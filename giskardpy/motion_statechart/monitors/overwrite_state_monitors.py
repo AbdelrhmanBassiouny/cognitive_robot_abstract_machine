@@ -6,10 +6,9 @@ import semantic_world.spatial_types.spatial_types as cas
 from giskardpy.data_types.data_types import ObservationState
 from giskardpy.data_types.exceptions import GoalInitalizationException
 from giskardpy.god_map import god_map
-from giskardpy.model.joints import OmniDrive, DiffDrive, OmniDrivePR22
 from giskardpy.motion_statechart.monitors.monitors import PayloadMonitor
 from giskardpy.utils.math import axis_angle_from_quaternion
-from semantic_world.connections import Has1DOFState
+from semantic_world.connections import Has1DOFState, OmniDrive
 from semantic_world.prefixed_name import PrefixedName
 
 
@@ -37,7 +36,7 @@ class SetSeedConfiguration(PayloadMonitor):
 
 
 class SetOdometry(PayloadMonitor):
-    odom_joints = (OmniDrive, DiffDrive, OmniDrivePR22)
+    odom_joints = (OmniDrive,)
 
     def __init__(self,
                  base_pose: cas.TransformationMatrix,
@@ -49,11 +48,11 @@ class SetOdometry(PayloadMonitor):
         super().__init__(run_call_in_thread=False, name=name)
         self.base_pose = base_pose
         if self.group_name is None:
-            drive_joints = god_map.world.search_for_joint_of_type(self.odom_joints)
-            if len(drive_joints) == 0:
+            drive_connections = god_map.world.search_for_connections_of_type(self.odom_joints)
+            if len(drive_connections) == 0:
                 raise GoalInitalizationException('No drive joints in world')
-            elif len(drive_joints) == 1:
-                self.brumbrum_joint = drive_joints[0]
+            elif len(drive_connections) == 1:
+                self.brumbrum_joint = drive_connections[0]
             else:
                 raise GoalInitalizationException('Multiple drive joint found in world, please set \'group_name\'')
         else:

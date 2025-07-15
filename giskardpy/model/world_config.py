@@ -233,8 +233,8 @@ class WorldWithOmniDriveRobot(WorldConfig):
         self.odom_link_name = PrefixedName(odom_link_name)
 
     def setup(self, robot_name: Optional[str] = None):
-        map = Body(self.map_name)
-        odom = Body(self.odom_link_name)
+        map = Body(name=self.map_name)
+        odom = Body(name=self.odom_link_name)
         localization = Connection6DoF(parent=map, child=odom, _world=self.world)
 
         urdf_parser = URDFParser(urdf=self.urdf)

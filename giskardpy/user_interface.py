@@ -4,7 +4,6 @@ from collections import defaultdict
 from itertools import chain
 from typing import Optional, List, Dict, Tuple, Union, Type
 import semantic_world.spatial_types.spatial_types as cas
-from giskardpy.data_types.data_types import PrefixName
 from giskardpy.data_types.exceptions import EmptyProblemException
 from giskardpy.data_types.exceptions import SetupException
 from giskardpy.god_map import god_map
@@ -25,6 +24,7 @@ from giskardpy.model.trajectory import Trajectory
 from giskardpy.motion_statechart.tasks.task import WEIGHT_BELOW_CA
 from giskardpy.qp.constraint import EqualityConstraint, InequalityConstraint, DerivativeEqualityConstraint, \
     DerivativeInequalityConstraint
+from semantic_world.prefixed_name import PrefixedName
 from semantic_world.spatial_types.symbol_manager import symbol_manager
 from giskardpy.motion_statechart.monitors.monitors import EndMotion
 
@@ -216,8 +216,8 @@ class MotionGoalWrapper:
 
     def add_cartesian_pose(self,
                            goal_pose: cas.TransformationMatrix,
-                           tip_link: Union[str, PrefixName],
-                           root_link: Union[str, PrefixName],
+                           tip_link: Union[str, PrefixedName],
+                           root_link: Union[str, PrefixedName],
                            name: Optional[str] = None,
                            reference_linear_velocity: Optional[float] = None,
                            reference_angular_velocity: Optional[float] = None,
@@ -241,9 +241,9 @@ class MotionGoalWrapper:
         :param weight: None = use default weight
         """
         if isinstance(root_link, str):
-            root_link = god_map.world.search_for_link_name(root_link)
+            root_link = god_map.world.get_body_by_name(root_link)
         if isinstance(tip_link, str):
-            tip_link = god_map.world.search_for_link_name(tip_link)
+            tip_link = god_map.world.get_body_by_name(tip_link)
         name = self._generate_default_name(CartesianPose, name)
         goal = CartesianPose(root_link=root_link,
                              tip_link=tip_link,
