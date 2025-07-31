@@ -8,9 +8,9 @@ from giskardpy.data_types.exceptions import SetupException
 from giskardpy.god_map import god_map
 from giskardpy.model.collision_world_syncer import CollisionWorldSynchronizer, CollisionCheckerLib, \
     CollisionAvoidanceThresholds
-from giskardpy.model.world import WorldTree
 from giskardpy.data_types.data_types import PrefixName
 from giskardpy.middleware import get_middleware
+from semantic_world.world import World
 
 
 class CollisionAvoidanceConfig(abc.ABC):
@@ -29,7 +29,7 @@ class CollisionAvoidanceConfig(abc.ABC):
         return self.collision_scene.collision_checker_id
 
     @property
-    def world(self) -> WorldTree:
+    def world(self) -> World:
         return god_map.world
 
     @abc.abstractmethod

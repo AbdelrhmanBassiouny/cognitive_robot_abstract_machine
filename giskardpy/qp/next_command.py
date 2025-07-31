@@ -11,10 +11,9 @@ import giskardpy.utils.math as giskard_math
 from giskardpy.utils.decorators import memoize
 from line_profiler import profile
 
-from semantic_world.world import World
 
 if TYPE_CHECKING:
-    from giskardpy.model.world import WorldTree
+    from semantic_world.world import World
 
 
 @memoize
@@ -54,7 +53,7 @@ class NextCommands:
     @classmethod
     @profile
     def from_xdot_implicit(cls, free_variables: List[FreeVariable], xdot: np.ndarray, max_derivative: Derivatives,
-                  prediction_horizon: int, world: WorldTree, dt: float) -> NextCommands:
+                  prediction_horizon: int, world: World, dt: float) -> NextCommands:
         self = cls()
         self.free_variable_data = {}
         offset = len(free_variables)
@@ -70,7 +69,7 @@ class NextCommands:
     @classmethod
     @profile
     def from_xdot_explicit_no_acc(cls, free_variables: List[FreeVariable], xdot: np.ndarray, max_derivative: Derivatives,
-                  prediction_horizon: int, world: WorldTree, dt: float) -> NextCommands:
+                  prediction_horizon: int, world: World, dt: float) -> NextCommands:
         self = cls()
         self.free_variable_data = {}
         offset = len(free_variables)
