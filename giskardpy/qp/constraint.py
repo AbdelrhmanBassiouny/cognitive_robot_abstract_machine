@@ -22,18 +22,18 @@ class Constraint:
 
 @dataclass
 class InequalityConstraint(Constraint):
-    expression: cas.symbol_expr
+    expression: cas.SymbolicScalar
 
     velocity_limit: float
-    quadratic_weight: cas.symbol_expr_float
+    quadratic_weight: cas.ScalarData
 
-    lower_error: cas.symbol_expr_float = -1e4
-    upper_error: cas.symbol_expr_float = 1e4
+    lower_error: cas.ScalarData = -1e4
+    upper_error: cas.ScalarData = 1e4
 
-    lower_slack_limit: cas.symbol_expr_float = -1e4
-    upper_slack_limit: cas.symbol_expr_float = 1e4
+    lower_slack_limit: cas.ScalarData = -1e4
+    upper_slack_limit: cas.ScalarData = 1e4
 
-    linear_weight: cas.symbol_expr_float = 0
+    linear_weight: cas.ScalarData = 0
 
     def __copy__(self):
         return InequalityConstraint(constraint_name=self.constraint_name,
@@ -64,16 +64,16 @@ class InequalityConstraint(Constraint):
 
 @dataclass
 class EqualityConstraint(Constraint):
-    expression: cas.symbol_expr
+    expression: cas.SymbolicScalar
 
-    bound: cas.symbol_expr_float
-    velocity_limit: cas.symbol_expr_float
-    quadratic_weight: cas.symbol_expr_float
+    bound: cas.ScalarData
+    velocity_limit: cas.ScalarData
+    quadratic_weight: cas.ScalarData
 
-    lower_slack_limit: cas.symbol_expr_float = -1e4
-    upper_slack_limit: cas.symbol_expr_float = 1e4
+    lower_slack_limit: cas.ScalarData = -1e4
+    upper_slack_limit: cas.ScalarData = 1e4
 
-    linear_weight: cas.symbol_expr_float = 0
+    linear_weight: cas.ScalarData = 0
 
     def __copy__(self):
         return EqualityConstraint(constraint_name=self.constraint_name,
@@ -100,13 +100,13 @@ class EqualityConstraint(Constraint):
 class DerivativeInequalityConstraint(Constraint):
     derivative: Derivatives
     expression: cas.Expression
-    lower_limit: cas.symbol_expr_float
-    upper_limit: cas.symbol_expr_float
-    quadratic_weight: cas.symbol_expr_float
-    normalization_factor: Optional[cas.symbol_expr_float]
-    lower_slack_limit: cas.symbol_expr_float
-    upper_slack_limit: cas.symbol_expr_float
-    linear_weight: cas.symbol_expr_float = None
+    lower_limit: cas.ScalarData
+    upper_limit: cas.ScalarData
+    quadratic_weight: cas.ScalarData
+    normalization_factor: Optional[cas.ScalarData]
+    lower_slack_limit: cas.ScalarData
+    upper_slack_limit: cas.ScalarData
+    linear_weight: cas.ScalarData = None
 
     def __copy__(self):
         return DerivativeInequalityConstraint(constraint_name=self.constraint_name,
@@ -129,12 +129,12 @@ class DerivativeInequalityConstraint(Constraint):
 class DerivativeEqualityConstraint(Constraint):
     derivative: Derivatives
     expression: cas.Expression
-    bound: cas.symbol_expr_float
-    quadratic_weight: cas.symbol_expr_float
-    normalization_factor: Optional[cas.symbol_expr_float]
-    lower_slack_limit: cas.symbol_expr_float
-    upper_slack_limit: cas.symbol_expr_float
-    linear_weight: cas.symbol_expr_float = None
+    bound: cas.ScalarData
+    quadratic_weight: cas.ScalarData
+    normalization_factor: Optional[cas.ScalarData]
+    lower_slack_limit: cas.ScalarData
+    upper_slack_limit: cas.ScalarData
+    linear_weight: cas.ScalarData = None
 
     def __copy__(self):
         return DerivativeEqualityConstraint(constraint_name=self.constraint_name,

@@ -99,13 +99,13 @@ class Task(MotionStatechartNode):
         self.linear_weight_gains.append(q_gain)
 
     def add_equality_constraint(self,
-                                reference_velocity: cas.symbol_expr_float,
-                                equality_bound: cas.symbol_expr_float,
-                                weight: cas.symbol_expr_float,
-                                task_expression: cas.symbol_expr,
+                                reference_velocity: cas.ScalarData,
+                                equality_bound: cas.ScalarData,
+                                weight: cas.ScalarData,
+                                task_expression: cas.SymbolicScalar,
                                 name: str = None,
-                                lower_slack_limit: Optional[cas.symbol_expr_float] = None,
-                                upper_slack_limit: Optional[cas.symbol_expr_float] = None):
+                                lower_slack_limit: Optional[cas.ScalarData] = None,
+                                upper_slack_limit: Optional[cas.ScalarData] = None):
         """
         Add a task constraint to the motion problem. This should be used for most constraints.
         It will not strictly stick to the reference velocity, but requires only a single constraint in the final
@@ -137,14 +137,14 @@ class Task(MotionStatechartNode):
         self.eq_constraints.append(constraint)
 
     def add_inequality_constraint(self,
-                                  reference_velocity: cas.symbol_expr_float,
-                                  lower_error: cas.symbol_expr_float,
-                                  upper_error: cas.symbol_expr_float,
-                                  weight: cas.symbol_expr_float,
-                                  task_expression: cas.symbol_expr,
+                                  reference_velocity: cas.ScalarData,
+                                  lower_error: cas.ScalarData,
+                                  upper_error: cas.ScalarData,
+                                  weight: cas.ScalarData,
+                                  task_expression: cas.SymbolicScalar,
                                   name: Optional[str] = None,
-                                  lower_slack_limit: Optional[cas.symbol_expr_float] = None,
-                                  upper_slack_limit: Optional[cas.symbol_expr_float] = None):
+                                  lower_slack_limit: Optional[cas.ScalarData] = None,
+                                  upper_slack_limit: Optional[cas.ScalarData] = None):
         """
         Add a task constraint to the motion problem. This should be used for most constraints.
         It will not strictly stick to the reference velocity, but requires only a single constraint in the final
@@ -180,18 +180,18 @@ class Task(MotionStatechartNode):
 
     def add_inequality_constraint_vector(self,
                                          reference_velocities: Union[
-                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                          lower_errors: Union[
-                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                          upper_errors: Union[
-                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                          weights: Union[
-                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                          task_expression: Union[
-                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr]],
+                                             cas.Expression, cas.Vector3, cas.Point3, List[cas.SymbolicScalar]],
                                          names: List[str],
-                                         lower_slack_limits: Optional[List[cas.symbol_expr_float]] = None,
-                                         upper_slack_limits: Optional[List[cas.symbol_expr_float]] = None):
+                                         lower_slack_limits: Optional[List[cas.ScalarData]] = None,
+                                         upper_slack_limits: Optional[List[cas.ScalarData]] = None):
         """
         Calls add_constraint for a list of expressions.
         """
@@ -218,16 +218,16 @@ class Task(MotionStatechartNode):
 
     def add_equality_constraint_vector(self,
                                        reference_velocities: Union[
-                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                        equality_bounds: Union[
-                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                        weights: Union[
-                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                        task_expression: Union[
-                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr]],
+                                           cas.Expression, cas.Vector3, cas.Point3, List[cas.SymbolicScalar]],
                                        names: List[str],
-                                       lower_slack_limits: Optional[List[cas.symbol_expr_float]] = None,
-                                       upper_slack_limits: Optional[List[cas.symbol_expr_float]] = None):
+                                       lower_slack_limits: Optional[List[cas.ScalarData]] = None,
+                                       upper_slack_limits: Optional[List[cas.ScalarData]] = None):
         """
         Calls add_constraint for a list of expressions.
         """
@@ -246,8 +246,8 @@ class Task(MotionStatechartNode):
     def add_point_goal_constraints(self,
                                    frame_P_current: cas.Point3,
                                    frame_P_goal: cas.Point3,
-                                   reference_velocity: cas.symbol_expr_float,
-                                   weight: cas.symbol_expr_float,
+                                   reference_velocity: cas.ScalarData,
+                                   weight: cas.ScalarData,
                                    name: str = ''):
         """
         Adds three constraints to move frame_P_current to frame_P_goal.
@@ -268,10 +268,10 @@ class Task(MotionStatechartNode):
                                                    f'{name}/z'])
 
     def add_position_constraint(self,
-                                expr_current: Union[cas.symbol_expr, float],
-                                expr_goal: Union[cas.symbol_expr_float, float],
-                                reference_velocity: Union[cas.symbol_expr_float, float],
-                                weight: Union[cas.symbol_expr_float, float] = WEIGHT_BELOW_CA,
+                                expr_current: Union[cas.SymbolicScalar, float],
+                                expr_goal: Union[cas.ScalarData, float],
+                                reference_velocity: Union[cas.ScalarData, float],
+                                weight: Union[cas.ScalarData, float] = WEIGHT_BELOW_CA,
                                 name: str = ''):
         """
         A wrapper around add_constraint. Will add a constraint that tries to move expr_current to expr_goal.
@@ -284,11 +284,11 @@ class Task(MotionStatechartNode):
                                      name=name)
 
     def add_position_range_constraint(self,
-                                      expr_current: Union[cas.symbol_expr, float],
-                                      expr_min: Union[cas.symbol_expr_float, float],
-                                      expr_max: Union[cas.symbol_expr_float, float],
-                                      reference_velocity: Union[cas.symbol_expr_float, float],
-                                      weight: Union[cas.symbol_expr_float, float] = WEIGHT_BELOW_CA,
+                                      expr_current: Union[cas.SymbolicScalar, float],
+                                      expr_min: Union[cas.ScalarData, float],
+                                      expr_max: Union[cas.ScalarData, float],
+                                      reference_velocity: Union[cas.ScalarData, float],
+                                      weight: Union[cas.ScalarData, float] = WEIGHT_BELOW_CA,
                                       name: str = ''):
         """
         A wrapper around add_constraint. Will add a constraint that tries to move expr_current to expr_goal.
@@ -305,8 +305,8 @@ class Task(MotionStatechartNode):
     def add_vector_goal_constraints(self,
                                     frame_V_current: cas.Vector3,
                                     frame_V_goal: cas.Vector3,
-                                    reference_velocity: cas.symbol_expr_float,
-                                    weight: cas.symbol_expr_float = WEIGHT_BELOW_CA,
+                                    reference_velocity: cas.ScalarData,
+                                    weight: cas.ScalarData = WEIGHT_BELOW_CA,
                                     name: str = ''):
         """
         Adds constraints to align frame_V_current with frame_V_goal. Make sure that both vectors are expressed
@@ -368,14 +368,14 @@ class Task(MotionStatechartNode):
                                                    f'{name}/rot/z'])
 
     def add_velocity_constraint(self,
-                                lower_velocity_limit: Union[cas.symbol_expr_float, List[cas.symbol_expr_float]],
-                                upper_velocity_limit: Union[cas.symbol_expr_float, List[cas.symbol_expr_float]],
-                                weight: cas.symbol_expr_float,
-                                task_expression: cas.symbol_expr,
-                                velocity_limit: cas.symbol_expr_float,
+                                lower_velocity_limit: Union[cas.ScalarData, List[cas.ScalarData]],
+                                upper_velocity_limit: Union[cas.ScalarData, List[cas.ScalarData]],
+                                weight: cas.ScalarData,
+                                task_expression: cas.SymbolicScalar,
+                                velocity_limit: cas.ScalarData,
                                 name: Optional[str] = None,
-                                lower_slack_limit: Union[cas.symbol_expr_float, List[cas.symbol_expr_float]] = -1e4,
-                                upper_slack_limit: Union[cas.symbol_expr_float, List[cas.symbol_expr_float]] = 1e4):
+                                lower_slack_limit: Union[cas.ScalarData, List[cas.ScalarData]] = -1e4,
+                                upper_slack_limit: Union[cas.ScalarData, List[cas.ScalarData]] = 1e4):
         """
         Add a velocity constraint. Internally, this will be converted into multiple constraints, to ensure that the
         velocity stays within the given bounds.
@@ -404,13 +404,13 @@ class Task(MotionStatechartNode):
         self.derivative_constraints.append(constraint)
 
     def add_velocity_eq_constraint(self,
-                                   velocity_goal: Union[cas.symbol_expr_float, List[cas.symbol_expr_float]],
-                                   weight: cas.symbol_expr_float,
-                                   task_expression: cas.symbol_expr,
-                                   velocity_limit: cas.symbol_expr_float,
+                                   velocity_goal: Union[cas.ScalarData, List[cas.ScalarData]],
+                                   weight: cas.ScalarData,
+                                   task_expression: cas.SymbolicScalar,
+                                   velocity_limit: cas.ScalarData,
                                    name: Optional[str] = None,
-                                   lower_slack_limit: Union[cas.symbol_expr_float, List[cas.symbol_expr_float]] = -1e4,
-                                   upper_slack_limit: Union[cas.symbol_expr_float, List[cas.symbol_expr_float]] = 1e4):
+                                   lower_slack_limit: Union[cas.ScalarData, List[cas.ScalarData]] = -1e4,
+                                   upper_slack_limit: Union[cas.ScalarData, List[cas.ScalarData]] = 1e4):
         """
         Add a velocity constraint. Internally, this will be converted into multiple constraints, to ensure that the
         velocity stays within the given bounds.
@@ -438,13 +438,13 @@ class Task(MotionStatechartNode):
 
     def add_velocity_eq_constraint_vector(self,
                                           velocity_goals: Union[
-                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                           reference_velocities: Union[
-                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                           weights: Union[
-                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr_float]],
+                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.ScalarData]],
                                           task_expression: Union[
-                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.symbol_expr]],
+                                              cas.Expression, cas.Vector3, cas.Point3, List[cas.SymbolicScalar]],
                                           names: List[str]):
         for i in range(len(velocity_goals)):
             name_suffix = names[i] if names else None
@@ -458,9 +458,9 @@ class Task(MotionStatechartNode):
 
     def add_translational_velocity_limit(self,
                                          frame_P_current: cas.Point3,
-                                         max_velocity: cas.symbol_expr_float,
-                                         weight: cas.symbol_expr_float,
-                                         max_violation: cas.symbol_expr_float = np.inf,
+                                         max_velocity: cas.ScalarData,
+                                         weight: cas.ScalarData,
+                                         max_violation: cas.ScalarData = np.inf,
                                          name=''):
         """
         Adds constraints to limit the translational velocity of frame_P_current. Be aware that the velocity is relative

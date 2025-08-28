@@ -132,7 +132,7 @@ class ProblemDataPart(ABC):
     def jerk_constraints(self) -> List[DerivativeInequalityConstraint]:
         return self.get_derivative_constraints(Derivatives.jerk)
 
-    def _sorter(self, *args: dict) -> Tuple[List[cas.symbol_expr], np.ndarray]:
+    def _sorter(self, *args: dict) -> Tuple[List[cas.SymbolicScalar], np.ndarray]:
         """
         Sorts every arg dict individually and then appends all of them.
         :arg args: a bunch of dicts
@@ -404,11 +404,11 @@ class FreeVariableBounds(ProblemDataPart):
 
     @profile
     def free_variable_bounds(self) \
-            -> Tuple[List[Dict[str, cas.symbol_expr_float]], List[Dict[str, cas.symbol_expr_float]]]:
+            -> Tuple[List[Dict[str, cas.ScalarData]], List[Dict[str, cas.ScalarData]]]:
         # if self.config.qp_formulation in [ControllerMode.explicit, ControllerMode.explicit_no_acc]:
         max_derivative = self.config.max_derivative
-        lb: DefaultDict[Derivatives, Dict[str, cas.symbol_expr_float]] = defaultdict(dict)
-        ub: DefaultDict[Derivatives, Dict[str, cas.symbol_expr_float]] = defaultdict(dict)
+        lb: DefaultDict[Derivatives, Dict[str, cas.ScalarData]] = defaultdict(dict)
+        ub: DefaultDict[Derivatives, Dict[str, cas.ScalarData]] = defaultdict(dict)
         for v in self.free_variables:
             if self.config.qp_formulation.has_explicit_pos_limits:
                 for t in range(self.config.prediction_horizon):
@@ -545,13 +545,13 @@ class EqualityBounds(ProblemDataPart):
         return {f'{c.name}': c.capped_bound(self.config.mpc_dt, self.control_horizon) for c in
                 self.equality_constraints}
 
-    def last_derivative_values(self, derivative: Derivatives) -> Dict[str, cas.symbol_expr_float]:
+    def last_derivative_values(self, derivative: Derivatives) -> Dict[str, cas.ScalarData]:
         last_values = {}
         for v in self.free_variables:
             last_values[f'{v.name}/last_{derivative}'] = v.symbols.data[derivative]
         return last_values
 
-    def derivative_links(self, derivative: Derivatives) -> Dict[str, cas.symbol_expr_float]:
+    def derivative_links(self, derivative: Derivatives) -> Dict[str, cas.ScalarData]:
         derivative_link = {}
         for t in range(self.config.prediction_horizon - 1):
             if t >= self.config.prediction_horizon - (self.config.max_derivative - derivative):
