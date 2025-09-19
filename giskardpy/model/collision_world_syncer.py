@@ -9,8 +9,9 @@ from line_profiler import profile
 
 import semantic_world.spatial_types.spatial_types as cas
 from giskardpy.god_map import god_map
-from giskardpy.model.collision_detector import CollisionDetector, Collisions, NullCollisionDetector
-from giskardpy.model.collision_matrix_manager import CollisionMatrixManager, CollisionCheck
+from giskardpy.model.collision_matrix_manager import CollisionMatrixManager
+from giskardpy.model.collisions import NullCollisionDetector, Collisions
+from semantic_world.collision_checking.collision_detector import Collision, CollisionDetector, CollisionCheck
 from semantic_world.robots import AbstractRobot
 from semantic_world.spatial_types.symbol_manager import symbol_manager
 from semantic_world.world import World
@@ -41,6 +42,8 @@ class CollisionWorldSynchronizer:
     external_collision_data: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=float))
     self_collision_data: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=float))
 
+    collision_list_sizes: int = 1000
+
     def __post_init__(self):
         self.matrix_manager = CollisionMatrixManager(world=self.world, robots=self.robots)
 
@@ -60,22 +63,12 @@ class CollisionWorldSynchronizer:
         self.collision_matrix = collision_matrix
 
     def check_collisions(self) -> Collisions:
-        self.closest_points = self.collision_detector.check_collisions(self.collision_matrix)
+        collisions = self.collision_detector.check_collisions(self.collision_matrix)
+        self.closest_points = Collisions.from_collision_list(collisions, self.collision_list_sizes)
         return self.closest_points
 
     def is_collision_checking_enabled(self) -> bool:
         return not isinstance(self.collision_detector, NullCollisionDetector)
-
-    # def reset_cache(self):
-    #     """
-    #     Called when model changes.
-    #     :return:
-    #     """
-    #     self.external_monitored_links = {}
-    #     self.self_monitored_links = {}
-
-    # def get_map_T_geometry(self, body: Body, collision_id: int = 0) -> np.ndarray:
-    #     return god_map.world.compute_fk_with_collision_offset_np(god_map.world.root_link_name, body, collision_id)
 
     # %% external collision symbols
     def monitor_link_for_external(self, body: Body, idx: int):

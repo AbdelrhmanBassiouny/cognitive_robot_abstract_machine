@@ -8,7 +8,7 @@ from line_profiler.explicit_profiler import profile
 from pkg_resources import resource_filename
 
 from giskardpy.god_map import god_map
-from giskardpy.model.collision_detector import Collision
+from giskardpy.model.collisions import GiskardCollision
 from semantic_world.prefixed_name import PrefixedName
 from giskardpy.middleware import get_middleware
 from giskardpy.utils.utils import suppress_stdout
@@ -23,18 +23,18 @@ if not hasattr(pb, '__version__') or pb.__version__ != '1.0.0':
     raise ImportError('Betterpybullet is outdated.')
 
 
-def create_collision(pb_collision: pb.Collision, world: World) -> Collision:
-    collision = Collision(
-        link_a=world.get_body_by_name(pb_collision.obj_a.name),
-        link_b=world.get_body_by_name(pb_collision.obj_b.name),
+def create_collision(pb_collision: pb.Collision, world: World) -> GiskardCollision:
+    collision = GiskardCollision(
+        body_a=world.get_kinematic_structure_entity_by_name(pb_collision.obj_a.name),
+        body_b=world.get_kinematic_structure_entity_by_name(pb_collision.obj_b.name),
         contact_distance_input=pb_collision.contact_distance,
         map_P_pa=pb_collision.map_P_pa,
         map_P_pb=pb_collision.map_P_pb,
         map_V_n_input=pb_collision.world_V_n,
         a_P_pa=pb_collision.a_P_pa,
         b_P_pb=pb_collision.b_P_pb)
-    collision.original_link_a = collision.link_a
-    collision.original_link_b = collision.link_b
+    collision.original_body_a = collision.body_a
+    collision.original_body_b = collision.body_b
     collision.is_external = None
     return collision
 
