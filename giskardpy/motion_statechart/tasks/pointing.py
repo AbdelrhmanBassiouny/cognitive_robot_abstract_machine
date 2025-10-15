@@ -49,7 +49,7 @@ class Pointing(Task):
             provider=lambda: self.root_P_goal_point,
         )
         root_P_goal_point.reference_frame = self.root_link
-        tip_V_pointing_axis = cas.Vector3(self.tip_V_pointing_axis)
+        tip_V_pointing_axis = cas.Vector3.from_iterable(self.tip_V_pointing_axis)
 
         root_V_goal_axis = root_P_goal_point - root_T_tip.to_position()
         root_V_goal_axis.scale(1)
