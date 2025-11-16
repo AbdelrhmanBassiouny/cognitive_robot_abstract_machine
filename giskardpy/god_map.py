@@ -30,8 +30,6 @@ class GodMap:
 
     # %% controller datatypes
     trajectory: Trajectory
-    added_collision_checks: Dict[Tuple[PrefixedName, PrefixedName], float]
-    motion_start_time: float
 
     # %% other
     tmp_folder: str
