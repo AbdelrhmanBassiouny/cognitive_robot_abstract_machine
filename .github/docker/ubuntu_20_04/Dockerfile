@@ -7,7 +7,7 @@ SHELL ["/bin/bash", "-c"]
 # Install Dependencies, tzdata install noninteractive, because of Timezone setup
 RUN apt-get update
 RUN DEBIAN_FRONTEND=noninteractive TZ=Europe/Berlin apt-get -y install tzdata
-RUN apt-get install -y curl python3 python3-pip git-all git cmake sudo pkg-config python3-numpy
+RUN apt-get install -y curl python3 python3-pip git-all git cmake sudo pkg-config python3-numpy graphviz graphviz-dev
 
 # Get requirements.txt from DOWNLOAD_URL-Parameter
 RUN curl -fsSL $DOWNLOAD_URL -o requirements.txt
