@@ -70,7 +70,7 @@ from semantic_digital_twin.semantic_annotations.factories import (
     VerticalSemanticDirection,
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
-from semantic_digital_twin.spatial_types import TransformationMatrix
+from semantic_digital_twin.spatial_types import TransformationMatrix, Vector3
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.spatial_types.spatial_types import (
     trinary_logic_and,
@@ -1520,6 +1520,37 @@ class TestParallel:
         kin_sim.tick_until_end()
         # 5 (longest ticker) + 1 (for parallel to turn True) + 2 (for end to trigger)
         assert kin_sim.control_cycles == 8
+
+    def test_parallel_with_tasks(self, pr2_world: World):
+        map = pr2_world.root
+        r_tip = pr2_world.get_kinematic_structure_entity_by_name("r_gripper_tool_frame")
+        msc = MotionStatechart()
+        msc.add_node(
+            parallel := Parallel(
+                [
+                    AlignPlanes(
+                        root_link=map,
+                        tip_link=r_tip,
+                        tip_normal=Vector3.X(reference_frame=r_tip),
+                        goal_normal=Vector3.X(reference_frame=map),
+                    ),
+                    AlignPlanes(
+                        root_link=map,
+                        tip_link=r_tip,
+                        tip_normal=Vector3.Y(reference_frame=r_tip),
+                        goal_normal=Vector3.Z(reference_frame=map),
+                    ),
+                ]
+            )
+        )
+        msc.add_node(EndMotion.when_true(parallel))
+
+        kin_sim = Executor(
+            world=pr2_world,
+            controller_config=QPControllerConfig.create_default_with_50hz(),
+        )
+        kin_sim.compile(motion_statechart=msc)
+        kin_sim.tick_until_end()
 
 
 class TestOpenClose:
