@@ -6,7 +6,11 @@ import threading
 from abc import ABC
 from dataclasses import field, dataclass, fields
 
-from krrood.adapters.json_serializer import SubclassJSONSerializer, JSON_TYPE_NAME
+from krrood.adapters.json_serializer import (
+    SubclassJSONSerializer,
+    JSON_TYPE_NAME,
+    to_json,
+)
 from typing_extensions import (
     Dict,
     Any,
@@ -551,29 +555,10 @@ class MotionStatechartNode(SubclassJSONSerializer):
         for field_ in fields(self):
             if not field_.name.startswith("_") and field_.init:
                 value = getattr(self, field_.name)
-                json_data[field_.name] = self._attribute_to_json(value)
+                json_data[field_.name] = to_json(value)
         if self.parent_node_index is not None:
-            json_data["parent_node_index"] = self.parent_node.index
+            json_data["parent_node_index"] = self.parent_node_index
         return json_data
-
-    def _attribute_to_json(self, value: Any) -> Any:
-        if isinstance(value, dict):
-            return self._dict_to_json(value)
-        if isinstance(value, list):
-            return self._list_to_json(value)
-        if isinstance(value, SubclassJSONSerializer):
-            return value.to_json()
-        return value
-
-    def _list_to_json(self, list_attr: list) -> list:
-        return [self._attribute_to_json(value) for value in list_attr]
-
-    def _dict_to_json(self, dict_attr: Dict[Any, Any]) -> Dict[str, Any]:
-        result = {}
-        for key, value in dict_attr.items():
-            json_value = self._attribute_to_json(value)
-            result[key] = json_value
-        return result
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -593,9 +578,9 @@ class MotionStatechartNode(SubclassJSONSerializer):
                     "dict parameters of MotionStatechartNode are not supported yet. Use a list instead."
                 )
             node_kwargs[field_name] = field_data
-        parent_node_name = node_kwargs.pop("parent_node_index", None)
+        parent_node_index = node_kwargs.pop("parent_node_index", None)
         result = cls(**node_kwargs)
-        result.parent_node_name = parent_node_name
+        result.parent_node_index = parent_node_index
         return result
 
     def formatted_name(self, quoted: bool = False) -> str:
@@ -663,6 +648,10 @@ class Goal(MotionStatechartNode):
             self.nodes.append(node)
         node.parent_node = self
         self.motion_statechart.add_node(node)
+
+    def add_nodes(self, nodes: List[MotionStatechartNode]) -> None:
+        for node in nodes:
+            self.add_node(node)
 
     def _apply_goal_conditions_to_children(self) -> None:
         """
@@ -844,3 +833,52 @@ class CancelMotion(MotionStatechartNode):
 
     def on_tick(self, context: ExecutionContext) -> Optional[float]:
         raise self.exception
+
+    def to_json(self) -> Dict[str, Any]:
+        exception_field = next(f for f in fields(self) if f.name == "exception")
+        # set init to False to prevent superclass from calling to_json on it
+        exception_field.init = False
+        json_data = super().to_json()
+        # cast to general exception, because it can be json serialized
+        json_data["exception"] = to_json(Exception(str(self.exception)))
+        return json_data
+
+    @classmethod
+    def when_true(
+        cls, node: MotionStatechartNode, exception: Optional[Exception] = None
+    ) -> Self:
+        """
+        Factory method for creating an EndMotion node that activates when the given node has a true observation state.
+        """
+        exception = exception or Exception(
+            f"Cancelled because {node.unique_name} is true"
+        )
+        end = cls(exception=exception)
+        end.start_condition = node.observation_variable
+        return end
+
+    @classmethod
+    def when_all_true(
+        cls, nodes: List[MotionStatechartNode], exception: Exception
+    ) -> Self:
+        """
+        Factory method for creating an EndMotion node that activates when ALL of the given nodes have a true observation state.
+        """
+        end = cls(exception=exception)
+        end.start_condition = cas.trinary_logic_and(
+            *[node.observation_variable for node in nodes]
+        )
+        return end
+
+    @classmethod
+    def when_any_true(
+        cls, nodes: List[MotionStatechartNode], exception: Exception
+    ) -> Self:
+        """
+        Factory method for creating an EndMotion node that activates when ANY of the given nodes have a true observation state.
+        """
+        end = cls(exception=exception)
+        end.start_condition = cas.trinary_logic_or(
+            *[node.observation_variable for node in nodes]
+        )
+        return end

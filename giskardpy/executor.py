@@ -1,10 +1,8 @@
 from dataclasses import dataclass, field, InitVar
 
-import numpy as np
 from typing_extensions import Optional
 
 from giskardpy.data_types.exceptions import (
-    EmptyProblemException,
     NoQPControllerConfigException,
 )
 from giskardpy.model.better_pybullet_syncer import BulletCollisionDetector
@@ -19,6 +17,7 @@ from giskardpy.motion_statechart.auxilary_variable_manager import (
 )
 from giskardpy.motion_statechart.context import BuildContext
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from giskardpy.qp.exceptions import EmptyProblemException
 from giskardpy.qp.qp_controller import QPController
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -179,6 +178,4 @@ class Executor:
             auxiliary_variables=self.auxiliary_variable_manager.variables,
         )
         if self.qp_controller.has_not_free_variables():
-            raise EmptyProblemException(
-                "Tried to compile a QPController without free variables."
-            )
+            raise EmptyProblemException()

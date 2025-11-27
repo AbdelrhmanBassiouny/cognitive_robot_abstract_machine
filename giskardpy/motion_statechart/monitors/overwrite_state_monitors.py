@@ -4,7 +4,7 @@ from dataclasses import field, dataclass
 from typing import Optional, Type, Tuple
 
 import semantic_digital_twin.spatial_types.spatial_types as cas
-from giskardpy.data_types.exceptions import GoalInitalizationException
+from giskardpy.motion_statechart.exceptions import GoalInitalizationException
 from giskardpy.motion_statechart.context import BuildContext, ExecutionContext
 from giskardpy.motion_statechart.graph_node import (
     MotionStatechartNode,
