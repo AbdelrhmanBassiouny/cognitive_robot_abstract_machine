@@ -25,3 +25,16 @@ Install the CRAM package along with its dependencies:
 cd cognitive_robot_abstract_machine
 poetry install
 ```
+
+## Contribution
+
+Before committing any changes, please navigate into the project root and install pre-commit hooks:
+
+```bash
+sudo apt install pre-commit
+pre-commit install
+```
+
+### Code of Conduct
+
+(TBD)
