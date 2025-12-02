@@ -8,7 +8,7 @@ from pycram.process_module import simulated_robot
 from pycram.object_descriptors.urdf import ObjectDescription
 from pycram.world_concepts.world_object import Object
 from pycram.ros_utils.viz_marker_publisher import VizMarkerPublisher
-from pycram.robot_plans *
+from pycram.robot_plans import *
 
 
 extension = ObjectDescription.get_file_extension()
@@ -26,8 +26,10 @@ obj_target_ = Object("bowl", Bowl, "bowl.stl", pose=pose)
 action_map = {"pouring": PouringAction}
 
 # this is just bc we dont want to pick up for the demonstration of cutting and mixing
-#obiously we need to change this here for different robots
-tool_pose = PoseStamped.from_list([2.0449586673391935, 1.5384467778416917, 1.09705326966067], [0, 0, 0, 1])
+# obiously we need to change this here for different robots
+tool_pose = PoseStamped.from_list(
+    [2.0449586673391935, 1.5384467778416917, 1.09705326966067], [0, 0, 0, 1]
+)
 obj_tool_.pose = tool_pose
 location_pose = PoseStamped.from_list([1.7, 2, 0])
 looking_pose = PoseStamped.from_list([2.5, 2, 0.97])
@@ -39,8 +41,10 @@ with simulated_robot:
     perform(an(NavigateAction([location_pose])))
     perform(an(MoveTorsoAction([TorsoState.HIGH])))
 
-    #attach tool to robot
-    tool_frame = RobotDescription.current_robot_description.get_arm_chain(Arms.RIGHT).get_tool_frame()
+    # attach tool to robot
+    tool_frame = RobotDescription.current_robot_description.get_arm_chain(
+        Arms.RIGHT
+    ).get_tool_frame()
     World.current_world.robot.attach(child_object=obj_tool_, parent_link=tool_frame)
 
     perform(an(LookAtAction([looking_pose])))
