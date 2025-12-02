@@ -803,8 +803,14 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         """
         variable = variable or self._selected_variables[0]
         key = lambda res: res[variable._id_].value
-        mapping = lambda results_gen: [max(results_gen, key=key)]
-        self._results_mapping.append(mapping)
+
+        def get_max(results_gen):
+            try:
+                yield max(results_gen, key=key)
+            except ValueError:
+                yield {variable._id_: HashedValue(None)}
+
+        self._results_mapping.append(get_max)
         return self
 
     def min(self, variable: Optional[CanBehaveLikeAVariable[T]] = None) -> Self:
@@ -818,8 +824,14 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         """
         variable = variable or self._selected_variables[0]
         key = lambda res: res[variable._id_].value
-        mapping = lambda results_gen: [min(results_gen, key=key)]
-        self._results_mapping.append(mapping)
+
+        def get_min(results_gen):
+            try:
+                yield min(results_gen, key=key)
+            except ValueError:
+                yield {variable._id_: HashedValue(None)}
+
+        self._results_mapping.append(get_min)
         return self
 
     def sum(self, variable: Optional[CanBehaveLikeAVariable[T]] = None) -> Self:

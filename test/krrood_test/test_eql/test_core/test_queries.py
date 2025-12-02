@@ -864,6 +864,21 @@ def test_max_min_no_variable():
     assert min_query_result[0] == min(values)
 
 
+def test_max_min_with_empty_list():
+    empty_list = []
+    value = let(int, domain=empty_list)
+
+    max_query = an(entity(value).max())
+    max_query_result = list(max_query.evaluate())
+    assert len(max_query_result) == 1
+    assert max_query_result[0] is None
+
+    min_query = an(entity(value).min())
+    min_query_result = list(min_query.evaluate())
+    assert len(min_query_result) == 1
+    assert min_query_result[0] is None
+
+
 def test_order_by_key():
     names = ["Handle1", "handle2", "Handle3", "container1", "Container2", "container3"]
     body_name = let(str, domain=names)
