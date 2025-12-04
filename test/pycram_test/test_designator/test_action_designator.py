@@ -55,7 +55,6 @@ class TestActionDesignatorGrounding(ApartmentWorldTestCase):
         joint_states_left = JointStateManager().get_arm_state(
             Arms.LEFT, StaticJointState.Park, self.robot_view
         )
-        time.sleep(10)
         for joint_name, joint_state in zip(
             joint_states_right.joint_names, joint_states_right.joint_positions
         ):
