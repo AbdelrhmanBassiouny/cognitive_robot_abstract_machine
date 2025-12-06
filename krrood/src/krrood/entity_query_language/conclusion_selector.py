@@ -71,31 +71,6 @@ class ExceptIf(ConclusionSelector):
     the left branch's conclusions/outputs are excluded; otherwise, left flows through.
     """
 
-    @lru_cache(maxsize=None)
-    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
-        """
-        Return the projection for ExceptIf operators.
-
-        Includes variables from both branches and their conclusions based on truth values.
-        """
-        projection = HashedIterable()
-
-        # When true, we need right's variables to check the exception condition
-        if when_true:
-            projection.update(self.right._unique_variables_)
-
-        # Include conclusions from both branches
-        for conclusion in self.left._conclusion_.union(self.right._conclusion_):
-            projection.update(conclusion._unique_variables_)
-
-        if self._parent_:
-            projection.update(self._parent_._projection_(when_true))
-
-        for conclusion in self._conclusion_:
-            projection.update(conclusion._unique_variables_)
-
-        return projection
-
     def _evaluate__(
         self,
         sources: Optional[Dict[int, HashedValue]] = None,

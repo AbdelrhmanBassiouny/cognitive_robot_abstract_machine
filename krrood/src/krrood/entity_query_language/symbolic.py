@@ -194,26 +194,6 @@ class SymbolicExpression(Generic[T], ABC):
     def _add_conclusion_(self, conclusion: Conclusion):
         self._conclusion_.add(conclusion)
 
-    @lru_cache(maxsize=None)
-    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
-        """
-        Return the set of variable ids that uniquely identify an output of this node
-        for its parent, on the given truth branch.
-
-        The default implementation asks the parent for its projection, and augments it
-        with variables referenced by this node's conclusions when the branch can yield.
-        """
-        if self._parent_:
-            projection = self._parent_._projection_(when_true=when_true)
-        else:
-            projection = HashedIterable()
-
-        if when_true or (when_true is None):
-            for child in self._children_:
-                for conclusion in child._conclusion_:
-                    projection.update(conclusion._unique_variables_)
-        return projection
-
     @property
     def _parent_(self) -> Optional[SymbolicExpression]:
         if self._eval_parent_ is not None:
@@ -726,27 +706,6 @@ class ResultQuantifier(ResultProcessor[T], ABC):
             result_count, done=True
         )
 
-    @lru_cache(maxsize=None)
-    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
-        """
-        Return the projection for result quantifiers.
-
-        Includes selected variables from the child and conclusion variables when applicable.
-        """
-        projection = (
-            self._parent_._projection_(when_true=when_true)
-            if self._parent_
-            else HashedIterable()
-        )
-        child = self._child_
-        for var in child._selected_variables:
-            projection.add(var)
-            projection.update(var._unique_variables_)
-        if when_true or (when_true is None):
-            for conclusion in child._conclusion_:
-                projection.update(conclusion._unique_variables_)
-        return projection
-
     def _assert_satisfaction_of_quantification_constraints_(
         self, result_count: int, done: bool
     ):
@@ -952,26 +911,6 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
 
         self._results_mapping.append(get_distinct_results)
         return self
-
-    @lru_cache(maxsize=None)
-    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
-        """
-        Return the projection for query object descriptors.
-
-        Includes selected variables and conclusion variables when applicable.
-        """
-        projection = (
-            self._parent_._projection_(when_true=when_true)
-            if self._parent_
-            else HashedIterable()
-        )
-        projection.update(self._selected_variables)
-        for var in self._selected_variables:
-            projection.update(var._unique_variables_)
-        if self._child_ and (when_true or (when_true is None)):
-            for conclusion in self._child_._conclusion_:
-                projection.update(conclusion._unique_variables_)
-        return projection
 
     def _evaluate__(
         self,
@@ -1651,24 +1590,6 @@ class BinaryOperator(SymbolicExpression, ABC):
         """
         return self.left._all_variable_instances_ + self.right._all_variable_instances_
 
-    @lru_cache(maxsize=None)
-    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
-        """
-        Return the projection for binary operators.
-
-        Includes variables from both operands symmetrically to ensure non-empty dedup keys.
-        """
-        projection = HashedIterable()
-        # Include variables from both left and right operands symmetrically
-        projection.update(self.left._unique_variables_)
-        projection.update(self.right._unique_variables_)
-        if when_true or (when_true is None):
-            for conclusion in self._conclusion_:
-                projection.update(conclusion._unique_variables_)
-        if self._parent_:
-            projection.update(self._parent_._projection_(when_true))
-        return projection
-
 
 def not_contains(container, item) -> bool:
     """
@@ -1866,26 +1787,6 @@ class OR(LogicalBinaryOperator, ABC):
 
     left_evaluated: bool = field(default=False, init=False)
     right_evaluated: bool = field(default=False, init=False)
-
-    @lru_cache(maxsize=None)
-    def _projection_(self, when_true: Optional[bool] = True) -> HashedIterable[int]:
-        """
-        Return the projection for OR operators.
-
-        Includes variables from both operands symmetrically to ensure non-empty dedup keys.
-        """
-        projection = HashedIterable()
-        # Include variables from both left and right operands symmetrically
-        projection.update(self.left._unique_variables_)
-        projection.update(self.right._unique_variables_)
-        if when_true or (when_true is None):
-            for conclusion in self.left._conclusion_:
-                projection.update(conclusion._unique_variables_)
-            for conclusion in self.right._conclusion_:
-                projection.update(conclusion._unique_variables_)
-        if self._parent_:
-            projection.update(self._parent_._projection_(when_true))
-        return projection
 
     def evaluate_left(
         self,
