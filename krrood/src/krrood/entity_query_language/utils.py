@@ -61,7 +61,7 @@ def generate_bindings(child_vars_items, sources):
     backtracking strategy with early pruning.
 
     The input mirrors Variable._child_vars_.items(): a sequence of (name, var)
-    pairs. Each yielded item is a mapping: name -> {var_id: HashedValue}.
+    pairs. Each yielded item is a mapping: name -> {var_id: value}.
 
     The function evaluates each child variable against the current partial
     binding "sources" so constraints can prune the search space early.
@@ -80,9 +80,9 @@ def generate_bindings(child_vars_items, sources):
 
     ordered = sorted(list(child_vars_items), key=score)
 
-    acc = dict(sources)  # var_id -> HashedValue
+    acc = dict(sources)  # var_id -> value
     initially_bound = set(acc.keys())
-    selected = {}  # name -> {var_id: HashedValue}
+    selected = {}  # name -> {var_id: value}
 
     def dfs(i: int):
         if i == len(ordered):

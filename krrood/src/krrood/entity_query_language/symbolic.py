@@ -30,7 +30,7 @@ from typing_extensions import (
     List,
     Tuple,
     Callable,
-    Self,
+    Self, Set,
 )
 
 from .cache_data import (
@@ -267,15 +267,11 @@ class SymbolicExpression(Generic[T], ABC):
                 if isinstance(v, SymbolicExpression):
                     vars.remove(v)
                     vars.update(set(v._all_variable_instances_))
-        sources = set(HashedIterable(vars))
-        return sources
+        return set(vars)
 
     @cached_property
-    def _unique_variables_(self) -> HashedIterable[Variable]:
-        unique_variables = HashedIterable()
-        for var in self._all_variable_instances_:
-            unique_variables.add(var)
-        return unique_variables
+    def _unique_variables_(self) -> Set[Variable]:
+        return make_set(self._all_variable_instances_)
 
     @cached_property
     @abstractmethod
@@ -965,7 +961,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         """
         if var._id_ in result:
             return True
-        unique_vars = [uv.value for uv in var._unique_variables_ if uv.value is not var]
+        unique_vars = [uv for uv in var._unique_variables_ if uv is not var]
         if unique_vars and all(
             self.variable_is_bound_or_its_children_are_bound(uv, result)
             for uv in unique_vars
@@ -1666,7 +1662,7 @@ class Comparator(BinaryOperator):
         elif not left_has_the and right_has_the:
             return self.right, self.left
         if sources and any(
-            v.value._var_._id_ in sources for v in self.right._unique_variables_
+            v._var_._id_ in sources for v in self.right._unique_variables_
         ):
             return self.right, self.left
         else:
@@ -1886,7 +1882,7 @@ class ForAll(QuantifiedConditional):
     @cached_property
     def condition_unique_variable_ids(self) -> List[int]:
         return [
-            v.id_
+            v._id_
             for v in self.condition._unique_variables_.difference(
                 self.left._unique_variables_
             )
@@ -1992,13 +1988,9 @@ def chained_logic(
 
 def optimize_or(left: SymbolicExpression, right: SymbolicExpression) -> OR:
 
-    left_vars = left._unique_variables_.filter(
-        lambda v: not isinstance(v.value, Literal)
-    )
-    right_vars = right._unique_variables_.filter(
-        lambda v: not isinstance(v.value, Literal)
-    )
-    if set(left_vars.unwrapped_values) == set(right_vars.unwrapped_values):
+    left_vars = {v for v in left._unique_variables_ if not isinstance(v, Literal)}
+    right_vars = {v for v in right._unique_variables_ if not isinstance(v, Literal)}
+    if left_vars == right_vars:
         return ElseIf(left, right)
     else:
         return Union(left, right)

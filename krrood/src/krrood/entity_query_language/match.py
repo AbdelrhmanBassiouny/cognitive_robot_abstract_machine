@@ -17,7 +17,7 @@ from .entity import (
     exists,
 )
 from .failures import NoneWrappedFieldError
-from .hashed_data import T, HashedValue
+from .hashed_data import T
 from .predicate import HasType
 from .symbolic import (
     CanBehaveLikeAVariable,
@@ -346,7 +346,7 @@ class Select(Match[T], Selectable[T]):
 
     def _evaluate__(
         self,
-        sources: Optional[Dict[int, HashedValue]] = None,
+        sources: Optional[Dict[int, Any]] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         yield from self.variable._evaluate__(sources, parent)

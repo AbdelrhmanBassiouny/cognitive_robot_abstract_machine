@@ -3,12 +3,10 @@ from __future__ import annotations
 import typing
 from abc import ABC
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing_extensions import Dict, Optional, Iterable, Any
 
 from .cache_data import SeenSet
 from .conclusion import Conclusion
-from .hashed_data import HashedIterable
 from .rxnode import ColorLegend
 from .symbolic import (
     SymbolicExpression,
@@ -43,14 +41,12 @@ class ConclusionSelector(LogicalBinaryOperator, ABC):
         """
         if not conclusions:
             return
-        required_vars = HashedIterable()
+        required_var_ids = set()
         for conclusion in conclusions:
-            vars_ = conclusion._unique_variables_.filter(
-                lambda v: not isinstance(v.value, Literal)
-            )
-            required_vars.update(vars_)
+            vars_ = {v._id_ for v in conclusion._unique_variables_ if not isinstance(v, Literal)}
+            required_var_ids.update(vars_)
         required_output = {
-            k: v for k, v in output.bindings.items() if k in required_vars
+            k: v for k, v in output.bindings.items() if k in required_var_ids
         }
 
         if not self.concluded_before[not self._is_false_].check(required_output):
@@ -81,7 +77,7 @@ class ExceptIf(ConclusionSelector):
         """
         self._eval_parent_ = parent
         # init an empty source if none is provided
-        sources = sources or HashedIterable()
+        sources = sources or {}
 
         # constrain left values by available sources
         left_values = self.left._evaluate__(sources, parent=self)

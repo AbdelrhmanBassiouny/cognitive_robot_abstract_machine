@@ -102,17 +102,3 @@ class Add(Conclusion[T]):
         v = next(iter(self.value._evaluate__(sources, parent=self)))[self.value._id_]
         sources[self.var._var_._id_] = v
         yield OperationResult(sources, False, self)
-
-
-@dataclass(eq=False)
-class Infer(ResultQuantifier[T]):
-
-    def __post_init__(self):
-        super().__post_init__()
-        for v in self._child_._selected_variables:
-            v._is_inferred_ = True
-        self._node_.wrap_subtree = False
-
-    @property
-    def _plot_color_(self) -> ColorLegend:
-        return ColorLegend("Infer", "#EAC9FF")
