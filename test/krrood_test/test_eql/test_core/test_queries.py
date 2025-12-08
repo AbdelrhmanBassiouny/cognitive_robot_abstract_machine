@@ -636,6 +636,30 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
     ), ("All not generated items " "should not satisfy the " "predicate.")
 
 
+def test_select_predicate(handles_and_containers_world):
+    """
+    Test the generation of handles in the HandlesAndContainersWorld.
+    """
+    world = handles_and_containers_world
+
+    @dataclass
+    class HasName(Predicate):
+        body: Body
+        name: str
+
+        def __call__(self):
+            return self.body.name == self.name
+
+    body = let(Body, world.bodies)
+    has_name = HasName(body, "Handle1")
+    query = the(entity(has_name, has_name))
+
+    handle1 = query.evaluate()
+    assert isinstance(handle1, HasName), "Should generate a handle."
+    assert has_name.body.name == "Handle1", "The generated handle should have the expected name."
+
+
+
 def test_contains_type():
     fb1_fruits = [Apple("apple"), Body("Body1")]
     fb2_fruits = [Body("Body3"), Body("Body2")]

@@ -1208,9 +1208,10 @@ class Variable(CanBehaveLikeAVariable[T]):
             # Build once: unwrapped hashed kwargs for already provided child vars
             bound_kwargs = {k: v[self._child_vars_[k]._id_] for k, v in kwargs.items()}
             instance = self._type_(**bound_kwargs)
+            truth_value = bool(instance)
             if self._predicate_type_ == PredicateType.SubClassOfPredicate:
-                instance = instance()
-            yield self._process_output_and_update_values_(instance, kwargs)
+                truth_value = instance()
+            yield self._process_output_and_update_values_(instance, kwargs, truth_value)
 
     def _generate_combinations_for_child_vars_values_(
             self, sources: Optional[Dict[int, Any]] = None
@@ -1220,13 +1221,14 @@ class Variable(CanBehaveLikeAVariable[T]):
         )
 
     def _process_output_and_update_values_(
-            self, instance: Any, kwargs: Dict[str, OperationResult]
+            self, instance: Any, kwargs: Dict[str, OperationResult], truth_value: bool
     ) -> OperationResult:
         """
         Process the predicate/variable instance and get the results.
 
         :param instance: The created instance.
         :param kwargs: The keyword arguments of the predicate/variable.
+        :param truth_value: The truth-value of the predicate/variable instance.
         :return: The results' dictionary.
         """
         # kwargs is a mapping from name -> {var_id: value};
@@ -1234,7 +1236,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         values = {self._id_: instance}
         for d in kwargs.values():
             values.update(d.bindings)
-        return OperationResult(values, not bool(instance), self)
+        return OperationResult(values, not truth_value, self)
 
     @property
     def _name_(self):
