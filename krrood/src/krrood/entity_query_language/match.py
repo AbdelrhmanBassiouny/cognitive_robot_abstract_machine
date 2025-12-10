@@ -16,7 +16,7 @@ from .entity import (
     entity,
     exists,
 )
-from .failures import NoneWrappedFieldError, WrongSelectableType
+from .failures import NoneWrappedFieldError, WrongSelectableType, UnquantifiedMatchError
 from .predicate import HasType
 from .rxnode import RWXNode
 from .symbolic import (
@@ -238,6 +238,10 @@ class Match(AbstractMatchExpression[T]):
     """
     Whether the match is resolved or not.
     """
+    selectable_match: Optional[SelectableMatchExpression] = field(init=False, default=None)
+    """
+    The selectable match expression of this match.
+    """
 
     def __call__(self, **kwargs) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
         """
@@ -249,6 +253,14 @@ class Match(AbstractMatchExpression[T]):
         self.kwargs = kwargs
         return self
 
+    def __getattr__(self, item):
+        """
+        Implemented to raise the appropriate error.
+        """
+        if item.startswith("_"):
+            raise AttributeError(item)
+        raise UnquantifiedMatchError(self)
+
     def apply_result_processor(
             self, result_processor: Type[ResultProcessor[T]], **result_processor_kwargs
     ) -> Union[ResultProcessor[T], T]:
@@ -257,9 +269,11 @@ class Match(AbstractMatchExpression[T]):
         """
         self.result_processor_data = ResultProcessorData(result_processor, result_processor_kwargs)
         self.resolve()
-        return SelectableMatchExpression(_match_expression_=self)
+        if self.selectable_match is None:
+            self.selectable_match = SelectableMatchExpression(_match_expression_=self)
+        return self.selectable_match
 
-    def domain_from(self, domain: DomainType):
+    def from_(self, domain: DomainType):
         """
         Record the domain to use for the variable created by the match.
         """

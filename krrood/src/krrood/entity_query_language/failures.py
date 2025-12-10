@@ -13,6 +13,7 @@ from ..utils import DataclassException
 
 if TYPE_CHECKING:
     from .symbolic import SymbolicExpression, ResultQuantifier
+    from .match import Match
 
 
 @dataclass
@@ -91,8 +92,19 @@ class UsageError(DataclassException):
     """
     Raised when there is an incorrect usage of the entity query language API.
     """
-
     ...
+
+
+@dataclass
+class UnquantifiedMatchError(UsageError):
+    """
+    Raised when a Match expression is being used without being quantified first.
+    """
+    match_expression: Match
+
+    def __post_init__(self):
+        self.message = (f"The match expression {self.match_expression} is being used without being quantified first."
+                        f"Please make sure to quantify the match using a/an or the")
 
 
 @dataclass

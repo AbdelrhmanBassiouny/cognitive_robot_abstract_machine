@@ -4,6 +4,7 @@ import krrood.entity_query_language.entity_result_processors as eql
 from krrood.entity_query_language.entity import (
     entity,
     let, set_of, )
+from krrood.entity_query_language.failures import UnquantifiedMatchError
 from krrood.entity_query_language.match import (
     matching,
     match_any,
@@ -29,7 +30,7 @@ def test_match(handles_and_containers_world):
         matching(FixedConnection)(
             parent=matching(Container)(name="Container1"),
             child=matching(Handle)(name="Handle1"),
-        ).domain_from(world.connections)
+        ).from_(world.connections)
     )
 
     fixed_connection_query_manual = the(
@@ -58,7 +59,7 @@ def test_select(handles_and_containers_world):
     fixed_connection = the(matching(FixedConnection)(
         parent=matching(Container)(name="Container1"),
         child=matching(Handle)(name="Handle1"),
-    ).domain_from(world.connections))
+    ).from_(world.connections))
     container_and_handle = select(container := fixed_connection.parent,
                                   handle := fixed_connection.child)
 
@@ -88,7 +89,7 @@ def test_select_where(handles_and_containers_world):
     fixed_connection = the(matching(FixedConnection)(
         parent=matching(Container),
         child=matching(Handle),
-    ).domain_from(world.connections))
+    ).from_(world.connections))
     container_and_handle = select(container := fixed_connection.parent,
                                   handle := fixed_connection.child).where(container.size > 1)
 
@@ -125,7 +126,7 @@ def world_and_cabinets_and_specific_drawer(handles_and_containers_world):
 
 def test_match_any(world_and_cabinets_and_specific_drawer):
     world, cabinets, my_drawer = world_and_cabinets_and_specific_drawer
-    cabinet = a(matching(Cabinet)(drawers=match_any([my_drawer])).domain_from(cabinets))
+    cabinet = a(matching(Cabinet)(drawers=match_any([my_drawer])).from_(cabinets))
     found_cabinets = list(cabinet.evaluate())
     assert len(found_cabinets) == 2
     assert cabinets[0] in found_cabinets
@@ -134,7 +135,7 @@ def test_match_any(world_and_cabinets_and_specific_drawer):
 
 def test_match_all(world_and_cabinets_and_specific_drawer):
     world, cabinets, my_drawer = world_and_cabinets_and_specific_drawer
-    cabinet = the(matching(Cabinet)(drawers=match_all([my_drawer])).domain_from(cabinets))
+    cabinet = the(matching(Cabinet)(drawers=match_all([my_drawer])).from_(cabinets))
     found_cabinet = cabinet.evaluate()
     assert found_cabinet is cabinets[1]
 
@@ -151,7 +152,7 @@ def test_match_any_on_collection_returns_unique_parent_entities():
     cabinet2 = Cabinet(container=other_c, drawers=[drawer2])
     views = [drawer1, drawer2, cabinet1, cabinet2]
 
-    q = a(matching(Cabinet)(drawers=match_any([drawer1, drawer2])).domain_from(views))
+    q = a(matching(Cabinet)(drawers=match_any([drawer1, drawer2])).from_(views))
 
     results = list(q.evaluate())
     # Expect exactly the two cabinets, no duplicates
@@ -161,13 +162,19 @@ def test_match_any_on_collection_returns_unique_parent_entities():
 
 def test_count_wih_match(handles_and_containers_world):
     world = handles_and_containers_world
-    number_of_fixed_connections = eql.count(matching(FixedConnection).domain_from(world.connections)).evaluate()
-    assert number_of_fixed_connections == len([con for con in world.connections if isinstance(con, FixedConnection)])
+    fixed_connections = a(matching(FixedConnection).from_(world.connections))
+    assert count(fixed_connections).evaluate() == len([con for con in world.connections if isinstance(con, FixedConnection)])
 
 
 def test_max_with_match(handles_and_containers_world):
     world = handles_and_containers_world
     assert eql.max(entity(let(Container, world.bodies).size)).evaluate() == 2
-    container = a(matching(Container).domain_from(world.bodies))
+    container = a(matching(Container).from_(world.bodies))
     max_size_container = select(eql.max(container.size)).evaluate()
     assert max_size_container == 2
+
+def test_unquantified_match_error(handles_and_containers_world):
+    world = handles_and_containers_world
+    container = matching(Container).from_(world.bodies)
+    with pytest.raises(UnquantifiedMatchError):
+        container.size
