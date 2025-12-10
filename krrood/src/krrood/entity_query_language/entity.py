@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from .hashed_data import T
+from .failures import LiteralConditionError
 from .symbol_graph import SymbolGraph
-from .utils import is_iterable
+from .utils import is_iterable, T
 
 """
 User interface (grammar & vocabulary) for entity query language.
@@ -29,13 +29,12 @@ from .symbolic import (
     Comparator,
     chained_logic,
     CanBehaveLikeAVariable,
-    From,
     Variable,
     optimize_or,
     Flatten,
     ForAll,
     Exists,
-    Literal, Selectable, Max, Min, Sum, Count, QueryObjectDescriptor, Average,
+    Literal, Selectable, Max, Min, Sum, Count, Average, DomainType,
 )
 
 from .predicate import (
@@ -107,13 +106,13 @@ def _extract_variables_and_expression(
     selected_variables = list(selected_variables)
     expression = None
     if len(expression_list) > 0:
+        literal_expressions = [exp for exp in expression_list if not isinstance(exp, SymbolicExpression)]
+        if literal_expressions:
+            raise LiteralConditionError(literal_expressions)
         expression = (
             and_(*expression_list) if len(expression_list) > 1 else expression_list[0]
         )
     return selected_variables, expression
-
-
-DomainType = Union[Iterable, None]
 
 
 def let(
@@ -154,7 +153,7 @@ def let(
 
 def _get_domain_source_from_domain_and_type_values(
     domain: DomainType, type_: Type
-) -> Optional[From]:
+) -> Optional[DomainType]:
     """
     Get the domain source from the domain and the type values.
 
@@ -166,7 +165,7 @@ def _get_domain_source_from_domain_and_type_values(
         domain = filter(lambda x: isinstance(x, type_), domain)
     elif domain is None and issubclass(type_, Symbol):
         domain = SymbolGraph().get_instances_of_type(type_)
-    return From(domain)
+    return domain
 
 
 def and_(*conditions: ConditionType):

@@ -22,11 +22,11 @@ from .symbol_graph import (
     SymbolGraph,
 )
 from .symbolic import (
-    T,
     SymbolicExpression,
     Variable,
     _any_of_the_kwargs_is_a_variable,
 )
+from .utils import T
 
 
 def symbolic_function(
@@ -94,6 +94,9 @@ class Predicate(Symbol, ABC):
         """
         Evaluate the predicate for the supplied values.
         """
+
+    def __bool__(self):
+        return bool(self.__call__())
 
 
 @dataclass(eq=False)
