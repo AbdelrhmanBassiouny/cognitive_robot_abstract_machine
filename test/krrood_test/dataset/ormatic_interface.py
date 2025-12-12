@@ -799,6 +799,32 @@ class KinematicChainDAO(
     }
 
 
+class ListOfEnumDAO(
+    SymbolDAO, DataAccessObject[test.krrood_test.dataset.example_classes.ListOfEnum]
+):
+
+    __tablename__ = "ListOfEnumDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    list_of_enum: Mapped[
+        typing.List[test.krrood_test.dataset.example_classes.TestEnum]
+    ] = mapped_column(
+        krrood.ormatic.custom_types.EnumListType(
+            test.krrood_test.dataset.example_classes.TestEnum
+        ),
+        nullable=False,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ListOfEnumDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
+
 class MoreShapesDAO(
     SymbolDAO, DataAccessObject[test.krrood_test.dataset.example_classes.MoreShapes]
 ):

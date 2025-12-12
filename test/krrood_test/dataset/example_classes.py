@@ -604,3 +604,17 @@ class PrimaryBase:
 @dataclass
 class MultipleInheritance(PrimaryBase, Mixin):
     extra_attribute: str
+
+
+# %% Test List of Enum
+
+
+class TestEnum(Enum):
+    OPTION_A = "option_a"
+    OPTION_B = "option_b"
+    OPTION_C = "option_c"
+
+
+@dataclass
+class ListOfEnum(Symbol):
+    list_of_enum: List[TestEnum]
