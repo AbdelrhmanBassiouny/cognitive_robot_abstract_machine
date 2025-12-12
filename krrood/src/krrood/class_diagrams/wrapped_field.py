@@ -152,8 +152,7 @@ class WrappedField:
             return False
         args = get_args(self.resolved_type)
         return len(args) > 0 and all(
-            inspect.isclass(arg) and issubclass(arg, enum.Enum)
-            for arg in args
+            inspect.isclass(arg) and issubclass(arg, enum.Enum) for arg in args
         )
 
     @cached_property
