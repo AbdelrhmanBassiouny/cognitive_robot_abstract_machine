@@ -21,7 +21,7 @@ leaf_types = (
     str,
     bool,
     NoneType,
-)  # containers that can be serialized by the built-in JSON module
+)  # types that can be serialized by the built-in JSON module
 
 
 JSON_TYPE_NAME = "__json_type__"  # the key used in JSON dicts to identify the class
@@ -202,7 +202,7 @@ class SubclassJSONSerializer:
 
         fully_qualified_class_name = data.get(JSON_TYPE_NAME)
         if not fully_qualified_class_name:
-            raise MissingTypeError()
+            return data
 
         try:
             module_name, class_name = fully_qualified_class_name.rsplit(".", 1)
@@ -254,6 +254,9 @@ def to_json(obj: Union[SubclassJSONSerializer, Any]) -> JSON_RETURN_TYPE:
 
     if isinstance(obj, list_like_classes):
         return [to_json(item) for item in obj]
+
+    if isinstance(obj, dict):
+        return obj
 
     if isinstance(obj, SubclassJSONSerializer):
         return obj.to_json()

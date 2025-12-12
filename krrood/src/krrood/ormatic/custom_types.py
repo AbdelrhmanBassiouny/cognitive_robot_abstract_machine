@@ -31,37 +31,34 @@ class TypeType(TypeDecorator):
 
 class EnumListType(TypeDecorator):
     """
-    TypeDecorator for storing lists of enum values as JSON string.
+    TypeDecorator for storing lists of enum values as JSON.
 
     Stores the enum class reference and a list of enum values. This provides
-    database-backend independence by using JSON string storage, avoiding
-    conflicts with custom JSON serializers.
+    database-backend independence by using native JSON storage.
     """
 
-    impl = types.Text
+    impl = types.JSON
     cache_ok = True
 
     def __init__(self, enum_class: Type[enum.Enum]):
         super().__init__()
         self.enum_class = enum_class
 
-    def process_bind_param(self, value: Optional[List[enum.Enum]], dialect) -> Optional[str]:
+    def process_bind_param(self, value: Optional[List[enum.Enum]], dialect) -> Optional[dict]:
         if value is None:
             return None
-        data = {
+        return {
             "enum_class": module_and_class_name(self.enum_class),
             "values": [item.value for item in value]
         }
-        return json.dumps(data)
 
-    def process_result_value(self, value: Optional[str], dialect) -> Optional[List[enum.Enum]]:
+    def process_result_value(self, value: Optional[dict], dialect) -> Optional[List[enum.Enum]]:
         if value is None:
             return None
 
-        data = json.loads(value)
-        enum_class_name = data["enum_class"]
+        enum_class_name = value["enum_class"]
         module_name, class_name = enum_class_name.rsplit(".", 1)
         module = importlib.import_module(module_name)
         enum_class = getattr(module, class_name)
 
-        return [enum_class(v) for v in data["values"]]
+        return [enum_class(v) for v in value["values"]]
