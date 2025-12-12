@@ -7,7 +7,6 @@ from functools import reduce
 from operator import or_
 
 from krrood.entity_query_language.entity import (
-    let,
     entity,
     not_,
     in_,
@@ -352,12 +351,11 @@ class HasDoorLikeFactories(ABC):
         :param world: The world from which to get the bodies.
         :return: A list of bodies that are not part of any door semantic annotation.
         """
-        all_doors = let(Door, domain=world.semantic_annotations)
-        other_body = let(Body, domain=world.bodies)
-        door_bodies = all_doors.bodies
+        all_doors = an(entity(Door).from_(world.semantic_annotations))
+        other_body = entity(Body).from_(world.bodies)
         bodies_without_excluded_bodies_query = an(
-            entity(other_body).where(
-                for_all(door_bodies, not_(in_(other_body, door_bodies)))
+            other_body.where(
+                for_all(all_doors.bodies, not_(in_(other_body, all_doors.bodies)))
             )
         )
 

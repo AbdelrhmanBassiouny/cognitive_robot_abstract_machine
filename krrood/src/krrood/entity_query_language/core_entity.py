@@ -350,3 +350,40 @@ def inference(
     return lambda **kwargs: Variable(
         _type_=type_, _name__=type_.__name__, _kwargs_=kwargs, _is_inferred_=True
     )
+
+
+@dataclass
+class ComparatorBuilder:
+    operation: Callable[[T, T], bool]
+    right: T
+
+    def apply(self, left: T) -> Comparator:
+        return Comparator(left, self.right)
+
+
+def gt(right: T) -> ComparatorBuilder:
+    return ComparatorBuilder(
+        operator.gt,
+        right,
+    )
+
+
+def lt(right: T) -> ComparatorBuilder:
+    return ComparatorBuilder(
+        operator.lt,
+        right,
+    )
+
+
+def ge(right: T) -> ComparatorBuilder:
+    return ComparatorBuilder(
+        operator.ge,
+        right,
+    )
+
+
+def le(right: T) -> ComparatorBuilder:
+    return ComparatorBuilder(
+        operator.le,
+        right,
+    )

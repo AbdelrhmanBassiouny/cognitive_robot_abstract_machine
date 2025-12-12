@@ -1,4 +1,5 @@
 import pytest
+from krrood.entity_query_language.core_entity import gt
 from sqlalchemy import select
 from sqlalchemy.exc import MultipleResultsFound
 
@@ -28,7 +29,7 @@ from krrood.entity_query_language.entity import (
     or_,
     in_,
 )
-from krrood.entity_query_language.entity_result_processors import an, the
+from krrood.entity_query_language.entity_result_processors import an, the, a
 from krrood.ormatic.dao import to_dao
 from krrood.ormatic.eql_interface import eql_to_sql
 
@@ -37,8 +38,7 @@ def test_translate_simple_greater(session, database):
     session.add(PositionDAO(x=1, y=2, z=3))
     session.add(PositionDAO(x=1, y=2, z=4))
     session.commit()
-
-    query = an(entity(position := let(type_=Position, domain=[])).where(position.z > 3))
+    query = a(entity(Position)(z=gt(3)))
 
     translator = eql_to_sql(query, session)
     query_by_hand = select(PositionDAO).where(PositionDAO.z > 3)

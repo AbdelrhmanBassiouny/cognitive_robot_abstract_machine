@@ -6,7 +6,6 @@ from typing import Optional, List
 
 import trimesh.sample
 from krrood.entity_query_language.entity import (
-    let,
     entity,
     and_,
     not_,
@@ -39,9 +38,9 @@ def robot_in_collision(
     if ignore_collision_with is None:
         ignore_collision_with = []
 
-    body = let(type_=Body, domain=robot._world.bodies_with_enabled_collision)
-    possible_collisions_bodies = an(
-        entity(body).where(
+    body = entity(Body).from_(robot._world.bodies_with_enabled_collision)
+    possible_collisions_bodies = a(
+        body.where(
             not_(contains(robot.bodies, body)),
             not_(contains(ignore_collision_with, body)),
         ),
