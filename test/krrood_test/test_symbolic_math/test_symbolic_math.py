@@ -1212,3 +1212,93 @@ class TestScalar:
             result = op(s1, s2)
             assert isinstance(result, cas.Scalar), f"{op.__name__} result is not Scalar"
             assert result == op(1, 2), f"{op.__name__} result is wrong"
+
+
+class TestVector:
+    def test_arithmetic_operations(self):
+        operators = [
+            operator.add,
+            operator.sub,
+            operator.mul,
+            operator.truediv,
+            operator.pow,
+            operator.floordiv,
+            operator.mod,
+        ]
+        v1_np = np.array([1, 2, 3], ndmin=2)
+        v2_np = np.array([3, 2, 1], ndmin=2)
+        s1_float = 1
+        v1 = cas.Vector(v1_np)
+        v2 = cas.Vector(v2_np)
+        s1 = cas.Scalar(s1_float)
+
+        for op in operators:
+            result = op(v1, s1)
+            expected = op(v1_np, s1_float)
+            assert isinstance(result, cas.Vector), f"{op.__name__} result is not Vector"
+            assert np.allclose(result, expected), f"{op.__name__} result is wrong"
+            assert (
+                result.shape == expected.shape
+            ), f"{op.__name__} result shape is wrong"
+
+            result = op(v1, v2)
+            expected = op(v1_np, v2_np)
+            assert isinstance(result, cas.Vector), f"{op.__name__} result is not Vector"
+            assert np.allclose(result, expected), f"{op.__name__} result is wrong"
+            assert (
+                result.shape == expected.shape
+            ), f"{op.__name__} result shape is wrong"
+
+
+class TestMatrix:
+    def test_arithmetic_operations(self):
+        operators = [
+            operator.add,
+            operator.sub,
+            operator.mul,
+            operator.truediv,
+            operator.pow,
+            operator.floordiv,
+            operator.mod,
+        ]
+        v1_np = np.array([1, 2, 3], ndmin=2)
+        m1_np = np.array([[3, 2, 1], [23, 23, 23], [4, 5, 6]], ndmin=2)
+        m2_np = np.array([[6, 5, 4], [1, 2, 3], [0, 0, 0]], ndmin=2)
+        s1_float = 1
+        s1 = cas.Scalar(s1_float)
+        v1 = cas.Vector(v1_np)
+        m1 = cas.Matrix(m1_np)
+        m2 = cas.Matrix(m2_np)
+
+        for op in operators:
+            expected = op(m1_np, s1_float)
+            result = op(m1, s1)
+            assert isinstance(result, cas.Matrix), f"{op.__name__} result is not Matrix"
+            assert np.allclose(result, expected), f"{op.__name__} result is wrong"
+            assert (
+                result.shape == expected.shape
+            ), f"{op.__name__} result shape is wrong"
+
+            expected = op(m1_np, v1_np)
+            result = op(m1, v1)
+            assert isinstance(result, cas.Matrix), f"{op.__name__} result is not Matrix"
+            assert np.allclose(result, expected), f"{op.__name__} result is wrong"
+            assert (
+                result.shape == expected.shape
+            ), f"{op.__name__} result shape is wrong"
+
+            expected = op(m1_np, v1_np)
+            result = op(m1, v1)
+            assert isinstance(result, cas.Matrix), f"{op.__name__} result is not Matrix"
+            assert np.allclose(result, expected), f"{op.__name__} result is wrong"
+            assert (
+                result.shape == expected.shape
+            ), f"{op.__name__} result shape is wrong"
+
+            expected = op(m1_np, m2_np)
+            result = op(m1, m2)
+            assert isinstance(result, cas.Matrix), f"{op.__name__} result is not Matrix"
+            assert np.allclose(result, expected), f"{op.__name__} result is wrong"
+            assert (
+                result.shape == expected.shape
+            ), f"{op.__name__} result shape is wrong"

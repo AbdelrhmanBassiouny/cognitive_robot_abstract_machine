@@ -15,7 +15,7 @@ import casadi as _ca
 import numpy as _np
 from scipy import sparse as _sp
 import typing_extensions as _te
-from typing_extensions import ClassVar as _ClassVar
+from typing_extensions import ClassVar as _ClassVar, Iterable
 
 from krrood.entity_query_language.predicate import Symbol
 from krrood.symbolic_math.exceptions import (
@@ -26,6 +26,7 @@ from krrood.symbolic_math.exceptions import (
     SymbolicMathError,
     NotScalerError,
     UnsupportedOperationError,
+    WrongDimensionsError,
 )
 
 EPS: float = _sys.float_info.epsilon * 4.0
@@ -512,6 +513,9 @@ class SymbolicType(Symbol):
             _ca.simplify(self.casadi_sx), _ca.simplify(other_expression), 5
         )
 
+    def __neg__(self) -> Expression:
+        return Expression(self.casadi_sx.__neg__())
+
 
 class BasicOperatorMixin:
     """
@@ -550,58 +554,6 @@ class BasicOperatorMixin:
             elif not isinstance(other, NumericalScalar):
                 return NotImplemented
             return Expression(operation(self.casadi_sx, other))
-
-    # %% arthimetic operators
-    def __neg__(self) -> Expression:
-        return Expression(self.casadi_sx.__neg__())
-
-    def __add__(self, other: ScalarData) -> Expression:
-        return self._binary_operation(other, _operator.add)
-
-    def __radd__(self, other: NumericalScalar) -> Expression:
-        return self._binary_operation(other, _operator.add, reverse=True)
-
-    def __sub__(self, other: ScalarData) -> Expression:
-        return self._binary_operation(other, _operator.sub)
-
-    def __rsub__(self, other: NumericalScalar) -> Expression:
-        return self._binary_operation(other, _operator.sub, reverse=True)
-
-    def __mul__(self, other: ScalarData) -> Expression:
-        return self._binary_operation(other, _operator.mul)
-
-    def __rmul__(self, other: NumericalScalar) -> Expression:
-        return self._binary_operation(other, _operator.mul, reverse=True)
-
-    def __truediv__(self, other: ScalarData) -> Expression:
-        return self._binary_operation(other, _operator.truediv)
-
-    def __rtruediv__(self, other: NumericalScalar) -> Expression:
-        return self._binary_operation(other, _operator.truediv, reverse=True)
-
-    def __pow__(self, other: ScalarData) -> Expression:
-        return self._binary_operation(other, _operator.pow)
-
-    def __rpow__(self, other: NumericalScalar) -> Expression:
-        return self._binary_operation(other, _operator.pow, reverse=True)
-
-    def __floordiv__(self, other: ScalarData) -> Expression:
-        return floor(self / other)
-
-    def __rfloordiv__(self, other: ScalarData) -> Expression:
-        return floor(other / self)
-
-    def __mod__(self, other: ScalarData) -> Expression:
-        return fmod(self.casadi_sx, other)
-
-    def __rmod__(self, other: ScalarData) -> Expression:
-        return fmod(other, self.casadi_sx)
-
-    def __divmod__(self, other: ScalarData) -> _te.Tuple[Expression, Expression]:
-        return self // other, self % other
-
-    def __rdivmod__(self, other: ScalarData) -> _te.Tuple[Expression, Expression]:
-        return other // self, other % self
 
     # %% logical operators
 
@@ -655,20 +607,6 @@ class BasicOperatorMixin:
             condition=other, if_result=Expression(data=1), else_result=other
         )
         return if_eq_zero(other, if_result=if_nan, else_result=self / save_denominator)
-
-
-class VectorOperationsMixin:
-    casadi_sx: _ca.SX
-    """
-    Reference to the casadi data structure of type casadi.SX
-    """
-
-    def __sub__(self, other: _te.Self) -> Expression: ...
-
-    def euclidean_distance(self, other: _te.Self) -> Expression:
-        difference = self - other
-        distance = difference.norm()
-        return distance
 
 
 @_dataclasses.dataclass(eq=False)
@@ -1026,35 +964,157 @@ class Scalar(Expression):
             return float(self) == other
         return NotImplemented
 
-    def __add__(self, other: Scalar) -> Scalar:
+    def __add__(self, other: Scalar) -> _te.Self:
         return Scalar.from_casadi_sx(self.casadi_sx + other.casadi_sx)
 
-    def __sub__(self, other: Scalar) -> Scalar:
+    def __sub__(self, other: Scalar) -> _te.Self:
         return Scalar.from_casadi_sx(self.casadi_sx - other.casadi_sx)
 
-    def __mul__(self, other: Scalar) -> Scalar:
+    def __mul__(self, other: Scalar) -> _te.Self:
         return Scalar.from_casadi_sx(self.casadi_sx * other.casadi_sx)
 
-    def __truediv__(self, other: Scalar) -> Scalar:
+    def __truediv__(self, other: Scalar) -> _te.Self:
         return Scalar.from_casadi_sx(self.casadi_sx / other.casadi_sx)
 
-    def __pow__(self, other: Scalar) -> Scalar:
+    def __pow__(self, other: Scalar) -> _te.Self:
         return Scalar.from_casadi_sx(self.casadi_sx**other.casadi_sx)
 
-    def __floordiv__(self, other: Scalar) -> Scalar:
+    def __floordiv__(self, other: Scalar) -> _te.Self:
         return Scalar.from_casadi_sx(_ca.floor(self.casadi_sx / other.casadi_sx))
 
-    def __mod__(self, other: Scalar) -> Scalar:
+    def __mod__(self, other: Scalar) -> _te.Self:
         return fmod(self, other)
 
 
 @_dataclasses.dataclass(eq=False)
 class Vector(Expression):
-    pass
+
+    def __init__(
+        self, data: _te.Optional[Iterable[bool | int | _IntEnum | float]] = None
+    ):
+        if data is None:
+            data = []
+        self.casadi_sx = _ca.SX(data)
+
+    def __add__(self, other: Scalar | Vector) -> _te.Self:
+        return Vector.from_casadi_sx(self.casadi_sx + other.casadi_sx)
+
+    def __sub__(self, other: Scalar | Vector) -> _te.Self:
+        return Vector.from_casadi_sx(self.casadi_sx - other.casadi_sx)
+
+    def __mul__(self, other: Scalar | Vector) -> _te.Self:
+        return Vector.from_casadi_sx(self.casadi_sx * other.casadi_sx)
+
+    def __truediv__(self, other: Scalar | Vector) -> _te.Self:
+        return Vector.from_casadi_sx(self.casadi_sx / other.casadi_sx)
+
+    def __pow__(self, other: Scalar | Vector) -> _te.Self:
+        return Vector.from_casadi_sx(self.casadi_sx**other.casadi_sx)
+
+    def __floordiv__(self, other: Scalar | Vector) -> _te.Self:
+        return Vector.from_casadi_sx(_ca.floor(self.casadi_sx / other.casadi_sx))
+
+    def __mod__(self, other: Scalar | Vector) -> _te.Self:
+        return fmod(self, other)
+
+    def euclidean_distance(self, other: _te.Self) -> Expression:
+        difference = self - other
+        distance = difference.norm()
+        return distance
 
 
 @_dataclasses.dataclass(eq=False)
 class Matrix(Expression):
+    def __init__(
+        self, data: _te.Optional[Iterable[bool | int | _IntEnum | float]] = None
+    ):
+        if data is None:
+            data = []
+        self.casadi_sx = _ca.SX(data)
+
+    def __add__(self, other: Scalar | Vector | Matrix) -> _te.Self:
+        other_sx = self._broadcast_like_self(other)
+        return Matrix.from_casadi_sx(self.casadi_sx + other_sx)
+
+    def __sub__(self, other: Scalar | Vector | Matrix) -> _te.Self:
+        other_sx = self._broadcast_like_self(other)
+        return Matrix.from_casadi_sx(self.casadi_sx - other_sx)
+
+    def __mul__(self, other: Scalar | Vector | Matrix) -> _te.Self:
+        other_sx = self._broadcast_like_self(other)
+        return Matrix.from_casadi_sx(self.casadi_sx * other_sx)
+
+    def __truediv__(self, other: Scalar | Vector | Matrix) -> _te.Self:
+        other_sx = self._broadcast_like_self(other)
+        num = self.casadi_sx
+        den = other_sx
+        zero_den = _ca.eq(den, 0)
+        zero_num = _ca.eq(num, 0)
+        signed_inf = _ca.sign(num) * _ca.SX(_np.inf)
+        nan_const = _ca.SX(_np.nan)
+        base_div = num / den
+        # Where denominator is zero, use signed infinity; where both numerator and denominator are zero, use NaN
+        result = _ca.if_else(
+            zero_den, _ca.if_else(zero_num, nan_const, signed_inf), base_div
+        )
+        return Matrix.from_casadi_sx(result)
+
+    def __pow__(self, other: Scalar | Vector | Matrix) -> _te.Self:
+        other_sx = self._broadcast_like_self(other)
+        return Matrix.from_casadi_sx(self.casadi_sx**other_sx)
+
+    def __floordiv__(self, other: Scalar | Vector | Matrix) -> _te.Self:
+        other_sx = self._broadcast_like_self(other)
+        num = self.casadi_sx
+        den = other_sx
+        zero_den = _ca.eq(den, 0)
+        # numpy: floor_divide by zero yields 0 and issues a warning; we mimic the value semantics
+        div = _ca.floor(num / den)
+        result = _ca.if_else(zero_den, _ca.SX.zeros(*self.shape), div)
+        return Matrix.from_casadi_sx(result)
+
+    def __mod__(self, other: Scalar | Vector | Matrix) -> _te.Self:
+        other_sx = self._broadcast_like_self(other)
+        num = self.casadi_sx
+        den = other_sx
+        zero_den = _ca.eq(den, 0)
+        mod_val = _ca.fmod(num, den)
+        result = _ca.if_else(zero_den, _ca.SX.zeros(*self.shape), mod_val)
+        return Matrix.from_casadi_sx(result)
+
+    def _broadcast_like_self(self, other: Expression) -> _ca.SX:
+        """
+        Broadcast the other operand to match this matrix's shape for element-wise operations.
+
+        Rules:
+        - Scalar: allowed without change.
+        - Vector with shape (1, n) and self has n columns: broadcast across rows.
+        - Vector with shape (n, 1) and self has n rows: broadcast across columns.
+        - Matrix with identical shape: allowed.
+        Otherwise, raise WrongDimensionsError.
+        """
+        # Scalars are always compatible
+        if isinstance(other, Scalar):
+            return other.casadi_sx
+        # Exact same shape → no broadcasting required
+        if self.shape == other.shape:
+            return other.casadi_sx
+        # Vector row broadcasting: (1, n) with matching columns
+        if (
+            isinstance(other, Vector)
+            and other.shape[0] == 1
+            and other.shape[1] == self.shape[1]
+        ):
+            return _ca.repmat(other.casadi_sx, self.shape[0], 1)
+        # Vector column broadcasting: (n, 1) with matching rows
+        if (
+            isinstance(other, Vector)
+            and other.shape[1] == 1
+            and other.shape[0] == self.shape[0]
+        ):
+            return _ca.repmat(other.casadi_sx, 1, self.shape[1])
+        # If we reach here, shapes are incompatible
+        raise WrongDimensionsError(self.shape, other.shape)
 
     @classmethod
     def zeros(cls, rows: int, columns: int) -> _te.Self:
