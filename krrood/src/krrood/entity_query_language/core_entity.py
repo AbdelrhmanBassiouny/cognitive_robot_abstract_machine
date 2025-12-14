@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from abc import abstractmethod
 from dataclasses import dataclass
 
 from .failures import LiteralConditionError
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable, T
+from ..doc.eql.test_tmp.writing_rule_trees import body2
 
 """
 User interface (grammar & vocabulary) for entity query language.
@@ -251,6 +253,49 @@ def contains(*args):
     return in_(item, container)
 
 
+@dataclass
+class Items:
+    """
+    Represents all items to check for containment in a container.
+    """
+
+    items: Iterable[Any]
+
+
+@overload
+def contains_all(*items: Any):
+    """
+    A version of contains where the container is not defined yet
+    """
+    ...
+
+
+@overload
+def contains_all(
+    container: Union[Iterable, CanBehaveLikeAVariable[T]], items: Iterable[Any]
+) -> AND:
+    """
+    Check whether a container contains an item.
+
+    :param container: The container expression.
+    :param items: The items to look for.
+    :return: An AND expression equivalent to ``item1 in container & item2 in container ...etc.``.
+    :rtype: SymbolicExpression
+    """
+    ...
+
+
+def contains_all(*args):
+    """
+    Check whether a container contains an item. Can take just the item or both container and item.
+    """
+    if len(args) == 1:
+        items = args[0]
+        return Items(items)
+    container, items = args[0], args[1]
+    return and_(*[in_(item, container) for item in items])
+
+
 @overload
 def in_(container: Union[Iterable, CanBehaveLikeAVariable[T]]):
     """
@@ -353,7 +398,15 @@ def inference(
 
 
 @dataclass
-class ComparatorBuilder:
+class ConditionBuilder(ABC):
+    operation: Callable[[Any], bool]
+
+    @abstractmethod
+    def apply(self, *args, **kwargs) -> SymbolicExpression: ...
+
+
+@dataclass
+class ComparatorBuilder(ConditionBuilder):
     operation: Callable[[T, T], bool]
     right: T
 
@@ -386,4 +439,15 @@ def le(right: T) -> ComparatorBuilder:
     return ComparatorBuilder(
         operator.le,
         right,
+    )
+
+
+@dataclass
+class ContainsAllBuilder(ConditionBuilder):
+    items: Iterable[Any]
+
+
+def contains_all(items: Iterable[Any]) -> ComparatorBuilder:
+    return ConditionBuilder(
+        lambda container: and_(*[contains(container, item) for item in items])
     )

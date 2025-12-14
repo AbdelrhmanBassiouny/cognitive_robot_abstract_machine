@@ -392,7 +392,7 @@ class EntityMatch(AbstractEntityMatch[T]):
             raise AttributeError(item)
         raise UnquantifiedMatchError(self)
 
-    def from_(self, domain: DomainType):
+    def from_(self, domain: Iterable[T]) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
         """
         Record the domain to use for the variable created by the match.
         """
@@ -740,3 +740,72 @@ def _entity_matching(
     elif type_ and not isinstance(type_, type):
         return EntityMatch(_type=type_, domain=domain, variable=Literal(type_))
     return EntityMatch(_type=type_, domain=domain)
+
+
+@dataclass
+class Body(Symbol):
+    size: int
+
+
+@dataclass
+class World(Symbol):
+    bodies: List[Body]
+
+
+# 1) No where statement, nested construction with keyword arguments for constraints.
+world = the(
+    entity(World)(
+        bodies=collection_that(
+            contains(body1), contains(body2), has(atleast(1), entity(Body)(size=gt(1)))
+        )
+    )
+).evaluate()
+
+# 2) No where statement, variables defined using var(), entity() is a selection,
+# arguments constraints to allow using python operators like > without needing gt() like functions
+# and keyword arguments for equality and containment constraints
+W = var(type_=World, domain=worlds)
+world = the(
+    entity(W)(
+        exists(atleast(1), entity(B := var(type_=Body, domain=W.bodies))(B.size > 1)),
+        bodies=contains(body1, body2),
+    )
+).evaluate()
+
+# 3) variables defined with var(), entity is for selection, where() for constraints. No arguments, or keyword arguments.
+W = var(World, domain=worlds)
+world = the(
+    entity(W).where(
+        contains(W.bodies, body1),
+        contains(W.bodies, body2),
+        exists(entity().where(B.size > 1)),
+    )
+).evaluate()
+
+
+# 4) variables are defined using entity().from_() and also entity() performs selection.
+# where statement for constraints, no arguments or keyword arguments.
+W = entity(World).from_(worlds)
+B = entity(Body).from_(W.bodies)
+world = the(
+    entity(W).where(
+        contains(W.bodies, body1),
+        contains(W.bodies, body2),
+        exists(atleast(1), B.size > 1),
+    )
+).evaluate()
+
+# var() can also be renamed to let()
+
+
+# winner is refinned 3:
+# 3) variables defined with var(), entity is for selection, where() for constraints. No arguments, or keyword arguments.
+W = var(World, domain=worlds)
+B = var(Body, domain=W.bodies)
+world = the(
+    entity(W).where(
+        contains(W.bodies, body1),
+        contains(W.bodies, body2),
+        exists(entity(B).where(B.size > 1)),
+    )
+).evaluate()

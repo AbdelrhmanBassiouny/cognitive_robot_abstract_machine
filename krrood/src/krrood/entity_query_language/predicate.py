@@ -14,7 +14,7 @@ from typing_extensions import (
     ClassVar,
     Dict,
     List,
-    Iterable
+    Iterable,
 )
 
 from .enums import PredicateType
@@ -68,8 +68,15 @@ class Symbol:
         update_cache(instance)
         return instance
 
-    def from_(self, domain: Iterable[T]) -> T:
-        raise NotImplementedError("This method should not be called, this is just for IDE hints")
+    def from_(self, domain: Iterable[T]) -> Self:
+        raise NotImplementedError(
+            "This method should not be called, this is just for IDE hints"
+        )
+
+    def contains(self, *items: T) -> bool:
+        raise NotImplementedError(
+            "This method should not be called, this is just for IDE hints"
+        )
 
 
 @dataclass(eq=False)
