@@ -1069,6 +1069,12 @@ class Vector(Expression):
     def __mod__(self, other: Scalar | Vector) -> _te.Self:
         return fmod(self, other)
 
+    def dot(self, other: GenericSymbolicType) -> GenericSymbolicType:
+        return _create_return_type(other)(_ca.mtimes(to_sx(self), to_sx(other)))
+
+    def __matmul__(self, other: GenericSymbolicType) -> GenericSymbolicType:
+        return self.dot(other)
+
     def euclidean_distance(self, other: _te.Self) -> Expression:
         difference = self - other
         distance = difference.norm()
