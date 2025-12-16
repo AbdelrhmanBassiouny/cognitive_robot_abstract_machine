@@ -26,6 +26,7 @@ from .mixins import (
     HasRevoluteConnection,
     HasLeftRightDoor,
     HasSlider,
+    HasHoles,
 )
 from ..datastructures.prefixed_name import PrefixedName
 from ..datastructures.variables import SpatialVariables
@@ -314,7 +315,7 @@ class Room(SemanticAnnotation):
 
 
 @dataclass(eq=False)
-class Wall(HasBody):
+class Wall(HasBody, HasHoles):
 
     @classmethod
     def create_with_new_body_in_world(

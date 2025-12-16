@@ -839,6 +839,25 @@ class HasHingeDAO(
     }
 
 
+class HasHolesDAO(
+    SemanticAssociationDAO,
+    DataAccessObject[semantic_digital_twin.semantic_annotations.mixins.HasHoles],
+):
+
+    __tablename__ = "HasHolesDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SemanticAssociationDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HasHolesDAO",
+        "inherit_condition": database_id == SemanticAssociationDAO.database_id,
+    }
+
+
 class HasSliderDAO(
     HasPrismaticConnectionDAO,
     DataAccessObject[semantic_digital_twin.semantic_annotations.mixins.HasSlider],

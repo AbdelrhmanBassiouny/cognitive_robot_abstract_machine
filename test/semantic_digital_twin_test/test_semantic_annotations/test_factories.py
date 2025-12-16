@@ -311,6 +311,25 @@ class TestFactories(unittest.TestCase):
         semantic_wall_annotations = world.get_semantic_annotations_by_type(Wall)
         self.assertEqual(len(semantic_wall_annotations), 1)
 
+    def test_has_holes_factory(self):
+        world = World()
+        root = Body(name=PrefixedName("root"))
+        with world.modify_world():
+            world.add_body(root)
+        wall = Wall.create_with_new_body_in_world(
+            name=PrefixedName("wall"),
+            scale=Scale(0.1, 4, 2),
+            world=world,
+            parent=root,
+        )
+        door = Door.create_with_new_body_in_world(
+            name=PrefixedName("door"),
+            scale=Scale(0.03, 1, 2),
+            world=world,
+            parent=root,
+        )
+        wall.cut_hole_for_from_body(door)
+
 
 if __name__ == "__main__":
     unittest.main()

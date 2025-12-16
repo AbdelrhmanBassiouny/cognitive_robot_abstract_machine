@@ -5,14 +5,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import reduce
 from operator import or_
-from typing import (
-    List,
-    Optional,
-    Self,
-    Iterable,
-    Tuple,
-    Union,
-)
 
 import numpy as np
 import trimesh
@@ -23,7 +15,16 @@ from probabilistic_model.probabilistic_circuit.rx.helper import (
 from random_events.interval import SimpleInterval, Bound
 from random_events.product_algebra import SimpleEvent, Event
 from random_events.variable import Continuous
-from typing_extensions import TYPE_CHECKING, assert_never
+from typing_extensions import (
+    TYPE_CHECKING,
+    assert_never,
+    List,
+    Optional,
+    Self,
+    Iterable,
+    Tuple,
+    Union,
+)
 
 from krrood.ormatic.utils import classproperty
 from ..datastructures.prefixed_name import PrefixedName
@@ -39,7 +40,7 @@ from ..world_description.connections import (
     PrismaticConnection,
 )
 from ..world_description.degree_of_freedom import DegreeOfFreedom
-from ..world_description.geometry import Scale, BoundingBox
+from ..world_description.geometry import Scale
 from ..world_description.shape_collection import BoundingBoxCollection
 from ..world_description.world_entity import (
     SemanticAnnotation,
@@ -366,6 +367,31 @@ class SemanticAssociation(ABC):
         self: HasBody | Self, child: HasBody
     ) -> TransformationMatrix:
         return self.body.global_pose.inverse() @ child.body.global_pose
+
+
+@dataclass(eq=False)
+class HasHoles(SemanticAssociation, ABC):
+
+    def cut_hole_for_from_body(self: HasBody | Self, body_annotation: HasBody):
+        """
+        Cuts a hole in the semantic annotation's body for the given body annotation.
+
+        :param body_annotation: The body annotation to cut a hole for.
+        """
+        hole_event = body_annotation.body.collision.as_bounding_box_collection_in_frame(
+            self.body
+        ).event
+
+        wall_event = self.body.collision.as_bounding_box_collection_in_frame(
+            self.body
+        ).event
+
+        new_wall_event = wall_event - hole_event
+        new_bounding_box_collection = BoundingBoxCollection.from_event(
+            self.body, new_wall_event
+        ).as_shapes()
+        self.body.collision = new_bounding_box_collection
+        self.body.visual = new_bounding_box_collection
 
 
 @dataclass(eq=False)
