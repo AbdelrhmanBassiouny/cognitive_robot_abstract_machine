@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Type, Optional
 
-from typing_extensions import TypeVar, Type, List
+from typing_extensions import TypeVar, Type, List, Optional
 
 T = TypeVar("T")
 

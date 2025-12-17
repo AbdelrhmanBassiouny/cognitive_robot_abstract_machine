@@ -15,7 +15,7 @@ from typing_extensions import (
     Any,
 )
 
-from krrood.adapters.json_serializer import JSONSerializationError
+from krrood.adapters.exceptions import JSONSerializationError
 from .datastructures.prefixed_name import PrefixedName
 
 if TYPE_CHECKING:

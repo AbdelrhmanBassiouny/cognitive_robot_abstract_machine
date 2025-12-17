@@ -5,9 +5,9 @@ from krrood.ormatic.alternative_mappings import FunctionMapping, UncallableFunct
 from krrood.ormatic.dao import (
     to_dao,
     is_data_column,
-    NoDAOFoundError,
     ToDAOState,
 )
+from krrood.ormatic.exceptions import NoDAOFoundError
 from ..dataset.example_classes import *
 from ..dataset.ormatic_interface import *
 

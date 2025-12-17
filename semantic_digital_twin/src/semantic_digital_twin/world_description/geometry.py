@@ -12,7 +12,8 @@ import trimesh
 import trimesh.exchange.stl
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
 from PIL import Image
-from krrood.adapters.json_serializer import SubclassJSONSerializer, JSON_TYPE_NAME
+from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.adapters.exceptions import JSON_TYPE_NAME
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from typing_extensions import Optional, List, Dict, Any, Self, Tuple

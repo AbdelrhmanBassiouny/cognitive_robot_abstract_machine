@@ -4,12 +4,19 @@ import enum
 import importlib
 import uuid
 from abc import ABC
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from types import NoneType
 
-from casadi import external
-from typing_extensions import Dict, Any, Self, Union, Callable, Type, ClassVar, TypeVar
+from typing_extensions import Dict, Any, Self, Union, Type, TypeVar
 
+from .exceptions import (
+    MissingTypeError,
+    InvalidTypeFormatError,
+    UnknownModuleError,
+    ClassNotFoundError,
+    ClassNotSerializableError,
+    JSON_TYPE_NAME,
+)
 from ..ormatic.dao import HasGeneric
 from ..singleton import SingletonMeta
 from ..utils import get_full_class_name, recursive_subclasses, inheritance_path_length
@@ -27,77 +34,10 @@ leaf_types = (
     NoneType,
 )  # containers that can be serialized by the built-in JSON module
 
-
-JSON_TYPE_NAME = "__json_type__"  # the key used in JSON dicts to identify the class
-
 JSON_DICT_TYPE = Dict[str, Any]  # Commonly referred JSON dict
 JSON_RETURN_TYPE = Union[
     JSON_DICT_TYPE, list[JSON_DICT_TYPE], *leaf_types
 ]  # Commonly referred JSON types
-
-
-class JSONSerializationError(Exception):
-    """Base exception for JSON (de)serialization errors."""
-
-
-class MissingTypeError(JSONSerializationError):
-    """Raised when the 'type' field is missing in the JSON data."""
-
-    def __init__(self):
-        super().__init__("Missing 'type' field in JSON data")
-
-
-@dataclass
-class InvalidTypeFormatError(JSONSerializationError):
-    """Raised when the 'type' field value is not a fully qualified class name."""
-
-    invalid_type_value: str
-
-    def __post_init__(self):
-        super().__init__(f"Invalid type format: {self.invalid_type_value}")
-
-
-@dataclass
-class UnknownModuleError(JSONSerializationError):
-    """Raised when the module specified in the 'type' field cannot be imported."""
-
-    module_name: str
-
-    def __post_init__(self):
-        super().__init__(f"Unknown module in type: {self.module_name}")
-
-
-@dataclass
-class ClassNotFoundError(JSONSerializationError):
-    """Raised when the class specified in the 'type' field cannot be found in the module."""
-
-    class_name: str
-    module_name: str
-
-    def __post_init__(self):
-        super().__init__(
-            f"Class '{self.class_name}' not found in module '{self.module_name}'"
-        )
-
-
-@dataclass
-class ClassNotSerializableError(JSONSerializationError):
-    """Raised when the class specified cannot be JSON-serialized."""
-
-    clazz: Type
-
-    def __post_init__(self):
-        super().__init__(f"Class '{self.clazz.__name__}' cannot be serialized")
-
-
-@dataclass
-class ClassNotDeserializableError(JSONSerializationError):
-    """Raised when the class specified cannot be JSON-deserialized."""
-
-    clazz: Type
-
-    def __post_init__(self):
-        super().__init__(f"Class '{self.clazz.__name__}' cannot be deserialized")
 
 
 @dataclass

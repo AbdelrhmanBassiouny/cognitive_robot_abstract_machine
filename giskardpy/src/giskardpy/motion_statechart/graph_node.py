@@ -8,9 +8,9 @@ from dataclasses import field, dataclass, fields
 
 from krrood.adapters.json_serializer import (
     SubclassJSONSerializer,
-    JSON_TYPE_NAME,
     to_json,
 )
+from krrood.adapters.exceptions import JSON_TYPE_NAME
 from typing_extensions import (
     Dict,
     Any,

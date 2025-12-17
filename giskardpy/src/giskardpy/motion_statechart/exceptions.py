@@ -1,7 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 
-from krrood.adapters.json_serializer import JSON_TYPE_NAME, JSONSerializableTypeRegistry
+from krrood.adapters.json_serializer import JSONSerializableTypeRegistry
+from krrood.adapters.exceptions import JSON_TYPE_NAME
 from krrood.utils import get_full_class_name
 from typing_extensions import Any, Dict, TYPE_CHECKING
 

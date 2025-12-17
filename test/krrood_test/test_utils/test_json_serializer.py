@@ -8,13 +8,15 @@ import pytest
 
 
 from krrood.adapters.json_serializer import (
+    SubclassJSONSerializer,
+    to_json,
+    from_json,
+)
+from krrood.adapters.exceptions import (
     MissingTypeError,
     InvalidTypeFormatError,
     UnknownModuleError,
     ClassNotFoundError,
-    SubclassJSONSerializer,
-    to_json,
-    from_json,
     JSON_TYPE_NAME,
 )
 from krrood.utils import get_full_class_name
