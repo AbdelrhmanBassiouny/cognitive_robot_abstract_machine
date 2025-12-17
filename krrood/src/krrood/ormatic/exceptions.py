@@ -5,9 +5,11 @@ from typing import Type, Any
 
 from sqlalchemy.orm import RelationshipProperty
 
+from krrood.utils import DataclassException
+
 
 @dataclass
-class NoGenericError(TypeError):
+class NoGenericError(DataclassException, TypeError):
     """
     Exception raised when the original class for a DataAccessObject subclass cannot
     be determined.
@@ -20,14 +22,14 @@ class NoGenericError(TypeError):
     clazz: Type
 
     def __post_init__(self):
-        super().__init__(
+        self.message = (
             f"Cannot determine original class for {self.clazz}. "
             "Did you forget to parameterise the DataAccessObject subclass?"
         )
 
 
 @dataclass
-class NoDAOFoundError(TypeError):
+class NoDAOFoundError(DataclassException, TypeError):
     """
     Represents an error raised when no DAO (Data Access Object) class is found for a given class.
 
@@ -41,7 +43,7 @@ class NoDAOFoundError(TypeError):
     """
 
     def __post_init__(self):
-        super().__init__(
+        self.message = (
             f"Class {type(self.obj)} does not have a DAO. Did you forget to import your ORM Interface? "
             f"Otherwise the class may not be in the ORM Interface"
         )
@@ -61,17 +63,16 @@ class NoDAOFoundDuringParsingError(NoDAOFoundError):
     """
 
     def __init__(self, obj: Any, dao: Type, relationship: RelationshipProperty = None):
-        TypeError.__init__(
-            self,
+        self.message = (
             f"Class {type(obj)} does not have a DAO. This happened when trying "
             f"to create a dao for {dao}) on the relationship {relationship} with the "
             f"relationship value {obj}. "
-            f"Expected a relationship value of type {relationship.target}.",
+            f"Expected a relationship value of type {relationship.target}."
         )
 
 
 @dataclass
-class UnsupportedRelationshipError(ValueError):
+class UnsupportedRelationshipError(DataclassException, ValueError):
     """
     Raised when a relationship direction is not supported by the ORM mapping.
 
@@ -82,7 +83,4 @@ class UnsupportedRelationshipError(ValueError):
     relationship: RelationshipProperty
 
     def __post_init__(self):
-        ValueError.__init__(
-            self,
-            f"Unsupported relationship direction for {self.relationship}.",
-        )
+        self.message = f"Unsupported relationship direction for {self.relationship}."

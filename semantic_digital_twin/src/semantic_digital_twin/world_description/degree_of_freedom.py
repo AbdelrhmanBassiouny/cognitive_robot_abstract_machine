@@ -185,7 +185,7 @@ class DegreeOfFreedom(WorldEntityWithID, SubclassJSONSerializer):
         """
         if not isinstance(self.variables.position, cas.FloatVariable):
             raise UsageError(
-                "Cannot overwrite limits of mimic DOFs, use .raw_dof._overwrite_dof_limits instead."
+                message="Cannot overwrite limits of mimic DOFs, use .raw_dof._overwrite_dof_limits instead."
             )
         for derivative in Derivatives.range(Derivatives.position, Derivatives.jerk):
             if new_lower_limits.data[derivative] is not None:

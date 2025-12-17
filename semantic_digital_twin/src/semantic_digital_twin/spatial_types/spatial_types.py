@@ -2063,7 +2063,7 @@ class TransformationMatrix(
                     continue
                 if reference_frame != spatial_object.reference_frame:
                     raise SpatialTypesError(
-                        f"Reference frames of input parameters don't match ({reference_frame} != {spatial_object.reference_frame})."
+                        message=f"Reference frames of input parameters don't match ({reference_frame} != {spatial_object.reference_frame})."
                     )
         return reference_frame
 

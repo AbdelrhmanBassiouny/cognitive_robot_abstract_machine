@@ -3,19 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing_extensions import Type
 
+from ..utils import DataclassException
 
 JSON_TYPE_NAME = "__json_type__"  # the key used in JSON dicts to identify the class
 
 
-class JSONSerializationError(Exception):
+@dataclass
+class JSONSerializationError(DataclassException):
     """Base exception for JSON (de)serialization errors."""
 
 
+@dataclass
 class MissingTypeError(JSONSerializationError):
     """Raised when the 'type' field is missing in the JSON data."""
 
-    def __init__(self):
-        super().__init__(f"Missing {JSON_TYPE_NAME} field in JSON data")
+    def __post_init__(self):
+        self.message = f"Missing {JSON_TYPE_NAME} field in JSON data"
 
 
 @dataclass
@@ -25,7 +28,7 @@ class InvalidTypeFormatError(JSONSerializationError):
     invalid_type_value: str
 
     def __post_init__(self):
-        super().__init__(f"Invalid type format: {self.invalid_type_value}")
+        self.message = f"Invalid type format: {self.invalid_type_value}"
 
 
 @dataclass
@@ -35,7 +38,7 @@ class UnknownModuleError(JSONSerializationError):
     module_name: str
 
     def __post_init__(self):
-        super().__init__(f"Unknown module in type: {self.module_name}")
+        self.message = f"Unknown module in type: {self.module_name}"
 
 
 @dataclass
@@ -46,7 +49,7 @@ class ClassNotFoundError(JSONSerializationError):
     module_name: str
 
     def __post_init__(self):
-        super().__init__(
+        self.message = (
             f"Class '{self.class_name}' not found in module '{self.module_name}'"
         )
 
@@ -58,7 +61,7 @@ class ClassNotSerializableError(JSONSerializationError):
     clazz: Type
 
     def __post_init__(self):
-        super().__init__(f"Class '{self.clazz.__name__}' cannot be serialized")
+        self.message = f"Class '{self.clazz.__name__}' cannot be serialized"
 
 
 @dataclass
@@ -68,4 +71,4 @@ class ClassNotDeserializableError(JSONSerializationError):
     clazz: Type
 
     def __post_init__(self):
-        super().__init__(f"Class '{self.clazz.__name__}' cannot be deserialized")
+        self.message = f"Class '{self.clazz.__name__}' cannot be deserialized"
