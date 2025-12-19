@@ -7,7 +7,7 @@ import numpy as np
 from pycram.datastructures.pose import (
     PoseStamped,
     TransformStamped,
-    Quaternion,
+    PyCramQuaternion,
     PyCramVector3,
     AxisIdentifier,
 )
@@ -56,11 +56,11 @@ class TestPose(ApartmentWorldTestCase):
         p.position = PyCramVector3(3, 3, 3)
         self.assertEqual(p.position.to_list(), [3, 3, 3])
 
-        p.orientation = Quaternion(0, 0, 0, 1)
+        p.orientation = PyCramQuaternion(0, 0, 0, 1)
         self.assertEqual(p.orientation.to_list(), [0, 0, 0, 1])
         p.orientation.x = 1
         self.assertEqual(p.orientation.to_list(), [1, 0, 0, 1])
-        p.orientation = Quaternion(0, 0, 1, 0)
+        p.orientation = PyCramQuaternion(0, 0, 1, 0)
         self.assertEqual(p.orientation.to_list(), [0, 0, 1, 0])
 
     def test_pose_copy(self):
@@ -92,11 +92,11 @@ class TestPose(ApartmentWorldTestCase):
         t.translation = PyCramVector3(1, 1, 1)
         self.assertEqual(t.translation.to_list(), [1, 1, 1])
 
-        t.rotation = Quaternion(1, 0, 0, 0)
+        t.rotation = PyCramQuaternion(1, 0, 0, 0)
         self.assertEqual(t.rotation.to_list(), [1, 0, 0, 0])
         t.rotation.y = 1
         self.assertEqual(t.rotation.to_list(), [1, 1, 0, 0])
-        t.rotation = Quaternion(0, 0, 0, 1)
+        t.rotation = PyCramQuaternion(0, 0, 0, 1)
         self.assertEqual(t.rotation.to_list(), [0, 0, 0, 1])
 
     def test_transform_copy(self):

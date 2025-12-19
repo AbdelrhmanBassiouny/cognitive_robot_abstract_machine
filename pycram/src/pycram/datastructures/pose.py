@@ -168,7 +168,7 @@ class PyCramVector3(HasParameters):
 
 @has_parameters
 @dataclass
-class Quaternion(HasParameters):
+class PyCramQuaternion(HasParameters):
     """
     A quaternion with x, y, z and w components.
     """
@@ -262,14 +262,14 @@ class Quaternion(HasParameters):
             ).all()
         )
 
-    def __mul__(self, other: Self) -> Quaternion:
+    def __mul__(self, other: Self) -> PyCramQuaternion:
         """
         Multiplies two quaternions together.
 
         :param other: The other quaternion to multiply with.
         :return: A new quaternion that is the product of this quaternion and the other quaternion.
         """
-        return Quaternion.from_list(
+        return PyCramQuaternion.from_list(
             quaternion_multiply(self.to_list(), other.to_list())
         )
 
@@ -310,7 +310,7 @@ class PyCramPose(HasParameters):
     """
 
     position: PyCramVector3 = field(default_factory=PyCramVector3)
-    orientation: Quaternion = field(default_factory=Quaternion)
+    orientation: PyCramQuaternion = field(default_factory=PyCramQuaternion)
 
     def __repr__(self):
         return (
@@ -412,7 +412,7 @@ class PyCramPose(HasParameters):
         """
         return cls(
             PyCramVector3(position[0], position[1], position[2]),
-            Quaternion(orientation[0], orientation[1], orientation[2], orientation[3]),
+            PyCramQuaternion(orientation[0], orientation[1], orientation[2], orientation[3]),
         )
 
 
@@ -524,7 +524,7 @@ class PoseStamped(HasParameters):
         return self.pose.orientation
 
     @orientation.setter
-    def orientation(self, value: Quaternion):
+    def orientation(self, value: PyCramQuaternion):
         self.pose.orientation = value
 
     @property
@@ -568,7 +568,7 @@ class PoseStamped(HasParameters):
             y=message.pose.position.y,
             z=message.pose.position.z,
         )
-        orientation = Quaternion(
+        orientation = PyCramQuaternion(
             x=message.pose.orientation.x,
             y=message.pose.orientation.y,
             z=message.pose.orientation.z,
@@ -706,7 +706,7 @@ class PoseStamped(HasParameters):
 
         :param quaternion: A list representing the quaternion [x, y, z, w].
         """
-        self.orientation = self.orientation * Quaternion.from_list(quaternion)
+        self.orientation = self.orientation * PyCramQuaternion.from_list(quaternion)
 
     def is_facing_2d_axis(
         self,
@@ -849,7 +849,7 @@ class TransformStamped(PoseStamped):
         return self.pose.orientation
 
     @rotation.setter
-    def rotation(self, value: Quaternion):
+    def rotation(self, value: PyCramQuaternion):
         self.pose.orientation = value
 
     def __invert__(self) -> Self:
