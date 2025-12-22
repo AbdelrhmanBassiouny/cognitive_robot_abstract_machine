@@ -11,9 +11,14 @@ from typing_extensions import List
 from typing_extensions import Optional
 
 from ..datastructures.prefixed_name import PrefixedName
-from ..spatial_types import RotationMatrix, Vector3, Point3, TransformationMatrix
+from ..spatial_types import (
+    RotationMatrix,
+    Vector3,
+    Point3,
+    HomogeneousTransformationMatrix,
+)
 from ..spatial_types.derivatives import DerivativeMap
-from ..spatial_types.spatial_types import Quaternion
+from ..spatial_types.spatial_types import Quaternion, Pose
 from ..world import World
 from ..world_description.connections import Connection
 from ..world_description.degree_of_freedom import DegreeOfFreedom
@@ -106,9 +111,7 @@ class Vector3Mapping(AlternativeMapping[Vector3]):
         return result
 
     def create_from_dao(self) -> Vector3:
-        return Vector3(
-            x_init=self.x, y_init=self.y, z_init=self.z, reference_frame=None
-        )
+        return Vector3(x=self.x, y=self.y, z=self.z, reference_frame=None)
 
 
 @dataclass
@@ -129,7 +132,7 @@ class Point3Mapping(AlternativeMapping[Point3]):
         return result
 
     def create_from_dao(self) -> Point3:
-        return Point3(x_init=self.x, y_init=self.y, z_init=self.z, reference_frame=None)
+        return Point3(x=self.x, y=self.y, z=self.z, reference_frame=None)
 
 
 @dataclass
@@ -152,10 +155,10 @@ class QuaternionMapping(AlternativeMapping[Quaternion]):
 
     def create_from_dao(self) -> Quaternion:
         return Quaternion(
-            x_init=self.x,
-            y_init=self.y,
-            z_init=self.z,
-            w_init=self.w,
+            x=self.x,
+            y=self.y,
+            z=self.z,
+            w=self.w,
             reference_frame=None,
         )
 
@@ -180,7 +183,9 @@ class RotationMatrixMapping(AlternativeMapping[RotationMatrix]):
 
 
 @dataclass
-class TransformationMatrixMapping(AlternativeMapping[TransformationMatrix]):
+class HomogeneousTransformationMatrixMapping(
+    AlternativeMapping[HomogeneousTransformationMatrix]
+):
     position: Point3
     rotation: Quaternion
     reference_frame: Optional[KinematicStructureEntity] = field(
@@ -189,7 +194,7 @@ class TransformationMatrixMapping(AlternativeMapping[TransformationMatrix]):
     child_frame: Optional[KinematicStructureEntity] = field(init=False, default=None)
 
     @classmethod
-    def create_instance(cls, obj: TransformationMatrix):
+    def create_instance(cls, obj: HomogeneousTransformationMatrix):
         position = obj.to_position()
         rotation = obj.to_quaternion()
         result = cls(position=position, rotation=rotation)
@@ -198,12 +203,36 @@ class TransformationMatrixMapping(AlternativeMapping[TransformationMatrix]):
 
         return result
 
-    def create_from_dao(self) -> TransformationMatrix:
-        return TransformationMatrix.from_point_rotation_matrix(
+    def create_from_dao(self) -> HomogeneousTransformationMatrix:
+        return HomogeneousTransformationMatrix.from_point_rotation_matrix(
             point=self.position,
             rotation_matrix=RotationMatrix.from_quaternion(self.rotation),
             reference_frame=None,
             child_frame=self.child_frame,
+        )
+
+
+@dataclass
+class PoseMapping(AlternativeMapping[Pose]):
+    position: Point3
+    rotation: Quaternion
+    reference_frame: Optional[KinematicStructureEntity] = field(
+        init=False, default=None
+    )
+
+    @classmethod
+    def create_instance(cls, obj: Pose):
+        position = obj.to_position()
+        rotation = obj.to_quaternion()
+        result = cls(position=position, rotation=rotation)
+        result.reference_frame = obj.reference_frame
+        return result
+
+    def create_from_dao(self) -> Pose:
+        return Pose(
+            position=self.position,
+            orientation=self.rotation,
+            reference_frame=None,
         )
 
 

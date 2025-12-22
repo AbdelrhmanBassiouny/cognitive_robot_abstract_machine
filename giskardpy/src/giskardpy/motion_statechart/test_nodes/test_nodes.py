@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional
 
-import semantic_digital_twin.spatial_types.spatial_types as cas
+import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.context import ExecutionContext, BuildContext
 from giskardpy.motion_statechart.graph_node import (
     MotionStatechartNode,
@@ -13,13 +13,13 @@ from giskardpy.motion_statechart.graph_node import (
 @dataclass(eq=False, repr=False)
 class ConstTrueNode(MotionStatechartNode):
     def build(self, context: BuildContext) -> NodeArtifacts:
-        return NodeArtifacts(observation=cas.TrinaryTrue)
+        return NodeArtifacts(observation=sm.Scalar.const_true())
 
 
 @dataclass(eq=False, repr=False)
 class ConstFalseNode(MotionStatechartNode):
     def build(self, context: BuildContext) -> NodeArtifacts:
-        return NodeArtifacts(observation=cas.TrinaryFalse)
+        return NodeArtifacts(observation=sm.Scalar.const_false())
 
 
 @dataclass(repr=False, eq=False)
@@ -70,6 +70,4 @@ class TestNestedGoal(Goal):
         self.add_node(self.inner)
 
     def build(self, context: BuildContext) -> NodeArtifacts:
-        return NodeArtifacts(
-            observation=cas.Expression(self.inner.observation_variable)
-        )
+        return NodeArtifacts(observation=sm.Scalar(self.inner.observation_variable))

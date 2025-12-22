@@ -10,17 +10,16 @@ from functools import cached_property
 import numpy as np
 import trimesh
 import trimesh.exchange.stl
-from trimesh.visual.texture import TextureVisuals, SimpleMaterial
 from PIL import Image
-from krrood.adapters.json_serializer import SubclassJSONSerializer
-from krrood.adapters.exceptions import JSON_TYPE_NAME
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
+from trimesh.visual.texture import TextureVisuals, SimpleMaterial
 from typing_extensions import Optional, List, Dict, Any, Self, Tuple
 
+from krrood.adapters.exceptions import JSON_TYPE_NAME
+from krrood.adapters.json_serializer import SubclassJSONSerializer
 from ..datastructures.variables import SpatialVariables
-from ..spatial_types import TransformationMatrix, Point3
-from ..spatial_types.spatial_types import Expression
+from ..spatial_types import HomogeneousTransformationMatrix, Point3
 from ..utils import IDGenerator
 
 id_generator = IDGenerator()
@@ -127,7 +126,9 @@ class Shape(ABC, SubclassJSONSerializer):
     Base class for all shapes in the world.
     """
 
-    origin: TransformationMatrix = field(default_factory=TransformationMatrix)
+    origin: HomogeneousTransformationMatrix = field(
+        default_factory=HomogeneousTransformationMatrix
+    )
 
     color: Color = field(default_factory=Color)
 
@@ -353,7 +354,7 @@ class TriangleMesh(Mesh):
         if texture_file_path is not None:
             mesh = cls.add_texture(mesh=mesh, texture_file_path=texture_file_path)
 
-        origin = TransformationMatrix(data=origin)
+        origin = HomogeneousTransformationMatrix(data=origin)
         scale = Scale(x=scale[0], y=scale[1], z=scale[2])
         return cls(mesh=mesh, origin=origin, scale=scale)
 
@@ -362,7 +363,7 @@ class TriangleMesh(Mesh):
         mesh = trimesh.Trimesh(
             vertices=data["mesh"]["vertices"], faces=data["mesh"]["faces"]
         )
-        origin = TransformationMatrix.from_json(data["origin"], **kwargs)
+        origin = HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs)
         scale = Scale.from_json(data["scale"], **kwargs)
         return cls(mesh=mesh, origin=origin, scale=scale)
 
@@ -409,7 +410,7 @@ class Sphere(Shape):
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         return cls(
             radius=data["radius"],
-            origin=TransformationMatrix.from_json(data["origin"], **kwargs),
+            origin=HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs),
             color=Color.from_json(data["color"], **kwargs),
         )
 
@@ -460,7 +461,7 @@ class Cylinder(Shape):
         return cls(
             width=data["width"],
             height=data["height"],
-            origin=TransformationMatrix.from_json(data["origin"], **kwargs),
+            origin=HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs),
             color=Color.from_json(data["color"], **kwargs),
         )
 
@@ -509,7 +510,7 @@ class Box(Shape):
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         return cls(
             scale=Scale.from_json(data["scale"], **kwargs),
-            origin=TransformationMatrix.from_json(data["origin"], **kwargs),
+            origin=HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs),
             color=Color.from_json(data["color"], **kwargs),
         )
 
@@ -546,7 +547,7 @@ class BoundingBox:
     The maximum z-coordinate of the bounding box.
     """
 
-    origin: TransformationMatrix
+    origin: HomogeneousTransformationMatrix
     """
     The origin of the bounding box.
     """
@@ -642,12 +643,7 @@ class BoundingBox:
         """
         Check if the bounding box contains a point.
         """
-        x, y, z = (
-            (point.x.to_np(), point.y.to_np(), point.z.to_np())
-            if isinstance(point.z, Expression)
-            else (point.x, point.y, point.z)
-        )
-
+        x, y, z = (float(point.x), float(point.y), float(point.z))
         return self.simple_event.contains((x, y, z))
 
     @classmethod
@@ -713,7 +709,9 @@ class BoundingBox:
         self.enlarge(amount, amount, amount, amount, amount, amount)
 
     @classmethod
-    def from_mesh(cls, mesh: trimesh.Trimesh, origin: TransformationMatrix) -> Self:
+    def from_mesh(
+        cls, mesh: trimesh.Trimesh, origin: HomogeneousTransformationMatrix
+    ) -> Self:
         """
         Create a bounding box from a trimesh object.
         :param mesh: The trimesh object.
@@ -759,7 +757,9 @@ class BoundingBox:
         return cls(
             *min_point.to_np()[:3],
             *max_point.to_np()[:3],
-            origin=TransformationMatrix(reference_frame=min_point.reference_frame),
+            origin=HomogeneousTransformationMatrix(
+                reference_frame=min_point.reference_frame
+            ),
         )
 
     def as_shape(self) -> Box:
@@ -771,12 +771,14 @@ class BoundingBox:
         x = (self.max_x + self.min_x) / 2
         y = (self.max_y + self.min_y) / 2
         z = (self.max_z + self.min_z) / 2
-        origin = TransformationMatrix.from_xyz_rpy(
+        origin = HomogeneousTransformationMatrix.from_xyz_rpy(
             x, y, z, 0, 0, 0, self.origin.reference_frame
         )
         return Box(origin=origin, scale=scale)
 
-    def transform_to_origin(self, reference_T_new_origin: TransformationMatrix) -> Self:
+    def transform_to_origin(
+        self, reference_T_new_origin: HomogeneousTransformationMatrix
+    ) -> Self:
         """
         Transform the bounding box to a different reference frame.
         """
@@ -788,11 +790,13 @@ class BoundingBox:
             reference_T_new_origin.reference_frame, origin_frame
         )
 
-        reference_T_self: TransformationMatrix = reference_T_origin @ origin_T_self
+        reference_T_self: HomogeneousTransformationMatrix = (
+            reference_T_origin @ origin_T_self
+        )
 
         # Get all 8 corners of the BB in link-local space
         list_self_T_corner = [
-            TransformationMatrix.from_point_rotation_matrix(self_T_corner)
+            HomogeneousTransformationMatrix.from_point_rotation_matrix(self_T_corner)
             for self_T_corner in self.get_points()
         ]  # shape (8, 3)
 

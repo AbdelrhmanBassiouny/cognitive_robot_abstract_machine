@@ -12,7 +12,9 @@ from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.reasoning.world_reasoner import WorldReasoner
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl, Spoon
-from semantic_digital_twin.spatial_types import TransformationMatrix
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world_description.connections import FixedConnection
 
 world = setup_world()
@@ -31,7 +33,7 @@ bowl = STLParser(
 with world.modify_world():
     world.merge_world_at_pose(
         bowl,
-        TransformationMatrix.from_xyz_quaternion(
+        HomogeneousTransformationMatrix.from_xyz_quaternion(
             2.4, 2.2, 1, reference_frame=world.root
         ),
     )

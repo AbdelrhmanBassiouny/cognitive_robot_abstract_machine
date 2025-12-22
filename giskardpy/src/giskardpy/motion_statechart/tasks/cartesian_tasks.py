@@ -4,8 +4,7 @@ from typing import Optional, ClassVar
 import numpy as np
 from typing_extensions import List
 
-import semantic_digital_twin.spatial_types.spatial_types as cas
-from giskardpy.motion_statechart import auxilary_variable_manager
+import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.binding_policy import (
     GoalBindingPolicy,
     ForwardKinematicsBinding,
@@ -20,9 +19,13 @@ from giskardpy.motion_statechart.graph_node import (
 )
 from giskardpy.motion_statechart.graph_node import Task
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types.derivatives import Derivatives
+from semantic_digital_twin.spatial_types import (
+    Vector3,
+    Point3,
+    RotationMatrix,
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import PositionVariable
-from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -47,9 +50,8 @@ class CartesianPosition(Task):
     tip_link: KinematicStructureEntity = field(kw_only=True)
     """End link that should reach the goal position."""
 
-    goal_point: cas.Point3 = field(kw_only=True)
+    goal_point: Point3 = field(kw_only=True)
     """Target 3D point to reach."""
-
     threshold: float = field(default=0.01, kw_only=True)
     """Distance threshold for goal achievement in meters."""
 
@@ -132,7 +134,7 @@ class CartesianPositionStraight(Task):
     tip_link: KinematicStructureEntity = field(kw_only=True)
     """End link that should reach the goal position."""
 
-    goal_point: cas.Point3 = field(kw_only=True)
+    goal_point: Point3 = field(kw_only=True)
     """Target 3D point to reach."""
 
     reference_velocity: float = field(
@@ -185,16 +187,16 @@ class CartesianPositionStraight(Task):
 
         # Create coordinate frame aligned with straight-line path
         # x-axis points from current position towards goal
-        tip_V_error = cas.Vector3.from_iterable(tip_P_goal)
+        tip_V_error = Vector3.from_iterable(tip_P_goal)
         trans_error = tip_V_error.norm()
         tip_V_intermediate_error = tip_V_error.safe_division(trans_error)
 
         # Create orthogonal y and z axes
-        tip_V_intermediate_y = cas.Vector3.from_iterable(np.random.random((3,)))
+        tip_V_intermediate_y = Vector3.from_iterable(np.random.random((3,)))
         tip_V_intermediate_y.scale(1)
         y = tip_V_intermediate_error.cross(tip_V_intermediate_y)
         z = tip_V_intermediate_error.cross(y)
-        tip_R_aligned = cas.RotationMatrix.from_vectors(
+        tip_R_aligned = RotationMatrix.from_vectors(
             x=tip_V_intermediate_error, y=-z, z=y
         )
 
@@ -265,9 +267,8 @@ class CartesianOrientation(Task):
     tip_link: KinematicStructureEntity = field(kw_only=True)
     """End link whose orientation should match the goal."""
 
-    goal_orientation: cas.RotationMatrix = field(kw_only=True)
+    goal_orientation: RotationMatrix = field(kw_only=True)
     """Target rotation matrix to match."""
-
     threshold: float = field(default=0.01, kw_only=True)
     """Rotation error threshold for goal achievement in radians."""
 
@@ -321,7 +322,7 @@ class CartesianOrientation(Task):
 
         # Success condition: rotation error below threshold
         rotation_error = root_R_current.rotational_error(root_R_goal)
-        artifacts.observation = cas.abs(rotation_error) < self.threshold
+        artifacts.observation = sm.abs(rotation_error) < self.threshold
         return artifacts
 
     def on_start(self, context: ExecutionContext):
@@ -348,7 +349,7 @@ class CartesianPose(Task):
     tip_link: KinematicStructureEntity = field(kw_only=True)
     """Name of the tip link of the kin chain."""
 
-    goal_pose: cas.TransformationMatrix = field(kw_only=True)
+    goal_pose: HomogeneousTransformationMatrix = field(kw_only=True)
     """The goal pose."""
 
     reference_linear_velocity: float = field(
@@ -434,10 +435,24 @@ class CartesianPose(Task):
             weight=self.weight,
         )
 
-        # Success condition: both position and orientation errors below threshold
+        artifacts.debug_expressions.append(
+            DebugExpression(
+                "current_pose",
+                expression=HomogeneousTransformationMatrix(
+                    reference_frame=self.tip_link
+                ),
+            )
+        )
+        artifacts.debug_expressions.append(
+            DebugExpression(
+                "goal_pose",
+                expression=self._fk_binding.root_T_tip @ self.goal_pose,
+            )
+        )
+
         rotation_error = root_R_current.rotational_error(root_R_goal)
-        artifacts.observation = cas.logic_and(
-            cas.abs(rotation_error) < self.threshold,
+        artifacts.observation = sm.logic_and(
+            sm.abs(rotation_error) < self.threshold,
             distance_to_goal < self.threshold,
         )
 
@@ -498,7 +513,7 @@ class CartesianPositionVelocityLimit(Task):
 
         position_variables: List[PositionVariable] = root_P_tip.free_variables()
         velocity_variables = [p.dof.variables.velocity for p in position_variables]
-        root_P_tip_dot = cas.Expression(root_P_tip).total_derivative(
+        root_P_tip_dot = root_P_tip.total_derivative(
             position_variables, velocity_variables
         )
 
@@ -555,11 +570,9 @@ class CartesianRotationVelocityLimit(Task):
         _, angle = root_R_tip.to_axis_angle()
         angle_variables: List[PositionVariable] = angle.free_variables()
         angle_velocities = [v.dof.variables.velocity for v in angle_variables]
-        angle_dot = cas.Expression(angle).total_derivative(
-            angle_variables, angle_velocities
-        )
+        angle_dot = angle.total_derivative(angle_variables, angle_velocities)
 
-        artifacts.observation = cas.abs(angle_dot) <= self.max_angular_velocity
+        artifacts.observation = sm.abs(angle_dot) <= self.max_angular_velocity
 
         return artifacts
 
@@ -646,7 +659,7 @@ class CartesianPositionVelocityTarget(Task):
             self.root_link, self.tip_link
         ).to_position()
         self.add_velocity_eq_constraint_vector(
-            velocity_goals=cas.Expression([self.x_vel, self.y_vel, self.z_vel]),
+            velocity_goals=sm.Vector([self.x_vel, self.y_vel, self.z_vel]),
             task_expression=r_P_c,
             reference_velocities=[
                 CartesianPosition.default_reference_velocity,
@@ -674,11 +687,11 @@ class JustinTorsoLimitCart(Task):
         torso_root_T_torso_tip = context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         )
-        torso_root_V_up = cas.Vector3(0, 0, 1)
+        torso_root_V_up = Vector3(0, 0, 1)
         torso_root_V_up.reference_frame = self.root_link
         torso_root_V_up.vis_frame = self.root_link
 
-        torso_root_V_left = cas.Vector3(0, 1, 0)
+        torso_root_V_left = Vector3(0, 1, 0)
         torso_root_V_left.reference_frame = self.root_link
         torso_root_V_left.vis_frame = self.root_link
 
@@ -688,12 +701,6 @@ class JustinTorsoLimitCart(Task):
             frame_V_plane_vector1=torso_root_V_left,
             frame_V_plane_vector2=torso_root_V_up,
         )
-        # distance = cas.distance_point_to_line(torso_root_P_torso_tip, cas.Point3((0, 0, 0)), torso_root_V_up)
-
-        # god_map.context.add_debug_expression(f'{self.name}/torso_root_V_up',
-        #                                                       expression=torso_root_V_up)
-        # god_map.context.add_debug_expression(f'{self.name}/torso_root_P_torso_tip',
-        #                                                       expression=torso_root_P_torso_tip)
 
         self.add_inequality_constraint(
             reference_velocity=CartesianPosition.default_reference_velocity,

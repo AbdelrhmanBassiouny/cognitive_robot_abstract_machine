@@ -1,12 +1,10 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 
-from krrood.adapters.json_serializer import JSONSerializableTypeRegistry
-from krrood.adapters.exceptions import JSON_TYPE_NAME
-from krrood.utils import get_full_class_name
-from typing_extensions import Any, Dict, TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING
 
-from semantic_digital_twin.spatial_types import FloatVariable, Expression
+from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar
 
 if TYPE_CHECKING:
     from giskardpy.motion_statechart.graph_node import (
@@ -83,7 +81,7 @@ class NotInMotionStatechartError(MotionStatechartError):
 @dataclass
 class InvalidConditionError(MotionStatechartError):
     condition: TrinaryCondition
-    new_expression: Expression
+    new_expression: Scalar
     reason: str = field(init=False)
 
     def __post_init__(self):
