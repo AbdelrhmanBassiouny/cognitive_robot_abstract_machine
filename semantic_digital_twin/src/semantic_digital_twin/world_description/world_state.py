@@ -43,10 +43,7 @@ class WorldStateView:
 
     @position.setter
     def position(self, value: float):
-        try:
-            self.data[Derivatives.position] = value
-        except Exception as e:
-            self.data[Derivatives.position] = value[0]
+        self.data[Derivatives.position] = value
 
     @property
     def velocity(self) -> float:
