@@ -1,10 +1,12 @@
 import inspect
 import sys
-from dataclasses import dataclass
+from abc import abstractmethod, ABC
+from dataclasses import dataclass, Field
 from enum import Enum
+from functools import lru_cache, cached_property
 from uuid import UUID
 
-from typing_extensions import List, Type, Generic, TYPE_CHECKING
+from typing_extensions import List, Type, Generic, TYPE_CHECKING, Optional
 from typing_extensions import TypeVar, get_origin, get_args
 
 
@@ -26,7 +28,11 @@ def classes_of_module(module) -> List[Type]:
 def behaves_like_a_built_in_class(
     clazz: Type,
 ) -> bool:
-    return is_builtin_class(clazz) or clazz == UUID or (inspect.isclass(clazz) and issubclass(clazz, Enum))
+    return (
+        is_builtin_class(clazz)
+        or clazz == UUID
+        or (inspect.isclass(clazz) and issubclass(clazz, Enum))
+    )
 
 
 def is_builtin_class(clazz: Type) -> bool:
@@ -37,7 +43,7 @@ T = TypeVar("T")
 
 
 @dataclass
-class Role(Generic[T]):
+class Role(Generic[T], ABC):
     """
     Represents a role with generic typing. This is used in Role Design Pattern in OOP.
 
@@ -46,8 +52,44 @@ class Role(Generic[T]):
     behavior and data.
     """
 
+    @classmethod
+    @lru_cache(maxsize=None)
+    def get_role_taker_type(cls) -> Type:
+        """
+        :return: The type of the role taker.
+        """
+        return get_generic_type_param(cls, Role)[0]
 
-def get_generic_type_param(cls, generic_base):
+    @classmethod
+    @abstractmethod
+    def role_taker_field(cls) -> Field:
+        """
+        :return: the field that holds the role taker instance.
+        """
+        ...
+
+    @cached_property
+    def role_taker(self) -> T:
+        """
+        :return: The role taker instance.
+        """
+        return getattr(self, self.role_taker_field().name)
+
+    def __getattr__(self, item):
+        """
+        Get an attribute from the role taker when not found on the class.
+
+        :param item: The attribute name to retrieve.
+        :return: The attribute value if found in the role taker, otherwise raises AttributeError.
+        """
+        if hasattr(self.role_taker, item):
+            return getattr(self.role_taker, item)
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{item}'"
+        )
+
+
+def get_generic_type_param(cls, generic_base) -> Optional[List[Type]]:
     """
     Given a subclass and its generic base, return the concrete type parameter(s).
 
