@@ -169,14 +169,21 @@ class WrappedClass:
     _wrapped_field_name_map_: Dict[str, WrappedField] = dataclass_field(
         init=False, hash=False, default_factory=dict, repr=False
     )
-    roles: Set[HasRoleTaker] = dataclass_field(init=False, default_factory=set)
-    """
-    A set of roles that this class plays, represented by the HasRoleTaker instances.
-     There are HasRoleTaker edges connecting the roles to this class.
-    """
-    role_taker_association: Optional[AssociationThroughRoleTaker] = dataclass_field(
-        init=False, default=None
-    )
+
+    @cached_property
+    def roles(self) -> Tuple[WrappedClass, ...]:
+        """
+        A tuple of roles that this class plays, represented by the HasRoleTaker instances.
+         There are HasRoleTaker edges connecting the roles to this class.
+        """
+        return tuple(
+            [
+                self._class_diagram.role_association_subgraph[n]
+                for n, _, _ in self._class_diagram.role_association_subgraph.in_edges(
+                    self.index
+                )
+            ]
+        )
 
     @cached_property
     def fields(self) -> List[WrappedField]:
@@ -637,13 +644,8 @@ class ClassDiagram:
 
         :param role_taker_assoc: Association of the role taker.
         """
-        wrapped_classes = (
-            self.wrapped_classes_of_role_associations_subgraph_in_topological_order
-        )
         role_taker_clazz = role_taker_assoc.source
-        for role_clazz in wrapped_classes:
-            if role_clazz is role_taker_clazz:
-                break
+        for role_clazz in role_taker_clazz.roles:
             self._add_association_through_role_taker(role_clazz, role_taker_assoc)
 
     def _add_association_through_role_taker(
