@@ -4,7 +4,7 @@ import logging
 from abc import ABC
 from copy import copy
 from dataclasses import dataclass
-from dataclasses import field, InitVar
+from dataclasses import field as dataclass_field, InitVar
 from functools import cached_property, lru_cache
 
 import rustworkx as rx
@@ -113,6 +113,36 @@ class HasRoleTaker(Association):
         return f"role-taker({self.field.public_name})"
 
 
+@dataclass(eq=False)
+class AssociationThroughRoleTaker(Association):
+    """
+    This is an association between a role and a role taker where the role taker class contains an association. This
+    applies transitively to the role taker's role takers and so on. The path is a list of fields that are traversed to
+    get to the target class.
+    """
+
+    field: WrappedField = dataclass_field(init=False)
+    """
+    The last field in the path that is the association to the target class.
+    """
+    association_path: List[Association]
+    """
+    The path of associations that are traversed to get to the target class.
+    """
+    field_path: List[WrappedField] = dataclass_field(init=False)
+    """
+    The path of fields that are traversed to get to the target class.
+    """
+
+    def __post_init__(self):
+        self.field_path = [a.field for a in self.association_path]
+        self.field = self.field_path[-1]
+
+    @cached_property
+    def last_source(self) -> WrappedClass:
+        return self.association_path[-1].source
+
+
 class ParseError(TypeError):
     """
     Error that will be raised when the parser encounters something that can/should not be parsed.
@@ -127,13 +157,21 @@ class ParseError(TypeError):
 class WrappedClass:
     """A node wrapper around a Python class used in the class diagram graph."""
 
-    index: Optional[int] = field(init=False, default=None)
+    index: Optional[int] = dataclass_field(init=False, default=None)
     clazz: Type
-    _class_diagram: Optional[ClassDiagram] = field(
+    _class_diagram: Optional[ClassDiagram] = dataclass_field(
         init=False, hash=False, default=None, repr=False
     )
-    _wrapped_field_name_map_: Dict[str, WrappedField] = field(
+    _wrapped_field_name_map_: Dict[str, WrappedField] = dataclass_field(
         init=False, hash=False, default_factory=dict, repr=False
+    )
+    roles: Set[HasRoleTaker] = dataclass_field(init=False, default_factory=set)
+    """
+    A set of roles that this class plays, represented by the HasRoleTaker instances.
+     There are HasRoleTaker edges connecting the roles to this class.
+    """
+    role_taker_association: Optional[AssociationThroughRoleTaker] = dataclass_field(
+        init=False, default=None
     )
 
     @cached_property
@@ -179,14 +217,14 @@ class ClassDiagram:
 
     classes: InitVar[List[Type]]
 
-    introspector: AttributeIntrospector = field(
+    introspector: AttributeIntrospector = dataclass_field(
         default_factory=DataclassOnlyIntrospector, init=True, repr=False
     )
 
-    _dependency_graph: rx.PyDiGraph[WrappedClass, ClassRelation] = field(
+    _dependency_graph: rx.PyDiGraph[WrappedClass, ClassRelation] = dataclass_field(
         default_factory=rx.PyDiGraph, init=False
     )
-    _cls_wrapped_cls_map: Dict[Type, WrappedClass] = field(
+    _cls_wrapped_cls_map: Dict[Type, WrappedClass] = dataclass_field(
         default_factory=dict, init=False, repr=False
     )
 
@@ -210,6 +248,23 @@ class ClassDiagram:
         """
         for relation in self.get_outgoing_relations(clazz):
             if isinstance(relation, Association) and condition(relation):
+                yield relation
+
+    def get_associations_through_role_taker_with_condition(
+        self,
+        clazz: Union[Type, WrappedClass],
+        condition: Callable[[AssociationThroughRoleTaker], bool],
+    ) -> Iterable[AssociationThroughRoleTaker]:
+        """
+        Get all associations through role takers that match the condition.
+
+        :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
+        :param condition: The condition to filter relations by.
+        """
+        for relation in self.get_outgoing_relations(clazz):
+            if isinstance(relation, AssociationThroughRoleTaker) and condition(
+                relation
+            ):
                 yield relation
 
     def get_outgoing_relations(
@@ -314,7 +369,6 @@ class ClassDiagram:
         find_predecessors_by_edge = self._dependency_graph.find_predecessors_by_edge
         return tuple(find_predecessors_by_edge(wrapped_cls.index, edge_filter_func))
 
-    @lru_cache(maxsize=None)
     def get_out_edges(
         self, cls: Union[Type, WrappedClass]
     ) -> Tuple[ClassRelation, ...]:
@@ -505,6 +559,43 @@ class ClassDiagram:
         self._dependency_graph.add_edge(
             relation.source.index, relation.target.index, relation
         )
+        if not isinstance(relation, Association):
+            return
+        if isinstance(relation, HasRoleTaker):
+            relation.target.roles.add(relation)
+            relation.source.role_taker_association = relation
+            for rel in self.get_outgoing_relations(relation.target):
+                if not isinstance(rel, Association):
+                    continue
+                prev_association_path = (
+                    rel.association_path
+                    if isinstance(rel, AssociationThroughRoleTaker)
+                    else [rel]
+                )
+                self.add_relation(
+                    AssociationThroughRoleTaker(
+                        association_path=[relation, *prev_association_path],
+                        source=relation.source,
+                        target=rel.target,
+                    )
+                )
+        else:
+            for has_role_taker_relation in relation.source.roles:
+                prev_association_path = (
+                    relation.association_path
+                    if isinstance(relation, AssociationThroughRoleTaker)
+                    else [relation]
+                )
+                self.add_relation(
+                    AssociationThroughRoleTaker(
+                        association_path=[
+                            has_role_taker_relation,
+                            *prev_association_path,
+                        ],
+                        source=has_role_taker_relation.source,
+                        target=relation.target,
+                    )
+                )
 
     def _create_inheritance_relations(self):
         """

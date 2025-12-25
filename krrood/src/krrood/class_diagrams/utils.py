@@ -88,6 +88,14 @@ class Role(Generic[T], ABC):
             f"'{self.__class__.__name__}' object has no attribute '{item}'"
         )
 
+    def __hash__(self):
+        return hash((self.__class__, hash(self.role_taker)))
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        return hash(self) == hash(other)
+
 
 def get_generic_type_param(cls, generic_base) -> Optional[List[Type]]:
     """

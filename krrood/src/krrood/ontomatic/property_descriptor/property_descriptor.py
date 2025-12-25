@@ -24,7 +24,11 @@ from .monitored_container import (
 )
 from .property_descriptor_relation import PropertyDescriptorRelation
 from ..failures import UnMonitoredContainerTypeForDescriptor
-from ...class_diagrams.class_diagram import WrappedClass, Association
+from ...class_diagrams.class_diagram import (
+    WrappedClass,
+    Association,
+    AssociationThroughRoleTaker,
+)
 from ...class_diagrams.wrapped_field import WrappedField
 from ...entity_query_language.predicate import Symbol
 from ...entity_query_language.symbol_graph import (
@@ -287,10 +291,10 @@ class PropertyDescriptor(Symbol):
 
     @classmethod
     @lru_cache(maxsize=None)
-    def get_associated_field_of_domain_type(
+    def get_association_of_source_type(
         cls,
         domain_type: Union[Type[Symbol], WrappedClass],
-    ) -> Optional[WrappedField]:
+    ) -> Optional[Union[Association, AssociationThroughRoleTaker]]:
         """
         Get the field of the domain type that is associated with this descriptor class.
 
@@ -308,7 +312,22 @@ class PropertyDescriptor(Symbol):
             ),
             None,
         )
-        return result.field if result else None
+        if (
+            not result
+            and class_diagram.get_wrapped_class(domain_type).role_taker_association
+        ):
+            association_condition = (
+                lambda association: type(association.field.property_descriptor) is cls
+            )
+            result = next(
+                iter(
+                    class_diagram.get_associations_through_role_taker_with_condition(
+                        domain_type, association_condition
+                    )
+                ),
+                None,
+            )
+        return result
 
     @classmethod
     @lru_cache(maxsize=None)

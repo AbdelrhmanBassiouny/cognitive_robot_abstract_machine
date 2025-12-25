@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from typing_extensions import Optional, Type, Iterable, Tuple, List, TYPE_CHECKING
 
-from ...class_diagrams.class_diagram import Association
+from ...class_diagrams.class_diagram import Association, AssociationThroughRoleTaker
 from ...class_diagrams.wrapped_field import WrappedField
 from .mixins import TransitiveProperty, HasInverseProperty
 from ...entity_query_language.symbol_graph import (
@@ -157,10 +157,21 @@ class PropertyDescriptorRelation(PredicateClassRelation):
 
         :return: The inverse domain instance and property descriptor field.
         """
-        if self.inverse_field:
-            return self.target, self.inverse_field
-        elif self.inverse_field_from_target_role_taker:
-            return self.target_role_taker, self.inverse_field_from_target_role_taker
+        if self.inverse_association:
+            if isinstance(self.inverse_association, AssociationThroughRoleTaker):
+                source = self.target.instance
+                for wrapped_field in self.inverse_association.field_path[:-1]:
+                    source = getattr(source, wrapped_field.public_name)
+                source = SymbolGraph().get_wrapped_instance(source)
+                if not source:
+                    raise ValueError(
+                        f"cannot find a wrapped instance for the inverse {self.inverse_of} defined for the relation {self}"
+                    )
+            else:
+                source = self.target
+            return source, self.inverse_association.field
+        # elif self.inverse_field_from_target_role_taker:
+        #     return self.target_role_taker, self.inverse_field_from_target_role_taker
         else:
             raise ValueError(
                 f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self}"
@@ -181,13 +192,13 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         return SymbolGraph().ensure_wrapped_instance(role_taker)
 
     @cached_property
-    def inverse_field_from_target_role_taker(self) -> Optional[WrappedField]:
+    def inverse_field_from_target_role_taker(self) -> List[WrappedField]:
         """
         Return the inverse field of this relation field that is stored in the role taker of the target.
         """
         if not self.target_role_taker_association:
             return None
-        return self.inverse_of.get_associated_field_of_domain_type(
+        return self.inverse_of.get_association_of_source_type(
             self.target_role_taker_association.target
         )
 
@@ -202,13 +213,13 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         )
 
     @cached_property
-    def inverse_field(self) -> Optional[WrappedField]:
+    def inverse_association(
+        self,
+    ) -> Optional[Association]:
         """
         Return the inverse field (if it exists) stored in the target of this relation.
         """
-        return self.inverse_of.get_associated_field_of_domain_type(
-            self.target.instance_type
-        )
+        return self.inverse_of.get_association_of_source_type(self.target.instance_type)
 
     def infer_transitive_relations(self):
         """
