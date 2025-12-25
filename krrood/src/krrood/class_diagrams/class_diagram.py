@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from abc import ABC
 from copy import copy
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ from dataclasses import field as dataclass_field, InitVar
 from functools import cached_property, lru_cache
 
 import rustworkx as rx
+
+from .. import logger
 
 try:
     from rustworkx_utils import RWXNode
@@ -769,6 +772,47 @@ class ClassDiagram:
             relation.source.index, relation.target.index, relation
         )
 
+    def to_dot(
+        self,
+        filepath: str,
+        format_: str = "svg",
+        graph: Optional[rx.PyDiGraph] = None,
+        without_inherited_associations: bool = True,
+    ):
+        import pydot
+
+        if graph is None:
+            if without_inherited_associations:
+                graph = (
+                    self.to_subdiagram_without_inherited_associations()._dependency_graph
+                )
+            else:
+                graph = self._dependency_graph
+
+        if not filepath.endswith(f".{format_}"):
+            filepath += f".{format_}"
+        dot_str = graph.to_dot(
+            lambda node: dict(
+                color="black",
+                fillcolor="lightblue",
+                style="filled",
+                label=node.name,
+            ),
+            lambda edge: dict(color=edge.color, style="solid", label=str(edge)),
+            dict(rankdir="LR"),
+        )
+        dot = pydot.graph_from_dot_data(dot_str)[0]
+        try:
+            dot.write(filepath, format=format_)
+        except FileNotFoundError:
+            tmp_filepath = filepath.replace(f".{format_}", ".dot")
+            dot.write(tmp_filepath, format="raw")
+            try:
+                os.system(f"/usr/bin/dot -T{format_} {tmp_filepath} -o {filepath}")
+                os.remove(tmp_filepath)
+            except Exception as e:
+                logger.error(e)
+
     def _build_rxnode_tree(self, add_association_relations: bool = False) -> RWXNode:
         """
         Convert the class diagram graph to RWXNode tree structure for visualization.
@@ -832,6 +876,7 @@ class ClassDiagram:
         font_size: int = 25,
         layout: str = "layered",
         edge_style: str = "straight",
+        add_association_relations: bool = False,
         **kwargs,
     ):
         """
@@ -845,9 +890,12 @@ class ClassDiagram:
         :param figsize: Figure size as (width, height) tuple
         :param node_size: Size of the nodes in the visualization
         :param font_size: Font size for labels
+        :param add_association_relations: Include association relationships in the visualization.
         :param kwargs: Additional keyword arguments passed to RWXNode.visualize()
         """
-        root_node = self._build_rxnode_tree()
+        root_node = self._build_rxnode_tree(
+            add_association_relations=add_association_relations
+        )
         root_node.visualize(
             filename=filename,
             title=title,
