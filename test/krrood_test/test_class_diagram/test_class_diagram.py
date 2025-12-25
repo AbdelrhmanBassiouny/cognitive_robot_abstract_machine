@@ -3,6 +3,8 @@ from dataclasses import is_dataclass
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
 from ..dataset import example_classes
+from ..dataset import university_ontology_like_classes
+import rustworkx as rx
 
 
 def test_class_diagram_visualization():
@@ -57,3 +59,13 @@ def test_class_diagram_visualization():
         )
         == 1
     )
+
+
+def test_role_taker_associations():
+
+    classes = filter(
+        is_dataclass,
+        classes_of_module(university_ontology_like_classes),
+    )
+    diagram = ClassDiagram(classes)
+    diagram.to_dot("class_diagram.svg")
