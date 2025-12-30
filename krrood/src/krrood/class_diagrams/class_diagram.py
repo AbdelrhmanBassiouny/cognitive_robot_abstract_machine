@@ -27,6 +27,8 @@ from typing_extensions import (
     Type,
     TYPE_CHECKING,
     Set,
+    Iterator,
+    Any,
 )
 
 
@@ -97,6 +99,18 @@ class Association(ClassRelation):
     field: WrappedField
     """The field in the source class that creates this association with the target class."""
 
+    def get_original_source_instance_given_this_relation_source_instance(
+        self, source_instance: Any
+    ):
+        """
+        Given a source instance, returns the original source instance that has the wrapped field of this association.
+        """
+        if not isinstance(source_instance, self.source.clazz):
+            raise ValueError(
+                f"The source instance is not of type {self.source.clazz}, got {source_instance}."
+            )
+        return source_instance
+
     @cached_property
     def one_to_many(self) -> bool:
         """Whether the association is one-to-many (True) or many-to-one (False)."""
@@ -150,9 +164,18 @@ class AssociationThroughRoleTaker(Association):
         self.field_path = [a.field for a in self.association_path]
         self.field = self.field_path[-1]
 
-    @cached_property
-    def last_source(self) -> WrappedClass:
-        return self.association_path[-1].source
+    @lru_cache(maxsize=None)
+    def get_original_source_instance_given_this_relation_source_instance(
+        self, source_instance: Any
+    ):
+        source_instance = (
+            super().get_original_source_instance_given_this_relation_source_instance(
+                source_instance
+            )
+        )
+        for wrapped_field in self.field_path[:-1]:
+            source_instance = getattr(source_instance, wrapped_field.public_name)
+        return source_instance
 
 
 class ParseError(TypeError):
@@ -258,7 +281,7 @@ class ClassDiagram:
         self,
         clazz: Union[Type, WrappedClass],
         condition: Callable[[Association], bool],
-    ) -> Iterable[Association]:
+    ) -> Iterator[Association]:
         """
         Get all associations that match the condition.
 
