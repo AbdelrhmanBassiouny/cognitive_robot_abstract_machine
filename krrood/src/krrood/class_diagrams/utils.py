@@ -88,6 +88,16 @@ class Role(Generic[T], ABC):
             f"'{self.__class__.__name__}' object has no attribute '{item}'"
         )
 
+    def __setattr__(self, key, value):
+        """
+        Set an attribute on the role taker instance if the role taker has this attribute,
+         otherwise set on this instance directly.
+        """
+        if hasattr(self.role_taker, key):
+            setattr(self.role_taker, key, value)
+        else:
+            super().__setattr__(key, value)
+
     def __hash__(self):
         return hash((self.__class__, hash(self.role_taker)))
 
@@ -97,7 +107,7 @@ class Role(Generic[T], ABC):
         return hash(self) == hash(other)
 
 
-def get_generic_type_param(cls, generic_base) -> Optional[List[Type]]:
+def get_generic_type_param(cls, generic_base: Type[T]) -> Optional[List[Type[T]]]:
     """
     Given a subclass and its generic base, return the concrete type parameter(s).
 
@@ -109,5 +119,6 @@ def get_generic_type_param(cls, generic_base) -> Optional[List[Type]]:
         if base_origin is None:
             continue
         if issubclass(get_origin(base), generic_base):
-            return get_args(base)
+            args = get_args(base)
+            return list(args) if args else None
     return None
