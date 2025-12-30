@@ -2,11 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import cached_property
-from typing_extensions import Optional, Type, Iterable, Tuple, List, TYPE_CHECKING
 
+from typing_extensions import (
+    Optional,
+    Type,
+    Iterable,
+    Tuple,
+    List,
+    TYPE_CHECKING,
+    Union,
+)
+
+from .mixins import TransitiveProperty, HasInverseProperty
 from ...class_diagrams.class_diagram import Association, AssociationThroughRoleTaker
 from ...class_diagrams.wrapped_field import WrappedField
-from .mixins import TransitiveProperty, HasInverseProperty
 from ...entity_query_language.symbol_graph import (
     PredicateClassRelation,
     SymbolGraph,
@@ -58,11 +67,14 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             self.infer_inverse_relation()
             self.infer_transitive_relations()
 
-    def update_source_wrapped_field_value(self):
+    def update_source_wrapped_field_value(self) -> bool:
         """
         Update the wrapped field value for the source instance.
+
+        :return: True if the value of the wrapped field was updated, False otherwise (i.e., if the value was already
+        set).
         """
-        self.wrapped_field.property_descriptor.update_value(
+        return self.wrapped_field.property_descriptor.update_value(
             self.source.instance, self.target.instance
         )
 
@@ -93,62 +105,20 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         This method identifies neighboring symbols that are connected
         through edge with relation types that are superclasses of the current relation type.
 
-        Also, it looks for role taker super relations of the source if it exists.
-
         :return: An iterator over neighboring symbols and relations that are super relations.
         """
-        yield from self.direct_super_relations
-        yield from self.role_taker_super_relations
-
-    @cached_property
-    def direct_super_relations(self):
-        """
-        Return the direct super relations of the source.
-        """
         source_type = self.source.instance_type
-        property_descriptor_cls: PropertyDescriptor = (
+        property_descriptor_cls: Type[PropertyDescriptor] = (
             self.wrapped_field.property_descriptor.__class__
         )
-        yield from (
-            (self.source, f)
-            for f in property_descriptor_cls.get_fields_of_superproperties(source_type)
-        )
-
-    @cached_property
-    def role_taker_super_relations(self):
-        """
-        Return the source role taker super relations.
-        """
-        if not self.role_taker_fields:
-            return
-        role_taker = getattr(
-            self.source.instance, self.source_role_taker_association.field.public_name
-        )
-        role_taker = SymbolGraph().ensure_wrapped_instance(role_taker)
-        yield from ((role_taker, f) for f in self.role_taker_fields)
-
-    @cached_property
-    def role_taker_fields(self) -> List[WrappedField]:
-        """
-        Return the role taker fields of the source role taker association.
-        """
-        if not self.source_role_taker_association:
-            return []
-        return list(
-            self.property_descriptor_cls.get_fields_of_superproperties(
-                self.source_role_taker_association.target
+        for association in property_descriptor_cls.get_superproperties_associations(
+            source_type
+        ):
+            original_source_instance = association.get_original_source_instance_given_this_relation_source_instance(
+                self.source.instance
             )
-        )
-
-    @cached_property
-    def source_role_taker_association(self) -> Optional[Association]:
-        """
-        Return the source role taker association of the relation.
-        """
-        class_diagram = SymbolGraph().class_diagram
-        return class_diagram.get_role_taker_associations_of_cls(
-            self.source.instance_type
-        )
+            source = SymbolGraph().get_wrapped_instance(original_source_instance)
+            yield source, association.field
 
     @property
     def inverse_domain_and_field(self) -> Tuple[WrappedInstance, WrappedField]:
@@ -157,65 +127,20 @@ class PropertyDescriptorRelation(PredicateClassRelation):
 
         :return: The inverse domain instance and property descriptor field.
         """
-        if self.inverse_association:
-            if isinstance(self.inverse_association, AssociationThroughRoleTaker):
-                source = self.target.instance
-                for wrapped_field in self.inverse_association.field_path[:-1]:
-                    source = getattr(source, wrapped_field.public_name)
-                source = SymbolGraph().get_wrapped_instance(source)
-                if not source:
-                    raise ValueError(
-                        f"cannot find a wrapped instance for the inverse {self.inverse_of} defined for the relation {self}"
-                    )
-            else:
-                source = self.target
-            return source, self.inverse_association.field
-        # elif self.inverse_field_from_target_role_taker:
-        #     return self.target_role_taker, self.inverse_field_from_target_role_taker
-        else:
+        if not self.inverse_association:
             raise ValueError(
                 f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self}"
             )
-
-    @cached_property
-    def target_role_taker(self) -> Optional[WrappedInstance]:
-        """
-        Return the role taker of the target if it exists.
-        """
-        if not self.target_role_taker_association:
-            return None
-        role_taker = getattr(
-            self.target.instance,
-            self.target_role_taker_association.field.public_name,
-            None,
+        original_source_instance = self.inverse_association.get_original_source_instance_given_this_relation_source_instance(
+            self.target
         )
-        return SymbolGraph().ensure_wrapped_instance(role_taker)
-
-    @cached_property
-    def inverse_field_from_target_role_taker(self) -> List[WrappedField]:
-        """
-        Return the inverse field of this relation field that is stored in the role taker of the target.
-        """
-        if not self.target_role_taker_association:
-            return None
-        return self.inverse_of.get_association_of_source_type(
-            self.target_role_taker_association.target
-        )
-
-    @cached_property
-    def target_role_taker_association(self) -> Optional[Association]:
-        """
-        Return role taker association of the target if it exists.
-        """
-        class_diagram = SymbolGraph().class_diagram
-        return class_diagram.get_role_taker_associations_of_cls(
-            self.target.instance_type
-        )
+        source = SymbolGraph().get_wrapped_instance(original_source_instance)
+        return source, self.inverse_association.field
 
     @cached_property
     def inverse_association(
         self,
-    ) -> Optional[Association]:
+    ) -> Optional[Union[Association, AssociationThroughRoleTaker]]:
         """
         Return the inverse field (if it exists) stored in the target of this relation.
         """
