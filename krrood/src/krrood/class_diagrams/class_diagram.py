@@ -161,7 +161,14 @@ class AssociationThroughRoleTaker(Association):
 
     def __post_init__(self):
         self.inferred = True
-        self.field_path = [a.field for a in self.association_path]
+        flat_association_path = []
+        for assoc in self.association_path:
+            if isinstance(assoc, AssociationThroughRoleTaker):
+                flat_association_path.extend(assoc.association_path)
+            else:
+                flat_association_path.append(assoc)
+        self.association_path = flat_association_path
+        self.field_path = [assoc.field for assoc in self.association_path]
         self.field = self.field_path[-1]
 
     @lru_cache(maxsize=None)
@@ -690,7 +697,9 @@ class ClassDiagram:
         :param role_taker_assoc: Association of the role taker.
         """
         role_taker_clazz = role_taker_assoc.source
-        association_path = self.get_role_association_path(role_clazz, role_taker_clazz)
+        association_path = list(
+            self.get_role_association_path(role_clazz, role_taker_clazz)
+        )
         association_path.append(role_taker_assoc)
         self.add_relation(
             AssociationThroughRoleTaker(
@@ -703,7 +712,7 @@ class ClassDiagram:
     @lru_cache(maxsize=None)
     def get_role_association_path(
         self, role_clazz: WrappedClass, role_taker_clazz: WrappedClass
-    ) -> List[Association]:
+    ) -> Tuple[Association]:
         """
         :param role_clazz: Wrapped class of the role.
         :param role_taker_clazz: Wrapped class of the role taker.
@@ -721,7 +730,7 @@ class ClassDiagram:
                 next_role_clazz.index
             )[0][-1]
             association_path.append(association)
-        return association_path
+        return tuple(association_path)
 
     @cached_property
     def wrapped_classes_of_role_associations_subgraph_in_topological_order(
@@ -942,6 +951,7 @@ class ClassDiagram:
 
     def clear(self):
         self._dependency_graph.clear()
+        AssociationThroughRoleTaker.get_original_source_instance_given_this_relation_source_instance.cache_clear()
 
     def __hash__(self):
         return hash(id(self))
