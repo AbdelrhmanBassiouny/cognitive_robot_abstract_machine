@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, Field, fields
 
 from typing_extensions import Set, List, Type
 
@@ -40,11 +40,19 @@ class CEO(Role[Person], Symbol):
     person: Person
     head_of: Company = None
 
+    @classmethod
+    def role_taker_field(cls) -> Field:
+        return [f for f in fields(cls) if f.name == "person"][0]
+
 
 @dataclass(eq=False)
 class Representative(Role[CEO], Symbol):
     ceo: CEO
     representative_of: Company = None
+
+    @classmethod
+    def role_taker_field(cls) -> Field:
+        return [f for f in fields(cls) if f.name == "ceo"][0]
 
 
 @dataclass
