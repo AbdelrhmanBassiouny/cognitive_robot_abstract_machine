@@ -754,18 +754,6 @@ class ClassDiagram:
         ]
 
     @cached_property
-    def wrapped_classes_of_association_subgraph_in_topological_order(
-        self,
-    ) -> List[WrappedClass]:
-        """
-        :return: List of all classes in the association subgraph in topological order.
-        """
-        return [
-            self._dependency_graph[index]
-            for index in rx.topological_sort(self.association_subgraph)
-        ]
-
-    @cached_property
     def inheritance_subgraph(self):
         """
         :return: The subgraph containing only inheritance relations and their incident nodes.
@@ -795,15 +783,6 @@ class ClassDiagram:
                 for r in self.associations
                 if isinstance(r, HasRoleTaker)
             ]
-        )
-
-    @cached_property
-    def association_subgraph(self):
-        """
-        :return: The subgraph containing only association relations and their incident nodes.
-        """
-        return self._dependency_graph.edge_subgraph(
-            [(r.source.index, r.target.index) for r in self.associations]
         )
 
     def add_relation(self, relation: ClassRelation):
@@ -861,100 +840,6 @@ class ClassDiagram:
                 os.remove(tmp_filepath)
             except Exception as e:
                 logger.error(e)
-
-    def _build_rxnode_tree(self, add_association_relations: bool = False) -> RWXNode:
-        """
-        Convert the class diagram graph to RWXNode tree structure for visualization.
-
-        Creates a tree where inheritance relationships are represented as parent-child connections.
-        If there are multiple root classes, they are grouped under a virtual root node.
-
-        :param add_association_relations: If True, include association relations as parent-child connections.
-        :return: Root RWXNode representing the class diagram
-        """
-        if not RWXNode:
-            raise ImportError(
-                "The rustworkx_utils package is required to visualize the class diagram."
-                "Please install it with `pip install rustworkx_utils`."
-            )
-        # Create RWXNode for each class
-        node_map = {}
-        for wrapped_class in self.wrapped_classes:
-            class_name = wrapped_class.clazz.__name__
-            node = RWXNode(name=class_name, data=wrapped_class)
-            node_map[wrapped_class.index] = node
-
-        # Build parent-child relationships from edges
-        for edge in self._dependency_graph.edge_list():
-            source_idx, target_idx = edge
-            relation = self._dependency_graph.get_edge_data(source_idx, target_idx)
-
-            # For inheritance: source is parent class, target is child class
-            # In RWXNode: parent class should have child class as its child
-            if isinstance(relation, Inheritance):
-                parent_node = node_map[source_idx]
-                child_node = node_map[target_idx]
-                child_node.add_parent(parent_node)
-            elif isinstance(relation, Association) and add_association_relations:
-                # For associations, add as parent relationship with label
-                source_node = node_map[source_idx]
-                target_node = node_map[target_idx]
-                # Association goes from source to target
-                target_node.add_parent(source_node)
-
-        # Find root nodes (nodes without parents)
-        root_nodes = [node for node in node_map.values() if not node.parents]
-
-        # If there's only one root, return it
-        if len(root_nodes) == 1:
-            return root_nodes[0]
-
-        # If there are multiple roots, create a virtual root
-        virtual_root = RWXNode(name="Class Diagram")
-        for root_node in root_nodes:
-            root_node.add_parent(virtual_root)
-
-        return virtual_root
-
-    def visualize(
-        self,
-        filename: str = "class_diagram.pdf",
-        title: str = "Class Diagram",
-        figsize: tuple = (35, 30),
-        node_size: int = 7000,
-        font_size: int = 25,
-        layout: str = "layered",
-        edge_style: str = "straight",
-        add_association_relations: bool = False,
-        **kwargs,
-    ):
-        """
-        Visualize the class diagram using rustworkx_utils.
-
-        Creates a visual representation of the class diagram showing classes and their relationships.
-        The diagram is saved as a PDF file.
-
-        :param filename: Output filename for the visualization
-        :param title: Title for the diagram
-        :param figsize: Figure size as (width, height) tuple
-        :param node_size: Size of the nodes in the visualization
-        :param font_size: Font size for labels
-        :param add_association_relations: Include association relationships in the visualization.
-        :param kwargs: Additional keyword arguments passed to RWXNode.visualize()
-        """
-        root_node = self._build_rxnode_tree(
-            add_association_relations=add_association_relations
-        )
-        root_node.visualize(
-            filename=filename,
-            title=title,
-            figsize=figsize,
-            node_size=node_size,
-            font_size=font_size,
-            layout=layout,
-            edge_style=edge_style,
-            **kwargs,
-        )
 
     def clear(self):
         self._dependency_graph.clear()

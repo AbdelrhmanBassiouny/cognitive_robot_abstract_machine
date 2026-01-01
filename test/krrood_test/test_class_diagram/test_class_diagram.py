@@ -8,7 +8,6 @@ from krrood.class_diagrams.class_diagram import (
 from krrood.class_diagrams.utils import classes_of_module
 from ..dataset import example_classes
 from ..dataset import university_ontology_like_classes
-import rustworkx as rx
 
 
 def test_class_diagram_visualization():
