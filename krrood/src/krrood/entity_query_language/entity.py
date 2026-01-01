@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .failures import UsageError
+
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable, T
 
@@ -95,6 +97,14 @@ def variable(
     :param inferred: Whether the variable is inferred or not.
     :return: A Variable that can be queried for.
     """
+    if isinstance(domain, Selectable):
+        raise UsageError(
+            message="Domain should not be a Variable object, use variable_from instead if you want to create a "
+            "variable from a Selectable domain, and filter by type in the where statement. Example:\n"
+            "var1 = Variable(Type1, domain=None)\n"
+            "var2 = variable_from(var1.attr1)\n"
+            "query = an(entity(var2).where(HasType(var2, Type2)))"
+        )
     domain_source = _get_domain_source_from_domain_and_type_values(domain, type_)
 
     if name is None:
@@ -111,7 +121,7 @@ def variable(
 
 
 def variable_from(
-    domain: DomainType,
+    domain: Union[Iterable[T], Selectable[T], CanBehaveLikeAVariable[T]],
     name: Optional[str] = None,
 ) -> Union[T, Selectable[T]]:
     """
