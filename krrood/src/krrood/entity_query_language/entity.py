@@ -36,12 +36,14 @@ from .symbolic import (
     Literal,
     Selectable,
     DomainType,
+    An,
 )
 
 from .predicate import (
     Predicate,
     # type: ignore
-    Symbol,  # type: ignore
+    Symbol,
+    HasType,
 )
 
 if TYPE_CHECKING:
@@ -97,18 +99,15 @@ def variable(
     :param inferred: Whether the variable is inferred or not.
     :return: A Variable that can be queried for.
     """
-    if isinstance(domain, Selectable):
-        raise UsageError(
-            message="Domain should not be a Variable object, use variable_from instead if you want to create a "
-            "variable from a Selectable domain, and filter by type in the where statement. Example:\n"
-            "var1 = Variable(Type1, domain=None)\n"
-            "var2 = variable_from(var1.attr1)\n"
-            "query = an(entity(var2).where(HasType(var2, Type2)))"
-        )
-    domain_source = _get_domain_source_from_domain_and_type_values(domain, type_)
 
     if name is None:
         name = type_.__name__
+
+    if isinstance(domain, Selectable):
+        var = variable_from(domain, name=name)
+        return An(Entity(_selected_variables=[var], _child_=HasType(var, type_)))
+
+    domain_source = _get_domain_source_from_domain_and_type_values(domain, type_)
 
     result = Variable(
         _type_=type_,
@@ -121,7 +120,7 @@ def variable(
 
 
 def variable_from(
-    domain: Union[Iterable[T], Selectable[T], CanBehaveLikeAVariable[T]],
+    domain: Union[Iterable[T], Selectable[T]],
     name: Optional[str] = None,
 ) -> Union[T, Selectable[T]]:
     """
