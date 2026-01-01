@@ -740,7 +740,7 @@ class ClassDiagram:
             for index in rx.topological_sort(self.inheritance_subgraph)
         ]
 
-    @cached_property
+    @property
     def inheritance_subgraph_without_unreachable_nodes(self):
         """
         :return: The subgraph containing only inheritance relations and their incident nodes.
@@ -754,7 +754,7 @@ class ClassDiagram:
             ]
         )
 
-    @cached_property
+    @property
     def inheritance_subgraph(self):
         """
         :return: The subgraph containing only inheritance relations and their incident nodes.
