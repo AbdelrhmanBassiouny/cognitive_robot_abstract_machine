@@ -779,16 +779,10 @@ class ClassDiagram:
         """
         :return: The role chain starting from the given node following HasRoleTaker edges.
         """
-        chain = []
-        current_node_idx = node.index
-        while True:
-            out_edges = self.role_association_subgraph.out_edges(current_node_idx)
-            if not out_edges:
-                break
-            edge_data = out_edges[0]
-            chain.append(edge_data[2])
-            current_node_idx = edge_data[1]
-        return tuple(chain)
+        graph = self.role_association_subgraph
+        return tuple(
+            graph.in_edges(idx)[0][2] for idx in rx.descendants(graph, node.index)
+        )
 
     @cached_property
     def role_association_subgraph(self):
