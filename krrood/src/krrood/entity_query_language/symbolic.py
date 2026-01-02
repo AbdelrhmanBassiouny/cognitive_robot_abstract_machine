@@ -10,7 +10,7 @@ from __future__ import annotations
 import operator
 import typing
 from abc import abstractmethod, ABC
-from collections import UserDict
+from collections import UserDict, defaultdict
 from copy import copy
 from dataclasses import dataclass, field, fields, MISSING, is_dataclass
 from functools import lru_cache, cached_property
@@ -79,16 +79,47 @@ id_generator = IDGenerator()
 RWXNode.enclosed_name = "Selected Variable"
 
 
-@dataclass
-class OperationResult:
+@dataclass(eq=False)
+class Bindings:
+    """
+    The bindings of the variables that result from operations or conditions of the query.
+    """
+
+    values: Dict[int, Any]
+    """
+    The bindings values as a dictionary mapping variable ids to values.
+    """
+
+    group_key: Optional[Tuple[int, ...]] = field(kw_only=True, default=None)
+    """
+    The group key as ids of variables if the bindings were grouped by a group_by operation.
+    """
+
+    def get(self, key: int, default: Optional[Any] = None) -> Any:
+        return self.values.get(key, default)
+
+    def __contains__(self, item):
+        return item in self.values
+
+    def __getitem__(self, item):
+        return self.values[item]
+
+    def __setitem__(self, key, value):
+        self.values[key] = value
+
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self.values == other.values and self.group_key == other.group_key
+
+
+@dataclass(eq=False)
+class OperationResult(Bindings):
     """
     A data structure that carries information about the result of an operation in EQL.
     """
 
-    bindings: Dict[int, Any]
-    """
-    The bindings resulting from the operation, mapping variable IDs to their values.
-    """
     is_false: bool
     """
     Whether the operation resulted in a false value (i.e., The operation condition was not satisfied)
@@ -104,23 +135,14 @@ class OperationResult:
 
     @property
     def value(self) -> Optional[Any]:
-        return self.bindings.get(self.operand._id_, None)
-
-    def __contains__(self, item):
-        return item in self.bindings
-
-    def __getitem__(self, item):
-        return self.bindings[item]
-
-    def __setitem__(self, key, value):
-        self.bindings[key] = value
+        return self.get(self.operand._id_, None)
 
     def __hash__(self):
         return id(self)
 
     def __eq__(self, other):
         return (
-            self.bindings == other.bindings
+            super().__eq__(other)
             and self.is_true == other.is_true
             and self.operand == other.operand
         )
@@ -527,12 +549,13 @@ class Aggregator(ResultProcessor[T], ABC):
         if self._id_ in sources:
             yield OperationResult(sources, False, self)
             return
-
         values = self._apply_aggregation_function_(self._child_._evaluate__(sources))
         if values:
-            yield OperationResult(values, False, self)
+            yield OperationResult({**values, **sources}, False, self)
         else:
-            yield OperationResult({self._id_: self._default_value_}, False, self)
+            yield OperationResult(
+                {self._id_: self._default_value_, **sources}, False, self
+            )
 
     @abstractmethod
     def _apply_aggregation_function_(
@@ -708,13 +731,13 @@ class ResultQuantifier(ResultProcessor[T], ABC):
 
     def _evaluate__(
         self,
-        sources: Optional[Dict[int, Any]] = None,
+        sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[T]:
-        sources = sources or {}
+        sources = sources or Bindings({})
         self._eval_parent_ = parent
         if self._id_ in sources:
-            yield OperationResult(sources, False, self)
+            yield OperationResult(sources.values, False, self)
             return
         result_count = 0
         values = self._child_._evaluate__(sources, parent=self)
@@ -725,7 +748,7 @@ class ResultQuantifier(ResultProcessor[T], ABC):
             )
             if self._var_:
                 value[self._id_] = value[self._var_._id_]
-            yield OperationResult(value.bindings, False, self)
+            yield OperationResult(value.values, False, self)
         self._assert_satisfaction_of_quantification_constraints_(
             result_count, done=True
         )
@@ -812,7 +835,7 @@ class The(ResultQuantifier[T]):
 
     def _evaluate__(
         self,
-        sources: Optional[Dict[int, Any]] = None,
+        sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
         try:
@@ -903,6 +926,28 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         self._update_child_(expression)
         return self
 
+    def group_by(self, *variables: Selectable[T]) -> Self:
+        """
+        Groups the query results by the specified variables.
+        """
+        vars_ids = tuple(v._var_._id_ for v in variables)
+
+        def grouping_mapping(
+            results: Iterable[Dict[int, Any]],
+        ) -> Iterable[OperationResult]:
+            grouped = defaultdict(lambda: defaultdict(list))
+            for result in results:
+                key = tuple(result.get(id_) for id_ in vars_ids)
+                for k, v in result.items():
+                    grouped[key][k].append(result)
+
+            # Depending on requirements, yield one result per group or a single dictionary
+            for grouped_key, grouped_results in grouped.items():
+                yield Bindings(grouped_results, group_keys=vars_ids)
+
+        self._results_mapping.append(grouping_mapping)
+        return self
+
     def order_by(
         self,
         variable: Selectable,
@@ -982,7 +1027,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
 
     def _evaluate__(
         self,
-        sources: Optional[Dict[int, Any]] = None,
+        sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         sources = sources or {}
@@ -991,9 +1036,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             self.evaluate_conclusions_and_update_bindings(values)
             if self.any_selected_variable_is_inferred_and_unbound(values):
                 continue
-            selected_vars_bindings = self._evaluate_selected_variables(values.bindings)
+            selected_vars_bindings = self._evaluate_selected_variables(values.values)
             for result in self._apply_results_mapping(selected_vars_bindings):
-                yield OperationResult({**values.bindings, **result}, False, self)
+                yield OperationResult({**values.values, **result}, False, self)
 
     @staticmethod
     def variable_is_inferred(var: CanBehaveLikeAVariable[T]) -> bool:
@@ -1075,17 +1120,19 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             yield from [OperationResult(sources, False, self)]
 
     def _evaluate_selected_variables(
-        self, sources: Dict[int, Any]
+        self, sources: Dict[int, Any], inferred: bool = True
     ) -> Iterable[Dict[int, Any]]:
         """
         Evaluate the selected variables by generating combinations of values from their evaluation generators.
 
         :param sources: The current bindings.
+        :param inferred: Whether to include inferred variables in the evaluation.
         :return: An Iterable of OperationResults for each combination of values.
         """
         var_val_gen = {
             var: var._evaluate__(copy(sources), parent=self)
             for var in self._selected_variables
+            if inferred or not self.variable_is_inferred(var)
         }
         for sol in generate_combinations(var_val_gen):
             yield {var._id_: sol[var][var._id_] for var in self._selected_variables}

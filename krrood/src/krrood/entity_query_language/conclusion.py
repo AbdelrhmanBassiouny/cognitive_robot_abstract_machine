@@ -14,6 +14,7 @@ from .symbolic import (
     OperationResult,
     ResultQuantifier,
     Selectable,
+    Bindings,
 )
 from .utils import T
 
@@ -73,7 +74,7 @@ class Set(Conclusion[T]):
 
     def _evaluate__(
         self,
-        sources: Optional[Dict[int, Any]] = None,
+        sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         self._eval_parent_ = parent
@@ -86,7 +87,7 @@ class Set(Conclusion[T]):
         sources[self.var._var_._id_] = next(
             iter(self.value._evaluate__(sources, parent=self))
         )[self.value._id_]
-        yield OperationResult(sources, False, self)
+        yield OperationResult(sources.values, False, self)
 
 
 @dataclass(eq=False)
@@ -95,11 +96,11 @@ class Add(Conclusion[T]):
 
     def _evaluate__(
         self,
-        sources: Optional[Dict[int, Any]] = None,
+        sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         self._eval_parent_ = parent
         self._yield_when_false_ = False
         v = next(iter(self.value._evaluate__(sources, parent=self)))[self.value._id_]
         sources[self.var._var_._id_] = v
-        yield OperationResult(sources, False, self)
+        yield OperationResult(sources.values, False, self)
