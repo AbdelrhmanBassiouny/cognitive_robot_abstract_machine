@@ -27,7 +27,9 @@ from scipy.spatial import ConvexHull
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.robots.abstract_robot import AbstractRobot
 from semantic_digital_twin.spatial_types import Point3
-from semantic_digital_twin.spatial_types.spatial_types import TransformationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import BoundingBox
@@ -57,7 +59,7 @@ from ..datastructures.enums import (
 )
 from ..datastructures.grasp import GraspDescription
 from ..datastructures.partial_designator import PartialDesignator
-from ..datastructures.pose import PoseStamped, GraspPose, Vector3
+from ..datastructures.pose import PoseStamped, GraspPose, PyCramVector3
 from ..designator import LocationDesignatorDescription
 from ..failures import RobotInCollision
 from ..pose_generator_and_validator import (
@@ -1264,7 +1266,9 @@ class ProbabilisticCostmapLocation(LocationDesignatorDescription):
 
     @staticmethod
     def _calculate_room_event(
-        world: World, free_space_graph: GraphOfConvexSets, target_position: Vector3
+        world: World,
+        free_space_graph: GraphOfConvexSets,
+        target_position: PyCramVector3,
     ) -> Event:
         """
         Calculates an event for the free space inside the room around the target position is located in, in 2d.
@@ -1292,8 +1296,8 @@ class ProbabilisticCostmapLocation(LocationDesignatorDescription):
 
         robot = world.get_semantic_annotations_by_type(AbstractRobot)[0]
         robot_pose = robot.root.global_pose
-        robot.root.parent_connection.origin = TransformationMatrix.from_xyz_quaternion(
-            100, 100, 0
+        robot.root.parent_connection.origin = (
+            HomogeneousTransformationMatrix.from_xyz_quaternion(100, 100, 0)
         )
 
         test = world.ray_tracer.ray_test(rays_start, rays_end)
@@ -1329,7 +1333,7 @@ class ProbabilisticCostmapLocation(LocationDesignatorDescription):
         return room_event
 
     def _create_free_space_conditions(
-        self, world: World, target_position: Vector3, search_distance: float = 1.5
+        self, world: World, target_position: PyCramVector3, search_distance: float = 1.5
     ) -> Tuple[Event, Event, Event]:
         """
         Creates the conditions for the free space around the target position.
@@ -1397,7 +1401,7 @@ class ProbabilisticCostmapLocation(LocationDesignatorDescription):
         return reachable_space_condition, navigation_space_condition, room_condition
 
     def _create_navigation_circuit(
-        self, target_position: Vector3
+        self, target_position: PyCramVector3
     ) -> ProbabilisticCircuit:
         """
         Creates a probabilistic circuit that samples navigation poses around the target position.
@@ -1447,7 +1451,7 @@ class ProbabilisticCostmapLocation(LocationDesignatorDescription):
                 if isinstance(target, PoseStamped)
                 else PoseStamped.from_spatial_type(target.global_pose)
             )
-            target_position: Vector3 = target_pose.position
+            target_position: PyCramVector3 = target_pose.position
 
             self.test_world = deepcopy(self.world)
             self.test_world.name = "Test World"

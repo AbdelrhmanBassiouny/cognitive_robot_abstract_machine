@@ -10,7 +10,7 @@ from krrood.adapters.json_serializer import SubclassJSONSerializer
 from line_profiler.explicit_profiler import profile
 from typing_extensions import List, MutableMapping, ClassVar, Self, Type
 
-import semantic_digital_twin.spatial_types.spatial_types as cas
+import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.context import BuildContext, ExecutionContext
 from giskardpy.motion_statechart.data_types import (
     LifeCycleValues,
@@ -32,6 +32,7 @@ from giskardpy.motion_statechart.graph_node import (
 from giskardpy.motion_statechart.graph_node import Task
 from giskardpy.motion_statechart.plotters.graphviz import MotionStatechartGraphviz
 from giskardpy.qp.constraint_collection import ConstraintCollection
+from krrood.symbolic_math.symbolic_math import VariableParameters
 
 
 @dataclass(repr=False, eq=False)
@@ -110,59 +111,28 @@ class State(MutableMapping[MotionStatechartNode, float], SubclassJSONSerializer)
 class LifeCycleState(State):
 
     default_value: ClassVar[float] = LifeCycleValues.NOT_STARTED
-    _compiled_updater: cas.CompiledFunction = field(init=False)
+    _compiled_updater: sm.CompiledFunction = field(init=False)
 
     def compile(self):
+        """
+        Compiles updater for life cycle states.
+        1. Define state transitions based on current life cycle state and conditions.
+        2. Combine all node state transitions into a single expression and compile it.
+        3. Bind compiled function arguments to memory views of observation and life cycle state data.
+        4. Store the compiled updater for later use in updating life cycle states.
+        """
         state_updater = []
         for node in self.motion_statechart.nodes:
             state_symbol = node.life_cycle_variable
 
-            not_started_transitions = cas.if_else(
-                condition=node.start_condition == cas.TrinaryTrue,
-                if_result=cas.Expression(LifeCycleValues.RUNNING),
-                else_result=cas.Expression(LifeCycleValues.NOT_STARTED),
-            )
-            running_transitions = cas.if_cases(
-                cases=[
-                    (
-                        node.reset_condition == cas.TrinaryTrue,
-                        cas.Expression(LifeCycleValues.NOT_STARTED),
-                    ),
-                    (
-                        node.end_condition == cas.TrinaryTrue,
-                        cas.Expression(LifeCycleValues.DONE),
-                    ),
-                    (
-                        node.pause_condition == cas.TrinaryTrue,
-                        cas.Expression(LifeCycleValues.PAUSED),
-                    ),
-                ],
-                else_result=cas.Expression(LifeCycleValues.RUNNING),
-            )
-            pause_transitions = cas.if_cases(
-                cases=[
-                    (
-                        node.reset_condition == cas.TrinaryTrue,
-                        cas.Expression(LifeCycleValues.NOT_STARTED),
-                    ),
-                    (
-                        node.end_condition == cas.TrinaryTrue,
-                        cas.Expression(LifeCycleValues.DONE),
-                    ),
-                    (
-                        node.pause_condition == cas.TrinaryFalse,
-                        cas.Expression(LifeCycleValues.RUNNING),
-                    ),
-                ],
-                else_result=cas.Expression(LifeCycleValues.PAUSED),
-            )
-            ended_transitions = cas.if_else(
-                condition=node.reset_condition == cas.TrinaryTrue,
-                if_result=cas.Expression(LifeCycleValues.NOT_STARTED),
-                else_result=cas.Expression(LifeCycleValues.DONE),
-            )
+            (
+                not_started_transitions,
+                running_transitions,
+                pause_transitions,
+                ended_transitions,
+            ) = node.create_lifecycle_transitions()
 
-            state_machine = cas.if_eq_cases(
+            state_machine = sm.if_eq_cases(
                 a=state_symbol,
                 b_result_cases=[
                     (LifeCycleValues.NOT_STARTED, not_started_transitions),
@@ -170,12 +140,14 @@ class LifeCycleState(State):
                     (LifeCycleValues.PAUSED, pause_transitions),
                     (LifeCycleValues.DONE, ended_transitions),
                 ],
-                else_result=cas.Expression(state_symbol),
+                else_result=sm.Scalar(state_symbol),
             )
             state_updater.append(state_machine)
-        state_updater = cas.Expression(state_updater)
+        state_updater = sm.Vector(state_updater)
         self._compiled_updater = state_updater.compile(
-            parameters=[self.observation_symbols(), self.life_cycle_symbols()],
+            parameters=VariableParameters.from_lists(
+                self.observation_symbols(), self.life_cycle_symbols()
+            ),
             sparse=False,
         )
         self._compiled_updater.bind_args_to_memory_view(
@@ -205,12 +177,12 @@ class LifeCycleState(State):
 class ObservationState(State):
     default_value: ClassVar[ObservationStateValues] = ObservationStateValues.UNKNOWN
 
-    _compiled_updater: cas.CompiledFunction = field(init=False)
+    _compiled_updater: sm.CompiledFunction = field(init=False)
 
     def compile(self, context: BuildContext):
         observation_state_updater = []
         for node in self.motion_statechart.nodes:
-            state_f = cas.if_eq_cases(
+            state_f = sm.if_eq_cases(
                 a=node.life_cycle_variable,
                 b_result_cases=[
                     (
@@ -219,21 +191,21 @@ class ObservationState(State):
                     ),
                     (
                         int(LifeCycleValues.NOT_STARTED),
-                        cas.TrinaryUnknown,
+                        sm.Scalar.const_trinary_unknown(),
                     ),
                 ],
-                else_result=cas.Expression(node.observation_variable),
+                else_result=sm.Scalar(node.observation_variable),
             )
             observation_state_updater.append(state_f)
-        self._compiled_updater = cas.Expression(observation_state_updater).compile(
-            parameters=[
+        self._compiled_updater = sm.Vector(observation_state_updater).compile(
+            parameters=VariableParameters.from_lists(
                 self.observation_symbols(),
                 self.life_cycle_symbols(),
                 context.world.state.get_variables(),
                 context.collision_scene.get_external_collision_symbol(),
                 context.collision_scene.get_self_collision_symbol(),
                 context.auxiliary_variable_manager.variables,
-            ],
+            ),
             sparse=False,
         )
         self._compiled_updater.bind_args_to_memory_view(
@@ -487,10 +459,6 @@ class MotionStatechart(SubclassJSONSerializer):
             node._observation_expression = artifacts.observation
         node._debug_expressions = artifacts.debug_expressions
 
-    def _apply_goal_conditions_to_their_children(self):
-        for goal in self.get_nodes_by_type(Goal):
-            goal._apply_goal_conditions_to_children()
-
     def compile(self, context: BuildContext):
         """
         Compiles all components of the motion statechart given the provided context.
@@ -500,7 +468,6 @@ class MotionStatechart(SubclassJSONSerializer):
         """
         self.sanity_check()
         self._expand_goals(context=context)
-        self._apply_goal_conditions_to_their_children()
         self._build_nodes(context=context)
         self._add_transitions()
         self.observation_state.compile(context=context)

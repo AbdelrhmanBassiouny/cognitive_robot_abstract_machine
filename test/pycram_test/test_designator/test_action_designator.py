@@ -1,18 +1,17 @@
-import time
 import unittest
 
-import rclpy
 import rustworkx
-from giskardpy.utils.utils_for_tests import compare_axis_angle
-from pycram.motion_executor import MotionExecutor
-from semantic_digital_twin.adapters.procthor.procthor_semantic_annotations import Milk
-from semantic_digital_twin.adapters.viz_marker import VizMarkerPublisher
 
+from giskardpy.utils.utils_for_tests import compare_axis_angle
 from pycram.datastructures.dataclasses import Context
+from pycram.motion_executor import MotionExecutor
 from pycram.process_module import simulated_robot
 from pycram.robot_plans.actions import *
 from pycram.robot_plans.motions import MoveTCPWaypointsMotion
 from pycram.testing import ApartmentWorldTestCase
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Milk,
+)
 
 
 class TestActionDesignatorGrounding(ApartmentWorldTestCase):
@@ -215,7 +214,7 @@ class TestActionDesignatorGrounding(ApartmentWorldTestCase):
     def test_detect(self):
         milk_body = self.world.get_body_by_name("milk.stl")
         self.robot_view.root.parent_connection.origin = (
-            TransformationMatrix.from_xyz_rpy(
+            HomogeneousTransformationMatrix.from_xyz_rpy(
                 1.5, 2, 0, reference_frame=self.world.root
             )
         )
