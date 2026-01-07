@@ -259,3 +259,15 @@ def inference(
     return lambda **kwargs: Variable(
         _type_=type_, _name__=type_.__name__, _kwargs_=kwargs, _is_inferred_=True
     )
+
+
+def has_solution(for_: Any, conditions: Callable[[Any], ConditionType]) -> bool:
+    """
+    Checks if there exists a solution that satisfies all given conditions.
+
+    :param for_: The variable for which the solution is being sought.
+    :param conditions: A list of conditions to check for a solution.
+    :return: True if there is a solution that satisfies all conditions, False otherwise.
+    """
+    var = variable_from([for_])
+    return any(An(entity(var).where(*conditions(var))).evaluate())

@@ -43,7 +43,10 @@ def get_full_class_name(cls):
 
 
 @lru_cache
-def inheritance_path_length(child_class: Type, parent_class: Type) -> Optional[int]:
+def inheritance_path_length(
+    child_class: Type,
+    parent_class: Type,
+) -> Optional[int]:
     """
     Calculate the inheritance path length between two classes.
     Every inheritance level that lies between `child_class` and `parent_class` increases the length by one.

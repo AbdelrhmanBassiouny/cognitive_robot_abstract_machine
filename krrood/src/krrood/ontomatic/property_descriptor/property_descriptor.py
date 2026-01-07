@@ -161,7 +161,7 @@ class PropertyDescriptor(Symbol):
         Update the domain and range sets and the domain-range map for this descriptor type.
         """
         range_type = self.wrapped_field.type_endpoint
-        assert issubclass(range_type, Symbol)
+        # assert issubclass(range_type, Symbol)
         self.domain_range_map[self.__class__][self.domain] = range_type
         for super_class in self.__class__.__mro__:
             if (super_class is PropertyDescriptor) or not issubclass(

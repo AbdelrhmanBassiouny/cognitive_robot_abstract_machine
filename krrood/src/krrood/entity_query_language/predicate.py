@@ -145,6 +145,52 @@ class HasTypes(HasType):
     """
 
 
+@dataclass(eq=False)
+class HasAttribute(Predicate):
+    """
+    Represents a predicate to check if a given instance has a specified attribute.
+
+    This class is used to evaluate whether the provided instance contains the specified
+    attribute by leveraging Python's built-in `hasattr` functionality. It provides methods
+    to retrieve the instance and attribute name and perform direct checks.
+    """
+
+    instance: Any
+    """
+    The instance whose attribute presence is being checked.
+    """
+    attribute_name: str
+    """
+    The name of the attribute to check for in the `instance`.
+    """
+
+    def __call__(self) -> bool:
+        return hasattr(self.instance, self.attribute_name)
+
+
+@dataclass(eq=False)
+class IsSubClassOf(Predicate):
+    """
+    Represents a predicate to check if a given class is a subclass of a specified parent class.
+
+    This class is used to evaluate whether the provided class is a subclass of the specified
+    parent class by leveraging Python's built-in `issubclass` functionality. It provides methods
+    to retrieve the class and parent class and perform direct checks.
+    """
+
+    child_cls: Type
+    """
+    The class whose subclass relationship is being checked.
+    """
+    parent_cls: Type
+    """
+    The parent class to check against for the `cls`.
+    """
+
+    def __call__(self) -> bool:
+        return issubclass(self.child_cls, self.parent_cls)
+
+
 def update_cache(instance: Symbol):
     """
     Updates the cache with the given instance of a symbolic type.

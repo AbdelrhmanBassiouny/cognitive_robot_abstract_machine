@@ -285,3 +285,31 @@ def search_class_in_sys_modules(target_class_name: str) -> List[Type]:
                 if obj not in found_classes:
                     found_classes.append(obj)
     return found_classes
+
+
+def _role_aware_inheritance_path_length(
+        child_class: Type, parent_class: Type, current_length: int = 0
+) -> int:
+    """
+    Helper function for :func:`inheritance_path_length`.
+
+    :param child_class: The child class.
+    :param parent_class: The parent class.
+    :param current_length: The current length of the inheritance path.
+    :return: The minimum path length between `child_class` and `parent_class`.
+    """
+
+    if child_class == parent_class:
+        return current_length
+    else:
+        return min(
+            _inheritance_path_length(base, parent_class, current_length + 1)
+            for base in child_class.__bases__
+            if issubclass(base, parent_class)
+        )
+
+def issubclass_or_role(subtype: Type, supertype: Type) -> bool:
+    return issubclass(subtype, supertype) or (
+            issubclass(subtype, Role)
+            and issubclass(subtype.get_role_taker_type(), supertype)
+    )

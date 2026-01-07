@@ -5,8 +5,9 @@ from dataclasses import dataclass, Field
 from enum import Enum
 from functools import lru_cache, cached_property
 from uuid import UUID
+from copy import copy
 
-from typing_extensions import List, Type, Generic, TYPE_CHECKING, Optional
+from typing_extensions import List, Type, Generic, TYPE_CHECKING, Optional, Union
 from typing_extensions import TypeVar, get_origin, get_args
 
 
@@ -122,3 +123,118 @@ def get_generic_type_param(cls, generic_base: Type[T]) -> Optional[List[Type[T]]
             args = get_args(base)
             return list(args) if args else None
     return None
+
+
+def sort_classes_by_role_aware_inheritance_path_length(
+    classes: List[Type],
+) -> List[Type]:
+    near_common_ancestor = role_aware_nearest_common_ancestor(classes)
+    if near_common_ancestor is None:
+        return classes
+    class_lengths = [
+        (clazz, role_aware_inheritance_path_length(clazz, near_common_ancestor))
+        for clazz in classes
+    ]
+    sorted_ = list(sorted(class_lengths, key=lambda x: x[1]))
+    # if any consecutive lengths are equal, make non role first
+    for i in range(len(sorted_) - 1):
+        if sorted_[i][1] != sorted_[i + 1][1]:
+            continue
+        if not (
+            issubclass(sorted_[i][0], Role) and not issubclass(sorted_[i + 1][0], Role)
+        ):
+            continue
+        # keep swapping until we find a different length
+        for j in range(i + 1, 0, -1):
+            if sorted_[j][1] != sorted_[j - 1][1]:
+                break
+            # swap
+            sorted_[j], sorted_[j - 1] = sorted_[j - 1], sorted_[j]
+
+    return [clazz for clazz, _ in sorted_]
+
+
+def role_aware_nearest_common_ancestor(classes):
+    if not classes:
+        return None
+
+    # Get MROs as lists
+    mros = [copy(cls.mro()) for cls in classes]
+    for mro in mros:
+        if Role not in mro:
+            continue
+        rol_idx = mro.index(Role)
+        role_cls = mro[rol_idx - 1]
+        role_taker_cls = role_cls.get_role_taker_type()
+        mro[rol_idx] = role_taker_cls
+
+    # Iterate in MRO order of the first class
+    for candidate in mros[0]:
+        if all(candidate in mro for mro in mros[1:]):
+            return candidate
+
+    return None
+
+
+@lru_cache
+def role_aware_inheritance_path_length(
+    child_class: Type,
+    parent_class: Type,
+) -> Union[float, int]:
+    """
+    Calculate the inheritance path length between two classes taking roles into account.
+    Every inheritance level that lies between `child_class` and `parent_class` increases the length by one.
+    In case of multiple inheritance, the path length is calculated for each branch and the minimum is returned.
+
+    :param child_class: The child class.
+    :param parent_class: The parent class.
+    :return: The minimum path length between `child_class` and `parent_class` or None if no path exists.
+    """
+    if not issubclass_or_role(child_class, parent_class):
+        return float("inf")
+
+    return _role_aware_inheritance_path_length(child_class, parent_class, 0)
+
+
+def _role_aware_inheritance_path_length(
+    child_class: Type, parent_class: Type, current_length: int = 0
+) -> int:
+    """
+    Helper function for :func:`inheritance_path_length`.
+
+    :param child_class: The child class.
+    :param parent_class: The parent class.
+    :param current_length: The current length of the inheritance path.
+    :return: The minimum path length between `child_class` and `parent_class`.
+    """
+
+    if child_class == parent_class:
+        return current_length
+    else:
+        child_bases = set(child_class.__bases__)
+        if Role in child_bases and child_class is not Role:
+            role_taker_type = child_class.get_role_taker_type()
+            if role_taker_type is not None:
+                child_bases.add(role_taker_type)
+        return min(
+            _role_aware_inheritance_path_length(base, parent_class, current_length + 1)
+            for base in child_bases
+            if issubclass_or_role(base, parent_class)
+        )
+
+
+def issubclass_or_role(child: Type, parent: Type) -> bool:
+    """
+    Check if `child` is a subclass of `parent` or if `child` is a Role whose role taker is a subclass of `parent`.
+
+    :param child: The child class.
+    :param parent: The parent class.
+    :return: True if `child` is a subclass of `parent` or if `child` is a Role for `parent`, False otherwise.
+    """
+    if issubclass(child, parent):
+        return True
+    if issubclass(child, Role) and child is not Role:
+        role_taker_type = child.get_role_taker_type()
+        if issubclass(role_taker_type, parent):
+            return True
+    return False
