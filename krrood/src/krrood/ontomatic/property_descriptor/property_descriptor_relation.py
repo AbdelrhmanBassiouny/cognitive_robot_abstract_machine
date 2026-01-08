@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from .property_descriptor import PropertyDescriptor
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(unsafe_hash=True, repr=False)
 class PropertyDescriptorRelation(PredicateClassRelation):
     """
     Edge data representing a relation between two wrapped instances that is represented structurally by a property
@@ -143,8 +143,11 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :return: The inverse domain instance and property descriptor field.
         """
         if not self.inverse_association:
+            import pdbpp
+
+            pdbpp.set_trace()
             raise ValueError(
-                f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self}"
+                f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self.source.name}-{self.wrapped_field.public_name}-{self.target.name}"
             )
         original_source_instance = self.inverse_association.get_original_source_instance_given_this_relation_source_instance(
             self.target.instance

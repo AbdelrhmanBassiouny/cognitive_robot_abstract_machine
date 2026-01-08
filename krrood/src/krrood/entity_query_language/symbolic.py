@@ -1573,7 +1573,7 @@ class Attribute(DomainMapping):
             return None
 
     def _apply_mapping_(self, value: Any) -> Iterable[Any]:
-        if is_iterable(value):
+        if not hasattr(value, self._attribute_name_) and is_iterable(value):
             for v in value:
                 yield getattr(v, self._attribute_name_)
             return

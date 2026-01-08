@@ -176,6 +176,21 @@ def role_aware_nearest_common_ancestor(classes):
     return None
 
 
+def nearest_common_ancestor(classes):
+    if not classes:
+        return None
+
+    # Get MROs as lists
+    mros = [copy(cls.mro()) for cls in classes]
+
+    # Iterate in MRO order of the first class
+    for candidate in mros[0]:
+        if all(candidate in mro for mro in mros[1:]):
+            return candidate
+
+    return None
+
+
 @lru_cache
 def role_aware_inheritance_path_length(
     child_class: Type,

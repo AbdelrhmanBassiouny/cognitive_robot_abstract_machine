@@ -73,6 +73,9 @@ class PredicateClassRelation:
         """Return the predicate type name for labeling the edge."""
         return self.__class__.__name__
 
+    def __repr__(self):
+        return str(self)
+
     @property
     def color(self) -> str:
         return "red" if self.inferred else "black"
