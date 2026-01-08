@@ -42,6 +42,9 @@ from semantic_digital_twin.world_description.world_entity import (
     Actuator,
 )
 from semantic_digital_twin.world_description.world_state import WorldStateTrajectory
+from semantic_digital_twin.world_description.world_state_trajectory_plotter import (
+    WorldStateTrajectoryPlotter,
+)
 
 
 def test_set_state(world_setup):
@@ -1100,6 +1103,8 @@ def test_world_state_trajectory(world_setup):
     assert np.allclose(
         traj.data[0, :, 1:], initial_state.data[:, 1:]
     )  # Other DOFs unchanged initially
+
+    WorldStateTrajectoryPlotter().plot_trajectory(traj, "./traj.pdf")
 
     # Verify world version consistency
     assert traj._world_version == world.get_world_model_manager().version

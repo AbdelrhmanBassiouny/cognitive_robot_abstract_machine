@@ -1188,6 +1188,7 @@ class TestCartesianTasks:
         kin_sim = Executor(world=pr2_world_state_reset)
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
+        kin_sim.plot_trajectory()
 
 
 def test_cart_goal_sequence_at_build(pr2_world_state_reset: World):
