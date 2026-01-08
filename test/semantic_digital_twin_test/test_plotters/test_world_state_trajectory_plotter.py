@@ -59,7 +59,9 @@ def _build_simple_trajectory(world_setup, duration_s: float = 3.0, dt: float = 0
     return world, traj, dof_change, dof_constant, dt
 
 
-def _render_plot(plotter: WorldStateTrajectoryPlotter, traj: WorldStateTrajectory, monkeypatch):
+def _render_plot(
+    plotter: WorldStateTrajectoryPlotter, traj: WorldStateTrajectory, monkeypatch
+):
     captured = {}
 
     # Avoid file output and figure closing during tests
@@ -76,7 +78,9 @@ def _render_plot(plotter: WorldStateTrajectoryPlotter, traj: WorldStateTrajector
 
 
 def test_physical_width_and_time_normalization(world_setup, monkeypatch):
-    world, traj, dof_change, dof_constant, dt = _build_simple_trajectory(world_setup, duration_s=5.0, dt=0.2)
+    world, traj, dof_change, dof_constant, dt = _build_simple_trajectory(
+        world_setup, duration_s=5.0, dt=0.2
+    )
 
     second_width_in_cm = 2.0
     plotter = WorldStateTrajectoryPlotter(
@@ -108,7 +112,11 @@ def test_subplot_titles_labels_and_shared_xlabel(world_setup, monkeypatch):
     _, traj, *_ = _build_simple_trajectory(world_setup, duration_s=2.0, dt=0.1)
 
     plotter = WorldStateTrajectoryPlotter(
-        derivatives_to_plot=[Derivatives.position, Derivatives.velocity, Derivatives.acceleration],
+        derivatives_to_plot=[
+            Derivatives.position,
+            Derivatives.velocity,
+            Derivatives.acceleration,
+        ],
         legend=False,
     )
 
@@ -139,14 +147,16 @@ def test_subplot_titles_labels_and_shared_xlabel(world_setup, monkeypatch):
 
 
 def test_center_positions_and_suppression_rules(world_setup, monkeypatch):
-    world, traj, dof_change, dof_constant, dt = _build_simple_trajectory(world_setup, duration_s=1.0, dt=0.1)
+    world, traj, dof_change, dof_constant, dt = _build_simple_trajectory(
+        world_setup, duration_s=1.0, dt=0.1
+    )
 
     plotter = WorldStateTrajectoryPlotter(
         derivatives_to_plot=[Derivatives.position, Derivatives.velocity],
         legend=False,
         center_positions=True,
         sort_degrees_of_freedom=False,
-        plot_0_lines=False,
+        plot_constant_lines=False,
     )
 
     rendered = _render_plot(plotter, traj, monkeypatch)
