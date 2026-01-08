@@ -46,7 +46,7 @@ Type alias for the domain-range map.
 """
 
 
-@dataclass
+@dataclass(eq=False)
 class PropertyDescriptor(Symbol):
     """Descriptor managing a data class field while giving it metadata like superproperties,
     sub-properties, inverse, transitivity, ...etc.
@@ -163,6 +163,8 @@ class PropertyDescriptor(Symbol):
         range_type = self.wrapped_field.type_endpoint
         # assert issubclass(range_type, Symbol)
         self.domain_range_map[self.__class__][self.domain] = range_type
+        self.all_domains[self.__class__].add(self.domain)
+        self.all_ranges[self.__class__].add(range_type)
         for super_class in self.__class__.__mro__:
             if (super_class is PropertyDescriptor) or not issubclass(
                 super_class, PropertyDescriptor
@@ -337,3 +339,9 @@ class PropertyDescriptor(Symbol):
             domain_type, association_condition
         )
         return tuple(associations_generator)
+
+    def __hash__(self):
+        return hash(id(self))
+
+    def __eq__(self, other):
+        return id(self) == id(other)
