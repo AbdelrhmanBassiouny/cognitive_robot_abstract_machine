@@ -494,6 +494,7 @@ class ClassDiagram:
                 )
         return assoc_keys_by_source
 
+    @lru_cache(maxsize=None)
     def to_subdiagram_without_inherited_associations(
         self,
         include_field_name: bool = False,
@@ -858,6 +859,7 @@ class ClassDiagram:
         self._dependency_graph.clear()
         AssociationThroughRoleTaker.get_original_source_instance_given_this_relation_source_instance.cache_clear()
         self.__class__.role_chain_starting_from_node.cache_clear()
+        self.__class__.to_subdiagram_without_inherited_associations.cache_clear()
 
     def __hash__(self):
         return hash(id(self))
