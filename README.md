@@ -35,28 +35,6 @@ sudo apt install pre-commit
 pre-commit install
 ```
 
-## Documentation
-
-This repository publishes documentation for three projects to GitHub Pages:
-- **krrood**: Available at `/krrood/`
-- **pycram**: Available at `/pycram/`
-- **semantic_digital_twin**: Available at `/semantic_digital_twin/`
-
-Documentation is automatically built and deployed when changes are pushed to the `main` branch. The unified deployment workflow (`.github/workflows/deploy-unified-docs.yml`) builds all three documentation sets and combines them into a single GitHub Pages site with a landing page.
-
-To test documentation builds locally:
-```bash
-# For krrood
-cd krrood && jupyter-book build doc
-
-# For pycram
-cd pycram/doc/source && jupyter-book build .
-
-# For semantic_digital_twin (requires Docker)
-docker run -v $(pwd):/workspace pycram/semantic_world:jazzy \
-  bash -c "cd /workspace/semantic_digital_twin && jupyter-book build doc"
-```
-
 ### Code of Conduct
 
 > Any code added to the repository must have at least an 85% test coverage.

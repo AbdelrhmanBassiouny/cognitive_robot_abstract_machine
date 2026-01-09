@@ -1,21 +1,15 @@
-name: Build pycram documentation (test only)
+name: Build Jupyter-Book documentation 📖
 
-# This workflow only builds the documentation for testing  
-# Deployment is handled by deploy-unified-docs.yml
 on:
   push:
     branches:
       - dev
       - main
-    paths:
-      - 'pycram/**'
   pull_request:
     branches:
       - master
       - dev
       - main
-    paths:
-      - 'pycram/**'
 
 # ----------------------------------------------------------------------------------------------------------------------
 
