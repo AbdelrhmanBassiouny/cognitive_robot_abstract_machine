@@ -9,7 +9,7 @@ from giskardpy.ros2_tools.force_torque_filter_node import (
 def main():
     rclpy.init()
 
-    node = ForceTorqueFilterNode(cfg=FilterConfig())
+    node = ForceTorqueFilterNode(config=FilterConfig())
 
     try:
         rclpy.spin(node)

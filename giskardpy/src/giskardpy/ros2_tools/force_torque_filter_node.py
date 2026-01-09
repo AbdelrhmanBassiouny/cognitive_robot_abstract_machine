@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+"""
+ROS 2 node and utilities to filter and differentiate force-torque signals.
+
+Provides a configurable low-pass filtering pipeline with optional offset
+removal and a smoothed first derivative for six-axis wrench data.
+"""
 from __future__ import annotations
 
 import dataclasses
@@ -28,7 +34,7 @@ class FilterConfig:
     """
     Suffix to append to the topic_in topic name to produce the filtered output topic.
     """
-    topic_diff_out_suffix: str = "filtered/derivative"
+    topic_derivative_out_suffix: str = "filtered/derivative"
     """
     Suffix to append to the topic_in topic name to produce the first time derivative the filtered output topic.
     """
@@ -52,16 +58,55 @@ class FilterConfig:
     """
     Order of the derivative low-pass filter.
     """
-    offset_mode: str = "ewma"  # "ewma" or "none"
+    offset_mode: str = "ewma"
+    """
+    Method for offset removal from the signal. Options:
+    - "ewma": Use exponentially weighted moving average to estimate and remove offset
+    - "none": Disable offset removal
+    """
+
     offset_alpha: float = 0.005
+    """
+    Learning rate for the EWMA offset estimator (only used when offset_mode="ewma").
+    Higher values adapt faster to offset changes but are more sensitive to noise.
+    Valid range: (0.0, 1.0), typical values: 0.001 to 0.01
+    """
+
     warmup_samples: int = 50
+    """
+    Number of initial samples to discard before publishing filtered output.
+    This prevents startup transients from affecting the filtered signal.
+    The node will process but not publish the first N samples.
+    """
+
     qos_depth: int = 10
+    """
+    Quality of Service history depth for ROS 2 topics.
+    Number of messages to keep in the publisher/subscriber queue.
+    """
+
     qos_reliable: bool = True
+    """
+    Quality of Service reliability policy for ROS 2 topics.
+    - True: Use RELIABLE delivery (guarantees message delivery)
+    - False: Use BEST_EFFORT delivery (faster but may drop messages)
+    """
 
     def __post_init__(self) -> None:
+        """
+        Run validation after dataclass initialization.
+
+        Ensures that the configuration values are consistent before use.
+        """
         self.sanity_check_params()
 
     def sanity_check_params(self):
+        """
+        Validate configuration values.
+
+        Ensures that all numerical parameters are within acceptable ranges and
+        that categorical parameters use supported values.
+        """
         if self.offset_mode not in ("ewma", "none"):
             raise ValueError("Parameter 'offset_mode' must be 'ewma' or 'none'")
         if self.order_main <= 0 or self.order_diff <= 0:
@@ -71,21 +116,56 @@ class FilterConfig:
 
     @property
     def topic_filtered_out(self) -> str:
+        """
+        Build the topic name for the filtered wrench output.
+
+        Concatenates the input topic with the configured filtered suffix.
+
+        :return: Full topic name for the filtered wrench output.
+        """
         return (
             self.topic_in.rstrip("/") + "/" + self.topic_filtered_out_suffix.lstrip("/")
         )
 
     @property
-    def topic_diff_out(self) -> str:
-        return self.topic_in.rstrip("/") + "/" + self.topic_diff_out_suffix.lstrip("/")
+    def topic_derivative_out(self) -> str:
+        """
+        Build the topic name for the derivative output.
+
+        Concatenates the input topic with the configured derivative suffix.
+
+        :return: Full topic name for the derivative wrench output.
+        """
+        return (
+            self.topic_in.rstrip("/")
+            + "/"
+            + self.topic_derivative_out_suffix.lstrip("/")
+        )
 
     @classmethod
     def from_ros2_params(cls, node: Node) -> FilterConfig:
-        cls._declare_parameters_from_cfg(node)
-        return cls._read_parameters_to_cfg(node)
+        """
+        Build a configuration from ROS 2 node parameters.
+
+        Declares parameters with defaults on the provided node and
+        then reads their current values into a new configuration.
+
+        :param node: ROS 2 node used to declare and read parameters.
+        :return: New configuration populated from the node parameters.
+        """
+        cls._declare_parameters_from_config(node)
+        return cls._read_parameters_to_config(node)
 
     @classmethod
-    def _declare_parameters_from_cfg(cls, node: Node) -> None:
+    def _declare_parameters_from_config(cls, node: Node) -> None:
+        """
+        Declare all configuration fields as ROS 2 parameters on the node.
+
+        Uses type-appropriate neutral defaults for fields without explicit
+        defaults so that parameters exist and can be overridden externally.
+
+        :param node: Node on which parameters will be declared.
+        """
         for f in dataclasses.fields(cls):
             # Compute a neutral default for required fields (no default provided)
             if f.default is not dataclasses.MISSING:
@@ -106,7 +186,16 @@ class FilterConfig:
             node.declare_parameter(f.name, default_val)
 
     @classmethod
-    def _read_parameters_to_cfg(cls, node: Node) -> FilterConfig:
+    def _read_parameters_to_config(cls, node: Node) -> FilterConfig:
+        """
+        Read ROS 2 parameters into a new configuration instance.
+
+        Uses typed accessors to remain compatible across ROS 2 distributions.
+
+        :param node: Node from which parameters are read.
+        :return: Configuration populated from the node parameters.
+        """
+
         # Typed getters for maximum ROS 2 compatibility across distros
         def get_str(name: str) -> str:
             return str(node.get_parameter(name).get_parameter_value().string_value)
@@ -142,19 +231,35 @@ class OffsetEstimator:
     """
 
     alpha: float
-    value: float = 0.0
+    """
+    Learning rate for the EWMA offset estimator (only used when offset_mode="ewma").
+    Higher values adapt faster to offset changes but are more sensitive to noise.
+    Valid range: (0.0, 1.0), typical values: 0.001 to 0.01
+    """
+    current_value: float = 0.0
+    """
+    Current estimated offset value.
+    """
     initialized: bool = False
+    """
+    Indicates whether the estimator has received its first sample.
+    """
 
     def update(self, x: float) -> float:
-        """Update offset with new sample and return the offset estimate."""
+        """
+        Update offset with new sample and return the offset estimate.
+
+        :param x: New sample value.
+        :return: Current estimated offset after the update.
+        """
         if not self.initialized:
-            self.value = float(x)
+            self.current_value = float(x)
             self.initialized = True
-            return self.value
-        self.value = (1.0 - float(self.alpha)) * self.value + float(self.alpha) * float(
-            x
-        )
-        return self.value
+            return self.current_value
+        self.current_value = (1.0 - float(self.alpha)) * self.current_value + float(
+            self.alpha
+        ) * float(x)
+        return self.current_value
 
 
 @dataclass
@@ -164,21 +269,41 @@ class LowPassButter:
     """
 
     cutoff_hz: float
+    """
+    Cutoff frequency of the low-pass filter in hertz.
+    """
     fs_hz: float
+    """
+    Sampling frequency of the input signal in hertz.
+    """
     order: int
+    """
+    Order of the Butterworth filter.
+    """
     sos: np.ndarray = field(init=False, repr=False)
-    zi: np.ndarray = field(init=False, repr=False)
+    """
+    Second-order sections representation of the filter.
+    """
+    filter_state: np.ndarray = field(init=False, repr=False)
+    """
+    Internal filter state for streaming processing.
+    """
 
     def __post_init__(self) -> None:
         nyq = 0.5 * float(self.fs_hz)
         wn = float(self.cutoff_hz) / nyq
         self.sos = butter(int(self.order), wn, btype="low", output="sos")
         # zi per SOS section: shape (n_sections, 2)
-        self.zi = np.zeros((self.sos.shape[0], 2))
+        self.filter_state = np.zeros((self.sos.shape[0], 2))
 
     def step(self, x: float) -> float:
-        """Process a single sample through the filter."""
-        y, self.zi = sosfilt(self.sos, [x], zi=self.zi)
+        """
+        Process a single sample through the filter.
+
+        :param x: Input sample.
+        :return: Filtered sample.
+        """
+        y, self.filter_state = sosfilt(self.sos, [x], zi=self.filter_state)
         return float(y[-1])
 
 
@@ -188,14 +313,27 @@ class DerivativeEstimator:
     First derivative via sample-to-sample difference using provided dt.
     """
 
-    prev: Optional[float] = None
+    previous: Optional[float] = None
+    """
+    Previous sample value used to compute the discrete derivative.
+    """
 
     def step(self, x: float, dt: float) -> float:
-        if dt <= 0.0 or self.prev is None:
-            self.prev = float(x)
+        """
+        Compute the first derivative using the previous sample and time step.
+
+        Returns zero on the first call or when the provided time step is not
+        positive.
+
+        :param x: Current sample.
+        :param dt: Time step since the previous sample in seconds.
+        :return: Estimated derivative value.
+        """
+        if dt <= 0.0 or self.previous is None:
+            self.previous = float(x)
             return 0.0
-        dx = (float(x) - float(self.prev)) / float(dt)
-        self.prev = float(x)
+        dx = (float(x) - float(self.previous)) / float(dt)
+        self.previous = float(x)
         return float(dx)
 
 
@@ -205,41 +343,94 @@ class WrenchProcessor:
     Composes offset removal, main low-pass, derivative, and derivative smoothing for six axes.
     """
 
-    cfg: FilterConfig
+    config: FilterConfig
+    """
+    Configuration that defines filter and derivative behavior.
+    """
     remove_offset: bool = field(init=False)
+    """
+    Whether offset removal is enabled based on the configuration.
+    """
     offset: list = field(init=False, repr=False)
+    """
+    Per-axis offset estimators for the six wrench components.
+    """
     main: list = field(init=False, repr=False)
+    """
+    Per-axis main low-pass filters for the six wrench components.
+    """
     diff: list = field(init=False, repr=False)
+    """
+    Per-axis discrete derivative estimators for the six wrench components.
+    """
     diff_smooth: list = field(init=False, repr=False)
+    """
+    Per-axis smoothing low-pass filters applied to the derivative signals.
+    """
 
     def __post_init__(self) -> None:
-        fs = float(self.cfg.expected_rate_hz)
-        self.remove_offset = self.cfg.offset_mode != "none"
+        """
+        Initialize per-axis processors according to the configuration.
+
+        Creates optional offset estimators, main low-pass filters, derivative
+        estimators, and derivative smoothing filters for each of the six axes.
+
+        :return: None
+        """
+        fs = float(self.config.expected_rate_hz)
+        self.remove_offset = self.config.offset_mode != "none"
         self.offset = [
-            OffsetEstimator(self.cfg.offset_alpha) if self.remove_offset else None
+            OffsetEstimator(self.config.offset_alpha) if self.remove_offset else None
             for _ in range(6)
         ]
         self.main = [
-            LowPassButter(self.cfg.cutoff_main_hz, fs, self.cfg.order_main)
+            LowPassButter(self.config.cutoff_main_hz, fs, self.config.order_main)
             for _ in range(6)
         ]
         self.diff = [DerivativeEstimator() for _ in range(6)]
         self.diff_smooth = [
-            LowPassButter(self.cfg.cutoff_diff_hz, fs, self.cfg.order_diff)
+            LowPassButter(self.config.cutoff_diff_hz, fs, self.config.order_diff)
             for _ in range(6)
         ]
 
     @staticmethod
     def _axes_from_wrench(w: Wrench) -> List[float]:
+        """
+        Extract the six scalar components from a wrench message.
+
+        Returns force (x, y, z) followed by torque (x, y, z).
+
+        :param w: Input wrench message.
+        :return: List of six values: force (x, y, z) then torque (x, y, z).
+        """
         return [w.force.x, w.force.y, w.force.z, w.torque.x, w.torque.y, w.torque.z]
 
     @staticmethod
     def _wrench_from_axes(a: List[float]) -> Wrench:
+        """
+        Build a wrench message from six scalar components.
+
+        Interprets the list as force (x, y, z) followed by torque (x, y, z).
+
+        :param a: Six values: force (x, y, z) then torque (x, y, z).
+        :return: Wrench message with forces and torques set.
+        """
         f = Vector3(x=float(a[0]), y=float(a[1]), z=float(a[2]))
         t = Vector3(x=float(a[3]), y=float(a[4]), z=float(a[5]))
         return Wrench(force=f, torque=t)
 
     def process(self, w: Wrench, dt: float) -> Tuple[Wrench, Wrench]:
+        """
+        Filter a wrench and compute its smoothed first derivative.
+
+        Applies optional offset removal, a main low-pass filter, a discrete
+        derivative, and a secondary low-pass on the derivative for each axis.
+        Returns a tuple of the filtered wrench and the derivative wrench.
+
+        :param w: Input wrench to process.
+        :param dt: Time step in seconds between samples.
+        :return: Tuple of (filtered wrench, derivative wrench).
+        """
         axes = self._axes_from_wrench(w)
         filtered = [0.0] * 6
         deriv = [0.0] * 6
@@ -265,48 +456,72 @@ class ForceTorqueFilterNode(Node):
     - filtered/diff: the first derivative of the filtered signal with reduced noise
     """
 
-    cfg: FilterConfig | None = None
+    config: FilterConfig | None = None
+    """
+    Optional configuration to initialize the node. If not provided, parameters are read from the ROS 2 node.
+    """
     processor: WrenchProcessor = field(init=False, repr=False)
+    """
+    Internal processor that performs filtering and derivative computation.
+    """
     last_stamp_ns: Optional[int] = None
+    """
+    Timestamp of the last processed message in nanoseconds.
+    """
     sample_count: int = 0
+    """
+    Count of received samples used for warm-up gating.
+    """
 
     def __post_init__(self) -> None:
+        """
+        Set up the ROS 2 node, parameters, quality of service, and topics.
+
+        Creates the processor pipeline, declares and reads parameters, and
+        wires subscriptions and publishers for filtered and derivative output.
+
+        :return: None
+        """
         super().__init__("force_torque_filter")
 
         # Declare parameters with defaults, then read actual values
-        if self.cfg is None:
-            self.cfg = FilterConfig.from_ros2_params(self)
+        if self.config is None:
+            self.config = FilterConfig.from_ros2_params(self)
 
         qos = QoSProfile(
             reliability=(
                 ReliabilityPolicy.RELIABLE
-                if self.cfg.qos_reliable
+                if self.config.qos_reliable
                 else ReliabilityPolicy.BEST_EFFORT
             ),
             history=HistoryPolicy.KEEP_LAST,
-            depth=self.cfg.qos_depth,
+            depth=self.config.qos_depth,
         )
 
-        self.processor = WrenchProcessor(self.cfg)
+        self.processor = WrenchProcessor(self.config)
 
         self.sub = self.create_subscription(
-            WrenchStamped, self.cfg.topic_in, self._on_msg, qos
+            WrenchStamped, self.config.topic_in, self._on_msg, qos
         )
         self.pub_filtered = self.create_publisher(
-            WrenchStamped, self.cfg.topic_filtered_out, qos
+            WrenchStamped, self.config.topic_filtered_out, qos
         )
         self.pub_diff = self.create_publisher(
-            WrenchStamped, self.cfg.topic_diff_out, qos
+            WrenchStamped, self.config.topic_derivative_out, qos
         )
 
         self.get_logger().info("ForceTorqueFilterNode started")
 
     def _on_msg(self, msg: WrenchStamped) -> None:
-        """Callback that processes an incoming wrench sample.
+        """
+        Callback that processes an incoming wrench sample.
 
         - Computes dt from the message header timestamp
         - Processes the signal to produce filtered and derivative outputs
         - Applies a warm-up gate to avoid startup transients
+
+        :param msg: Incoming wrench message with header timestamp.
+        :return: None
         """
         stamp = msg.header.stamp
         cur_ns = int(stamp.sec) * 1_000_000_000 + int(stamp.nanosec)
@@ -316,14 +531,14 @@ class ForceTorqueFilterNode(Node):
         self.last_stamp_ns = cur_ns
 
         self.sample_count += 1
-        dt_use = dt if dt > 0.0 else 1.0 / max(1e-6, self.cfg.expected_rate_hz)
+        dt_use = dt if dt > 0.0 else 1.0 / max(1e-6, self.config.expected_rate_hz)
 
         filt_wrench, diff_wrench = self.processor.process(msg.wrench, dt_use)
 
         # Warmup gate to avoid startup transients
         # Do not publish for the first `warmup_samples` messages, inclusive of the Nth sample
         # so that exactly publishing `warmup_samples` inputs produces zero outputs.
-        if self.sample_count <= self.cfg.warmup_samples:
+        if self.sample_count <= self.config.warmup_samples:
             return
 
         out_filtered = WrenchStamped()
@@ -338,6 +553,12 @@ class ForceTorqueFilterNode(Node):
 
 
 def main():
+    """
+    Run the force-torque filter as a ROS 2 node.
+
+    Initializes rclpy, spins the node, and shuts down on exit.
+
+    """
     rclpy.init()
     node = ForceTorqueFilterNode()
     try:

@@ -143,18 +143,21 @@ def test_node_publishes_after_warmup(rclpy_node):
     # Subscriptions on the fixture node to the filter outputs
     rclpy_node.create_subscription(
         WrenchStamped,
-        node.cfg.topic_filtered_out,
+        node.config.topic_filtered_out,
         lambda m: recv_filtered.append(m),
         10,
     )
     rclpy_node.create_subscription(
-        WrenchStamped, node.cfg.topic_diff_out, lambda m: recv_diff.append(m), 10
+        WrenchStamped,
+        node.config.topic_derivative_out,
+        lambda m: recv_diff.append(m),
+        10,
     )
 
     # Publisher on the fixture node to the filter input
-    pub = rclpy_node.create_publisher(WrenchStamped, node.cfg.topic_in, 10)
+    pub = rclpy_node.create_publisher(WrenchStamped, node.config.topic_in, 10)
 
-    fs = node.cfg.expected_rate_hz
+    fs = node.config.expected_rate_hz
     dt = 1.0 / fs
 
     def publish_sequence(
@@ -183,7 +186,7 @@ def test_node_publishes_after_warmup(rclpy_node):
 
     try:
         # Warmup: publish exactly warmup_samples samples; no output expected
-        publish_sequence(node.cfg.warmup_samples)
+        publish_sequence(node.config.warmup_samples)
         # Allow processing
         for _ in range(10):
             rclpy.spin_once(rclpy_node, timeout_sec=0.01)
