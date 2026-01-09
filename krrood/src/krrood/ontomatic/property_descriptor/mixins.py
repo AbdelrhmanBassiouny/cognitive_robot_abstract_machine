@@ -93,15 +93,6 @@ class IrreflexiveProperty(ABC):
 
 
 @dataclass
-class IsUnknownClass(ABC):
-    """
-    Means that the type of the class is unknown.
-    """
-
-    ...
-
-
-@dataclass
 class IsBaseClass(ABC):
     """
     Means that the class is the base class.
