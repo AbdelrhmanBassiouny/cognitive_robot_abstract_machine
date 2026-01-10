@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing_extensions import TYPE_CHECKING, Type, List
+from collections import defaultdict
+from dataclasses import dataclass, field
+from typing_extensions import TYPE_CHECKING, Type, List, Any, Dict
+
 
 if TYPE_CHECKING:
     from .property_descriptor import PropertyDescriptor
+    from ...entity_query_language.predicate import Symbol
 
 
 @dataclass
@@ -106,3 +109,15 @@ class RoleForMixin(ABC):
     """A mixin for property descriptors that represent a role-for relationship."""
 
     ...
+
+
+@dataclass
+class PersistentEntityMixin(ABC):
+    """A mixin for classes that are persistent entities."""
+
+    property_range_subject_map: Dict[PropertyDescriptor, Dict[Type, Symbol]] = field(
+        init=False, default_factory=lambda: defaultdict(dict)
+    )
+    """
+    A mapping from property descriptors to a mapping of ranges to the subject instance
+    """

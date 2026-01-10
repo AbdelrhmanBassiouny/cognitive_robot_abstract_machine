@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+from dataset.university_ontology_like_classes import (
+    SportsLover,
+    BasketBallLover,
+    BasketBall,
+    Gamer,
+    VideoGames,
+    CompanyWithEmployees,
+)
 from ..dataset.university_ontology_like_classes import (
     Company,
     Person,
     CEO,
     Representative,
+    ExperiencedCEO,
+    PeopleWithHoppy,
 )
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 
@@ -88,3 +98,26 @@ def test_transitive_property():
     assert company in company3.sub_organization_of
     assert company2 in company4.sub_organization_of
     assert company in company4.sub_organization_of
+
+
+def test_role_graph():
+    company = Company(name="BassCo")
+    company_with_employees = CompanyWithEmployees(company)
+    person1 = Person(name="Bass")
+    ceo1 = CEO(person1)
+    representative = Representative(ceo1)
+    representative.head_of = company
+    experienced_ceo = ExperiencedCEO(ceo1)
+    experienced_ceo.experiences.append(company)
+
+    # hoppy 1
+    basket_ball_lover = BasketBallLover(person1)
+    basket_ball = BasketBall(name="Basketball")
+    basket_ball_lover.loves.append(basket_ball)
+
+    # hoppy 2
+    gamer = Gamer(person1)
+    game = VideoGames(name="GTA")
+    gamer.likes.append(game)
+
+    assert ceo1 in company_with_employees.employees
