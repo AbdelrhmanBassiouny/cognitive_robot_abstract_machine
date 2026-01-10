@@ -3,7 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from collections import defaultdict
-from krrood.ontomatic.property_descriptor.mixins import HasEquivalentProperties
+from krrood.ontomatic.property_descriptor.mixins import (
+    HasEquivalentProperties,
+    SymmetricProperty,
+)
 
 from typing_extensions import (
     Optional,
@@ -35,6 +38,10 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     Edge data representing a relation between two wrapped instances that is represented structurally by a property
     descriptor attached to the source instance.
     """
+
+    inferrence_explanation: Optional[
+        Tuple[Type[PropertyDescriptor], Type[PropertyDescriptor]]
+    ] = None
 
     @cached_property
     def transitive(self) -> bool:
@@ -85,6 +92,27 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         self.infer_inverse_relation()
         self.infer_transitive_relations()
         self.infer_chain_axioms()
+        self.infer_symmetric_relation()
+
+    def infer_symmetric_relation(self):
+        """
+        Infer all symmetric relations of this relation.
+        """
+        if issubclass(self.property_descriptor_class, SymmetricProperty) and not (
+            self.inferred
+            and self.inferrence_explanation
+            and self.inferrence_explanation[0] is SymmetricProperty
+        ):
+            self.__class__(
+                self.target,
+                self.source,
+                self.wrapped_field,
+                inferred=True,
+                inferrence_explanation=(
+                    SymmetricProperty,
+                    self.property_descriptor_class,
+                ),
+            ).add_to_graph_and_apply_implications()
 
     def infer_equivelence_relations(self):
         """
@@ -206,7 +234,11 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
         """
-        if self.transitive:
+        if self.transitive and not (
+            self.inferred
+            and self.inferrence_explanation
+            and self.inferrence_explanation[0] is SymmetricProperty
+        ):
             self.infer_transitive_relations_outgoing_from_source()
             self.infer_transitive_relations_incoming_to_target()
 
