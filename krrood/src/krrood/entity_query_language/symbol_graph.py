@@ -3,7 +3,7 @@ from __future__ import annotations
 from copy import copy
 import os
 import weakref
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field, InitVar
 from functools import lru_cache, cached_property
 
@@ -71,6 +71,18 @@ class PredicateClassRelation:
         :return: True if the relation was newly added, False if it already existed.
         """
         return SymbolGraph().add_relation(self)
+
+    def add_to_graph_and_apply_implications(self):
+        """
+        Add this relation to the graph and apply all implications of this relation.
+        """
+        SymbolGraph().apply_implications(self)
+
+    def infer_and_apply_implications(self):
+        """
+        Infer all implications of adding this relation.
+        """
+        pass
 
     def __str__(self):
         """Return the predicate type name for labeling the edge."""
@@ -206,6 +218,37 @@ class SymbolGraph(metaclass=SingletonMeta):
     _relation_index: Dict[WrappedField, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
+
+    _inference_queue: deque[PredicateClassRelation] = field(
+        init=False, default_factory=deque, repr=False
+    )
+    """
+    A queue of relations that need to be added to the graph and their implications applied.
+    """
+
+    _is_inferring: bool = field(init=False, default=False, repr=False)
+    """
+    A flag that indicates whether the graph is currently applying implications.
+    """
+
+    def apply_implications(self, relation: PredicateClassRelation):
+        """
+        Add the given relation to the inference queue and apply all implications in a breadth-first manner.
+
+        :param relation: The relation to apply the implications for.
+        """
+        self._inference_queue.append(relation)
+        if self._is_inferring:
+            return
+
+        self._is_inferring = True
+        try:
+            while self._inference_queue:
+                relation_to_process = self._inference_queue.popleft()
+                if relation_to_process.add_to_graph():
+                    relation_to_process.infer_and_apply_implications()
+        finally:
+            self._is_inferring = False
 
     def __post_init__(self):
         if self._class_diagram is None:

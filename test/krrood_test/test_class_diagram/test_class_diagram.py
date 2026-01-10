@@ -71,7 +71,7 @@ def test_role_taker_associations():
         classes_of_module(university_ontology_like_classes),
     )
     diagram = ClassDiagram(classes)
-    assert len(diagram._dependency_graph.edges()) == 16
+    assert len(diagram._dependency_graph.edges()) == 49
     assert (
         len(
             [
@@ -80,9 +80,9 @@ def test_role_taker_associations():
                 if isinstance(e, HasRoleTaker)
             ]
         )
-        == 2
+        == 8
     )
-    assert len(diagram._dependency_graph.nodes()) == 10
+    assert len(diagram._dependency_graph.nodes()) == 25
     assert (
         len(
             [
@@ -91,6 +91,6 @@ def test_role_taker_associations():
                 if isinstance(e, AssociationThroughRoleTaker)
             ]
         )
-        == 5
+        == 18
     )
     # diagram.to_dot("class_diagram.svg")

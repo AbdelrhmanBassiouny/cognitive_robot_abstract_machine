@@ -76,13 +76,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             return
         self.add_to_graph_and_apply_implications()
 
-    def add_to_graph_and_apply_implications(self):
-        """
-        Add this relation to the graph and apply all implications of this relation.
-        """
-        if self.add_to_graph():
-            self.infer_and_apply_implications()
-
     def infer_and_apply_implications(self):
         """
         Infer all implications of adding this relation and apply them to the corresponding objects.
@@ -98,11 +91,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all symmetric relations of this relation.
         """
-        if issubclass(self.property_descriptor_class, SymmetricProperty) and not (
-            self.inferred
-            and self.inferrence_explanation
-            and self.inferrence_explanation[0] is SymmetricProperty
-        ):
+        if issubclass(self.property_descriptor_class, SymmetricProperty):
             self.__class__(
                 self.target,
                 self.source,
@@ -112,25 +101,27 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                     SymmetricProperty,
                     self.property_descriptor_class,
                 ),
-            ).add_to_graph_and_apply_implications()
+            ).update_source_and_add_to_graph_and_apply_implications()
 
     def infer_equivelence_relations(self):
         """
         Infer all equivalence relations of this relation.
         """
-        for equiv_relation in self.equivelence_relations:
-            original_source_instance = equiv_relation.get_original_source_instance_given_this_relation_source_instance(
+        for equivalence_relation in self.equivelence_relations:
+            original_source_instance = equivalence_relation.get_original_source_instance_given_this_relation_source_instance(
                 self.source.instance
             )
             source = SymbolGraph().get_wrapped_instance(original_source_instance)
             self.__class__(
-                source, self.target, equiv_relation.field, inferred=True
+                source, self.target, equivalence_relation.field, inferred=True
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
     def equivelence_relations(self) -> Iterable[Association]:
-        for equiv_desc in self.equivelent_descriptors:
-            yield equiv_desc.get_association_of_source_type(self.source.instance_type)
+        for equivalence_descriptor in self.equivelent_descriptors:
+            yield equivalence_descriptor.get_association_of_source_type(
+                self.source.instance_type
+            )
 
     @property
     def equivelent_descriptors(self) -> List[Type[PropertyDescriptor]]:
@@ -199,9 +190,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :return: The inverse domain instance and property descriptor field.
         """
         if not self.inverse_association:
-            import pdbpp
-
-            pdbpp.set_trace()
             raise ValueError(
                 f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self.source.name}-{self.wrapped_field.public_name}-{self.target.name}"
             )
@@ -234,11 +222,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
         """
-        if self.transitive and not (
-            self.inferred
-            and self.inferrence_explanation
-            and self.inferrence_explanation[0] is SymmetricProperty
-        ):
+        if self.transitive:
             self.infer_transitive_relations_outgoing_from_source()
             self.infer_transitive_relations_incoming_to_target()
 
@@ -246,11 +230,11 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer transitive relations outgoing from the source.
         """
-        for nxt_relation in self.target_outgoing_relations_with_same_descriptor_type:
+        for next_relation in self.target_outgoing_relations_with_same_descriptor_type:
             self.__class__(
                 self.source,
-                nxt_relation.target,
-                nxt_relation.wrapped_field,
+                next_relation.target,
+                next_relation.wrapped_field,
                 inferred=True,
             ).update_source_and_add_to_graph_and_apply_implications()
 
