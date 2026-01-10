@@ -8,7 +8,6 @@ from typing_extensions import (
     Type,
     Iterable,
     Tuple,
-    List,
     TYPE_CHECKING,
     Union,
     Iterator,
@@ -143,17 +142,16 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :return: The inverse domain instance and property descriptor field.
         """
         if not self.inverse_association:
-            import pdbpp
-
-            pdbpp.set_trace()
             raise ValueError(
                 f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self.source.name}-{self.wrapped_field.public_name}-{self.target.name}"
             )
         original_source_instance = self.inverse_association.get_original_source_instance_given_this_relation_source_instance(
             self.target.instance
         )
-        source = SymbolGraph().get_wrapped_instance(original_source_instance)
-        return source, self.inverse_association.field
+        original_source_wrapped_instance = SymbolGraph().get_wrapped_instance(
+            original_source_instance
+        )
+        return original_source_wrapped_instance, self.inverse_association.field
 
     @cached_property
     def inverse_association(
@@ -162,7 +160,15 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Return the inverse field (if it exists) stored in the target of this relation.
         """
-        return self.inverse_of.get_association_of_source_type(self.target.instance_type)
+        value = self.inverse_of.get_association_of_source_type(
+            self.target.instance_type
+        )
+        if value is not None:
+            return value
+        roles_for_target = SymbolGraph().get_roles_for_instance(self.target)
+        for role in roles_for_target:
+            value = self.inverse_of.get_association_of_source_type(role.instance_type)
+        return value
 
     def infer_transitive_relations(self):
         """

@@ -28,7 +28,6 @@ from .symbolic import (
     _any_of_the_kwargs_is_a_variable,
 )
 from .utils import T
-from ..class_diagrams.utils import Role
 
 
 def symbolic_function(
@@ -121,10 +120,7 @@ class HasType(Predicate):
     """
 
     def __call__(self) -> bool:
-        return isinstance(self.variable, self.type_) or (
-            isinstance(self.variable, Role)
-            and issubclass(self.variable.get_role_taker_type(), self.type_)
-        )
+        return isinstance(self.variable, self.type_)
 
 
 @dataclass(eq=False)

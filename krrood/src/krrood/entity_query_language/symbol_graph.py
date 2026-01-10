@@ -5,6 +5,7 @@ import os
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
+from functools import lru_cache, cached_property
 
 from rustworkx import PyDiGraph
 from typing_extensions import (
@@ -17,6 +18,7 @@ from typing_extensions import (
     Dict,
     DefaultDict,
     Callable,
+    Tuple,
 )
 
 from .. import logger
@@ -25,6 +27,7 @@ from ..class_diagrams.wrapped_field import WrappedField
 from ..ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
+from ..ontomatic.property_descriptor.mixins import RoleForMixin
 from ..singleton import SingletonMeta
 from ..utils import recursive_subclasses
 
@@ -124,6 +127,13 @@ class WrappedInstance:
         self.instance_reference = weakref.ref(instance)
         self.instance_type = type(instance)
 
+    @cached_property
+    def roles(self) -> Tuple[WrappedInstance, ...]:
+        """
+        :return: All roles that point to this instance.
+        """
+        return self.symbol_graph.get_roles_for_instance(self)
+
     @property
     def instance(self) -> Optional[Symbol]:
         """
@@ -151,7 +161,7 @@ class WrappedInstance:
         return id(self.instance)
 
 
-@dataclass
+@dataclass(eq=False)
 class SymbolGraph(metaclass=SingletonMeta):
     """
     A singleton combination of a class and instance diagram.
@@ -210,6 +220,19 @@ class SymbolGraph(metaclass=SingletonMeta):
     @property
     def class_diagram(self) -> ClassDiagram:
         return self._class_diagram
+
+    @lru_cache(maxsize=None)
+    def get_roles_for_instance(self, instance: Any) -> Tuple[WrappedInstance, ...]:
+        condition = lambda edge: isinstance(
+            edge, PredicateClassRelation
+        ) and isinstance(edge.wrapped_field.property_descriptor, RoleForMixin)
+        roles = [
+            relation.source
+            for relation in self.get_incoming_relations_with_condition(
+                self.get_wrapped_instance(instance), condition
+            )
+        ]
+        return tuple(roles)
 
     def add_node(self, wrapped_instance: WrappedInstance):
         """
@@ -452,3 +475,6 @@ class SymbolGraph(metaclass=SingletonMeta):
                 os.remove(tmp_filepath)
             except Exception as e:
                 logger.error(e)
+
+    def __hash__(self):
+        return hash(id(self._instance_graph))

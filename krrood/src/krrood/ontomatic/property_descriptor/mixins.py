@@ -99,3 +99,10 @@ class IsBaseClass(ABC):
     """
 
     ...
+
+
+@dataclass
+class RoleForMixin(ABC):
+    """A mixin for property descriptors that represent a role-for relationship."""
+
+    ...

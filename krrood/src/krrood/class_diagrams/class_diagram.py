@@ -36,7 +36,7 @@ from .attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
-from .utils import Role, get_generic_type_param
+from .utils import get_generic_type_param
 from .wrapped_field import WrappedField
 
 from .failures import ClassIsUnMappedInClassDiagram
@@ -308,18 +308,33 @@ class ClassDiagram:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
 
-    def get_associations_with_condition(
+    def get_outgoing_associations_with_condition(
         self,
         clazz: Union[Type, WrappedClass],
         condition: Callable[[Association], bool],
     ) -> Iterator[Association]:
         """
-        Get all associations that match the condition.
+        Get all outgoing associations that match the condition.
 
         :param clazz: The source class or wrapped class for which outgoing edges are to be retrieved.
         :param condition: The condition to filter relations by.
         """
         for relation in self.get_outgoing_relations(clazz):
+            if isinstance(relation, Association) and condition(relation):
+                yield relation
+
+    def get_incoming_associations_with_condition(
+        self,
+        clazz: Union[Type, WrappedClass],
+        condition: Callable[[Association], bool],
+    ) -> Iterator[Association]:
+        """
+        Get all incoming associations that match the condition.
+
+        :param clazz: The target (class or wrapped class) for which incoming associations are to be retrieved.
+        :param condition: The condition to filter relations by.
+        """
+        for relation in self.get_incoming_relations(clazz):
             if isinstance(relation, Association) and condition(relation):
                 yield relation
 
@@ -334,6 +349,18 @@ class ClassDiagram:
         """
         wrapped_cls = self.get_wrapped_class(clazz)
         yield from self.get_out_edges(wrapped_cls)
+
+    def get_incoming_relations(
+        self,
+        clazz: Union[Type, WrappedClass],
+    ) -> Iterable[ClassRelation]:
+        """
+        Get all incoming edge relations of the given class.
+
+        :param clazz: The target class or wrapped class for which incoming edges are to be retrieved.
+        """
+        wrapped_cls = self.get_wrapped_class(clazz)
+        yield from self.get_in_edges(wrapped_cls)
 
     @lru_cache(maxsize=None)
     def get_common_role_taker_associations(
@@ -438,6 +465,20 @@ class ClassDiagram:
         wrapped_cls = self.get_wrapped_class(cls)
         out_edges = [
             edge for _, _, edge in self._dependency_graph.out_edges(wrapped_cls.index)
+        ]
+        return tuple(out_edges)
+
+    def get_in_edges(self, cls: Union[Type, WrappedClass]) -> Tuple[ClassRelation, ...]:
+        """
+        Caches and retrieves the incoming edges (relations) for the provided class in a
+        dependency graph.
+
+        :param cls: The class or wrapped class for which incoming edges are to be retrieved.
+        :return: A tuple of incoming edges (relations) associated with the provided class.
+        """
+        wrapped_cls = self.get_wrapped_class(cls)
+        out_edges = [
+            edge for _, _, edge in self._dependency_graph.in_edges(wrapped_cls.index)
         ]
         return tuple(out_edges)
 
@@ -654,10 +695,11 @@ class ClassDiagram:
                 association_type = Association
                 if (
                     wrapped_field.is_role_taker
-                    and issubclass(clazz.clazz, Role)
+                    and hasattr(clazz.clazz, "get_role_taker_type")
+                    and callable(clazz.clazz.get_role_taker_type)
                     and target_type is clazz.clazz.get_role_taker_type()
                 ):
-                    role_taker_type = get_generic_type_param(clazz.clazz, Role)[0]
+                    role_taker_type = get_generic_type_param(clazz.clazz, "Role")[0]
                     if role_taker_type is target_type:
                         association_type = HasRoleTaker
 
@@ -676,7 +718,7 @@ class ClassDiagram:
             self.wrapped_classes_of_role_associations_subgraph_in_topological_order
         )
         for role_taker_clazz in reversed(wrapped_classes):
-            role_taker_associations = self.get_associations_with_condition(
+            role_taker_associations = self.get_outgoing_associations_with_condition(
                 role_taker_clazz, lambda rel: not isinstance(rel, HasRoleTaker)
             )
             for association in role_taker_associations:

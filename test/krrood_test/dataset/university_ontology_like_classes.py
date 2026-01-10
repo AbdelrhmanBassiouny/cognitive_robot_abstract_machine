@@ -4,7 +4,6 @@ from dataclasses import dataclass, field, Field, fields
 
 from typing_extensions import Set, List, Type
 
-from krrood.class_diagrams.utils import Role
 from krrood.entity_query_language.predicate import Symbol
 from krrood.ontomatic.property_descriptor.mixins import (
     HasInverseProperty,
@@ -13,6 +12,7 @@ from krrood.ontomatic.property_descriptor.mixins import (
 from krrood.ontomatic.property_descriptor.property_descriptor import (
     PropertyDescriptor,
 )
+from krrood.class_diagrams.utils import Role
 
 
 @dataclass(eq=False)
