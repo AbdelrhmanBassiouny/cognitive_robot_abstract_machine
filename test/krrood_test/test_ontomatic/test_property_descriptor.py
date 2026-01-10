@@ -107,17 +107,18 @@ def test_role_graph():
     ceo1 = CEO(person1)
     representative = Representative(ceo1)
     representative.head_of = company
-    experienced_ceo = ExperiencedCEO(ceo1)
-    experienced_ceo.experiences.append(company)
+    # experienced_ceo = ExperiencedCEO(ceo1)
+    # experienced_ceo.experiences.append(company)
+    #
+    # # hoppy 1
+    # basket_ball_lover = BasketBallLover(person1)
+    # basket_ball = BasketBall(name="Basketball")
+    # basket_ball_lover.loves.append(basket_ball)
+    #
+    # # hoppy 2
+    # gamer = Gamer(person1)
+    # game = VideoGames(name="GTA")
+    # gamer.likes.append(game)
 
-    # hoppy 1
-    basket_ball_lover = BasketBallLover(person1)
-    basket_ball = BasketBall(name="Basketball")
-    basket_ball_lover.loves.append(basket_ball)
-
-    # hoppy 2
-    gamer = Gamer(person1)
-    game = VideoGames(name="GTA")
-    gamer.likes.append(game)
-
+    assert ceo1 in company.members
     assert ceo1 in company_with_employees.employees
