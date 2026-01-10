@@ -38,6 +38,10 @@ JSON_DICT_TYPE = Dict[str, Any]  # Commonly referred JSON dict
 JSON_RETURN_TYPE = Union[
     JSON_DICT_TYPE, list[JSON_DICT_TYPE], *leaf_types
 ]  # Commonly referred JSON types
+JSON_IS_CLASS = "__is_class__"
+"""
+We need to remember if something is a class, because the type of a class is often just type.
+"""
 
 
 @dataclass
@@ -135,6 +139,9 @@ class SubclassJSONSerializer:
             target_cls = getattr(module, class_name)
         except AttributeError as exc:
             raise ClassNotFoundError(class_name, module_name) from exc
+
+        if data.get(JSON_IS_CLASS, False):
+            return ClassJSONSerializer.from_json(data, clazz=target_cls, **kwargs)
 
         if issubclass(target_cls, SubclassJSONSerializer):
             return target_cls._from_json(data, **kwargs)
@@ -239,6 +246,30 @@ class UUIDJSONSerializer(ExternalClassJSONSerializer[uuid.UUID]):
         cls, data: Dict[str, Any], clazz: Type[uuid.UUID], **kwargs
     ) -> uuid.UUID:
         return clazz(data["value"])
+
+
+@dataclass
+class ClassJSONSerializer(ExternalClassJSONSerializer[None]):
+    """
+    A class that provides mechanisms for serializing and deserializing Python classes
+    to and from JSON representations.
+    """
+
+    @classmethod
+    def to_json(cls, obj: Type) -> Dict[str, Any]:
+        """
+        This is a special case because we need to remember that the type of the class is a class, not a type.
+        .. note:: We can't do type(obj) because that often returns just `type`.
+        """
+        return {JSON_TYPE_NAME: get_full_class_name(obj), JSON_IS_CLASS: True}
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any], clazz: Type, **kwargs) -> Type:
+        return clazz
+
+    @classmethod
+    def matches_generic_type(cls, clazz: Type) -> bool:
+        return type(clazz) == type
 
 
 @dataclass

@@ -55,7 +55,7 @@ def test_force_impact_node(rclpy_node):
 
     ft_node = msc_copy.nodes[0].nodes[0]
 
-    kin_sim.tick_until_end()
+    kin_sim.tick_until_end(timeout=5_000)
     msc_copy.draw("muh.pdf")
     assert (
         msc_copy.history.get_observation_history_of_node(ft_node)[0]
