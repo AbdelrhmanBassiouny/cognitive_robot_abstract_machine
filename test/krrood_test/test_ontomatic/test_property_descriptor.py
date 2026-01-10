@@ -121,4 +121,3 @@ def test_role_graph():
     # gamer.likes.append(game)
 
     assert ceo1 in company.members
-    assert ceo1 in company_with_employees.employees

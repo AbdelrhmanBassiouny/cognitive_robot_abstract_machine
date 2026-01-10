@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from collections import defaultdict
+from krrood.ontomatic.property_descriptor.mixins import HasEquivalentProperties
 
 from typing_extensions import (
     Optional,
@@ -79,10 +80,35 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all implications of adding this relation and apply them to the corresponding objects.
         """
+        self.infer_equivelence_relations()
         self.infer_super_relations()
         self.infer_inverse_relation()
         self.infer_transitive_relations()
         self.infer_chain_axioms()
+
+    def infer_equivelence_relations(self):
+        """
+        Infer all equivalence relations of this relation.
+        """
+        for equiv_relation in self.equivelence_relations:
+            original_source_instance = equiv_relation.get_original_source_instance_given_this_relation_source_instance(
+                self.source.instance
+            )
+            source = SymbolGraph().get_wrapped_instance(original_source_instance)
+            self.__class__(
+                source, self.target, equiv_relation.field, inferred=True
+            ).update_source_and_add_to_graph_and_apply_implications()
+
+    @cached_property
+    def equivelence_relations(self) -> Iterable[Association]:
+        for equiv_desc in self.equivelent_descriptors:
+            yield equiv_desc.get_association_of_source_type(self.source.instance_type)
+
+    @property
+    def equivelent_descriptors(self) -> List[Type[PropertyDescriptor]]:
+        if issubclass(self.property_descriptor_class, HasEquivalentProperties):
+            return self.property_descriptor_class.get_equivalent_properties()
+        return []
 
     def update_source_wrapped_field_value(self) -> bool:
         """
@@ -240,10 +266,10 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infers relations based on property chain axioms.
         """
-        chain_data = (
-            self._get_all_chain_axioms_where_this_relation_descriptor_contributes()
-        )
-        for target_class, chain, indicies in chain_data:
+        chain_data = self.property_descriptor_class.chain_axioms[
+            self.property_descriptor_class
+        ].items()
+        for (target_class, chain), indicies in chain_data:
             for index in indicies:
                 prefix = chain[:index]
                 suffix = chain[index + 1 :]
@@ -253,25 +279,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                         self._apply_inferred_chain_relation(
                             start_node, end_node, target_class
                         )
-
-    def _get_all_chain_axioms_where_this_relation_descriptor_contributes(
-        self,
-    ) -> Iterable[Type[HasChainAxioms], Tuple[Type[PropertyDescriptor], ...], Set[int]]:
-        for (target, chain), indicies in self.property_descriptor_class.chain_axioms[
-            self.property_descriptor_class
-        ].items():
-            yield target, chain, indicies
-
-    def _get_all_chain_axioms(self):
-        # Find property_descriptor_base once
-        property_descriptor_base = None
-        for base in self.property_descriptor_class.__mro__:
-            if base.__name__ == "PropertyDescriptor":
-                property_descriptor_base = base
-                break
-        if not property_descriptor_base:
-            return {}
-        return _cached_get_all_chain_axioms(property_descriptor_base)
 
     def _find_nodes_backward(
         self, end_node: WrappedInstance, chain: Tuple[Type[PropertyDescriptor], ...]
