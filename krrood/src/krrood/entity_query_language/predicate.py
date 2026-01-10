@@ -28,6 +28,7 @@ from .symbolic import (
     _any_of_the_kwargs_is_a_variable,
 )
 from .utils import T
+from ..class_diagrams.utils import Role
 
 
 def symbolic_function(
@@ -101,7 +102,7 @@ class Predicate(Symbol, ABC):
 
 
 @dataclass(eq=False)
-class HasType(Predicate):
+class HasTypeORRole(Predicate):
     """
     Represents a predicate to check if a given variable is an instance of a specified type.
 
@@ -117,6 +118,23 @@ class HasType(Predicate):
     type_: Type
     """
     The type or tuple of types against which the `variable` is validated.
+    """
+
+    def __call__(self) -> bool:
+        return isinstance(self.variable, self.type_) or (
+            isinstance(self.variable, Role)
+            and isinstance(self.variable.role_taker, self.type_)
+        )
+
+
+@dataclass(eq=False)
+class HasType(HasTypeORRole):
+    """
+    Represents a predicate to check if a given variable is an instance of a specified type.
+
+    This class is used to evaluate whether the domain value belongs to a given type by leveraging
+    Python's built-in `isinstance` functionality. It provides methods to retrieve the domain and
+    range values and perform direct checks.
     """
 
     def __call__(self) -> bool:

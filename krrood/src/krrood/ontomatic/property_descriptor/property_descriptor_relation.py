@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, lru_cache
+from collections import defaultdict
 
 from typing_extensions import (
     Optional,
@@ -13,7 +14,7 @@ from typing_extensions import (
     Iterator,
 )
 
-from .mixins import TransitiveProperty, HasInverseProperty
+from .mixins import TransitiveProperty, HasInverseProperty, HasChainAxioms
 from ...class_diagrams.class_diagram import Association, AssociationThroughRoleTaker
 from ...class_diagrams.wrapped_field import WrappedField
 from ...entity_query_language.symbol_graph import (
@@ -21,6 +22,7 @@ from ...entity_query_language.symbol_graph import (
     SymbolGraph,
     WrappedInstance,
 )
+from ...utils import recursive_subclasses
 
 if TYPE_CHECKING:
     from .property_descriptor import PropertyDescriptor
@@ -38,8 +40,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         If the relation is transitive or not.
         """
-        if self.property_descriptor_cls:
-            return issubclass(self.property_descriptor_cls, TransitiveProperty)
+        if self.property_descriptor_class:
+            return issubclass(self.property_descriptor_class, TransitiveProperty)
         else:
             return False
 
@@ -48,10 +50,10 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         The inverse of the relation if it exists.
         """
-        if self.property_descriptor_cls and issubclass(
-            self.property_descriptor_cls, HasInverseProperty
+        if self.property_descriptor_class and issubclass(
+            self.property_descriptor_class, HasInverseProperty
         ):
-            return self.property_descriptor_cls.get_inverse()
+            return self.property_descriptor_class.get_inverse()
         else:
             return None
 
@@ -80,6 +82,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         self.infer_super_relations()
         self.infer_inverse_relation()
         self.infer_transitive_relations()
+        self.infer_chain_axioms()
 
     def update_source_wrapped_field_value(self) -> bool:
         """
@@ -142,6 +145,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :return: The inverse domain instance and property descriptor field.
         """
         if not self.inverse_association:
+            import pdbpp
+
+            pdbpp.set_trace()
             raise ValueError(
                 f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self.source.name}-{self.wrapped_field.public_name}-{self.target.name}"
             )
@@ -210,7 +216,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Get the outgoing relations from the target that have the same property descriptor type as this relation.
         """
         relation_condition = lambda relation: issubclass(
-            relation.property_descriptor_cls, self.property_descriptor_cls
+            relation.property_descriptor_class, self.property_descriptor_class
         )
         yield from SymbolGraph().get_outgoing_relations_with_condition(
             self.target, relation_condition
@@ -224,15 +230,110 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Get the incoming relations from the source that have the same property descriptor type as this relation.
         """
         relation_condition = lambda relation: issubclass(
-            relation.property_descriptor_cls, self.property_descriptor_cls
+            relation.property_descriptor_class, self.property_descriptor_class
         )
         yield from SymbolGraph().get_incoming_relations_with_condition(
             self.source, relation_condition
         )
 
+    def infer_chain_axioms(self):
+        """
+        Infers relations based on property chain axioms.
+        """
+        all_axioms = self._get_all_chain_axioms()
+        for target_class, chains in all_axioms.items():
+            for chain in chains:
+                for index, property_class in enumerate(chain):
+                    if issubclass(self.property_descriptor_class, property_class):
+                        prefix = chain[:index]
+                        suffix = chain[index + 1 :]
+
+                        for start_node in self._find_nodes_backward(
+                            self.source, prefix
+                        ):
+                            for end_node in self._find_nodes_forward(
+                                self.target, suffix
+                            ):
+                                self._apply_inferred_chain_relation(
+                                    start_node, end_node, target_class
+                                )
+
+    def _get_all_chain_axioms(self):
+        # Find property_descriptor_base once
+        property_descriptor_base = None
+        for base in self.property_descriptor_class.__mro__:
+            if base.__name__ == "PropertyDescriptor":
+                property_descriptor_base = base
+                break
+        if not property_descriptor_base:
+            return {}
+        return _cached_get_all_chain_axioms(property_descriptor_base)
+
+    def _find_nodes_backward(
+        self, end_node: WrappedInstance, chain: Tuple[Type[PropertyDescriptor], ...]
+    ) -> Iterable[WrappedInstance]:
+        if not chain:
+            yield end_node
+            return
+
+        last_property_descriptor = chain[-1]
+        remaining = chain[:-1]
+
+        condition = lambda r: isinstance(r, PropertyDescriptorRelation) and issubclass(
+            r.property_descriptor_class, last_property_descriptor
+        )
+        for relation in SymbolGraph().get_incoming_relations_with_condition(
+            end_node, condition
+        ):
+            yield from self._find_nodes_backward(relation.source, remaining)
+
+    def _find_nodes_forward(
+        self,
+        start_node: WrappedInstance,
+        chain: Tuple[Type[PropertyDescriptor], ...],
+    ) -> Iterable[WrappedInstance]:
+        if not chain:
+            yield start_node
+            return
+
+        first_property_descriptor = chain[0]
+        remaining = chain[1:]
+
+        condition = lambda r: isinstance(r, PropertyDescriptorRelation) and issubclass(
+            r.property_descriptor_class, first_property_descriptor
+        )
+        for relation in SymbolGraph().get_outgoing_relations_with_condition(
+            start_node, condition
+        ):
+            yield from self._find_nodes_forward(relation.target, remaining)
+
+    def _apply_inferred_chain_relation(
+        self,
+        source: WrappedInstance,
+        target: WrappedInstance,
+        target_property_descriptor_class: Type[PropertyDescriptor],
+    ):
+        association = target_property_descriptor_class.get_association_of_source_type(
+            source.instance_type
+        )
+        if association:
+            self.__class__(
+                source, target, association.field, inferred=True
+            ).update_source_and_add_to_graph_and_apply_implications()
+
     @cached_property
-    def property_descriptor_cls(self) -> Type[PropertyDescriptor]:
+    def property_descriptor_class(self) -> Type[PropertyDescriptor]:
         """
         Return the property descriptor class of the relation.
         """
         return type(self.wrapped_field.property_descriptor)
+
+
+@lru_cache(maxsize=1)
+def _cached_get_all_chain_axioms(property_descriptor_base):
+    axioms = defaultdict(list)
+    for cls in recursive_subclasses(property_descriptor_base):
+        if issubclass(cls, HasChainAxioms):
+            for target, chains in cls.get_chain_axioms().items():
+                axioms[target].extend(chains)
+    return axioms

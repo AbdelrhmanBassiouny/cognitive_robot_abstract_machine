@@ -28,7 +28,7 @@ class HasInverseProperty(ABC):
 
     @classmethod
     @abstractmethod
-    def get_inverse(cls) -> Type[PropertyDescriptor]:
+    def get_inverse(cls) -> Optional[Type[PropertyDescriptor]]:
         """
         The inverse of this property.
         """
@@ -109,6 +109,24 @@ class RoleForMixin(ABC):
     """A mixin for property descriptors that represent a role-for relationship."""
 
     ...
+
+
+@dataclass
+class HasChainAxioms(ABC):
+    """
+    A mixin for descriptors that have property chain axioms.
+    """
+
+    @classmethod
+    @abstractmethod
+    def get_chain_axioms(
+        cls,
+    ) -> Dict[Type[PropertyDescriptor], List[Tuple[Type[PropertyDescriptor], ...]]]:
+        """
+        Returns a mapping where the key is the target property (the implication)
+        and the value is a list of chains (tuples of property descriptors) that imply it.
+        """
+        ...
 
 
 @dataclass

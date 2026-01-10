@@ -4,6 +4,7 @@ from .failures import UsageError
 
 from .symbol_graph import SymbolGraph
 from .utils import is_iterable, T
+from ..class_diagrams.wrapped_field import issubclass_or_role
 
 """
 User interface (grammar & vocabulary) for entity query language.

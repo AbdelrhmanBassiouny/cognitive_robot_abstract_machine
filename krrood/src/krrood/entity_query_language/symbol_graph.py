@@ -29,7 +29,7 @@ from ..ontomatic.property_descriptor.attribute_introspector import (
 )
 from ..ontomatic.property_descriptor.mixins import RoleForMixin
 from ..singleton import SingletonMeta
-from ..utils import recursive_subclasses
+from ..utils import recursive_subclasses, T
 
 if TYPE_CHECKING:
     from .predicate import Symbol
@@ -478,3 +478,16 @@ class SymbolGraph(metaclass=SingletonMeta):
 
     def __hash__(self):
         return hash(id(self._instance_graph))
+
+
+def role_aware_recursive_subclasses(cls: Type[T]) -> List[Type[T]]:
+    """
+    Recursively get all subclasses of a class, including those that are subclasses of subclasses, while also considering role inheritance.
+    This function is role-aware, meaning it will include subclasses that are also roles of the given class.
+    """
+    all_sub_classes = (
+        cls.__subclasses__() + SymbolGraph().class_diagram.get_roles_of_class(cls)
+    )
+    return all_sub_classes + [
+        g for s in all_sub_classes for g in role_aware_recursive_subclasses(s)
+    ]

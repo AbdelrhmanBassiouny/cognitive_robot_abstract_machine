@@ -308,6 +308,18 @@ class ClassDiagram:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_all_relations()
 
+    def get_roles_of_class(self, cls: Type) -> List[Type]:
+        """
+        Get all roles that are subclasses of the given class.
+
+        :param cls: The class for which to retrieve roles.
+        :return: A list of role classes that are subclasses of the given class.
+        """
+        return [
+            t.clazz
+            for t in self.get_incoming_neighbors_with_relation_type(cls, HasRoleTaker)
+        ]
+
     def get_outgoing_associations_with_condition(
         self,
         clazz: Union[Type, WrappedClass],

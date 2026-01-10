@@ -1350,6 +1350,26 @@ class HasAttributeDAO(
     }
 
 
+class HasTypeORRoleDAO(
+    PredicateDAO, DataAccessObject[krrood.entity_query_language.predicate.HasTypeORRole]
+):
+
+    __tablename__ = "HasTypeORRoleDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(PredicateDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    type_: Mapped[TypeType] = mapped_column(
+        TypeType, nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HasTypeORRoleDAO",
+        "inherit_condition": database_id == PredicateDAO.database_id,
+    }
+
+
 class IsSubClassOfDAO(
     PredicateDAO, DataAccessObject[krrood.entity_query_language.predicate.IsSubClassOf]
 ):
