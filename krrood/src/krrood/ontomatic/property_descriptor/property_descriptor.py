@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from abc import abstractmethod, ABC
 from collections import defaultdict
 from dataclasses import dataclass, field, fields
 from functools import cached_property, lru_cache
 
+from krrood.ontomatic.property_descriptor.mixins import HasChainAxioms
 from typing_extensions import (
     ClassVar,
     Set,
@@ -123,18 +125,34 @@ class PropertyDescriptor(Symbol):
     """
     A set of all range types for this descriptor class.
     """
+    chain_axioms: ClassVar[
+        Dict[
+            Type[PropertyDescriptor],  # Participant Descriptor
+            Dict[
+                Tuple[Type[PropertyDescriptor], Tuple[Type[PropertyDescriptor], ...]],
+                Set[int],
+            ],
+        ]
+    ] = defaultdict(lambda: defaultdict(set))
 
     def __post_init__(self):
         self._validate_non_redundant_domain()
         self._update_wrapped_field()
         self._update_domain_and_range()
+        if HasChainAxioms in self.__class__.__bases__:
+            self.register_chain_axioms_for_target(self.__class__)
 
-    @cached_property
-    def private_attr_name(self) -> str:
+    @classmethod
+    def register_chain_axioms_for_target(
+        cls,
+        target: Type[HasChainAxioms],
+    ):
         """
-        The name of the private attribute that stores the values on the owner instance.
+        Register a chain axiom.
         """
-        return f"_{self.wrapped_field.name}"
+        for chain in target.get_chain_axioms():
+            for i, descriptor in enumerate(chain):
+                cls.chain_axioms[descriptor][(target, chain)].add(i)
 
     def _validate_non_redundant_domain(self):
         """

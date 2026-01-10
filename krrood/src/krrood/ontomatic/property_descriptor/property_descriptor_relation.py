@@ -240,23 +240,27 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infers relations based on property chain axioms.
         """
-        all_axioms = self._get_all_chain_axioms()
-        for target_class, chains in all_axioms.items():
-            for chain in chains:
-                for index, property_class in enumerate(chain):
-                    if issubclass(self.property_descriptor_class, property_class):
-                        prefix = chain[:index]
-                        suffix = chain[index + 1 :]
+        chain_data = (
+            self._get_all_chain_axioms_where_this_relation_descriptor_contributes()
+        )
+        for target_class, chain, indicies in chain_data:
+            for index in indicies:
+                prefix = chain[:index]
+                suffix = chain[index + 1 :]
 
-                        for start_node in self._find_nodes_backward(
-                            self.source, prefix
-                        ):
-                            for end_node in self._find_nodes_forward(
-                                self.target, suffix
-                            ):
-                                self._apply_inferred_chain_relation(
-                                    start_node, end_node, target_class
-                                )
+                for start_node in self._find_nodes_backward(self.source, prefix):
+                    for end_node in self._find_nodes_forward(self.target, suffix):
+                        self._apply_inferred_chain_relation(
+                            start_node, end_node, target_class
+                        )
+
+    def _get_all_chain_axioms_where_this_relation_descriptor_contributes(
+        self,
+    ) -> Iterable[Type[HasChainAxioms], Tuple[Type[PropertyDescriptor], ...], Set[int]]:
+        for (target, chain), indicies in self.property_descriptor_class.chain_axioms[
+            self.property_descriptor_class
+        ].items():
+            yield target, chain, indicies
 
     def _get_all_chain_axioms(self):
         # Find property_descriptor_base once
@@ -327,13 +331,3 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Return the property descriptor class of the relation.
         """
         return type(self.wrapped_field.property_descriptor)
-
-
-@lru_cache(maxsize=1)
-def _cached_get_all_chain_axioms(property_descriptor_base):
-    axioms = defaultdict(list)
-    for cls in recursive_subclasses(property_descriptor_base):
-        if issubclass(cls, HasChainAxioms):
-            for target, chains in cls.get_chain_axioms().items():
-                axioms[target].extend(chains)
-    return axioms

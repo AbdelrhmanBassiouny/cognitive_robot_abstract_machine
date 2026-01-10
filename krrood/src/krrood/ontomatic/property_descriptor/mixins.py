@@ -121,10 +121,9 @@ class HasChainAxioms(ABC):
     @abstractmethod
     def get_chain_axioms(
         cls,
-    ) -> Dict[Type[PropertyDescriptor], List[Tuple[Type[PropertyDescriptor], ...]]]:
+    ) -> List[Tuple[Type[PropertyDescriptor], ...]]:
         """
-        Returns a mapping where the key is the target property (the implication)
-        and the value is a list of chains (tuples of property descriptors) that imply it.
+        Returns a list of chains (tuples of property descriptors) that imply this descriptor type.
         """
         ...
 
