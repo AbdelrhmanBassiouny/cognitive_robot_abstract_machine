@@ -88,10 +88,37 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         self.infer_chain_axioms()
         self.infer_symmetric_relation()
 
+    @property
+    def is_inferred_from_symmetric_relation(self) -> bool:
+        """
+        Check if the relation was inferred from a symmetric relation.
+
+        :return: True if the relation was inferred from a symmetric relation, False otherwise.
+        """
+        return (
+            self.inferrence_explanation is not None
+            and self.inferrence_explanation[0] == SymmetricProperty
+        )
+
+    @property
+    def is_inferred_from_equivelence_relation(self) -> bool:
+        """
+        Check if the relation was inferred from an equivalence relation.
+
+        :return: True if the relation was inferred from an equivalence relation, False otherwise.
+        """
+        return (
+            self.inferrence_explanation is not None
+            and self.inferrence_explanation[0] == HasEquivalentProperties
+        )
+
     def infer_symmetric_relation(self):
         """
         Infer all symmetric relations of this relation.
         """
+        if self.is_inferred_from_symmetric_relation:
+            return
+
         if issubclass(self.property_descriptor_class, SymmetricProperty):
             self.__class__(
                 self.target,
@@ -108,13 +135,23 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all equivalence relations of this relation.
         """
+        if self.is_inferred_from_equivelence_relation:
+            return
+
         for equivalence_relation in self.equivelence_relations:
             original_source_instance = equivalence_relation.get_original_source_instance_given_this_relation_source_instance(
                 self.source.instance
             )
             source = SymbolGraph().get_wrapped_instance(original_source_instance)
             self.__class__(
-                source, self.target, equivalence_relation.field, inferred=True
+                source,
+                self.target,
+                equivalence_relation.field,
+                inferred=True,
+                inferrence_explanation=(
+                    HasEquivalentProperties,
+                    self.property_descriptor_class,
+                ),
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
@@ -223,6 +260,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
         """
+        if self.is_inferred_from_symmetric_relation:
+            return
+
         if self.transitive:
             self.infer_transitive_relations_outgoing_from_source()
             self.infer_transitive_relations_incoming_to_target()
