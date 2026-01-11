@@ -16,6 +16,7 @@ from typing_extensions import (
     TYPE_CHECKING,
     Union,
     Iterator,
+    List,
 )
 
 from .mixins import TransitiveProperty, HasInverseProperty, HasChainAxioms
@@ -39,9 +40,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     descriptor attached to the source instance.
     """
 
-    inferrence_explanation: Optional[
-        Tuple[Type[PropertyDescriptor], Type[PropertyDescriptor]]
-    ] = None
+    inferrence_explanation: Optional[Tuple[Type, Type[PropertyDescriptor]]] = None
 
     @cached_property
     def transitive(self) -> bool:
@@ -70,6 +69,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Update the source wrapped-field value, add this relation to the graph, and apply all implications of adding this
          relation.
         """
+        if SymbolGraph().relation_exists(self):
+            return
         source_updated = not self.inferred or self.update_source_wrapped_field_value()
         if not source_updated:
             # Means that the value was already set, so we don't need to infer anything.
@@ -118,13 +119,13 @@ class PropertyDescriptorRelation(PredicateClassRelation):
 
     @cached_property
     def equivelence_relations(self) -> Iterable[Association]:
-        for equivalence_descriptor in self.equivelent_descriptors:
+        for equivalence_descriptor in self.equivalent_descriptors:
             yield equivalence_descriptor.get_association_of_source_type(
                 self.source.instance_type
             )
 
     @property
-    def equivelent_descriptors(self) -> List[Type[PropertyDescriptor]]:
+    def equivalent_descriptors(self) -> List[Type[PropertyDescriptor]]:
         if issubclass(self.property_descriptor_class, HasEquivalentProperties):
             return self.property_descriptor_class.get_equivalent_properties()
         return []
@@ -257,11 +258,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Get the outgoing relations from the target that have the same property descriptor type as this relation.
         """
-        relation_condition = lambda relation: issubclass(
-            relation.property_descriptor_class, self.property_descriptor_class
-        )
-        yield from SymbolGraph().get_outgoing_relations_with_condition(
-            self.target, relation_condition
+        yield from SymbolGraph().get_outgoing_relations_by_descriptor_class(
+            self.target, self.property_descriptor_class
         )
 
     @property
@@ -271,11 +269,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Get the incoming relations from the source that have the same property descriptor type as this relation.
         """
-        relation_condition = lambda relation: issubclass(
-            relation.property_descriptor_class, self.property_descriptor_class
-        )
-        yield from SymbolGraph().get_incoming_relations_with_condition(
-            self.source, relation_condition
+        yield from SymbolGraph().get_incoming_relations_by_descriptor_class(
+            self.source, self.property_descriptor_class
         )
 
     def infer_chain_axioms(self):
@@ -306,11 +301,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         last_property_descriptor = chain[-1]
         remaining = chain[:-1]
 
-        condition = lambda r: isinstance(r, PropertyDescriptorRelation) and issubclass(
-            r.property_descriptor_class, last_property_descriptor
-        )
-        for relation in SymbolGraph().get_incoming_relations_with_condition(
-            end_node, condition
+        for relation in SymbolGraph().get_incoming_relations_by_descriptor_class(
+            end_node, last_property_descriptor
         ):
             yield from self._find_nodes_backward(relation.source, remaining)
 
@@ -326,11 +318,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         first_property_descriptor = chain[0]
         remaining = chain[1:]
 
-        condition = lambda r: isinstance(r, PropertyDescriptorRelation) and issubclass(
-            r.property_descriptor_class, first_property_descriptor
-        )
-        for relation in SymbolGraph().get_outgoing_relations_with_condition(
-            start_node, condition
+        for relation in SymbolGraph().get_outgoing_relations_by_descriptor_class(
+            start_node, first_property_descriptor
         ):
             yield from self._find_nodes_forward(relation.target, remaining)
 

@@ -55,7 +55,7 @@ class PredicateClassRelation:
     """
     The dataclass field in the source class that represents this relation with the target.
     """
-    inferred: bool = False
+    inferred: bool = field(default=False, compare=False, hash=False)
     """
     Whether it was inferred or not.
     """
@@ -215,8 +215,16 @@ class SymbolGraph(metaclass=SingletonMeta):
     This enables quick behavior similar to selecting everything from an entire table in SQL.
     """
 
-    _relation_index: Dict[WrappedField, set[tuple[int, int]]] = field(
-        default_factory=dict, init=False, repr=False
+    _relation_index: DefaultDict[
+        WrappedField, DefaultDict[int, List[PredicateClassRelation]]
+    ] = field(
+        init=False, default_factory=lambda: defaultdict(lambda: defaultdict(list))
+    )
+
+    _relation_index_incoming: DefaultDict[
+        WrappedField, DefaultDict[int, List[PredicateClassRelation]]
+    ] = field(
+        init=False, default_factory=lambda: defaultdict(lambda: defaultdict(list))
     )
 
     _inference_queue: deque[PredicateClassRelation] = field(
@@ -224,6 +232,13 @@ class SymbolGraph(metaclass=SingletonMeta):
     )
     """
     A queue of relations that need to be added to the graph and their implications applied.
+    """
+
+    _pending_relations: set[PredicateClassRelation] = field(
+        init=False, default_factory=set, repr=False
+    )
+    """
+    A set of relations that are currently in the inference queue.
     """
 
     _is_inferring: bool = field(init=False, default=False, repr=False)
@@ -237,6 +252,10 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         :param relation: The relation to apply the implications for.
         """
+        if self.relation_exists(relation) or relation in self._pending_relations:
+            return
+
+        self._pending_relations.add(relation)
         self._inference_queue.append(relation)
         if self._is_inferring:
             return
@@ -245,6 +264,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         try:
             while self._inference_queue:
                 relation_to_process = self._inference_queue.popleft()
+                self._pending_relations.discard(relation_to_process)
                 if relation_to_process.add_to_graph():
                     relation_to_process.infer_and_apply_implications()
         finally:
@@ -353,6 +373,13 @@ class SymbolGraph(metaclass=SingletonMeta):
         """
         self.add_node(wrapped_instance)
 
+    _fields_by_descriptor_class: DefaultDict[Type, List[WrappedField]] = field(
+        init=False, default_factory=lambda: defaultdict(list)
+    )
+    """
+    A mapping from property descriptor class to the wrapped fields that use it.
+    """
+
     def add_relation(self, relation: PredicateClassRelation) -> bool:
         """Add a relation edge to the instance graph."""
         if self.relation_exists(relation):
@@ -360,18 +387,31 @@ class SymbolGraph(metaclass=SingletonMeta):
         self._instance_graph.add_edge(
             relation.source.index, relation.target.index, relation
         )
-        if relation.wrapped_field not in self._relation_index:
-            self._relation_index[relation.wrapped_field] = set()
-        self._relation_index[relation.wrapped_field].add(
-            (relation.source.index, relation.target.index)
+        self._relation_index[relation.wrapped_field][relation.source.index].append(
+            relation
         )
+        self._relation_index_incoming[relation.wrapped_field][
+            relation.target.index
+        ].append(relation)
+
+        descriptor_class = type(relation.wrapped_field.property_descriptor)
+        if (
+            relation.wrapped_field
+            not in self._fields_by_descriptor_class[descriptor_class]
+        ):
+            self._fields_by_descriptor_class[descriptor_class].append(
+                relation.wrapped_field
+            )
+
         return True
 
     def relation_exists(self, relation: PredicateClassRelation) -> bool:
-        return (
-            relation.source.index,
-            relation.target.index,
-        ) in self._relation_index.get(relation.wrapped_field, set())
+        return any(
+            r.target.index == relation.target.index
+            for r in self._relation_index.get(relation.wrapped_field, {}).get(
+                relation.source.index, []
+            )
+        )
 
     def relations(self) -> Iterable[PredicateClassRelation]:
         yield from self._instance_graph.edges()
@@ -468,6 +508,70 @@ class SymbolGraph(metaclass=SingletonMeta):
             edge
             for _, _, edge in self._instance_graph.out_edges(wrapped_instance.index)
         )
+
+    def get_outgoing_relations_for_wrapped_field(
+        self, wrapped_instance: WrappedInstance, wrapped_field: WrappedField
+    ) -> Iterable[PredicateClassRelation]:
+        """
+        Get all relations with the given wrapped field that are outgoing from the given wrapped instance.
+
+        :param wrapped_instance: The wrapped instance to get the relations from.
+        :param wrapped_field: The wrapped field to filter for.
+        """
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        if not wrapped_instance:
+            return
+        yield from self._relation_index.get(wrapped_field, {}).get(
+            wrapped_instance.index, []
+        )
+
+    def get_incoming_relations_for_wrapped_field(
+        self, wrapped_instance: WrappedInstance, wrapped_field: WrappedField
+    ) -> Iterable[PredicateClassRelation]:
+        """
+        Get all relations with the given wrapped field that are incoming to the given wrapped instance.
+
+        :param wrapped_instance: The wrapped instance to get the relations from.
+        :param wrapped_field: The wrapped field to filter for.
+        """
+        wrapped_instance = self.get_wrapped_instance(wrapped_instance)
+        if not wrapped_instance:
+            return
+        yield from self._relation_index_incoming.get(wrapped_field, {}).get(
+            wrapped_instance.index, []
+        )
+
+    def get_outgoing_relations_by_descriptor_class(
+        self,
+        wrapped_instance: WrappedInstance,
+        descriptor_class: Type,
+    ) -> Iterable[PredicateClassRelation]:
+        """
+        Get all relations whose property descriptor class is a subclass of the given descriptor class
+        and are outgoing from the given wrapped instance.
+        """
+        for cls, fields in self._fields_by_descriptor_class.items():
+            if issubclass(cls, descriptor_class):
+                for wrapped_field in fields:
+                    yield from self.get_outgoing_relations_for_wrapped_field(
+                        wrapped_instance, wrapped_field
+                    )
+
+    def get_incoming_relations_by_descriptor_class(
+        self,
+        wrapped_instance: WrappedInstance,
+        descriptor_class: Type,
+    ) -> Iterable[PredicateClassRelation]:
+        """
+        Get all relations whose property descriptor class is a subclass of the given descriptor class
+        and are incoming to the given wrapped instance.
+        """
+        for cls, fields in self._fields_by_descriptor_class.items():
+            if issubclass(cls, descriptor_class):
+                for wrapped_field in fields:
+                    yield from self.get_incoming_relations_for_wrapped_field(
+                        wrapped_instance, wrapped_field
+                    )
 
     def to_dot(
         self,
