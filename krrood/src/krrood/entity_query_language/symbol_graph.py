@@ -7,6 +7,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass, field, InitVar
 from functools import lru_cache, cached_property
 
+from line_profiler import profile
 from rustworkx import PyDiGraph
 from typing_extensions import (
     TYPE_CHECKING,
@@ -65,6 +66,7 @@ class PredicateClassRelation:
         self.source = SymbolGraph().ensure_wrapped_instance(self.source)
         self.target = SymbolGraph().ensure_wrapped_instance(self.target)
 
+    @profile
     def add_to_graph(self) -> bool:
         """
         Add the relation to the graph.
@@ -73,6 +75,7 @@ class PredicateClassRelation:
         """
         return SymbolGraph().add_relation(self)
 
+    @profile
     def add_to_graph_and_apply_implications(self):
         """
         Add this relation to the graph and apply all implications of this relation.
@@ -236,6 +239,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     A flag that indicates whether the graph is currently applying implications.
     """
 
+    @profile
     def apply_implications(self, relation: PredicateClassRelation):
         """
         Add the given relation to the inference queue and apply all implications in a breadth-first manner.

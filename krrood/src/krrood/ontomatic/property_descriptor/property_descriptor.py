@@ -5,6 +5,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field, fields
 from functools import cached_property, lru_cache
 
+from line_profiler import profile
+
 from krrood.ontomatic.property_descriptor.mixins import HasChainAxioms
 from typing_extensions import (
     ClassVar,
@@ -295,6 +297,7 @@ class PropertyDescriptor(Symbol):
             self.obj_attr_map[obj] = value
             self.add_relation_to_the_graph_and_apply_implications(obj, value)
 
+    @profile
     def update_value(
         self,
         domain_value: Symbol,
