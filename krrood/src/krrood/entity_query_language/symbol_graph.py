@@ -14,6 +14,7 @@ from typing_extensions import (
     Iterable,
     Optional,
     List,
+    Set,
     Type,
     Dict,
     DefaultDict,
@@ -216,29 +217,18 @@ class SymbolGraph(metaclass=SingletonMeta):
     """
 
     _relation_index: DefaultDict[
-        WrappedField, DefaultDict[int, List[PredicateClassRelation]]
-    ] = field(
-        init=False, default_factory=lambda: defaultdict(lambda: defaultdict(list))
-    )
+        WrappedField, DefaultDict[int, Set[PredicateClassRelation]]
+    ] = field(init=False, default_factory=lambda: defaultdict(lambda: defaultdict(set)))
 
     _relation_index_incoming: DefaultDict[
-        WrappedField, DefaultDict[int, List[PredicateClassRelation]]
-    ] = field(
-        init=False, default_factory=lambda: defaultdict(lambda: defaultdict(list))
-    )
+        WrappedField, DefaultDict[int, Set[PredicateClassRelation]]
+    ] = field(init=False, default_factory=lambda: defaultdict(lambda: defaultdict(set)))
 
     _inference_queue: deque[PredicateClassRelation] = field(
         init=False, default_factory=deque, repr=False
     )
     """
     A queue of relations that need to be added to the graph and their implications applied.
-    """
-
-    _pending_relations: set[PredicateClassRelation] = field(
-        init=False, default_factory=set, repr=False
-    )
-    """
-    A set of relations that are currently in the inference queue.
     """
 
     _is_inferring: bool = field(init=False, default=False, repr=False)
@@ -252,10 +242,9 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         :param relation: The relation to apply the implications for.
         """
-        if self.relation_exists(relation) or relation in self._pending_relations:
+        if not relation.add_to_graph():
             return
 
-        self._pending_relations.add(relation)
         self._inference_queue.append(relation)
         if self._is_inferring:
             return
@@ -264,9 +253,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         try:
             while self._inference_queue:
                 relation_to_process = self._inference_queue.popleft()
-                self._pending_relations.discard(relation_to_process)
-                if relation_to_process.add_to_graph():
-                    relation_to_process.infer_and_apply_implications()
+                relation_to_process.infer_and_apply_implications()
         finally:
             self._is_inferring = False
 
@@ -387,12 +374,12 @@ class SymbolGraph(metaclass=SingletonMeta):
         self._instance_graph.add_edge(
             relation.source.index, relation.target.index, relation
         )
-        self._relation_index[relation.wrapped_field][relation.source.index].append(
+        self._relation_index[relation.wrapped_field][relation.source.index].add(
             relation
         )
         self._relation_index_incoming[relation.wrapped_field][
             relation.target.index
-        ].append(relation)
+        ].add(relation)
 
         descriptor_class = type(relation.wrapped_field.property_descriptor)
         if (
@@ -406,11 +393,8 @@ class SymbolGraph(metaclass=SingletonMeta):
         return True
 
     def relation_exists(self, relation: PredicateClassRelation) -> bool:
-        return any(
-            r.target.index == relation.target.index
-            for r in self._relation_index.get(relation.wrapped_field, {}).get(
-                relation.source.index, []
-            )
+        return relation in self._relation_index.get(relation.wrapped_field, {}).get(
+            relation.source.index, set()
         )
 
     def relations(self) -> Iterable[PredicateClassRelation]:
@@ -522,7 +506,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         if not wrapped_instance:
             return
         yield from self._relation_index.get(wrapped_field, {}).get(
-            wrapped_instance.index, []
+            wrapped_instance.index, set()
         )
 
     def get_incoming_relations_for_wrapped_field(
@@ -538,7 +522,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         if not wrapped_instance:
             return
         yield from self._relation_index_incoming.get(wrapped_field, {}).get(
-            wrapped_instance.index, []
+            wrapped_instance.index, set()
         )
 
     def get_outgoing_relations_by_descriptor_class(
@@ -550,9 +534,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         Get all relations whose property descriptor class is a subclass of the given descriptor class
         and are outgoing from the given wrapped instance.
         """
-        for cls, fields in self._fields_by_descriptor_class.items():
+        for cls, fields in list(self._fields_by_descriptor_class.items()):
             if issubclass(cls, descriptor_class):
-                for wrapped_field in fields:
+                for wrapped_field in list(fields):
                     yield from self.get_outgoing_relations_for_wrapped_field(
                         wrapped_instance, wrapped_field
                     )
@@ -566,9 +550,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         Get all relations whose property descriptor class is a subclass of the given descriptor class
         and are incoming to the given wrapped instance.
         """
-        for cls, fields in self._fields_by_descriptor_class.items():
+        for cls, fields in list(self._fields_by_descriptor_class.items()):
             if issubclass(cls, descriptor_class):
-                for wrapped_field in fields:
+                for wrapped_field in list(fields):
                     yield from self.get_incoming_relations_for_wrapped_field(
                         wrapped_instance, wrapped_field
                     )

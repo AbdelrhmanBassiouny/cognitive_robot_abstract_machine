@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from collections import defaultdict
 from krrood.ontomatic.property_descriptor.mixins import (
@@ -40,7 +40,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     descriptor attached to the source instance.
     """
 
-    inferrence_explanation: Optional[Tuple[Type, Type[PropertyDescriptor]]] = None
+    inferrence_explanation: Optional[Tuple[Type, Type[PropertyDescriptor]]] = field(
+        default=None, compare=False, hash=False
+    )
 
     @cached_property
     def transitive(self) -> bool:
@@ -69,8 +71,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Update the source wrapped-field value, add this relation to the graph, and apply all implications of adding this
          relation.
         """
-        if SymbolGraph().relation_exists(self):
-            return
         source_updated = not self.inferred or self.update_source_wrapped_field_value()
         if not source_updated:
             # Means that the value was already set, so we don't need to infer anything.
