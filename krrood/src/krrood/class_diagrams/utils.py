@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, Field
 from enum import Enum
 from functools import lru_cache, cached_property
-from typing_extensions import List, Type, Union, Generic
+from typing_extensions import List, Type, Union, Generic, Dict
 from uuid import UUID
 from copy import copy
 
@@ -206,6 +206,9 @@ class Role(Generic[T], ABC):
     behavior and data.
     """
 
+    _role_taker_roles: Dict = field(default_factory=dict, init=False, repr=False)
+    _role_role_takers: Dict = field(default_factory=dict, init=False, repr=False)
+
     @classmethod
     @lru_cache(maxsize=None)
     def get_role_taker_type(cls) -> Type[T]:
@@ -238,9 +241,19 @@ class Role(Generic[T], ABC):
         """
         if hasattr(self.role_taker, item):
             return getattr(self.role_taker, item)
+        for role in self.role_taker_roles:
+            if hasattr(role, item):
+                return getattr(role, item)
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{item}'"
         )
+
+    @property
+    def role_taker_roles(self) -> List[Role]:
+        """
+        :return: All roles of the role taker instance.
+        """
+        return Role._role_taker_roles[self.role_taker]
 
     def __setattr__(self, key, value):
         """
@@ -250,6 +263,12 @@ class Role(Generic[T], ABC):
         if key != self.role_taker_field().name and hasattr(self.role_taker, key):
             setattr(self.role_taker, key, value)
         else:
+            role_taker = value
+            Role._role_taker_roles[role_taker].append(self)
+            Role._role_role_takers[self].append(role_taker)
+            if isinstance(role_taker, Role):
+                Role._role_taker_roles[role_taker.role_taker].append(self)
+                Role._role_role_takers[self].append(role_taker.role_taker)
             super().__setattr__(key, value)
 
     def __hash__(self):
