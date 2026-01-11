@@ -86,12 +86,12 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all implications of adding this relation and apply them to the corresponding objects.
         """
-        self.infer_equivalence_relations()
         self.infer_super_relations()
         self.infer_inverse_relation()
         self.infer_transitive_relations()
         self.infer_chain_axioms()
         self.infer_symmetric_relation()
+        self.infer_equivalence_relations()
 
     def infer_symmetric_relation(self):
         """
@@ -109,7 +109,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                     SymmetricProperty,
                     self.property_descriptor_class,
                 ),
-            ).add_to_graph_and_apply_implications()
+            ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
     def inferred_from_symmetry(self) -> bool:
