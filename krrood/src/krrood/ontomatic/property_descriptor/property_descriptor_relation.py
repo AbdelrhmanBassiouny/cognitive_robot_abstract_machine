@@ -260,7 +260,10 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
         """
-        if self.is_inferred_from_symmetric_relation:
+        if (
+            self.is_inferred_from_symmetric_relation
+            or self.is_inferred_from_equivelence_relation
+        ):
             return
 
         if self.transitive:
