@@ -2,19 +2,29 @@ from __future__ import annotations
 import inspect
 import sys
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass, field, Field
 from enum import Enum
 from functools import lru_cache, cached_property
-from typing_extensions import List, Type, Union, Generic, Dict
-from uuid import UUID
-from copy import copy
-
 from typing_extensions import (
     List,
     Type,
-    Optional,
+    Union,
+    Generic,
+    Dict,
+    Tuple,
+    ClassVar,
+    TYPE_CHECKING,
+    Any,
 )
+from uuid import UUID
+from copy import copy
+
+from typing_extensions import List, Type, Optional, TYPE_CHECKING
 from typing_extensions import TypeVar, get_origin, get_args
+
+if TYPE_CHECKING:
+    from ..entity_query_language.predicate import Symbol
 
 
 def classes_of_module(module) -> List[Type]:
@@ -206,8 +216,8 @@ class Role(Generic[T], ABC):
     behavior and data.
     """
 
-    _role_taker_roles: Dict = field(default_factory=dict, init=False, repr=False)
-    _role_role_takers: Dict = field(default_factory=dict, init=False, repr=False)
+    _role_taker_roles: ClassVar[Dict[Any, List[Role]]] = defaultdict(list)
+    _role_role_takers: ClassVar[Dict[Role, List[Any]]] = defaultdict(list)
 
     @classmethod
     @lru_cache(maxsize=None)
@@ -241,9 +251,11 @@ class Role(Generic[T], ABC):
         """
         if hasattr(self.role_taker, item):
             return getattr(self.role_taker, item)
-        for role in self.role_taker_roles:
-            if hasattr(role, item):
-                return getattr(role, item)
+        # for role in self.role_taker_roles:
+        #     if role is self:
+        #         continue
+        #     if hasattr(role, item):
+        #         return getattr(role, item)
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{item}'"
         )
@@ -263,12 +275,13 @@ class Role(Generic[T], ABC):
         if key != self.role_taker_field().name and hasattr(self.role_taker, key):
             setattr(self.role_taker, key, value)
         else:
-            role_taker = value
-            Role._role_taker_roles[role_taker].append(self)
-            Role._role_role_takers[self].append(role_taker)
-            if isinstance(role_taker, Role):
-                Role._role_taker_roles[role_taker.role_taker].append(self)
-                Role._role_role_takers[self].append(role_taker.role_taker)
+            if key == self.role_taker_field().name:
+                role_taker = value
+                Role._role_taker_roles[role_taker].append(self)
+                Role._role_role_takers[self].append(role_taker)
+                if isinstance(role_taker, Role):
+                    Role._role_taker_roles[role_taker.role_taker].append(self)
+                    Role._role_role_takers[self].append(role_taker.role_taker)
             super().__setattr__(key, value)
 
     def __hash__(self):

@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from .property_descriptor import PropertyDescriptor
 
 
-@dataclass(unsafe_hash=True, repr=False)
+@dataclass(eq=False, repr=False)
 class PropertyDescriptorRelation(PredicateClassRelation):
     """
     Edge data representing a relation between two wrapped instances that is represented structurally by a property
@@ -126,16 +126,29 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             return
 
         if issubclass(self.property_descriptor_class, SymmetricProperty):
-            self.__class__(
-                self.target,
-                self.source,
-                self.wrapped_field,
-                inferred=True,
-                inferrence_explanation=(
-                    SymmetricProperty,
-                    self.property_descriptor_class,
-                ),
-            ).update_source_and_add_to_graph_and_apply_implications()
+            source_updated = self.wrapped_field.property_descriptor.update_value(
+                self.target.instance, self.source.instance
+            )
+            # self.__class__(
+            #     self.target,
+            #     self.source,
+            #     self.wrapped_field,
+            #     inferred=True,
+            #     inferrence_explanation=(
+            #         SymmetricProperty,
+            #         self.property_descriptor_class,
+            #     ),
+            # ).update_source()
+
+    def update_source_and_add_to_graph(self):
+        """
+        Update the source wrapped-field value and add this relation to the graph.
+        """
+        source_updated = not self.inferred or self.update_source_wrapped_field_value()
+        if not source_updated:
+            # Means that the value was already set, so we don't need to infer anything.
+            return
+        self.add_to_graph()
 
     @profile
     def infer_equivalence_relations(self):
@@ -271,10 +284,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
         """
-        if (
-            self.is_inferred_from_symmetric_relation
-            or self.is_inferred_from_equivelence_relation
-        ):
+        if self.is_inferred_from_equivelence_relation:
             return
 
         if self.transitive:
@@ -312,8 +322,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Get the outgoing relations from the target that have the same property descriptor type as this relation.
         """
-        yield from SymbolGraph().get_outgoing_relations_by_descriptor_class(
-            self.target, self.property_descriptor_class
+        yield from SymbolGraph().get_outgoing_relations_with_condition(
+            self.target,
+            lambda rel: rel.property_descriptor_class == self.property_descriptor_class,
         )
 
     @property
@@ -323,8 +334,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Get the incoming relations from the source that have the same property descriptor type as this relation.
         """
-        yield from SymbolGraph().get_incoming_relations_by_descriptor_class(
-            self.source, self.property_descriptor_class
+        yield from SymbolGraph().get_incoming_relations_with_condition(
+            self.source,
+            lambda rel: rel.property_descriptor_class == self.property_descriptor_class,
         )
 
     @profile

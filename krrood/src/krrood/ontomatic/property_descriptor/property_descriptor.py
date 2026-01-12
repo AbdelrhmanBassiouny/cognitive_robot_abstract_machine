@@ -7,7 +7,7 @@ from functools import cached_property, lru_cache
 
 from line_profiler import profile
 
-from krrood.ontomatic.property_descriptor.mixins import HasChainAxioms
+from . import logger
 from typing_extensions import (
     ClassVar,
     Set,
@@ -21,7 +21,7 @@ from typing_extensions import (
     DefaultDict,
 )
 
-from .mixins import TransitiveProperty
+from .mixins import TransitiveProperty, HasChainAxioms, SymmetricProperty
 from .monitored_container import (
     MonitoredContainer,
     monitored_type_map,
@@ -216,7 +216,7 @@ class PropertyDescriptor(Symbol):
          relation).
         :param inferred: Whether the relation is inferred or not.
         """
-        if domain_value and range_value:
+        if domain_value is not None and range_value is not None:
             for v in make_set(range_value):
                 PropertyDescriptorRelation(
                     domain_value, v, self.wrapped_field, inferred=inferred
@@ -233,6 +233,33 @@ class PropertyDescriptor(Symbol):
         if obj is None:
             return self
         value = self.obj_attr_map.get(obj, None)
+        if False and issubclass(self.__class__, SymmetricProperty):
+            incoming_values = [
+                rel.source.instance
+                for rel in SymbolGraph().get_incoming_relations_with_condition(
+                    obj,
+                    lambda r: type(r.wrapped_field.property_descriptor)
+                    is self.__class__,
+                )
+            ]
+            outgoing_values = [
+                rel.target.instance
+                for rel in SymbolGraph().get_outgoing_relations_with_condition(
+                    obj,
+                    lambda r: type(r.wrapped_field.property_descriptor)
+                    is self.__class__,
+                )
+            ]
+            other_values = incoming_values + outgoing_values
+            if len(other_values) > 0:
+                if value is None:
+                    element_type = type(getattr(other_values[0], self.field_name))
+                    value = element_type(descriptor=self)
+                for v in other_values:
+                    if v not in value:
+                        value._add_item(
+                            v, inferred=False, add_relation_to_the_graph=False
+                        )
         self._bind_owner_if_container_type(value, owner=obj)
         return value
 
@@ -294,6 +321,13 @@ class PropertyDescriptor(Symbol):
             for v in make_set(value):
                 attr._add_item(v, inferred=False)
         else:
+            if (
+                issubclass(self.__class__, SymmetricProperty)
+                and self.__class__.__name__ == "HasCollaborationWith"
+            ):
+                logger.info(
+                    f"Setting symmetric property {self.__class__.__name__} on {type(obj).__name__} to {type(value).__name__}"
+                )
             self.obj_attr_map[obj] = value
             self.add_relation_to_the_graph_and_apply_implications(obj, value)
 
@@ -302,16 +336,30 @@ class PropertyDescriptor(Symbol):
         self,
         domain_value: Symbol,
         range_value: Symbol,
+        inferred: bool = False,
     ) -> bool:
         """Update the value of the managed attribute
 
         :param domain_value: The domain value to update (i.e., the instance that this descriptor is attached to).
         :param range_value: The range value to update (i.e., the value to set on the managed attribute).
         """
-        v = self.obj_attr_map.get(domain_value, None)
+        v = getattr(domain_value, self.field_name)
         updated = False
+        if (
+            isinstance(self, SymmetricProperty)
+            and type(self).__name__ == "HasCollaborationWith"
+            and domain_value.uri == "http://benchmark/OWL2Bench#U0C3D0AP1"
+        ):
+            logger.info(
+                f"Updating symmetric property of {domain_value.uri} to {range_value.uri}"
+            )
+            # import pdbpp
+            #
+            # pdbpp.set_trace()
         if isinstance(v, MonitoredContainer):
-            updated = v._update(range_value, add_relation_to_the_graph=False)
+            updated = v._update(
+                range_value, add_relation_to_the_graph=False, inferred=inferred
+            )
         elif v != range_value:
             self.obj_attr_map[domain_value] = range_value
             updated = True
