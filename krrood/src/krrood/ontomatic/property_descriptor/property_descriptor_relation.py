@@ -110,7 +110,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Infer all symmetric relations of this relation.
         """
         if issubclass(self.property_descriptor_class, SymmetricProperty):
-            self.update_source()
+            self.wrapped_field.property_descriptor.update_value(
+                self.target.instance, self.source.instance
+            )
 
     def update_source_and_add_to_graph(self):
         """
