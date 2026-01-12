@@ -233,33 +233,6 @@ class PropertyDescriptor(Symbol):
         if obj is None:
             return self
         value = self.obj_attr_map.get(obj, None)
-        if False and issubclass(self.__class__, SymmetricProperty):
-            incoming_values = [
-                rel.source.instance
-                for rel in SymbolGraph().get_incoming_relations_with_condition(
-                    obj,
-                    lambda r: type(r.wrapped_field.property_descriptor)
-                    is self.__class__,
-                )
-            ]
-            outgoing_values = [
-                rel.target.instance
-                for rel in SymbolGraph().get_outgoing_relations_with_condition(
-                    obj,
-                    lambda r: type(r.wrapped_field.property_descriptor)
-                    is self.__class__,
-                )
-            ]
-            other_values = incoming_values + outgoing_values
-            if len(other_values) > 0:
-                if value is None:
-                    element_type = type(getattr(other_values[0], self.field_name))
-                    value = element_type(descriptor=self)
-                for v in other_values:
-                    if v not in value:
-                        value._add_item(
-                            v, inferred=False, add_relation_to_the_graph=False
-                        )
         self._bind_owner_if_container_type(value, owner=obj)
         return value
 
@@ -345,17 +318,6 @@ class PropertyDescriptor(Symbol):
         """
         v = getattr(domain_value, self.field_name)
         updated = False
-        if (
-            isinstance(self, SymmetricProperty)
-            and type(self).__name__ == "HasCollaborationWith"
-            and domain_value.uri == "http://benchmark/OWL2Bench#U0C3D0AP1"
-        ):
-            logger.info(
-                f"Updating symmetric property of {domain_value.uri} to {range_value.uri}"
-            )
-            # import pdbpp
-            #
-            # pdbpp.set_trace()
         if isinstance(v, MonitoredContainer):
             updated = v._update(
                 range_value, add_relation_to_the_graph=False, inferred=inferred

@@ -110,24 +110,6 @@ class MonitoredContainer(Generic[T], ABC):
             value = weakref.ref(value, self._remove_item)
         owner = self._owner
         if owner is not None and add_relation_to_the_graph:
-            if (
-                not inferred  # len(v) > 0
-                and isinstance(self._descriptor, SymmetricProperty)
-                and type(self._descriptor).__name__ == "HasCollaborationWith"
-            ):
-                logger.info(
-                    f"Not Inferred Updating symmetric property of {owner.uri} to {value.uri}"
-                )
-                # import pdbpp
-                #
-                # pdbpp.set_trace()
-            # if (
-            #     type(self._descriptor).__name__ == "HasCollaborationWith"
-            #     and value.uri == "http://benchmark/OWL2Bench#U0C3D0AP1"
-            # ):
-            # import pdbpp
-            #
-            # pdbpp.set_trace()
             self._descriptor.add_relation_to_the_graph_and_apply_implications(
                 owner, value, inferred=inferred
             )
