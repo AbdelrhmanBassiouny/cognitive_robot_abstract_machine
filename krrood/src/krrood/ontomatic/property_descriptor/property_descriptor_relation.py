@@ -75,8 +75,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         Update the source wrapped-field value, add this relation to the graph, and apply all implications of adding this
          relation.
         """
-        source_updated = not self.inferred or self.update_source_wrapped_field_value()
-        if not source_updated:
+        if not self.update_source():
             # Means that the value was already set, so we don't need to infer anything.
             return
         self.add_to_graph_and_apply_implications()

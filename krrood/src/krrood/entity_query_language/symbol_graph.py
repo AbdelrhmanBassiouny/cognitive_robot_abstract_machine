@@ -248,7 +248,6 @@ class SymbolGraph(metaclass=SingletonMeta):
     """
     A flag that indicates whether the graph is currently applying implications.
     """
-    _cw: List = field(default_factory=list, init=False, repr=False)
 
     @profile
     def apply_implications(self, relation: PredicateClassRelation):
@@ -257,19 +256,7 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         :param relation: The relation to apply the implications for.
         """
-        is_cw = False
-        if (
-            relation.wrapped_field.property_descriptor.__class__.__name__
-            == "HasCollaborationWith"
-        ):
-            logger.info("Applying implications")
-            self._cw.append(relation)
-            is_cw = True
         if not relation.add_to_graph():
-            if is_cw:
-                import pdbpp
-
-                pdbpp.set_trace()
             return
 
         self._inference_queue.append(relation)
@@ -280,24 +267,8 @@ class SymbolGraph(metaclass=SingletonMeta):
         try:
             while len(self._inference_queue) > 0:
                 relation_to_process = self._inference_queue.popleft()
-                if relation_to_process in self._cw:
-                    logger.info("Processing implications")
-                    self._cw.remove(relation_to_process)
                 relation_to_process.infer_and_apply_implications()
-            if len(self._cw) > 0:
-                logger.info("Processing remaining CW implications")
-                import pdbpp
-
-                pdbpp.set_trace()
-                for relation_to_process in copy(self._cw):
-                    self._cw.remove(relation_to_process)
-                    relation_to_process.infer_and_apply_implications()
         finally:
-            if len(self._cw) > 0:
-                logger.info("CW remaining after implications")
-                import pdbpp
-
-                pdbpp.set_trace()
             self._is_inferring = False
 
     def __post_init__(self):
