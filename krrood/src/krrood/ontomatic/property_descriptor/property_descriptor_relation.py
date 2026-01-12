@@ -94,19 +94,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         self.infer_symmetric_relation()
 
     @property
-    def is_inferred_from_symmetric_relation(self) -> bool:
-        """
-        Check if the relation was inferred from a symmetric relation.
-
-        :return: True if the relation was inferred from a symmetric relation, False otherwise.
-        """
-        return (
-            self.inferrence_explanation is not None
-            and self.inferrence_explanation[0] == SymmetricProperty
-        )
-
-    @property
-    def is_inferred_from_equivelence_relation(self) -> bool:
+    def is_inferred_from_equivalence_relation(self) -> bool:
         """
         Check if the relation was inferred from an equivalence relation.
 
@@ -122,40 +110,30 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all symmetric relations of this relation.
         """
-        if self.is_inferred_from_symmetric_relation:
-            return
-
         if issubclass(self.property_descriptor_class, SymmetricProperty):
-            source_updated = self.wrapped_field.property_descriptor.update_value(
-                self.target.instance, self.source.instance
-            )
-            # self.__class__(
-            #     self.target,
-            #     self.source,
-            #     self.wrapped_field,
-            #     inferred=True,
-            #     inferrence_explanation=(
-            #         SymmetricProperty,
-            #         self.property_descriptor_class,
-            #     ),
-            # ).update_source()
+            self.update_source()
 
     def update_source_and_add_to_graph(self):
         """
         Update the source wrapped-field value and add this relation to the graph.
         """
-        source_updated = not self.inferred or self.update_source_wrapped_field_value()
-        if not source_updated:
+        if not self.update_source():
             # Means that the value was already set, so we don't need to infer anything.
             return
         self.add_to_graph()
+
+    def update_source(self):
+        """
+        Update the source wrapped-field value.
+        """
+        return not self.inferred or self.update_source_wrapped_field_value()
 
     @profile
     def infer_equivalence_relations(self):
         """
         Infer all equivalence relations of this relation.
         """
-        if self.is_inferred_from_equivelence_relation:
+        if self.is_inferred_from_equivalence_relation:
             return
 
         for equivalence_relation in self.equivelence_relations:
@@ -284,7 +262,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
         """
-        if self.is_inferred_from_equivelence_relation:
+        if self.is_inferred_from_equivalence_relation:
             return
 
         if self.transitive:
