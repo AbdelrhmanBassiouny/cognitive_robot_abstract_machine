@@ -36,6 +36,9 @@ from ..utils import recursive_subclasses, T
 
 if TYPE_CHECKING:
     from .predicate import Symbol
+    from ..ontomatic.property_descriptor.property_descriptor import (
+        PropertyDescriptor,
+    )
 
 
 @dataclass(eq=False)
@@ -280,6 +283,25 @@ class SymbolGraph(metaclass=SingletonMeta):
                 list(recursive_subclasses(Symbol)),
                 introspector=DescriptorAwareIntrospector(),
             )
+
+    def descriptor_subgraph(
+        self, descriptor_type: Type[PropertyDescriptor]
+    ) -> PyDiGraph:
+        """
+        Get a subgraph of the instance graph containing only relations of the have a property
+        descriptor of the given type.
+
+        :param descriptor_type: The type of the descriptor to filter for.
+        :return: A subgraph containing only relations of the given type.
+        """
+        subgraph = self._instance_graph.edge_subgraph(
+            [
+                (e.source.index, e.target.index)
+                for e in self.relations()
+                if isinstance(e.wrapped_field.property_descriptor, descriptor_type)
+            ]
+        )
+        return subgraph
 
     @property
     def class_diagram(self) -> ClassDiagram:
@@ -576,6 +598,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         filepath: str,
         format_="svg",
         graph_type="instance",
+        graph: Optional[PyDiGraph] = None,
         without_inherited_associations: bool = True,
     ) -> None:
         """
@@ -588,14 +611,14 @@ class SymbolGraph(metaclass=SingletonMeta):
         """
         import pydot
 
-        if graph_type == "type":
+        if not graph and graph_type == "type":
             if without_inherited_associations:
                 graph = self.class_diagram.to_subdiagram_without_inherited_associations(
                     True
                 )._dependency_graph
             else:
                 graph = self.class_diagram._dependency_graph
-        else:
+        elif not graph:
             graph = self._instance_graph
         if not filepath.endswith(f".{format_}"):
             filepath += f".{format_}"

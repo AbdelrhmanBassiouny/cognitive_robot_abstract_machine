@@ -91,14 +91,16 @@ def nearest_common_ancestor(classes):
     return None
 
 
+@lru_cache
 def sort_classes_by_role_aware_inheritance_path_length(
-    classes: List[Type],
+    classes: Tuple[Type], common_ancestor: Optional[Type] = None
 ) -> List[Type]:
-    near_common_ancestor = role_aware_nearest_common_ancestor(classes)
-    if near_common_ancestor is None:
-        return classes
+    if not common_ancestor:
+        common_ancestor = role_aware_nearest_common_ancestor(tuple(classes))
+        if common_ancestor is None:
+            return classes
     class_lengths = [
-        (clazz, role_aware_inheritance_path_length(clazz, near_common_ancestor))
+        (clazz, role_aware_inheritance_path_length(clazz, common_ancestor))
         for clazz in classes
     ]
     sorted_ = list(sorted(class_lengths, key=lambda x: x[1]))
@@ -120,6 +122,7 @@ def sort_classes_by_role_aware_inheritance_path_length(
     return [clazz for clazz, _ in sorted_]
 
 
+@lru_cache
 def role_aware_nearest_common_ancestor(classes):
     if not classes:
         return None
@@ -274,7 +277,7 @@ class Role(Generic[T], ABC):
         """
         if key != self.role_taker_field().name and hasattr(self.role_taker, key):
             setattr(self.role_taker, key, value)
-        else:
+        if hasattr(self, key):
             if key == self.role_taker_field().name:
                 role_taker = value
                 Role._role_taker_roles[role_taker].append(self)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from functools import cached_property, lru_cache
 from collections import defaultdict
 
@@ -36,6 +37,17 @@ if TYPE_CHECKING:
     from .property_descriptor import PropertyDescriptor
 
 
+class InferredThrough(Enum):
+    """
+    Enum representing different ways a property descriptor relation can be inferred.
+    """
+
+    EQUIVALENT = "equivalent"
+    INVERSE = "inverse"
+    SUPER = "super"
+    Transitive = "transitive"
+
+
 @dataclass(eq=False, repr=False)
 class PropertyDescriptorRelation(PredicateClassRelation):
     """
@@ -43,9 +55,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
     descriptor attached to the source instance.
     """
 
-    inferrence_explanation: Optional[Tuple[Type, Type[PropertyDescriptor]]] = field(
-        default=None, compare=False, hash=False
-    )
+    inference_explanation: Optional[
+        Tuple[InferredThrough, PropertyDescriptorRelation]
+    ] = field(default=None, compare=False, hash=False)
 
     @cached_property
     def transitive(self) -> bool:
@@ -100,8 +112,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :return: True if the relation was inferred from an equivalence relation, False otherwise.
         """
         return (
-            self.inferrence_explanation is not None
-            and self.inferrence_explanation[0] == HasEquivalentProperties
+            self.inference_explanation is not None
+            and self.inference_explanation[0] == InferredThrough.EQUIVALENT
         )
 
     @profile
@@ -147,9 +159,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 self.target,
                 equivalence_relation.field,
                 inferred=True,
-                inferrence_explanation=(
-                    HasEquivalentProperties,
-                    self.property_descriptor_class,
+                inference_explanation=(
+                    InferredThrough.EQUIVALENT,
+                    self,
                 ),
             ).update_source_and_add_to_graph_and_apply_implications()
 
@@ -185,7 +197,11 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         for super_domain, super_field in self.super_relations:
             self.__class__(
-                super_domain, self.target, super_field, inferred=True
+                super_domain,
+                self.target,
+                super_field,
+                inferred=True,
+                inference_explanation=(InferredThrough.SUPER, self),
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @profile
@@ -193,10 +209,17 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer the inverse relation if it exists.
         """
-        if self.inverse_of:
+        if self.inverse_of and not (
+            self.inference_explanation
+            and self.inference_explanation[0] == InferredThrough.INVERSE
+        ):
             inverse_domain, inverse_field = self.inverse_domain_and_field
             self.__class__(
-                inverse_domain, self.source, inverse_field, inferred=True
+                inverse_domain,
+                self.source,
+                inverse_field,
+                inferred=True,
+                inference_explanation=(InferredThrough.INVERSE, self),
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
@@ -230,6 +253,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         :return: The inverse domain instance and property descriptor field.
         """
         if not self.inverse_association:
+            import pdbpp
+
+            pdbpp.set_trace()
             raise ValueError(
                 f"cannot find a field for the inverse {self.inverse_of} defined for the relation {self.source.name}-{self.wrapped_field.public_name}-{self.target.name}"
             )

@@ -378,18 +378,26 @@ class PropertyDescriptor(Symbol):
     def get_superproperties_associations(
         cls,
         domain_type: Union[SymbolType, WrappedClass],
+        direct: bool = True,
     ) -> Tuple[Association, ...]:
         """
         :param domain_type: The domain type that has the required association(s).
+        :param direct: Whether to get only direct superproperties or all superproperties.
         :return: The associations that have the given domain type as a source and have a descriptor type that
          is a super class of this descriptor class.
         """
 
         def association_condition(association: Association) -> bool:
-            return (
-                issubclass(cls, type(association.field.property_descriptor))
-                and type(association.field.property_descriptor) is not cls
-            )
+            if direct:
+                sub_class_condition = (
+                    type(association.field.property_descriptor) in cls.__bases__
+                )
+            else:
+                sub_class_condition = (
+                    issubclass(type(association.field.property_descriptor), cls)
+                    and type(association.field.property_descriptor) is not cls
+                )
+            return sub_class_condition
 
         class_diagram = SymbolGraph().class_diagram
 

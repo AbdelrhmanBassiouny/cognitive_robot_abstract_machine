@@ -17,6 +17,7 @@ from typing_extensions import (
 
 from .mixins import SymmetricProperty
 from . import logger
+from ...class_diagrams.utils import Role
 
 from ...entity_query_language.predicate import Symbol
 
@@ -246,6 +247,15 @@ class MonitoredSet(MonitoredContainer, set):
             add_relation_to_the_graph=add_relation_to_the_graph,
         )
         super().add(value)
+        if isinstance(self._owner, Role) and hasattr(
+            self._owner.role_taker, self._descriptor.field_name
+        ):
+            role_taker_attr = getattr(
+                self._owner.role_taker, self._descriptor.field_name
+            )
+            role_taker_attr._add_item(
+                value, inferred=inferred, add_relation_to_the_graph=False
+            )
 
     def _remove_item(self, item):
         self.remove(item)
