@@ -10,6 +10,7 @@ from functools import lru_cache, cached_property
 from krrood.ontomatic.property_descriptor.mixins import SymmetricProperty
 from line_profiler import profile
 from rustworkx import PyDiGraph
+from rustworkx.rustworkx import NoEdgeBetweenNodes
 from typing_extensions import (
     TYPE_CHECKING,
     Any,
@@ -106,10 +107,19 @@ class PredicateClassRelation:
     def __hash__(self):
         return hash(
             (
-                id(self.source.instance),
-                id(self.target.instance),
+                self.source.index,
+                self.target.index,
                 self.wrapped_field.public_name,
             )
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, PredicateClassRelation):
+            return False
+        return (
+            self.source.index == other.source.index
+            and self.target.index == other.target.index
+            and self.wrapped_field.public_name == other.wrapped_field.public_name
         )
 
 
@@ -232,12 +242,12 @@ class SymbolGraph(metaclass=SingletonMeta):
     This enables quick behavior similar to selecting everything from an entire table in SQL.
     """
 
-    _relation_index: DefaultDict[
-        WrappedField, DefaultDict[int, Set[PredicateClassRelation]]
-    ] = field(init=False, default_factory=lambda: defaultdict(lambda: defaultdict(set)))
+    _relation_index: DefaultDict[str, DefaultDict[int, Set[PredicateClassRelation]]] = (
+        field(init=False, default_factory=lambda: defaultdict(lambda: defaultdict(set)))
+    )
 
     _relation_index_incoming: DefaultDict[
-        WrappedField, DefaultDict[int, Set[PredicateClassRelation]]
+        str, DefaultDict[int, Set[PredicateClassRelation]]
     ] = field(init=False, default_factory=lambda: defaultdict(lambda: defaultdict(set)))
 
     _inference_queue: deque[PredicateClassRelation] = field(
@@ -407,13 +417,14 @@ class SymbolGraph(metaclass=SingletonMeta):
         """Add a relation edge to the instance graph."""
         if self.relation_exists(relation):
             return False
+
         self._instance_graph.add_edge(
             relation.source.index, relation.target.index, relation
         )
-        self._relation_index[relation.wrapped_field][relation.source.index].add(
+        self._relation_index[relation.wrapped_field.name][relation.source.index].add(
             relation
         )
-        self._relation_index_incoming[relation.wrapped_field][
+        self._relation_index_incoming[relation.wrapped_field.name][
             relation.target.index
         ].add(relation)
 
@@ -429,9 +440,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         return True
 
     def relation_exists(self, relation: PredicateClassRelation) -> bool:
-        return relation in self._relation_index.get(relation.wrapped_field, {}).get(
-            relation.source.index, set()
-        )
+        return relation in self._relation_index.get(
+            relation.wrapped_field.name, {}
+        ).get(relation.source.index, set())
 
     def relations(self) -> Iterable[PredicateClassRelation]:
         yield from self._instance_graph.edges()
@@ -541,7 +552,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         if not wrapped_instance:
             return
-        yield from self._relation_index.get(wrapped_field, {}).get(
+        yield from self._relation_index.get(wrapped_field.name, {}).get(
             wrapped_instance.index, set()
         )
 
@@ -557,7 +568,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         if not wrapped_instance:
             return
-        yield from self._relation_index_incoming.get(wrapped_field, {}).get(
+        yield from self._relation_index_incoming.get(wrapped_field.name, {}).get(
             wrapped_instance.index, set()
         )
 

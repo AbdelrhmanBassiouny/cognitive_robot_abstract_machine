@@ -44,7 +44,7 @@ class TypeResolutionError(TypeError):
         super().__init__(f"Could not resolve type for {self.name}")
 
 
-@dataclass
+@dataclass(eq=False)
 class WrappedField:
     """
     A class that wraps a field of dataclass and provides some utility functions.
@@ -288,7 +288,7 @@ def search_class_in_sys_modules(target_class_name: str) -> List[Type]:
 
 
 def _role_aware_inheritance_path_length(
-        child_class: Type, parent_class: Type, current_length: int = 0
+    child_class: Type, parent_class: Type, current_length: int = 0
 ) -> int:
     """
     Helper function for :func:`inheritance_path_length`.
@@ -308,8 +308,9 @@ def _role_aware_inheritance_path_length(
             if issubclass(base, parent_class)
         )
 
+
 def issubclass_or_role(subtype: Type, supertype: Type) -> bool:
     return issubclass(subtype, supertype) or (
-            issubclass(subtype, Role)
-            and issubclass(subtype.get_role_taker_type(), supertype)
+        issubclass(subtype, Role)
+        and issubclass(subtype.get_role_taker_type(), supertype)
     )
