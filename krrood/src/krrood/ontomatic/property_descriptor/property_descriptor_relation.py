@@ -45,7 +45,8 @@ class InferredThrough(Enum):
     EQUIVALENT = "equivalent"
     INVERSE = "inverse"
     SUPER = "super"
-    Transitive = "transitive"
+    TRANSITIVE = "transitive"
+    SYMMETRY = "symmetry"
 
 
 @dataclass(eq=False, repr=False)
@@ -121,10 +122,22 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all symmetric relations of this relation.
         """
+        if (
+            self.inference_explanation
+            and self.inference_explanation[0] == InferredThrough.SYMMETRY
+        ):
+            return
         if issubclass(self.property_descriptor_class, SymmetricProperty):
-            self.wrapped_field.property_descriptor.update_value(
-                self.target.instance, self.source.instance
-            )
+            self.__class__(
+                self.target,
+                self.source,
+                self.wrapped_field,
+                inferred=True,
+                inference_explanation=(InferredThrough.SYMMETRY, self),
+            ).update_source_and_add_to_graph_and_apply_implications()
+            # self.wrapped_field.property_descriptor.update_value(
+            #     self.target.instance, self.source.instance
+            # )
 
     def update_source_and_add_to_graph(self):
         """
