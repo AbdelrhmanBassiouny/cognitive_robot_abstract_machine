@@ -294,13 +294,6 @@ class PropertyDescriptor(Symbol):
             for v in make_set(value):
                 attr._add_item(v, inferred=False)
         else:
-            if (
-                issubclass(self.__class__, SymmetricProperty)
-                and self.__class__.__name__ == "HasCollaborationWith"
-            ):
-                logger.info(
-                    f"Setting symmetric property {self.__class__.__name__} on {type(obj).__name__} to {type(value).__name__}"
-                )
             self.obj_attr_map[obj] = value
             self.add_relation_to_the_graph_and_apply_implications(obj, value)
 

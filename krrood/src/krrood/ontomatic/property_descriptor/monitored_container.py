@@ -110,9 +110,14 @@ class MonitoredContainer(Generic[T], ABC):
         if inferred:
             value = weakref.ref(value, self._remove_item)
         owner = self._owner
+        value_owner = value
+        while isinstance(value_owner, Role) and hasattr(
+            value_owner.role_taker, self._descriptor.field_name
+        ):
+            value_owner = value_owner.role_taker
         if owner is not None and add_relation_to_the_graph:
             self._descriptor.add_relation_to_the_graph_and_apply_implications(
-                owner, value, inferred=inferred
+                owner, value_owner, inferred=inferred
             )
         return value
 
