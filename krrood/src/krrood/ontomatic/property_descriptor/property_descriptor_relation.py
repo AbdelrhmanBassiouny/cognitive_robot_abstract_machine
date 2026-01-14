@@ -305,6 +305,9 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         if self.is_inferred_from_equivalence_relation:
             return
 
+        if issubclass(self.property_descriptor_class, SymmetricProperty):
+            return
+
         if self.transitive:
             self.infer_transitive_relations_outgoing_from_source()
             self.infer_transitive_relations_incoming_to_target()
@@ -320,6 +323,10 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 next_relation.wrapped_field,
                 inferred=True,
             ).update_source_and_add_to_graph_and_apply_implications()
+
+    @cached_property
+    def inferred_from_symmetry(self):
+        return self.inference_explanation and self.inference_explanation[0] == InferredThrough.SYMMETRY
 
     def infer_transitive_relations_incoming_to_target(self):
         """

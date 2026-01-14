@@ -5,6 +5,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field, fields
 from functools import cached_property, lru_cache
 
+from krrood.ontomatic.property_descriptor.mixins import IrreflexiveProperty
 from line_profiler import profile
 
 from . import logger
@@ -34,6 +35,7 @@ from ...class_diagrams.class_diagram import (
     AssociationThroughRoleTaker,
 )
 from ...class_diagrams.wrapped_field import WrappedField
+from ...class_diagrams.utils import issubclass_or_role
 from ...entity_query_language.predicate import Symbol, Predicate
 from ...entity_query_language.symbol_graph import (
     SymbolGraph,
@@ -127,6 +129,10 @@ class PropertyDescriptor(Symbol):
     """
     A set of all range types for this descriptor class.
     """
+    descriptor_instances_by_domain_type: ClassVar[Dict[Type[PropertyDescriptor], Dict[SymbolType, PropertyDescriptor]]] = defaultdict(dict)
+    """
+    A mapping from domain types to the descriptor instances that manage attributes of that type.
+    """
     chain_axioms: ClassVar[
         Dict[
             Type[PropertyDescriptor],  # Participant Descriptor
@@ -136,6 +142,10 @@ class PropertyDescriptor(Symbol):
             ],
         ]
     ] = defaultdict(lambda: defaultdict(set))
+    """
+    A mapping from participant descriptor classes to a mapping from chain of participant descriptor classes to the
+    indices of the participant descriptors in the chain that are chain axiom participants."""
+
 
     def __post_init__(self):
         self._validate_non_redundant_domain()
@@ -143,6 +153,13 @@ class PropertyDescriptor(Symbol):
         self._update_domain_and_range()
         if HasChainAxioms in self.__class__.__bases__:
             self.register_chain_axioms_for_target(self.__class__)
+
+    @classmethod
+    def get_descriptor_instances_for_domain_types(cls, domain_type: SymbolType) -> PropertyDescriptor:
+        for d_type in domain_type.__mro__:
+            if d_type in cls.descriptor_instances_by_domain_type[cls]:
+                return cls.descriptor_instances_by_domain_type[cls][d_type]
+        raise ValueError(f"No descriptor instances found for domain type {domain_type}")
 
     @classmethod
     def register_chain_axioms_for_target(
@@ -196,6 +213,7 @@ class PropertyDescriptor(Symbol):
                 continue
             self.all_domains[super_class].add(self.domain)
             self.all_ranges[super_class].add(range_type)
+        self.descriptor_instances_by_domain_type[self.__class__][self.domain] = self
 
     @cached_property
     def range(self) -> SymbolType:
@@ -233,8 +251,31 @@ class PropertyDescriptor(Symbol):
         if obj is None:
             return self
         value = self.obj_attr_map.get(obj, None)
+        # value = self._infer_related_relations_that_contribute_to_the_value(obj, value)
         self._bind_owner_if_container_type(value, owner=obj)
         return value
+
+    def _infer_related_relations_that_contribute_to_the_value(self, obj: Any, value: Any) -> Any:
+        if isinstance(self, SymmetricProperty) and issubclass(self, TransitiveProperty):
+            self._infer_transitive_symmetric_relations(obj, value)
+
+    def _infer_transitive_symmetric_relations(self, obj: Any, value: Any) -> Any:
+        relation_induced_subgraph = (
+            SymbolGraph()
+            .descriptor_subgraph(HasSameHomeTownWith)
+            .to_undirected(multigraph=False)
+        )
+        node_sets = []
+        obj_wrapped_instance = SymbolGraph().get_wrapped_instance(obj)
+        obj_idx = obj_wrapped_instance.index
+        if obj_idx not in relation_induced_subgraph.nodes():
+            return
+        for node_idx in relation_induced_subgraph.node_indices():
+            if not isinstance(self, IrreflexiveProperty) and node_idx == obj_idx and (obj_idx, obj_idx) not in node_sets:
+                node_sets.append((obj_idx, obj_idx))
+            if rx.has_path(relation_induced_subgraph, node_idx, obj_idx):
+                node_sets.append((node_idx, obj_idx))
+                node_sets.append((obj_idx, node_idx))
 
     @staticmethod
     def _bind_owner_if_container_type(
