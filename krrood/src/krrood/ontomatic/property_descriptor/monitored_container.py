@@ -3,7 +3,7 @@ from __future__ import annotations
 import weakref
 from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from typing_extensions import (
     Optional,
@@ -107,15 +107,13 @@ class MonitoredContainer(Generic[T], ABC):
         :param add_relation_to_the_graph: Whether to add the relation to the graph or not.
         :return: The value with a weakref if inferred is True, otherwise the value itself
         """
-        if inferred:
-            value = weakref.ref(value, self._remove_item)
         owner = self._owner
-        value_owner = value
-        while isinstance(value_owner, Role) and hasattr(
-            value_owner.role_taker, self._descriptor.field_name
-        ):
-            value_owner = value_owner.role_taker
         if owner is not None and add_relation_to_the_graph:
+            value_owner = value
+            while isinstance(value_owner, Role):
+                value_owner = value_owner.role_taker
+            while isinstance(owner, Role):
+                owner = owner.role_taker
             self._descriptor.add_relation_to_the_graph_and_apply_implications(
                 owner, value_owner, inferred=inferred
             )
@@ -246,7 +244,9 @@ class MonitoredSet(MonitoredContainer, set):
     def _add_item(
         self, value, inferred: bool = False, add_relation_to_the_graph: bool = True
     ):
-        value = self._on_add(
+        if value in self:
+            return
+        self._on_add(
             value,
             inferred=inferred,
             add_relation_to_the_graph=add_relation_to_the_graph,

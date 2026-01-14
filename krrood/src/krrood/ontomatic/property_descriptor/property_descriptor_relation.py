@@ -5,6 +5,7 @@ from enum import Enum
 from functools import cached_property, lru_cache
 from collections import defaultdict
 
+from krrood.class_diagrams.utils import Role
 from line_profiler import profile
 
 from krrood.ontomatic.property_descriptor.mixins import (
@@ -208,11 +209,29 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer all super relations of this relation.
         """
-        for super_domain, super_field in self.super_relations:
+        # for super_domain, super_field in self.super_relations:
+        for super_descriptor_type in self.property_descriptor_class.super_classes():
+            super_value = None
+            try:
+                super_value = getattr(
+                    self.source.instance, super_descriptor_type.get_field_name()
+                )
+            except AttributeError:
+                if self.source.instance in Role._role_taker_roles:
+                    for role in Role._role_taker_roles[self.source.instance]:
+                        if hasattr(role, super_descriptor_type.get_field_name()):
+                            super_value = getattr(
+                                role, super_descriptor_type.get_field_name()
+                            )
+                            break
+            if super_value is None:
+                continue
+            super_descriptor = super_value._descriptor
+            super_domain = super_value._owner
             self.__class__(
                 super_domain,
                 self.target,
-                super_field,
+                super_descriptor.wrapped_field,
                 inferred=True,
                 inference_explanation=(InferredThrough.SUPER, self),
             ).update_source_and_add_to_graph_and_apply_implications()
@@ -226,11 +245,25 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             self.inference_explanation
             and self.inference_explanation[0] == InferredThrough.INVERSE
         ):
-            inverse_domain, inverse_field = self.inverse_domain_and_field
+            # inverse_domain, inverse_field = self.inverse_domain_and_field
+            inverse_domain = self.target
+            try:
+                inverse_value = getattr(
+                    inverse_domain.instance, self.inverse_of.get_field_name()
+                )
+            except AttributeError:
+                if inverse_domain.instance in Role._role_taker_roles:
+                    for role in Role._role_taker_roles[inverse_domain.instance]:
+                        if hasattr(role, self.inverse_of.get_field_name()):
+                            inverse_value = getattr(
+                                role, self.inverse_of.get_field_name()
+                            )
+                            break
+            inverse_descriptor = inverse_value._descriptor
             self.__class__(
                 inverse_domain,
                 self.source,
-                inverse_field,
+                inverse_descriptor.wrapped_field,
                 inferred=True,
                 inference_explanation=(InferredThrough.INVERSE, self),
             ).update_source_and_add_to_graph_and_apply_implications()
@@ -292,9 +325,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         )
         if value is not None:
             return value
-        roles_for_target = SymbolGraph().get_roles_for_instance(self.target)
-        for role in roles_for_target:
-            value = self.inverse_of.get_association_of_source_type(role.instance_type)
         return value
 
     @profile
@@ -316,27 +346,42 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         Infer transitive relations outgoing from the source.
         """
-        for next_relation in self.target_outgoing_relations_with_same_descriptor_type:
+
+        def edge_condition(relation: PredicateClassRelation) -> bool:
+            return relation.property_descriptor_class is self.property_descriptor_class
+
+        for target in SymbolGraph()._instance_graph.find_successors_by_edge(
+            self.target.index, edge_condition
+        ):
             self.__class__(
                 self.source,
-                next_relation.target,
-                next_relation.wrapped_field,
+                target,
+                self.wrapped_field,
                 inferred=True,
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
     def inferred_from_symmetry(self):
-        return self.inference_explanation and self.inference_explanation[0] == InferredThrough.SYMMETRY
+        return (
+            self.inference_explanation
+            and self.inference_explanation[0] == InferredThrough.SYMMETRY
+        )
 
     def infer_transitive_relations_incoming_to_target(self):
         """
         Infer transitive relations incoming to the target.
         """
-        for nxt_relation in self.source_incoming_relations_with_same_descriptor_type:
+
+        def edge_condition(relation: PredicateClassRelation) -> bool:
+            return relation.property_descriptor_class is self.property_descriptor_class
+
+        for source in SymbolGraph()._instance_graph.find_predecessors_by_edge(
+            self.source.index, edge_condition
+        ):
             self.__class__(
-                nxt_relation.source,
+                source,
                 self.target,
-                nxt_relation.wrapped_field,
+                self.wrapped_field,
                 inferred=True,
             ).update_source_and_add_to_graph_and_apply_implications()
 

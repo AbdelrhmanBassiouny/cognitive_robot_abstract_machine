@@ -285,20 +285,23 @@ class Role(Generic[T], ABC):
         """
         if key != self.role_taker_field().name and hasattr(self.role_taker, key):
             setattr(self.role_taker, key, value)
-        if hasattr(self, key):
-            if key == self.role_taker_field().name:
-                role_taker = value
-                Role._role_taker_roles[role_taker].append(self)
-                Role._role_role_takers[self].append(role_taker)
-                if isinstance(role_taker, Role):
-                    Role._role_taker_roles[role_taker.role_taker].append(self)
-                    Role._role_role_takers[self].append(role_taker.role_taker)
+        if key == self.role_taker_field().name or hasattr(self, key):
             super().__setattr__(key, value)
+        if key == self.role_taker_field().name:
+            role_taker = value
+            Role._role_taker_roles[role_taker].append(self)
+            Role._role_role_takers[self].append(role_taker)
+            if isinstance(role_taker, Role):
+                Role._role_taker_roles[role_taker.role_taker].append(self)
+                Role._role_role_takers[self].append(role_taker.role_taker)
 
     def __hash__(self):
-        return hash(id(self))
+        role_taker = self.role_taker
+        while isinstance(role_taker, Role):
+            role_taker = role_taker.role_taker
+        return hash(id(role_taker))
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            return False
+        # if not isinstance(other, self.__class__):
+        #     return False
         return hash(self) == hash(other)

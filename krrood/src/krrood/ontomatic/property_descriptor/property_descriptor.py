@@ -29,11 +29,13 @@ from .monitored_container import (
 )
 from .property_descriptor_relation import PropertyDescriptorRelation
 from ..failures import UnMonitoredContainerTypeForDescriptor
+from ..utils import to_snake
 from ...class_diagrams.class_diagram import (
     WrappedClass,
     Association,
     AssociationThroughRoleTaker,
 )
+from ...class_diagrams.utils import Role
 from ...class_diagrams.wrapped_field import WrappedField
 from ...class_diagrams.utils import issubclass_or_role
 from ...entity_query_language.predicate import Symbol, Predicate
@@ -129,9 +131,17 @@ class PropertyDescriptor(Symbol):
     """
     A set of all range types for this descriptor class.
     """
-    descriptor_instances_by_domain_type: ClassVar[Dict[Type[PropertyDescriptor], Dict[SymbolType, PropertyDescriptor]]] = defaultdict(dict)
+    descriptor_instances_by_domain_type: ClassVar[
+        Dict[Type[PropertyDescriptor], Dict[SymbolType, PropertyDescriptor]]
+    ] = defaultdict(dict)
     """
     A mapping from domain types to the descriptor instances that manage attributes of that type.
+    """
+    descriptor_instances_by_range_type: ClassVar[
+        Dict[Type[PropertyDescriptor], Dict[SymbolType, PropertyDescriptor]]
+    ] = defaultdict(dict)
+    """
+    A mapping from range types to the descriptor instances that manage attributes of that type.
     """
     chain_axioms: ClassVar[
         Dict[
@@ -146,7 +156,6 @@ class PropertyDescriptor(Symbol):
     A mapping from participant descriptor classes to a mapping from chain of participant descriptor classes to the
     indices of the participant descriptors in the chain that are chain axiom participants."""
 
-
     def __post_init__(self):
         self._validate_non_redundant_domain()
         self._update_wrapped_field()
@@ -155,11 +164,34 @@ class PropertyDescriptor(Symbol):
             self.register_chain_axioms_for_target(self.__class__)
 
     @classmethod
-    def get_descriptor_instances_for_domain_types(cls, domain_type: SymbolType) -> PropertyDescriptor:
+    def super_classes(cls) -> Tuple[Type[PropertyDescriptor], ...]:
+        return tuple(
+            b
+            for b in cls.__bases__
+            if b is not PropertyDescriptor and issubclass(b, PropertyDescriptor)
+        )
+
+    @classmethod
+    def get_field_name(cls) -> str:
+        return to_snake(cls.__name__)
+
+    @classmethod
+    def get_descriptor_instance_for_domain_type(
+        cls, domain_type: SymbolType
+    ) -> PropertyDescriptor:
         for d_type in domain_type.__mro__:
             if d_type in cls.descriptor_instances_by_domain_type[cls]:
                 return cls.descriptor_instances_by_domain_type[cls][d_type]
         raise ValueError(f"No descriptor instances found for domain type {domain_type}")
+
+    @classmethod
+    def get_descriptor_instance_for_range_type(
+        cls, range_type: SymbolType
+    ) -> PropertyDescriptor:
+        for r_type in range_type.__mro__:
+            if r_type in cls.descriptor_instances_by_domain_type[cls]:
+                return cls.descriptor_instances_by_range_type[cls][r_type]
+        raise ValueError(f"No descriptor instances found for range type {range_type}")
 
     @classmethod
     def register_chain_axioms_for_target(
@@ -251,31 +283,8 @@ class PropertyDescriptor(Symbol):
         if obj is None:
             return self
         value = self.obj_attr_map.get(obj, None)
-        # value = self._infer_related_relations_that_contribute_to_the_value(obj, value)
         self._bind_owner_if_container_type(value, owner=obj)
         return value
-
-    def _infer_related_relations_that_contribute_to_the_value(self, obj: Any, value: Any) -> Any:
-        if isinstance(self, SymmetricProperty) and issubclass(self, TransitiveProperty):
-            self._infer_transitive_symmetric_relations(obj, value)
-
-    def _infer_transitive_symmetric_relations(self, obj: Any, value: Any) -> Any:
-        relation_induced_subgraph = (
-            SymbolGraph()
-            .descriptor_subgraph(HasSameHomeTownWith)
-            .to_undirected(multigraph=False)
-        )
-        node_sets = []
-        obj_wrapped_instance = SymbolGraph().get_wrapped_instance(obj)
-        obj_idx = obj_wrapped_instance.index
-        if obj_idx not in relation_induced_subgraph.nodes():
-            return
-        for node_idx in relation_induced_subgraph.node_indices():
-            if not isinstance(self, IrreflexiveProperty) and node_idx == obj_idx and (obj_idx, obj_idx) not in node_sets:
-                node_sets.append((obj_idx, obj_idx))
-            if rx.has_path(relation_induced_subgraph, node_idx, obj_idx):
-                node_sets.append((node_idx, obj_idx))
-                node_sets.append((obj_idx, node_idx))
 
     @staticmethod
     def _bind_owner_if_container_type(
@@ -350,7 +359,17 @@ class PropertyDescriptor(Symbol):
         :param domain_value: The domain value to update (i.e., the instance that this descriptor is attached to).
         :param range_value: The range value to update (i.e., the value to set on the managed attribute).
         """
-        v = getattr(domain_value, self.field_name)
+        try:
+            v = getattr(domain_value, self.field_name)
+        except AttributeError:
+            if domain_value in Role._role_taker_roles:
+                for role in Role._role_taker_roles[domain_value]:
+                    if hasattr(role, self.field_name):
+                        domain_value = role
+                        v = getattr(role, self.field_name)
+                        break
+            else:
+                raise
         updated = False
         if isinstance(v, MonitoredContainer):
             updated = v._update(
