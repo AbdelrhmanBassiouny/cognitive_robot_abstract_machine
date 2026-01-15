@@ -69,6 +69,7 @@ from .utils import (
 from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
+from ..class_diagrams.utils import Role
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:
@@ -1577,7 +1578,16 @@ class Attribute(DomainMapping):
             for v in value:
                 yield getattr(v, self._attribute_name_)
             return
-        yield getattr(value, self._attribute_name_)
+        elif not hasattr(value, self._attribute_name_):
+            if value in Role._role_taker_roles:
+                for role in Role._role_taker_roles[value]:
+                    if hasattr(role, self._attribute_name_):
+                        yield getattr(role, self._attribute_name_)
+                        return
+        try:
+            yield getattr(value, self._attribute_name_)
+        except AttributeError:
+            return
 
     @property
     def _name_(self):
