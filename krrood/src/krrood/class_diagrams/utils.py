@@ -116,16 +116,20 @@ def sort_classes_by_role_aware_inheritance_path_length(
     for i in range(len(sorted_) - 1):
         if sorted_[i][1] != sorted_[i + 1][1]:
             continue
-        if not (
+        if (
             issubclass(sorted_[i][0], Role) and not issubclass(sorted_[i + 1][0], Role)
+        ) or (
+            issubclass(sorted_[i][0], Role)
+            and issubclass(sorted_[i + 1][0], Role)
+            and len(sorted_[i][0].all_role_taker_types())
+            > len(sorted_[i + 1][0].all_role_taker_types())
         ):
-            continue
-        # keep swapping until we find a different length
-        for j in range(i + 1, 0, -1):
-            if sorted_[j][1] != sorted_[j - 1][1]:
-                break
-            # swap
-            sorted_[j], sorted_[j - 1] = sorted_[j - 1], sorted_[j]
+            # keep swapping until we find a different length
+            for j in range(i + 1, 0, -1):
+                if sorted_[j][1] != sorted_[j - 1][1]:
+                    break
+                # swap
+                sorted_[j], sorted_[j - 1] = sorted_[j - 1], sorted_[j]
 
     return [clazz for clazz, _ in sorted_]
 
@@ -252,6 +256,16 @@ class Role(Generic[T], ABC):
         :return: The role taker instance.
         """
         return getattr(self, self.role_taker_field().name)
+
+    @classmethod
+    @lru_cache
+    def all_role_taker_types(cls) -> Tuple[Type, ...]:
+        role_taker_type = cls.get_role_taker_type()
+        all_role_taker_types = [role_taker_type]
+        while issubclass(role_taker_type, Role):
+            role_taker_type = role_taker_type.get_role_taker_type()
+            all_role_taker_types.append(role_taker_type)
+        return tuple(all_role_taker_types)
 
     def __getattr__(self, item):
         """
