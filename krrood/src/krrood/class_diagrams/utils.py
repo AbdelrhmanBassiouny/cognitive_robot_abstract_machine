@@ -297,6 +297,9 @@ class Role(Generic[T], ABC):
         Set an attribute on the role taker instance if the role taker has this attribute,
          otherwise set on this instance directly.
         """
+        if key == self.role_taker_field().name:
+            object.__setattr__(self, "_direct_role_taker", value)
+
         if key != self.role_taker_field().name and hasattr(self.role_taker, key):
             setattr(self.role_taker, key, value)
         if key == self.role_taker_field().name or hasattr(self, key):
@@ -306,14 +309,19 @@ class Role(Generic[T], ABC):
             Role._role_taker_roles[role_taker].append(self)
             Role._role_role_takers[self].append(role_taker)
             if isinstance(role_taker, Role):
-                Role._role_taker_roles[role_taker.role_taker].append(self)
-                Role._role_role_takers[self].append(role_taker.role_taker)
+                rt = role_taker.role_taker
+                Role._role_taker_roles[rt].append(self)
+                Role._role_role_takers[self].append(rt)
 
     def __hash__(self):
-        role_taker = self.role_taker
-        while isinstance(role_taker, Role):
-            role_taker = role_taker.role_taker
-        return hash(id(role_taker))
+        curr = self
+        while isinstance(curr, Role):
+            rt = getattr(curr, "_direct_role_taker", None)
+            if rt is not None:
+                curr = rt
+            else:
+                curr = curr.role_taker
+        return hash(id(curr))
 
     def __eq__(self, other):
         # if not isinstance(other, self.__class__):

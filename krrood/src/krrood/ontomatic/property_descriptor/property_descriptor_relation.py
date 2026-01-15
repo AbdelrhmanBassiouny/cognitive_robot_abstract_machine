@@ -247,6 +247,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         ):
             # inverse_domain, inverse_field = self.inverse_domain_and_field
             inverse_domain = self.target
+            inverse_value = None
             try:
                 inverse_value = getattr(
                     inverse_domain.instance, self.inverse_of.get_field_name()
@@ -259,6 +260,8 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                                 role, self.inverse_of.get_field_name()
                             )
                             break
+            if inverse_value is None:
+                return
             inverse_descriptor = inverse_value._descriptor
             self.__class__(
                 inverse_domain,
