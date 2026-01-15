@@ -238,13 +238,13 @@ class PropertyDescriptor(Symbol):
         self.domain_range_map[self.__class__][self.domain] = range_type
         self.all_domains[self.__class__].add(self.domain)
         self.all_ranges[self.__class__].add(range_type)
-        for super_class in self.__class__.__mro__:
-            if (super_class is PropertyDescriptor) or not issubclass(
-                super_class, PropertyDescriptor
-            ):
-                continue
-            self.all_domains[super_class].add(self.domain)
-            self.all_ranges[super_class].add(range_type)
+        # for super_class in self.__class__.__mro__:
+        #     if (super_class is PropertyDescriptor) or not issubclass(
+        #         super_class, PropertyDescriptor
+        #     ):
+        #         continue
+        #     self.all_domains[super_class].add(self.domain)
+        #     self.all_ranges[super_class].add(range_type)
         self.descriptor_instances_by_domain_type[self.__class__][self.domain] = self
 
     @cached_property
