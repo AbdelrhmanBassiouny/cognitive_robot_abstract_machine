@@ -3,8 +3,9 @@ from __future__ import annotations
 import weakref
 from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
+from line_profiler import profile
 from typing_extensions import (
     Optional,
     Union,
@@ -15,10 +16,7 @@ from typing_extensions import (
     TypeVar,
 )
 
-from .mixins import SymmetricProperty
-from . import logger
 from ...class_diagrams.utils import Role
-
 from ...entity_query_language.predicate import Symbol
 
 if TYPE_CHECKING:
@@ -241,6 +239,7 @@ class MonitoredSet(MonitoredContainer, set):
         for value in values:
             self._add_item(value)
 
+    @profile
     def _add_item(
         self, value, inferred: bool = False, add_relation_to_the_graph: bool = True
     ):

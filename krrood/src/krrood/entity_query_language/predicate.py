@@ -205,6 +205,32 @@ class IsSubClassOf(Predicate):
         return issubclass(self.child_cls, self.parent_cls)
 
 
+@dataclass(eq=False)
+class IsSubClassOrRole(Predicate):
+    """
+    Represents a predicate to check if a given class is a subclass of a specified parent class.
+
+    This class is used to evaluate whether the provided class is a subclass of the specified
+    parent class by leveraging Python's built-in `issubclass` functionality. It provides methods
+    to retrieve the class and parent class and perform direct checks.
+    """
+
+    child_cls: Type
+    """
+    The class whose subclass relationship is being checked.
+    """
+    parent_cls: Type
+    """
+    The parent class to check against for the `cls`.
+    """
+
+    def __call__(self) -> bool:
+        return issubclass(self.child_cls, self.parent_cls) or (
+            issubclass(self.child_cls, Role)
+            and issubclass(self.child_cls.get_role_taker_type(), self.parent_cls)
+        )
+
+
 def update_cache(instance: Symbol):
     """
     Updates the cache with the given instance of a symbolic type.

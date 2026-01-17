@@ -512,11 +512,15 @@ class Aggregator(ResultProcessor[T], ABC):
             yield OperationResult(sources, False, self)
             return
 
-        values = self._apply_aggregation_function_(self._child_._evaluate__(sources))
+        values = self._apply_aggregation_function_(
+            self._child_._evaluate__(sources, parent=self)
+        )
         if values:
-            yield OperationResult(values, False, self)
+            yield OperationResult({**sources, **values}, False, self)
         else:
-            yield OperationResult({self._id_: self._default_value_}, False, self)
+            yield OperationResult(
+                {**sources, self._id_: self._default_value_}, False, self
+            )
 
     @abstractmethod
     def _apply_aggregation_function_(
@@ -548,7 +552,7 @@ class Count(Aggregator[T]):
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
     ) -> Dict[int, Any]:
-        return {self._id_: len(list(child_results))}
+        return {self._id_: len([res for res in child_results if res.is_true])}
 
 
 @dataclass
@@ -865,6 +869,10 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         """
         condition_list = list(conditions)
 
+        for cond in condition_list:
+            if isinstance(cond, QuantifiedConditional) and len(cond.variables) == 0:
+                cond.variables = self._selected_variables
+
         # If there are no conditions raise error.
         if len(condition_list) == 0:
             raise ValueError("No conditions provided")
@@ -1067,13 +1075,29 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         :param sources: The current bindings.
         :return: An Iterable of OperationResults for each combination of values.
         """
+        yield from self._chain_evaluate_variables(
+            self._selected_variables, sources, parent=self
+        )
+
+    @staticmethod
+    def _chain_evaluate_variables(
+        variables: Iterable[Selectable[T]],
+        sources: Dict[int, Any],
+        parent: Optional[SymbolicExpression] = None,
+    ) -> Iterable[Dict[int, Any]]:
+        """
+        Evaluate the selected variables by generating combinations of values from their evaluation generators.
+
+        :param sources: The current bindings.
+        :return: An Iterable of OperationResults for each combination of values.
+        """
         var_val_gen = [
             (
                 lambda bindings, var=var: (
-                    v.bindings for v in var._evaluate__(copy(bindings), parent=self)
+                    v.bindings for v in var._evaluate__(copy(bindings), parent=parent)
                 )
             )
-            for var in self._selected_variables
+            for var in variables
         ]
 
         yield from chain_stages(var_val_gen, sources)
@@ -1340,10 +1364,16 @@ class Variable(CanBehaveLikeAVariable[T]):
         :param bindings: The bindings of the result.
         :return: The OperationResult instance with updated truth value.
         """
-        if isinstance(self._parent_, LogicalOperator) or (
+        if isinstance(self._parent_, (ResultProcessor, LogicalOperator)) or (
             self is self._conditions_root_
         ):
-            self._is_false_ = not bool(bindings[self._id_])
+            current_value = bindings[self._id_]
+            is_true = (
+                len(current_value) > 0
+                if is_iterable(current_value)
+                else bool(current_value)
+            )
+            self._is_false_ = not is_true
         else:
             self._is_false_ = False
         return OperationResult(bindings, self._is_false_, self)
@@ -1470,7 +1500,12 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         :return: The operation result.
         """
         if isinstance(self._parent_, LogicalOperator) or self is self._conditions_root_:
-            self._is_false_ = not bool(current_value)
+            is_true = (
+                len(current_value) > 0
+                if is_iterable(current_value)
+                else current_value is not None
+            )
+            self._is_false_ = not is_true
         return OperationResult(
             {**child_result.bindings, self._id_: current_value},
             self._is_false_,
@@ -1960,27 +1995,36 @@ class ElseIf(OR):
 
 
 @dataclass(eq=False, repr=False)
-class QuantifiedConditional(LogicalBinaryOperator, ABC):
+class QuantifiedConditional(LogicalOperator[T], ABC):
     """
     This is the super class of the universal, and existential conditional operators. It is a binary logical operator
     that has a quantified variable and a condition on the values of that variable.
     """
 
-    @property
-    def variable(self):
-        return self.left
-
-    @variable.setter
-    def variable(self, value):
-        self.left = value
+    _child_: SymbolicExpression
+    """
+    The condition to be evaluated over the quantified variables.
+    """
+    variables: Iterable[Selectable[T]] = field(default_factory=list)
+    """
+    The quantified variables.
+    """
 
     @property
     def condition(self):
-        return self.right
+        return self._child_
 
     @condition.setter
     def condition(self, value):
-        self.right = value
+        self._child_ = value
+
+    @property
+    def _all_variable_instances_(self) -> List[Variable]:
+        variables = []
+        for v in self.variables:
+            variables.extend(v._all_variable_instances_)
+        variables.extend(self.condition._all_variable_instances_)
+        return variables
 
 
 @dataclass(eq=False, repr=False)
@@ -1995,7 +2039,7 @@ class ForAll(QuantifiedConditional):
         return [
             v._id_
             for v in self.condition._unique_variables_.difference(
-                self.left._unique_variables_
+                set().union(v._unique_variables_) for v in self.left
             )
         ]
 
@@ -2008,15 +2052,17 @@ class ForAll(QuantifiedConditional):
         self._eval_parent_ = parent
 
         solution_set = None
-
-        for var_val in self.variable._evaluate__(sources, parent=self):
+        var_val_gen = QueryObjectDescriptor._chain_evaluate_variables(
+            self.variables, sources, parent=self
+        )
+        for var_val in var_val_gen:
             if solution_set is None:
-                solution_set = self.get_all_candidate_solutions(var_val.bindings)
+                solution_set = self.get_all_candidate_solutions(var_val)
             else:
                 solution_set = [
                     sol
                     for sol in solution_set
-                    if self.evaluate_condition({**sol, **var_val.bindings})
+                    if self.evaluate_condition({**sol, **var_val})
                 ]
             if not solution_set:
                 solution_set = []
@@ -2047,7 +2093,7 @@ class ForAll(QuantifiedConditional):
         return False
 
     def _invert_(self):
-        return Exists(self.variable, self.condition._invert_())
+        return Exists(self.variables, self.condition._invert_())
 
 
 @dataclass(eq=False, repr=False)
@@ -2065,15 +2111,18 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         sources = sources or {}
         self._eval_parent_ = parent
-        seen_var_values = []
-        for val in self.condition._evaluate__(sources, parent=self):
-            var_val = val[self.variable._id_]
-            if val.is_true and var_val not in seen_var_values:
-                seen_var_values.append(var_val)
-                yield OperationResult(val.bindings, False, self)
+        var_val_gen = QueryObjectDescriptor._chain_evaluate_variables(
+            self.variables, sources, parent=self
+        )
+        for var_val in var_val_gen:
+            sources = {**sources, **var_val}
+            for val in self.condition._evaluate__(sources, parent=self):
+                if val.is_true:
+                    yield OperationResult(copy(sources), False, self)
+                    break
 
     def _invert_(self):
-        return ForAll(self.variable, self.condition._invert_())
+        return ForAll(self.variables, self.condition._invert_())
 
 
 OperatorOptimizer = Callable[[SymbolicExpression, SymbolicExpression], LogicalOperator]

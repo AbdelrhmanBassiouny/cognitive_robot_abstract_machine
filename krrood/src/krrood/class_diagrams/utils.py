@@ -204,7 +204,8 @@ def _role_aware_inheritance_path_length(
         )
 
 
-def issubclass_or_role(child: Type, parent: Type | Tuple[Type]) -> bool:
+@lru_cache
+def issubclass_or_role(child: Type, parent: Type | Tuple[Type, ...]) -> bool:
     """
     Check if `child` is a subclass of `parent` or if `child` is a Role whose role taker is a subclass of `parent`.
 

@@ -19,6 +19,8 @@ from typing_extensions import (
     Type,
     Callable,
     TYPE_CHECKING,
+    Protocol,
+    Tuple,
 )
 
 from .symbolic import (
@@ -42,6 +44,7 @@ from .symbolic import (
 
 from .predicate import (
     Predicate,
+    symbolic_function,
     # type: ignore
     Symbol,
     HasType,
@@ -50,7 +53,16 @@ from .predicate import (
 if TYPE_CHECKING:
     pass
 
-ConditionType = Union[SymbolicExpression, bool, Predicate]
+
+class Boolable(Protocol):
+
+    def __bool__(self) -> bool:
+        raise NotImplementedError(
+            "Subclasses must implement __bool__ method to convert to boolean."
+        )
+
+
+ConditionType = Union[SymbolicExpression, bool, Predicate, Boolable, Iterable]
 """
 The possible types for conditions.
 """
@@ -218,33 +230,49 @@ def flatten(
 
 
 def for_all(
-    universal_variable: Union[CanBehaveLikeAVariable[T], T],
+    universal_variables: (
+        Tuple[Union[CanBehaveLikeAVariable[T], T], ...]
+        | Union[CanBehaveLikeAVariable[T], T]
+    ),
     condition: ConditionType,
 ):
     """
     A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **every**
      value of the universal_variable.
 
-    :param universal_variable: The universal on variable that the condition must satisfy for all its values.
+    :param universal_variables: The universal on variable that the condition must satisfy for all its values.
     :param condition: A SymbolicExpression or bool representing a condition that must be satisfied.
     :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
     """
-    return ForAll(universal_variable, condition)
+    universal_variables = (
+        (universal_variables,)
+        if not is_iterable(universal_variables)
+        else universal_variables
+    )
+    return ForAll(variables=universal_variables, _child_=condition)
 
 
 def exists(
-    universal_variable: Union[CanBehaveLikeAVariable[T], T],
+    existential_variables: (
+        Tuple[Union[CanBehaveLikeAVariable[T], T], ...]
+        | Union[CanBehaveLikeAVariable[T], T]
+    ),
     condition: ConditionType,
 ):
     """
     A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **any**
      value of the universal_variable.
 
-    :param universal_variable: The universal on variable that the condition must satisfy for any of its values.
+    :param existential_variables: The universal on variable that the condition must satisfy for any of its values.
     :param condition: A SymbolicExpression or bool representing a condition that must be satisfied.
     :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
     """
-    return Exists(universal_variable, condition)
+    existential_variables = (
+        (existential_variables,)
+        if not is_iterable(existential_variables)
+        else existential_variables
+    )
+    return Exists(variables=existential_variables, _child_=condition)
 
 
 def inference(
@@ -270,5 +298,43 @@ def has_solution(for_: Any, conditions: Callable[[Any], ConditionType]) -> bool:
     :param conditions: A list of conditions to check for a solution.
     :return: True if there is a solution that satisfies all conditions, False otherwise.
     """
-    var = variable_from([for_])
-    return any(An(entity(var).where(*conditions(var))).evaluate())
+    var = for_
+    if not isinstance(var, SymbolicExpression):
+        var = variable(type(for_), [for_])
+    return any(An(_child_=entity(var).where(*conditions(var))).evaluate())
+
+
+@symbolic_function
+def length(iterable: Union[Iterable[T], CanBehaveLikeAVariable[T]]) -> int:
+    """
+    Symbolic function that returns the length of an iterable.
+
+    :param iterable: The iterable whose length is to be calculated.
+    :return: The length of the iterable.
+    :rtype: int
+    """
+    return len(iterable)
+
+
+@symbolic_function
+def type(obj: Any) -> Type:
+    """
+    Symbolic function that returns the type of an object.
+
+    :param obj: The object whose type is to be determined.
+    :return: The type of the object.
+    :rtype: Type
+    """
+    return obj.__class__
+
+
+@symbolic_function
+def to_str(obj: Any) -> str:
+    """
+    Symbolic function that converts an object to its string representation.
+
+    :param obj: The object to be converted to string.
+    :return: The string representation of the object.
+    :rtype: str
+    """
+    return str(obj)

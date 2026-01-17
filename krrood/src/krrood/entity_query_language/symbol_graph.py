@@ -413,6 +413,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     A mapping from property descriptor class to the wrapped fields that use it.
     """
 
+    @profile
     def add_relation(self, relation: PredicateClassRelation) -> bool:
         """Add a relation edge to the instance graph."""
         if self.relation_exists(relation):
