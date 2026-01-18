@@ -869,10 +869,6 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         """
         condition_list = list(conditions)
 
-        for cond in condition_list:
-            if isinstance(cond, QuantifiedConditional) and len(cond.variables) == 0:
-                cond.variables = self._selected_variables
-
         # If there are no conditions raise error.
         if len(condition_list) == 0:
             raise ValueError("No conditions provided")
@@ -2111,15 +2107,22 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         sources = sources or {}
         self._eval_parent_ = parent
-        var_val_gen = QueryObjectDescriptor._chain_evaluate_variables(
-            self.variables, sources, parent=self
-        )
+        if self.variables:
+            var_val_gen = QueryObjectDescriptor._chain_evaluate_variables(
+                self.variables, sources, parent=self
+            )
+        else:
+            var_val_gen = iter([{}])
         for var_val in var_val_gen:
             sources = {**sources, **var_val}
-            for val in self.condition._evaluate__(sources, parent=self):
-                if val.is_true:
-                    yield OperationResult(copy(sources), False, self)
-                    break
+            if self.evaluate_condition(copy(sources)):
+                yield OperationResult(sources, False, self)
+
+    def evaluate_condition(self, sources: Dict[int, Any]) -> bool:
+        for condition_val in self.condition._evaluate__(sources, parent=self):
+            if condition_val.is_true:
+                return True
+        return False
 
     def _invert_(self):
         return ForAll(self.variables, self.condition._invert_())

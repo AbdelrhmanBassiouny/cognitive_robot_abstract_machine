@@ -5,7 +5,7 @@ from krrood.entity_query_language.entity import (
     in_,
     for_all,
     variable,
-    exists,
+    exists_on,
 )
 from krrood.entity_query_language.entity_result_processors import an, the
 from ..dataset.example_classes import VectorsWithProperty
@@ -70,7 +70,7 @@ def test_exists_and_for_all(handles_and_containers_world):
     drawer_var_2 = variable(Drawer, world.views)
     my_drawers = an(entity(drawer_var_2).where(drawer_var_2.handle.name == "Handle1"))
     drawers = cabinets.drawers
-    query = an(entity(my_drawers).where(exists(drawers, in_(my_drawers, drawers))))
+    query = an(entity(my_drawers).where(exists_on(drawers, in_(my_drawers, drawers))))
 
     results = list(query.evaluate())
 

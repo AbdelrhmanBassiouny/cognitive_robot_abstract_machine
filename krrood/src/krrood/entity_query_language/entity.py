@@ -252,7 +252,7 @@ def for_all(
     return ForAll(variables=universal_variables, _child_=condition)
 
 
-def exists(
+def exists_on(
     existential_variables: (
         Tuple[Union[CanBehaveLikeAVariable[T], T], ...]
         | Union[CanBehaveLikeAVariable[T], T]
@@ -275,6 +275,20 @@ def exists(
     return Exists(variables=existential_variables, _child_=condition)
 
 
+def exists(*conditions: ConditionType):
+    """
+    Checks if there exists at least one solution that satisfies the given condition.
+
+    :param condition: A SymbolicExpression or bool representing a condition that must be satisfied.
+    :return: A SymbolicExpression that can be evaluated producing every set that satisfies the condition.
+    """
+    if len(conditions) > 1:
+        condition = and_(*conditions)
+    else:
+        condition = conditions[0]
+    return Exists(_child_=condition)
+
+
 def inference(
     type_: Type[T],
 ) -> Union[Type[T], Callable[[Any], Variable[T]]]:
@@ -290,7 +304,7 @@ def inference(
     )
 
 
-def has_solution(for_: Any, conditions: Callable[[Any], ConditionType]) -> bool:
+def has_solution_for(for_: Any, conditions: Callable[[Any], ConditionType]) -> bool:
     """
     Checks if there exists a solution that satisfies all given conditions.
 

@@ -13,7 +13,7 @@ from krrood.entity_query_language.entity import (
     set_of,
     variable,
     or_,
-    exists,
+    exists_on,
     flatten,
     variable_from,
 )
@@ -674,7 +674,7 @@ def test_equivalent_to_contains_type_using_exists():
     fb = variable(FruitBox, domain=None)
     fruit_box_query = an(
         entity(fb).where(
-            exists(fb, HasType(flatten(fb.fruits), Apple)),
+            exists_on(fb, HasType(flatten(fb.fruits), Apple)),
         )
     )
 
