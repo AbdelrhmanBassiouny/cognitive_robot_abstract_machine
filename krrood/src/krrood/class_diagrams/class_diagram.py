@@ -248,6 +248,12 @@ class WrappedClass:
         )
 
     @cached_property
+    def axiom(self) -> Optional[Callable]:
+        if "axiom" in self.clazz.__dict__:
+            return self.clazz.axiom
+        return None
+
+    @cached_property
     def fields(self) -> List[WrappedField]:
         """Return wrapped fields discovered by the diagram’s attribute introspector.
 
@@ -300,12 +306,18 @@ class ClassDiagram:
     _cls_wrapped_cls_map: Dict[Type, WrappedClass] = dataclass_field(
         default_factory=dict, init=False, repr=False
     )
+    cls_axiom_map: Dict[Type, Callable] = dataclass_field(
+        init=False, default_factory=dict
+    )
 
     def __post_init__(self, classes: List[Type]):
         """Initialize the diagram with the provided classes and build relations."""
         self._dependency_graph = rx.PyDiGraph()
         for clazz in classes:
-            self.add_node(WrappedClass(clazz=clazz))
+            wc = WrappedClass(clazz=clazz)
+            if wc.axiom is not None:
+                self.cls_axiom_map[clazz] = wc.axiom
+            self.add_node(wc)
         self._create_all_relations()
 
     def get_roles_of_class(self, cls: Type) -> List[Type]:

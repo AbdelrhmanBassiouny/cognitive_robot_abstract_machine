@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from abc import abstractmethod, ABC
 from collections import defaultdict
+from copy import copy
 from dataclasses import dataclass, field, fields
 from functools import cached_property, lru_cache
+from types import ModuleType
 
 from krrood.ontomatic.property_descriptor.mixins import IrreflexiveProperty
 from line_profiler import profile
@@ -20,6 +22,7 @@ from typing_extensions import (
     Union,
     Tuple,
     DefaultDict,
+    List,
 )
 
 from .mixins import TransitiveProperty, HasChainAxioms, SymmetricProperty
@@ -30,6 +33,7 @@ from .monitored_container import (
 from .property_descriptor_relation import PropertyDescriptorRelation
 from ..failures import UnMonitoredContainerTypeForDescriptor
 from ..utils import to_snake
+from ...class_diagrams import ClassDiagram
 from ...class_diagrams.class_diagram import (
     WrappedClass,
     Association,
@@ -38,11 +42,16 @@ from ...class_diagrams.class_diagram import (
 from ...class_diagrams.utils import Role
 from ...class_diagrams.wrapped_field import WrappedField
 from ...class_diagrams.utils import issubclass_or_role
+from ...entity_query_language.entity import and_, variable
+from ...entity_query_language.enums import PredicateType
 from ...entity_query_language.predicate import Symbol, Predicate
 from ...entity_query_language.symbol_graph import (
     SymbolGraph,
 )
+from ...entity_query_language.symbolic import Variable
 from ...entity_query_language.utils import make_set
+from ...ormatic.utils import classes_of_module
+from ...utils import recursive_subclasses
 
 SymbolType = Type[Symbol]
 """
@@ -179,7 +188,13 @@ class PropertyDescriptor(Symbol):
     def get_descriptor_instance_for_domain_type(
         cls, domain_type: SymbolType
     ) -> PropertyDescriptor:
-        for d_type in domain_type.__mro__:
+        mro = list(domain_type.__mro__)
+        if Role in mro:
+            for i, t in enumerate(copy(mro)):
+                if t is Role:
+                    mro.insert(i, domain_type.get_role_taker_type())
+                    mro.remove(Role)
+        for d_type in mro:
             if d_type in cls.descriptor_instances_by_domain_type[cls]:
                 return cls.descriptor_instances_by_domain_type[cls][d_type]
         raise ValueError(f"No descriptor instances found for domain type {domain_type}")
@@ -233,19 +248,41 @@ class PropertyDescriptor(Symbol):
         """
         Update the domain and range sets and the domain-range map for this descriptor type.
         """
-        range_type = self.wrapped_field.type_endpoint
-        # assert issubclass(range_type, Symbol)
-        self.domain_range_map[self.__class__][self.domain] = range_type
-        self.all_domains[self.__class__].add(self.domain)
-        self.all_ranges[self.__class__].add(range_type)
-        # for super_class in self.__class__.__mro__:
-        #     if (super_class is PropertyDescriptor) or not issubclass(
-        #         super_class, PropertyDescriptor
-        #     ):
-        #         continue
-        #     self.all_domains[super_class].add(self.domain)
-        #     self.all_ranges[super_class].add(range_type)
-        self.descriptor_instances_by_domain_type[self.__class__][self.domain] = self
+        self._update_domain_and_range_of_descriptor(self, self.domain)
+
+    @classmethod
+    def update_domains_that_are_axiomatized_on_properties(
+        cls, module: Optional[ModuleType] = None
+    ):
+        """
+        Update the domain and range sets and the domain-range map for all descriptor types
+        for all classes that are axiomatized on a property descriptor.
+        """
+        if module is not None:
+            class_diagram = ClassDiagram(classes_of_module(module))
+        else:
+            class_diagram = SymbolGraph().class_diagram
+        for domain_type, axiom in class_diagram.cls_axiom_map.items():
+            for desc_type in class_axiomatized_properties(domain_type):
+                cls._update_domain_and_range_of_descriptor(
+                    desc_type.get_descriptor_instance_for_domain_type(domain_type),
+                    domain_type,
+                )
+
+    @staticmethod
+    def _update_domain_and_range_of_descriptor(
+        descriptor: PropertyDescriptor, domain: SymbolType
+    ):
+        """
+        Update the domain and range sets and the domain-range map for this descriptor type.
+        """
+        range_type = descriptor.wrapped_field.type_endpoint
+        descriptor.domain_range_map[descriptor.__class__][domain] = range_type
+        descriptor.all_ranges[descriptor.__class__].add(range_type)
+        descriptor.all_domains[descriptor.__class__].add(domain)
+        descriptor.descriptor_instances_by_domain_type[descriptor.__class__][
+            domain
+        ] = descriptor
 
     @cached_property
     def range(self) -> SymbolType:
@@ -464,3 +501,52 @@ class PropertyDescriptor(Symbol):
 
     def __eq__(self, other):
         return id(self) == id(other)
+
+
+@dataclass(eq=False)
+class HasProperty(Predicate):
+    """
+    Represents a predicate to check if a given instance has a specified property.
+
+    This class is used to evaluate whether the provided instance contains the specified
+    property by leveraging Python's built-in `hasattr` functionality. It provides methods
+    to retrieve the instance and property name and perform direct checks.
+    """
+
+    instance: Any
+    """
+    The instance whose property presence is being checked.
+    """
+    property_descriptor_type: Type[PropertyDescriptor]
+    """
+    The type of the property descriptor to check for in the `instance`.
+    """
+
+    def __call__(self) -> bool:
+        return hasattr(self.instance, self.property_descriptor_type.get_field_name())
+
+
+@lru_cache
+def class_axiomatized_properties(cls: Type) -> List[Type[PropertyDescriptor]]:
+    properties = []
+    eql_axiom_conditions = (
+        and_(*cls.axiom(variable(type, domain=None))) if hasattr(cls, "axiom") else None
+    )
+    if eql_axiom_conditions is None:
+        return properties
+    for uv in eql_axiom_conditions._unique_variables_:
+        if (
+            isinstance(uv, Variable)
+            and uv._predicate_type_ == PredicateType.SubClassOfPredicate
+            and issubclass(uv._type_, HasProperty)
+        ):
+            desc = uv._kwargs_["property_descriptor_type"]
+            properties.append(desc)
+    return properties
+
+
+@lru_cache
+def is_class_axiomatized_on_property(
+    cls: Type, property_descriptor_type: Type[PropertyDescriptor]
+) -> bool:
+    return property_descriptor_type in class_axiomatized_properties(cls)

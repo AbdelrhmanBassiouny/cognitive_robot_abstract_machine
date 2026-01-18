@@ -91,11 +91,11 @@ def nearest_common_ancestor(classes):
     return None
 
 
-@lru_cache
 def sort_classes_by_role_aware_inheritance_path_length(
     classes: Tuple[Type, ...],
     common_ancestor: Optional[Type] = None,
     classes_to_remove_from_common_ancestor: Optional[Tuple[Type, ...]] = None,
+    with_levels: bool = False,
 ) -> List[Type]:
     classes_to_remove_from_common_ancestor = (
         list(classes_to_remove_from_common_ancestor)
@@ -131,6 +131,8 @@ def sort_classes_by_role_aware_inheritance_path_length(
                 # swap
                 sorted_[j], sorted_[j - 1] = sorted_[j - 1], sorted_[j]
 
+    if with_levels:
+        return sorted_
     return [clazz for clazz, _ in sorted_]
 
 

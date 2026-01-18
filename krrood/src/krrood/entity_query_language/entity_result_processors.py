@@ -121,7 +121,7 @@ def average(
     )
 
 
-def count(variable: Union[Selectable[T], Iterable[T]]) -> Union[T, Count[T]]:
+def count(variable: Union[Selectable[T], Iterable[T], Predicate]) -> Union[T, Count[T]]:
     """
     Count the number of values produced by the given variable.
 
