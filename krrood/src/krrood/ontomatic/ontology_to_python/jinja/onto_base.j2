@@ -1,0 +1,41 @@
+"""
+Auto-generated Python classes from OWL ontology
+Generated using custom converter
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing_extensions import Optional, Set, TypeVar, Type, Any, Union
+
+from krrood.entity_query_language.predicate import Symbol
+from krrood.ontomatic.property_descriptor.mixins import IsBaseClass
+from krrood.class_diagrams.utils import Role
+
+@dataclass(eq=False)
+class {{ cls.name }}({{ ', '.join(cls.base_classes) }}, IsBaseClass):
+    {% if cls.label or cls.comment %}
+    """{{ cls.label if cls.label else '' }}{% if cls.label and cls.comment %}\n\n{% endif %}{{ cls.comment if cls.comment else '' }}"""
+    {% endif %}
+    {% if cls.declared_properties|length == 0%}
+    ...
+    {% else %}
+    {% if cls.declared_properties|length > 0 %}
+    {% for prop_name in cls.declared_properties %}
+    {% set prop = properties[prop_name] %}
+    {% if prop.label or prop.comment %}    # {{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %} - {% endif %}{{ prop.comment if prop.comment else '' }}
+    {% endif %}
+    {% if prop.type == 'ObjectProperty' %}
+    {{ prop.field_name }}: Set[{{ prop.object_range_hint }}] = field(kw_only=True, default_factory=set)
+    {% else %}
+    {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = field(kw_only=True, default=None)
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+
+    def __hash__(self):
+        return hash(id(self))
+
+
+T = TypeVar('T', bound={{ cls.name }})

@@ -32,7 +32,7 @@ from .monitored_container import (
 )
 from .property_descriptor_relation import PropertyDescriptorRelation
 from ..failures import UnMonitoredContainerTypeForDescriptor
-from ..utils import to_snake
+from ..utils import NamingRegistry
 from ...class_diagrams import ClassDiagram
 from ...class_diagrams.class_diagram import (
     WrappedClass,
@@ -182,7 +182,7 @@ class PropertyDescriptor(Symbol):
 
     @classmethod
     def get_field_name(cls) -> str:
-        return to_snake(cls.__name__)
+        return NamingRegistry.to_snake_case(cls.__name__)
 
     @classmethod
     def get_descriptor_instance_for_domain_type(

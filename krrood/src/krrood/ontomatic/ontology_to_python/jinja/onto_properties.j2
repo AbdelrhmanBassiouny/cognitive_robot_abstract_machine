@@ -1,0 +1,76 @@
+"""
+Auto-generated Python classes from OWL ontology
+Generated using custom converter
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing_extensions import Type, List, Optional, Tuple
+
+from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
+from krrood.ontomatic.property_descriptor.mixins import (
+HasInverseProperty,
+TransitiveProperty,
+HasEquivalentProperties,
+HasDisjointProperties,
+SymmetricProperty,
+ASymmetricProperty,
+ReflexiveProperty,
+IrreflexiveProperty,
+RoleForMixin,
+HasChainAxioms
+)
+
+
+# Property descriptor classes (object properties)
+{% for prop_name in properties_order %}
+{% set prop = properties[prop_name] %}
+{% if prop.type == 'ObjectProperty' and not prop.is_specialized%}
+@dataclass(eq=False)
+class {{ prop.descriptor_name }}({{ ', '.join(prop.base_descriptors) }}):
+    {% if prop.label or prop.comment %}
+    """{{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %}\n\n{% endif %}{{ prop.comment if prop.comment else '' }}"""
+    {% else %}
+    """{{ prop.descriptor_name }}"""
+    {% endif %}
+    {# Only emit a typed inverse if the target descriptor is already defined earlier #}
+    {% if prop.inverse_of%}
+
+    {% set inverse = properties[prop.inverse_of].descriptor_name %}
+    @classmethod
+    def get_inverse(cls) -> Optional[Type[{{ inverse }}]]:
+        if cls is {{ prop.descriptor_name }}:
+            return {{ inverse }}
+        return None
+    {% endif %}
+    {% if prop.equivalent_properties|length > 0 %}
+
+    @classmethod
+    def get_equivalent_properties(cls) -> List[Type[PropertyDescriptor]]:
+        if cls is {{ prop.descriptor_name }}:
+            return [{{ ', '.join(prop.equivalent_properties_descriptor_names) }}]
+        return []
+    {% endif %}
+    {% if prop.disjoint_properties|length > 0 %}
+
+    @classmethod
+    def get_disjoint_properties(cls) -> List[Type[PropertyDescriptor]]:
+        return [{{ ', '.join(prop.disjoint_properties_descriptor_names) }}]
+    {% endif %}
+    {% if prop.chain_axioms|length > 0 %}
+
+    @classmethod
+    def get_chain_axioms(cls) -> List[Tuple[Type[PropertyDescriptor], ...]]:
+        if cls is {{ prop.descriptor_name }}:
+            return [
+                {% for chain in prop.chain_axioms %}
+                ({{ chain | join(', ') }}),
+                {% endfor %}
+            ]
+        return []
+    {% endif %}
+
+
+{% endif %}
+{% endfor %}

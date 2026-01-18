@@ -1,0 +1,71 @@
+"""
+Auto-generated Python classes from OWL ontology
+Generated using custom converter
+"""
+
+from __future__ import annotations
+
+from .{{ properties_module_name }} import *
+from .{{ ontology_base_module_name }} import *
+
+
+# Generated classes
+{% for cls_name in classes_order %}
+{% set cls = classes[cls_name] %}
+{% if cls_name in role_takers %}
+@dataclass(eq=False)
+class {{ cls.name }}MixinProtocol({% if cls.add_role_taker %}{{ cls.role_taker.class_name }}MixinProtocol, {% endif %}{% if cls.base_classes %}{{ ', '.join(cls.base_classes) }}{% else %}{{ ontology_base_class_name }}{% endif %}):
+    {% if cls.label or cls.comment %}
+    """{{ cls.label if cls.label else '' }}{% if cls.label and cls.comment %}\n\n{% endif %}{{ cls.comment if cls.comment else '' }}"""
+    {% endif %}
+    {% if cls.declared_properties|length == 0%}
+    ...
+    {% else %}
+    {% if cls.declared_properties|length > 0 %}
+    {% for prop_name in cls.declared_properties %}
+    {% set prop = properties[prop_name] %}
+    {% if prop.label or prop.comment %}    # {{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %} - {% endif %}{{ prop.comment if prop.comment else '' }}
+    {% endif %}
+    {% if prop.type == 'ObjectProperty' %}
+    {{ prop.field_name }}: Set[{{ prop.object_range_hint }}]
+    {% else %}
+    {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}]
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+
+
+@dataclass(eq=False)
+class {{ cls.name }}({{ cls.name }}MixinProtocol):
+    ...
+{% else %}
+{#{% elif cls.role_taker|length > 0 %}#}
+{#{% if cls.add_role_taker %}#}
+@dataclass(eq=False)
+class {{ cls.name }}({% if cls.add_role_taker %}{{ cls.role_taker.class_name }}MixinProtocol, {% endif %}{% if cls.base_classes %}{{ ', '.join(cls.base_classes) }}{% else %}{{ ontology_base_class_name }}{% endif %}):
+    {% if cls.label or cls.comment %}
+    """{{ cls.label if cls.label else '' }}{% if cls.label and cls.comment %}\n\n{% endif %}{{ cls.comment if cls.comment else '' }}"""
+    {% endif %}
+    {% if cls.declared_properties|length == 0  and cls.role_taker|length == 0%}
+    ...
+    {% else %}
+    {% if cls.declared_properties|length > 0 %}
+    {% for prop_name in cls.declared_properties %}
+    {% set prop = properties[prop_name] %}
+    {% if prop.label or prop.comment %}    # {{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %} - {% endif %}{{ prop.comment if prop.comment else '' }}
+    {% endif %}
+    {% if prop.type == 'ObjectProperty' %}
+    {{ prop.field_name }}: Set[{{ prop.object_range_hint }}] = field(default_factory=set)
+    {% else %}
+    {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = field(kw_only=True, default=None)
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+
+{#{% endif %}#}
+{% endif %}
+
+
+{% endfor %}

@@ -1,0 +1,105 @@
+"""
+Auto-generated Python classes from OWL ontology
+Generated using custom converter
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field, fields, Field
+from functools import lru_cache
+from typing_extensions import Tuple, ClassVar
+
+from krrood.class_diagrams.utils import Role
+from krrood.entity_query_language.entity import contains, ConditionType, variable_from, length, variable, exists, for_all, to_str
+from krrood.entity_query_language.entity_result_processors import count
+import krrood.entity_query_language.entity as eql
+from krrood.entity_query_language.predicate import HasAttribute, IsSubClassOf, IsSubClassOrRole
+from krrood.ontomatic.property_descriptor.property_descriptor import (
+    PropertyDescriptor,
+    HasProperty,
+)
+from krrood.class_diagrams.utils import Role, issubclass_or_role
+from krrood.ontomatic.utils import AnonymousClass, get_super_axiom_and_candidate_var
+from .{{ properties_module_name }} import *
+from .{{ ontology_base_module_name }} import *
+
+# Generated classes
+{% for cls_name in classes_order %}
+{% set cls = classes[cls_name] %}
+{% if cls.name == ontology_base_class_name %}
+    {% continue %}
+{% endif %}
+@dataclass(eq=False)
+class {{ cls.name }}({% if cls.base_classes %}{{ ', '.join(cls.base_classes) }}{% else %}{{ ontology_base_class_name }}{% endif %}):
+    {% if cls.label or cls.comment %}
+    """{{ cls.label if cls.label else '' }}{% if cls.label and cls.comment %}\n\n{% endif %}{{ cls.comment if cls.comment else '' }}"""
+    {% endif %}
+    cls_uri: ClassVar[str] = "{{ cls.uri }}"
+    {% if cls.declared_properties|length > 0  or cls.role_taker|length > 0%}
+    {% if cls.role_taker|length > 0 %}
+    {% if cls.add_role_taker %}
+    # Role taker
+    {{ cls.role_taker.field_name }}: {{ cls.role_taker.class_name }}
+    {% endif %}
+    {% endif %}
+    {% if cls.declared_properties|length > 0 %}
+    {% for prop_name in cls.declared_properties %}
+    {% set prop = properties[prop_name] %}
+    {% if prop.label or prop.comment %}    # {{ prop.label if prop.label else '' }}{% if prop.label and prop.comment %} - {% endif %}{{ prop.comment if prop.comment else '' }}
+    {% endif %}
+    {% if prop.type == 'ObjectProperty' %}
+    {{ prop.field_name }}: Set[{{ prop.object_range_hint }}] = field(kw_only=True, default_factory=set)
+    {% else %}
+    {{ prop.field_name }}: Optional[{{ prop.data_type_hint_inner }}] = field(kw_only=True, default=None)
+    {% endif %}
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+    {% if cls.role_taker|length > 0 %}
+    {% if cls.add_role_taker %}
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def role_taker_field(cls) -> Field:
+        return next(iter(f for f in fields(cls) if f.name == "{{ cls.role_taker.field_name }}"))
+    {% endif %}
+    {% endif %}
+    {% if cls.axioms|length > 0 %}
+
+    @classmethod
+    def axiom(cls, candidate: AnonymousClass) -> Tuple[ConditionType, ...]:
+        super_axiom, candidate_var = get_super_axiom_and_candidate_var({{ cls.name }}, cls, candidate)
+        {{ cls.axioms_setup | join('\n        ') }}
+        return ({{ cls.axioms | join(',\n\t\t\t\t') }}
+        )
+    {% endif %}
+    {% if cls.axioms_python|length > 0 %}
+
+    @classmethod
+    def axiom_python(cls, candidate: AnonymousClass) -> bool:
+        return {{ cls.axioms_python | join(' and ') }}
+    {% endif %}
+    {% if cls.equivalent_classes|length > 0 %}
+
+
+{% for eq_cls in cls.equivalent_classes %}
+{{ eq_cls }} = {{ cls.name }}
+{% endfor %}
+    {% endif %}
+
+
+{% endfor %}
+
+
+# Descriptor assignments
+{% for cls_name in classes_order %}
+{% set cls = classes[cls_name] %}
+{% for prop_name in cls.declared_properties %}
+{% set prop = properties[prop_name] %}
+{% if prop.type == 'ObjectProperty' %}
+{{ cls.name }}.{{ prop.field_name }} = {{ prop.descriptor_name }}({{ cls.name }}, '{{ prop.field_name }}')
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+PropertyDescriptor.update_domains_that_are_axiomatized_on_properties()
