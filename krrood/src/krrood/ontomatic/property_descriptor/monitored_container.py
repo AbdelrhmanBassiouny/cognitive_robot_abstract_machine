@@ -3,7 +3,7 @@ from __future__ import annotations
 import weakref
 from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from line_profiler import profile
 from typing_extensions import (
@@ -16,6 +16,9 @@ from typing_extensions import (
     TypeVar,
 )
 
+from ...class_diagrams.utils import (
+    sort_classes_by_role_aware_inheritance_path_length,
+)
 from ...class_diagrams.utils import Role
 from ...entity_query_language.predicate import Symbol
 
@@ -73,7 +76,9 @@ class MonitoredContainer(Generic[T], ABC):
         super().__init_subclass__(**kwargs)
         monitored_type_map[cls._get_monitored_type()] = cls
 
-    def __init__(self, *args, descriptor: PropertyDescriptor, **kwargs):
+    def __init__(
+        self, *args, descriptor: Optional[PropertyDescriptor] = None, **kwargs
+    ):
         self._descriptor: PropertyDescriptor = descriptor
         self._owner_ref: Optional[weakref.ref[Symbol]] = None
         super().__init__(*args, **kwargs)
@@ -188,6 +193,10 @@ class MonitoredList(MonitoredContainer, list):
     A list that invokes the descriptor on_add for further implicit inferences.
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._known_uris: set[str] = set()
+
     @classmethod
     def _get_monitored_type(cls):
         return list
@@ -199,13 +208,32 @@ class MonitoredList(MonitoredContainer, list):
     def append(self, item):
         self._add_item(item)
 
+    def add(self, value):
+        self.append(value)
+
     def _add_item(
-        self, item, inferred: bool = False, add_relation_to_the_graph: bool = True
+        self, value, inferred: bool = False, add_relation_to_the_graph: bool = True
     ):
-        item = self._on_add(
-            item, inferred=inferred, add_relation_to_the_graph=add_relation_to_the_graph
+        if value in self:
+            return
+        self._on_add(
+            value,
+            inferred=inferred,
+            add_relation_to_the_graph=add_relation_to_the_graph,
         )
-        super().append(item)
+        # if str(value.uri) in [str(v.uri) for v in self]:
+        #     raise ValueError(f"Duplicate URI detected: {value.uri}")
+        # self._known_uris.add(value.uri)
+        super().append(value)
+        if isinstance(self._owner, Role) and hasattr(
+            self._owner.role_taker, self._descriptor.field_name
+        ):
+            role_taker_attr = getattr(
+                self._owner.role_taker, self._descriptor.field_name
+            )
+            role_taker_attr._add_item(
+                value, inferred=inferred, add_relation_to_the_graph=False
+            )
 
     def __setitem__(self, idx, value):
         value = self._on_add(value)
@@ -245,11 +273,38 @@ class MonitoredSet(MonitoredContainer, set):
     ):
         if value in self:
             return
+        # value_owner = value
+        range_ = self._descriptor.range
+        most_upper_range = sort_classes_by_role_aware_inheritance_path_length(
+            self._descriptor.all_ranges[self._descriptor.__class__]
+        )[-1]
+        found = False
+        if not isinstance(value, most_upper_range):
+            for role in Role._role_taker_roles[value]:
+                if isinstance(role, most_upper_range):
+                    value = role
+                    found = True
+                    break
+            if not found:
+                for role_taker in Role._role_role_takers[value]:
+                    if isinstance(role_taker, most_upper_range):
+                        value = role_taker
+                        break
+        if (
+            self._descriptor.__class__.__name__ == "HasHead"
+            and value.__class__.__name__ == "Chair"
+        ):
+            import pdbpp
+
+            pdbpp.set_trace()
         self._on_add(
             value,
             inferred=inferred,
             add_relation_to_the_graph=add_relation_to_the_graph,
         )
+        # while isinstance(value_owner, Role):
+        #     value_owner = value_owner.role_taker
+
         super().add(value)
         if isinstance(self._owner, Role) and hasattr(
             self._owner.role_taker, self._descriptor.field_name

@@ -10,7 +10,7 @@ from dataset.university_ontology_like_classes import (
 )
 from ..dataset.university_ontology_like_classes import (
     Company,
-    Person,
+    PersonOnto,
     CEO,
     Representative,
     ExperiencedCEO,
@@ -24,13 +24,13 @@ SymbolGraph()
 
 def test_set_non_container_property():
     company = Company(name="BassCo")
-    person1 = Person(name="Bass1")
+    person1 = PersonOnto(name="Bass1")
 
     person1.works_for = company
     assert person1.works_for == company
     assert person1 in company.members
 
-    person2 = Person(name="Bass2")
+    person2 = PersonOnto(name="Bass2")
     another_company = Company(name="AnotherBassCo")
     person2.works_for = another_company
     assert person2.works_for == another_company
@@ -41,8 +41,8 @@ def test_set_non_container_property():
 def test_set_container_property():
     company = Company(name="BassCo")
     company2 = Company(name="AnotherBassCo")
-    person1 = Person(name="Bass1")
-    person2 = Person(name="Bass2")
+    person1 = PersonOnto(name="Bass1")
+    person2 = PersonOnto(name="Bass2")
 
     # test direct setting of a set
     company.members = {person1, person2}
@@ -61,7 +61,7 @@ def test_set_container_property():
 
 def test_setting_a_role_affects_role_taker():
     company = Company(name="BassCo")
-    person1 = Person(name="Bass1")
+    person1 = PersonOnto(name="Bass1")
     ceo1 = CEO(person1)
 
     ceo1.head_of = company
@@ -73,7 +73,7 @@ def test_setting_a_role_affects_role_taker():
 
 def test_setting_a_role_affects_role_taker_chain():
     company = Company(name="BassCo")
-    person1 = Person(name="Bass1")
+    person1 = PersonOnto(name="Bass1")
     ceo1 = CEO(person1)
     representative1 = Representative(ceo1)
 
@@ -103,7 +103,7 @@ def test_transitive_property():
 def test_role_graph():
     company = Company(name="BassCo")
     company_with_employees = CompanyWithEmployees(company)
-    person1 = Person(name="Bass")
+    person1 = PersonOnto(name="Bass")
     ceo1 = CEO(person1)
     representative = Representative(ceo1)
     representative.head_of = company

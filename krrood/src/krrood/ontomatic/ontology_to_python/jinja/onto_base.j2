@@ -6,7 +6,7 @@ Generated using custom converter
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing_extensions import Optional, Set, TypeVar, Type, Any, Union
+from typing_extensions import Optional, Set, TypeVar, Type, Any, Union, List
 
 from krrood.entity_query_language.predicate import Symbol
 from krrood.ontomatic.property_descriptor.mixins import IsBaseClass

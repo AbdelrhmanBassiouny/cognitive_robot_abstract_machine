@@ -1239,8 +1239,12 @@ class InferenceEngine:
                     )
                     continue
                 p = self.onto.properties[target_prop_name]
-                p.type = PropertyType.DATA_PROPERTY
-                p.data_type_hint_inner = py_type
+                if p.type is None:
+                    p.type = PropertyType.DATA_PROPERTY
+                if p.type == PropertyType.DATA_PROPERTY:
+                    p.data_type_hint_inner = py_type
+                else:
+                    p.object_range_hint = py_type
                 p._predefined_data_type = True
                 ov = set(p._overrides_for)
                 ov.add(cls_name)
@@ -1351,9 +1355,9 @@ class InferenceEngine:
 
         if not py_types:
             logger.warning(
-                f"[owl_to_python]: Could not infer data type for property '{info.name}'. Using Any."
+                f"[owl_to_python]: Could not infer data type for property '{info.name}'. Using str."
             )
-            py_types.append("Any")
+            py_types.append("str")
 
         unique_types = list(OrderedSet(py_types))
         info.data_type_hint_inner = (

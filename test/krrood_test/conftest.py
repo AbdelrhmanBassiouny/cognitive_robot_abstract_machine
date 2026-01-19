@@ -6,6 +6,7 @@ from dataclasses import is_dataclass
 
 import pytest
 import sqlalchemy
+from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
 from sqlalchemy import JSON
 from sqlalchemy.orm import Session, configure_mappers
 
@@ -22,7 +23,7 @@ from krrood.ormatic.ormatic import ORMatic
 from krrood.ormatic.utils import classes_of_module, create_engine
 from krrood.ormatic.utils import drop_database
 from krrood.utils import recursive_subclasses
-from .dataset import example_classes
+from .dataset import example_classes, university_ontology_like_classes
 from .dataset.example_classes import (
     PhysicalObject,
     NotMappedParent,
@@ -56,6 +57,7 @@ def generate_sqlalchemy_interface():
     }
     all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
     all_classes |= set(classes_of_module(example_classes))
+    all_classes |= set(classes_of_module(university_ontology_like_classes))
     all_classes |= {Symbol}
 
     # remove classes that don't need persistence
@@ -66,7 +68,9 @@ def generate_sqlalchemy_interface():
     all_classes = {
         c
         for c in all_classes
-        if is_dataclass(c) and not issubclass(c, AlternativeMapping)
+        if is_dataclass(c)
+        and not issubclass(c, AlternativeMapping)
+        and not issubclass(c, PropertyDescriptor)
     }
 
     all_classes |= {FunctionType}
@@ -112,7 +116,7 @@ def pytest_sessionstart(session):
     try:
         pass
         # TODO: Somebody with ORM experience has to check why the generated ORM interface is broken
-        # generate_sqlalchemy_interface()
+        generate_sqlalchemy_interface()
     except Exception as e:
         import warnings
 

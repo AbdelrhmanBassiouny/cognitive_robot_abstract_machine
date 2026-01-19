@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
+from inspect import isclass
 from types import NoneType
 from copy import copy
 
@@ -140,7 +141,9 @@ class WrappedField:
 
     @cached_property
     def is_container(self) -> bool:
-        return get_origin(self.resolved_type) in self.container_types
+        origin = get_origin(self.resolved_type)
+
+        return isclass(origin) and issubclass(origin, tuple(self.container_types))
 
     @cached_property
     def container_type(self) -> Optional[Type]:

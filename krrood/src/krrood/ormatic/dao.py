@@ -10,6 +10,7 @@ from typing import _GenericAlias
 
 import sqlalchemy.inspection
 import sqlalchemy.orm
+from krrood.class_diagrams.utils import Role
 from sqlalchemy import Column
 from sqlalchemy.orm import MANYTOONE, MANYTOMANY, ONETOMANY, RelationshipProperty
 from typing_extensions import (
@@ -196,6 +197,7 @@ class ToDataAccessObjectState(DataAccessObjectState[ToDataAccessObjectWorkItem])
         :param source_object: The object being converted.
         :param dao_instance: The partially built DAO.
         """
+
         super().register(source_object, dao_instance)
         self.keep_alive[id(source_object)] = source_object
 
@@ -277,6 +279,7 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
         :param original_clazz: The domain class to instantiate.
         :return: The uninitialized domain object instance.
         """
+
         result = original_clazz.__new__(original_clazz)
         self.register(dao_instance, result)
         return result
@@ -686,7 +689,17 @@ class DataAccessObject(HasGeneric[T]):
             setattr(self, relationship.key, None)
             return
 
+        while isinstance(value, Role):
+            # import pdbpp
+            #
+            # pdbpp.set_trace()
+            if issubclass(get_dao_class(type(value)), relationship.mapper.class_):
+                break
+            # range = SymbolGraph().class_diagram
+            value = value.role_taker
+
         dao_instance = self._get_or_queue_dao(value, state)
+
         setattr(self, relationship.key, dao_instance)
 
     def _extract_collection_relationship(
@@ -703,8 +716,10 @@ class DataAccessObject(HasGeneric[T]):
         :param state: The conversion state.
         """
         source_collection = getattr(source_object, relationship.key)
-        dao_collection = [self._get_or_queue_dao(v, state) for v in source_collection]
-        setattr(self, relationship.key, type(source_collection)(dao_collection))
+        dao_collection = type(source_collection)(
+            self._get_or_queue_dao(v, state) for v in source_collection
+        )
+        setattr(self, relationship.key, dao_collection)
 
     def _get_or_queue_dao(
         self, source_object: Any, state: ToDataAccessObjectState
@@ -723,7 +738,7 @@ class DataAccessObject(HasGeneric[T]):
 
         dao_clazz = get_dao_class(type(source_object))
         if dao_clazz is None:
-            raise NoDAOFoundDuringParsingError(source_object, type(self), None)
+            raise NoDAOFoundError(source_object)
 
         # Check for alternative mapping
         mapped_object = state.apply_alternative_mapping_if_needed(

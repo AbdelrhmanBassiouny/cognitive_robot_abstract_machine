@@ -548,6 +548,18 @@ class OwlLoader:
         )
         for s, py_cls in so_iterator:
             existing_roles = self.registry.resolve(s)
+            existing_roles = existing_roles or []
+            role_types = list(map(type, existing_roles)) + [py_cls]
+            # if any(
+            #     "Woman" == t.__name__
+            #     for t in self.anonymous_instances[URIRef(s)].final_sorted_types
+            # ) and any(
+            #     r.__class__.__name__ in ["Chair", "Professor", "FullProfessor"]
+            #     for r in self.anonymous_instances[URIRef(s)].final_sorted_types
+            # ):
+            #     import pdbpp
+            #
+            #     pdbpp.set_trace()
             kwargs = self._get_common_role_taker_kwargs(existing_roles, py_cls)
             self.registry.get_or_create_for(s, py_cls, self.symbol_graph, **kwargs)
 
@@ -788,6 +800,8 @@ class OwlLoader:
             #     f"[OwlLoader] Assigning property {attr_name} to {target.uri} with object {value.uri}"
             # )
             attr_val.add(value)
+        elif isinstance(attr_val, list):
+            attr_val.append(value)
         else:
             setattr(target, attr_name, value)
         return True
