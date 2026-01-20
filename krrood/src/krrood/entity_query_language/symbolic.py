@@ -69,7 +69,7 @@ from .utils import (
 from ..class_diagrams import ClassRelation
 from ..class_diagrams.class_diagram import Association, WrappedClass
 from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
-from ..class_diagrams.utils import Role
+from ..class_diagrams import Role
 from ..class_diagrams.wrapped_field import WrappedField
 
 if TYPE_CHECKING:

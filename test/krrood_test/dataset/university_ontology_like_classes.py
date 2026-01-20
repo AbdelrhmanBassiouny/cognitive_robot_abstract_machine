@@ -12,7 +12,7 @@ from krrood.ontomatic.property_descriptor.mixins import (
 from krrood.ontomatic.property_descriptor.property_descriptor import (
     PropertyDescriptor,
 )
-from krrood.class_diagrams.utils import Role
+from krrood.class_diagrams import Role
 
 
 @dataclass(eq=False)

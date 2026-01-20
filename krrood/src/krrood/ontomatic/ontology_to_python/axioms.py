@@ -9,7 +9,7 @@ import rdflib
 from rdflib import URIRef
 from typing_extensions import List, Type, ClassVar, Callable, Any, TYPE_CHECKING
 
-from ...class_diagrams.utils import issubclass_or_role
+from ...class_diagrams.class_diagram import issubclass_or_role
 from ...entity_query_language.entity import (
     variable,
     ConditionType,

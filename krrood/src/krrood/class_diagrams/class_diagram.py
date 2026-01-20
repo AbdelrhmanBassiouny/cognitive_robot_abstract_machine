@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import logging
 import os
-from abc import ABC
+from abc import ABC, abstractmethod
 from copy import copy
-from dataclasses import dataclass
+from collections import defaultdict
+from dataclasses import dataclass, Field
 from dataclasses import field as dataclass_field, InitVar
 from functools import cached_property, lru_cache
+from typing import Tuple, Type, Optional, List, Union
 
 import rustworkx as rx
 
@@ -29,6 +31,9 @@ from typing_extensions import (
     Set,
     Iterator,
     Any,
+    Generic,
+    ClassVar,
+    TypeVar,
 )
 
 
@@ -36,13 +41,131 @@ from .attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
-from .utils import get_generic_type_param
+from ..utils import get_generic_type_param
 from .wrapped_field import WrappedField
 
 from .failures import ClassIsUnMappedInClassDiagram
 
 if TYPE_CHECKING:
     from ..entity_query_language.predicate import PropertyDescriptor
+
+
+T = TypeVar("T")
+
+
+@dataclass
+class Role(Generic[T], ABC):
+    """
+    Represents a role with generic typing. This is used in Role Design Pattern in OOP.
+
+    This class serves as a container for defining roles with associated generic
+    types, enabling flexibility and type safety when modeling role-specific
+    behavior and data.
+    """
+
+    _attribute_provider: ClassVar[Optional[ClassDiagram]] = None
+    _role_taker_roles: ClassVar[Dict[Any, List[Role]]] = defaultdict(list)
+    _role_role_takers: ClassVar[Dict[Role, List[Any]]] = defaultdict(list)
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def get_role_taker_type(cls) -> Type[T]:
+        """
+        :return: The type of the role taker.
+        """
+        return get_generic_type_param(cls, Role.__name__)[0]
+
+    @classmethod
+    @abstractmethod
+    def role_taker_field(cls) -> Field:
+        """
+        :return: the field that holds the role taker instance.
+        """
+        ...
+
+    @property
+    def role_taker(self) -> T:
+        """
+        :return: The role taker instance.
+        """
+        return getattr(self, self.role_taker_field().name)
+
+    @classmethod
+    @lru_cache
+    def all_role_taker_types(cls) -> Tuple[Type, ...]:
+        role_taker_type = cls.get_role_taker_type()
+        all_role_taker_types = [role_taker_type]
+        while issubclass(role_taker_type, Role):
+            role_taker_type = role_taker_type.get_role_taker_type()
+            all_role_taker_types.append(role_taker_type)
+        return tuple(all_role_taker_types)
+
+    def __getattr__(self, item):
+        """
+        Get an attribute from the role taker when not found on the class.
+
+        :param item: The attribute name to retrieve.
+        :return: The attribute value if found in the role taker, otherwise raises AttributeError.
+        """
+        if hasattr(self.role_taker, item):
+            return getattr(self.role_taker, item)
+
+        if self._attribute_provider:
+            provider_class = self._attribute_provider.get_provider_class(
+                type(self.role_taker), item
+            )
+            if provider_class:
+                # Find the instance among siblings
+                for role in self._role_taker_roles[self.role_taker]:
+                    if isinstance(role, provider_class):
+                        return getattr(role, item)
+
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{item}'"
+        )
+
+    @property
+    def role_taker_roles(self) -> List[Role]:
+        """
+        :return: All roles of the role taker instance.
+        """
+        return Role._role_taker_roles[self.role_taker]
+
+    def __setattr__(self, key, value):
+        """
+        Set an attribute on the role taker instance if the role taker has this attribute,
+         otherwise set on this instance directly.
+        """
+        if key == self.role_taker_field().name:
+            object.__setattr__(self, "_direct_role_taker", value)
+
+        if key != self.role_taker_field().name and hasattr(self.role_taker, key):
+            setattr(self.role_taker, key, value)
+        if key == self.role_taker_field().name or hasattr(self, key):
+            super().__setattr__(key, value)
+        if key == self.role_taker_field().name:
+            role_taker = value
+            Role._role_taker_roles[role_taker].append(self)
+            Role._role_role_takers[self].append(role_taker)
+            if isinstance(role_taker, Role):
+                rt = role_taker.role_taker
+                Role._role_taker_roles[rt].append(self)
+                Role._role_role_takers[self].append(rt)
+
+    def __hash__(self):
+        curr = self
+        while isinstance(curr, Role):
+            rt = getattr(curr, "_direct_role_taker", None)
+            if rt is not None:
+                curr = rt
+            else:
+                curr = curr.role_taker
+        return hash(id(curr))
+
+    def __eq__(self, other):
+        # if not isinstance(other, self.__class__):
+        #     return False
+        return hash(self) == hash(other)
 
 
 @dataclass
@@ -310,6 +433,10 @@ class ClassDiagram:
         init=False, default_factory=dict
     )
 
+    _role_attribute_lookup_table: Dict[Type, Dict[str, Type]] = dataclass_field(
+        init=False, default_factory=lambda: defaultdict(dict), repr=False
+    )
+
     def __post_init__(self, classes: List[Type]):
         """Initialize the diagram with the provided classes and build relations."""
         self._dependency_graph = rx.PyDiGraph()
@@ -319,6 +446,30 @@ class ClassDiagram:
                 self.cls_axiom_map[clazz] = wc.axiom
             self.add_node(wc)
         self._create_all_relations()
+        self._build_role_attribute_lookup_table()
+        Role._attribute_provider = self
+
+    def _build_role_attribute_lookup_table(self):
+        """Build a lookup table for role attributes."""
+        for wc in self.wrapped_classes:
+            assoc = self.get_role_taker_associations_of_cls(wc)
+            if assoc:
+                taker_type = assoc.target.clazz
+                for field in wc.fields:
+                    if field.public_name != assoc.field.public_name:
+                        self._role_attribute_lookup_table[taker_type][
+                            field.public_name
+                        ] = wc.clazz
+
+    def get_provider_class(self, taker_type: Type, attribute_name: str) -> Optional[Type]:
+        """Identify the role class providing the attribute for the given taker type."""
+        for cls in taker_type.mro():
+            if (
+                cls in self._role_attribute_lookup_table
+                and attribute_name in self._role_attribute_lookup_table[cls]
+            ):
+                return self._role_attribute_lookup_table[cls][attribute_name]
+        return None
 
     def get_roles_of_class(self, cls: Type) -> List[Type]:
         """
@@ -932,3 +1083,136 @@ class ClassDiagram:
 
     def __eq__(self, other):
         return self is other
+
+
+def sort_classes_by_role_aware_inheritance_path_length(
+    classes: Tuple[Type, ...],
+    common_ancestor: Optional[Type] = None,
+    classes_to_remove_from_common_ancestor: Optional[Tuple[Type, ...]] = None,
+    with_levels: bool = False,
+) -> List[Type]:
+    classes_to_remove_from_common_ancestor = (
+        list(classes_to_remove_from_common_ancestor)
+        if classes_to_remove_from_common_ancestor
+        else []
+    )
+    classes_to_remove_from_common_ancestor.append(None)
+    if not common_ancestor:
+        common_ancestor = role_aware_nearest_common_ancestor(tuple(classes))
+        if common_ancestor in classes_to_remove_from_common_ancestor:
+            return classes
+    class_lengths = [
+        (clazz, role_aware_inheritance_path_length(clazz, common_ancestor))
+        for clazz in classes
+    ]
+    sorted_ = list(sorted(class_lengths, key=lambda x: x[1]))
+    # if any consecutive lengths are equal, make non role first
+    for i in range(len(sorted_) - 1):
+        if sorted_[i][1] != sorted_[i + 1][1]:
+            continue
+        if (
+            issubclass(sorted_[i][0], Role) and not issubclass(sorted_[i + 1][0], Role)
+        ) or (
+            issubclass(sorted_[i][0], Role)
+            and issubclass(sorted_[i + 1][0], Role)
+            and len(sorted_[i][0].all_role_taker_types())
+            > len(sorted_[i + 1][0].all_role_taker_types())
+        ):
+            # keep swapping until we find a different length
+            for j in range(i + 1, 0, -1):
+                if sorted_[j][1] != sorted_[j - 1][1]:
+                    break
+                # swap
+                sorted_[j], sorted_[j - 1] = sorted_[j - 1], sorted_[j]
+
+    if with_levels:
+        return sorted_
+    return [clazz for clazz, _ in sorted_]
+
+
+@lru_cache
+def role_aware_nearest_common_ancestor(classes):
+    if not classes:
+        return None
+
+    # Get MROs as lists
+    mros = [copy(cls.mro()) for cls in classes]
+    for mro in mros:
+        if Role not in mro:
+            continue
+        rol_idx = mro.index(Role)
+        role_cls = mro[rol_idx - 1]
+        role_taker_cls = role_cls.get_role_taker_type()
+        mro[rol_idx] = role_taker_cls
+
+    # Iterate in MRO order of the first class
+    for candidate in mros[0]:
+        if all(candidate in mro for mro in mros[1:]):
+            return candidate
+
+    return None
+
+
+@lru_cache
+def role_aware_inheritance_path_length(
+    child_class: Type,
+    parent_class: Type,
+) -> Union[float, int]:
+    """
+    Calculate the inheritance path length between two classes taking roles into account.
+    Every inheritance level that lies between `child_class` and `parent_class` increases the length by one.
+    In case of multiple inheritance, the path length is calculated for each branch and the minimum is returned.
+
+    :param child_class: The child class.
+    :param parent_class: The parent class.
+    :return: The minimum path length between `child_class` and `parent_class` or None if no path exists.
+    """
+    if not issubclass_or_role(child_class, parent_class):
+        return float("inf")
+
+    return _role_aware_inheritance_path_length(child_class, parent_class, 0)
+
+
+def _role_aware_inheritance_path_length(
+    child_class: Type, parent_class: Type, current_length: int = 0
+) -> int:
+    """
+    Helper function for :func:`inheritance_path_length`.
+
+    :param child_class: The child class.
+    :param parent_class: The parent class.
+    :param current_length: The current length of the inheritance path.
+    :return: The minimum path length between `child_class` and `parent_class`.
+    """
+
+    if child_class == parent_class:
+        return current_length
+    else:
+        child_bases = set(child_class.__bases__)
+        if Role in child_bases and child_class is not Role:
+            role_taker_type = child_class.get_role_taker_type()
+            if role_taker_type is not None:
+                child_bases.add(role_taker_type)
+        return min(
+            _role_aware_inheritance_path_length(base, parent_class, current_length + 1)
+            for base in child_bases
+            if issubclass_or_role(base, parent_class)
+        )
+
+
+@lru_cache
+def issubclass_or_role(child: Type, parent: Type | Tuple[Type, ...]) -> bool:
+    """
+    Check if `child` is a subclass of `parent` or if `child` is a Role whose role taker is a subclass of `parent`.
+
+    :param child: The child class.
+    :param parent: The parent class.
+    :return: True if `child` is a subclass of `parent` or if `child` is a Role for `parent`, False otherwise.
+    """
+    if issubclass(child, parent):
+        return True
+    if issubclass(child, Role) and child is not Role:
+        role_taker_type = child.get_role_taker_type()
+        if issubclass_or_role(role_taker_type, parent):
+            return True
+    return False

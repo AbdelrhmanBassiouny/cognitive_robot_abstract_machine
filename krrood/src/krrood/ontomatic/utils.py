@@ -8,7 +8,8 @@ from typing import Any, Set, Iterable, List, Type, Optional
 import rdflib
 from rdflib import OWL
 
-from ..class_diagrams.utils import issubclass_or_role, Role
+from ..class_diagrams import Role
+from ..class_diagrams.class_diagram import issubclass_or_role
 from ..entity_query_language.entity import variable
 from ..entity_query_language.symbolic import Variable
 from ..utils import inheritance_path_length

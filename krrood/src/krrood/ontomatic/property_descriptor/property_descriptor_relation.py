@@ -5,7 +5,7 @@ from enum import Enum
 from functools import cached_property, lru_cache
 from collections import defaultdict
 
-from krrood.class_diagrams.utils import Role
+from ...class_diagrams import Role
 from line_profiler import profile
 
 from krrood.ontomatic.property_descriptor.mixins import (
@@ -133,9 +133,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 inferred=True,
                 inference_explanation=(InferredThrough.SYMMETRY, self),
             ).update_source_and_add_to_graph_and_apply_implications()
-            # self.wrapped_field.property_descriptor.update_value(
-            #     self.target.instance, self.source.instance
-            # )
 
     def update_source_and_add_to_graph(self):
         """
@@ -205,19 +202,19 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         # for super_domain, super_field in self.super_relations:
         for super_descriptor_type in self.property_descriptor_class.super_classes():
-            super_value = None
-            try:
-                super_value = getattr(
-                    self.source.instance, super_descriptor_type.get_field_name()
-                )
-            except AttributeError:
-                if self.source.instance in Role._role_taker_roles:
-                    for role in Role._role_taker_roles[self.source.instance]:
-                        if hasattr(role, super_descriptor_type.get_field_name()):
-                            super_value = getattr(
-                                role, super_descriptor_type.get_field_name()
-                            )
-                            break
+            # super_value = None
+            # try:
+            super_value = getattr(
+                self.source.instance, super_descriptor_type.get_field_name()
+            )
+            # except AttributeError:
+            #     if self.source.instance in Role._role_taker_roles:
+            #         for role in Role._role_taker_roles[self.source.instance]:
+            #             if hasattr(role, super_descriptor_type.get_field_name()):
+            #                 super_value = getattr(
+            #                     role, super_descriptor_type.get_field_name()
+            #                 )
+            #                 break
             if super_value is None:
                 continue
             super_descriptor = super_value._descriptor
@@ -240,19 +237,19 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         ):
             # inverse_domain, inverse_field = self.inverse_domain_and_field
             inverse_domain = self.target
-            inverse_value = None
-            try:
-                inverse_value = getattr(
-                    inverse_domain.instance, self.inverse_of.get_field_name()
-                )
-            except AttributeError:
-                if inverse_domain.instance in Role._role_taker_roles:
-                    for role in Role._role_taker_roles[inverse_domain.instance]:
-                        if hasattr(role, self.inverse_of.get_field_name()):
-                            inverse_value = getattr(
-                                role, self.inverse_of.get_field_name()
-                            )
-                            break
+            # inverse_value = None
+            # try:
+            inverse_value = getattr(
+                inverse_domain.instance, self.inverse_of.get_field_name()
+            )
+            # except AttributeError:
+            #     if inverse_domain.instance in Role._role_taker_roles:
+            #         for role in Role._role_taker_roles[inverse_domain.instance]:
+            #             if hasattr(role, self.inverse_of.get_field_name()):
+            #                 inverse_value = getattr(
+            #                     role, self.inverse_of.get_field_name()
+            #                 )
+            #                 break
             if inverse_value is None:
                 return
             inverse_descriptor = inverse_value._descriptor

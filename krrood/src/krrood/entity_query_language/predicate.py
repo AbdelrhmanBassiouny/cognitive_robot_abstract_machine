@@ -28,7 +28,7 @@ from .symbolic import (
     _any_of_the_kwargs_is_a_variable,
 )
 from .utils import T
-from ..class_diagrams.utils import Role
+from ..class_diagrams import Role
 
 
 def symbolic_function(

@@ -10,7 +10,7 @@ from typing import _GenericAlias
 
 import sqlalchemy.inspection
 import sqlalchemy.orm
-from krrood.class_diagrams.utils import Role
+from ..class_diagrams import Role
 from sqlalchemy import Column
 from sqlalchemy.orm import MANYTOONE, MANYTOMANY, ONETOMANY, RelationshipProperty
 from typing_extensions import (

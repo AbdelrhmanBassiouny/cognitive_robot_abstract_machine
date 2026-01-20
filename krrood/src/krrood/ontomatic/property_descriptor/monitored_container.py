@@ -16,10 +16,8 @@ from typing_extensions import (
     TypeVar,
 )
 
-from ...class_diagrams.utils import (
-    sort_classes_by_role_aware_inheritance_path_length,
-)
-from ...class_diagrams.utils import Role
+from ...class_diagrams.class_diagram import sort_classes_by_role_aware_inheritance_path_length
+from ...class_diagrams import Role
 from ...entity_query_language.predicate import Symbol
 
 if TYPE_CHECKING:

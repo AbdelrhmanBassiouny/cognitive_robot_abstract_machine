@@ -37,11 +37,10 @@ from ...class_diagrams import ClassDiagram
 from ...class_diagrams.class_diagram import (
     WrappedClass,
     Association,
-    AssociationThroughRoleTaker,
+    AssociationThroughRoleTaker, issubclass_or_role,
 )
-from ...class_diagrams.utils import Role
+from ...class_diagrams import Role
 from ...class_diagrams.wrapped_field import WrappedField
-from ...class_diagrams.utils import issubclass_or_role
 from ...entity_query_language.entity import and_, variable
 from ...entity_query_language.enums import PredicateType
 from ...entity_query_language.predicate import Symbol, Predicate

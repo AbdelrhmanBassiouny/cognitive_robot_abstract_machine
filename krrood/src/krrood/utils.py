@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Union, Type
 
-from typing_extensions import TypeVar, Type, List, Optional
+from typing_extensions import TypeVar, Type, List, Optional, get_origin, get_args
 
 T = TypeVar("T")
 
@@ -17,6 +17,23 @@ def recursive_subclasses(cls: Type[T]) -> List[Type[T]]:
     return cls.__subclasses__() + [
         g for s in cls.__subclasses__() for g in recursive_subclasses(s)
     ]
+
+
+def get_generic_type_param(cls, generic_base_name: str) -> Optional[List[Type[T]]]:
+    """
+    Given a subclass and its generic base, return the concrete type parameter(s).
+
+    Example:
+        get_generic_type_param(Employee, Role) -> (<class '__main__.Person'>,)
+    """
+    for base in getattr(cls, "__orig_bases__", []):
+        base_origin = get_origin(base)
+        if base_origin is None:
+            continue
+        if get_origin(base).__name__ == generic_base_name:
+            args = get_args(base)
+            return list(args) if args else None
+    return None
 
 
 @dataclass

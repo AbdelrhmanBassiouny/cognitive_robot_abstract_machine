@@ -33,11 +33,10 @@ from ..utils import (
     get_most_specific_types,
     AnonymousClass,
 )
-from ...class_diagrams.class_diagram import Association, ClassDiagram
+from ...class_diagrams.class_diagram import Association, ClassDiagram, \
+    sort_classes_by_role_aware_inheritance_path_length, issubclass_or_role
 from ...class_diagrams.utils import (
-    issubclass_or_role,
     Role,
-    sort_classes_by_role_aware_inheritance_path_length,
 )
 from ...entity_query_language.predicate import Symbol
 from ...entity_query_language.symbol_graph import SymbolGraph
