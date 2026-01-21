@@ -602,84 +602,10 @@ class PropertyExtractor:
 
 
 @dataclass
-class PropertyMaps:
-    """
-    Dataclass for storing property inference maps for domain, range, superclasses, and inverse property pairs.
-    """
-
-    dom_map: Dict[str, Set[str]] = field(default_factory=dict)
-    """
-    Map of property names to sets of domain class names.
-    """
-    declared_dom_map: Dict[str, Set[str]] = field(default_factory=dict)
-    """
-    Map of property names to sets of declared domain class names. These are the classes where the property is declared.
-    """
-    rng_map: Dict[str, Set[str]] = field(default_factory=dict)
-    """
-    Map of property names to sets of range class names.
-    """
-    rng_uri_map: Dict[str, Set[rdflib.term.URIRef]] = field(default_factory=dict)
-    """
-    Map of property names to sets of range URIs.
-    """
-    super_map: Dict[str, List[str]] = field(default_factory=dict)
-    """
-    Map of property names to lists of superclass names.
-    """
-    inverse_pairs: List[Tuple[str, str]] = field(default_factory=list)
-    """
-    List of tuples representing inverse property pairs (property_name, inverse_property_name).
-    """
-    equivalent_map: Dict[str, List[str]] = field(default_factory=dict)
-    """
-    Map of property names to lists of equivalent property names.
-    """
-    properties: Dict[str, PropertyInfo] = field(default_factory=dict)
-    """
-    Map of property names to PropertyInfo objects.
-    """
-
-    @classmethod
-    def from_properties(cls, properties: Dict[str, PropertyInfo]) -> PropertyMaps:
-        """
-        Create a PropertyMaps object from a dictionary of PropertyInfo objects.
-
-        :param properties: A dictionary of PropertyInfo objects.
-        :return: A PropertyMaps object.
-        """
-        dom_map = {n: set(p.domains) for n, p in properties.items()}
-        declared_dom_map = {n: set(p.domains) for n, p in properties.items()}
-        rng_map = {n: set(p.ranges) for n, p in properties.items()}
-        rng_uri_map = {n: set(p.range_uris) for n, p in properties.items()}
-        super_map = {n: list(p.superproperties) for n, p in properties.items()}
-        inverse_pairs = [
-            (n, inv)
-            for n, p in properties.items()
-            for inv in p.inverses
-            if inv in properties
-        ]
-        equivalent_map = {
-            n: list(p.equivalent_properties) for n, p in properties.items()
-        }
-        return cls(
-            dom_map,
-            declared_dom_map,
-            rng_map,
-            rng_uri_map,
-            super_map,
-            inverse_pairs,
-            equivalent_map,
-            properties,
-        )
-
-
-@dataclass
 class InferenceEngine:
     """Engine for performing ontological inference and computing class/property relationships."""
 
     onto: OntologyInfo
-    property_maps: PropertyMaps = field(init=False)
     XSD_TO_PYTHON_TYPES: ClassVar[Dict[rdflib.term.URIRef, str]] = {
         XSD.string: "str",
         XSD.normalizedString: "str",
@@ -707,9 +633,6 @@ class InferenceEngine:
         XSD.time: "str",
         XSD.anyURI: "str",
     }
-
-    def __post_init__(self):
-        self.property_maps = PropertyMaps.from_properties(self.onto.properties)
 
     @staticmethod
     def topological_order(items: Dict[str, Any], dep_key: str) -> List[str]:
@@ -754,6 +677,12 @@ class InferenceEngine:
                 ancestors.add(base)
                 stack.extend(name_to_bases.get(base, []))
             info.all_base_classes = sorted(ancestors)
+        for info in self.onto.classes.values():
+            info.all_base_classes_including_role_takers = copy(info.all_base_classes)
+            if info.role_taker:
+                info.all_base_classes_including_role_takers.append(
+                    info.role_taker.class_name
+                )
 
     def infer_properties(
         self,
@@ -837,13 +766,11 @@ class InferenceEngine:
 
     def _infer_properties_data_from_restrictions(self):
         """
-        Walk through all classes and their restrictions in the graph and update declared_dom_map accordingly.
+        Walk through all classes and their restrictions in the graph and update properties data accordingly.
         """
         covered_restrictions = set()
         # Walk class restrictions
         for cls_uri in self.onto.graph.subjects(RDF.type, OWL.Class):
-            # if isinstance(cls_uri, rdflib.BNode):
-            #     continue
             cls_name = NamingRegistry.uri_to_python_name(cls_uri, self.onto.graph)
             for_class = self.onto.description_for(cls_name) or cls_name
 
@@ -852,12 +779,6 @@ class InferenceEngine:
                 self._restrictions_handler(cls_name, restr)
                 # If restriction mentions a property, count this class as declared domain for that property
                 covered_restrictions.add(restr)
-                on_prop = self.onto.graph.value(restr, OWL.onProperty)
-                if on_prop:
-                    prop_name = NamingRegistry.uri_to_python_name(
-                        on_prop, self.onto.graph
-                    )
-                    self.property_maps.declared_dom_map[prop_name].add(cls_name)
 
             # restrictions inside intersectionOf
             intersection = []
@@ -870,13 +791,9 @@ class InferenceEngine:
                     on_prop = (
                         self.onto.graph.value(first, OWL.onProperty) if first else None
                     )
-                    if on_prop and restriction_added:
-                        prop_name = NamingRegistry.uri_to_python_name(
-                            on_prop, self.onto.graph
-                        )
-                        self.property_maps.declared_dom_map[prop_name].add(for_class)
-                    elif (
+                    if (
                         on_prop
+                        and not restriction_added
                         and intersection
                         and intersection[0] in self.onto.classes
                         and self.onto.classes[for_class].axioms
@@ -920,7 +837,6 @@ class InferenceEngine:
             self._restrictions_handler(for_class, restr)
             prop_name = NamingRegistry.uri_to_python_name(on_prop, self.onto.graph)
             for_class = self.onto.description_for(for_class) or for_class
-            self.property_maps.declared_dom_map[prop_name].add(for_class)
 
     def _restrictions_handler(self, for_class: str, node: rdflib.term.Node):
         """
@@ -937,8 +853,6 @@ class InferenceEngine:
         description_for = self.onto.description_for(for_class)
         for_class = description_for or for_class
         prop_name = NamingRegistry.uri_to_python_name(on_prop, self.onto.graph)
-        if prop_name in self.onto.properties:
-            self.property_maps.dom_map[prop_name].add(for_class)
         axiom = None
         value_type = None
         if self.onto.graph.value(node, OWL.hasValue):
@@ -1009,145 +923,77 @@ class InferenceEngine:
                 for_class=for_class,
                 onto=self.onto,
             )
-        if axiom:
-            try:
-                rng_name = value_type
-                if prop_name == "roleFor":
-                    cls_info = self.onto.classes.get(for_class)
-                    if cls_info:
-                        cls_info.role_taker = RoleTakerInfo(
-                            rng_name, NamingRegistry.to_snake_case(rng_name)
-                        )
-                    return True
-                self.onto.classes[for_class].axioms_setup.extend(
-                    axiom.setup_statements()
-                )
-                self.onto.classes[for_class].axioms.extend(axiom.conditions_eql())
-                self.onto.classes[for_class].axioms_python.extend(
-                    axiom.conditions_python()
-                )
-                if rng_name is None:
-                    if self.onto.original_properties[prop_name].ranges:
-                        rng_name = self.onto.original_properties[prop_name].ranges[0]
-                    else:
-                        return True
-                existing_ranges = self.property_maps.rng_map.get(prop_name, set())
-                contesting_ranges = set(existing_ranges)
-                for dom_cls, pred_obj in self.onto.property_restrictions.items():
-                    if prop_name in pred_obj:
-                        for er in existing_ranges:
-                            if er in pred_obj[prop_name]:
-                                contesting_ranges.remove(er)
-                if self.onto.classes[for_class].role_taker:
-                    role_taker = self.onto.classes[for_class].role_taker.class_name
-                    if (
-                        role_taker in self.onto.original_properties[prop_name].domains
-                        and rng_name in self.onto.original_properties[prop_name].ranges
-                    ):
-                        self.property_maps.dom_map[prop_name].remove(for_class)
-                        self.onto.property_restrictions.setdefault(
-                            for_class, {}
-                        ).setdefault(prop_name, set()).add(rng_name)
-                        return False
-                if contesting_ranges and not any(
-                    cr in self.onto.classes[rng_name].all_base_classes + [rng_name]
-                    for cr in contesting_ranges
-                ):
-                    self.property_maps.dom_map[prop_name].remove(for_class)
-                    return False
-
-                self.property_maps.rng_map[prop_name].add(rng_name)
-                rng_uri = (
-                    value_type
-                    if not isinstance(value_type, rdflib.term.BNode)
-                    else rdflib.URIRef(self.onto.classes[rng_name].uri)
-                )
-                self.property_maps.rng_uri_map[prop_name].add(rng_uri)
-                self.onto.property_restrictions.setdefault(for_class, {}).setdefault(
-                    prop_name, set()
-                ).add(rng_name)
-                for inverse in self.onto.properties[prop_name].inverses:
-                    self.onto.property_restrictions.setdefault(rng_name, {}).setdefault(
-                        inverse, set()
-                    ).add(for_class)
-                    if inverse and isinstance(axiom, QualifiedAxiomInfoMixin):
-                        inverse_axiom = copy(axiom)
-                        inverse_axiom.on_class = for_class
-                        inverse_axiom.for_class = rng_name
-                        inverse_axiom.property_name = inverse
-                        self.onto.classes[rng_name].axioms_setup.extend(
-                            inverse_axiom.setup_statements()
-                        )
-                        self.onto.classes[rng_name].axioms.extend(
-                            inverse_axiom.conditions_eql()
-                        )
-                        self.onto.classes[rng_name].axioms_python.extend(
-                            inverse_axiom.conditions_python()
-                        )
-            except Exception as e:
-                logger.warning(f"[owl_to_python] Error processing restriction: {e}")
+        if not axiom:
             return True
-
-    def _propagate_types(self):
-        """
-        Perform iterative propagation of domains and ranges along property hierarchy and inverses.
-        """
-        changed = True
-        while changed:
-            changed = False
-            for a, b in self.property_maps.inverse_pairs:
-                before_da, before_ra = len(self.property_maps.dom_map[a]), len(
-                    self.property_maps.rng_map[a]
-                )
-                before_db, before_rb = len(self.property_maps.dom_map[b]), len(
-                    self.property_maps.rng_map[b]
-                )
-                if not before_da:
-                    self.property_maps.dom_map[a].update(self.property_maps.rng_map[b])
-                if not before_ra:
-                    self.property_maps.rng_map[a].update(self.property_maps.dom_map[b])
-                if not before_db:
-                    self.property_maps.dom_map[b].update(self.property_maps.rng_map[a])
-                if not before_rb:
-                    self.property_maps.rng_map[b].update(self.property_maps.dom_map[a])
-                if (
-                    len(self.property_maps.dom_map[a]) != before_da
-                    or len(self.property_maps.rng_map[a]) != before_ra
-                    or len(self.property_maps.dom_map[b]) != before_db
-                    or len(self.property_maps.rng_map[b]) != before_rb
-                ):
-                    changed = True
-            for name, supers in self.property_maps.super_map.items():
-                supers_and_equivalents = set(supers).union(
-                    self.property_maps.equivalent_map[name]
-                )
-                for sp in supers_and_equivalents:
-                    if sp not in self.property_maps.dom_map:
-                        continue
-                    before_range_len, before_range_uri_len, before_domain_len = (
-                        len(self.property_maps.rng_map[name]),
-                        len(self.property_maps.rng_uri_map[name]),
-                        len(self.property_maps.dom_map[name]),
+        try:
+            rng_name = value_type
+            if prop_name == "roleFor":
+                cls_info = self.onto.classes.get(for_class)
+                if cls_info:
+                    cls_info.role_taker = RoleTakerInfo(
+                        rng_name, NamingRegistry.to_snake_case(rng_name)
                     )
-                    if not before_range_len:
-                        self.property_maps.rng_map[name].update(
-                            self.property_maps.rng_map[sp]
-                        )
-                    if not before_range_uri_len:
-                        self.property_maps.rng_uri_map[name].update(
-                            self.property_maps.rng_uri_map[sp]
-                        )
-                    if not before_domain_len:
-                        self.property_maps.dom_map[name].update(
-                            self.property_maps.dom_map[sp]
-                        )
-                    if (
-                        len(self.property_maps.rng_map[name]) != before_range_len
-                        or len(self.property_maps.rng_uri_map[name])
-                        != before_range_uri_len
-                        or len(self.property_maps.dom_map[name]) != before_domain_len
-                    ):
-                        changed = True
+                return True
+            self.onto.classes[for_class].axioms_setup.extend(axiom.setup_statements())
+            self.onto.classes[for_class].axioms.extend(axiom.conditions_eql())
+            self.onto.classes[for_class].axioms_python.extend(axiom.conditions_python())
+            if rng_name is None:
+                if self.onto.original_properties[prop_name].ranges:
+                    rng_name = self.onto.original_properties[prop_name].ranges[0]
+                else:
+                    return True
+            if self.onto.classes[for_class].role_taker:
+                role_taker = self.onto.classes[for_class].role_taker.class_name
+                if (
+                    role_taker in self.onto.original_properties[prop_name].domains
+                    and rng_name in self.onto.original_properties[prop_name].ranges
+                ):
+                    self.onto.property_restrictions.setdefault(
+                        for_class, {}
+                    ).setdefault(prop_name, set()).add(rng_name)
+                    return False
+            existing_ranges = self.onto.properties[prop_name].ranges
+            contesting_ranges = set(existing_ranges)
+            for dom_cls, pred_obj in self.onto.property_restrictions.items():
+                if prop_name in pred_obj:
+                    for er in existing_ranges:
+                        if er in pred_obj[prop_name]:
+                            contesting_ranges.remove(er)
+            if contesting_ranges and not any(
+                cr
+                in self.onto.classes[rng_name].all_base_classes_including_role_takers
+                + [rng_name]
+                for cr in contesting_ranges
+            ):
+                return False
+
+            self.onto.properties[prop_name].ranges.append(rng_name)
+            self.onto.property_restrictions.setdefault(for_class, {}).setdefault(
+                prop_name, set()
+            ).add(rng_name)
+            for inverse in self.onto.properties[prop_name].inverses:
+                self.onto.property_restrictions.setdefault(rng_name, {}).setdefault(
+                    inverse, set()
+                ).add(for_class)
+                if inverse and isinstance(axiom, QualifiedAxiomInfoMixin):
+                    inverse_axiom = copy(axiom)
+                    inverse_axiom.on_class = for_class
+                    inverse_axiom.for_class = rng_name
+                    inverse_axiom.property_name = inverse
+                    self.onto.classes[rng_name].axioms_setup.extend(
+                        inverse_axiom.setup_statements()
+                    )
+                    self.onto.classes[rng_name].axioms.extend(
+                        inverse_axiom.conditions_eql()
+                    )
+                    self.onto.classes[rng_name].axioms_python.extend(
+                        inverse_axiom.conditions_python()
+                    )
+        except Exception as e:
+            logger.warning(f"[owl_to_python] Error processing restriction: {e}")
+        return True
+
+    def _remove_rng_from_property_ranges_if_not_subclass_of_explicit_domains(self): ...
 
     def _finalize_properties(self):
         """
