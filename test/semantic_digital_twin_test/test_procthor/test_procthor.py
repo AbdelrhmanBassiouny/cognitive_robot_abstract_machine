@@ -130,9 +130,10 @@ class ProcTHORTestCase(unittest.TestCase):
             "Kitchen_4_floor",
         )
 
-        supporting_surface = self.world.get_semantic_annotations_by_type(Floor)[
-            0
-        ].calculate_supporting_surface()
+        with self.world.modify_world():
+            supporting_surface = self.world.get_semantic_annotations_by_type(Floor)[
+                0
+            ].calculate_supporting_surface()
 
         queried_supporting_surface = self.world.get_kinematic_structure_entity_by_name(
             "Kitchen_4_floor_supporting_surface_region"
