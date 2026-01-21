@@ -76,6 +76,7 @@ def conclusion_185021833760373592529284117887051484781(case) -> List[str]:
         for sp in reversed(case.sorted_superproperties):
             if len(case.onto.original_properties[sp].ranges) > 0:
                 ranges.extend(case.onto.original_properties[sp].ranges)
+                break
         return ranges
 
     return property_info_ranges_of_type(case)

@@ -197,7 +197,9 @@ class PropertyDescriptor(Symbol):
         for d_type in mro:
             if d_type in cls.descriptor_instances_by_domain_type[cls]:
                 return cls.descriptor_instances_by_domain_type[cls][d_type]
-        raise ValueError(f"No descriptor instances found for domain type {domain_type}")
+        raise ValueError(
+            f"No descriptor instances found for domain type {domain_type} and descriptor type {cls}"
+        )
 
     @classmethod
     def get_descriptor_instance_for_range_type(

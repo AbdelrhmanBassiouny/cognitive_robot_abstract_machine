@@ -126,6 +126,7 @@ def conclusion_272707851413176399338327613086271601265(case) -> List[str]:
         for sp in reversed(case.sorted_superproperties):
             if len(case.onto.original_properties[sp].domains) > 0:
                 domains.extend(case.onto.original_properties[sp].domains)
+                break
         return domains
 
     return property_info_domains_of_type(case)

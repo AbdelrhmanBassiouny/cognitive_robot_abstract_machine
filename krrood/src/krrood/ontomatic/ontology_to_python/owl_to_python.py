@@ -158,7 +158,6 @@ class PropertyInfo:
     inverse_target_is_prior: bool = False
     is_transitive: bool = False
     is_functional: bool = False
-    is_specialized: bool = False
     declared_domains: List[str] = field(default_factory=list)
     _overrides_for: List[str] = field(default_factory=list)
     _predefined_data_type: bool = False
@@ -600,7 +599,6 @@ class PropertyExtractor:
             is_reflexive=is_reflexive,
             is_irreflexive=is_irreflexive,
             is_functional=is_functional,
-            is_specialized=False,
         )
 
 
@@ -696,6 +694,8 @@ class InferenceEngine:
         """
         self._infer_properties_data_from_restrictions()
 
+        # self.fit_property_rdr()
+
         for prop_name, prop_info in self.onto.properties.items():
             if prop_name == "roleFor":
                 continue
@@ -705,7 +705,6 @@ class InferenceEngine:
 
         self._finalize_properties()
         self._add_property_chain_axioms()
-        self._create_specialized_properties()
 
     @cached_property
     def property_rdr(self):
@@ -716,11 +715,11 @@ class InferenceEngine:
 
     def fit_property_rdr(self):
         def ask_now_domain(case: PropertyInfo):
-            # return case.name == "loves"
+            return case.name == "isWomenCollegeOf"
             return False
 
         def ask_now_range(case: PropertyInfo):
-            # return case.name == "loves"
+            return case.name == "isWomenCollegeOf"
             return False
 
         for prop_name, prop_info in self.onto.properties.items():
@@ -789,14 +788,13 @@ class InferenceEngine:
                 node = coll
                 while node and node != RDF.nil:
                     first = self.onto.graph.value(node, RDF.first)
-                    restriction_added = self._restrictions_handler(cls_name, first)
+                    self._restrictions_handler(cls_name, first)
                     covered_restrictions.add(first)
                     on_prop = (
                         self.onto.graph.value(first, OWL.onProperty) if first else None
                     )
                     if (
                         on_prop
-                        and not restriction_added
                         and intersection
                         and intersection[0] in self.onto.classes
                         and self.onto.classes[for_class].axioms
@@ -849,10 +847,10 @@ class InferenceEngine:
         :param node: The restriction node.
         """
         if not node:
-            return True
+            return
         on_prop = self.onto.graph.value(node, OWL.onProperty)
         if not on_prop:
-            return True
+            return
         description_for = self.onto.description_for(for_class)
         for_class = description_for or for_class
         prop_name = NamingRegistry.uri_to_python_name(on_prop, self.onto.graph)
@@ -922,75 +920,21 @@ class InferenceEngine:
                 onto=self.onto,
             )
         if not axiom:
-            return True
-        try:
-            rng_name = value_type
-            if prop_name == "roleFor":
-                cls_info = self.onto.classes.get(for_class)
-                if cls_info:
-                    cls_info.role_taker = RoleTakerInfo(
-                        rng_name, NamingRegistry.to_snake_case(rng_name)
-                    )
-                return True
-            self.onto.classes[for_class].axioms_setup.extend(axiom.setup_statements())
-            self.onto.classes[for_class].axioms.extend(axiom.conditions_eql())
-            self.onto.classes[for_class].axioms_python.extend(axiom.conditions_python())
-            self.onto.classes[for_class].property_axioms_info[prop_name] = axiom
-            if rng_name is None:
-                if self.onto.original_properties[prop_name].ranges:
-                    rng_name = self.onto.original_properties[prop_name].ranges[0]
-                else:
-                    return True
-            # if self.onto.classes[for_class].role_taker:
-            #     role_taker = self.onto.classes[for_class].role_taker.class_name
-            #     if (
-            #         role_taker in self.onto.original_properties[prop_name].domains
-            #         and rng_name in self.onto.original_properties[prop_name].ranges
-            #     ):
-            #         self.onto.property_restrictions.setdefault(
-            #             for_class, {}
-            #         ).setdefault(prop_name, set()).add(rng_name)
-            #         return False
-            # existing_ranges = self.onto.properties[prop_name].ranges
-            # contesting_ranges = set(existing_ranges)
-            # for dom_cls, pred_obj in self.onto.property_restrictions.items():
-            #     if prop_name in pred_obj:
-            #         for er in existing_ranges:
-            #             if er in pred_obj[prop_name]:
-            #                 contesting_ranges.remove(er)
-            # if existing_ranges and not any(
-            #     cr
-            #     in self.onto.classes[rng_name].all_base_classes_including_role_takers
-            #     + [rng_name]
-            #     for cr in existing_ranges
-            # ):
-            #     return False
-
-            # self.onto.properties[prop_name].ranges.append(rng_name)
-            # self.onto.property_restrictions.setdefault(for_class, {}).setdefault(
-            #     prop_name, set()
-            # ).add(rng_name)
-            for inverse in self.onto.properties[prop_name].inverses:
-                # self.onto.property_restrictions.setdefault(rng_name, {}).setdefault(
-                #     inverse, set()
-                # ).add(for_class)
-                if inverse and isinstance(axiom, QualifiedAxiomInfoMixin):
-                    inverse_axiom = copy(axiom)
-                    inverse_axiom.on_class = for_class
-                    inverse_axiom.for_class = rng_name
-                    inverse_axiom.property_name = inverse
-                    self.onto.classes[rng_name].axioms_setup.extend(
-                        inverse_axiom.setup_statements()
-                    )
-                    self.onto.classes[rng_name].axioms.extend(
-                        inverse_axiom.conditions_eql()
-                    )
-                    self.onto.classes[rng_name].axioms_python.extend(
-                        inverse_axiom.conditions_python()
-                    )
-        except Exception as e:
-            logger.warning(f"[owl_to_python] Error processing restriction: {e}")
-        return True
+            return
+        rng_name = value_type
+        if prop_name == "roleFor":
+            cls_info = self.onto.classes.get(for_class)
+            if cls_info:
+                cls_info.role_taker = RoleTakerInfo(
+                    rng_name, NamingRegistry.to_snake_case(rng_name)
+                )
+                cls_info.all_base_classes_including_role_takers.append(rng_name)
+            return
+        self.onto.classes[for_class].axioms_setup.extend(axiom.setup_statements())
+        self.onto.classes[for_class].axioms.extend(axiom.conditions_eql())
+        self.onto.classes[for_class].axioms_python.extend(axiom.conditions_python())
+        self.onto.classes[for_class].property_axioms_info[prop_name] = axiom
+        return
 
     def _remove_rng_from_property_ranges_if_not_subclass_of_explicit_domains(self): ...
 
@@ -1005,60 +949,6 @@ class InferenceEngine:
                 self.onto.classes[r].uri for r in info.ranges if r in self.onto.classes
             ]
             info.declared_domains = copy(info.domains)
-
-    def _create_specialized_properties(self):
-        """
-        Create specialized versions of properties based on class-level restrictions.
-        Used for narrowing property ranges in specific subclasses.
-        """
-        specialized_props: Dict[str, PropertyInfo] = {}
-        for cls_name, props in self.onto.property_restrictions.items():
-            for prop_name, rng_names in props.items():
-                base = self.onto.properties.get(prop_name)
-                if not base or base.type != PropertyType.OBJECT_PROPERTY:
-                    continue
-                if rng_names.issubset(
-                    set(self.onto.original_properties[prop_name].ranges)
-                ):
-                    continue
-                if cls_name in base.declared_domains:
-                    base.declared_domains.remove(cls_name)
-                for rng_name in sorted(rng_names):
-                    if rng_name in base.ranges:
-                        base.ranges.remove(rng_name)
-                    if len(base.ranges) == 0:
-                        for dd in base.declared_domains:
-                            if prop_name in self.onto.classes[dd].declared_properties:
-                                self.onto.classes[dd].declared_properties.remove(
-                                    prop_name
-                                )
-                        base.declared_domains = []
-                    spec_key = f"{prop_name}{{{rng_name}}}"
-                    if (
-                        spec_key in self.onto.properties
-                        or spec_key in specialized_props
-                    ):
-                        continue
-                    specialized_props[spec_key] = PropertyInfo(
-                        name=prop_name,
-                        uri=base.uri,
-                        type=PropertyType.OBJECT_PROPERTY,
-                        domains=[cls_name],
-                        ranges=[rng_name],
-                        label=base.label,
-                        comment=base.comment,
-                        field_name=base.field_name,
-                        descriptor_name=NamingRegistry.to_pascal_case(
-                            base.descriptor_name or prop_name
-                        ),
-                        superproperties=[prop_name],
-                        inverses=[],
-                        inverse_of=None,
-                        is_transitive=base.is_transitive,
-                        declared_domains=[cls_name],
-                        is_specialized=True,
-                    )
-        self.onto.properties.update(specialized_props)
 
     def apply_predefined_overrides(
         self,
@@ -1356,31 +1246,13 @@ class InferenceEngine:
             child_info.name
         )
 
-        parent_props_filtered = [p.split("{")[0] for p in parent_props]
-        child_props_filtered = [p.split("{")[0] for p in child_props]
-
-        matched_prop_names = set(parent_props_filtered).intersection(
-            set(child_props_filtered)
-        )
-
-        for mpn in copy(matched_prop_names):
-            mpn_parent_idx = parent_props_filtered.index(mpn)
-            mpn_child_idx = child_props_filtered.index(mpn)
-            parent_p_name = parent_props[mpn_parent_idx]
-            child_p_name = child_props[mpn_child_idx]
-            if (
-                self.onto.properties[parent_p_name].is_specialized
-                and not self.onto.properties[child_p_name].is_specialized
-            ):
-                matched_prop_names.remove(mpn)
+        matched_prop_names = set(parent_props).intersection(set(child_props))
 
         # Re-verify based on original logic: check all combinations of parent/child properties
         # and remove/add base name based on range and superproperty compatibility.
         child_matched_prop_names = {}
         for parent_p_name in parent_props:
-            parent_base_name = parent_p_name.split("{")[0]
             for child_p_name in child_props:
-                child_base_name = child_p_name.split("{")[0]
                 child_p_info, parent_p_info = self.onto.properties.get(
                     child_p_name
                 ), self.onto.properties.get(parent_p_name)
@@ -1391,30 +1263,17 @@ class InferenceEngine:
                     or parent_p_info.type == PropertyType.DATA_PROPERTY
                 ):
                     continue
-                if parent_base_name not in child_p_info.all_superproperties + [
-                    child_base_name
+                if parent_p_name not in child_p_info.all_superproperties + [
+                    child_p_name
                 ]:
                     continue
-                child_rng = child_p_info.object_range_hint
-                if child_p_name in child_info.property_axioms_info and isinstance(
-                    child_info.property_axioms_info[child_p_name],
-                    QualifiedAxiomInfoMixin,
-                ):
-                    child_rng = child_info.property_axioms_info[child_p_name].on_class
-                parent_rng = parent_p_info.object_range_hint
-                if parent_p_name in parent_info.property_axioms_info and isinstance(
-                    parent_info.property_axioms_info[parent_p_name],
-                    QualifiedAxiomInfoMixin,
-                ):
-                    parent_rng = parent_info.property_axioms_info[
-                        parent_p_name
-                    ].on_class
-
+                child_rng = self.get_cls_property_rng(child_info.name, child_p_name)
+                parent_rng = self.get_cls_property_rng(parent_info.name, parent_p_name)
                 if parent_rng not in self.onto.classes[
                     child_rng
                 ].all_base_classes_including_role_takers + [child_rng]:
-                    if parent_base_name in matched_prop_names:
-                        matched_prop_names.remove(parent_base_name)
+                    if parent_p_name in matched_prop_names:
+                        matched_prop_names.remove(parent_p_name)
                     continue
 
                 child_prop_range, parent_prop_range = (
@@ -1424,27 +1283,39 @@ class InferenceEngine:
                 if parent_prop_range not in self.onto.class_ancestors.get(
                     child_prop_range, set()
                 ).union({child_prop_range}):
-                    if parent_base_name in matched_prop_names:
-                        matched_prop_names.remove(parent_base_name)
+                    if parent_p_name in matched_prop_names:
+                        matched_prop_names.remove(parent_p_name)
                     continue
-                matched_prop_names.add(parent_base_name)
-                child_matched_prop_names[parent_base_name] = [
+                matched_prop_names.add(parent_p_name)
+                child_matched_prop_names[parent_p_name] = [
                     pname for pname in child_props if child_p_name in pname
                 ][0]
 
         return matched_prop_names, child_matched_prop_names
 
     @lru_cache
+    def get_cls_property_rng(self, cls_name: str, prop_name: str) -> Optional[str]:
+        """Get the range of a property for a given class, considering restrictions."""
+        cls_info = self.onto.classes[cls_name]
+        if prop_name in cls_info.property_axioms_info:
+            axiom = cls_info.property_axioms_info[prop_name]
+            if isinstance(axiom, QualifiedAxiomInfoMixin) and axiom.on_class:
+                return axiom.on_class
+        prop_info = self.onto.properties.get(prop_name)
+        if prop_info and prop_info.object_range_hint:
+            return prop_info.object_range_hint
+        return None
+
+    @lru_cache
     def get_declared_and_restricted_properties_of_cls(self, cls_name: str) -> List[str]:
         """Get declared properties of a class, including those from restrictions."""
         cls_info = self.onto.classes[cls_name]
         cls_props = copy(cls_info.declared_properties)
-        cls_props_filtered = [p.split("{")[0] for p in cls_props]
         for prop_name, axiom in cls_info.property_axioms_info.items():
             if not isinstance(axiom, QualifiedAxiomInfoMixin) or not axiom.on_class:
                 continue
             prop_name = axiom.property_name
-            if prop_name in cls_props_filtered:
+            if prop_name in cls_props:
                 continue
             cls_props.append(prop_name)
         return cls_props
@@ -1669,7 +1540,7 @@ class CodeGenerator:
 
     def _execute_inference_pipeline(self):
         """
-        Run the inference engine to propagate types and specialized properties.
+        Run the inference engine to propagate types.
         """
         self.engine.compute_ancestors()
 
@@ -1694,7 +1565,7 @@ class CodeGenerator:
         Decide which properties belong to which class based on inheritance and overrides.
         """
         for cls_name, info in self.onto.classes.items():
-            ancestors = set(info.all_base_classes)
+            ancestors = set(info.all_base_classes_including_role_takers)
             declared: List[str] = []
             for pn, p in self.onto.properties.items():
                 if pn == "roleFor":
@@ -1710,10 +1581,6 @@ class CodeGenerator:
                     )
                 ):
                     continue
-                if p.is_specialized:
-                    for sp in p.superproperties:
-                        if sp in declared:
-                            declared.remove(sp)
                 declared.append(pn)
             info.declared_properties = sorted(set(declared))
 
@@ -1737,9 +1604,7 @@ class CodeGenerator:
         if "roleFor" in self.onto.properties:
             del self.onto.properties["roleFor"]
 
-        prop_classes = {
-            k: v for k, v in self.onto.properties.items() if not v.is_specialized
-        }
+        prop_classes = {k: v for k, v in self.onto.properties.items()}
         props_order = self.engine.topological_order(prop_classes, "superproperties")
 
         self.engine.find_implicit_subtypes(props_order)
