@@ -6,8 +6,16 @@ from dataclasses import dataclass, field
 from functools import cached_property
 
 import rdflib
-from rdflib import URIRef
-from typing_extensions import List, Type, ClassVar, Callable, Any, TYPE_CHECKING
+from rdflib import URIRef, RDF, OWL
+from typing_extensions import (
+    List,
+    Type,
+    ClassVar,
+    Callable,
+    Any,
+    TYPE_CHECKING,
+    Optional,
+)
 
 from ...class_diagrams.utils import issubclass_or_role
 from ...entity_query_language.entity import (
@@ -434,18 +442,30 @@ class MinQualifiedCardinalityAxiomInfo(QuantifiedQualifiedAxiomInfo):
 
 
 @dataclass
-class HasValueAxiomInfo(PropertyAxiomInfo):
+class HasValueAxiomInfo(PropertyAxiomInfo, QualifiedAxiomInfoMixin):
     """
     Information about a has value axiom.
     """
 
     value: Any
     value_str: str = field(init=False)
+    on_class: Optional[str] = field(init=False, default=None)
 
     def __post_init__(self):
         self.value_str = self.value
         if isinstance(self.value, str):
             self.value_str = f'"{self.value}"'
+        self.on_class = self.value_type
+
+    @cached_property
+    def value_type(self) -> Optional[str]:
+        value_type = [
+            v
+            for v in self.onto.graph.objects(self.value, RDF.type)
+            if v != OWL.NamedIndividual
+        ][0]
+        value_type = NamingRegistry.uri_to_python_name(value_type, self.onto.graph)
+        return value_type
 
     def conditions_eql(self):
         base_conditions = super().conditions_eql()

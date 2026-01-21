@@ -14,6 +14,8 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from functools import cached_property, lru_cache
 
+from krrood.ontomatic.ontology_to_python.axioms import PropertyAxiomInfo
+
 from .axioms import (
     SubClassAxiomInfo,
     QualifiedAxiomInfoMixin,
@@ -107,6 +109,7 @@ class ClassInfo:
     axioms: List[str] = field(default_factory=list)
     axioms_python: List[str] = field(default_factory=list)
     axioms_setup: List[str] = field(default_factory=list)
+    property_axioms_info: Dict[str, PropertyAxiomInfo] = field(default_factory=dict)
     onto: Optional[OntologyInfo] = field(default=None, repr=False)
 
     def __deepcopy__(self, memo):
@@ -863,12 +866,7 @@ class InferenceEngine:
                 for_class=for_class,
                 onto=self.onto,
             )
-            value_type = [
-                v
-                for v in self.onto.graph.objects(has_value, RDF.type)
-                if v != OWL.NamedIndividual
-            ][0]
-            value_type = NamingRegistry.uri_to_python_name(value_type, self.onto.graph)
+            value_type = axiom.value_type
         elif self.onto.graph.value(node, OWL.maxQualifiedCardinality):
             literal_value = self.onto.graph.value(node, OWL.maxQualifiedCardinality)
             max_value = literal_value.toPython()
@@ -937,44 +935,45 @@ class InferenceEngine:
             self.onto.classes[for_class].axioms_setup.extend(axiom.setup_statements())
             self.onto.classes[for_class].axioms.extend(axiom.conditions_eql())
             self.onto.classes[for_class].axioms_python.extend(axiom.conditions_python())
+            self.onto.classes[for_class].property_axioms_info[prop_name] = axiom
             if rng_name is None:
                 if self.onto.original_properties[prop_name].ranges:
                     rng_name = self.onto.original_properties[prop_name].ranges[0]
                 else:
                     return True
-            if self.onto.classes[for_class].role_taker:
-                role_taker = self.onto.classes[for_class].role_taker.class_name
-                if (
-                    role_taker in self.onto.original_properties[prop_name].domains
-                    and rng_name in self.onto.original_properties[prop_name].ranges
-                ):
-                    self.onto.property_restrictions.setdefault(
-                        for_class, {}
-                    ).setdefault(prop_name, set()).add(rng_name)
-                    return False
-            existing_ranges = self.onto.properties[prop_name].ranges
-            contesting_ranges = set(existing_ranges)
-            for dom_cls, pred_obj in self.onto.property_restrictions.items():
-                if prop_name in pred_obj:
-                    for er in existing_ranges:
-                        if er in pred_obj[prop_name]:
-                            contesting_ranges.remove(er)
-            if contesting_ranges and not any(
-                cr
-                in self.onto.classes[rng_name].all_base_classes_including_role_takers
-                + [rng_name]
-                for cr in contesting_ranges
-            ):
-                return False
+            # if self.onto.classes[for_class].role_taker:
+            #     role_taker = self.onto.classes[for_class].role_taker.class_name
+            #     if (
+            #         role_taker in self.onto.original_properties[prop_name].domains
+            #         and rng_name in self.onto.original_properties[prop_name].ranges
+            #     ):
+            #         self.onto.property_restrictions.setdefault(
+            #             for_class, {}
+            #         ).setdefault(prop_name, set()).add(rng_name)
+            #         return False
+            # existing_ranges = self.onto.properties[prop_name].ranges
+            # contesting_ranges = set(existing_ranges)
+            # for dom_cls, pred_obj in self.onto.property_restrictions.items():
+            #     if prop_name in pred_obj:
+            #         for er in existing_ranges:
+            #             if er in pred_obj[prop_name]:
+            #                 contesting_ranges.remove(er)
+            # if existing_ranges and not any(
+            #     cr
+            #     in self.onto.classes[rng_name].all_base_classes_including_role_takers
+            #     + [rng_name]
+            #     for cr in existing_ranges
+            # ):
+            #     return False
 
-            self.onto.properties[prop_name].ranges.append(rng_name)
-            self.onto.property_restrictions.setdefault(for_class, {}).setdefault(
-                prop_name, set()
-            ).add(rng_name)
+            # self.onto.properties[prop_name].ranges.append(rng_name)
+            # self.onto.property_restrictions.setdefault(for_class, {}).setdefault(
+            #     prop_name, set()
+            # ).add(rng_name)
             for inverse in self.onto.properties[prop_name].inverses:
-                self.onto.property_restrictions.setdefault(rng_name, {}).setdefault(
-                    inverse, set()
-                ).add(for_class)
+                # self.onto.property_restrictions.setdefault(rng_name, {}).setdefault(
+                #     inverse, set()
+                # ).add(for_class)
                 if inverse and isinstance(axiom, QualifiedAxiomInfoMixin):
                     inverse_axiom = copy(axiom)
                     inverse_axiom.on_class = for_class
@@ -1268,7 +1267,7 @@ class InferenceEngine:
                 matched_props, child_matched_props = self._get_matched_properties(
                     parent_info, child_info
                 )
-                if not matched_props:
+                if not matched_props or not child_matched_props:
                     continue
 
                 subsumption_type = self._determine_subsumption_type(
@@ -1381,6 +1380,7 @@ class InferenceEngine:
         for parent_p_name in parent_props:
             parent_base_name = parent_p_name.split("{")[0]
             for child_p_name in child_props:
+                child_base_name = child_p_name.split("{")[0]
                 child_p_info, parent_p_info = self.onto.properties.get(
                     child_p_name
                 ), self.onto.properties.get(parent_p_name)
@@ -1391,7 +1391,30 @@ class InferenceEngine:
                     or parent_p_info.type == PropertyType.DATA_PROPERTY
                 ):
                     continue
-                if parent_base_name not in child_p_info.all_superproperties:
+                if parent_base_name not in child_p_info.all_superproperties + [
+                    child_base_name
+                ]:
+                    continue
+                child_rng = child_p_info.object_range_hint
+                if child_p_name in child_info.property_axioms_info and isinstance(
+                    child_info.property_axioms_info[child_p_name],
+                    QualifiedAxiomInfoMixin,
+                ):
+                    child_rng = child_info.property_axioms_info[child_p_name].on_class
+                parent_rng = parent_p_info.object_range_hint
+                if parent_p_name in parent_info.property_axioms_info and isinstance(
+                    parent_info.property_axioms_info[parent_p_name],
+                    QualifiedAxiomInfoMixin,
+                ):
+                    parent_rng = parent_info.property_axioms_info[
+                        parent_p_name
+                    ].on_class
+
+                if parent_rng not in self.onto.classes[
+                    child_rng
+                ].all_base_classes_including_role_takers + [child_rng]:
+                    if parent_base_name in matched_prop_names:
+                        matched_prop_names.remove(parent_base_name)
                     continue
 
                 child_prop_range, parent_prop_range = (
@@ -1417,13 +1440,13 @@ class InferenceEngine:
         cls_info = self.onto.classes[cls_name]
         cls_props = copy(cls_info.declared_properties)
         cls_props_filtered = [p.split("{")[0] for p in cls_props]
-        if cls_info.name in self.onto.property_restrictions:
-            for prop_name, ranges in self.onto.property_restrictions[
-                cls_info.name
-            ].items():
-                if prop_name in cls_props_filtered:
-                    continue
-                cls_props.append(prop_name)
+        for prop_name, axiom in cls_info.property_axioms_info.items():
+            if not isinstance(axiom, QualifiedAxiomInfoMixin) or not axiom.on_class:
+                continue
+            prop_name = axiom.property_name
+            if prop_name in cls_props_filtered:
+                continue
+            cls_props.append(prop_name)
         return cls_props
 
     def _determine_subsumption_type(
@@ -1830,6 +1853,7 @@ class CodeGenerator:
         classes_order = [c for c in classes_order if c != Role.__name__]
         for cls_info in self.onto.classes.values():
             cls_info.onto = None
+            cls_info.property_axioms_info = {}
         render_classes = {k: asdict(v) for k, v in self.onto.classes.items()}
         for c in render_classes.values():
             if c["role_taker"] is None:
@@ -1853,6 +1877,7 @@ class CodeGenerator:
             prop_info.onto = None
         for stubs_info in stubs_classes.values():
             stubs_info.onto = None
+            stubs_info.property_axioms_info = {}
         render_props = {k: asdict(v) for k, v in self.onto.properties.items()}
         render_stubs = {k: asdict(v) for k, v in stubs_classes.items()}
         for c in render_stubs.values():
