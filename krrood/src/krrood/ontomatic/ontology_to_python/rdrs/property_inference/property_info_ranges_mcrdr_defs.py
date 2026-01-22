@@ -74,8 +74,8 @@ def conclusion_185021833760373592529284117887051484781(case) -> List[str]:
         """Get possible value(s) for PropertyInfo.ranges  of type ."""
         ranges = []
         for sp in reversed(case.sorted_superproperties):
-            if len(case.onto.original_properties[sp].ranges) > 0:
-                ranges.extend(case.onto.original_properties[sp].ranges)
+            if len(case.onto.properties[sp].ranges) > 0:
+                ranges.extend(case.onto.properties[sp].ranges)
                 break
         return ranges
 

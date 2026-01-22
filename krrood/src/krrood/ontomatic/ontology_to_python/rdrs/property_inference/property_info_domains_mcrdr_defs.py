@@ -124,8 +124,8 @@ def conclusion_272707851413176399338327613086271601265(case) -> List[str]:
         """Get possible value(s) for PropertyInfo.domains  of type ."""
         domains = []
         for sp in reversed(case.sorted_superproperties):
-            if len(case.onto.original_properties[sp].domains) > 0:
-                domains.extend(case.onto.original_properties[sp].domains)
+            if len(case.onto.properties[sp].domains) > 0:
+                domains.extend(case.onto.properties[sp].domains)
                 break
         return domains
 

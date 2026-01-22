@@ -715,11 +715,11 @@ class InferenceEngine:
 
     def fit_property_rdr(self):
         def ask_now_domain(case: PropertyInfo):
-            return case.name == "isWomenCollegeOf"
+            return case.name == "isHeadOf"
             return False
 
         def ask_now_range(case: PropertyInfo):
-            return case.name == "isWomenCollegeOf"
+            return case.name == "isHeadOf"
             return False
 
         for prop_name, prop_info in self.onto.properties.items():
