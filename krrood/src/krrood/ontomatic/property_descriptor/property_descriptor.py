@@ -278,9 +278,10 @@ class PropertyDescriptor(Symbol):
         """
         Update the domain and range sets and the domain-range map for this descriptor type.
         """
-        range_type = descriptor.wrapped_field.type_endpoint
-        descriptor.domain_range_map[descriptor.__class__][domain] = range_type
-        descriptor.all_ranges[descriptor.__class__].add(range_type)
+        range_types = descriptor.wrapped_field.type_endpoint_tuple
+        for range_type in range_types:
+            descriptor.domain_range_map[descriptor.__class__][domain] = range_type
+            descriptor.all_ranges[descriptor.__class__].add(range_type)
         descriptor.all_domains[descriptor.__class__].add(domain)
         descriptor.descriptor_instances_by_domain_type[descriptor.__class__][
             domain

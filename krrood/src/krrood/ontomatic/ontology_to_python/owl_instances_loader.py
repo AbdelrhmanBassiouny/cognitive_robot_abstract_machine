@@ -523,7 +523,14 @@ class OwlLoader:
     def _assign_all_properties_to_instance(self, instance: AnonymousClass):
         """Iterates through all properties of all instances and assigns properties to the instances."""
         for p, o in self._triples_by_subject[instance.uri]:
-            if p in [RDF.type, RDFS.subClassOf, OWL.equivalentClass, OWL.disjointWith]:
+            if p in [
+                RDF.type,
+                RDFS.subClassOf,
+                OWL.equivalentClass,
+                OWL.disjointWith,
+                OWL.disjointUnionOf,
+                OWL.sameAs,
+            ]:
                 continue
             field_name = to_snake(local_name(p))
             obj = o
@@ -549,17 +556,6 @@ class OwlLoader:
         for s, py_cls in so_iterator:
             existing_roles = self.registry.resolve(s)
             existing_roles = existing_roles or []
-            role_types = list(map(type, existing_roles)) + [py_cls]
-            # if any(
-            #     "Woman" == t.__name__
-            #     for t in self.anonymous_instances[URIRef(s)].final_sorted_types
-            # ) and any(
-            #     r.__class__.__name__ in ["Chair", "Professor", "FullProfessor"]
-            #     for r in self.anonymous_instances[URIRef(s)].final_sorted_types
-            # ):
-            #     import pdbpp
-            #
-            #     pdbpp.set_trace()
             kwargs = self._get_common_role_taker_kwargs(existing_roles, py_cls)
             self.registry.get_or_create_for(s, py_cls, self.symbol_graph, **kwargs)
 
@@ -598,6 +594,8 @@ class OwlLoader:
             RDFS.subClassOf,
             OWL.equivalentClass,
             OWL.Class,
+            OWL.disjointUnionOf,
+            OWL.sameAs,
         }
         filtered_triples = [
             (s, p, o)
@@ -760,7 +758,7 @@ class OwlLoader:
             if isinstance(obj_node, URIRef)
             else None
         )
-        if len(obj_roles) > 1:
+        if obj_roles and len(obj_roles) > 1:
             obj = self.best_fit_object_role(field_name, tuple(obj_roles))
         else:
             obj = obj_roles[0] if obj_roles else None

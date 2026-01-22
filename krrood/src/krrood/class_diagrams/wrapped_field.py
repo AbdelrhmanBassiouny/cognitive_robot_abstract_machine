@@ -22,10 +22,11 @@ from typing_extensions import (
     TYPE_CHECKING,
     Optional,
     Union,
+    Tuple,
 )
 
 from .failures import MissingContainedTypeOfContainer
-from .utils import behaves_like_a_built_in_class
+from .utils import behaves_like_a_built_in_class, make_tuple
 from ..ormatic.utils import module_and_class_name
 
 if TYPE_CHECKING:
@@ -170,12 +171,14 @@ class WrappedField:
 
     @cached_property
     def contained_type(self):
-        if not self.is_container and not self.is_optional:
+        if not self.is_container and not self.is_optional and not self.is_union:
             raise ValueError("Field is not a container")
         if self.is_optional:
             return get_args(self.resolved_type)[0]
         else:
             try:
+                if self.is_union:
+                    return get_args(self.resolved_type)
                 return get_args(self.resolved_type)[0]
             except IndexError:
                 if self.resolved_type is Type:
@@ -213,11 +216,25 @@ class WrappedField:
         )
 
     @cached_property
+    def type_endpoint_tuple(self) -> Tuple[Type, ...]:
+        if self.is_container or self.is_optional or self.is_union:
+            return make_tuple(self.contained_type)
+        else:
+            return make_tuple(self.resolved_type)
+
+    @cached_property
     def type_endpoint(self) -> Type:
+        if self.is_union:
+            raise ValueError("Field is a union, use type_endpoint_tuple instead")
         if self.is_container or self.is_optional:
             return self.contained_type
         else:
             return self.resolved_type
+
+    @cached_property
+    def is_union(self) -> bool:
+        origin = get_origin(self.resolved_type)
+        return origin == Union and not self.is_optional
 
     @cached_property
     def is_role_taker(self) -> bool:

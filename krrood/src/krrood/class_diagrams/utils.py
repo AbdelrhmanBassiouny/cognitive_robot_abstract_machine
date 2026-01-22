@@ -330,3 +330,16 @@ class Role(Generic[T], ABC):
         # if not isinstance(other, self.__class__):
         #     return False
         return hash(self) == hash(other)
+
+
+def make_tuple(obj: Any) -> Tuple:
+    """
+    Ensure the given object is a tuple.
+
+    :param obj: The object to convert.
+    :return: A tuple containing the object or the object itself if it's already a tuple.
+    """
+    if hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes)):
+        return tuple(obj)
+    else:
+        return (obj,)
