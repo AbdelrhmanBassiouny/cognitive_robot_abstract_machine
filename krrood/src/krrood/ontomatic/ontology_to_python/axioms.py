@@ -551,3 +551,38 @@ class AllValuesFromAxiomInfo(PropertyAxiomInfo, QualifiedAxiomInfoMixin):
             f"all(any(issubclass(t, {self.on_class}) for t in attr.types) for attr in candidate.{self.snake_property_name})"
         )
         return base_conditions
+
+
+@dataclass
+class HasSelfAxiomInfo(PropertyAxiomInfo, QualifiedAxiomInfoMixin):
+    """
+    Information about a has self axiom.
+    """
+
+    value: str = field(default="true")
+    on_class: Optional[str] = field(init=False, default=None)
+
+    def __post_init__(self):
+        self.on_class = self.for_class
+
+    @cached_property
+    def truth_value(self) -> bool:
+        return True if self.value.lower() == "true" else False
+
+    def conditions_eql(self):
+        base_conditions = super().conditions_eql()
+        cond = f"contains(candidate_var.{self.snake_property_name}, candidate_var)"
+        if not self.truth_value:
+            cond = f"not_({cond})"
+        base_conditions.append(cond)
+        return base_conditions
+
+    def conditions_python(self):
+        base_conditions = super().conditions_python()
+        cond = (
+            f"any(attr == candidate for attr in candidate.{self.snake_property_name})"
+        )
+        if not self.truth_value:
+            cond = f"not {cond}"
+        base_conditions.append(cond)
+        return base_conditions

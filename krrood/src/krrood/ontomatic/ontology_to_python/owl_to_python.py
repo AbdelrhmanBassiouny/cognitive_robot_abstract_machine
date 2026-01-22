@@ -17,6 +17,7 @@ from functools import cached_property, lru_cache
 from krrood.ontomatic.ontology_to_python.axioms import (
     PropertyAxiomInfo,
     QuantifiedQualifiedAxiomInfo,
+    HasSelfAxiomInfo,
 )
 
 from .axioms import (
@@ -935,6 +936,15 @@ class InferenceEngine:
                 property_name=prop_name,
                 on_class=value_type,
                 for_class=for_class,
+                onto=self.onto,
+            )
+        elif self.onto.graph.value(node, OWL.hasSelf):
+            value = self.onto.graph.value(node, OWL.hasSelf)
+            value_type = for_class
+            axiom = HasSelfAxiomInfo(
+                property_name=prop_name,
+                for_class=for_class,
+                value=NamingRegistry.uri_to_python_name(value, self.onto.graph),
                 onto=self.onto,
             )
         if not axiom:
