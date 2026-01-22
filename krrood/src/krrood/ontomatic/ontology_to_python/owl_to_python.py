@@ -102,6 +102,8 @@ class ClassInfo:
     all_base_classes_including_role_takers: List[str] = field(default_factory=list)
     base_classes_for_topological_sort: List[str] = field(default_factory=list)
     disjoint_with: List[str] = field(default_factory=list)
+    complement_of: Optional[str] = None
+    one_of: List[str] = field(default_factory=list)
     equivalent_classes: List[str] = field(default_factory=list)
     is_description_for: Optional[str] = None
     has_descriptions: List[str] = field(default_factory=list)
@@ -115,6 +117,8 @@ class ClassInfo:
     axioms_setup: List[str] = field(default_factory=list)
     property_axioms_info: Dict[str, PropertyAxiomInfo] = field(default_factory=dict)
     onto: Optional[OntologyInfo] = field(default=None, repr=False)
+    disjoint_union: List[str] = field(default_factory=list)
+    union: List[str] = field(default_factory=list)
 
     def __deepcopy__(self, memo):
         # Custom deepcopy to avoid copying the ontology reference
@@ -234,7 +238,9 @@ class OntologyInfo:
 
     graph: rdflib.Graph
     classes: Dict[str, ClassInfo] = field(default_factory=dict)
-    class_descriptions: Dict[str, ClassInfo] = field(default_factory=dict)
+    class_descriptions: Dict[str, ClassInfo] = field(
+        class_descriptionsdefault_factory=dict
+    )
     original_properties: Dict[str, PropertyInfo] = field(default_factory=dict)
     predefined_data_types: Optional[Dict[str, Dict[str, str]]] = None
     ontology_label: str = "Thing"
@@ -447,6 +453,32 @@ class ClassExtractor:
             if isinstance(disjoint_class, rdflib.URIRef):
                 disjoint_with.append(NamingRegistry.uri_to_python_name(disjoint_class))
 
+        # disjoint union
+        disjoint_union: List[str] = []
+        for disjoint_union_class in self.graph.objects(class_uri, OWL.disjointUnionOf):
+            if isinstance(disjoint_union_class, rdflib.URIRef):
+                disjoint_union.append(
+                    NamingRegistry.uri_to_python_name(disjoint_union_class)
+                )
+
+        # union
+        union: List[str] = []
+        for union_class in self.graph.objects(class_uri, OWL.unionOf):
+            if isinstance(union_class, rdflib.URIRef):
+                union.append(NamingRegistry.uri_to_python_name(union_class))
+
+        # complement of
+        complement_of: Optional[str] = None
+        for comp_class in self.graph.objects(class_uri, OWL.complementOf):
+            if isinstance(comp_class, rdflib.URIRef):
+                complement_of = NamingRegistry.uri_to_python_name(comp_class)
+
+        # one of
+        one_of: List[str] = []
+        for one_of_class in self.graph.objects(class_uri, OWL.oneOf):
+            if isinstance(one_of_class, rdflib.URIRef):
+                one_of.append(NamingRegistry.uri_to_python_name(one_of_class))
+
         # equivalent classes
         equivalent_classes: List[str] = []
         for eq_class in self.graph.objects(class_uri, OWL.equivalentClass):
@@ -482,6 +514,10 @@ class ClassExtractor:
             uri=str(class_uri),
             superclasses=unique_superclasses or [Symbol.__name__],
             disjoint_with=disjoint_with,
+            disjoint_union=disjoint_union,
+            union=union,
+            complement_of=complement_of,
+            one_of=one_of,
             equivalent_classes=equivalent_classes,
             is_description_for=is_description_for,
             has_descriptions=has_descriptions,
