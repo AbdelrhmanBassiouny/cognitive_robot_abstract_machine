@@ -113,7 +113,7 @@ class NamingRegistry:
         unions = list(graph.objects(bnode, OWL.unionOf))
         if unions:
             items = NamingRegistry._get_rdf_list(graph, unions[0])
-            return "OR".join([NamingRegistry._get_node_name(graph, i) for i in items])
+            return ",".join([NamingRegistry._get_node_name(graph, i) for i in items])
 
         # Restrictions
         on_prop = graph.value(bnode, OWL.onProperty)
@@ -137,6 +137,30 @@ class NamingRegistry:
                     graph.value(bnode, OWL.onClass)
                 )
                 return f"{prop_name}MAX{target}{on_class}"
+            if graph.value(bnode, OWL.minQualifiedCardinality):
+                target = NamingRegistry.uri_to_python_name(
+                    graph.value(bnode, OWL.maxQualifiedCardinality)
+                )
+                on_class = NamingRegistry.uri_to_python_name(
+                    graph.value(bnode, OWL.onClass)
+                )
+                return f"{prop_name}MIN{target}{on_class}"
+            if graph.value(bnode, OWL.qualifiedCardinality):
+                target = NamingRegistry.uri_to_python_name(
+                    graph.value(bnode, OWL.maxQualifiedCardinality)
+                )
+                on_class = NamingRegistry.uri_to_python_name(
+                    graph.value(bnode, OWL.onClass)
+                )
+                return f"{prop_name}EqualTo{target}{on_class}"
+            if graph.value(bnode, OWL.hasSelf):
+                target = NamingRegistry.uri_to_python_name(
+                    graph.value(bnode, OWL.hasSelf)
+                )
+                if target == "true":
+                    return f"{prop_name}Self"
+                else:
+                    return f"{prop_name}NotSelf"
             if graph.value(bnode, OWL.complementOf):
                 target = NamingRegistry.uri_to_python_name(
                     graph.value(bnode, OWL.complementOf)

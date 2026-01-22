@@ -14,7 +14,10 @@ from dataclasses import dataclass, field, asdict
 from enum import Enum
 from functools import cached_property, lru_cache
 
-from krrood.ontomatic.ontology_to_python.axioms import PropertyAxiomInfo
+from krrood.ontomatic.ontology_to_python.axioms import (
+    PropertyAxiomInfo,
+    QuantifiedQualifiedAxiomInfo,
+)
 
 from .axioms import (
     SubClassAxiomInfo,
@@ -458,13 +461,20 @@ class ClassExtractor:
                     f"BNode class {class_name} has multiple superclasses: {unique_superclasses}"
                 )
             is_description_for = unique_superclasses[0]
-        elif is_b_node and not unique_superclasses:
+        elif is_b_node and list(self.graph.subjects(RDFS.subClassOf, class_uri)):
             subclasses = list(self.graph.subjects(RDFS.subClassOf, class_uri))
             if len(subclasses) > 1:
                 raise NotImplemented(
                     f"BNode class {class_name} has multiple subclasses: {subclasses}"
                 )
             is_description_for = NamingRegistry.uri_to_python_name(subclasses[0])
+        elif is_b_node and list(self.graph.subjects(OWL.equivalentClass, class_uri)):
+            eq_classes = list(self.graph.subjects(OWL.equivalentClass, class_uri))
+            if len(eq_classes) > 1:
+                raise NotImplemented(
+                    f"BNode class {class_name} has multiple equivalent classes: {eq_classes}"
+                )
+            is_description_for = NamingRegistry.uri_to_python_name(eq_classes[0])
 
         return ClassInfo(
             name=class_name,
@@ -515,13 +525,21 @@ class PropertyExtractor:
 
         range_uris: List[rdflib.term.Identifier] = []
         for range_val in self.graph.objects(property_uri, RDFS.range):
-            ranges.append(NamingRegistry.uri_to_python_name(range_val))
-            range_uris.append(range_val)
+            prop_ranges = NamingRegistry.uri_to_python_name(
+                range_val, self.graph
+            ).split(",")
+            for r in prop_ranges:
+                ranges.append(r)
+            if len(prop_ranges) == 1:
+                range_uris.append(range_val)
 
         # Inheritance between properties
         for super_prop in self.graph.objects(property_uri, RDFS.subPropertyOf):
-            if isinstance(super_prop, rdflib.URIRef):
-                superproperties.append(NamingRegistry.uri_to_python_name(super_prop))
+            if not isinstance(super_prop, rdflib.URIRef):
+                continue
+            if super_prop in [OWL.topObjectProperty, OWL.topDataProperty]:
+                continue
+            superproperties.append(NamingRegistry.uri_to_python_name(super_prop))
 
         # Inverses
         for inv in self.graph.objects(property_uri, OWL.inverseOf):
@@ -1276,6 +1294,15 @@ class InferenceEngine:
                         matched_prop_names.remove(parent_p_name)
                     continue
 
+                child_axiom = child_info.property_axioms_info.get(child_p_name, None)
+                parent_axiom = parent_info.property_axioms_info.get(parent_p_name, None)
+                if isinstance(
+                    parent_axiom, QuantifiedQualifiedAxiomInfo
+                ) and not isinstance(child_axiom, QuantifiedQualifiedAxiomInfo):
+                    if parent_p_name in matched_prop_names:
+                        matched_prop_names.remove(parent_p_name)
+                    continue
+
                 child_prop_range, parent_prop_range = (
                     child_p_info.object_range_hint,
                     parent_p_info.object_range_hint,
@@ -1941,6 +1968,8 @@ class OwlToPythonConverter:
         ]:
             for p_uri in self.graph.subjects(RDF.type, p_type):
                 if isinstance(p_uri, rdflib.term.BNode):
+                    continue
+                if p_uri in [OWL.topObjectProperty, OWL.topDataProperty]:
                     continue
                 info = self.prop_ext.extract_info(p_uri)
                 if info.name in self.properties:
