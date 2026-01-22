@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass, field
-from typing import Dict, Type
+from typing import Type
 
-from typing_extensions import Generic, TypeVar, ClassVar, Any
+from typing_extensions import Generic, TypeVar, Any, get_args
 
 from krrood.utils import recursive_subclasses, DataclassException
 from ...world import World
@@ -48,10 +48,21 @@ class Ros2ToSemDTConverter(ABC, Generic[InputType, OutputType]):
     No registration is necessary.
     """
 
-    input_type: InputType
-    """The semDT type for which this converter handles conversion."""
-    output_type: OutputType
-    """The ROS2 message type for which this converter handles conversion."""
+    @classmethod
+    @property
+    def input_type(cls) -> Type[InputType]:
+        """
+        The semDT type for which this converter handles conversion.
+        """
+        return get_args(cls.__orig_bases__[0])[0]
+
+    @classmethod
+    @property
+    def output_type(cls) -> Type[InputType]:
+        """
+        The ROS2 message type for which this converter handles conversion.
+        """
+        return get_args(cls.__orig_bases__[0])[1]
 
     @classmethod
     def can_convert(cls, data: Any) -> bool:
@@ -94,13 +105,21 @@ class SemDTToRos2Converter(ABC, Generic[InputType, OutputType]):
     No registration is necessary.
     """
 
-    registry: ClassVar[Dict[Type, Type[SemDTToRos2Converter]]] = field(default={})
-    """Registry mapping semDT types to their corresponding ROS2MessageConverter subclass."""
+    @classmethod
+    @property
+    def input_type(cls) -> Type[InputType]:
+        """
+        The semDT type for which this converter handles conversion.
+        """
+        return get_args(cls.__orig_bases__[0])[0]
 
-    input_type: InputType
-    """The semDT type for which this converter handles conversion."""
-    output_type: OutputType
-    """The ROS2 message type for which this converter handles conversion."""
+    @classmethod
+    @property
+    def output_type(cls) -> Type[InputType]:
+        """
+        The ROS2 message type for which this converter handles conversion.
+        """
+        return get_args(cls.__orig_bases__[0])[1]
 
     @classmethod
     def can_convert(cls, obj: Any) -> bool:

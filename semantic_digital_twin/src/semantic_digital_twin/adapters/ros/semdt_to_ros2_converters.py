@@ -25,8 +25,6 @@ class HomogeneousTransformationMatrixToRos2Converter(
         HomogeneousTransformationMatrix, geometry_msgs.TransformStamped
     ]
 ):
-    input_type = HomogeneousTransformationMatrix
-    output_type = geometry_msgs.TransformStamped
 
     @classmethod
     def convert(
@@ -53,8 +51,6 @@ class HomogeneousTransformationMatrixToRos2Converter(
 
 @dataclass
 class PoseToRos2StampedConverter(SemDTToRos2Converter[Pose, geometry_msgs.PoseStamped]):
-    input_type = Pose
-    output_type = geometry_msgs.PoseStamped
 
     @classmethod
     def convert(cls, data: Pose) -> geometry_msgs.PoseStamped:
@@ -77,8 +73,6 @@ class PoseToRos2StampedConverter(SemDTToRos2Converter[Pose, geometry_msgs.PoseSt
 
 @dataclass
 class PoseToRos2Converter(SemDTToRos2Converter[Pose, geometry_msgs.Pose]):
-    input_type = Pose
-    output_type = geometry_msgs.Pose
 
     @classmethod
     def convert(cls, data: Pose) -> geometry_msgs.Pose:
@@ -99,8 +93,6 @@ class PoseToRos2Converter(SemDTToRos2Converter[Pose, geometry_msgs.Pose]):
 
 @dataclass
 class Point3ToRos2Converter(SemDTToRos2Converter[Point3, geometry_msgs.PointStamped]):
-    input_type = Point3
-    output_type = geometry_msgs.PointStamped
 
     @classmethod
     def convert(cls, data: Point3) -> geometry_msgs.PointStamped:
@@ -118,8 +110,6 @@ class Point3ToRos2Converter(SemDTToRos2Converter[Point3, geometry_msgs.PointStam
 class Vector3ToRos2Converter(
     SemDTToRos2Converter[Vector3, geometry_msgs.Vector3Stamped]
 ):
-    input_type = Vector3
-    output_type = geometry_msgs.Vector3Stamped
 
     @classmethod
     def convert(cls, data: Vector3) -> geometry_msgs.Vector3Stamped:
@@ -137,8 +127,6 @@ class Vector3ToRos2Converter(
 class QuaternionToRos2Converter(
     SemDTToRos2Converter[Quaternion, geometry_msgs.QuaternionStamped]
 ):
-    input_type = Quaternion
-    output_type = geometry_msgs.QuaternionStamped
 
     @classmethod
     def convert(cls, data: Quaternion) -> geometry_msgs.QuaternionStamped:
@@ -154,8 +142,6 @@ class QuaternionToRos2Converter(
 
 @dataclass
 class ColorToRos2Converter(SemDTToRos2Converter[Color, ColorRGBA]):
-    input_type = Color
-    output_type = ColorRGBA
 
     @classmethod
     def convert(cls, data: Color) -> ColorRGBA:
@@ -164,8 +150,6 @@ class ColorToRos2Converter(SemDTToRos2Converter[Color, ColorRGBA]):
 
 @dataclass
 class ShapeToRos2Converter(SemDTToRos2Converter[InputType, Marker]):
-    input_type = InputType
-    output_type = Marker
 
     @classmethod
     def convert(cls, data: InputType) -> Marker:
@@ -178,7 +162,6 @@ class ShapeToRos2Converter(SemDTToRos2Converter[InputType, Marker]):
 
 @dataclass
 class BoxToRos2Converter(ShapeToRos2Converter[Box]):
-    input_type = Box
 
     @classmethod
     def convert(cls, data: Box) -> Marker:
@@ -192,7 +175,6 @@ class BoxToRos2Converter(ShapeToRos2Converter[Box]):
 
 @dataclass
 class CylinderToRos2Converter(ShapeToRos2Converter[Cylinder]):
-    input_type = Cylinder
 
     @classmethod
     def convert(cls, data: Cylinder) -> Marker:
@@ -206,7 +188,6 @@ class CylinderToRos2Converter(ShapeToRos2Converter[Cylinder]):
 
 @dataclass
 class SphereToRos2Converter(ShapeToRos2Converter[Sphere]):
-    input_type = Sphere
 
     @classmethod
     def convert(cls, data: Sphere) -> Marker:
@@ -220,7 +201,6 @@ class SphereToRos2Converter(ShapeToRos2Converter[Sphere]):
 
 @dataclass
 class FileMeshToRos2Converter(ShapeToRos2Converter[FileMesh]):
-    input_type = FileMesh
 
     @classmethod
     def convert(cls, data: FileMesh) -> Marker:
