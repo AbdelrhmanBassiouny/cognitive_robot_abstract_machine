@@ -1,30 +1,25 @@
 from __future__ import annotations
+
 import inspect
 import sys
 from abc import ABC, abstractmethod
 from collections import defaultdict
-from dataclasses import dataclass, field, Field
+from copy import copy
+from dataclasses import dataclass, Field
 from enum import Enum
-from functools import lru_cache, cached_property
+from functools import lru_cache
+from uuid import UUID
+
+from typing_extensions import List, Type, Optional
+from typing_extensions import TypeVar, get_origin, get_args
 from typing_extensions import (
-    List,
-    Type,
     Union,
     Generic,
     Dict,
     Tuple,
     ClassVar,
-    TYPE_CHECKING,
     Any,
 )
-from uuid import UUID
-from copy import copy
-
-from typing_extensions import List, Type, Optional, TYPE_CHECKING
-from typing_extensions import TypeVar, get_origin, get_args
-
-if TYPE_CHECKING:
-    from ..entity_query_language.predicate import Symbol
 
 
 def classes_of_module(module) -> List[Type]:
@@ -43,12 +38,12 @@ def classes_of_module(module) -> List[Type]:
 
 
 def behaves_like_a_built_in_class(
-    clazz: Type,
+        clazz: Type,
 ) -> bool:
     return (
-        is_builtin_class(clazz)
-        or clazz == UUID
-        or (inspect.isclass(clazz) and issubclass(clazz, Enum))
+            is_builtin_class(clazz)
+            or clazz == UUID
+            or (inspect.isclass(clazz) and issubclass(clazz, Enum))
     )
 
 
@@ -92,10 +87,10 @@ def nearest_common_ancestor(classes):
 
 
 def sort_classes_by_role_aware_inheritance_path_length(
-    classes: Tuple[Type, ...],
-    common_ancestor: Optional[Type] = None,
-    classes_to_remove_from_common_ancestor: Optional[Tuple[Type, ...]] = None,
-    with_levels: bool = False,
+        classes: Tuple[Type, ...],
+        common_ancestor: Optional[Type] = None,
+        classes_to_remove_from_common_ancestor: Optional[Tuple[Type, ...]] = None,
+        with_levels: bool = False,
 ) -> List[Type]:
     classes_to_remove_from_common_ancestor = (
         list(classes_to_remove_from_common_ancestor)
@@ -117,12 +112,12 @@ def sort_classes_by_role_aware_inheritance_path_length(
         if sorted_[i][1] != sorted_[i + 1][1]:
             continue
         if (
-            issubclass(sorted_[i][0], Role) and not issubclass(sorted_[i + 1][0], Role)
+                issubclass(sorted_[i][0], Role) and not issubclass(sorted_[i + 1][0], Role)
         ) or (
-            issubclass(sorted_[i][0], Role)
-            and issubclass(sorted_[i + 1][0], Role)
-            and len(sorted_[i][0].all_role_taker_types())
-            > len(sorted_[i + 1][0].all_role_taker_types())
+                issubclass(sorted_[i][0], Role)
+                and issubclass(sorted_[i + 1][0], Role)
+                and len(sorted_[i][0].all_role_taker_types())
+                > len(sorted_[i + 1][0].all_role_taker_types())
         ):
             # keep swapping until we find a different length
             for j in range(i + 1, 0, -1):
@@ -161,8 +156,8 @@ def role_aware_nearest_common_ancestor(classes):
 
 @lru_cache
 def role_aware_inheritance_path_length(
-    child_class: Type,
-    parent_class: Type,
+        child_class: Type,
+        parent_class: Type,
 ) -> Union[float, int]:
     """
     Calculate the inheritance path length between two classes taking roles into account.
@@ -180,7 +175,7 @@ def role_aware_inheritance_path_length(
 
 
 def _role_aware_inheritance_path_length(
-    child_class: Type, parent_class: Type, current_length: int = 0
+        child_class: Type, parent_class: Type, current_length: int = 0
 ) -> int:
     """
     Helper function for :func:`inheritance_path_length`.

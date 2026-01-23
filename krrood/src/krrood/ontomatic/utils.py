@@ -1,17 +1,20 @@
 from __future__ import annotations
 
 import re
-from dataclasses import fields, dataclass, field
-from enum import Enum
+from dataclasses import fields
 from functools import lru_cache
 from typing import Any, Set, Iterable, List, Type, Optional
 import rdflib
 from rdflib import OWL
+from typing_extensions import TYPE_CHECKING, Dict
 
 from ..class_diagrams.utils import issubclass_or_role, Role
 from ..entity_query_language.entity import variable
 from ..entity_query_language.symbolic import Variable
 from ..utils import inheritance_path_length
+
+if TYPE_CHECKING:
+    from .ontology_to_python.ontology_info import AnonymousClass
 
 
 @lru_cache
@@ -41,22 +44,29 @@ def not_none_inheritance_path_length(child: Type, parent: Type) -> int:
     return length
 
 
-@dataclass
-class AnonymousClass:
-    """Represents an anonymous class that is yet to be identified"""
+def topological_order(items: Dict[str, Any], dep_key: str) -> List[str]:
+    """Return a topological order based on dependency names in dep_key; if cycles, append remaining alphabetically."""
 
-    uri: URIRef
-    types: Set[Type] = field(default_factory=set)
-    final_sorted_types: List[Type] = field(default_factory=list)
+    def get_deps(item):
+        if hasattr(item, dep_key):
+            return getattr(item, dep_key, [])
+        return item.get(dep_key, [])
 
-    def add_type(self, cls: Type):
-        self.types.add(cls)
-
-    def __hash__(self):
-        return hash(self.uri)
-
-    def __eq__(self, other):
-        return hash(self) == hash(other)
+    remaining = {
+        name: set(get_deps(items[name])) & set(items.keys()) for name in items
+    }
+    ordered: List[str] = []
+    while remaining:
+        ready = sorted([name for name, deps in remaining.items() if not deps])
+        if not ready:
+            ordered.extend(sorted(remaining.keys()))
+            break
+        for name in ready:
+            ordered.append(name)
+            del remaining[name]
+        for deps in remaining.values():
+            deps.difference_update(ready)
+    return ordered
 
 
 def get_super_axiom_and_candidate_var(
@@ -207,10 +217,3 @@ class NamingRegistry:
             return "".join(p.capitalize() for p in parts if p)
         # Otherwise just capitalize first char
         return name[:1].upper() + name[1:]
-
-
-class PropertyType(str, Enum):
-    """Enumeration of OWL property types."""
-
-    OBJECT_PROPERTY = "ObjectProperty"
-    DATA_PROPERTY = "DataProperty"

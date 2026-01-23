@@ -8,15 +8,15 @@ from collections import defaultdict
 from dataclasses import fields, is_dataclass, dataclass, field
 from functools import lru_cache
 from types import ModuleType
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Type, Union, ClassVar
 
 import rdflib
 import rustworkx as rx
-from krrood.ontomatic.utils import NamingRegistry
 from rdflib import RDF, URIRef, Literal, OWL, RDFS
 from ripple_down_rules import RDRDecorator
 from tqdm import tqdm
+from typing_extensions import Any, Dict, Iterable, List, Optional, Tuple, Type, Union, ClassVar
 
+from .ontology_info import AnonymousClass
 from ..property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
@@ -31,7 +31,7 @@ from ..property_descriptor.property_descriptor import PropertyDescriptor
 from ..utils import (
     get_non_class_attribute_names_of_instance,
     get_most_specific_types,
-    AnonymousClass,
+    NamingRegistry,
 )
 from ...class_diagrams.class_diagram import Association, ClassDiagram
 from ...class_diagrams.utils import (
@@ -39,9 +39,10 @@ from ...class_diagrams.utils import (
     Role,
     sort_classes_by_role_aware_inheritance_path_length,
 )
+from ...entity_query_language.mixins import HasPythonAxiom
 from ...entity_query_language.predicate import Symbol
 from ...entity_query_language.symbol_graph import SymbolGraph
-from ...ormatic.utils import classes_of_module
+from ...class_diagrams.utils import classes_of_module
 
 logger = logging.Logger("owl_loader")
 logger.setLevel(logging.DEBUG)
@@ -62,7 +63,7 @@ class OwlInstancesRegistry:
         self._by_uri: Dict[URIRef, List[Any]] = defaultdict(list)
 
     def get_or_create_for(
-        self, uri: URIRef, factory: Type, symbol_graph, *args, **kwargs
+            self, uri: URIRef, factory: Type, symbol_graph, *args, **kwargs
     ) -> Any:
         instances = self.resolve(uri)
 
@@ -135,9 +136,9 @@ class ModelMetadata:
     """
 
     def __init__(
-        self,
-        model_modules: Union[ModuleType, Iterable[ModuleType]],
-        symbol_graph: SymbolGraph,
+            self,
+            model_modules: Union[ModuleType, Iterable[ModuleType]],
+            symbol_graph: SymbolGraph,
     ):
         """Initializes ModelMetadata by scanning the provided modules.
 
@@ -185,9 +186,9 @@ class ModelMetadata:
 
             # Collect descriptor classes available in the module for quick lookup by name
             if (
-                isinstance(obj, type)
-                and issubclass(obj, PropertyDescriptor)
-                and obj is not PropertyDescriptor
+                    isinstance(obj, type)
+                    and issubclass(obj, PropertyDescriptor)
+                    and obj is not PropertyDescriptor
             ):
                 self.descriptor_by_name[obj.__name__] = obj
 
@@ -206,7 +207,7 @@ class ModelMetadata:
 
     @lru_cache
     def get_descriptor_base(
-        self, pred_local: str
+            self, pred_local: str
     ) -> Optional[Type[PropertyDescriptor]]:
         """Finds the PropertyDescriptor base class for a given predicate local name.
 
@@ -321,8 +322,8 @@ class OwlLoader:
                 )
                 if py_cls:
                     if not any(
-                        issubclass_or_role(t, py_cls)
-                        for t in instance.final_sorted_types
+                            issubclass_or_role(t, py_cls)
+                            for t in instance.final_sorted_types
                     ):
                         instance.final_sorted_types.append(py_cls)
             for desc in descriptors:
@@ -343,7 +344,7 @@ class OwlLoader:
                 for dom, level in domains:
                     if level < found_level:
                         break
-                    if hasattr(dom, "axiom_python") and dom.axiom_python(instance):
+                    if isinstance(dom, HasPythonAxiom) and dom.check_axiom_python(instance):
                         self._update_inferred_types_given_descriptor_domain_and_range(
                             instance, desc, dom
                         )
@@ -355,19 +356,19 @@ class OwlLoader:
                         continue
                     for range_inst in getattr(instance, desc.get_field_name()):
                         if any(
-                            issubclass_or_role(it, range_)
-                            for it in range_inst.final_sorted_types
+                                issubclass_or_role(it, range_)
+                                for it in range_inst.final_sorted_types
                         ):
                             if not any(
-                                issubclass_or_role(t, dom)
-                                for t in instance.final_sorted_types
-                            ) and not hasattr(dom, "axiom_python"):
+                                    issubclass_or_role(t, dom)
+                                    for t in instance.final_sorted_types
+                            ) and not isinstance(dom, HasPythonAxiom):
                                 instance.final_sorted_types.append(dom)
                                 found_level = level
                             break
 
     def keep_most_specific_types_and_sort_from_least_to_most_specific(
-        self,
+            self,
     ) -> None:
         for instance in self.anonymous_instances.values():
             result = get_most_specific_types(tuple(instance.final_sorted_types))
@@ -384,7 +385,7 @@ class OwlLoader:
             )
 
     def sort_explicit_types_from_most_to_least_specific(
-        self,
+            self,
     ) -> None:
         for uri, instances in self.registry._by_uri.items():
             if len(instances) <= 1:
@@ -413,19 +414,19 @@ class OwlLoader:
 
     @lru_cache
     def get_descriptors_of_instance(
-        self, instance: AnonymousClass
+            self, instance: AnonymousClass
     ) -> List[Type[PropertyDescriptor]]:
         non_class_fields = get_non_class_attribute_names_of_instance(instance)
         descriptors = [self.metadata.get_descriptor_base(f) for f in non_class_fields]
         return [d for d in descriptors if d is not None]
 
     def _update_inferred_types_given_descriptor_domain_and_range(
-        self,
-        instance: AnonymousClass,
-        desc: Type[PropertyDescriptor],
-        dom: Type,
-        range_: Optional[Type] = None,
-        range_inst: Optional[AnonymousClass] = None,
+            self,
+            instance: AnonymousClass,
+            desc: Type[PropertyDescriptor],
+            dom: Type,
+            range_: Optional[Type] = None,
+            range_inst: Optional[AnonymousClass] = None,
     ):
         if not any(issubclass_or_role(t, dom) for t in instance.final_sorted_types):
             instance.final_sorted_types.append(dom)
@@ -440,7 +441,7 @@ class OwlLoader:
             range_instances = [range_inst]
         for range_inst in range_instances:
             if not any(
-                issubclass_or_role(t, range_) for t in range_inst.final_sorted_types
+                    issubclass_or_role(t, range_) for t in range_inst.final_sorted_types
             ):
                 range_inst.final_sorted_types.append(range_)
 
@@ -465,14 +466,14 @@ class OwlLoader:
                         )
                     )
                     if issubclass(descriptor_type, ReflexiveProperty) or not issubclass(
-                        descriptor_type, IrreflexiveProperty
+                            descriptor_type, IrreflexiveProperty
                     ):
                         descriptor_instance.update_value(
                             node_instance.instance,
                             node_instance.instance,
                             inferred=True,
                         )
-                    for node2 in comp[i + 1 :]:
+                    for node2 in comp[i + 1:]:
                         node2_instance = descriptor_induced_subgraph[node2]
                         descriptor_instance.update_value(
                             node_instance.instance,
@@ -536,7 +537,7 @@ class OwlLoader:
             obj = o
             if isinstance(obj, Literal):
                 if self._assign_data_property(
-                    [instance], field_name, obj, must_have_attr=False
+                        [instance], field_name, obj, must_have_attr=False
                 ):
                     self.literals[instance.uri][field_name] = obj
             else:
@@ -560,7 +561,7 @@ class OwlLoader:
             self.registry.get_or_create_for(s, py_cls, self.symbol_graph, **kwargs)
 
     def _get_common_role_taker_kwargs(
-        self, existing_roles: Optional[List[Any]], target_cls: Type
+            self, existing_roles: Optional[List[Any]], target_cls: Type
     ) -> Dict[str, Any]:
         """Finds common role-taker associations between existing roles and a target class.
 
@@ -624,10 +625,10 @@ class OwlLoader:
                 pbar.update(1)
 
     def _assign_property(
-        self,
-        subj_roles: List[Symbol],
-        field_name: str,
-        obj_uri: Union[URIRef, Literal],
+            self,
+            subj_roles: List[Symbol],
+            field_name: str,
+            obj_uri: Union[URIRef, Literal],
     ):
         """Assigns a property to an instance based on the predicate name and object URI. It handles both data and
          object properties.
@@ -672,11 +673,11 @@ class OwlLoader:
         )
 
     def _assign_data_property(
-        self,
-        subj_roles: List[Symbol],
-        field_name: Optional[str],
-        literal: Literal,
-        must_have_attr: bool = True,
+            self,
+            subj_roles: List[Symbol],
+            field_name: Optional[str],
+            literal: Literal,
+            must_have_attr: bool = True,
     ) -> bool:
         """Assigns a data property to an instance, coercing the literal value if possible.
 
@@ -716,7 +717,7 @@ class OwlLoader:
 
     @lru_cache
     def best_fit_object_role(
-        self, field_name: str, obj_roles: Tuple[Any]
+            self, field_name: str, obj_roles: Tuple[Any]
     ) -> Optional[Type]:
         """Finds the best fitting object role type for a given object type.
 
@@ -740,10 +741,10 @@ class OwlLoader:
         return obj
 
     def _assign_object_property(
-        self,
-        subj_roles: List[Symbol],
-        field_name: str,
-        obj_node: Union[URIRef, Literal],
+            self,
+            subj_roles: List[Symbol],
+            field_name: str,
+            obj_node: Union[URIRef, Literal],
     ):
         """Assigns an object property by resolving the object node and finding the correct attribute.
 
@@ -836,7 +837,7 @@ class OwlLoader:
 
     @staticmethod
     def get_and_construct_role_taker(
-        registry, cls_: Type, uri_ref: URIRef, symbol_graph: SymbolGraph, **kwargs
+            registry, cls_: Type, uri_ref: URIRef, symbol_graph: SymbolGraph, **kwargs
     ) -> Tuple[Optional[Association], Optional[Symbol]]:
         """Recursively finds or constructs role-takers for a given class.
 
@@ -889,7 +890,7 @@ class OwlLoader:
 
     @staticmethod
     def create_symbol_graph(
-        model_modules: Iterable[Union[str, ModuleType]],
+            model_modules: Iterable[Union[str, ModuleType]],
     ) -> SymbolGraph:
         """Creates and initializes a SymbolGraph from model modules.
 
@@ -915,12 +916,12 @@ class OwlLoader:
 
     @staticmethod
     def load_instances(
-        owl_path: str,
-        base_module: Union[str, ModuleType],
-        classes_module: Union[str, ModuleType],
-        properties_module: Union[str, ModuleType],
-        symbol_graph: Optional[SymbolGraph] = None,
-        registry: Optional[OwlInstancesRegistry] = None,
+            owl_path: str,
+            base_module: Union[str, ModuleType],
+            classes_module: Union[str, ModuleType],
+            properties_module: Union[str, ModuleType],
+            symbol_graph: Optional[SymbolGraph] = None,
+            registry: Optional[OwlInstancesRegistry] = None,
     ) -> OwlInstancesRegistry:
         """Loads OWL instances into a registry.
 
@@ -953,10 +954,10 @@ class OwlLoader:
 
     @staticmethod
     def load_multi_file_instances(
-        owl_paths: Iterable[str],
-        base_module: Union[str, ModuleType],
-        classes_module: Union[str, ModuleType],
-        properties_module: Union[str, ModuleType],
+            owl_paths: Iterable[str],
+            base_module: Union[str, ModuleType],
+            classes_module: Union[str, ModuleType],
+            properties_module: Union[str, ModuleType],
     ) -> OwlInstancesRegistry:
         """Loads instances from multiple OWL files into a single registry.
 

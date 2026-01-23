@@ -1,5 +1,5 @@
 from ripple_down_rules.datastructures.case import Case, create_case
-from ...owl_to_python import PropertyInfo
+from ...ontology_info import PropertyInfo
 from typing_extensions import Any, Dict
 from ripple_down_rules.helpers import general_rdr_classify
 from . import property_info_domains_mcrdr as domains_classifier

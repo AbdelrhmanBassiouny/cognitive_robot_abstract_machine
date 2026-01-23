@@ -12,6 +12,7 @@ from typing_extensions import Tuple, ClassVar
 from krrood.class_diagrams.utils import Role
 from krrood.entity_query_language.entity import contains, ConditionType, variable_from, length, variable, exists, for_all, to_str
 from krrood.entity_query_language.entity_result_processors import count
+from krrood.entity_query_language.mixins import HasAxiom, HasPythonAxiom
 import krrood.entity_query_language.entity as eql
 from krrood.entity_query_language.predicate import HasAttribute, IsSubClassOf, IsSubClassOrRole
 from krrood.ontomatic.property_descriptor.property_descriptor import (
@@ -76,7 +77,7 @@ class {{ cls.name }}({% if cls.base_classes %}{{ ', '.join(cls.base_classes) }}{
     {% if cls.axioms_python|length > 0 %}
 
     @classmethod
-    def axiom_python(cls, candidate: AnonymousClass) -> bool:
+    def check_axiom_python(cls, candidate: AnonymousClass) -> bool:
         return {{ cls.axioms_python | join(' and ') }}
     {% endif %}
     {% if cls.equivalent_classes|length > 0 %}

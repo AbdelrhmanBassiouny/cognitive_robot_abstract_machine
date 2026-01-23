@@ -30,10 +30,8 @@ from ...entity_query_language.entity import (
 from ...entity_query_language.predicate import IsSubClassOrRole
 from ...entity_query_language.utils import is_iterable
 from ..property_descriptor.property_descriptor import HasProperty
-from ..utils import AnonymousClass, NamingRegistry, PropertyType
-
-if TYPE_CHECKING:
-    from .owl_to_python import OntologyInfo
+from ..utils import NamingRegistry
+from .ontology_info import OntologyInfo, PropertyType, AnonymousClass
 
 
 @dataclass

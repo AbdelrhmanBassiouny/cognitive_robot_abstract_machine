@@ -1,13 +1,12 @@
 from ripple_down_rules.helpers import (
-    get_an_updated_case_copy,
     update_case_and_conclusions_with_rule_output,
 )
-from ripple_down_rules.utils import copy_case, make_set
+from ripple_down_rules.utils import copy_case
 from ripple_down_rules.datastructures.case import Case, create_case
 from typing_extensions import Set
 
 from .property_info_ranges_mcrdr_defs import *
-
+from ...ontology_info import PropertyInfo
 
 attribute_name = "ranges"
 conclusion_type = (

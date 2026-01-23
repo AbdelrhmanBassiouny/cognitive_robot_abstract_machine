@@ -1,5 +1,5 @@
 from typing_extensions import List
-from ...owl_to_python import PropertyInfo
+from ...ontology_info import PropertyInfo
 from ripple_down_rules import *
 
 
