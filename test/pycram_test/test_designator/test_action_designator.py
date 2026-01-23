@@ -186,7 +186,7 @@ def test_place(mutable_model_world):
     object_description = world.get_body_by_name("milk.stl")
     description = PlaceActionDescription(
         object_description,
-        PoseStamped.from_list([2.2, 2, 1], [0, 0, 0, 1], world.root),
+        PoseStamped.from_list([2.4, 2, 1], [0, 0, 0, 1], world.root),
         [Arms.LEFT],
     )
     plan = SequentialPlan(
@@ -300,8 +300,6 @@ def test_close(immutable_model_world):
 
 def test_transport(mutable_model_world):
     world, robot_view, context = mutable_model_world
-    # node = rclpy.create_node("test_node")
-    # VizMarkerPublisher(world, node, throttle_state_updates=20)
     description = TransportActionDescription(
         world.get_body_by_name("milk.stl"),
         [PoseStamped.from_list([3.1, 2.2, 0.95], [0.0, 0.0, 1.0, 0.0], world.root)],
@@ -315,6 +313,9 @@ def test_transport(mutable_model_world):
     milk_position = world.get_body_by_name("milk.stl").global_pose.to_np()[:3, 3]
     dist = np.linalg.norm(milk_position - np.array([3.1, 2.2, 0.95]))
     assert dist <= 0.01
+
+    assert len(plan.nodes) == len(plan.all_nodes)
+    assert len(plan.edges) == len(plan.all_nodes) - 1
 
 
 def test_grasping(immutable_model_world):

@@ -279,9 +279,6 @@ class CostmapLocation(LocationDesignatorDescription):
             )
             final_map.number_of_samples = 600
 
-            node = rclpy.create_node("Location_Designator")
-            VizMarkerPublisher(test_world, node, throttle_state_updates=20)
-
             for pose_candidate in final_map:
                 logger.debug(f"Testing candidate pose at {pose_candidate}")
                 pose_candidate.position.z = 0

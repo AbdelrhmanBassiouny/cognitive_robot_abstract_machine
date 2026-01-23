@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Tuple
 
@@ -63,16 +64,21 @@ class GraspDescription:
         else:
             offset = 0
 
-        pre_pose = PoseStamped.from_list(pose.position.to_list(), orientation=grasp_orientation, frame=pose_frame)
+        pre_pose = PoseStamped.from_list(pose.position.to_list(), pose.orientation.to_list(), frame=pose_frame)
+        pre_pose.rotate_by_quaternion(grasp_orientation)
         pre_pose = translate_pose_along_local_axis(pre_pose, self.manipulation_axis(), -offset)
+
+        grasp_pose = deepcopy(pose)
+        grasp_pose.rotate_by_quaternion(grasp_orientation)
 
         # Lift pose calculation
         lift_pose_map = PoseStamped.from_spatial_type(world.transform(pose.to_spatial_type(), world.root))
         lift_pose_map.position.z += self.manipulation_offset
 
         lift_pose =  PoseStamped.from_spatial_type(world.transform(lift_pose_map.to_spatial_type(), pose_frame))
+        lift_pose.rotate_by_quaternion(grasp_orientation)
 
-        sequence = [pre_pose, PoseStamped.from_list(pose.position.to_list(), grasp_orientation, frame=pose_frame), PoseStamped.from_list(lift_pose.position.to_list(), grasp_orientation, frame=pose_frame)]
+        sequence = [pre_pose, grasp_pose, lift_pose]
 
         if reverse:
             sequence.reverse()

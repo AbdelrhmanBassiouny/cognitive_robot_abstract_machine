@@ -334,7 +334,8 @@ def simple_apartment_setup():
         )
     ).parse()
     world.merge_world_at_pose(
-        milk_world, HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07)
+        milk_world,
+        HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi),
     )
     return world
 

@@ -565,3 +565,28 @@ def test_pose_sequence_top_tracy_box(tracy_milk_world):
     assert sequence[2].orientation.to_list() == pytest.approx(
         [0.707, 0.707, 0.0, 0.0], abs=0.001
     )
+
+
+def test_pose_sequence_180_flip(immutable_simple_pr2_world):
+    world, robot_view, context = immutable_simple_pr2_world
+
+    man = robot_view.left_arm.manipulator
+    grasp_desc = GraspDescription(
+        ApproachDirection.FRONT,
+        VerticalAlignment.NoAlignment,
+        man,
+    )
+    sequence = grasp_desc._pose_sequence(
+        PoseStamped.from_list([1, 0, 1], [0, 0, 1, 0], frame=world.root),
+        world.get_body_by_name("milk.stl"),
+    )
+
+    assert sequence[0].frame_id == world.root
+
+    assert sequence[0].orientation.to_list() == pytest.approx([0, 0, 1, 0], abs=0.001)
+    assert sequence[1].orientation.to_list() == pytest.approx([0, 0, 1, 0], abs=0.001)
+    assert sequence[2].orientation.to_list() == pytest.approx([0, 0, 1, 0], abs=0.001)
+
+    assert sequence[0].position.to_list() == pytest.approx([1.083, 0, 1], abs=0.001)
+    assert sequence[1].position.to_list() == pytest.approx([1.0, 0, 1], abs=0.001)
+    assert sequence[2].position.to_list() == pytest.approx([1.0, 0, 1.05], abs=0.001)

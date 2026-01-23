@@ -58,18 +58,15 @@ class ReachAction(ActionDescription):
     Object designator_description describing the object that should be picked up
     """
 
-    _pre_perform_callbacks = []
-    """
-    List to save the callbacks which should be called before performing the action.
-    """
+    reverse_reach_order: bool = False
 
     def __post_init__(self):
         super().__post_init__()
 
     def execute(self) -> None:
 
-        target_pre_pose, target_pose, _ = self.grasp_description.grasp_pose_sequence(
-            self.object_designator
+        target_pre_pose, target_pose, _ = self.grasp_description._pose_sequence(
+            self.target_pose, self.object_designator, reverse=self.reverse_reach_order
         )
 
         SequentialPlan(
@@ -114,6 +111,7 @@ class ReachAction(ActionDescription):
         arm: Union[Iterable[Arms], Arms] = None,
         grasp_description: Union[Iterable[GraspDescription], GraspDescription] = None,
         object_designator: Union[Iterable[Body], Body] = None,
+        reverse_reach_order: Union[Iterable[bool], bool] = False,
     ) -> PartialDesignator[ReachAction]:
         return PartialDesignator[ReachAction](
             ReachAction,
@@ -121,6 +119,7 @@ class ReachAction(ActionDescription):
             arm=arm,
             grasp_description=grasp_description,
             object_designator=object_designator,
+            reverse_reach_order=reverse_reach_order,
         )
 
 

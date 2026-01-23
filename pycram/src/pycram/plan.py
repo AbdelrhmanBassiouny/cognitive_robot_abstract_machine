@@ -93,9 +93,7 @@ class Plan:
     Callbacks to be called when a node of the given type is ended.
     """
 
-    def __init__(
-        self, root: PlanNode, context: Context
-    ):  # world: World, robot: AbstractRobot, super_plan: Plan = None):
+    def __init__(self, root: PlanNode, context: Context):
         super().__init__()
         self.plan_graph = rx.PyDiGraph()
         self.node_indices = {}
@@ -143,9 +141,8 @@ class Plan:
         :param mount_node: A node of this plan to which the other plan will be mounted. If None, the root of this plan will be used.
         """
         mount_node = mount_node or self.root
-        self.add_nodes_from(other.nodes)
-        self.add_edges_from(other.edges)
         self.add_edge(mount_node, other.root)
+        self.add_edges_from(other.edges)
         for node in self.nodes:
             node.execute = self
             node.world = self.world
@@ -196,9 +193,9 @@ class Plan:
         :param v_of_edge: Target node of the edge
         :param attr: Additional attributes to be added to the edge
         """
-        if u_of_edge not in self.nodes:
+        if u_of_edge not in self.all_nodes:
             self.add_node(u_of_edge)
-        if v_of_edge not in self.nodes:
+        if v_of_edge not in self.all_nodes:
             self.add_node(v_of_edge)
         self._set_layer_indices(u_of_edge, v_of_edge)
 
@@ -400,6 +397,7 @@ class Plan:
         :return: The Plan Node that precedes the given node
         """
         search_space = self.get_previous_nodes(origin_node, on_layer)
+        search_space.reverse()
 
         return [node for node in search_space if type(node) == node_type]
 
@@ -423,6 +421,7 @@ class Plan:
         :return: The Plan Node that precedes the given node
         """
         search_space = self.get_previous_nodes(node, on_layer)
+        search_space.reverse()
         return [
             node
             for node in search_space

@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import rclpy
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
@@ -34,6 +35,7 @@ from pycram.robot_plans import (
     PickUpAction,
     PlaceAction,
 )
+from semantic_digital_twin.adapters.viz_marker import VizMarkerPublisher
 
 engine = create_engine("sqlite:///:memory:")
 
@@ -283,7 +285,9 @@ def test_pickUpAction(database, mutable_model_world):
                 world.get_body_by_name("milk.stl"),
                 Arms.LEFT,
                 GraspDescription(
-                    ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False
+                    ApproachDirection.FRONT,
+                    VerticalAlignment.NoAlignment,
+                    robot_view.left_arm.manipulator,
                 ),
             ),
             NavigateActionDescription(
@@ -400,7 +404,7 @@ def complex_plan(mutable_model_world):
                 GraspDescription(
                     ApproachDirection.FRONT,
                     VerticalAlignment.NoAlignment,
-                    False,
+                    robot_view.left_arm.manipulator,
                 ),
             ),
             NavigateActionDescription(
@@ -584,7 +588,9 @@ def test_filtering(database, mutable_model_world):
                 world.get_body_by_name("milk.stl"),
                 Arms.LEFT,
                 GraspDescription(
-                    ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False
+                    ApproachDirection.FRONT,
+                    VerticalAlignment.NoAlignment,
+                    robot_view.left_arm.manipulator,
                 ),
             ),
             NavigateActionDescription(
