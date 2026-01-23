@@ -43,7 +43,7 @@ jobs:
           rm -rf /opt/ros/semantic_digital_twin/* 
           cd /opt/ros/semantic_digital_twin
           rm -rf .git .github .gitignore .gitmodules .readthedocs.yaml
-          cp -r $GITHUB_WORKSPACE/ros/src/semantic_digital_twin/semantic_digital_twin/* /opt/ros/semantic_digital_twin/
+          cp -r /__w/${{ github.event.repository.name }}/${{ github.event.repository.name }}/ros/src/semantic_digital_twin /opt/ros
           # Adjust working directory for container steps if needed, but 'defaults' handles it generally.
           # However, semantic_digital_twin workflow expects to run in /opt/ros/semantic_digital_twin
 
@@ -59,6 +59,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+
+      - name: Install Graphviz
+        if: ${{ inputs.lib == 'pycram' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install graphviz libgraphviz-dev -y
 
       - name: Install dependencies (Non-container)
         if: ${{ !inputs.use_container }}
