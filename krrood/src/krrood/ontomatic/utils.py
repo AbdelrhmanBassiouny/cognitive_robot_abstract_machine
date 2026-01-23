@@ -75,7 +75,7 @@ def get_super_axiom_and_candidate_var(
     candidate_var = (
         candidate
         if isinstance(candidate, Variable)
-        else variable(AnonymousClass, [candidate])
+        else variable(type(candidate), [candidate])
     )
 
     sup = (
