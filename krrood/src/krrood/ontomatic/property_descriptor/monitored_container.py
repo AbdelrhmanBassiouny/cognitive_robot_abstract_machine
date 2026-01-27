@@ -5,7 +5,6 @@ from _weakref import ref as weakref_ref
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
-from line_profiler import profile
 from typing_extensions import (
     Optional,
     Union,
@@ -267,7 +266,6 @@ class MonitoredSet(MonitoredContainer, set):
         for value in values:
             self._add_item(value)
 
-    @profile
     def _add_item(
         self, value, inferred: bool = False, add_relation_to_the_graph: bool = True
     ):

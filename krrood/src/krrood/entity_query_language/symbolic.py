@@ -303,6 +303,15 @@ class SymbolicExpression(Generic[T], ABC):
         SymbolicExpression._symbolic_expression_stack_.append(node)
         return self
 
+    def _is_subset_of_(self, other: SymbolicExpression) -> bool:
+        """
+        Check if this symbolic expression is a subset of another symbolic expression.
+
+        :param other: The other symbolic expression to compare with.
+        :return: True if this symbolic expression is a subset of the other, False otherwise.
+        """
+        raise NotImplementedError
+
     def __exit__(self, *args):
         SymbolicExpression._symbolic_expression_stack_.pop()
 
@@ -411,6 +420,21 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
 
     def __ge__(self, other) -> Comparator:
         return Comparator(self, other, operator.ge)
+
+    def __sub__(self, other):
+        return MathOperation(self, other, operator.sub)
+
+    def __add__(self, other):
+        return MathOperation(self, other, operator.add)
+
+    def __mul__(self, other):
+        return MathOperation(self, other, operator.mul)
+
+    def __truediv__(self, other):
+        return MathOperation(self, other, operator.truediv)
+
+    def __pow__(self, other):
+        return MathOperation(self, other, operator.pow)
 
     def __hash__(self):
         return super().__hash__()
@@ -1713,6 +1737,30 @@ class BinaryOperator(SymbolicExpression, ABC):
         This is useful for accessing the leaves of the symbolic expression tree.
         """
         return self.left._all_variable_instances_ + self.right._all_variable_instances_
+
+
+@dataclass(eq=False, repr=False)
+class MathOperation(BinaryOperator, CanBehaveLikeAVariable):
+
+    operation: Callable[[Any, Any], Any]
+
+    def _evaluate__(
+        self,
+        sources: Optional[Dict[int, Any]] = None,
+        parent: Optional[SymbolicExpression] = None,
+    ) -> Iterable[OperationResult]:
+        self._eval_parent_ = parent
+        yield from (
+            OperationResult(
+                {**sources, self._id_: self.operation(l.value, r.value)}, False, self
+            )
+            for l in self.left._evaluate__(sources, self)
+            for r in self.right._evaluate__({**sources, **l.bindings}, self)
+        )
+
+    @property
+    def _name_(self) -> str:
+        return self.operation.__name__
 
 
 def not_contains(container, item) -> bool:

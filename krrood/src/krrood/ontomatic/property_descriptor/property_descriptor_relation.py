@@ -6,7 +6,6 @@ from functools import cached_property, lru_cache
 from collections import defaultdict
 
 from krrood.class_diagrams.utils import Role
-from line_profiler import profile
 
 from krrood.ontomatic.property_descriptor.mixins import (
     HasEquivalentProperties,
@@ -83,7 +82,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         else:
             return None
 
-    @profile
     def update_source_and_add_to_graph_and_apply_implications(self):
         """
         Update the source wrapped-field value, add this relation to the graph, and apply all implications of adding this
@@ -94,7 +92,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             return
         self.add_to_graph_and_apply_implications()
 
-    @profile
     def infer_and_apply_implications(self):
         """
         Infer all implications of adding this relation and apply them to the corresponding objects.
@@ -118,7 +115,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             and self.inference_explanation[0] == InferredThrough.EQUIVALENT
         )
 
-    @profile
     def infer_symmetric_relation(self):
         """
         Infer all symmetric relations of this relation.
@@ -155,7 +151,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
         """
         return not self.inferred or self.update_source_wrapped_field_value()
 
-    @profile
     def infer_equivalence_relations(self):
         """
         Infer all equivalence relations of this relation.
@@ -192,7 +187,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             return self.property_descriptor_class.get_equivalent_properties()
         return []
 
-    @profile
     def update_source_wrapped_field_value(self) -> bool:
         """
         Update the wrapped field value for the source instance.
@@ -204,7 +198,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             self.source.instance, self.target.instance
         )
 
-    @profile
     def infer_super_relations(self):
         """
         Infer all super relations of this relation.
@@ -236,7 +229,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
                 inference_explanation=(InferredThrough.SUPER, self),
             ).update_source_and_add_to_graph_and_apply_implications()
 
-    @profile
     def infer_inverse_relation(self):
         """
         Infer the inverse relation if it exists.
@@ -330,7 +322,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             return value
         return value
 
-    @profile
     def infer_transitive_relations(self):
         """
         Add all transitive relations of this relation type that results from adding this relation to the graph.
@@ -412,7 +403,6 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             lambda rel: rel.property_descriptor_class == self.property_descriptor_class,
         )
 
-    @profile
     def infer_chain_axioms(self):
         """
         Infers relations based on property chain axioms.

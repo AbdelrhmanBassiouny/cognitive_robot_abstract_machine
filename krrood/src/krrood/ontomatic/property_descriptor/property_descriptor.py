@@ -8,7 +8,6 @@ from functools import cached_property, lru_cache
 from types import ModuleType
 
 from krrood.ontomatic.property_descriptor.mixins import IrreflexiveProperty
-from line_profiler import profile
 
 from . import logger
 from typing_extensions import (
@@ -387,7 +386,6 @@ class PropertyDescriptor(Symbol):
             self.obj_attr_map[obj] = value
             self.add_relation_to_the_graph_and_apply_implications(obj, value)
 
-    @profile
     def update_value(
         self,
         domain_value: Symbol,

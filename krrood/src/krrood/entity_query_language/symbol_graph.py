@@ -8,7 +8,6 @@ from dataclasses import dataclass, field, InitVar
 from functools import lru_cache, cached_property
 
 from krrood.ontomatic.property_descriptor.mixins import SymmetricProperty
-from line_profiler import profile
 from rustworkx import PyDiGraph
 from rustworkx.rustworkx import NoEdgeBetweenNodes
 from typing_extensions import (
@@ -71,7 +70,7 @@ class PredicateClassRelation:
         self.source = SymbolGraph().ensure_wrapped_instance(self.source)
         self.target = SymbolGraph().ensure_wrapped_instance(self.target)
 
-    @profile
+
     def add_to_graph(self) -> bool:
         """
         Add the relation to the graph.
@@ -80,7 +79,6 @@ class PredicateClassRelation:
         """
         return SymbolGraph().add_relation(self)
 
-    @profile
     def add_to_graph_and_apply_implications(self):
         """
         Add this relation to the graph and apply all implications of this relation.
@@ -262,7 +260,6 @@ class SymbolGraph(metaclass=SingletonMeta):
     A flag that indicates whether the graph is currently applying implications.
     """
 
-    @profile
     def apply_implications(self, relation: PredicateClassRelation):
         """
         Add the given relation to the inference queue and apply all implications in a breadth-first manner.
@@ -413,7 +410,6 @@ class SymbolGraph(metaclass=SingletonMeta):
     A mapping from property descriptor class to the wrapped fields that use it.
     """
 
-    @profile
     def add_relation(self, relation: PredicateClassRelation) -> bool:
         """Add a relation edge to the instance graph."""
         if self.relation_exists(relation):
