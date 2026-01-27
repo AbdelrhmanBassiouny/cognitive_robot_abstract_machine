@@ -9,8 +9,12 @@ import pytest
 
 from giskardpy.data_types.exceptions import DuplicateNameException
 from giskardpy.executor import Executor, SimulationPacer
-from giskardpy.model.collision_matrix_manager import CollisionRequest
-from giskardpy.model.collision_world_syncer import CollisionCheckerLib
+from semantic_digital_twin.collision_checking.collision_matrix_manager import (
+    CollisionRequest,
+)
+from semantic_digital_twin.collision_checking.collision_world_syncer import (
+    CollisionCheckerLib,
+)
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
 from giskardpy.motion_statechart.data_types import (
     LifeCycleValues,

@@ -14,12 +14,14 @@ from semantic_digital_twin.world_description.world_state_trajectory_plotter impo
     WorldStateTrajectoryPlotter,
 )
 from .data_types.exceptions import NoQPControllerConfigException
-from .model.better_pybullet_syncer import BulletCollisionDetector
-from .model.collision_world_syncer import (
+from semantic_digital_twin.collision_checking.better_pybullet_syncer import (
+    BulletCollisionDetector,
+)
+from semantic_digital_twin.collision_checking.collision_world_syncer import (
     CollisionWorldSynchronizer,
     CollisionCheckerLib,
 )
-from .model.collisions import NullCollisionDetector
+from semantic_digital_twin.collision_checking.collisions import NullCollisionDetector
 from .motion_statechart.auxilary_variable_manager import (
     AuxiliaryVariableManager,
     AuxiliaryVariable,

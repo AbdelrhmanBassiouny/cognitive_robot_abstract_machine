@@ -8,9 +8,8 @@ import trimesh
 from pkg_resources import resource_filename
 
 from giskardpy.middleware import get_middleware
-from giskardpy.model.collisions import GiskardCollision
+from semantic_digital_twin.collision_checking.collisions import GiskardCollision
 from giskardpy.utils.utils import suppress_stdout, create_path
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import (
     Shape,

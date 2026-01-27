@@ -5,8 +5,11 @@ import giskardpy_bullet_bindings as bpb
 from line_profiler import profile
 
 from giskardpy.middleware import get_middleware
-from giskardpy.model.bpb_wrapper import create_shape_from_link, create_collision
-from giskardpy.model.collisions import GiskardCollision
+from semantic_digital_twin.collision_checking.bpb_wrapper import (
+    create_shape_from_link,
+    create_collision,
+)
+from semantic_digital_twin.collision_checking.collisions import GiskardCollision
 from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionDetector,
     CollisionCheck,

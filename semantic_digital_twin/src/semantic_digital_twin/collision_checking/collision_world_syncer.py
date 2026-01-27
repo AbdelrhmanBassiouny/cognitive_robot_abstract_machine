@@ -9,8 +9,13 @@ import numpy as np
 from line_profiler import profile
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.model.collision_matrix_manager import CollisionMatrixManager
-from giskardpy.model.collisions import NullCollisionDetector, Collisions
+from semantic_digital_twin.collision_checking.collision_matrix_manager import (
+    CollisionMatrixManager,
+)
+from semantic_digital_twin.collision_checking.collisions import (
+    NullCollisionDetector,
+    Collisions,
+)
 from giskardpy.motion_statechart.auxilary_variable_manager import (
     AuxiliaryVariable,
     create_vector3,

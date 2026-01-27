@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from giskardpy.executor import Executor
-from giskardpy.model.collision_matrix_manager import (
+from semantic_digital_twin.collision_checking.collision_matrix_manager import (
     CollisionRequest,
     CollisionAvoidanceTypes,
 )
@@ -35,7 +35,6 @@ from giskardpy.motion_statechart.test_nodes.test_nodes import (
     TestNestedGoal,
 )
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from giskardpy.utils.utils import limits_from_urdf_joint
 from krrood.symbolic_math.symbolic_math import (
     trinary_logic_and,
     trinary_logic_not,

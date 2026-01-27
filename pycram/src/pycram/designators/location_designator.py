@@ -28,7 +28,9 @@ from sortedcontainers import SortedSet
 from typing_extensions import List, Union, Iterable, Optional, Iterator, Tuple
 
 from giskardpy.executor import Executor
-from giskardpy.model.collision_matrix_manager import CollisionRequest
+from semantic_digital_twin.collision_checking.collision_matrix_manager import (
+    CollisionRequest,
+)
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     CollisionAvoidance,
 )

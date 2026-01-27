@@ -11,7 +11,9 @@ if TYPE_CHECKING:
     from .auxilary_variable_manager import AuxiliaryVariableManager, AuxiliaryVariable
     from .exceptions import MissingContextExtensionError
     from ..qp.qp_controller_config import QPControllerConfig
-    from ..model.collision_world_syncer import CollisionWorldSynchronizer
+    from semantic_digital_twin.collision_checking.collision_world_syncer import (
+        CollisionWorldSynchronizer,
+    )
 
 
 @dataclass
