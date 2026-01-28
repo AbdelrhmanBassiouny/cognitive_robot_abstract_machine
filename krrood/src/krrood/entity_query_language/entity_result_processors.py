@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing_extensions import Optional, Union, Type, Iterable, Callable
+from typing_extensions import Optional, Union, Type, Iterable, Callable, Any
 
 from .result_quantification_constraint import (
     ResultQuantificationConstraint,
@@ -18,7 +18,7 @@ from .symbolic import (
     Count,
     ResultProcessor,
 )
-from .utils import T
+from .utils import T, is_iterable
 
 
 def an(
@@ -58,7 +58,8 @@ def the(
 
 
 def max(
-    variable: Selectable[T], key: Optional[Callable] = None, default: Optional[T] = None
+    variable: Selectable[T], key: Optional[Callable] = None, default: Optional[T] = None,
+        per: Optional[Selectable, Any] = None
 ) -> Union[T, Max[T]]:
     """
     Maps the variable values to their maximum value.
@@ -66,15 +67,18 @@ def max(
     :param variable: The variable for which the maximum value is to be found.
     :param key: A function that extracts a comparison key from each variable value.
     :param default: The value returned when the iterable is empty.
+    :param per: An optional variable to group the maximum values by.
     :return: A Max object that can be evaluated to find the maximum value.
     """
+    if per is not None and not is_iterable(per):
+        per = (per,)
     return _apply_result_processor(
-        Max, variable, _key_func_=key, _default_value_=default
+        Max, variable, _key_func_=key, _default_value_=default, _per_=per
     )
 
 
 def min(
-    variable: Selectable[T], key: Optional[Callable] = None, default: Optional[T] = None
+    variable: Selectable[T], key: Optional[Callable] = None, default: Optional[T] = None, per: Optional[Selectable, Any] = None
 ) -> Union[T, Min[T]]:
     """
     Maps the variable values to their minimum value.
@@ -82,10 +86,13 @@ def min(
     :param variable: The variable for which the minimum value is to be found.
     :param key: A function that extracts a comparison key from each variable value.
     :param default: The value returned when the iterable is empty.
+    :param per: An optional variable to group the minimum values by.
     :return: A Min object that can be evaluated to find the minimum value.
     """
+    if per is not None and not is_iterable(per):
+        per = (per,)
     return _apply_result_processor(
-        Min, variable, _key_func_=key, _default_value_=default
+        Min, variable, _key_func_=key, _default_value_=default, _per_=per
     )
 
 
@@ -129,6 +136,8 @@ def count(variable: Union[Selectable[T], Iterable[T], Predicate], per: Optional[
     :param per: Optional variable to group counts by.
     :return: A Count object that can be evaluated to count the number of values.
     """
+    if per is not None and not is_iterable(per):
+        per = (per,)
     return _apply_result_processor(Count, variable, _per_=per)
 
 
