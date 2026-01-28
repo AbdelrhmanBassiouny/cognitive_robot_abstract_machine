@@ -510,14 +510,18 @@ class Aggregator(ResultProcessor[T], ABC):
     The default value to be returned if the child results are empty.
     """
 
-    def evaluate(
-        self,
-    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
-        """
-        Evaluate the query and map the results to the correct output data structure.
-        This is the exposed evaluation method for users.
-        """
-        return list(super().evaluate())[0]
+    def __post_init__(self):
+        super().__post_init__()
+        self._var_ = self
+
+    # def evaluate(
+    #     self,
+    # ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
+    #     """
+    #     Evaluate the query and map the results to the correct output data structure.
+    #     This is the exposed evaluation method for users.
+    #     """
+    #     return list(super().evaluate())[0]
 
     def _evaluate__(
         self,
@@ -583,14 +587,14 @@ class Count(Aggregator[T]):
             return
         counts_per_per = defaultdict(lambda: 0)
         for res in true_child_results:
-            per_value = res[self._per_._id_]
+            per_value = next(self._per_._evaluate__(res.bindings, parent=self)).value
             counts_per_per[per_value] += 1
         for k, v in counts_per_per.items():
             yield {self._id_: v, self._per_._id_: k}
 
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class EntityAggregator(Aggregator[T], ABC):
     _child_: Selectable[T]
     """
@@ -1359,8 +1363,13 @@ class Variable(CanBehaveLikeAVariable[T]):
         :return: An Iterable of OperationResults for each value in the domain.
         """
         for v in self._domain_:
-            bindings = {**sources, self._id_: v}
-            yield self._build_operation_result_and_update_truth_value_(bindings)
+            if isinstance(v, SymbolicExpression):
+                for vv in v._evaluate__(sources, parent=self):
+                    yield self._build_operation_result_and_update_truth_value_({**sources, **vv.bindings, self._id_: vv.value})
+            else:
+                yield self._build_operation_result_and_update_truth_value_(
+                    {**sources, self._id_: v}
+                )
 
     def _instantiate_using_child_vars_and_yield_results_(
         self, sources: Dict[int, Any]
@@ -1486,6 +1495,47 @@ class Literal(Variable[T]):
         else:
             return ColorLegend("Literal", "#949292")
 
+
+@dataclass(eq=False, repr=False)
+class Concatenate(CanBehaveLikeAVariable[T]):
+    """
+    Concatenation of two or more variables.
+    """
+
+    _variables_: List[Variable] = field(default_factory=list)
+
+    def __post_init__(self):
+        self._child_ = None
+        super().__post_init__()
+        self._update_children_(*self._variables_)
+        self._var_ = self
+
+    def _evaluate__(self, sources: Dict[int, Any], parent: Optional[SymbolicExpression] = None) -> Iterable[OperationResult]:
+        if self._id_ in sources:
+            yield OperationResult(sources, self._is_false_, self)
+        self._eval_parent_ = parent
+        for var in self._variables_:
+            for var_val in var._evaluate__(sources, self):
+                self._is_false_ = var_val.is_false
+                yield OperationResult({**sources, **var_val.bindings, self._id_: var_val.value}, var_val.is_false, self)
+
+    @property
+    def _plot_color_(self) -> ColorLegend:
+        if self._plot_color__:
+            return self._plot_color__
+        else:
+            return ColorLegend("Concatenate", "#949292")
+
+    @property
+    def _all_variable_instances_(self) -> List[Variable]:
+        all_vars = []
+        for var in self._variables_:
+            all_vars.extend(var._all_variable_instances_)
+        return all_vars
+
+    @property
+    def _name_(self):
+        return self.__class__.__name__
 
 @dataclass(eq=False, repr=False)
 class DomainMapping(CanBehaveLikeAVariable[T], ABC):

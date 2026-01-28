@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from krrood.entity_query_language.symbolic import Concatenate
+
 from .failures import UsageError
 
 from .symbol_graph import SymbolGraph
@@ -140,6 +142,15 @@ def variable_from(
     Similar to `variable` but constructed from a domain directly wihout specifying its type.
     """
     return Literal(data=domain, name=name, wrap_in_iterator=False)
+
+
+def concatenate(
+    *domain: Union[Iterable[T], Selectable[T]],
+) -> Union[T, Selectable[T]]:
+    """
+    Concatenation of two or more variables.
+    """
+    return Concatenate(_variables_=list(domain))
 
 
 def _get_domain_source_from_domain_and_type_values(
