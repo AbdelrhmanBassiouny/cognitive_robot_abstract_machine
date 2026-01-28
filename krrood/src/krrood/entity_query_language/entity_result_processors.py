@@ -121,14 +121,15 @@ def average(
     )
 
 
-def count(variable: Union[Selectable[T], Iterable[T], Predicate]) -> Union[T, Count[T]]:
+def count(variable: Union[Selectable[T], Iterable[T], Predicate], per: Optional[Selectable] = None) -> Union[T, Count[T]]:
     """
     Count the number of values produced by the given variable.
 
     :param variable: The variable for which the count is calculated.
+    :param per: Optional variable to group counts by.
     :return: A Count object that can be evaluated to count the number of values.
     """
-    return _apply_result_processor(Count, variable)
+    return _apply_result_processor(Count, variable, _per_=per)
 
 
 def _apply_result_processor(

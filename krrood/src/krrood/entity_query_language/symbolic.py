@@ -10,7 +10,7 @@ from __future__ import annotations
 import operator
 import typing
 from abc import abstractmethod, ABC
-from collections import UserDict
+from collections import UserDict, defaultdict
 from copy import copy
 from dataclasses import dataclass, field, fields, MISSING, is_dataclass
 from functools import lru_cache, cached_property
@@ -449,13 +449,6 @@ class ResultProcessor(CanBehaveLikeAVariable[T], ABC):
 
     _child_: SymbolicExpression[T]
 
-    def __post_init__(self):
-        super().__post_init__()
-        self._var_ = (
-            self._child_._var_ if isinstance(self._child_, Selectable) else None
-        )
-        self._node_.wrap_subtree = True
-
     @cached_property
     def _type_(self):
         if self._var_:
@@ -539,9 +532,12 @@ class Aggregator(ResultProcessor[T], ABC):
         values = self._apply_aggregation_function_(
             self._child_._evaluate__(sources, parent=self)
         )
-        if values:
-            yield OperationResult({**sources, **values}, False, self)
-        else:
+        entered = False
+        for value in values:
+            entered = True
+            yield OperationResult({**sources, **value}, False, self)
+        if not entered:
+            # If the aggregator returns no results, return the default value for the aggregator.
             yield OperationResult(
                 {**sources, self._id_: self._default_value_}, False, self
             )
@@ -573,10 +569,25 @@ class Count(Aggregator[T]):
     Count the number of child results.
     """
 
+    _per_: Optional[Selectable] = None
+    """
+    The entity to group by. If None, no grouping is performed.
+    """
+
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
-    ) -> Dict[int, Any]:
-        return {self._id_: len([res for res in child_results if res.is_true])}
+    ) -> Iterable[Dict[int, Any]]:
+        true_child_results = (res for res in child_results if res.is_true)
+        if not self._per_:
+            yield {self._id_: len(list(true_child_results))}
+            return
+        counts_per_per = defaultdict(lambda: 0)
+        for res in true_child_results:
+            per_value = res[self._per_._id_]
+            counts_per_per[per_value] += 1
+        for k, v in counts_per_per.items():
+            yield {self._id_: v, self._per_._id_: k}
+
 
 
 @dataclass
@@ -585,7 +596,7 @@ class EntityAggregator(Aggregator[T], ABC):
     """
     The child entity to be aggregated.
     """
-    _key_func_: Callable = field(kw_only=True, default=lambda x: x)
+    _key_func_: Callable[[Any], Any] = field(kw_only=True, default=lambda x: x)
     """
     An optional function that extracts the value to be used in the aggregation.
     """
@@ -600,7 +611,7 @@ class EntityAggregator(Aggregator[T], ABC):
         Extract the value of the child from the result dictionary.
          In addition, it applies the key function if given.
         """
-        value = result[self._child_._var_._id_]
+        value = result.value
         if self._key_func_:
             return self._key_func_(value)
         return value
@@ -614,15 +625,16 @@ class Sum(EntityAggregator[T]):
 
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
-    ) -> Dict[int, Any]:
+    ) -> Iterable[Dict[int, Any]]:
         entered = False
         sum_val = 0
         for val in map(self._get_child_value_from_result_, child_results):
             entered = True
             sum_val += val
         if entered:
-            return {self._id_: sum_val}
-        return {}
+            yield {self._id_: sum_val}
+            return
+        yield {}
 
 
 @dataclass(eq=False, repr=False)
@@ -634,15 +646,16 @@ class Average(EntityAggregator[T]):
 
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
-    ) -> Dict[int, Any]:
+    ) -> Iterable[Dict[int, Any]]:
         sum_val = 0
         count = 0
         for val in map(self._get_child_value_from_result_, child_results):
             sum_val += val
             count += 1
         if count:
-            return {self._id_: sum_val / count}
-        return {}
+            yield {self._id_: sum_val / count}
+            return
+        yield {}
 
 
 @dataclass(eq=False, repr=False)
@@ -654,23 +667,24 @@ class Extreme(EntityAggregator[T], ABC):
 
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
-    ) -> Dict[int, Any]:
+    ) -> Iterable[Dict[int, Any]]:
         try:
             bindings_with_extreme_val = self._extreme_function_(
                 child_results, key=self._get_child_value_from_result_
             ).bindings
             bindings_with_extreme_val[self._id_] = bindings_with_extreme_val[
-                self._child_._var_._id_
+                self._child_._id_
             ]
-            return bindings_with_extreme_val
+            yield bindings_with_extreme_val
+            return
         except ValueError:
             # Means that the child results were empty, so do not return any results,
             # the default value will be returned instead (see Aggregator._evaluate__)
-            return {}
+            yield {}
 
     @property
     @abstractmethod
-    def _extreme_function_(self) -> Callable: ...
+    def _extreme_function_(self) -> Callable[[Any], Any]: ...
 
 
 @dataclass(eq=False, repr=False)
@@ -717,6 +731,10 @@ class ResultQuantifier(ResultProcessor[T], ABC):
         if not isinstance(self._child_, QueryObjectDescriptor):
             raise InvalidEntityType(type(self._child_), [QueryObjectDescriptor])
         super().__post_init__()
+        self._var_ = (
+            self._child_._var_ if isinstance(self._child_, Selectable) else None
+        )
+        self._node_.wrap_subtree = True
 
     def _evaluate__(
         self,
@@ -957,7 +975,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
 
     def distinct(
         self,
-        *on: Selectable[T],
+        *on: TypingUnion[Selectable, Any],
     ) -> Self:
         """
         Apply distinctness constraint to the query object descriptor results.
