@@ -142,10 +142,6 @@ class InheritanceStrategy(Enum):
     SINGLE = "single"
 
 
-def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
-    return f"{t.__module__}.{t.__name__}"
-
-
 def is_direct_subclass(cls: Type, *bases: Type) -> bool:
     """
     :param cls: The class to check.

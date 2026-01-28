@@ -7,7 +7,8 @@ from functools import cached_property, lru_cache
 from typing_extensions import List, Dict, TYPE_CHECKING, Optional, Set, Type
 
 from .dao import AlternativeMapping
-from .utils import InheritanceStrategy, module_and_class_name
+from .utils import InheritanceStrategy
+from ..utils import module_and_class_name
 from ..class_diagrams.class_diagram import (
     WrappedClass,
 )

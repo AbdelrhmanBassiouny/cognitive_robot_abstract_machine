@@ -12,7 +12,8 @@ from typing_extensions import Optional, TextIO
 from .custom_types import TypeType
 from .dao import AlternativeMapping
 from .sqlalchemy_generator import SQLAlchemyGenerator
-from .utils import InheritanceStrategy, module_and_class_name
+from .utils import InheritanceStrategy
+from ..utils import module_and_class_name
 from .wrapped_table import WrappedTable, AssociationTable
 from ..class_diagrams.class_diagram import (
     ClassDiagram,

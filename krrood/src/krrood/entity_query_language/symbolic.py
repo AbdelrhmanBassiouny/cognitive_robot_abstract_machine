@@ -896,6 +896,10 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     """
     Mapping functions that map the results of the query object descriptor to a new set of results.
     """
+    _seen_results: Optional[SeenSet] = field(init=False, default=None)
+    """
+    A set of seen results, used when distinct is called in the query object descriptor.
+    """
 
     def __post_init__(self):
         super().__post_init__()
@@ -988,7 +992,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             if on
             else tuple([v._var_._id_ for v in self._selected_variables])
         )
-        seen_results = SeenSet(keys=on_ids)
+        self._seen_results = SeenSet(keys=on_ids)
 
         def get_distinct_results(
             results_gen: Iterable[Dict[int, Any]],
@@ -1002,10 +1006,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
                 bindings = (
                     res if not on else {k: v for k, v in res.items() if k in on_ids}
                 )
-                if seen_results.check(bindings):
+                if self._seen_results.check(bindings):
                     continue
                 yield res
-                seen_results.add(bindings)
 
         self._results_mapping.append(get_distinct_results)
         return self
@@ -1024,6 +1027,8 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             selected_vars_bindings = self._evaluate_selected_variables(values.bindings)
             for result in self._apply_results_mapping(selected_vars_bindings):
                 yield OperationResult({**values.bindings, **result}, False, self)
+        if self._seen_results is not None:
+            self._seen_results.clear()
 
     @staticmethod
     def variable_is_inferred(var: CanBehaveLikeAVariable[T]) -> bool:
