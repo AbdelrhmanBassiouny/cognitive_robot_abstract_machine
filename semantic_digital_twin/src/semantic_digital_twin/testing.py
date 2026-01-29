@@ -101,7 +101,7 @@ def world_setup_simple():
                 Cylinder(
                     origin=HomogeneousTransformationMatrix.from_xyz_rpy(),
                     width=0.5,
-                    height=0.25,
+                    height=0.2,
                 )
             ]
         ),
