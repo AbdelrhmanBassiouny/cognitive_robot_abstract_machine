@@ -39,12 +39,12 @@ def test_contact_distance(world_setup_simple, collision_detector):
     assert collision
 
     if collision.body_a == cylinder:
-        map_P_cylinder = collision.map_P_pa
-        map_P_sphere = collision.map_P_pb
+        map_P_cylinder = collision.root_P_pa
+        map_P_sphere = collision.root_P_pb
         assert collision.body_b == sphere
     else:
-        map_P_sphere = collision.map_P_pa
-        map_P_cylinder = collision.map_P_pb
+        map_P_sphere = collision.root_P_pa
+        map_P_cylinder = collision.root_P_pb
         assert collision.body_b == cylinder
         assert collision.body_a == sphere
 
@@ -75,18 +75,18 @@ def test_contact_distance_compound_front(
     collision_box = tcd.check_collision_between_bodies(sphere, box, distance=10)
 
     if collision_box.body_a == sphere:
-        map_P_sphere1 = collision_box.map_P_pa
-        map_P_box = collision_box.map_P_pb
+        map_P_sphere1 = collision_box.root_P_pa
+        map_P_box = collision_box.root_P_pb
     else:
-        map_P_box = collision_box.map_P_pa
-        map_P_sphere1 = collision_box.map_P_pb
+        map_P_box = collision_box.root_P_pa
+        map_P_sphere1 = collision_box.root_P_pb
 
     if collision_compound.body_a == sphere:
-        map_P_sphere2 = collision_compound.map_P_pa
-        map_P_compound = collision_compound.map_P_pb
+        map_P_sphere2 = collision_compound.root_P_pa
+        map_P_compound = collision_compound.root_P_pb
     else:
-        map_P_compound = collision_compound.map_P_pa
-        map_P_sphere2 = collision_compound.map_P_pb
+        map_P_compound = collision_compound.root_P_pa
+        map_P_sphere2 = collision_compound.root_P_pb
 
     assert np.allclose(map_P_sphere1, map_P_sphere2, atol=1e-3)
     assert np.allclose(map_P_compound, map_P_box, atol=1e-3)

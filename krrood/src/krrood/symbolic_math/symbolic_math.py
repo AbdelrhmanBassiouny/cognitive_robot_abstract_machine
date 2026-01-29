@@ -423,7 +423,7 @@ class CompiledFunctionWithViews:
         return self.split_out_view
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class SymbolicMathType(ABC):
     """
     A wrapper around CasADi's ca.SX, with better usability
@@ -486,7 +486,7 @@ class SymbolicMathType(ABC):
         return self.to_np()
 
     def __repr__(self):
-        return repr(self.casadi_sx)
+        return f"{self.__class__.__name__}({repr(self.casadi_sx)[3:-1]})"
 
     def __getitem__(
         self, item: np.ndarray | int | slice | Tuple[int | slice, int | slice]
@@ -771,7 +771,7 @@ class SymbolicMathType(ABC):
         return H.dot(v)
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class Scalar(SymbolicMathType):
     """
     A symbolic type representing a scalar value.
@@ -963,7 +963,7 @@ class Scalar(SymbolicMathType):
         return self._rbinary(other, ca.fmod)
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class FloatVariable(Scalar):
     """
     A symbolic expression representing a single float variable.
@@ -1003,7 +1003,7 @@ class FloatVariable(Scalar):
         return np.nan
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Vector(SymbolicMathType):
     """
     A vector of symbolic expressions.
@@ -1130,7 +1130,7 @@ class Vector(SymbolicMathType):
         return Vector.from_casadi_sx(ca.vertcat(to_sx(self), to_sx(other)))
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class Matrix(SymbolicMathType):
     """
     A matrix of symbolic expressions.

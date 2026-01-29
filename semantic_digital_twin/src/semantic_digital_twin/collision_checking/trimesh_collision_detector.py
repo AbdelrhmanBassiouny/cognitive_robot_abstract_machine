@@ -108,13 +108,13 @@ class TrimeshCollisionDetector(CollisionDetector):
             )
             if distance_result.min_distance <= distance:
                 result.append(
-                    Collision(
-                        distance_result.min_distance,
-                        body_a,
-                        body_b,
-                        map_P_pa=distance_result.nearest_points[0],
-                        map_P_pb=distance_result.nearest_points[1],
-                        map_V_n_input=distance_result.nearest_points[0]
+                    Collision.from_parts(
+                        contact_distance=distance_result.min_distance,
+                        body_a=body_a,
+                        body_b=body_b,
+                        root_P_pa=distance_result.nearest_points[0],
+                        root_P_pb=distance_result.nearest_points[1],
+                        root_V_n=distance_result.nearest_points[0]
                         - distance_result.nearest_points[1],
                     )
                 )

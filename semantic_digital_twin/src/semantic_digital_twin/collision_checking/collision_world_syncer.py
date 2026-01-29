@@ -152,7 +152,7 @@ class CollisionWorldSynchronizer:
             name=PrefixedName(f"closest_point({body.name})[{idx}].new_a_P_pa"),
             provider=lambda n=body, i=idx: self.closest_points.get_external_collisions(
                 n
-            )[i].new_a_P_pa,
+            )[i].fixed_parent_of_a_P_pa,
         )
 
     @lru_cache
@@ -276,7 +276,7 @@ class CollisionWorldSynchronizer:
         provider = (
             lambda a=link_a, b=link_b, i=idx: self.closest_points.get_self_collisions(
                 a, b
-            )[i].new_b_V_n
+            )[i].fixed_parent_of_b_V_n
         )
         return create_vector3(
             name=PrefixedName(
@@ -290,7 +290,7 @@ class CollisionWorldSynchronizer:
         provider = (
             lambda a=link_a, b=link_b, i=idx: self.closest_points.get_self_collisions(
                 a, b
-            )[i].new_a_P_pa
+            )[i].fixed_parent_of_a_P_pa
         )
         return create_point(
             name=PrefixedName(
@@ -304,7 +304,7 @@ class CollisionWorldSynchronizer:
         provider = (
             lambda a=link_a, b=link_b, i=idx: self.closest_points.get_self_collisions(
                 a, b
-            )[i].new_b_P_pb
+            )[i].fixed_parent_of_b_P_pb
         )
         p = create_point(
             name=PrefixedName(

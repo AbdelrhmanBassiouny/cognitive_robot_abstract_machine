@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from ..world_description.world_entity import KinematicStructureEntity
 
 
-@dataclass(eq=False)
+@dataclass(eq=False, repr=False)
 class SpatialType:
     """
     Provides functionality to associate a reference frame with an object.
@@ -140,7 +140,7 @@ class SpatialType:
         return result
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class HomogeneousTransformationMatrix(
     sm.SymbolicMathType, SpatialType, SubclassJSONSerializer
 ):
@@ -460,7 +460,7 @@ class HomogeneousTransformationMatrix(
         )
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     """
     Class to represent a 4x4 symbolic rotation matrix tied to kinematic references.
@@ -789,7 +789,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return r_distance.to_angle()
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     """
     Represents a 3D point with reference frame handling.
@@ -1008,7 +1008,7 @@ class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return self.to_generic_vector().euclidean_distance(other.to_generic_vector())
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     """
     Representation of a 3D vector with reference frame support for homogenous transformations.
@@ -1345,7 +1345,7 @@ class Vector3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return result
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     """
     Represents a quaternion, which is a mathematical entity used to encode
@@ -1673,7 +1673,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         )
 
 
-@dataclass(eq=False, init=False)
+@dataclass(eq=False, init=False, repr=False)
 class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(

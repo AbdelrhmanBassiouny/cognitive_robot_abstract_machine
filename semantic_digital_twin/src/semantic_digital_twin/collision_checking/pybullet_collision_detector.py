@@ -1,21 +1,16 @@
-import tempfile
 from dataclasses import dataclass, field
 from functools import lru_cache
-
-from typing import Dict, Tuple, DefaultDict, List, Set, Optional
+from typing import Dict, Tuple, List, Optional
 
 import giskardpy_bullet_bindings as bpb
 
-
-from .bpb_wrapper import create_shape_from_link, create_collision
+from .bpb_wrapper import create_shape_from_link
 from .collision_detector import (
     CollisionDetector,
-    CollisionCheck,
     CollisionMatrix,
     CollisionCheckingResult,
+    Collision,
 )
-from .collisions import GiskardCollision
-from ..datastructures.prefixed_name import PrefixedName
 from ..world_description.world_entity import Body
 
 
@@ -86,5 +81,19 @@ class BulletCollisionDetector(CollisionDetector):
             self.kineverse_world.get_closest_filtered_map_batch(query)
         )
         return CollisionCheckingResult(
-            [create_collision(collision, self.world) for collision in result]
+            [
+                Collision.from_parts(
+                    body_a=self.world.get_kinematic_structure_entity_by_id(
+                        collision.obj_a.name
+                    ),
+                    body_b=self.world.get_kinematic_structure_entity_by_id(
+                        collision.obj_b.name
+                    ),
+                    contact_distance=collision.contact_distance,
+                    root_P_pa=collision.map_P_pa,
+                    root_P_pb=collision.map_P_pb,
+                    root_V_n=collision.world_V_n,
+                )
+                for collision in result
+            ]
         )

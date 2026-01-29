@@ -17,145 +17,6 @@ from semantic_digital_twin.world_description.connections import ActiveConnection
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@dataclass(unsafe_hash=True)
-class GiskardCollision:
-    contact_distance_input: float = 0.0
-    body_a: Body = field(default=None)
-    body_b: Body = field(default=None)
-    original_body_a: Body = field(init=False)
-    original_body_b: Body = field(init=False)
-    map_P_pa: np.ndarray = field(default=None)
-    map_P_pb: np.ndarray = field(default=None)
-    map_V_n_input: np.ndarray = field(default=None)
-    a_P_pa: np.ndarray = field(default=None)
-    b_P_pb: np.ndarray = field(default=None)
-    data: np.ndarray = field(init=False)
-    is_external: bool = False
-
-    _hash_idx: int = 0
-    _map_V_n_idx: int = 1
-    _map_V_n_slice: slice = slice(1, 4)
-
-    _contact_distance_idx: int = 4
-    _new_a_P_pa_idx: int = 5
-    _new_a_P_pa_slice: slice = slice(5, 8)
-
-    _new_b_V_n_idx: int = 8
-    _new_b_V_n_slice: slice = slice(8, 11)
-    _new_b_P_pb_idx: int = 11
-    _new_b_P_pb_slice: slice = slice(11, 14)
-
-    _self_data_slice: slice = slice(4, 14)
-    _external_data_slice: slice = slice(0, 8)
-
-    @profile
-    def __post_init__(self):
-        self.original_body_a = self.body_a
-        self.original_body_b = self.body_b
-
-        self.data = np.array(
-            [
-                self.body_b.__hash__(),  # hash
-                0,
-                0,
-                1,  # map_V_n
-                self.contact_distance_input,
-                0,
-                0,
-                0,  # new_a_P_pa
-                0,
-                0,
-                1,  # new_b_V_n
-                0,
-                0,
-                0,  # new_b_P_pb
-            ],
-            dtype=float,
-        )
-        if self.map_V_n_input is not None:
-            self.map_V_n = self.map_V_n_input
-
-    @property
-    def external_data(self) -> np.ndarray:
-        return self.data[: self._new_b_V_n_idx]
-
-    @property
-    def self_data(self) -> np.ndarray:
-        return self.data[self._self_data_slice]
-
-    @property
-    def external_and_self_data(self) -> np.ndarray:
-        return self.data[self._external_data_slice]
-
-    @property
-    def contact_distance(self) -> float:
-        return self.data[self._contact_distance_idx]
-
-    @contact_distance.setter
-    def contact_distance(self, value: float):
-        self.data[self._contact_distance_idx] = value
-
-    @property
-    def link_b_hash(self) -> float:
-        return self.data[self._hash_idx]
-
-    @property
-    def map_V_n(self) -> np.ndarray:
-        a = self.data[self._map_V_n_slice]
-        return np.array([a[0], a[1], a[2], 0])
-
-    @map_V_n.setter
-    def map_V_n(self, value: np.ndarray):
-        self.data[self._map_V_n_slice] = value[:3]
-
-    @property
-    def new_a_P_pa(self):
-        a = self.data[self._new_a_P_pa_slice]
-        return np.array([a[0], a[1], a[2], 1])
-
-    @new_a_P_pa.setter
-    def new_a_P_pa(self, value: np.ndarray):
-        self.data[self._new_a_P_pa_slice] = value[:3]
-
-    @property
-    def new_b_P_pb(self):
-        a = self.data[self._new_b_P_pb_slice]
-        return np.array([a[0], a[1], a[2], 1])
-
-    @new_b_P_pb.setter
-    def new_b_P_pb(self, value: np.ndarray):
-        self.data[self._new_b_P_pb_slice] = value[:3]
-
-    @property
-    def new_b_V_n(self):
-        a = self.data[self._new_b_V_n_slice]
-        return np.array([a[0], a[1], a[2], 0])
-
-    @new_b_V_n.setter
-    def new_b_V_n(self, value: np.ndarray):
-        self.data[self._new_b_V_n_slice] = value[:3]
-
-    def __str__(self):
-        return (
-            f"{self.original_body_a}|-|{self.original_body_b}: {self.contact_distance}"
-        )
-
-    def __repr__(self):
-        return str(self)
-
-    def reverse(self):
-        return GiskardCollision(
-            body_a=self.original_body_b,
-            body_b=self.original_body_a,
-            map_P_pa=self.map_P_pb,
-            map_P_pb=self.map_P_pa,
-            map_V_n_input=-self.map_V_n,
-            a_P_pa=self.b_P_pb,
-            b_P_pb=self.a_P_pa,
-            contact_distance_input=self.contact_distance,
-        )
-
-
 @dataclass
 class SortedCollisionResults:
     data: List[GiskardCollision] = field(default_factory=list)
@@ -272,21 +133,23 @@ class Collisions:
         new_b_T_r = world.compute_forward_kinematics_np(new_link_b, robot.root)
         root_T_map = world.compute_forward_kinematics_np(robot.root, world.root)
         new_b_T_map = new_b_T_r @ root_T_map
-        collision.new_b_V_n = new_b_T_map @ collision.map_V_n
+        collision.fixed_parent_of_b_V_n = new_b_T_map @ collision.map_V_n
 
         if collision.map_P_pa is not None:
             new_a_T_r = world.compute_forward_kinematics_np(new_link_a, robot.root)
-            collision.new_a_P_pa = new_a_T_r @ root_T_map @ collision.map_P_pa
-            collision.new_b_P_pb = new_b_T_map @ collision.map_P_pb
+            collision.fixed_parent_of_a_P_pa = (
+                new_a_T_r @ root_T_map @ collision.map_P_pa
+            )
+            collision.fixed_parent_of_b_P_pb = new_b_T_map @ collision.map_P_pb
         else:
             new_a_T_a = world.compute_forward_kinematics_np(
                 new_link_a, collision.original_body_a
             )
-            collision.new_a_P_pa = new_a_T_a @ collision.a_P_pa
+            collision.fixed_parent_of_a_P_pa = new_a_T_a @ collision.a_P_pa
             new_b_T_b = world.compute_forward_kinematics_np(
                 new_link_b, collision.original_body_b
             )
-            collision.new_b_P_pb = new_b_T_b @ collision.b_P_pb
+            collision.fixed_parent_of_b_P_pb = new_b_T_b @ collision.b_P_pb
         return collision
 
     @profile
@@ -316,12 +179,12 @@ class Collisions:
         collision.body_a = new_a
         if collision.map_P_pa is not None:
             new_a_T_map = world.compute_forward_kinematics_np(new_a, world.root)
-            collision.new_a_P_pa = new_a_T_map @ collision.map_P_pa
+            collision.fixed_parent_of_a_P_pa = new_a_T_map @ collision.map_P_pa
         else:
             new_a_T_a = world.compute_forward_kinematics_np(
                 new_a, collision.original_body_a
             )
-            collision.new_a_P_pa = new_a_T_a @ collision.a_P_pa
+            collision.fixed_parent_of_a_P_pa = new_a_T_a @ collision.a_P_pa
 
         return collision
 

@@ -10,14 +10,11 @@ from uuid import UUID
 import giskardpy_bullet_bindings as pb
 import numpy as np
 import trimesh
-from pkg_resources import resource_filename
 from platformdirs import user_cache_dir
 from trimesh import Trimesh
 
 from giskardpy.utils.utils import create_path
-from .collisions import GiskardCollision
 from ..utils import suppress_stdout_stderr
-from ..world import World
 from ..world_description.geometry import (
     Shape,
     Box,
@@ -71,23 +68,6 @@ def trimesh_quantized_hash(mesh, decimals: int = 6, digest_size: int = 16) -> st
     h.update(f.tobytes())
 
     return h.hexdigest()
-
-
-def create_collision(pb_collision: pb.Collision, world: World) -> GiskardCollision:
-    collision = GiskardCollision(
-        body_a=world.get_kinematic_structure_entity_by_id(pb_collision.obj_a.name),
-        body_b=world.get_kinematic_structure_entity_by_id(pb_collision.obj_b.name),
-        contact_distance_input=pb_collision.contact_distance,
-        map_P_pa=pb_collision.map_P_pa,
-        map_P_pb=pb_collision.map_P_pb,
-        map_V_n_input=pb_collision.world_V_n,
-        a_P_pa=pb_collision.a_P_pa,
-        b_P_pb=pb_collision.b_P_pb,
-    )
-    collision.original_body_a = collision.body_a
-    collision.original_body_b = collision.body_b
-    collision.is_external = None
-    return collision
 
 
 def create_cube_shape(extents: Tuple[float, float, float]) -> pb.BoxShape:

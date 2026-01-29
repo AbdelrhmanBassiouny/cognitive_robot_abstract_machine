@@ -125,6 +125,7 @@ def world_setup_simple():
                         "stl",
                         "jeroen_cup.stl",
                     ),
+                    scale=Scale(10, 10, 10),
                 )
             ]
         ),
