@@ -16,7 +16,8 @@ from .custom_types import TypeType, PolymorphicEnumType
 from .dao import AlternativeMapping
 from .sqlalchemy_generator import SQLAlchemyGenerator
 from .type_dict import TypeDict
-from .utils import InheritanceStrategy, module_and_class_name
+from .utils import InheritanceStrategy
+from ..utils import module_and_class_name
 from .wrapped_table import WrappedTable, AssociationTable
 from ..adapters.json_serializer import SubclassJSONSerializer
 from ..class_diagrams.class_diagram import (

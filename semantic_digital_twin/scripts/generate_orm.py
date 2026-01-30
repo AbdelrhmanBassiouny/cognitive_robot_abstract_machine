@@ -26,6 +26,7 @@ import semantic_digital_twin.world_description.world_entity
 from krrood.adapters.json_serializer import JSONAttributeDiff
 from krrood.class_diagrams import ClassDiagram
 from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.type_dict import TypeDict
 from krrood.ormatic.utils import classes_of_module
 from krrood.utils import recursive_subclasses
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -53,7 +54,6 @@ from semantic_digital_twin.world_description.world_modification import (
     AttributeUpdateModification,
 )
 import semantic_digital_twin.robots.hsrb
-
 
 all_classes = set(
     classes_of_module(semantic_digital_twin.world_description.world_entity)
@@ -126,10 +126,11 @@ def generate_orm():
 
     instance = ORMatic(
         class_dependency_graph=class_diagram,
-        type_mappings={
-            trimesh.Trimesh: semantic_digital_twin.orm.model.TrimeshType,
-            uuid.UUID: sqlalchemy.UUID,
-        },
+        type_mappings=TypeDict(
+            {
+                trimesh.Trimesh: semantic_digital_twin.orm.model.TrimeshType,
+            }
+        ),
         alternative_mappings=alternative_mappings,
     )
 
