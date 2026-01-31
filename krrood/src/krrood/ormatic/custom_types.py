@@ -39,8 +39,6 @@ class PolymorphicEnumType(TypeDecorator):
     def process_bind_param(self, value: Optional[enum.Enum], dialect) -> Optional[str]:
         if value is None:
             return None
-        if not isinstance(value, enum.Enum):
-            raise TypeError(f"Expected Enum, got {type(value)}")
         # Store as 'module.path.ClassName.MEMBER_NAME'
         return f"{value.__class__.__module__}.{value.__class__.__name__}.{value.name}"
 

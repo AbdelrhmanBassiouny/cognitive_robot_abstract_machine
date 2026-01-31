@@ -1,7 +1,7 @@
 from enum import Enum
 
 from krrood.ormatic.type_dict import TypeDict
-from krrood_test.dataset.example_classes import (
+from ..dataset.example_classes import (
     ChildEnum2,
     Position4D,
     Position,
