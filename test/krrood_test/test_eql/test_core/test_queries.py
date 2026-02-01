@@ -16,6 +16,7 @@ from krrood.entity_query_language.entity import (
     exists_on,
     flatten,
     variable_from,
+    concatenate,
 )
 from krrood.entity_query_language.entity_result_processors import an, a, the, count
 from krrood.entity_query_language.failures import (
@@ -973,3 +974,13 @@ def test_multiple_dependent_selectables(handles_and_containers_world):
         (res[cabinet], res[cabinet_drawers])
         for res in cabinet_drawer_pairs_query.evaluate()
     } == set(cabinet_drawer_pairs_expected)
+
+
+def test_concatenate():
+    l1 = [1, 2, 3]
+    l2 = [4, 5, 6]
+    l1_var = variable_from(l1)
+    l2_var = variable_from(l2)
+    query = an(entity(concatenate(l1_var, l2_var)))
+    results = list(query.evaluate())
+    assert results == l1 + l2
