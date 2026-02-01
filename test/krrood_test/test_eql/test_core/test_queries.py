@@ -992,7 +992,7 @@ def test_count_per(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     cabinet_drawers = variable_from(cabinet.drawers)
-    query = eql.count(cabinet_drawers, per=cabinet)
+    query = eql.count(cabinet_drawers).per(cabinet)
     result = list(query.evaluate())
     expected = [len(c.drawers) for c in world.views if isinstance(c, Cabinet)]
     assert result == expected
@@ -1010,7 +1010,7 @@ def test_max_count_per(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     cabinet_drawers = variable_from(cabinet.drawers)
-    query = eql.max(eql.count(cabinet_drawers, per=cabinet))
+    query = eql.max(eql.count(cabinet_drawers).per(cabinet))
     result = list(query.evaluate())
     assert len(result) == 1
     result_max = result[0]

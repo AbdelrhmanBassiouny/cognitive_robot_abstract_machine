@@ -538,10 +538,23 @@ class Aggregator(ResultProcessor[T], ABC):
     """
     The default value to be returned if the child results are empty.
     """
+    _per_: Optional[Tuple[Selectable, ...]] = field(kw_only=True, default=None)
+    """
+    The variables to group by. If None, no grouping is performed.
+    """
 
     def __post_init__(self):
         super().__post_init__()
         self._var_ = self
+
+    def per(self, *variables: TypingUnion[Selectable, Any]) -> Self:
+        """
+        Groups the results of the aggregator by the given variables.
+
+        :param variables: The variables to group by.
+        """
+        self._per_ = variables
+        return self
 
     def _evaluate__(
         self,
@@ -553,9 +566,28 @@ class Aggregator(ResultProcessor[T], ABC):
             yield OperationResult(sources, False, self)
             return
 
-        values = self._apply_aggregation_function_(
-            self._child_._evaluate__(sources, parent=self)
-        )
+        child_results = self._child_._evaluate__(sources, parent=self)
+        if self._per_ is None:
+            values = self._apply_aggregation_function_(child_results)
+        else:
+            # Grouping logic
+            groups = defaultdict(list)
+            for res in child_results:
+                per_values = tuple(
+                    next(per._evaluate__(res.bindings, parent=self)).value
+                    for per in self._per_
+                )
+                groups[per_values].append(res)
+
+            values = []
+            for per_values, group_res in groups.items():
+                agg_results = self._apply_aggregation_function_(group_res)
+                per_id_value_dict = {
+                    per._id_: per_val for per, per_val in zip(self._per_, per_values)
+                }
+                for agg_res in agg_results:
+                    values.append({**agg_res, **per_id_value_dict})
+
         entered = False
         for value in values:
             entered = True
@@ -593,30 +625,11 @@ class Count(Aggregator[T]):
     Count the number of child results.
     """
 
-    _per_: Optional[Tuple[Selectable, ...]] = None
-    """
-    The entity to group by. If None, no grouping is performed.
-    """
-
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
     ) -> Iterable[Dict[int, Any]]:
         true_child_results = (res for res in child_results if res.is_true)
-        if self._per_ is None:
-            yield {self._id_: len(list(true_child_results))}
-            return
-        counts_per_per = defaultdict(lambda: 0)
-        for res in true_child_results:
-            per_value = tuple(
-                next(per._evaluate__(res.bindings, parent=self)).value
-                for per in self._per_
-            )
-            counts_per_per[per_value] += 1
-        for k, v in counts_per_per.items():
-            per_id_value_dict = {
-                per._id_: per_val for per, per_val in zip(self._per_, k)
-            }
-            yield {self._id_: v, **per_id_value_dict}
+        yield {self._id_: len(list(true_child_results))}
 
 
 @dataclass(eq=False, repr=False)
@@ -693,39 +706,12 @@ class Average(EntityAggregator[T]):
 class Extreme(EntityAggregator[T], ABC):
     """
     Find and return the extreme value among the child results. If given, make use of the key function to extract
-     the value to be compared.
+    the value to be compared.
     """
-
-    _per_: Optional[Tuple[Selectable, ...]] = None
 
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
     ) -> Iterable[Dict[int, Any]]:
-        if self._per_ is not None:
-            extreme_per = defaultdict(lambda: float("-inf"))
-            bindings_with_extreme_val_per = {}
-            for res in child_results:
-                per_value = tuple(
-                    next(per._evaluate__(res.bindings, parent=self)).value
-                    for per in self._per_
-                )
-                value = self._get_child_value_from_result_(res)
-                if self._extreme_function_([extreme_per[per_value], value]) != value:
-                    continue
-                bindings_with_extreme_val_per[per_value] = res.bindings.copy()
-                bindings_with_extreme_val_per[per_value][self._binding_id_] = (
-                    bindings_with_extreme_val_per[per_value][self._child_._binding_id_]
-                )
-                extreme_per[per_value] = value
-            for k, v in extreme_per.items():
-                if v != float("-inf"):
-                    per_id_value_dict = {
-                        per._binding_id_: per_val for per, per_val in zip(self._per_, k)
-                    }
-                    yield {**bindings_with_extreme_val_per[k], **per_id_value_dict}
-                else:
-                    pass
-            return
         try:
             bindings_with_extreme_val = self._extreme_function_(
                 child_results, key=self._get_child_value_from_result_
