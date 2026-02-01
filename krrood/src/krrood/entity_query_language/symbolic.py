@@ -346,7 +346,7 @@ class Selectable(SymbolicExpression[T], ABC):
 
     @cached_property
     def _type__(self):
-        return self._var_._type_ if self._var_ else None
+        return self._var_._type_ if self._var_ and self._var_ is not self else None
 
     def _process_result_(self, result: OperationResult) -> T:
         """
@@ -448,13 +448,6 @@ class ResultProcessor(CanBehaveLikeAVariable[T], ABC):
     """
 
     _child_: SymbolicExpression[T]
-
-    @cached_property
-    def _type_(self):
-        if self._var_:
-            return self._var_._type_
-        else:
-            raise ValueError("No type available as _var_ is None")
 
     @property
     def _name_(self) -> str:
@@ -587,12 +580,16 @@ class Count(Aggregator[T]):
             return
         counts_per_per = defaultdict(lambda: 0)
         for res in true_child_results:
-            per_value = tuple(next(per._evaluate__(res.bindings, parent=self)).value for per in self._per_)
+            per_value = tuple(
+                next(per._evaluate__(res.bindings, parent=self)).value
+                for per in self._per_
+            )
             counts_per_per[per_value] += 1
         for k, v in counts_per_per.items():
-            per_id_value_dict = {per._id_: per_val for per, per_val in zip(self._per_, k)}
+            per_id_value_dict = {
+                per._id_: per_val for per, per_val in zip(self._per_, k)
+            }
             yield {self._id_: v, **per_id_value_dict}
-
 
 
 @dataclass(eq=False, repr=False)
@@ -679,20 +676,23 @@ class Extreme(EntityAggregator[T], ABC):
             extreme_per = defaultdict(lambda: float("-inf"))
             bindings_with_extreme_val_per = {}
             for res in child_results:
-                per_value = tuple(next(per._evaluate__(res.bindings, parent=self)).value for per in self._per_)
+                per_value = tuple(
+                    next(per._evaluate__(res.bindings, parent=self)).value
+                    for per in self._per_
+                )
                 value = self._get_child_value_from_result_(res)
-                if self._extreme_function_([extreme_per[per_value], value]) == extreme_per[per_value]:
+                if self._extreme_function_([extreme_per[per_value], value]) != value:
                     continue
-                bindings_with_extreme_val_per[per_value] = self._extreme_function_(
-                    child_results, key=self._get_child_value_from_result_
-                ).bindings
-                bindings_with_extreme_val_per[per_value][self._id_] = bindings_with_extreme_val_per[
-                    per_value
-                ][self._child_._id_]
-                extreme_per[per_value] = self._extreme_function_(extreme_per[per_value], value)
+                bindings_with_extreme_val_per[per_value] = res.bindings.copy()
+                bindings_with_extreme_val_per[per_value][self._id_] = (
+                    bindings_with_extreme_val_per[per_value][self._child_._id_]
+                )
+                extreme_per[per_value] = value
             for k, v in extreme_per.items():
                 if v != float("-inf"):
-                    per_id_value_dict = {per._id_: per_val for per, per_val in zip(self._per_, k)}
+                    per_id_value_dict = {
+                        per._id_: per_val for per, per_val in zip(self._per_, k)
+                    }
                     yield {**bindings_with_extreme_val_per[k], **per_id_value_dict}
                 else:
                     yield {}
@@ -1009,7 +1009,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     def distinct(
         self,
         *on: TypingUnion[Selectable, Any],
-    ) -> Self:
+    ) -> TypingUnion[Self, T]:
         """
         Apply distinctness constraint to the query object descriptor results.
 
@@ -1390,7 +1390,9 @@ class Variable(CanBehaveLikeAVariable[T]):
         for v in self._domain_:
             if isinstance(v, SymbolicExpression):
                 for vv in v._evaluate__(sources, parent=self):
-                    yield self._build_operation_result_and_update_truth_value_({**sources, **vv.bindings, self._id_: vv.value})
+                    yield self._build_operation_result_and_update_truth_value_(
+                        {**sources, **vv.bindings, self._id_: vv.value}
+                    )
             else:
                 yield self._build_operation_result_and_update_truth_value_(
                     {**sources, self._id_: v}
@@ -1535,14 +1537,20 @@ class Concatenate(CanBehaveLikeAVariable[T]):
         self._update_children_(*self._variables_)
         self._var_ = self
 
-    def _evaluate__(self, sources: Dict[int, Any], parent: Optional[SymbolicExpression] = None) -> Iterable[OperationResult]:
+    def _evaluate__(
+        self, sources: Dict[int, Any], parent: Optional[SymbolicExpression] = None
+    ) -> Iterable[OperationResult]:
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
         self._eval_parent_ = parent
         for var in self._variables_:
             for var_val in var._evaluate__(sources, self):
                 self._is_false_ = var_val.is_false
-                yield OperationResult({**sources, **var_val.bindings, self._id_: var_val.value}, var_val.is_false, self)
+                yield OperationResult(
+                    {**sources, **var_val.bindings, self._id_: var_val.value},
+                    var_val.is_false,
+                    self,
+                )
 
     @property
     def _plot_color_(self) -> ColorLegend:
@@ -1561,6 +1569,7 @@ class Concatenate(CanBehaveLikeAVariable[T]):
     @property
     def _name_(self):
         return self.__class__.__name__
+
 
 @dataclass(eq=False, repr=False)
 class DomainMapping(CanBehaveLikeAVariable[T], ABC):

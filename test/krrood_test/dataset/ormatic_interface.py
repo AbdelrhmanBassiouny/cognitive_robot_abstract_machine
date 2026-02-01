@@ -27,6 +27,7 @@ import krrood.ormatic.custom_types
 import krrood.ormatic.type_dict
 import sqlalchemy.sql.sqltypes
 import test.krrood_test.dataset.example_classes
+import test.krrood_test.dataset.semantic_world_like_classes
 import test.krrood_test.dataset.university_ontology_like_classes
 import typing
 import typing_extensions
@@ -138,6 +139,12 @@ experiencedceodao_experiences_association = Table(
     Column("source_experiencedceodao_id", ForeignKey("ExperiencedCEODAO.database_id")),
     Column("target_companydao_id", ForeignKey("CompanyDAO.database_id")),
 )
+fruitboxdao_fruits_association = Table(
+    "fruitboxdao_fruits_association",
+    Base.metadata,
+    Column("source_fruitboxdao_id", ForeignKey("FruitBoxDAO.database_id")),
+    Column("target_bodydao_id", ForeignKey("BodyDAO.database_id")),
+)
 moreshapesdao_shapes_association = Table(
     "moreshapesdao_shapes_association",
     Base.metadata,
@@ -228,6 +235,30 @@ vectorswithpropertymappeddao_vectors_association = Table(
         ForeignKey("VectorsWithPropertyMappedDAO.database_id"),
     ),
     Column("target_vectormappeddao_id", ForeignKey("VectorMappedDAO.database_id")),
+)
+worlddao_bodies_association = Table(
+    "worlddao_bodies_association",
+    Base.metadata,
+    Column("source_worlddao_id", ForeignKey("WorldDAO.database_id")),
+    Column("target_bodydao_id", ForeignKey("BodyDAO.database_id")),
+)
+worlddao_connections_association = Table(
+    "worlddao_connections_association",
+    Base.metadata,
+    Column("source_worlddao_id", ForeignKey("WorldDAO.database_id")),
+    Column("target_connectiondao_id", ForeignKey("ConnectionDAO.database_id")),
+)
+worlddao_views_association = Table(
+    "worlddao_views_association",
+    Base.metadata,
+    Column("source_worlddao_id", ForeignKey("WorldDAO.database_id")),
+    Column("target_viewdao_id", ForeignKey("ViewDAO.database_id")),
+)
+cabinetdao_drawers_association = Table(
+    "cabinetdao_drawers_association",
+    Base.metadata,
+    Column("source_cabinetdao_id", ForeignKey("CabinetDAO.database_id")),
+    Column("target_drawerdao_id", ForeignKey("DrawerDAO.database_id")),
 )
 
 
@@ -1040,14 +1071,12 @@ class ForwardRefTypeBDAO(
     }
 
 
-class InterestDAO(
+class FruitBoxDAO(
     SymbolDAO,
-    DataAccessObject[
-        test.krrood_test.dataset.university_ontology_like_classes.Interest
-    ],
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.FruitBox],
 ):
 
-    __tablename__ = "InterestDAO"
+    __tablename__ = "FruitBoxDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
@@ -1062,6 +1091,27 @@ class InterestDAO(
         secondaryjoin="BodyDAO.database_id == fruitboxdao_fruits_association.c.target_bodydao_id",
         cascade="save-update, merge",
     )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "FruitBoxDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
+
+class InterestDAO(
+    SymbolDAO,
+    DataAccessObject[
+        test.krrood_test.dataset.university_ontology_like_classes.Interest
+    ],
+):
+
+    __tablename__ = "InterestDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     __mapper_args__ = {
         "polymorphic_identity": "InterestDAO",
@@ -2257,6 +2307,7 @@ class VideoGamesDAO(
         "inherit_condition": database_id == GamingDAO.database_id,
     }
 
+
 class WorldDAO(
     SymbolDAO,
     DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.World],
@@ -2438,7 +2489,7 @@ class ConnectionDAO(
 class FixedConnectionDAO(
     ConnectionDAO,
     DataAccessObject[
-        test.krrood_test.dataset.university_ontology_like_classes.VideoGames
+        test.krrood_test.dataset.semantic_world_like_classes.FixedConnection
     ],
 ):
 
@@ -2558,12 +2609,112 @@ class DoorDAO(
     __tablename__ = "DoorDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(GamingDAO.database_id), primary_key=True, use_existing_column=True
+        ForeignKey(ViewDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    handle_id: Mapped[int] = mapped_column(
+        ForeignKey("HandleDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    body_id: Mapped[int] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    handle: Mapped[HandleDAO] = relationship(
+        "HandleDAO", uselist=False, foreign_keys=[handle_id], post_update=True
+    )
+    body: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[body_id], post_update=True
     )
 
     __mapper_args__ = {
-        "polymorphic_identity": "VideoGamesDAO",
-        "inherit_condition": database_id == GamingDAO.database_id,
+        "polymorphic_identity": "DoorDAO",
+        "inherit_condition": database_id == ViewDAO.database_id,
+    }
+
+
+class DrawerDAO(
+    ViewDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Drawer],
+):
+
+    __tablename__ = "DrawerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ViewDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    correct: Mapped[typing.Optional[builtins.bool]] = mapped_column(
+        use_existing_column=True
+    )
+
+    handle_id: Mapped[int] = mapped_column(
+        ForeignKey("HandleDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    container_id: Mapped[int] = mapped_column(
+        ForeignKey("ContainerDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    handle: Mapped[HandleDAO] = relationship(
+        "HandleDAO", uselist=False, foreign_keys=[handle_id], post_update=True
+    )
+    container: Mapped[ContainerDAO] = relationship(
+        "ContainerDAO", uselist=False, foreign_keys=[container_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "DrawerDAO",
+        "inherit_condition": database_id == ViewDAO.database_id,
+    }
+
+
+class WardrobeDAO(
+    ViewDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Wardrobe],
+):
+
+    __tablename__ = "WardrobeDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ViewDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    handle_id: Mapped[int] = mapped_column(
+        ForeignKey("HandleDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    body_id: Mapped[int] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    container_id: Mapped[int] = mapped_column(
+        ForeignKey("ContainerDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    handle: Mapped[HandleDAO] = relationship(
+        "HandleDAO", uselist=False, foreign_keys=[handle_id], post_update=True
+    )
+    body: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[body_id], post_update=True
+    )
+    container: Mapped[ContainerDAO] = relationship(
+        "ContainerDAO", uselist=False, foreign_keys=[container_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "WardrobeDAO",
+        "inherit_condition": database_id == ViewDAO.database_id,
     }
 
 

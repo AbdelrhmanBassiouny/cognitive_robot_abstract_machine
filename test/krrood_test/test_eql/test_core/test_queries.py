@@ -984,3 +984,36 @@ def test_concatenate():
     query = an(entity(concatenate(l1_var, l2_var)))
     results = list(query.evaluate())
     assert results == l1 + l2
+
+
+def test_count_per(handles_and_containers_world):
+    world = handles_and_containers_world
+    cabinet = variable(Cabinet, domain=world.views)
+    cabinet_drawers = variable_from(cabinet.drawers)
+    query = eql.count(cabinet_drawers, per=cabinet)
+    result = list(query.evaluate())
+    expected = [len(c.drawers) for c in world.views if isinstance(c, Cabinet)]
+    assert result == expected
+
+    # without per should be all drawers of all cabinets
+    query_all = eql.count(cabinet_drawers)
+    results = list(query_all.evaluate())
+    assert len(results) == 1
+    result_all = results[0]
+    expected_all = sum(len(c.drawers) for c in world.views if isinstance(c, Cabinet))
+    assert result_all == expected_all
+
+
+def test_max_count_per(handles_and_containers_world):
+    world = handles_and_containers_world
+    cabinet = variable(Cabinet, domain=world.views)
+    cabinet_drawers = variable_from(cabinet.drawers)
+    query = eql.max(eql.count(cabinet_drawers, per=cabinet))
+    result = list(query.evaluate())
+    assert len(result) == 1
+    result_max = result[0]
+    expected = 0
+    for c in world.views:
+        if isinstance(c, Cabinet) and len(c.drawers) > expected:
+            expected = len(c.drawers)
+    assert result_max == expected
