@@ -36,6 +36,8 @@ class SeenSet:
             # Empty constraint means everything is covered
             self.all_seen = True
             return
+        if self.keys:
+            assignment = {k: v for k, v in assignment.items() if k in self.keys}
         # Maintain exact-match set only when all keys are present
         if self.keys and all(k in assignment for k in self.keys):
             self.exact.add(tuple(assignment[k] for k in self.keys))

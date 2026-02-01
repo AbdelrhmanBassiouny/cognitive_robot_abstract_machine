@@ -771,13 +771,15 @@ def test_count(handles_and_containers_world):
             contains(body.name, "Handle"),
         )
     )
-    assert query.evaluate() == len([b for b in world.bodies if "Handle" in b.name])
+    assert list(query.evaluate())[0] == len(
+        [b for b in world.bodies if "Handle" in b.name]
+    )
 
 
 def test_count_without_entity(handles_and_containers_world):
     world = handles_and_containers_world
     query = count(variable(type_=Body, domain=world.bodies))
-    assert query.evaluate() == len(world.bodies)
+    assert list(query.evaluate())[0] == len(world.bodies)
 
 
 def test_order_by(handles_and_containers_world):
@@ -791,28 +793,28 @@ def test_sum(handles_and_containers_world):
     heights = [1, 2, 3, 4, 5]
     heights_var = variable(int, domain=heights)
     query = eql.sum(entity(heights_var))
-    assert query.evaluate() == sum(heights)
+    assert list(query.evaluate())[0] == sum(heights)
 
 
 def test_average(handles_and_containers_world):
     heights = [1, 2, 3, 4, 5]
     heights_var = variable(int, domain=heights)
     query = eql.average(entity(heights_var))
-    assert query.evaluate() == sum(heights) / len(heights)
+    assert list(query.evaluate())[0] == sum(heights) / len(heights)
 
 
 def test_sum_on_empty_list(handles_and_containers_world):
     empty_list = []
     empty_var = variable(int, domain=empty_list)
     query = eql.sum(entity(empty_var))
-    assert query.evaluate() is None
+    assert list(query.evaluate())[0] is None
 
 
 def test_sum_without_entity():
     heights = [1, 2, 3, 4, 5]
     heights_var = variable(int, domain=heights)
     query = eql.sum(heights_var)
-    assert query.evaluate() == sum(heights)
+    assert list(query.evaluate())[0] == sum(heights)
 
 
 def test_limit(handles_and_containers_world):
@@ -888,10 +890,10 @@ def test_max_min_no_variable():
     value = variable(int, domain=values)
 
     max_query = eql.max(entity(value))
-    assert max_query.evaluate() == max(values)
+    assert list(max_query.evaluate())[0] == max(values)
 
     min_query = eql.min(entity(value))
-    assert min_query.evaluate() == min(values)
+    assert list(min_query.evaluate())[0] == min(values)
 
 
 def test_max_min_without_entity():
@@ -899,10 +901,10 @@ def test_max_min_without_entity():
     value = variable(int, domain=values)
 
     max_query = eql.max(value)
-    assert max_query.evaluate() == max(values)
+    assert list(max_query.evaluate())[0] == max(values)
 
     min_query = eql.min(value)
-    assert min_query.evaluate() == min(values)
+    assert list(min_query.evaluate())[0] == min(values)
 
 
 def test_max_min_with_empty_list():
@@ -910,10 +912,10 @@ def test_max_min_with_empty_list():
     value = variable(int, domain=empty_list)
 
     max_query = eql.max(entity(value))
-    assert max_query.evaluate() is None
+    assert list(max_query.evaluate())[0] is None
 
     min_query = eql.min(entity(value))
-    assert min_query.evaluate() is None
+    assert list(min_query.evaluate())[0] is None
 
 
 def test_order_by_key():

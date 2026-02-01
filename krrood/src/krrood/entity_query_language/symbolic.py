@@ -15,7 +15,6 @@ from copy import copy
 from dataclasses import dataclass, field, fields, MISSING, is_dataclass
 from functools import lru_cache, cached_property
 
-from krrood.entity_query_language.failures import VariableCannotBeEvaluated
 from typing_extensions import (
     Iterable,
     Any,
@@ -33,6 +32,7 @@ from typing_extensions import (
     Set,
 )
 
+from krrood.entity_query_language.failures import VariableCannotBeEvaluated
 from .cache_data import (
     SeenSet,
     ReEnterableLazyIterable,
@@ -67,7 +67,7 @@ from .utils import (
     chain_stages,
 )
 from ..class_diagrams import ClassRelation
-from ..class_diagrams.class_diagram import Association, WrappedClass
+from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.failures import ClassIsUnMappedInClassDiagram
 from ..class_diagrams.utils import Role
 from ..class_diagrams.wrapped_field import WrappedField
@@ -101,12 +101,21 @@ class OperationResult:
     """
 
     @cached_property
-    def is_true(self):
+    def has_value(self) -> bool:
+        return self.operand._binding_id_ in self.bindings
+
+    @cached_property
+    def is_true(self) -> bool:
         return not self.is_false
 
     @property
-    def value(self) -> Optional[Any]:
-        return self.bindings.get(self.operand._id_, None)
+    def value(self) -> Any:
+        """
+        The value of the operation result, retrieved from the bindings using the operand's ID.
+
+        :raises: KeyError if the operand is not found in the bindings.
+        """
+        return self.bindings[self.operand._binding_id_]
 
     def __contains__(self, item):
         return item in self.bindings
@@ -193,6 +202,10 @@ class SymbolicExpression(Generic[T], ABC):
         :return: The mapped result.
         """
         raise CannotProcessResultOfGivenChildType(type(self))
+
+    @cached_property
+    def _binding_id_(self) -> int:
+        return self._id_
 
     @abstractmethod
     def _evaluate__(
@@ -345,6 +358,10 @@ class Selectable(SymbolicExpression[T], ABC):
     """
 
     @cached_property
+    def _binding_id_(self) -> int:
+        return self._var_._binding_id_ if self._var_ is not self else self._id_
+
+    @cached_property
     def _type__(self):
         return self._var_._type_ if self._var_ and self._var_ is not self else None
 
@@ -384,6 +401,25 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
     """
     A storage of created symbolic attributes to prevent recreating same attribute multiple times.
     """
+
+    def _update_truth_value_(self, current_value: Any):
+        """
+        Updates the truth value of the variable based on the current value.
+
+        :param current_value: The current value of the variable.
+        """
+        if (
+            isinstance(self._parent_, (LogicalOperator, ResultProcessor))
+            or self is self._conditions_root_
+        ):
+            is_true = (
+                len(current_value) > 0
+                if is_iterable(current_value)
+                else bool(current_value)
+            )
+            self._is_false_ = not is_true
+        else:
+            self._is_false_ = False
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
         # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
@@ -507,15 +543,6 @@ class Aggregator(ResultProcessor[T], ABC):
         super().__post_init__()
         self._var_ = self
 
-    # def evaluate(
-    #     self,
-    # ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression[T]], T]]]:
-    #     """
-    #     Evaluate the query and map the results to the correct output data structure.
-    #     This is the exposed evaluation method for users.
-    #     """
-    #     return list(super().evaluate())[0]
-
     def _evaluate__(
         self,
         sources: Optional[Dict[int, Any]] = None,
@@ -630,13 +657,14 @@ class Sum(EntityAggregator[T]):
     ) -> Iterable[Dict[int, Any]]:
         entered = False
         sum_val = 0
-        for val in map(self._get_child_value_from_result_, child_results):
+        for val in map(
+            self._get_child_value_from_result_,
+            (res for res in child_results if res.has_value),
+        ):
             entered = True
             sum_val += val
         if entered:
-            yield {self._id_: sum_val}
-            return
-        yield {}
+            yield {self._binding_id_: sum_val}
 
 
 @dataclass(eq=False, repr=False)
@@ -651,13 +679,14 @@ class Average(EntityAggregator[T]):
     ) -> Iterable[Dict[int, Any]]:
         sum_val = 0
         count = 0
-        for val in map(self._get_child_value_from_result_, child_results):
+        for val in map(
+            self._get_child_value_from_result_,
+            (res for res in child_results if res.has_value),
+        ):
             sum_val += val
             count += 1
         if count:
-            yield {self._id_: sum_val / count}
-            return
-        yield {}
+            yield {self._binding_id_: sum_val / count}
 
 
 @dataclass(eq=False, repr=False)
@@ -684,32 +713,32 @@ class Extreme(EntityAggregator[T], ABC):
                 if self._extreme_function_([extreme_per[per_value], value]) != value:
                     continue
                 bindings_with_extreme_val_per[per_value] = res.bindings.copy()
-                bindings_with_extreme_val_per[per_value][self._id_] = (
-                    bindings_with_extreme_val_per[per_value][self._child_._id_]
+                bindings_with_extreme_val_per[per_value][self._binding_id_] = (
+                    bindings_with_extreme_val_per[per_value][self._child_._binding_id_]
                 )
                 extreme_per[per_value] = value
             for k, v in extreme_per.items():
                 if v != float("-inf"):
                     per_id_value_dict = {
-                        per._id_: per_val for per, per_val in zip(self._per_, k)
+                        per._binding_id_: per_val for per, per_val in zip(self._per_, k)
                     }
                     yield {**bindings_with_extreme_val_per[k], **per_id_value_dict}
                 else:
-                    yield {}
+                    pass
             return
         try:
             bindings_with_extreme_val = self._extreme_function_(
                 child_results, key=self._get_child_value_from_result_
             ).bindings
-            bindings_with_extreme_val[self._id_] = bindings_with_extreme_val[
-                self._child_._id_
+            bindings_with_extreme_val[self._binding_id_] = bindings_with_extreme_val[
+                self._child_._binding_id_
             ]
             yield bindings_with_extreme_val
             return
         except ValueError:
             # Means that the child results were empty, so do not return any results,
             # the default value will be returned instead (see Aggregator._evaluate__)
-            yield {}
+            pass
 
     @property
     @abstractmethod
@@ -1017,9 +1046,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         :return: This query object descriptor.
         """
         on_ids = (
-            tuple([v._var_._id_ for v in on])
+            tuple([v._binding_id_ for v in on])
             if on
-            else tuple([v._var_._id_ for v in self._selected_variables])
+            else tuple([v._binding_id_ for v in self._selected_variables])
         )
         self._seen_results = SeenSet(keys=on_ids)
 
@@ -1037,6 +1066,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
                 )
                 if self._seen_results.check(bindings):
                     continue
+                self._seen_results.add(bindings)
                 yield res
 
         self._results_mapping.append(get_distinct_results)
@@ -1227,7 +1257,6 @@ class SetOf(QueryObjectDescriptor[T]):
         :param result: The result to be mapped.
         :return: The mapped result.
         """
-        selected_variables_ids = [v._id_ for v in self._selected_variables]
         return UnificationDict(
             {v._var_: result[v._id_] for v in self._selected_variables}
         )
@@ -1443,18 +1472,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         :param bindings: The bindings of the result.
         :return: The OperationResult instance with updated truth value.
         """
-        if isinstance(self._parent_, (ResultProcessor, LogicalOperator)) or (
-            self is self._conditions_root_
-        ):
-            current_value = bindings[self._id_]
-            is_true = (
-                len(current_value) > 0
-                if is_iterable(current_value)
-                else bool(current_value)
-            )
-            self._is_false_ = not is_true
-        else:
-            self._is_false_ = False
+        self._update_truth_value_(bindings[self._id_])
         return OperationResult(bindings, self._is_false_, self)
 
     @property
@@ -1626,13 +1644,7 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         :param current_value: The current value of this operation that is derived from the child result.
         :return: The operation result.
         """
-        if isinstance(self._parent_, LogicalOperator) or self is self._conditions_root_:
-            is_true = (
-                len(current_value) > 0
-                if is_iterable(current_value)
-                else current_value is not None
-            )
-            self._is_false_ = not is_true
+        self._update_truth_value_(current_value)
         return OperationResult(
             {**child_result.bindings, self._id_: current_value},
             self._is_false_,
