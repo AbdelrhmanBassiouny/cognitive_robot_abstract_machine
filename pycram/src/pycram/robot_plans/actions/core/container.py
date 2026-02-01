@@ -67,8 +67,8 @@ class OpenAction(ActionDescription):
         grasping_prepose_distance: Union[
             Iterable[float], float
         ] = ActionConfig.grasping_prepose_distance,
-    ) -> PartialDesignator[Type[OpenAction]]:
-        return PartialDesignator(
+    ) -> PartialDesignator[OpenAction]:
+        return PartialDesignator[OpenAction](
             OpenAction,
             object_designator=object_designator_description,
             arm=arm,
@@ -125,8 +125,8 @@ class CloseAction(ActionDescription):
         grasping_prepose_distance: Union[
             Iterable[float], float
         ] = ActionConfig.grasping_prepose_distance,
-    ) -> PartialDesignator[Type[CloseAction]]:
-        return PartialDesignator(
+    ) -> PartialDesignator[CloseAction]:
+        return PartialDesignator[CloseAction](
             CloseAction,
             object_designator=object_designator_description,
             arm=arm,

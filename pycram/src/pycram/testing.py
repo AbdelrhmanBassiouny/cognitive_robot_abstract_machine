@@ -1,11 +1,8 @@
 import logging
 import os
-import threading
 import time
 import unittest
 from copy import deepcopy
-
-import pytest
 
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -15,7 +12,6 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.utils import rclpy_installed
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import OmniDrive
 from .datastructures.dataclasses import Context
@@ -26,7 +22,9 @@ from .robot_descriptions.pr2_states import *
 logger = logging.getLogger(__name__)
 
 try:
-    from semantic_digital_twin.adapters.viz_marker import VizMarkerPublisher
+    from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+        VizMarkerPublisher,
+    )
 except ImportError:
     logger.info(
         "Could not import VizMarkerPublisher. This is probably because you are not running ROS."
@@ -94,7 +92,7 @@ def setup_world() -> World:
     ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         2.37, 1.8, 1.05, reference_frame=apartment_world.root
     )
-    milk_view = Milk(body=apartment_world.get_body_by_name("milk.stl"))
+    milk_view = Milk(root=apartment_world.get_body_by_name("milk.stl"))
     with apartment_world.modify_world():
         apartment_world.add_semantic_annotation(milk_view)
 

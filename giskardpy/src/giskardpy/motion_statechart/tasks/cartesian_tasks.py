@@ -32,7 +32,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class CartesianPosition(Task):
     """
     Move a tip link to a goal position in 3D space.

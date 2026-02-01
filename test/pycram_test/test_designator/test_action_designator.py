@@ -1,5 +1,3 @@
-import unittest
-
 import pytest
 import rclpy
 import rustworkx
@@ -10,8 +8,10 @@ from pycram.motion_executor import MotionExecutor
 from pycram.process_module import simulated_robot
 from pycram.robot_plans.actions import *
 from pycram.robot_plans.motions import MoveTCPWaypointsMotion
-from pycram.testing import ApartmentWorldTestCase
-from semantic_digital_twin.adapters.viz_marker import VizMarkerPublisher
+from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
+from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+    VizMarkerPublisher,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
 )
@@ -117,7 +117,9 @@ def test_navigate(immutable_model_world):
 def test_reach_to_pick_up(immutable_model_world):
     world, robot_view, context = immutable_model_world
     grasp_description = GraspDescription(
-        ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False
+        ApproachDirection.FRONT,
+        VerticalAlignment.NoAlignment,
+        robot_view.left_arm.manipulator,
     )
     performable = ReachActionDescription(
         target_pose=PoseStamped.from_spatial_type(
@@ -150,7 +152,9 @@ def test_pick_up(mutable_model_world):
     world, robot_view, context = mutable_model_world
 
     grasp_description = GraspDescription(
-        ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False
+        ApproachDirection.FRONT,
+        VerticalAlignment.NoAlignment,
+        robot_view.left_arm.manipulator,
     )
     description = PickUpActionDescription(
         world.get_body_by_name("milk.stl"), [Arms.LEFT], [grasp_description]
@@ -182,7 +186,7 @@ def test_place(mutable_model_world):
     object_description = world.get_body_by_name("milk.stl")
     description = PlaceActionDescription(
         object_description,
-        PoseStamped.from_list([2.2, 2, 1], [0, 0, 0, 1], world.root),
+        PoseStamped.from_list([2.4, 2, 1], [0, 0, 0, 1], world.root),
         [Arms.LEFT],
     )
     plan = SequentialPlan(
@@ -196,7 +200,9 @@ def test_place(mutable_model_world):
             object_description,
             Arms.LEFT,
             GraspDescription(
-                ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False
+                ApproachDirection.FRONT,
+                VerticalAlignment.NoAlignment,
+                robot_view.left_arm.manipulator,
             ),
         ),
         description,
@@ -233,7 +239,7 @@ def test_detect(immutable_model_world):
     world, robot_view, context = immutable_model_world
     milk_body = world.get_body_by_name("milk.stl")
     with world.modify_world():
-        world.add_semantic_annotation(Milk(body=milk_body))
+        world.add_semantic_annotation(Milk(root=milk_body))
     milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         2.5, 2, 1.2, reference_frame=world.root
     )
@@ -294,8 +300,6 @@ def test_close(immutable_model_world):
 
 def test_transport(mutable_model_world):
     world, robot_view, context = mutable_model_world
-    node = rclpy.create_node("test_node")
-    VizMarkerPublisher(world, node, throttle_state_updates=20)
     description = TransportActionDescription(
         world.get_body_by_name("milk.stl"),
         [PoseStamped.from_list([3.1, 2.2, 0.95], [0.0, 0.0, 1.0, 0.0], world.root)],
@@ -309,6 +313,9 @@ def test_transport(mutable_model_world):
     milk_position = world.get_body_by_name("milk.stl").global_pose.to_np()[:3, 3]
     dist = np.linalg.norm(milk_position - np.array([3.1, 2.2, 0.95]))
     assert dist <= 0.01
+
+    assert len(plan.nodes) == len(plan.all_nodes)
+    assert len(plan.edges) == len(plan.all_nodes) - 1
 
 
 def test_grasping(immutable_model_world):

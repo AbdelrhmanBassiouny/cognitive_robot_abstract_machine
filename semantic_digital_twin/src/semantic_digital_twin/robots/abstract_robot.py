@@ -285,27 +285,13 @@ class Sensor(SemanticRobotAnnotation, ABC):
 
 
 @dataclass
-class FieldOfView(SubclassJSONSerializer):
+class FieldOfView:
     """
     Represents the field of view of a camera sensor, defined by the vertical and horizontal angles of the camera's view.
     """
 
     vertical_angle: float
     horizontal_angle: float
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "vertical_angle": self.vertical_angle,
-            "horizontal_angle": self.horizontal_angle,
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(
-            vertical_angle=data["vertical_angle"],
-            horizontal_angle=data["horizontal_angle"],
-        )
 
 
 @dataclass

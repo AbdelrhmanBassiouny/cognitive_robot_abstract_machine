@@ -20,10 +20,11 @@ from krrood.entity_query_language.predicate import (
 from krrood.entity_query_language.symbol_graph import SymbolGraph
 from krrood.ormatic.alternative_mappings import *  # type: ignore
 from krrood.ormatic.ormatic import ORMatic
+from krrood.ormatic.type_dict import TypeDict
 from krrood.ormatic.utils import classes_of_module, create_engine
 from krrood.ormatic.utils import drop_database
 from krrood.utils import recursive_subclasses
-from .dataset import example_classes, university_ontology_like_classes
+from .dataset import example_classes, semantic_world_like_classes, university_ontology_like_classes
 from .dataset.example_classes import (
     PhysicalObject,
     NotMappedParent,
@@ -57,6 +58,7 @@ def generate_sqlalchemy_interface():
     }
     all_classes |= set(classes_of_module(krrood.entity_query_language.symbol_graph))
     all_classes |= set(classes_of_module(example_classes))
+    all_classes |= set(classes_of_module(semantic_world_like_classes))
     all_classes |= set(classes_of_module(university_ontology_like_classes))
     all_classes |= {Symbol}
 
@@ -81,11 +83,11 @@ def generate_sqlalchemy_interface():
 
     instance = ORMatic(
         class_dependency_graph=class_diagram,
-        type_mappings={
-            PhysicalObject: ConceptType,
-            uuid.UUID: sqlalchemy.UUID,
-            JSONSerializableClass: JSON,
-        },
+        type_mappings=TypeDict(
+            {
+                PhysicalObject: ConceptType,
+            }
+        ),
         alternative_mappings=recursive_subclasses(AlternativeMapping),
     )
 
@@ -108,15 +110,15 @@ def pytest_configure(config):
     This hook runs before pytest collects tests and imports modules,
     ensuring the generated file exists before any module-level imports.
     """
+
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("numpy").setLevel(logging.WARNING)
 
 
 def pytest_sessionstart(session):
     try:
-        pass
-        # TODO: Somebody with ORM experience has to check why the generated ORM interface is broken
         generate_sqlalchemy_interface()
+
     except Exception as e:
         import warnings
 

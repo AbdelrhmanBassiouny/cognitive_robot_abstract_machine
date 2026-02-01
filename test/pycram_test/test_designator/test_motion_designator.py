@@ -1,4 +1,5 @@
 import os
+import unittest
 from copy import deepcopy
 
 import numpy as np
@@ -30,16 +31,25 @@ from pycram.testing import ApartmentWorldTestCase, EmptyWorldTestCase
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.pr2 import PR2
-from pycram.alternative_motion_mappings.hsrb_motion_mapping import *
+
+try:
+    from pycram.alternative_motion_mappings.hsrb_motion_mapping import *
+
+    skip_tests = False
+except (ImportError, ModuleNotFoundError, AttributeError):
+    skip_tests = True
 
 
+@unittest.skipIf(skip_tests, "Alternative motion mappings not available")
 class TestActionDesignatorGrounding(ApartmentWorldTestCase):
 
     def test_pick_up_motion(self):
         test_world = deepcopy(self.world)
         test_robot = PR2.from_world(test_world)
         grasp_description = GraspDescription(
-            ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False
+            ApproachDirection.FRONT,
+            VerticalAlignment.NoAlignment,
+            test_robot.left_arm.manipulator,
         )
         description = PickUpActionDescription(
             test_world.get_body_by_name("milk.stl"), [Arms.LEFT], [grasp_description]
@@ -82,6 +92,7 @@ class TestActionDesignatorGrounding(ApartmentWorldTestCase):
         )
 
 
+@unittest.skipIf(skip_tests, "Alternative motion mappings not available")
 class TestAlternativeMotionMapping(EmptyWorldTestCase):
     @classmethod
     def setUpClass(cls):

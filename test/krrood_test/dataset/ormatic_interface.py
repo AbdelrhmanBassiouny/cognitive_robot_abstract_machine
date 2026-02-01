@@ -17,11 +17,14 @@ from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
 import builtins
 import datetime
+import enum
+import krrood.adapters.json_serializer
 import krrood.entity_query_language.orm.model
 import krrood.entity_query_language.predicate
 import krrood.entity_query_language.symbol_graph
 import krrood.ormatic.alternative_mappings
 import krrood.ormatic.custom_types
+import krrood.ormatic.type_dict
 import sqlalchemy.sql.sqltypes
 import test.krrood_test.dataset.example_classes
 import test.krrood_test.dataset.university_ontology_like_classes
@@ -37,9 +40,10 @@ from krrood.ormatic.custom_types import TypeType
 class Base(DeclarativeBase):
     type_mappings = {
         test.krrood_test.dataset.example_classes.PhysicalObject: test.krrood_test.dataset.example_classes.ConceptType,
-        uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
-        test.krrood_test.dataset.example_classes.JSONSerializableClass: sqlalchemy.sql.sqltypes.JSON,
         typing.Type: krrood.ormatic.custom_types.TypeType,
+        enum.Enum: krrood.ormatic.custom_types.PolymorphicEnumType,
+        krrood.adapters.json_serializer.SubclassJSONSerializer: sqlalchemy.sql.sqltypes.JSON,
+        uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
     }
 
 
@@ -202,6 +206,14 @@ symbolgraphmappingdao_predicate_relations_association = Table(
         ForeignKey("PredicateClassRelationDAO.database_id"),
     ),
 )
+testpositionsetdao_positions_association = Table(
+    "testpositionsetdao_positions_association",
+    Base.metadata,
+    Column(
+        "source_testpositionsetdao_id", ForeignKey("TestPositionSetDAO.database_id")
+    ),
+    Column("target_positiondao_id", ForeignKey("PositionDAO.database_id")),
+)
 torsodao_kinematic_chains_association = Table(
     "torsodao_kinematic_chains_association",
     Base.metadata,
@@ -331,7 +343,9 @@ class JSONWrapperDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    json_serializable_object: Mapped[sqlalchemy.sql.sqltypes.JSON] = mapped_column(
+    json_serializable_object: Mapped[
+        test.krrood_test.dataset.example_classes.JSONSerializableClass
+    ] = mapped_column(
         sqlalchemy.sql.sqltypes.JSON, nullable=False, use_existing_column=True
     )
     more_objects: Mapped[
@@ -465,6 +479,28 @@ class PersonDAO(
         primaryjoin="PersonDAO.database_id == persondao_knows_association.c.source_persondao_id",
         secondaryjoin="PersonDAO.database_id == persondao_knows_association.c.target_persondao_id",
         cascade="save-update, merge",
+    )
+
+
+class PolymorphicEnumAssociationDAO(
+    Base,
+    DataAccessObject[
+        test.krrood_test.dataset.example_classes.PolymorphicEnumAssociation
+    ],
+):
+
+    __tablename__ = "PolymorphicEnumAssociationDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    value: Mapped[test.krrood_test.dataset.example_classes.PolymorphicEnum] = (
+        mapped_column(
+            krrood.ormatic.custom_types.PolymorphicEnumType,
+            nullable=False,
+            use_existing_column=True,
+        )
     )
 
 
@@ -618,12 +654,15 @@ class AtomDAO(
         ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
     )
 
-    element: Mapped[test.krrood_test.dataset.example_classes.Element] = mapped_column(
-        use_existing_column=True
-    )
     type: Mapped[builtins.int] = mapped_column(use_existing_column=True)
     charge: Mapped[builtins.float] = mapped_column(use_existing_column=True)
     timestamp: Mapped[datetime.datetime] = mapped_column(use_existing_column=True)
+
+    element: Mapped[test.krrood_test.dataset.example_classes.Element] = mapped_column(
+        krrood.ormatic.custom_types.PolymorphicEnumType,
+        nullable=False,
+        use_existing_column=True,
+    )
 
     __mapper_args__ = {
         "polymorphic_identity": "AtomDAO",
@@ -1016,6 +1055,14 @@ class InterestDAO(
 
     name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
+    fruits: Mapped[builtins.list[BodyDAO]] = relationship(
+        "BodyDAO",
+        secondary="fruitboxdao_fruits_association",
+        primaryjoin="FruitBoxDAO.database_id == fruitboxdao_fruits_association.c.source_fruitboxdao_id",
+        secondaryjoin="BodyDAO.database_id == fruitboxdao_fruits_association.c.target_bodydao_id",
+        cascade="save-update, merge",
+    )
+
     __mapper_args__ = {
         "polymorphic_identity": "InterestDAO",
         "inherit_condition": database_id == SymbolDAO.database_id,
@@ -1297,7 +1344,7 @@ class OriginalSimulatedObjectDAO(
     placeholder: Mapped[builtins.float] = mapped_column(use_existing_column=True)
 
     concept: Mapped[
-        typing.Optional[test.krrood_test.dataset.example_classes.ConceptType]
+        typing.Optional[test.krrood_test.dataset.example_classes.PhysicalObject]
     ] = mapped_column(
         test.krrood_test.dataset.example_classes.ConceptType,
         nullable=True,
@@ -2035,6 +2082,25 @@ class SymbolGraphMappingDAO(
     )
 
 
+class TestPositionSetDAO(
+    Base, DataAccessObject[test.krrood_test.dataset.example_classes.TestPositionSet]
+):
+
+    __tablename__ = "TestPositionSetDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    positions: Mapped[builtins.set[PositionDAO]] = relationship(
+        "PositionDAO",
+        secondary="testpositionsetdao_positions_association",
+        primaryjoin="TestPositionSetDAO.database_id == testpositionsetdao_positions_association.c.source_testpositionsetdao_id",
+        secondaryjoin="PositionDAO.database_id == testpositionsetdao_positions_association.c.target_positiondao_id",
+        cascade="save-update, merge",
+    )
+
+
 class TorsoDAO(
     KinematicChainDAO, DataAccessObject[test.krrood_test.dataset.example_classes.Torso]
 ):
@@ -2106,11 +2172,25 @@ class UUIDWrapperDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    identification: Mapped[sqlalchemy.sql.sqltypes.UUID] = mapped_column(
+    identification: Mapped[uuid.UUID] = mapped_column(
         sqlalchemy.sql.sqltypes.UUID, nullable=False, use_existing_column=True
     )
     other_identifications: Mapped[typing.List[uuid.UUID]] = mapped_column(
         JSON, nullable=False, use_existing_column=True
+    )
+
+
+class UnderspecifiedTypesContainerDAO(
+    Base,
+    DataAccessObject[
+        test.krrood_test.dataset.example_classes.UnderspecifiedTypesContainer
+    ],
+):
+
+    __tablename__ = "UnderspecifiedTypesContainerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
     )
 
 
@@ -2167,6 +2247,315 @@ class VideoGamesDAO(
 ):
 
     __tablename__ = "VideoGamesDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(GamingDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "VideoGamesDAO",
+        "inherit_condition": database_id == GamingDAO.database_id,
+    }
+
+class WorldDAO(
+    SymbolDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.World],
+):
+
+    __tablename__ = "WorldDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    id: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+
+    bodies: Mapped[builtins.list[BodyDAO]] = relationship(
+        "BodyDAO",
+        secondary="worlddao_bodies_association",
+        primaryjoin="WorldDAO.database_id == worlddao_bodies_association.c.source_worlddao_id",
+        secondaryjoin="BodyDAO.database_id == worlddao_bodies_association.c.target_bodydao_id",
+        cascade="save-update, merge",
+    )
+    connections: Mapped[builtins.list[ConnectionDAO]] = relationship(
+        "ConnectionDAO",
+        secondary="worlddao_connections_association",
+        primaryjoin="WorldDAO.database_id == worlddao_connections_association.c.source_worlddao_id",
+        secondaryjoin="ConnectionDAO.database_id == worlddao_connections_association.c.target_connectiondao_id",
+        cascade="save-update, merge",
+    )
+    views: Mapped[builtins.list[ViewDAO]] = relationship(
+        "ViewDAO",
+        secondary="worlddao_views_association",
+        primaryjoin="WorldDAO.database_id == worlddao_views_association.c.source_worlddao_id",
+        secondaryjoin="ViewDAO.database_id == worlddao_views_association.c.target_viewdao_id",
+        cascade="save-update, merge",
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "WorldDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
+
+class WorldEntityDAO(
+    SymbolDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.WorldEntity],
+):
+
+    __tablename__ = "WorldEntityDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("WorldDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    world: Mapped[WorldDAO] = relationship(
+        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "WorldEntityDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
+
+class BodyDAO(
+    WorldEntityDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Body],
+):
+
+    __tablename__ = "BodyDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(WorldEntityDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
+    size: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "BodyDAO",
+        "inherit_condition": database_id == WorldEntityDAO.database_id,
+    }
+
+
+class AppleDAO(
+    BodyDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Apple],
+):
+
+    __tablename__ = "AppleDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BodyDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "AppleDAO",
+        "inherit_condition": database_id == BodyDAO.database_id,
+    }
+
+
+class ContainerDAO(
+    BodyDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Container],
+):
+
+    __tablename__ = "ContainerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BodyDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ContainerDAO",
+        "inherit_condition": database_id == BodyDAO.database_id,
+    }
+
+
+class HandleDAO(
+    BodyDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Handle],
+):
+
+    __tablename__ = "HandleDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BodyDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HandleDAO",
+        "inherit_condition": database_id == BodyDAO.database_id,
+    }
+
+
+class ConnectionDAO(
+    WorldEntityDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Connection],
+):
+
+    __tablename__ = "ConnectionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(WorldEntityDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    parent_id: Mapped[int] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    child_id: Mapped[int] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    parent: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[parent_id], post_update=True
+    )
+    child: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[child_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ConnectionDAO",
+        "inherit_condition": database_id == WorldEntityDAO.database_id,
+    }
+
+
+class FixedConnectionDAO(
+    ConnectionDAO,
+    DataAccessObject[
+        test.krrood_test.dataset.university_ontology_like_classes.VideoGames
+    ],
+):
+
+    __tablename__ = "FixedConnectionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ConnectionDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "FixedConnectionDAO",
+        "inherit_condition": database_id == ConnectionDAO.database_id,
+    }
+
+
+class PrismaticConnectionDAO(
+    ConnectionDAO,
+    DataAccessObject[
+        test.krrood_test.dataset.semantic_world_like_classes.PrismaticConnection
+    ],
+):
+
+    __tablename__ = "PrismaticConnectionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ConnectionDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "PrismaticConnectionDAO",
+        "inherit_condition": database_id == ConnectionDAO.database_id,
+    }
+
+
+class RevoluteConnectionDAO(
+    ConnectionDAO,
+    DataAccessObject[
+        test.krrood_test.dataset.semantic_world_like_classes.RevoluteConnection
+    ],
+):
+
+    __tablename__ = "RevoluteConnectionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ConnectionDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RevoluteConnectionDAO",
+        "inherit_condition": database_id == ConnectionDAO.database_id,
+    }
+
+
+class ViewDAO(
+    WorldEntityDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.View],
+):
+
+    __tablename__ = "ViewDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(WorldEntityDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ViewDAO",
+        "inherit_condition": database_id == WorldEntityDAO.database_id,
+    }
+
+
+class CabinetDAO(
+    ViewDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Cabinet],
+):
+
+    __tablename__ = "CabinetDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ViewDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    container_id: Mapped[int] = mapped_column(
+        ForeignKey("ContainerDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    container: Mapped[ContainerDAO] = relationship(
+        "ContainerDAO", uselist=False, foreign_keys=[container_id], post_update=True
+    )
+    drawers: Mapped[builtins.list[DrawerDAO]] = relationship(
+        "DrawerDAO",
+        secondary="cabinetdao_drawers_association",
+        primaryjoin="CabinetDAO.database_id == cabinetdao_drawers_association.c.source_cabinetdao_id",
+        secondaryjoin="DrawerDAO.database_id == cabinetdao_drawers_association.c.target_drawerdao_id",
+        cascade="save-update, merge",
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "CabinetDAO",
+        "inherit_condition": database_id == ViewDAO.database_id,
+    }
+
+
+class DoorDAO(
+    ViewDAO, DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.Door]
+):
+
+    __tablename__ = "DoorDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(GamingDAO.database_id), primary_key=True, use_existing_column=True

@@ -89,3 +89,13 @@ Pay attention to the logger during generation and see if it understands your dat
 ## The sharp bits 🔪
 The world class manages the dependencies of the bodies in the world. Whenever you retrieve a body or connection, it comes as a data access object that is disconnected from the world itself.
 The relationships to the world exist and can be joined. However, when you reconstruct something else but the world, the reconstructed object does not have a world available. You can always reconstruct the entire world by querying for the objects world instead.
+
+
+## Accessing a permanent database
+
+This tutorial used an in memory database for the purpose of demonstration.
+If you want to permanently store worlds, you have to
+- Install an RDBMS that is supported by SQLAlchemy. (I recommend [PostgreSQL](https://www.postgresql.org/download/))
+- Create a user and database in your RDBMS, for instance with [this script](https://github.com/cram2/cognitive_robot_abstract_machine/blob/main/semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql).
+- Set the environment variable `SEMANTIC_DIGITAL_TWIN_DATABASE_URI` to the connection string of your RDBMS, for instance by adding `export SEMANTIC_DIGITAL_TWIN_DATABASE_URI=postgresql://semantic_digital_twin:a_very_strong_password_here@localhost:5432/semantic_digital_twin` to your bashrc.
+- Create a session for database interaction, for instance with `semantic_digital_twin_sessionmaker()()`

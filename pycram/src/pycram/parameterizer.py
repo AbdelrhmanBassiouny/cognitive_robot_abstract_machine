@@ -29,7 +29,7 @@ from sortedcontainers import SortedSet
 
 from .datastructures.dataclasses import Context
 from .language import SequentialPlan
-from .plan import Plan, DesignatorNode, ResolvedActionNode
+from .plan import Plan, DesignatorNode, ActionNode
 
 
 @dataclass
@@ -121,7 +121,7 @@ class Parameterizer:
             kwargs = {key: getattr(resolved, key) for key in resolved._parameters}
             plan.add_edge(
                 plan.root,
-                ResolvedActionNode(
+                ActionNode(
                     designator_ref=resolved, kwargs=kwargs, action=resolved.__class__
                 ),
             )

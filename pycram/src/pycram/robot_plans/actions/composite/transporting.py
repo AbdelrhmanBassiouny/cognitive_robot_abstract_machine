@@ -115,6 +115,7 @@ class TransportAction(ActionDescription):
                     target=self.target_location,
                     reachable_arm=self.arm,
                     reachable_for=self.robot_view,
+                    grasp_descriptions=pickup_pose.grasp_description,
                 ),
                 True,
             ),

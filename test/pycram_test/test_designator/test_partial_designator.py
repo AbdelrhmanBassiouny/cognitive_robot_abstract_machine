@@ -66,7 +66,9 @@ def test_partial_desig_call():
 def test_partial_desig_missing_params():
     partial_desig = PartialDesignator(PickUpAction, None, arm=Arms.RIGHT)
     missing_params = partial_desig.missing_parameter()
-    assert "object_designator" in missing_params and "grasp_description" in missing_params
+    assert (
+        "object_designator" in missing_params and "grasp_description" in missing_params
+    )
 
     grasp_description = GraspDescription(
         ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False
@@ -126,10 +128,13 @@ def test_partial_desig_iter(immutable_model_world):
     )
     assert 4 == len(performables)
     assert all([isinstance(p, PickUpAction) for p in performables])
-    assert [p.arm for p in performables] == [Arms.RIGHT, Arms.RIGHT, Arms.LEFT, Arms.LEFT]
-    assert [
-        p.grasp_description for p in performables
-    ] == [
+    assert [p.arm for p in performables] == [
+        Arms.RIGHT,
+        Arms.RIGHT,
+        Arms.LEFT,
+        Arms.LEFT,
+    ]
+    assert [p.grasp_description for p in performables] == [
         grasp_description_front,
         grasp_description_top,
         grasp_description_front,
@@ -214,6 +219,7 @@ def test_partial_pickup_action_insert_param(immutable_model_world):
 
 
 # Lazy product utility tests (do not require world)
+
 
 def test_lazy_product_result():
     l1 = [0, 1]

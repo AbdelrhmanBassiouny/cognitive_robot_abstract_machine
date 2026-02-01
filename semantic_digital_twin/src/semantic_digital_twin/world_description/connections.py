@@ -6,17 +6,17 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 import numpy as np
-from krrood.adapters.json_serializer import from_json, to_json
 from typing_extensions import List, TYPE_CHECKING, Union, Optional, Dict, Any, Self
 
-from .degree_of_freedom import DegreeOfFreedom
+from krrood.adapters.json_serializer import from_json, to_json
+from .connection_properties import JointDynamics
+from .degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
 from .world_entity import CollisionCheckingConfig, Connection, KinematicStructureEntity
 from ..adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
 from ..datastructures.prefixed_name import PrefixedName
 from ..datastructures.types import NpMatrix4x4
 from ..spatial_types import HomogeneousTransformationMatrix, Vector3, Point3, Quaternion
 from ..spatial_types.derivatives import DerivativeMap
-from .connection_properties import JointDynamics
 
 if TYPE_CHECKING:
     from ..world import World
@@ -71,10 +71,10 @@ class ActiveConnection(Connection):
         parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
         child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
         return cls(
-            name=PrefixedName.from_json(data["name"]),
+            name=from_json(data["name"]),
             parent=parent,
             child=child,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_json(
+            parent_T_connection_expression=from_json(
                 data["parent_T_connection_expression"], **kwargs
             ),
             frozen_for_collision_avoidance=data["frozen_for_collision_avoidance"],
@@ -157,10 +157,10 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
         parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
         child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
         return cls(
-            name=PrefixedName.from_json(data["name"]),
+            name=from_json(data["name"]),
             parent=parent,
             child=child,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_json(
+            parent_T_connection_expression=from_json(
                 data["parent_T_connection_expression"], **kwargs
             ),
             frozen_for_collision_avoidance=data["frozen_for_collision_avoidance"],
@@ -180,6 +180,7 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
         name: Optional[PrefixedName] = None,
         multiplier: float = 1.0,
         offset: float = 0.0,
+        dof_limits: Optional[DegreeOfFreedomLimits] = None,
         *args,
         **kwargs,
     ) -> Self:
@@ -201,7 +202,7 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
                  its DOF added to the world.
         """
         name = name or cls._generate_default_name(parent=parent, child=child)
-        dof = DegreeOfFreedom(name=PrefixedName("dof", str(name)))
+        dof = DegreeOfFreedom(name=PrefixedName("dof", str(name)), limits=dof_limits)
         world.add_degree_of_freedom(dof)
         connection = cls(
             parent=parent,
@@ -237,18 +238,18 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
         result.variables = self.raw_dof.variables * self.multiplier
         if self.multiplier < 0:
             # if multiplier is negative, we need to swap the limits
-            result.lower_limits, result.upper_limits = (
-                result.upper_limits,
-                result.lower_limits,
+            result.limits.lower, result.limits.upper = (
+                result.limits.upper,
+                result.limits.lower,
             )
-        result.lower_limits = result.lower_limits * self.multiplier
-        result.upper_limits = result.upper_limits * self.multiplier
+        result.limits.lower = result.limits.lower * self.multiplier
+        result.limits.upper = result.limits.upper * self.multiplier
 
         result.variables.position += self.offset
-        if result.lower_limits.position is not None:
-            result.lower_limits.position = result.lower_limits.position + self.offset
-        if result.upper_limits.position is not None:
-            result.upper_limits.position = result.upper_limits.position + self.offset
+        if result.limits.lower.position is not None:
+            result.limits.lower.position = result.limits.lower.position + self.offset
+        if result.limits.upper.position is not None:
+            result.limits.upper.position = result.limits.upper.position + self.offset
         return result
 
     @property
@@ -403,10 +404,10 @@ class Connection6DoF(Connection):
         parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
         child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
         return cls(
-            name=PrefixedName.from_json(data["name"]),
+            name=from_json(data["name"]),
             parent=parent,
             child=child,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_json(
+            parent_T_connection_expression=from_json(
                 data["parent_T_connection_expression"], **kwargs
             ),
             x_id=from_json(data["x_id"]),
@@ -629,10 +630,10 @@ class OmniDrive(ActiveConnection, HasUpdateState):
         parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
         child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
         return cls(
-            name=PrefixedName.from_json(data["name"], **kwargs),
+            name=from_json(data["name"], **kwargs),
             parent=parent,
             child=child,
-            parent_T_connection_expression=HomogeneousTransformationMatrix.from_json(
+            parent_T_connection_expression=from_json(
                 data["parent_T_connection_expression"], **kwargs
             ),
             x_id=from_json(data["x_id"]),
@@ -751,21 +752,27 @@ class OmniDrive(ActiveConnection, HasUpdateState):
         world.add_degree_of_freedom(pitch)
         yaw = DegreeOfFreedom(
             name=PrefixedName("yaw", stringified_name),
-            lower_limits=lower_rotation_limits,
-            upper_limits=upper_rotation_limits,
+            limits=DegreeOfFreedomLimits(
+                lower=lower_rotation_limits,
+                upper=upper_rotation_limits,
+            ),
         )
         world.add_degree_of_freedom(yaw)
 
         x_vel = DegreeOfFreedom(
             name=PrefixedName("x_vel", stringified_name),
-            lower_limits=lower_translation_limits,
-            upper_limits=upper_translation_limits,
+            limits=DegreeOfFreedomLimits(
+                lower=lower_rotation_limits,
+                upper=upper_rotation_limits,
+            ),
         )
         world.add_degree_of_freedom(x_vel)
         y_vel = DegreeOfFreedom(
             name=PrefixedName("y_vel", stringified_name),
-            lower_limits=lower_translation_limits,
-            upper_limits=upper_translation_limits,
+            limits=DegreeOfFreedomLimits(
+                lower=lower_rotation_limits,
+                upper=upper_rotation_limits,
+            ),
         )
         world.add_degree_of_freedom(y_vel)
 

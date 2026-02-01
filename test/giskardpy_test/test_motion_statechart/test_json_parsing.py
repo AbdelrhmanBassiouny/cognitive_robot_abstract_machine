@@ -35,6 +35,7 @@ from giskardpy.motion_statechart.test_nodes.test_nodes import (
     TestNestedGoal,
 )
 from giskardpy.qp.qp_controller_config import QPControllerConfig
+from giskardpy.utils.utils import limits_from_urdf_joint
 from krrood.symbolic_math.symbolic_math import (
     trinary_logic_and,
     trinary_logic_not,
@@ -51,7 +52,10 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
 )
-from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.degree_of_freedom import (
+    DegreeOfFreedom,
+    DegreeOfFreedomLimits,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -167,7 +171,8 @@ def test_executing_json_parsed_statechart():
         ll = DerivativeMap()
         ll.velocity = -1
         dof = DegreeOfFreedom(
-            name=PrefixedName("dof", "a"), lower_limits=ll, upper_limits=ul
+            name=PrefixedName("dof", "a"),
+            limits=DegreeOfFreedomLimits(lower=ll, upper=ul),
         )
         world.add_degree_of_freedom(dof)
         root_C_tip = RevoluteConnection(
@@ -176,7 +181,8 @@ def test_executing_json_parsed_statechart():
         world.add_connection(root_C_tip)
 
         dof = DegreeOfFreedom(
-            name=PrefixedName("dof", "b"), lower_limits=ll, upper_limits=ul
+            name=PrefixedName("dof", "b"),
+            limits=DegreeOfFreedomLimits(lower=ll, upper=ul),
         )
         world.add_degree_of_freedom(dof)
         root_C_tip2 = RevoluteConnection(
@@ -295,6 +301,7 @@ def test_compressed_copy_can_be_plotted(pr2_world_setup: World):
     end = EndMotion()
     msc.add_node(end)
     end.start_condition = cart_goal.observation_variable
+    msc.add_node(CancelMotion.when_true(cart_goal))
 
     msc._expand_goals(BuildContext.empty())
     json_data = msc.create_structure_copy().to_json()
@@ -302,6 +309,9 @@ def test_compressed_copy_can_be_plotted(pr2_world_setup: World):
     new_json_data = json.loads(json_str)
 
     msc_copy = MotionStatechart.from_json(new_json_data)
+    msc_copy._add_transitions()
+    assert isinstance(msc_copy.nodes[-2], EndMotion)
+    assert isinstance(msc_copy.nodes[-1], CancelMotion)
     msc_copy.draw("muh.pdf")
 
 

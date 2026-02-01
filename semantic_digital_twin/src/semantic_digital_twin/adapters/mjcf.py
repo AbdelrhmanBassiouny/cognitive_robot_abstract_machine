@@ -1,12 +1,19 @@
 import logging
 import os
-from typing_extensions import Optional, Dict
-import numpy
 from dataclasses import dataclass, field
 
 import mujoco
+import numpy
 from scipy.spatial.transform import Rotation
+from typing_extensions import Optional, Dict
 
+from .multi_sim import (
+    MujocoActuator,
+    GeomVisibilityAndCollisionType,
+    MujocoCamera,
+    MujocoEquality,
+    MujocoMocapBody,
+)
 from ..datastructures.prefixed_name import PrefixedName
 from ..exceptions import WorldEntityNotFoundError
 from ..spatial_types import (
@@ -24,7 +31,7 @@ from ..world_description.connections import (
     FixedConnection,
     Connection6DoF,
 )
-from ..world_description.degree_of_freedom import DegreeOfFreedom
+from ..world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
 from ..world_description.geometry import (
     Box,
     Sphere,
@@ -41,13 +48,6 @@ from ..world_description.inertial_properties import (
     PrincipalAxes,
 )
 from ..world_description.shape_collection import ShapeCollection
-from .multi_sim import (
-    MujocoActuator,
-    GeomVisibilityAndCollisionType,
-    MujocoCamera,
-    MujocoEquality,
-    MujocoMocapBody,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -440,8 +440,9 @@ class MJCFParser:
                 upper_limits.position = mujoco_joint.range[1]
                 dof = DegreeOfFreedom(
                     name=PrefixedName(dof_name),
-                    lower_limits=lower_limits,
-                    upper_limits=upper_limits,
+                    limits=DegreeOfFreedomLimits(
+                        lower=lower_limits, upper=upper_limits
+                    ),
                 )
             self.world.add_degree_of_freedom(dof)
             return dof
