@@ -2187,10 +2187,13 @@ class ForAll(QuantifiedConditional):
 
     @cached_property
     def condition_unique_variable_ids(self) -> List[int]:
+        variable_unique_variables = set().union(
+            *(v._unique_variables_ for v in self.variables)
+        )
         return [
             v._id_
             for v in self.condition._unique_variables_.difference(
-                set().union(v._unique_variables_) for v in self.left
+                variable_unique_variables
             )
         ]
 
