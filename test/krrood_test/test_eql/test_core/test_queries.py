@@ -16,6 +16,7 @@ from krrood.entity_query_language.entity import (
     exists,
     flatten,
     variable_from,
+    concatenate,
 )
 from krrood.entity_query_language.entity_result_processors import an, a, the, count
 from krrood.entity_query_language.failures import (
@@ -390,26 +391,6 @@ def test_generate_with_more_than_one_source_optimized(handles_and_containers_wor
         assert isinstance(sol[FC].parent, Container)
         assert isinstance(sol[FC].child, Handle)
         assert sol[PC].child == sol[FC].parent
-
-
-def test_sources(handles_and_containers_world):
-
-    W = variable(World, domain=handles_and_containers_world)
-    C = variable(Container, domain=W.bodies)
-    H = variable(Handle, domain=W.bodies)
-    FC = variable(FixedConnection, domain=W.connections)
-    PC = variable(PrismaticConnection, domain=W.connections)
-    query = a(
-        set_of(C, H, FC, PC).where(
-            C == FC.parent,
-            H == FC.child,
-            C == PC.child,
-        )
-    )
-    # render_tree(H._sources_[0]._node_.root, use_dot_exporter=True, view=True)
-    sources = list(query._sources_)
-    assert len(sources) == 1, "Should have 1 source."
-    assert sources[0] is handles_and_containers_world, "The source should be the world."
 
 
 def test_the(handles_and_containers_world):
@@ -790,13 +771,15 @@ def test_count(handles_and_containers_world):
             contains(body.name, "Handle"),
         )
     )
-    assert query.evaluate() == len([b for b in world.bodies if "Handle" in b.name])
+    assert list(query.evaluate())[0] == len(
+        [b for b in world.bodies if "Handle" in b.name]
+    )
 
 
 def test_count_without_entity(handles_and_containers_world):
     world = handles_and_containers_world
     query = count(variable(type_=Body, domain=world.bodies))
-    assert query.evaluate() == len(world.bodies)
+    assert list(query.evaluate())[0] == len(world.bodies)
 
 
 def test_order_by(handles_and_containers_world):
@@ -810,28 +793,28 @@ def test_sum(handles_and_containers_world):
     heights = [1, 2, 3, 4, 5]
     heights_var = variable(int, domain=heights)
     query = eql.sum(entity(heights_var))
-    assert query.evaluate() == sum(heights)
+    assert list(query.evaluate())[0] == sum(heights)
 
 
 def test_average(handles_and_containers_world):
     heights = [1, 2, 3, 4, 5]
     heights_var = variable(int, domain=heights)
     query = eql.average(entity(heights_var))
-    assert query.evaluate() == sum(heights) / len(heights)
+    assert list(query.evaluate())[0] == sum(heights) / len(heights)
 
 
 def test_sum_on_empty_list(handles_and_containers_world):
     empty_list = []
     empty_var = variable(int, domain=empty_list)
     query = eql.sum(entity(empty_var))
-    assert query.evaluate() is None
+    assert list(query.evaluate())[0] is None
 
 
 def test_sum_without_entity():
     heights = [1, 2, 3, 4, 5]
     heights_var = variable(int, domain=heights)
     query = eql.sum(heights_var)
-    assert query.evaluate() == sum(heights)
+    assert list(query.evaluate())[0] == sum(heights)
 
 
 def test_limit(handles_and_containers_world):
@@ -907,10 +890,10 @@ def test_max_min_no_variable():
     value = variable(int, domain=values)
 
     max_query = eql.max(entity(value))
-    assert max_query.evaluate() == max(values)
+    assert list(max_query.evaluate())[0] == max(values)
 
     min_query = eql.min(entity(value))
-    assert min_query.evaluate() == min(values)
+    assert list(min_query.evaluate())[0] == min(values)
 
 
 def test_max_min_without_entity():
@@ -918,10 +901,10 @@ def test_max_min_without_entity():
     value = variable(int, domain=values)
 
     max_query = eql.max(value)
-    assert max_query.evaluate() == max(values)
+    assert list(max_query.evaluate())[0] == max(values)
 
     min_query = eql.min(value)
-    assert min_query.evaluate() == min(values)
+    assert list(min_query.evaluate())[0] == min(values)
 
 
 def test_max_min_with_empty_list():
@@ -929,10 +912,10 @@ def test_max_min_with_empty_list():
     value = variable(int, domain=empty_list)
 
     max_query = eql.max(entity(value))
-    assert max_query.evaluate() is None
+    assert list(max_query.evaluate())[0] is None
 
     min_query = eql.min(entity(value))
-    assert min_query.evaluate() is None
+    assert list(min_query.evaluate())[0] is None
 
 
 def test_order_by_key():
@@ -993,3 +976,46 @@ def test_multiple_dependent_selectables(handles_and_containers_world):
         (res[cabinet], res[cabinet_drawers])
         for res in cabinet_drawer_pairs_query.evaluate()
     } == set(cabinet_drawer_pairs_expected)
+
+
+def test_concatenate():
+    l1 = [1, 2, 3]
+    l2 = [4, 5, 6]
+    l1_var = variable_from(l1)
+    l2_var = variable_from(l2)
+    query = an(entity(concatenate(l1_var, l2_var)))
+    results = list(query.evaluate())
+    assert results == l1 + l2
+
+
+def test_count_per(handles_and_containers_world):
+    world = handles_and_containers_world
+    cabinet = variable(Cabinet, domain=world.views)
+    cabinet_drawers = variable_from(cabinet.drawers)
+    query = eql.count(cabinet_drawers).per(cabinet)
+    result = list(query.evaluate())
+    expected = [len(c.drawers) for c in world.views if isinstance(c, Cabinet)]
+    assert result == expected
+
+    # without per should be all drawers of all cabinets
+    query_all = eql.count(cabinet_drawers)
+    results = list(query_all.evaluate())
+    assert len(results) == 1
+    result_all = results[0]
+    expected_all = sum(len(c.drawers) for c in world.views if isinstance(c, Cabinet))
+    assert result_all == expected_all
+
+
+def test_max_count_per(handles_and_containers_world):
+    world = handles_and_containers_world
+    cabinet = variable(Cabinet, domain=world.views)
+    cabinet_drawers = variable_from(cabinet.drawers)
+    query = eql.max(eql.count(cabinet_drawers).per(cabinet))
+    result = list(query.evaluate())
+    assert len(result) == 1
+    result_max = result[0]
+    expected = 0
+    for c in world.views:
+        if isinstance(c, Cabinet) and len(c.drawers) > expected:
+            expected = len(c.drawers)
+    assert result_max == expected
