@@ -19,7 +19,7 @@ In this tutorial we will manipulate the state (free variables) of the world.
 Concepts Used:
 - [](visualizing-worlds)
 - Factories (TODO)
-- [Entity Query Language](https://abdelrhmanbassiouny.github.io/entity_query_language/intro.html)
+- [Entity Query Language](https://cram2.github.io/cognitive_robot_abstract_machine/krrood/eql/intro.html)
 - [](world-structure-manipulation)
 
 First, we create a dresser containing a single drawer using the respective factories.
@@ -29,7 +29,7 @@ import threading
 import time
 
 import numpy as np
-from krrood.entity_query_language.entity import, entity, variable, in_
+from krrood.entity_query_language.entity import entity, variable, in_
 from krrood.entity_query_language.entity_result_processors import the
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
