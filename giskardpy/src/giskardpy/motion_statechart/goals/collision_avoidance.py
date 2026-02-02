@@ -462,8 +462,6 @@ class CollisionAvoidance(Goal):
             else:
                 connection_list = robot.controlled_connections
             for connection in connection_list:
-                if connection.frozen_for_collision_avoidance:
-                    continue
                 bodies = context.world.get_direct_child_bodies_with_collision(
                     connection
                 )

@@ -163,7 +163,6 @@ class Collisions:
             return (
                 isinstance(connection, ActiveConnection)
                 and connection.has_hardware_interface
-                and not connection.frozen_for_collision_avoidance
             )
 
         while movable_joint != world.root:

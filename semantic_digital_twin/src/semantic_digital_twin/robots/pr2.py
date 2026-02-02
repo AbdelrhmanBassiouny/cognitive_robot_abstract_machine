@@ -54,11 +54,6 @@ class PR2(AbstractRobot, SpecifiesLeftRightArm, HasNeck):
             SelfCollisionMatrixRule.from_collision_srdf(srdf_path, self._world)
         )
 
-        frozen_joints = ["r_gripper_l_finger_joint", "l_gripper_l_finger_joint"]
-        for joint_name in frozen_joints:
-            c: ActiveConnection = self._world.get_connection_by_name(joint_name)
-            c.frozen_for_collision_avoidance = True
-
         self.default_collision_rules.append(
             AvoidAllCollisions(
                 buffer_zone_distance=0.1,
