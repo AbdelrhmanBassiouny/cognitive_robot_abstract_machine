@@ -39,7 +39,7 @@ def robot_in_collision(
     if ignore_collision_with is None:
         ignore_collision_with = []
 
-    body = variable(type_=Body, domain=robot._world.bodies_with_enabled_collision)
+    body = variable(type_=Body, domain=robot._world.bodies_with_collision)
     possible_collisions_bodies = an(
         entity(body).where(
             and_(

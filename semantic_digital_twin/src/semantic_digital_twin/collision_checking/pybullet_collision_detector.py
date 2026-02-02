@@ -34,7 +34,7 @@ class BulletCollisionDetector(CollisionDetector):
         self.reset_cache()
         self.clear()
         self.body_to_bullet_object = {}
-        for body in self.world.bodies_with_enabled_collision:
+        for body in self.world.bodies_with_collision:
             self.add_body(body)
         self.ordered_bullet_objects = list(self.body_to_bullet_object.values())
 

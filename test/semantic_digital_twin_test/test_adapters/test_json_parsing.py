@@ -39,10 +39,6 @@ def test_body_json_serialization():
         Box(origin=HomogeneousTransformationMatrix.from_xyz_rpy(0, 1, 0, 0, 0, 1, body))
     ]
     body.collision = ShapeCollection(collision, reference_frame=body)
-    body.collision_config.max_avoided_bodies = 69
-    body.collision_config.disabled = False
-    body.collision_config.buffer_zone_distance = 1.227
-    body.collision_config.violated_distance = 0.23
 
     with world.modify_world():
         world.add_kinematic_structure_entity(body)
@@ -75,8 +71,6 @@ def test_body_json_serialization():
     )
 
     assert body == body2
-
-    assert body.collision_config == body2.collision_config
 
 
 def test_transformation_matrix_json_serialization():

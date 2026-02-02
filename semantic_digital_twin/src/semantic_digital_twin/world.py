@@ -7,13 +7,11 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from enum import IntEnum
 from functools import wraps, lru_cache, cached_property
-from itertools import combinations_with_replacement
 from uuid import UUID
 
 import numpy as np
 import rustworkx as rx
 import rustworkx.visualization
-
 from rustworkx import NoEdgeBetweenNodes
 from typing_extensions import (
     Dict,
@@ -41,7 +39,6 @@ from .exceptions import (
     MissingWorldModificationContextError,
     WorldEntityWithIDNotFoundError,
 )
-from .robots.abstract_robot import AbstractRobot
 from .spatial_computations.forward_kinematics import ForwardKinematicsManager
 from .spatial_computations.ik_solver import InverseKinematicsSolver
 from .spatial_computations.raytracer import RayTracer
@@ -65,7 +62,6 @@ from .world_description.world_entity import (
     Region,
     GenericKinematicStructureEntity,
     GenericConnection,
-    CollisionCheckingConfig,
     Body,
     WorldEntity,
     GenericWorldEntity,
@@ -244,62 +240,6 @@ def atomic_world_modification(
 
 
 @dataclass
-class CollisionPairManager:
-    """
-    Manages disabled collision pairs in the world.
-    """
-
-    world: World
-    """
-    The world to manage collision pairs for.
-    """
-
-    _disabled_collision_pairs: Set[Tuple[Body, Body]] = field(
-        default_factory=set, repr=False
-    )
-    """
-    Collisions for these Body pairs is disabled.f
-    """
-
-    _temp_disabled_collision_pairs: Set[Tuple[Body, Body]] = field(
-        default_factory=set, repr=False
-    )
-    """
-    A set of Body pairs for which collisions are temporarily disabled.
-    """
-
-    def reset_temporary_collision_config(self):
-        self._temp_disabled_collision_pairs = set()
-        for body in self.world.bodies_with_enabled_collision:
-            body.reset_temporary_collision_config()
-
-    @property
-    def disabled_collision_pairs(
-        self,
-    ) -> Set[Tuple[Body, Body]]:
-        return self._disabled_collision_pairs | self._temp_disabled_collision_pairs
-
-    @property
-    def enabled_collision_pairs(self) -> Set[Tuple[Body, Body]]:
-        """
-        The complement of disabled_collision_pairs with respect to all possible body combinations with enabled collision.
-        """
-        all_combinations = set(
-            combinations_with_replacement(self.world.bodies_with_enabled_collision, 2)
-        )
-        return all_combinations - self.disabled_collision_pairs
-
-    def add_temp_disabled_collision_pair(
-        self, body_a: KinematicStructureEntity, body_b: KinematicStructureEntity
-    ):
-        """
-        Disable collision checking between two bodies
-        """
-        pair = tuple(sorted([body_a, body_b], key=lambda b: b.id))
-        self._temp_disabled_collision_pairs.add(pair)
-
-
-@dataclass
 class WorldModelManager:
     """
     Manages the world model version and modification blocks.
@@ -403,11 +343,6 @@ class World:
     See `atomic_world_modification` for more information.
     """
 
-    _collision_pair_manager: CollisionPairManager = field(init=False, repr=False)
-    """
-    Manages disabled collision pairs in the world.
-    """
-
     _model_manager: WorldModelManager = field(
         default_factory=WorldModelManager, repr=False
     )
@@ -428,7 +363,6 @@ class World:
     """
 
     def __post_init__(self):
-        self._collision_pair_manager = CollisionPairManager(self)
         self.state = WorldState(_world=self)
         self._forward_kinematic_manager = ForwardKinematicsManager(self)
 
@@ -508,16 +442,6 @@ class World:
         :return: A list of all bodies in the world.
         """
         return self.get_kinematic_structure_entity_by_type(Body)
-
-    @property
-    def bodies_with_enabled_collision(self) -> List[Body]:
-        return [
-            b
-            for b in self.bodies
-            if b.has_collision()
-            and b.get_collision_config
-            and not b.get_collision_config().disabled
-        ]
 
     @property
     def bodies_with_collision(self) -> List[Body]:
@@ -1818,7 +1742,6 @@ class World:
                 new_world.add_kinematic_structure_entity(new_body)
                 new_body.visual = body.visual.copy_for_world(new_world)
                 new_body.collision = body.collision.copy_for_world(new_world)
-                new_body.collision_config = deepcopy(body.collision_config)
             for region in self.regions:
                 new_region = Region(
                     name=region.name,
@@ -1843,8 +1766,6 @@ class World:
         return new_world
 
     # %% Associations
-    def load_collision_srdf(self, file_path: str):
-        self._collision_pair_manager.load_collision_srdf(file_path)
 
     def modify_world(self) -> WorldModelUpdateContextManager:
         return WorldModelUpdateContextManager(world=self)

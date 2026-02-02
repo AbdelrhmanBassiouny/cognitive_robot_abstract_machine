@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from collections import deque
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
-from dataclasses import dataclass, field, Field
+from dataclasses import dataclass, field
 from dataclasses import fields
 from functools import lru_cache, cached_property
 from uuid import UUID, uuid4
@@ -14,9 +14,6 @@ from uuid import UUID, uuid4
 import numpy as np
 import trimesh
 import trimesh.boolean
-from scipy.stats import geom
-from trimesh.proximity import closest_point, nearby_faces
-from trimesh.sample import sample_surface
 from typing_extensions import (
     Deque,
     Type,
@@ -218,20 +215,6 @@ class WorldEntityWithID(WorldEntity, SubclassJSONSerializer):
             return obj
 
 
-@dataclass
-class CollisionCheckingConfig:
-    disabled: Optional[bool] = None
-    """
-    Flag to enable/disable collision checking for this entity. When True, all collision checks are ignored.
-    """
-
-    max_avoided_bodies: int = 1
-    """
-    Maximum number of other bodies this body should avoid simultaneously.
-    If more bodies than this are in the buffer zone, only the closest ones are avoided.
-    """
-
-
 @dataclass(eq=False)
 class KinematicStructureEntity(WorldEntityWithID, ABC):
     """
@@ -375,18 +358,6 @@ class Body(KinematicStructureEntity):
     The poses of the shapes are relative to the link.
     """
 
-    collision_config: Optional[CollisionCheckingConfig] = field(
-        default_factory=CollisionCheckingConfig
-    )
-    """
-    Configuration for collision checking.
-    """
-
-    temp_collision_config: Optional[CollisionCheckingConfig] = None
-    """
-    Temporary configuration for collision checking, takes priority over `collision_config`.
-    """
-
     index: Optional[int] = field(default=None, init=False)
     """
     The index of the entity in `_world.kinematic_structure`.
@@ -421,40 +392,6 @@ class Body(KinematicStructureEntity):
             return None
         return self.collision.combined_mesh
 
-    def get_collision_config(self) -> CollisionCheckingConfig:
-        if self.temp_collision_config is not None:
-            return self.temp_collision_config
-        return self.collision_config
-
-    def set_static_collision_config(self, collision_config: CollisionCheckingConfig):
-        merged_config = CollisionCheckingConfig(
-            buffer_zone_distance=(
-                collision_config.buffer_zone_distance
-                if collision_config.buffer_zone_distance is not None
-                else self.collision_config.buffer_zone_distance
-            ),
-            violated_distance=collision_config.violated_distance,
-            disabled=(
-                collision_config.disabled
-                if collision_config.disabled is not None
-                else self.collision_config.disabled
-            ),
-            max_avoided_bodies=collision_config.max_avoided_bodies,
-        )
-        self.collision_config = merged_config
-
-    def set_static_collision_distances(
-        self, buffer_zone_distance: float, violated_distance: float
-    ):
-        self.collision_config.buffer_zone_distance = buffer_zone_distance
-        self.collision_config.violated_distance = violated_distance
-
-    def set_temporary_collision_config(self, collision_config: CollisionCheckingConfig):
-        self.temp_collision_config = collision_config
-
-    def reset_temporary_collision_config(self):
-        self.temp_collision_config = None
-
     def has_collision(
         self, volume_threshold: float = 1.001e-6, surface_threshold: float = 0.00061
     ) -> bool:
@@ -466,88 +403,6 @@ class Body(KinematicStructureEntity):
         :return: True if collision geometry is mesh or simple shape exceeding thresholds
         """
         return len(self.collision) > 0
-
-    def compute_closest_points_multi(
-        self, others: list[Body], sample_size=25
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Computes the closest points to each given body respectively.
-
-        :param others: The list of bodies to compute the closest points to.
-        :param sample_size: The number of samples to take from the surface of the other bodies.
-        :return: A tuple containing: The points on the self body, the points on the other bodies, and the distances. All points are in the of this body.
-        """
-
-        @lru_cache(maxsize=None)
-        def evaluated_geometric_distribution(n: int) -> np.ndarray:
-            """
-            Evaluates the geometric distribution for a given number of samples.
-            :param n: The number of samples to evaluate.
-            :return: An array of probabilities for each sample.
-            """
-            return geom.pmf(np.arange(1, n + 1), 0.5)
-
-        query_points = []
-        for other in others:
-            # Calculate the closest vertex on this body to the other body
-            closest_vert_id = self.collision[0].mesh.kdtree.query(
-                (
-                    self._world.compute_forward_kinematics_np(self, other)
-                    @ other.collision[0].origin.to_np()
-                )[:3, 3],
-                k=1,
-            )[1]
-            closest_vert = self.collision[0].mesh.vertices[closest_vert_id]
-
-            # Compute the closest faces on the other body to the closes vertex
-            faces = nearby_faces(
-                other.collision[0].mesh,
-                [
-                    (
-                        self._world.compute_forward_kinematics_np(other, self)
-                        @ self.collision[0].origin.to_np()
-                    )[:3, 3]
-                    + closest_vert
-                ],
-            )[0]
-            face_weights = np.zeros(len(other.collision[0].mesh.faces))
-
-            # Assign weights to the faces based on a geometric distribution
-            face_weights[faces] = evaluated_geometric_distribution(len(faces))
-
-            # Sample points on the surface of the other body
-            q = sample_surface(
-                other.collision[0].mesh, sample_size, face_weight=face_weights, seed=420
-            )[0]
-            # Make 4x4 transformation matrix from points
-            points = np.tile(np.eye(4, dtype=np.float32), (len(q), 1, 1))
-            points[:, :3, 3] = q
-
-            # Transform from the mesh to the other mesh
-            transform = (
-                np.linalg.inv(self.collision[0].origin.to_np())
-                @ self._world.compute_forward_kinematics_np(self, other)
-                @ other.collision[0].origin.to_np()
-            )
-            points = points @ transform
-
-            points = points[
-                :, :3, 3
-            ]  # Extract the points from the transformation matrix
-
-            query_points.extend(points)
-
-        # Actually compute the closest points
-        points, dists = closest_point(self.collision[0].mesh, query_points)[:2]
-        # Find the closest points for each body out of all the sampled points
-        points = np.array(points).reshape(len(others), sample_size, 3)
-        dists = np.array(dists).reshape(len(others), sample_size)
-        dist_min = np.min(dists, axis=1)
-        points_min_self = points[np.arange(len(others)), np.argmin(dists, axis=1), :]
-        points_min_other = np.array(query_points).reshape(len(others), sample_size, 3)[
-            np.arange(len(others)), np.argmin(dists, axis=1), :
-        ]
-        return points_min_self, points_min_other, dist_min
 
     def get_semantic_annotations_by_type(
         self, type_: Type[GenericSemanticAnnotation]
@@ -794,14 +649,6 @@ class RootedSemanticAnnotation(SemanticAnnotation):
     def bodies_with_collisions(self) -> List[Body]:
         return [x for x in self.bodies if x.has_collision()]
 
-    @property
-    def bodies_with_enabled_collision(self) -> Set[Body]:
-        return set(
-            body
-            for body in self.bodies
-            if body.has_collision() and not body.get_collision_config().disabled
-        )
-
 
 @dataclass(eq=False)
 class Agent(RootedSemanticAnnotation):
@@ -813,8 +660,6 @@ class Agent(RootedSemanticAnnotation):
     robots, humans, or other autonomous actors.
 
     """
-
-    ...
 
 
 @dataclass(eq=False)
@@ -828,8 +673,6 @@ class Human(Agent):
     This class exists primarily for semantic distinction, so that algorithms
     can treat human agents differently from robots if needed.
     """
-
-    ...
 
 
 @dataclass(eq=False)

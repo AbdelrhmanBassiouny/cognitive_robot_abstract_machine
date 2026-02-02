@@ -36,7 +36,6 @@ from semantic_digital_twin.world_description.geometry import Box, Scale, Cylinde
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
-    CollisionCheckingConfig,
 )
 
 ###############################
@@ -121,9 +120,6 @@ def cylinder_bot_world():
         robot = Body(
             name=PrefixedName("bot"),
             collision=ShapeCollection(shapes=[Cylinder(width=0.1, height=0.5)]),
-            collision_config=CollisionCheckingConfig(
-                buffer_zone_distance=0.05, violated_distance=0.0, max_avoided_bodies=3
-            ),
         )
         robot_world.add_body(robot)
         MinimalRobot.from_world(robot_world)

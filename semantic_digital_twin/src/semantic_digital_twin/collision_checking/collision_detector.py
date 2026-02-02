@@ -1,26 +1,20 @@
 from __future__ import annotations
 
 import abc
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from itertools import combinations, combinations_with_replacement
 from uuid import UUID
 
 import numpy as np
-from lxml import etree
-from typing_extensions import List, Dict, Any
-from typing_extensions import Tuple, TYPE_CHECKING, Self
+from typing_extensions import TYPE_CHECKING, Self
 
-from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from krrood.symbolic_math.symbolic_math import (
     Matrix,
     VariableParameters,
     CompiledFunction,
 )
 from .collision_matrix import CollisionMatrix, CollisionCheck
-from ..adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
 from ..callbacks.callback import ModelChangeCallback, StateChangeCallback
-from ..world_description.world_entity import Body, CollisionCheckingConfig
+from ..world_description.world_entity import Body
 
 if TYPE_CHECKING:
     from ..world import World
@@ -199,7 +193,7 @@ class CollisionDetectorModelUpdater(ModelChangeCallback):
     def compile_collision_fks(self):
         collision_fks = []
         world_root = self.world.root
-        for body in self.world.bodies_with_enabled_collision:
+        for body in self.world.bodies_with_collision:
             if body == world_root:
                 continue
             collision_fks.append(

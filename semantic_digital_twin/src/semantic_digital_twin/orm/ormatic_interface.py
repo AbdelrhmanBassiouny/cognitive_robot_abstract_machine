@@ -24,7 +24,6 @@ import semantic_digital_twin.reasoning.predicates
 import semantic_digital_twin.robots.abstract_robot
 import semantic_digital_twin.semantic_annotations.mixins
 import semantic_digital_twin.semantic_annotations.semantic_annotations
-import semantic_digital_twin.world
 import semantic_digital_twin.world_description.connections
 import semantic_digital_twin.world_description.degree_of_freedom
 import semantic_digital_twin.world_description.geometry
@@ -312,46 +311,6 @@ class CallbackDAO(
         "polymorphic_on": "polymorphic_type",
         "polymorphic_identity": "CallbackDAO",
     }
-
-
-class CollisionCheckingConfigDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.world_entity.CollisionCheckingConfig
-    ],
-):
-
-    __tablename__ = "CollisionCheckingConfigDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-    disabled: Mapped[typing.Optional[builtins.bool]] = mapped_column(
-        use_existing_column=True
-    )
-    max_avoided_bodies: Mapped[builtins.int] = mapped_column(use_existing_column=True)
-
-
-class CollisionPairManagerDAO(
-    Base, DataAccessObject[semantic_digital_twin.world.CollisionPairManager]
-):
-
-    __tablename__ = "CollisionPairManagerDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-    world_id: Mapped[int] = mapped_column(
-        ForeignKey("WorldMappingDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    world: Mapped[WorldMappingDAO] = relationship(
-        "WorldMappingDAO", uselist=False, foreign_keys=[world_id], post_update=True
-    )
 
 
 class ColorDAO(
@@ -1666,16 +1625,6 @@ class BodyDAO(
         nullable=True,
         use_existing_column=True,
     )
-    collision_config_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("CollisionCheckingConfigDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    temp_collision_config_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("CollisionCheckingConfigDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     visual: Mapped[ShapeCollectionDAO] = relationship(
         "ShapeCollectionDAO", uselist=False, foreign_keys=[visual_id], post_update=True
@@ -1684,18 +1633,6 @@ class BodyDAO(
         "ShapeCollectionDAO",
         uselist=False,
         foreign_keys=[collision_id],
-        post_update=True,
-    )
-    collision_config: Mapped[CollisionCheckingConfigDAO] = relationship(
-        "CollisionCheckingConfigDAO",
-        uselist=False,
-        foreign_keys=[collision_config_id],
-        post_update=True,
-    )
-    temp_collision_config: Mapped[CollisionCheckingConfigDAO] = relationship(
-        "CollisionCheckingConfigDAO",
-        uselist=False,
-        foreign_keys=[temp_collision_config_id],
         post_update=True,
     )
 

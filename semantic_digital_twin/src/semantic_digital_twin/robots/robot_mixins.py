@@ -88,13 +88,15 @@ class SpecifiesLeftRightArm(HasArms, ABC):
         second_arm = self.arms[1]
         first_arm_chain = list(first_arm.bodies_with_collisions)
         second_arm_chain = list(second_arm.bodies_with_collisions)
-
-        return (
-            first_arm
-            if relation(
-                first_arm_chain[1],
-                second_arm_chain[1],
-                pov,
-            )()
-            else second_arm
-        )
+        try:
+            return (
+                first_arm
+                if relation(
+                    first_arm_chain[1],
+                    second_arm_chain[1],
+                    pov,
+                )()
+                else second_arm
+            )
+        except IndexError:
+            pass

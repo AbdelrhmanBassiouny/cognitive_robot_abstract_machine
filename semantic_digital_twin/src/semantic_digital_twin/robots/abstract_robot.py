@@ -32,7 +32,6 @@ from ..world_description.world_entity import (
     RootedSemanticAnnotation,
     Agent,
     Connection,
-    CollisionCheckingConfig,
 )
 from ..world_description.world_entity import (
     KinematicStructureEntity,

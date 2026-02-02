@@ -91,9 +91,7 @@ class CollisionMatrix:
         return CollisionMatrix(
             collision_checks={
                 CollisionCheck(body_a=body_a, body_b=body_b, distance=distance)
-                for body_a, body_b in combinations(
-                    world.bodies_with_enabled_collision, 2
-                )
+                for body_a, body_b in combinations(world.bodies_with_collision, 2)
             }
         )
 

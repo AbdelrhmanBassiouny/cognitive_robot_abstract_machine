@@ -11,7 +11,7 @@ from typing_extensions import List, TYPE_CHECKING, Union, Optional, Dict, Any, S
 from krrood.adapters.json_serializer import from_json, to_json
 from .connection_properties import JointDynamics
 from .degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
-from .world_entity import CollisionCheckingConfig, Connection, KinematicStructureEntity
+from .world_entity import Connection, KinematicStructureEntity
 from ..adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
 from ..datastructures.prefixed_name import PrefixedName
 from ..datastructures.types import NpMatrix4x4
@@ -74,13 +74,6 @@ class ActiveConnection(Connection):
     @property
     def is_controlled(self):
         return self.has_hardware_interface
-
-    def set_static_collision_config_for_direct_child_bodies(
-        self, collision_config: CollisionCheckingConfig
-    ):
-        for child_body in self._world.get_direct_child_bodies_with_collision(self):
-            if not child_body.get_collision_config().disabled:
-                child_body.set_static_collision_config(collision_config)
 
 
 @dataclass(eq=False)

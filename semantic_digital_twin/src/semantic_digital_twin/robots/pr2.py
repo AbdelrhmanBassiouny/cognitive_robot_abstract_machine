@@ -3,17 +3,13 @@ from __future__ import annotations
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Self
 
 from pkg_resources import resource_filename
 
 from .robot_mixins import HasNeck, SpecifiesLeftRightArm
-from ..collision_checking.collision_matrix import CollisionRulePriority
 from ..collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
     AvoidAllCollisions,
-    AvoidCollisionRule,
-    AvoidCollisionBetweenGroups,
 )
 from ..datastructures.prefixed_name import PrefixedName
 from ..robots.abstract_robot import (
@@ -28,9 +24,7 @@ from ..robots.abstract_robot import (
     Base,
 )
 from ..spatial_types import Quaternion, Vector3
-from ..world import World
 from ..world_description.connections import ActiveConnection
-from ..world_description.world_entity import CollisionCheckingConfig
 
 
 @dataclass(eq=False)

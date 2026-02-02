@@ -43,7 +43,7 @@ class TrimeshCollisionDetector(CollisionDetector):
         """
         if self._last_synced_model == self.world.get_world_model_manager().version:
             return
-        bodies_to_be_added = set(self.world.bodies_with_enabled_collision) - set(
+        bodies_to_be_added = set(self.world.bodies_with_collision) - set(
             self._collision_objects.keys()
         )
         for body in bodies_to_be_added:
@@ -54,7 +54,7 @@ class TrimeshCollisionDetector(CollisionDetector):
                 ),
             )
         bodies_to_be_removed = set(self._collision_objects.keys()) - set(
-            self.world.bodies_with_enabled_collision
+            self.world.bodies_with_collision
         )
         for body in bodies_to_be_removed:
             del self._collision_objects[body]

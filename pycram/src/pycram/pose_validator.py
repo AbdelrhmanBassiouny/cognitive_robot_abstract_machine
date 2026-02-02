@@ -201,8 +201,8 @@ def create_collision_matrix(
     )
     allowed_collision_with = ignore_collision_with + list(attached_bodies)
 
-    for robot_body in robot.bodies_with_enabled_collision:
-        for world_body in world.bodies_with_enabled_collision:
+    for robot_body in robot.bodies_with_collisions:
+        for world_body in world.bodies_with_collision:
             if (
                 world_body in allowed_collision_with
                 or robot_body in allowed_collision_with

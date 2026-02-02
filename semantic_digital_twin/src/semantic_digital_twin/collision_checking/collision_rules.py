@@ -14,7 +14,7 @@ from .collision_matrix import (
 )
 from ..robots.abstract_robot import AbstractRobot
 from ..world import World
-from ..world_description.world_entity import Body, CollisionCheckingConfig
+from ..world_description.world_entity import Body
 
 if TYPE_CHECKING:
     pass
@@ -133,9 +133,7 @@ class AllowNonRobotCollisions(HighPriorityAllowCollisionRule):
         }
 
         # Bodies with collisions that are NOT part of a robot
-        non_robot_bodies: set[Body] = (
-            set(world.bodies_with_enabled_collision) - robot_bodies
-        )
+        non_robot_bodies: set[Body] = set(world.bodies_with_collision) - robot_bodies
         if not non_robot_bodies:
             return
 
@@ -172,30 +170,19 @@ class SelfCollisionMatrixRule(HighPriorityAllowCollisionRule):
         collision_matrix: set[CollisionCheck] = set()
         for collision_request in self.collision_requests:
             if collision_request.all_bodies_for_group1():
-                view_1_bodies = world.bodies_with_enabled_collision
+                view_1_bodies = world.bodies_with_collision
             else:
                 view_1_bodies = collision_request.body_group1
             if collision_request.all_bodies_for_group2():
-                view2_bodies = world.bodies_with_enabled_collision
+                view2_bodies = world.bodies_with_collision
             else:
                 view2_bodies = collision_request.body_group2
-            disabled_pairs = world._collision_pair_manager.disabled_collision_pairs
             for body1 in view_1_bodies:
                 for body2 in view2_bodies:
                     collision_check = CollisionCheck(
                         body_a=body1, body_b=body2, distance=0
                     )
-                    (robot_body, env_body) = collision_check.bodies()
-                    if (robot_body, env_body) in disabled_pairs:
-                        continue
-                    if collision_request.distance is None:
-                        distance = max(
-                            robot_body.get_collision_config().buffer_zone_distance
-                            or 0.0,
-                            env_body.get_collision_config().buffer_zone_distance or 0.0,
-                        )
-                    else:
-                        distance = collision_request.distance
+                    distance = collision_request.distance
                     if not collision_request.is_allow_collision():
                         collision_check.distance = distance
                         collision_check._validate()

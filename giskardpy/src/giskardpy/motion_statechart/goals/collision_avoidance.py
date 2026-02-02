@@ -101,7 +101,7 @@ class ExternalCollisionAvoidanceTask(Task):
             self.tip, self.idx
         )
         b_result_cases = []
-        for body in context.world.bodies_with_enabled_collision:
+        for body in context.world.bodies_with_collision:
             if body.get_collision_config().buffer_zone_distance is None:
                 continue
             if body.get_collision_config().disabled:
@@ -495,8 +495,8 @@ class CollisionAvoidance(Goal):
         robot: AbstractRobot
         # collect bodies from the same connection to the main body pair
         for robot in context.world.get_semantic_annotations_by_type(AbstractRobot):
-            for body_a_original in robot.bodies_with_enabled_collision:
-                for body_b_original in robot.bodies_with_enabled_collision:
+            for body_a_original in robot.bodies_with_collisions:
+                for body_b_original in robot.bodies_with_collisions:
                     if (
                         (
                             body_a_original,

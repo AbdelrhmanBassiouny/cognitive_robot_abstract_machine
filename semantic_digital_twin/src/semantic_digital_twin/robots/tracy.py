@@ -34,7 +34,17 @@ class Tracy(AbstractRobot, SpecifiesLeftRightArm, HasNeck):
             )
         )
 
-    def setup_collision_rules(self): ...
+    def setup_collision_rules(self):
+        path_to_srdf = resource_filename(
+            "giskardpy", "../self_collision_matrices/iai/tracy.srdf"
+        )
+        self.world.load_collision_srdf(path_to_srdf)
+
+        for body in self.robot.bodies_with_collisions:
+            collision_config = CollisionCheckingConfig(
+                buffer_zone_distance=0.03, violated_distance=0.0
+            )
+            body.set_static_collision_config(collision_config)
 
     @classmethod
     def from_world(cls, world: World) -> Self:

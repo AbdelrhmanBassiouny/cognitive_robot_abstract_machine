@@ -4,28 +4,17 @@ import numpy as np
 import pytest
 from numpy.testing import assert_raises
 
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
-
-from semantic_digital_twin.spatial_types import Vector3
-from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import (
-    PrismaticConnection,
-    RevoluteConnection,
-    Connection6DoF,
-    FixedConnection,
-    OmniDrive,
-)
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
-    AddingAnExistingSemanticAnnotationError,
     DuplicateWorldEntityError,
-    DuplicateKinematicStructureEntityError,
     UsageError,
     MissingWorldModificationContextError,
     DofNotInWorldStateError,
     WrongWorldModelVersion,
     NonMonotonicTimeError,
 )
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
+from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
 
 # from semantic_digital_twin.spatial_types.math import rotation_matrix_from_rpy
@@ -34,11 +23,18 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     RotationMatrix,
 )
 from semantic_digital_twin.testing import world_setup
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import (
+    PrismaticConnection,
+    RevoluteConnection,
+    Connection6DoF,
+    FixedConnection,
+    OmniDrive,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     Body,
-    CollisionCheckingConfig,
     Actuator,
 )
 from semantic_digital_twin.world_description.world_state import WorldStateTrajectory
@@ -1007,28 +1003,6 @@ def test_dof_removal():
 
         c_root_bf = OmniDrive.create_with_dofs(parent=body1, child=body2, world=world)
         world.add_connection(c_root_bf)
-
-
-def test_set_static_collision_config():
-    w = World()
-
-    with w.modify_world():
-        b1 = Body(name=PrefixedName("b1"))
-        b2 = Body(name=PrefixedName("b2"))
-        w.add_kinematic_structure_entity(b1)
-        w.add_kinematic_structure_entity(b2)
-
-        dof = DegreeOfFreedom(name=PrefixedName("dofyboi"))
-        w.add_degree_of_freedom(dof)
-        connection = RevoluteConnection(
-            b1, b2, axis=Vector3.from_iterable([0, 0, 1]), dof_id=dof.id
-        )
-        w.add_connection(connection)
-
-        collision_config = CollisionCheckingConfig(
-            buffer_zone_distance=0.05, violated_distance=0.0, max_avoided_bodies=4
-        )
-        connection.set_static_collision_config_for_direct_child_bodies(collision_config)
 
 
 def test_actuators(world_setup):
