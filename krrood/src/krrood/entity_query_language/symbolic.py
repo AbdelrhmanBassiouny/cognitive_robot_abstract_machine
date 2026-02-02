@@ -398,10 +398,7 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
 
         :param current_value: The current value of the variable.
         """
-        if (
-            isinstance(self._parent_, (LogicalOperator, ResultProcessor))
-            or self is self._conditions_root_
-        ):
+        if isinstance(self._parent_, LogicalOperator) or self is self._conditions_root_:
             is_true = (
                 len(current_value) > 0
                 if is_iterable(current_value)
@@ -634,8 +631,7 @@ class Count(Aggregator[T]):
     def _apply_aggregation_function_(
         self, child_results: Iterable[OperationResult]
     ) -> Iterable[Dict[int, Any]]:
-        true_child_results = (res for res in child_results if res.is_true)
-        yield {self._id_: len(list(true_child_results))}
+        yield {self._binding_id_: len(list(child_results))}
 
 
 @dataclass(eq=False, repr=False)
@@ -732,8 +728,8 @@ class Extreme(EntityAggregator[T], ABC):
             yield bindings_with_extreme_val
             return
         except ValueError:
-            # Means that the child results were empty, so do not return any results,
-            # the default value will be returned instead (see Aggregator._evaluate__)
+            # Means that the child results were empty;
+            # the default value will be returned instead.
             yield {self._binding_id_: self._default_value_}
 
     @property
@@ -1530,7 +1526,7 @@ class Concatenate(CanBehaveLikeAVariable[T]):
     Concatenation of two or more variables.
     """
 
-    _variables_: List[Variable] = field(default_factory=list)
+    _variables_: List[Selectable[T]] = field(default_factory=list)
 
     def __post_init__(self):
         self._child_ = None
@@ -1539,7 +1535,9 @@ class Concatenate(CanBehaveLikeAVariable[T]):
         self._var_ = self
 
     def _evaluate__(
-        self, sources: Dict[int, Any], parent: Optional[SymbolicExpression] = None
+        self,
+        sources: Dict[int, Any] = None,
+        parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)

@@ -122,12 +122,12 @@ def variable_from(
 
 
 def concatenate(
-    *domain: Union[Iterable[T], Selectable[T]],
+    *variables: Union[Iterable[T], Selectable[T]],
 ) -> Union[T, Selectable[T]]:
     """
     Concatenation of two or more variables.
     """
-    return Concatenate(_variables_=list(domain))
+    return Concatenate(_variables_=list(variables))
 
 
 def _get_domain_source_from_domain_and_type_values(
