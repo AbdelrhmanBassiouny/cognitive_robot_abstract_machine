@@ -34,6 +34,7 @@ jobs:
       - name: Initialize submodules explicitly
         run: |
           cd cognitive_robot_abstract_machine
+          git config --global --add safe.directory "*"
           git submodule sync --recursive
           git submodule update --init --recursive
 

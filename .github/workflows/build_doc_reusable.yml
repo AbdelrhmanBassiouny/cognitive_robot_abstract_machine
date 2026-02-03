@@ -38,6 +38,8 @@ jobs:
 
       - name: Initialize submodules explicitly
         run: |
+          ${{ inputs.use_container && 'cd ros/src/semantic_digital_twin' || '' }}
+          git config --global --add safe.directory "*"
           git submodule sync --recursive
           git submodule update --init --recursive
 
