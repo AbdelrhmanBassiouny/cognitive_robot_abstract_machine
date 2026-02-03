@@ -45,11 +45,11 @@ class PR2(AbstractRobot, SpecifiesLeftRightArm, HasNeck):
             "collision_configs",
             "pr2.srdf",
         )
-        self.high_priority_collision_rules.append(
+        self._world.collision_manager.high_priority_rules.append(
             SelfCollisionMatrixRule.from_collision_srdf(srdf_path, self._world)
         )
 
-        self.default_collision_rules.append(
+        self._world.collision_manager.low_priority_rules.append(
             AvoidAllCollisions(
                 buffer_zone_distance=0.1,
                 violated_distance=0.0,
@@ -57,33 +57,33 @@ class PR2(AbstractRobot, SpecifiesLeftRightArm, HasNeck):
             )
         )
 
-        self.default_collision_rules.append(
+        self._world.collision_manager.low_priority_rules.append(
             AvoidAllCollisions(
                 buffer_zone_distance=0.05,
                 violated_distance=0.0,
                 bodies=[self.left_arm.bodies_with_collisions],
             )
         )
-        self.default_collision_rules.append(
+        self._world.collision_manager.low_priority_rules.append(
             AvoidAllCollisions(
                 buffer_zone_distance=0.05,
                 violated_distance=0.0,
                 bodies=[self.right_arm.bodies_with_collisions],
             )
         )
-        self.default_collision_rules.append(
+        self._world.collision_manager.low_priority_rules.append(
             AvoidAllCollisions(
                 buffer_zone_distance=0.2,
                 violated_distance=0.05,
                 bodies=[self._world.get_body_by_name("base_link")],
             )
         )
-        self.max_avoided_bodies_rules.append(
+        self._world.collision_manager.max_avoided_bodies_rules.append(
             MaxAvoidedCollisionsOverride(
                 2, bodies={self._world.get_body_by_name("base_link")}
             )
         )
-        self.max_avoided_bodies_rules.append(
+        self._world.collision_manager.max_avoided_bodies_rules.append(
             MaxAvoidedCollisionsOverride(
                 4,
                 bodies=set(

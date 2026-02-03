@@ -47,6 +47,7 @@ class CollisionCheck:
 
         if not self.body_b.has_collision():
             raise ValueError(f"Body {self.body_b.name} has no collision geometry")
+        self.sort_bodies()
         return self
 
     def __repr__(self):

@@ -1,11 +1,11 @@
 from __future__ import absolute_import
 from __future__ import annotations
 
+import copy
 import inspect
 import logging
 from copy import deepcopy
 from dataclasses import dataclass, field
-from enum import IntEnum
 from functools import wraps, lru_cache, cached_property
 from uuid import UUID
 
@@ -29,6 +29,7 @@ from typing_extensions import Type, Set
 
 from .callbacks.callback import ModelChangeCallback
 from .collision_checking.collision_detector import CollisionDetector
+from .collision_checking.collision_manager import CollisionManager
 from .collision_checking.trimesh_collision_detector import TrimeshCollisionDetector
 from .datastructures.prefixed_name import PrefixedName
 from .datastructures.types import NpMatrix4x4
@@ -96,11 +97,6 @@ GenericSemanticAnnotation = TypeVar(
 )
 
 FunctionStack = List[Tuple[Callable, Dict[str, Any]]]
-
-
-class PlotAlignment(IntEnum):
-    HORIZONTAL = 0
-    VERTICAL = 1
 
 
 class ResetStateContextManager:
@@ -337,6 +333,8 @@ class World:
     Name of the world. May act as default namespace for all bodies and semantic annotations in the world which do not have a prefix.
     """
 
+    collision_manager: CollisionManager = field(init=False)
+
     _atomic_modification_is_being_executed: bool = field(init=False, default=False)
     """
     Flag that indicates if an atomic world operation is currently being executed.
@@ -365,6 +363,7 @@ class World:
     def __post_init__(self):
         self.state = WorldState(_world=self)
         self._forward_kinematic_manager = ForwardKinematicsManager(self)
+        self.collision_manager = CollisionManager(self)
 
     def __hash__(self):
         return hash((id(self), self._model_manager.version))

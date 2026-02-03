@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import List
+from typing_extensions import List, TYPE_CHECKING
 
 from .collision_detector import CollisionMatrix
 from .collision_matrix import (
@@ -12,12 +12,13 @@ from .collision_matrix import (
 )
 from .collision_rules import (
     Updatable,
-    AllowCollisionBetweenGroups,
     AllowCollisionForAdjacentPairs,
     AllowNonRobotCollisions,
 )
 from ..callbacks.callback import ModelChangeCallback
-from ..world_description.world_entity import Body
+
+if TYPE_CHECKING:
+    from ..world_description.world_entity import Body
 
 
 @dataclass

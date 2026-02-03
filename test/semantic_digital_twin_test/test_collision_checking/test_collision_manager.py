@@ -69,11 +69,15 @@ class TestCollisionRules:
         avoid_all.apply_to_collision_matrix(collision_matrix)
         # collisions between pr2 bodies and between apartment bodies should be avoided
         assert (
-            CollisionCheck(body_a=apartment_body1, body_b=apartment_body2, distance=0.0)
+            CollisionCheck.create_and_validate(
+                body_a=apartment_body1, body_b=apartment_body2, distance=0.0
+            )
             in collision_matrix.collision_checks
         )
         assert (
-            CollisionCheck(body_a=pr2_body1, body_b=pr2_body2, distance=0.0)
+            CollisionCheck.create_and_validate(
+                body_a=pr2_body1, body_b=pr2_body2, distance=0.0
+            )
             in collision_matrix.collision_checks
         )
 
@@ -82,20 +86,21 @@ class TestCollisionRules:
         rule.apply_to_collision_matrix(collision_matrix)
         # collisions between apartment bodies should be allowed
         assert (
-            CollisionCheck(body_a=apartment_body1, body_b=apartment_body2, distance=0.0)
+            CollisionCheck.create_and_validate(
+                body_a=apartment_body1, body_b=apartment_body2, distance=0.0
+            )
             not in collision_matrix.collision_checks
         )
         assert (
-            CollisionCheck(body_a=pr2_body1, body_b=pr2_body2, distance=0.0)
+            CollisionCheck.create_and_validate(
+                body_a=pr2_body1, body_b=pr2_body2, distance=0.0
+            )
             in collision_matrix.collision_checks
         )
 
     def test_pr2_collision_config(self, pr2_world_state_reset):
         pr2 = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
-        collision_manager = CollisionManager(pr2_world_state_reset)
-        collision_manager.low_priority_rules.extend(pr2.default_collision_rules)
-        collision_manager.high_priority_rules.extend(pr2.high_priority_collision_rules)
-        collision_manager.max_avoided_bodies_rules.extend(pr2.max_avoided_bodies_rules)
+        collision_manager = pr2_world_state_reset.collision_manager
         collision_matrix = collision_manager.create_collision_matrix()
         rule: HighPriorityAllowCollisionRule
         for rule in collision_manager.high_priority_rules:
@@ -129,9 +134,7 @@ class TestCollisionRules:
 
     def test_AllowCollisionForAdjacentPairs(self, pr2_world_state_reset):
         pr2 = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
-        collision_manager = CollisionManager(pr2_world_state_reset)
-        collision_manager.low_priority_rules.extend(pr2.default_collision_rules)
-        collision_manager.high_priority_rules.extend(pr2.high_priority_collision_rules)
+        collision_manager = pr2_world_state_reset.collision_manager
         expected_collision_matrix = collision_manager.create_collision_matrix()
 
         hard_ware_interface_cache = {}

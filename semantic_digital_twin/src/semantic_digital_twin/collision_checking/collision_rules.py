@@ -13,11 +13,10 @@ from .collision_matrix import (
     CollisionCheck,
 )
 from ..robots.abstract_robot import AbstractRobot
-from ..world import World
-from ..world_description.world_entity import Body
 
 if TYPE_CHECKING:
-    pass
+    from ..world import World
+    from ..world_description.world_entity import Body
 
 
 class HasBodies(Protocol):
@@ -179,7 +178,7 @@ class SelfCollisionMatrixRule(HighPriorityAllowCollisionRule):
                 view2_bodies = collision_request.body_group2
             for body1 in view_1_bodies:
                 for body2 in view2_bodies:
-                    collision_check = CollisionCheck(
+                    collision_check = CollisionCheck.create_and_validate(
                         body_a=body1, body_b=body2, distance=0
                     )
                     distance = collision_request.distance
@@ -242,5 +241,9 @@ class SelfCollisionMatrixRule(HighPriorityAllowCollisionRule):
         ]
 
         for body_a, body_b in disabled_collision_pairs:
-            self.allowed_collision_pairs.add(CollisionCheck(body_a, body_b))
+            if body_a == body_b:
+                continue
+            self.allowed_collision_pairs.add(
+                CollisionCheck.create_and_validate(body_a, body_b)
+            )
         return self

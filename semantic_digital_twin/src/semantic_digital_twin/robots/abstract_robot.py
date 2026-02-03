@@ -432,12 +432,6 @@ class AbstractRobot(Agent, ABC):
     A collection of all kinematic chains containing a sensor, such as a camera.
     """
 
-    default_collision_rules: list[CollisionRule] = field(default_factory=list)
-    high_priority_collision_rules: list[CollisionRule] = field(default_factory=list)
-    max_avoided_bodies_rules: list[MaxAvoidedCollisionsRule] = field(
-        default_factory=list
-    )
-
     @property
     def controlled_connections(self) -> Set[ActiveConnection]:
         """
@@ -463,9 +457,9 @@ class AbstractRobot(Agent, ABC):
                 _world=world,
             )
             robot._setup_semantic_annotations()
-        robot._setup_collision_rules()
-        robot._setup_velocity_limits()
-        robot._setup_hardware_interfaces()
+            robot._setup_collision_rules()
+            robot._setup_velocity_limits()
+            robot._setup_hardware_interfaces()
         return robot
 
     @abstractmethod
