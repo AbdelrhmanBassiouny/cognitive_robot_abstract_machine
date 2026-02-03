@@ -1,3 +1,5 @@
+from itertools import combinations
+
 from semantic_digital_twin.collision_checking.collision_manager import CollisionManager
 from semantic_digital_twin.collision_checking.collision_matrix import (
     CollisionMatrix,
@@ -152,3 +154,38 @@ class TestCollisionRules:
                 dof.has_hardware_interface = hard_ware_interface_cache[dof.name]
 
         assert collision_manager.create_collision_matrix() == expected_collision_matrix
+
+
+class TestCollisionGroups:
+    def test_collision_groups(self, pr2_world_state_reset):
+        pr2 = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
+        collision_manager = pr2_world_state_reset.collision_manager
+
+        # there should be groups
+        assert len(collision_manager.collision_groups) > 0
+
+        # there should be fewer groups than bodies with collisions
+        assert len(collision_manager.collision_groups) < len(pr2.bodies_with_collisions)
+
+        # no group should be in the bodies of another group
+        for group1, group2 in combinations(
+            collision_manager.collision_groups.values(), 2
+        ):
+            assert group1.root not in group2.bodies
+            assert group2.root not in group1.bodies
+
+        # no group should be empty
+        for group in collision_manager.collision_groups.values():
+            assert len(group.bodies) > 0
+
+        # no group body should be in another group body
+        for group1, group2 in combinations(
+            collision_manager.collision_groups.values(), 2
+        ):
+            for body1 in group1.bodies:
+                for body2 in group2.bodies:
+                    assert body1 != body2
+
+        # ever body with a collision should be in a group
+        for body in pr2.bodies_with_collisions:
+            assert collision_manager.get_collision_group(body)

@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing_extensions import Self, Dict, Type, TypeVar, TYPE_CHECKING
 
+from semantic_digital_twin.collision_checking.collision_expressions import (
+    CollisionExpressionManager,
+)
+from semantic_digital_twin.collision_checking.collision_manager import CollisionManager
 from semantic_digital_twin.world import World
 
 if TYPE_CHECKING:
@@ -37,7 +41,7 @@ class BuildContext:
     """There world in which to execute the Motion Statechart."""
     auxiliary_variable_manager: AuxiliaryVariableManager
     """Auxiliary variable manager used by nodes to create auxiliary variables."""
-    collision_scene: CollisionWorldSynchronizer
+    collision_expression_manager: CollisionExpressionManager
     """Synchronization of the collision world with the world in which the Motion Statechart is executed."""
     qp_controller_config: QPControllerConfig
     """Configuration of the QP controller used to solve the QP problem."""
@@ -50,6 +54,10 @@ class BuildContext:
     Dictionary of extensions used to augment the build context.
     Ros2 extensions are automatically added to the build context when using the Ros2Executor.
     """
+
+    @property
+    def collision_manager(self) -> CollisionManager:
+        return self.world.collision_manager
 
     def require_extension(
         self, extension_type: Type[GenericContextExtension]
@@ -73,7 +81,7 @@ class BuildContext:
         return cls(
             world=World(),
             auxiliary_variable_manager=None,
-            collision_scene=None,
+            collision_expression_manager=None,
             qp_controller_config=None,
             control_cycle_variable=None,
         )

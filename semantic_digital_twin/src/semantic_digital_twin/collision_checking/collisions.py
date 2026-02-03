@@ -153,41 +153,6 @@ class Collisions:
         return collision
 
     @profile
-    def transform_external_collision(
-        self, collision: GiskardCollision, world: World
-    ) -> GiskardCollision:
-        body_a = collision.original_body_a
-        movable_joint = body_a.parent_connection
-
-        def is_joint_movable(connection: ActiveConnection):
-            return (
-                isinstance(connection, ActiveConnection)
-                and connection.has_hardware_interface
-            )
-
-        while movable_joint != world.root:
-            if is_joint_movable(movable_joint):
-                break
-            movable_joint = movable_joint.parent.parent_connection
-        else:
-            raise Exception(
-                f"{body_a.name} has no movable parent connection "
-                f"and should't have collision checking enabled."
-            )
-        new_a = movable_joint.child
-        collision.body_a = new_a
-        if collision.map_P_pa is not None:
-            new_a_T_map = world.compute_forward_kinematics_np(new_a, world.root)
-            collision.fixed_parent_of_a_P_pa = new_a_T_map @ collision.map_P_pa
-        else:
-            new_a_T_a = world.compute_forward_kinematics_np(
-                new_a, collision.original_body_a
-            )
-            collision.fixed_parent_of_a_P_pa = new_a_T_a @ collision.a_P_pa
-
-        return collision
-
-    @profile
     def get_external_collisions(self, link_name: Body) -> SortedCollisionResults:
         """
         Collisions are saved as a list for each movable robot joint, sorted by contact distance

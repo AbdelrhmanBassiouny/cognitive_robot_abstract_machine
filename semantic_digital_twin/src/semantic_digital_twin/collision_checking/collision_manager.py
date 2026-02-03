@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from rustworkx import rustworkx
 from typing_extensions import List, TYPE_CHECKING
 
 from .collision_detector import CollisionMatrix
@@ -16,9 +17,20 @@ from .collision_rules import (
     AllowNonRobotCollisions,
 )
 from ..callbacks.callback import ModelChangeCallback
+from ..world_description.connections import ActiveConnection
 
 if TYPE_CHECKING:
-    from ..world_description.world_entity import Body
+    from ..world_description.world_entity import Body, KinematicStructureEntity
+
+
+@dataclass
+class CollisionGroup:
+    """
+    Bodies in this group are viewed as a single body.
+    """
+
+    root: KinematicStructureEntity
+    bodies: set[Body] = field(default_factory=set)
 
 
 @dataclass
@@ -39,6 +51,10 @@ class CollisionManager(ModelChangeCallback):
         default_factory=lambda: [DefaultMaxAvoidedCollisions()]
     )
 
+    collision_groups: dict[KinematicStructureEntity, CollisionGroup] = field(
+        default_factory=dict
+    )
+
     def __post_init__(self):
         super().__post_init__()
         self.high_priority_rules.extend(
@@ -47,9 +63,36 @@ class CollisionManager(ModelChangeCallback):
         self._notify()
 
     def _notify(self):
+        if self.world.is_empty():
+            return
         for rule in self.rules:
             if isinstance(rule, Updatable):
                 rule.update(self.world)
+        self.update_collision_groups()
+
+    def get_collision_group(self, body: Body) -> CollisionGroup:
+        for group in self.collision_groups.values():
+            if body in group.bodies or body == group.root:
+                return group
+        raise Exception(f"No collision group found for {body}")
+
+    def update_collision_groups(self):
+        self.collision_groups = {}
+        for parent, childs in rustworkx.bfs_successors(
+            self.world.kinematic_structure, self.world.root.index
+        ):
+            try:
+                collision_group = self.get_collision_group(parent)
+            except Exception:
+                collision_group = CollisionGroup(parent)
+                self.collision_groups[parent] = collision_group
+            for child in childs:
+                parent_C_child = self.world.get_connection(parent, child)
+                if not parent_C_child.is_controlled and child.has_collision():
+                    collision_group.bodies.add(child)
+        for group in list(self.collision_groups.values()):
+            if len(group.bodies) == 0:
+                del self.collision_groups[group.root]
 
     def get_max_avoided_bodies(self, body: Body) -> int:
         for rule in reversed(self.max_avoided_bodies_rules):
@@ -57,6 +100,12 @@ class CollisionManager(ModelChangeCallback):
             if max_avoided_bodies is not None:
                 return max_avoided_bodies
         raise Exception(f"No rule found for {body}")
+
+    def get_buffer_zone_distance(self, body: Body) -> float: ...
+
+    def get_violated_violated_distance(self, body: Body) -> float: ...
+
+    def get_possible_collision_bodies(self, body: Body) -> set[Body]: ...
 
     @property
     def rules(self) -> List[CollisionRule]:

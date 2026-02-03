@@ -186,7 +186,7 @@ class Executor:
         return BuildContext(
             world=self.world,
             auxiliary_variable_manager=self.auxiliary_variable_manager,
-            collision_scene=self.collision_scene,
+            collision_expression_manager=self.collision_scene,
             qp_controller_config=self.controller_config,
             control_cycle_variable=self._control_cycles_variable,
         )
