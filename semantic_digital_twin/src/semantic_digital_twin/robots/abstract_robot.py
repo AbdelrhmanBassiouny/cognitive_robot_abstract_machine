@@ -339,6 +339,7 @@ class Camera(Sensor):
     field_of_view: FieldOfView = field(default=None)
     minimal_height: float = 0.0
     maximal_height: float = 1.0
+    default_camera: bool = False
 
     def __hash__(self):
         """
@@ -612,3 +613,9 @@ class AbstractRobot(Agent):
                 )
             )
         return collision_matrx
+
+    def get_default_camera(self) -> Camera:
+        for sensor in self.sensors:
+            if isinstance(sensor, Camera) and sensor.default_camera:
+                return sensor
+        return [s for s in self.sensors if isinstance(s, Camera)][0]

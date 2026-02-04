@@ -81,7 +81,7 @@ class HSRB(AbstractRobot, HasArms, HasNeck):
             hand_camera = Camera(
                 name=PrefixedName("hand_camera", prefix=hsrb.name.name),
                 root=world.get_body_by_name("hand_camera_frame"),
-                forward_facing_axis=Vector3(1, 0, 0),
+                forward_facing_axis=Vector3(0, 0, 1),
                 field_of_view=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 ),
@@ -104,19 +104,20 @@ class HSRB(AbstractRobot, HasArms, HasNeck):
             head_center_camera = Camera(
                 name=PrefixedName("head_center_camera", prefix=hsrb.name.name),
                 root=world.get_body_by_name("head_center_camera_frame"),
-                forward_facing_axis=Vector3(1, 0, 0),
+                forward_facing_axis=Vector3(0, 0, 1),
                 field_of_view=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 ),
                 minimal_height=0.75049,
                 maximal_height=0.99483,
                 _world=world,
+                default_camera=True,
             )
 
             head_r_camera = Camera(
                 name=PrefixedName("head_right_camera", prefix=hsrb.name.name),
                 root=world.get_body_by_name("head_r_stereo_camera_link"),
-                forward_facing_axis=Vector3(1, 0, 0),
+                forward_facing_axis=Vector3(0, 0, 1),
                 field_of_view=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 ),
@@ -128,7 +129,7 @@ class HSRB(AbstractRobot, HasArms, HasNeck):
             head_l_camera = Camera(
                 name=PrefixedName("head_left_camera", prefix=hsrb.name.name),
                 root=world.get_body_by_name("head_l_stereo_camera_link"),
-                forward_facing_axis=Vector3(1, 0, 0),
+                forward_facing_axis=Vector3(0, 0, 1),
                 field_of_view=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 ),
@@ -140,7 +141,7 @@ class HSRB(AbstractRobot, HasArms, HasNeck):
             head_rgbd_camera = Camera(
                 name=PrefixedName("head_rgbd_camera", prefix=hsrb.name.name),
                 root=world.get_body_by_name("head_rgbd_sensor_link"),
-                forward_facing_axis=Vector3(1, 0, 0),
+                forward_facing_axis=Vector3(0, 0, 1),
                 field_of_view=FieldOfView(
                     horizontal_angle=0.99483, vertical_angle=0.75049
                 ),

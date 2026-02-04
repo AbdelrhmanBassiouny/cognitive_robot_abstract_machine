@@ -189,7 +189,7 @@ class Tiago(AbstractRobot, SpecifiesLeftRightArm, HasNeck):
 
             left_gripper_open = JointState.from_mapping(
                 name=PrefixedName("left_gripper_open", prefix=tiago.name.name),
-                mapping=dict(zip(left_gripper_joints, [0.048, 0.048])),
+                mapping=dict(zip(left_gripper_joints, [0.044, 0.044])),
                 state_type=GripperState.OPEN,
             )
 
@@ -209,7 +209,7 @@ class Tiago(AbstractRobot, SpecifiesLeftRightArm, HasNeck):
 
             right_gripper_open = JointState.from_mapping(
                 name=PrefixedName("right_gripper_open", prefix=tiago.name.name),
-                mapping=dict(zip(right_gripper_joints, [0.048, 0.048])),
+                mapping=dict(zip(right_gripper_joints, [0.044, 0.044])),
                 state_type=GripperState.OPEN,
             )
 
