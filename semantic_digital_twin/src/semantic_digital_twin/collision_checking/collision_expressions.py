@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import lru_cache
 
@@ -76,7 +77,7 @@ class ExternalCollisionExpressionManager(CollisionGroupConsumer):
         Takes collisions, checks if they are external, and inserts them
         into the buffer at the right place.
         """
-        closest_contacts: dict[Body, list[Collision]] = {}
+        closest_contacts: dict[Body, list[Collision]] = defaultdict(list)
         for collision in collision.contacts:
             # 1. check if collision is external
             if (
@@ -86,27 +87,38 @@ class ExternalCollisionExpressionManager(CollisionGroupConsumer):
                 continue
             if collision.body_a not in self.registered_bodies:
                 collision = collision.reverse()
+            closest_contacts[collision.body_a].append(collision)
 
-            group1 = self.get_collision_group(collision.body_a)
-            group1_T_root = group1.root.global_pose.inverse().to_np()
-            group1_P_pa = group1_T_root @ collision.root_P_pa
-            self.insert_data_block(
-                body=group1.root,
-                idx=0,
-                group1_P_point_on_a=group1_P_pa,
-                root_V_contact_normal=collision.root_V_n,
-                contact_distance=collision.contact_distance,
-                buffer_distance=max(
-                    self.geb(collision.body_a),
-                    self.get_buffer_zone_distance(collision.body_b),
-                ),
-                violated_distance=max(
-                    self.get_violated_violated_distance(collision.body_a),
-                    self.get_violated_violated_distance(collision.body_b),
-                ),
-            )
-        # 3. transform collision into group frames
-        # 4. insert collision into buffer
+        for body_a, collisions in closest_contacts.items():
+            for i in range(
+                min(
+                    len(collisions),
+                    self.collision_manager.get_max_avoided_bodies(body_a),
+                )
+            ):
+                collision = collisions[i]
+                group1 = self.get_collision_group(collision.body_a)
+                group1_T_root = group1.root.global_pose.inverse().to_np()
+                group1_P_pa = group1_T_root @ collision.root_P_pa
+                self.insert_data_block(
+                    body=group1.root,
+                    idx=i,
+                    group1_P_point_on_a=group1_P_pa,
+                    root_V_contact_normal=collision.root_V_n,
+                    contact_distance=collision.contact_distance,
+                    buffer_distance=max(
+                        self.collision_manager.get_buffer_zone_distance(
+                            collision.body_a
+                        ),
+                        self.collision_manager.get_buffer_zone_distance(
+                            collision.body_b
+                        ),
+                    ),
+                    violated_distance=max(
+                        self.collision_manager.get_violated_distance(collision.body_a),
+                        self.collision_manager.get_violated_distance(collision.body_b),
+                    ),
+                )
 
     def insert_data_block(
         self,

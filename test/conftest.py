@@ -150,7 +150,7 @@ def cylinder_bot_world():
             parent=body,
             child=environment2,
             parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                y=1
+                y=0.5
             ),
         )
         world.add_connection(env_connection2)

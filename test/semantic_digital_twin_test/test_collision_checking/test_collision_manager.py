@@ -16,6 +16,7 @@ from semantic_digital_twin.collision_checking.collision_manager import (
 from semantic_digital_twin.collision_checking.collision_matrix import (
     CollisionMatrix,
     CollisionCheck,
+    MaxAvoidedCollisionsOverride,
 )
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidCollisionBetweenGroups,
@@ -298,9 +299,13 @@ class TestExternalCollisionExpressionManager:
                 buffer_zone_distance=10, bodies=cylinder_bot_world.bodies_with_collision
             )
         )
+        collision_manager.max_avoided_bodies_rules.append(
+            MaxAvoidedCollisionsOverride(5, {robot.root})
+        )
         collision_manager.add_collision_consumer(
             external_collisions := ExternalCollisionExpressionManager(robot)
         )
         external_collisions.register_body(robot.root, number_of_potential_collisions=2)
-        collision_manager.compute_collisions()
+        collisions = collision_manager.compute_collisions()
+        # assert
         pass
