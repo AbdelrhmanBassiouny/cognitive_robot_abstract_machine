@@ -12,7 +12,14 @@ from typing_extensions import TYPE_CHECKING, Type, Any, List
 from ..utils import DataclassException
 
 if TYPE_CHECKING:
-    from .symbolic import SymbolicExpression, ResultQuantifier
+    from .symbolic import (
+        SymbolicExpression,
+        ResultQuantifier,
+        Variable,
+        Selectable,
+        QueryObjectDescriptor,
+        Aggregator,
+    )
     from .match import Match
 
 
@@ -121,6 +128,78 @@ class UsageError(DataclassException):
 
 
 @dataclass
+class NoConditionsProvidedToWhereStatementOfDescriptor(UsageError):
+    """
+    Raised when no conditions are provided to the where statement of a query descriptor.
+    """
+
+    descriptor: QueryObjectDescriptor
+    """
+    The query object descriptor that has no conditions in its where statement.
+    """
+
+    def __post_init__(self):
+        self.message = f"No conditions were provided to the where statement of the descriptor {self.descriptor}"
+        super().__post_init__()
+
+
+@dataclass
+class AggregationUsageError(UsageError): ...
+
+
+@dataclass
+class NonAggregatedSelectedVariablesError(AggregationUsageError):
+    """
+    Raised when a non-aggregated and not grouped_by variable(s) is selected along with an aggregated variable.
+    """
+
+    non_aggregated_variables: List[Selectable]
+    """
+    The non-aggregated selected variables.
+    """
+    aggregated_variables: List[Selectable]
+    """
+    The aggregated variables.
+    """
+    group_by_variables: List[Selectable] = field(default_factory=list)
+    """
+    The grouped by variables, if any.
+    """
+
+    def __post_init__(self):
+        self.message = (
+            f"The variabls {self.non_aggregated_variables} are neither aggregated nor grouped by, they cannot be selected"
+            f"along with the aggregated variables {self.aggregated_variables}. You can only select variables that are"
+            f" either aggregated or are in the grouped by variables {self.group_by_variables}."
+        )
+        super().__post_init__()
+
+
+@dataclass
+class AggregatorWithNonAggregatorInWhereConditionError(AggregationUsageError):
+    """
+    Raised when an aggregator is used in a where condition with non-aggregators.
+    """
+
+    descriptor: QueryObjectDescriptor
+    """
+    The query object descriptor that contains the aggregators and non-aggregators.
+    """
+    aggregators: List[Aggregator]
+    """
+    The aggregators in the where condition.
+    """
+    non_aggregators: List[Selectable]
+    """
+    The non-aggregators in the where condition.
+    """
+
+    def __post_init__(self):
+        self.message = f"The where condition of the descriptor {self.descriptor} contains aggregators {self.aggregators} and non-aggregators {self.non_aggregators}."
+        super().__post_init__()
+
+
+@dataclass
 class NoKwargsInMatchVar(UsageError):
     """
     Raised when a match_variable is used without any keyword arguments.
@@ -133,6 +212,7 @@ class NoKwargsInMatchVar(UsageError):
             f"The match variable {self.match_variable} was used without any keyword arguments."
             f"If you don't want to specify keyword arguments use variable() instead"
         )
+        super().__post_init__()
 
 
 @dataclass
@@ -164,11 +244,19 @@ class LiteralConditionError(UsageError):
     So make sure that at least one of the arguments to the predicate or symbolic function are variables.
     """
 
+    query_descriptor: QueryObjectDescriptor
+    """
+    The query object descriptor that contains the literal condition.
+    """
     literal_conditions: List[Any]
+    """
+    The literal conditions that are given to the query.
+    """
 
     def __post_init__(self):
         self.message = (
-            f"Literal conditions are not allowed in queries: {self.literal_conditions} as they are always"
+            f"The following Literal {self.literal_conditions} was given to the descriptor {self.query_descriptor}."
+            f"Literal conditions are not allowed in queries, as they are always"
             f"either True or False, independent on any other values/bindings in the query"
         )
         super().__post_init__()

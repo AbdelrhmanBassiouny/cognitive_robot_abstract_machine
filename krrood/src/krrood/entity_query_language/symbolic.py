@@ -50,6 +50,10 @@ from .failures import (
     InvalidChildType,
     CannotProcessResultOfGivenChildType,
     LiteralConditionError,
+    NonAggregatedSelectedVariablesError,
+    UsageError,
+    NoConditionsProvidedToWhereStatementOfDescriptor,
+    AggregatorWithNonAggregatorInWhereConditionError,
 )
 from .failures import VariableCannotBeEvaluated
 from .result_quantification_constraint import (
@@ -661,49 +665,10 @@ class Aggregator(ResultProcessor[T], ABC):
             return
 
         child_results = self._child_._evaluate__(sources, parent=self)
-        # if self._per_ is None:
         values = self._apply_aggregation_function_(child_results)
-        # else:
-        #     groups = self._group_child_results_(child_results)
-        #     values = self._aggregation_per_group_(groups)
 
         for value in values:
             yield OperationResult({**sources, **value}, False, self)
-
-    def _group_child_results_(
-        self, child_results: Iterable[OperationResult]
-    ) -> Dict[Tuple, List[OperationResult]]:
-        """
-        Group child results by the values of the per variables.
-
-        :param child_results: The child results to be grouped.
-        :return: A dictionary mapping the per values to the child results that belong to that group.
-        """
-        groups = defaultdict(list)
-        for res in child_results:
-            per_values = tuple(
-                next(per._evaluate__(res.bindings, parent=self)).value
-                for per in self._per_
-            )
-            groups[per_values].append(res)
-        return groups
-
-    def _aggregation_per_group_(
-        self, groups: Dict[Tuple, List[OperationResult]]
-    ) -> Iterator[Bindings]:
-        """
-        Apply the aggregation function per child result group.
-
-        :param groups: The grouped child results.
-        :return: An iterable of dictionaries containing the aggregated results and the per values.
-        """
-        for per_values, group_res in groups.items():
-            agg_results = self._apply_aggregation_function_(group_res)
-            per_id_value_dict = {
-                per._id_: per_val for per, per_val in zip(self._per_, per_values)
-            }
-            for agg_res in agg_results:
-                yield {**agg_res, **per_id_value_dict}
 
     @abstractmethod
     def _apply_aggregation_function_(
@@ -760,10 +725,9 @@ class EntityAggregator(Aggregator[T], ABC):
         Extract the value of the child from the result dictionary.
          In addition, it applies the key function if given.
         """
-        value = result
         if self._key_func_:
-            return self._key_func_(value)
-        return value
+            return self._key_func_(result)
+        return result
 
 
 @dataclass(eq=False, repr=False)
@@ -825,19 +789,19 @@ class Extreme(EntityAggregator[T], ABC):
     ) -> Iterator[Bindings]:
         for res in child_results:
             try:
-                extreme_val = self._extreme_function_(
-                    res.value, key=self._get_child_value_from_result_
-                )
-                res.bindings[self._binding_id_] = extreme_val
-                yield res.bindings
+                extreme_val = self._extreme_function_(res.value, key=self._key_func_)
+                bindings = res.bindings.copy()
+                bindings[self._binding_id_] = extreme_val
+                yield bindings
             except ValueError:
                 # Means that the child results were empty;
                 # the default value will be returned instead.
-                yield {self._binding_id_: self._default_value_}
+                yield {self._binding_id_: self._default_value_} | res.bindings
 
-    @property
     @abstractmethod
-    def _extreme_function_(self) -> Callable[[Any], Any]: ...
+    def _extreme_function_(
+        self, values: Iterable, key: Optional[Callable[[Any], Any]] = None
+    ) -> Callable[[Any], Any]: ...
 
 
 @dataclass(eq=False, repr=False)
@@ -847,9 +811,10 @@ class Max(Extreme[T]):
      the value to be compared.
     """
 
-    @property
-    def _extreme_function_(self) -> Callable[[Any], Any]:
-        return max
+    def _extreme_function_(
+        self, values: Iterable, key: Optional[Callable[[Any], Any]] = None
+    ) -> Any:
+        return max(values, key=key)
 
 
 @dataclass(eq=False, repr=False)
@@ -859,9 +824,10 @@ class Min(Extreme[T]):
      the value to be compared.
     """
 
-    @property
-    def _extreme_function_(self) -> Callable[[Any], Any]:
-        return min
+    def _extreme_function_(
+        self, values: Iterable, key: Optional[Callable[[Any], Any]] = None
+    ) -> Any:
+        return min(values, key=key)
 
 
 @dataclass(eq=False)
@@ -1041,9 +1007,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     """
     The variables that are selected by the query object descriptor.
     """
-    _variables_to_group_by_: Optional[List[Selectable]] = field(
-        default=None, init=False
-    )
+    _variables_to_group_by_: List[Selectable] = field(default_factory=list, init=False)
     """
     The variables to group the results by.
     """
@@ -1063,11 +1027,72 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
     """
     A set of seen results, used when distinct is called in the query object descriptor.
     """
+    _condition_list_: List[ConditionType] = field(default_factory=list, init=False)
+    """
+    The condition list of the query object descriptor.
+    """
 
     def __post_init__(self):
         super().__post_init__()
+        if self._aggregated_and_non_aggregated_variables_in_selection_[0]:
+            self._group_ = True
+        self._enclose_plotted_nodes_of_selected_variables__()
+
+    def _enclose_plotted_nodes_of_selected_variables__(self):
+        """
+        Enclose the selected variables in the query object descriptor.
+        """
         for variable in self._selected_variables:
             variable._var_._node_.enclosed = True
+
+    def _assert_correct_selected_variables__(self):
+        """
+        Assert that the selected variables are correct.
+
+        :raises UsageError: If the selected variables are not valid.
+        """
+        aggregated_variables, non_aggregated_variables = (
+            self._aggregated_and_non_aggregated_variables_in_selection_
+        )
+        if aggregated_variables and any(
+            var._binding_id_ not in self._ids_of_variables_to_group_by_
+            for var in non_aggregated_variables
+        ):
+            raise NonAggregatedSelectedVariablesError(
+                non_aggregated_variables,
+                aggregated_variables,
+                self._variables_to_group_by_,
+            )
+
+    @cached_property
+    def _ids_of_variables_to_group_by_(self) -> List[int]:
+        """
+        Get the ids of the variables to group by.
+        """
+        return [var._binding_id_ for var in self._variables_to_group_by_]
+
+    @cached_property
+    def _aggregated_and_non_aggregated_variables_in_selection_(
+        self,
+    ) -> Tuple[List[Selectable], List[Selectable]]:
+        """
+        :return: The aggregated and non-aggregated variables from the selected variables.
+        """
+        aggregated_variables = []
+        non_aggregated_variables = []
+        for variable in self._selected_variables:
+            if isinstance(variable, Aggregator):
+                aggregated_variables.append(variable)
+            else:
+                non_aggregated_variables.append(variable)
+        return aggregated_variables, non_aggregated_variables
+
+    @cached_property
+    def _group_(self) -> bool:
+        """
+        :return: Whether the results should be grouped or not. Is true when an aggregator is selected.
+        """
+        return len(self._aggregated_and_non_aggregated_variables_in_selection_[0]) > 0
 
     def where(self, *conditions: ConditionType) -> Self:
         """
@@ -1078,16 +1103,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         """
         condition_list = list(conditions)
 
-        # If there are no conditions raise error.
-        if len(condition_list) == 0:
-            raise ValueError("No conditions provided")
-
-        # If there's a constant condition raise error.
-        literal_expressions = [
-            exp for exp in condition_list if not isinstance(exp, SymbolicExpression)
-        ]
-        if literal_expressions:
-            raise LiteralConditionError(literal_expressions)
+        self._assert_correct_conditions__(condition_list)
 
         # Build the expression from the conditions
         expression = (
@@ -1099,6 +1115,59 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         # set the child of the query object descriptor to the expression and return self.
         self._update_child_(expression)
         return self
+
+    def _assert_correct_conditions__(self, condition_list: List[ConditionType]):
+        """
+        :param condition_list: The conditions that constrain the query selectables.
+        :raises UsageError: If the conditions are not valid.
+        """
+        # If there are no conditions raise error.
+        if len(condition_list) == 0:
+            raise NoConditionsProvidedToWhereStatementOfDescriptor(self)
+
+        self._condition_list_ = condition_list
+
+        # If there's a constant condition raise error.
+        literal_expressions = [
+            exp for exp in condition_list if not isinstance(exp, SymbolicExpression)
+        ]
+        if literal_expressions:
+            raise LiteralConditionError(self, literal_expressions)
+
+    def _assert_correct_conditions_with_aggregations__(self):
+        """
+        :raises AggregatorWithNonAggregatorInWhereConditionError: If the conditions have aggregators and non-aggregators.
+        """
+        aggregators, non_aggregators = (
+            self._aggregators_and_non_aggregators_in_where_condition_
+        )
+        if aggregators and any(
+            var._binding_id_ not in self._ids_of_variables_to_group_by_
+            for var in non_aggregators
+        ):
+            raise AggregatorWithNonAggregatorInWhereConditionError(
+                self, aggregators, non_aggregators
+            )
+
+    @cached_property
+    def _aggregators_and_non_aggregators_in_where_condition_(
+        self,
+    ) -> Tuple[List[Aggregator], List[Selectable]]:
+        """
+        Get the aggregators and non-aggregators in the where condition.
+        """
+        aggregators, non_aggregators = [], []
+        for cond in self._condition_list_:
+            if isinstance(cond, Aggregator):
+                aggregators.append(cond)
+            else:
+                non_aggregators.append(cond)
+            for var in cond._children_:
+                if isinstance(var, Aggregator):
+                    aggregators.append(var)
+                elif not isinstance(var, Literal):
+                    non_aggregators.append(var)
+        return aggregators, non_aggregators
 
     def order_by(
         self,
@@ -1116,7 +1185,9 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         self._order_by = OrderByParams(variable, descending, key)
         return self
 
-    def _order(self, results: Iterator[OperationResult] = None) -> List[OperationResult]:
+    def _order(
+        self, results: Iterator[OperationResult] = None
+    ) -> List[OperationResult]:
         """
         Order the results by the given order variable.
 
@@ -1161,7 +1232,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
 
     def _get_distinct_results__(
         self, results_gen: Iterable[Dict[int, Any]]
-    ) -> Iterable[Dict[int, Any]]:
+    ) -> Iterator[Dict[int, Any]]:
         """
         Apply distinctness constraint to the query object descriptor results.
 
@@ -1203,10 +1274,15 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         Evaluate the query descriptor by constraining values, updating conclusions,
         and selecting variables.
         """
+        self._assert_correct_selected_variables__()
+        self._assert_correct_conditions_with_aggregations__()
         self._eval_parent_ = parent
         sources = sources or {}
 
-        results_generator = self._generate_results__(sources)
+        if self._group_:
+            results_generator = self._generate_grouped_results__(sources)
+        else:
+            results_generator = self._generate_results__(sources)
 
         if self._order_by:
             yield from self._order(results_generator)
@@ -1216,47 +1292,59 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         if self._seen_results is not None:
             self._seen_results.clear()
 
-    def update_with_selected_variables(
-        self, constrained_values: Iterator[Bindings]
-    ) -> Iterator[Bindings]:
-        for values in constrained_values:
-            values = self.evaluate_conclusions_and_update_bindings(values)
-            if self.any_selected_variable_is_inferred_and_unbound(values):
-                continue
-            yield from self._evaluate_selected_variables(values)
-
     def _generate_results__(self, sources: Dict[int, Any]) -> Iterator[OperationResult]:
         """
         Internal generator to process constrained values and selected variables.
         """
         for values in self.get_constrained_values(sources):
 
-            self.evaluate_conclusions_and_update_bindings(values)
-
-            if self.any_selected_variable_is_inferred_and_unbound(values):
-                continue
-
-            selected_vars_bindings = self._evaluate_selected_variables(values.bindings)
+            selected_vars_bindings = self._evaluate_selected_variables(values)
 
             yield from (
-                OperationResult({**values.bindings, **result}, False, self)
+                OperationResult({**values, **result}, False, self)
                 for result in self._apply_results_mapping(selected_vars_bindings)
             )
 
-    def _group_results_(
-        self, results: Iterator[Bindings]
-    ) -> List[GroupOperationResult]:
+    def _generate_grouped_results__(
+        self, sources: Bindings
+    ) -> Iterator[GroupOperationResult]:
         """
-        Group results by the variables specified in the grouped_by clause.
+        Generate results grouped by the specified variables in the grouped_by clause.
 
-        :param results: The results to be grouped.
-        :return: A list of GroupOperationResult objects, each representing a group of child results.
+        :param sources: The current bindings.
+        :return: An iterator of GroupOperationResult objects, each representing a group of child results.
+        """
+        groups = self._construct_groups_from_constrained_values__(sources)
+
+        for group_key, group_results in groups.items():
+            selected_vars_bindings = self._evaluate_selected_variables(group_results)
+            yield from (
+                GroupOperationResult(
+                    {**group_results, **result},
+                    False,
+                    self,
+                    tuple(self._variables_to_group_by_),
+                )
+                for result in self._apply_results_mapping(selected_vars_bindings)
+            )
+
+    def _construct_groups_from_constrained_values__(
+        self, sources: Bindings
+    ) -> Dict[GroupKey, Bindings]:
+        """
+        Construct groups from constrained values using `variables_to_group_by_`.
+
+        :param sources: The current bindings.
+        :return: A dictionary mapping group key to GroupOperationResult.
         """
         groups = defaultdict(lambda: defaultdict(list))
         variables_to_group_by_ids = [
             var._binding_id_ for var in self._variables_to_group_by_
         ]
-        for res in results:
+        constrained_values = self.get_constrained_values(sources)
+        constrained_values = self._evaluate_grouped_by_variables_(constrained_values)
+        constrained_values = self._evaluate_children_of_aggregators_(constrained_values)
+        for res in constrained_values:
             group_key = tuple(
                 next(var._evaluate__(res, parent=self)).value
                 for var in self._variables_to_group_by_
@@ -1266,12 +1354,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
                     groups[group_key][id_] = val
                 else:
                     groups[group_key][id_].append(val)
-        return [
-            GroupOperationResult(
-                group, False, self, tuple(self._variables_to_group_by_)
-            )
-            for group in groups.values()
-        ]
+        return groups
 
     @staticmethod
     def variable_is_inferred(var: CanBehaveLikeAVariable[T]) -> bool:
@@ -1334,29 +1417,76 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
             ).bindings
         return child_result
 
-    def get_constrained_values(self, sources: Optional[Bindings]) -> Iterator[Bindings]:
+    def get_constrained_values(self, sources: Bindings) -> Iterator[Bindings]:
         """
         Evaluate the child (i.e., the conditions that constrain the domain of the selected variables).
 
         :param sources: The current bindings.
         :return: The bindings after applying the constraints of the child.
         """
-        if self._child_:
-            # QueryObjectDescriptor does not yield when it's False
-            yield from (
-                res.bindings
-                for res in self._child_._evaluate__(sources, parent=self)
-                if res.is_true
-            )
-        else:
+
+        if not self._child_:
             yield sources
+            return
+
+        for res in self._get_child_true_results__(sources):
+
+            self.evaluate_conclusions_and_update_bindings(res.bindings)
+
+            if self.any_selected_variable_is_inferred_and_unbound(res.bindings):
+                continue
+
+            yield res.bindings
+
+    def _get_child_true_results__(self, sources: Bindings) -> Iterator[OperationResult]:
+        """
+        :param sources: The current bindings.
+        :return: An iterator of child results that are true.
+        """
+        yield from (
+            res for res in self._child_._evaluate__(sources, parent=self) if res.is_true
+        )
+
+    def _evaluate_children_of_aggregators_(
+        self, sources: Iterator[Bindings]
+    ) -> Iterator[Bindings]:
+        """
+        Evaluate the children of aggregators by generating combinations of values from their evaluation generators.
+
+        :param sources: The current bindings.
+        :return: An Iterable of Bindings for each combination of values.
+        """
+        for values in sources:
+            yield from self._chain_evaluate_variables(
+                [
+                    var._child_
+                    for var in self._selected_variables
+                    if isinstance(var, Aggregator)
+                ],
+                values,
+                parent=self,
+            )
+
+    def _evaluate_grouped_by_variables_(
+        self, sources: Iterator[Bindings]
+    ) -> Iterator[Bindings]:
+        """
+        Evaluate the grouped_by variables by generating combinations of values from their evaluation generators.
+
+        :param sources: The current bindings.
+        :return: An Iterable of Bindings for each combination of values.
+        """
+        for values in sources:
+            yield from self._chain_evaluate_variables(
+                self._variables_to_group_by_, values, parent=self
+            )
 
     def _evaluate_selected_variables(self, sources: Bindings) -> Iterator[Bindings]:
         """
         Evaluate the selected variables by generating combinations of values from their evaluation generators.
 
         :param sources: The current bindings.
-        :return: An Iterable of OperationResults for each combination of values.
+        :return: An Iterable of Bindings for each combination of values.
         """
         yield from self._chain_evaluate_variables(
             self._selected_variables, sources, parent=self
@@ -1364,7 +1494,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
 
     @staticmethod
     def _chain_evaluate_variables(
-        variables: Iterable[Selectable[T]],
+        variables: Iterable[SymbolicExpression[T]],
         sources: Bindings,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterator[Bindings]:

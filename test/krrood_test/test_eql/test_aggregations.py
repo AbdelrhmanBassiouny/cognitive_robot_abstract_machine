@@ -1,14 +1,29 @@
 import pytest
 
 import krrood.entity_query_language.entity_result_processors as eql
+from krrood.entity_query_language.entity_result_processors import an, a
 from krrood.entity_query_language.entity import (
     variable,
     variable_from,
     entity,
     set_of,
 )
+from krrood.entity_query_language.failures import NonAggregatedSelectedVariablesError
 from ..dataset.department_and_employee import Department, Employee
 from ..dataset.semantic_world_like_classes import Cabinet
+
+
+def test_non_aggregated_selectables_with_aggregated_ones(handles_and_containers_world):
+    world = handles_and_containers_world
+    cabinet = variable(Cabinet, domain=world.views)
+    drawer = variable_from(cabinet.drawers)
+    with pytest.raises(NonAggregatedSelectedVariablesError):
+        query = a(
+            set_of(drawer, eql.max(drawer))
+            .where(drawer.handle.name.startswith("H"))
+            .grouped_by(cabinet)
+        )
+        _ = list(query.evaluate())
 
 
 def test_max_grouped_by(handles_and_containers_world):
@@ -17,9 +32,13 @@ def test_max_grouped_by(handles_and_containers_world):
     drawer = variable_from(cabinet.drawers)
 
     # We want to find the drawer with the "largest" handle name (alphabetically) per cabinet.
-    drawers_by_cabinet = variable_from(cabinet.drawers).grouped_by(cabinet)
-    max_drawer = eql.max(drawers_by_cabinet, key=lambda d: d.handle.name)
-    results = list(max_drawer.evaluate())
+    # drawers_by_cabinet = variable_from(cabinet.drawers).grouped_by(cabinet)
+    query = a(
+        set_of(
+            cabinet, max_drawer := eql.max(drawer, key=lambda d: d.handle.name)
+        ).grouped_by(cabinet)
+    )
+    results = list(query.evaluate())
 
     # expected: for each cabinet, one result which is the drawer with max handle name
     expected_cabinets = [c for c in world.views if isinstance(c, Cabinet)]
