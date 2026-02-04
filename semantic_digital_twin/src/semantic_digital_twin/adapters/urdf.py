@@ -80,8 +80,8 @@ def urdf_joint_to_limits(
         upper_limits.position = upper
 
     velocity = getattr(limit, "velocity", None) if limit is not None else None
-    lower_limits.velocity = -velocity if velocity is not None else None
-    upper_limits.velocity = velocity if velocity is not None else None
+    lower_limits.velocity = -abs(velocity) if velocity is not None else None
+    upper_limits.velocity = abs(velocity) if velocity is not None else None
 
     if urdf_joint.mimic is not None:
         multiplier = (
