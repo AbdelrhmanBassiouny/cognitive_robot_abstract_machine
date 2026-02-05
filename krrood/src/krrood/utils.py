@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import types
+from ast import Module
 from dataclasses import dataclass, field
 from functools import lru_cache
 from inspect import isclass

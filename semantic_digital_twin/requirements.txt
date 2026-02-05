@@ -1,6 +1,6 @@
 rustworkx
 numpy
-trimesh
+trimesh>=4.11.1
 typing_extensions
 urdf-parser-py
 matplotlib
@@ -33,3 +33,4 @@ pyglet == 1.5.31
 pycollada
 mujoco==3.3.5
 multiverse-simulators>=0.0.14
+psycopg
