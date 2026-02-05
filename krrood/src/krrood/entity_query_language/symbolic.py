@@ -13,7 +13,7 @@ from abc import abstractmethod, ABC
 from collections import UserDict, defaultdict
 from copy import copy
 from dataclasses import dataclass, field, fields, MISSING, is_dataclass
-from functools import lru_cache, cached_property
+from functools import lru_cache, cached_property, wraps
 
 from typing_extensions import (
     Iterable,
@@ -180,6 +180,23 @@ class GroupOperationResult(OperationResult):
         }
 
 
+def auto_update_eval_parent(func):
+    """
+    Decorator that updates the _eval_parent_ of a SymbolicExpression during evaluation.
+    """
+
+    @wraps(func)
+    def wrapper(self, sources=None, parent=None):
+        previous_parent = self._eval_parent_
+        self._eval_parent_ = parent
+        try:
+            yield from func(self, sources, parent)
+        finally:
+            self._eval_parent_ = previous_parent
+
+    return wrapper
+
+
 @dataclass(eq=False)
 class SymbolicExpression(Generic[T], ABC):
     """
@@ -214,6 +231,11 @@ class SymbolicExpression(Generic[T], ABC):
             self._id_expression_map_[self._id_] = self
         if hasattr(self, "_child_") and self._child_ is not None:
             self._update_child_()
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if "_evaluate__" in cls.__dict__:
+            cls._evaluate__ = auto_update_eval_parent(cls._evaluate__)
 
     def _update_child_(
         self,
@@ -403,7 +425,7 @@ class ConstraintSpecifier(SymbolicExpression[T], ABC):
         sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterator[OperationResult]:
-        self._eval_parent_ = parent
+
         yield from self._child_._evaluate__(sources, self)
 
     @property
@@ -538,18 +560,13 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
     A storage of created domain mappings to prevent recreating same mapping multiple times.
     """
 
-    def _update_truth_value_(
-        self, current_value: Any, force_update: bool = False
-    ) -> None:
+    def _update_truth_value_(self, current_value: Any) -> None:
         """
         Updates the truth value of the variable based on the current value.
 
         :param current_value: The current value of the variable.
-        :param force_update: Whether to force update the truth value.
         """
-        if force_update or isinstance(
-            self._parent_, (LogicalOperator, ConstraintSpecifier)
-        ):
+        if isinstance(self._parent_, (LogicalOperator, ConstraintSpecifier)):
             is_true = (
                 len(current_value) > 0
                 if is_iterable(current_value)
@@ -925,7 +942,7 @@ class ResultQuantifier(ResultProcessor[T], ABC):
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[T]:
         sources = sources or {}
-        self._eval_parent_ = parent
+
         if self._id_ in sources:
             yield OperationResult(sources, False, self)
             return
@@ -1529,7 +1546,7 @@ class QueryObjectDescriptor(SymbolicExpression[T], ABC):
         and selecting variables.
         """
         self._assert_correct_selected_variables__()
-        self._eval_parent_ = parent
+
         sources = sources or {}
 
         results_generator = self._generate_results__(sources)
@@ -1868,7 +1885,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         or will yield from current domain if exists,
         or has no domain and will instantiate new values by constructing the type if the type is given.
         """
-        self._eval_parent_ = parent
+
         sources = sources or {}
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
@@ -1950,11 +1967,7 @@ class Variable(CanBehaveLikeAVariable[T]):
         values = {self._id_: instance}
         for d in kwargs.values():
             values.update(d.bindings)
-        self._update_truth_value_(
-            instance,
-            force_update=self._predicate_type_ is PredicateType.SubClassOfPredicate,
-        )
-        return OperationResult(values, self._is_false_, self)
+        return self._build_operation_result_and_update_truth_value_(values)
 
     def _build_operation_result_and_update_truth_value_(
         self, bindings: Bindings
@@ -2056,7 +2069,7 @@ class Concatenate(CanBehaveLikeAVariable[T]):
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
             return
-        self._eval_parent_ = parent
+
         for var in self._variables_:
             for var_val in var._evaluate__(sources, self):
                 self._is_false_ = var_val.is_false
@@ -2115,8 +2128,6 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
         """
 
         sources = sources or {}
-
-        self._eval_parent_ = parent
 
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
@@ -2360,7 +2371,6 @@ class Having(ConstraintSpecifier[T]):
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         sources = sources or {}
-        self._eval_parent_ = parent
 
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
@@ -2437,7 +2447,6 @@ class Comparator(BinaryOperator):
         Compares the left and right symbolic variables using the "operation".
         """
         sources = sources or {}
-        self._eval_parent_ = parent
 
         if self._id_ in sources:
             yield OperationResult(sources, self._is_false_, self)
@@ -2532,7 +2541,7 @@ class Not(LogicalOperator[T]):
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         sources = sources or {}
-        self._eval_parent_ = parent
+
         for v in self._child_._evaluate__(sources, parent=self):
             self._is_false_ = v.is_true
             yield OperationResult(v.bindings, self._is_false_, self)
@@ -2564,7 +2573,7 @@ class AND(LogicalBinaryOperator):
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         sources = sources or {}
-        self._eval_parent_ = parent
+
         left_values = self.left._evaluate__(sources, parent=self)
         for left_value in left_values:
             self._is_false_ = left_value.is_false
@@ -2642,7 +2651,6 @@ class Union(OR):
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         sources = sources or {}
-        self._eval_parent_ = parent
 
         yield from self.evaluate_left(sources)
         yield from self.evaluate_right(sources)
@@ -2664,7 +2672,7 @@ class ElseIf(OR):
         This method overrides the base class method to handle ElseIf logic.
         """
         sources = sources or {}
-        self._eval_parent_ = parent
+
         yield from self.evaluate_left(sources)
 
 
@@ -2714,7 +2722,6 @@ class ForAll(QuantifiedConditional):
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         sources = sources or {}
-        self._eval_parent_ = parent
 
         solution_set = None
 
@@ -2773,7 +2780,7 @@ class Exists(QuantifiedConditional):
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
         sources = sources or {}
-        self._eval_parent_ = parent
+
         seen_var_values = []
         for val in self.condition._evaluate__(sources, parent=self):
             var_val = val[self.variable._id_]

@@ -13,7 +13,8 @@ from .symbolic import (
     Variable,
     OperationResult,
     ResultQuantifier,
-    Selectable, Bindings,
+    Selectable,
+    Bindings,
 )
 from .utils import T
 
@@ -76,7 +77,7 @@ class Set(Conclusion[T]):
         sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
-        self._eval_parent_ = parent
+
         self._yield_when_false_ = False
         if self.var._var_._id_ not in sources:
             parent_value = next(iter(self.var._evaluate__(sources, parent=self)))[
@@ -98,7 +99,7 @@ class Add(Conclusion[T]):
         sources: Optional[Bindings] = None,
         parent: Optional[SymbolicExpression] = None,
     ) -> Iterable[OperationResult]:
-        self._eval_parent_ = parent
+
         self._yield_when_false_ = False
         v = next(iter(self.value._evaluate__(sources, parent=self)))[self.value._id_]
         sources[self.var._var_._id_] = v
