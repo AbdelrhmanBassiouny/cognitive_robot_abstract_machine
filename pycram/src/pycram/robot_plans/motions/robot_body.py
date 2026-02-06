@@ -8,7 +8,7 @@ from .base import BaseMotion
 from ...datastructures.pose import Vector3Stamped, PoseStamped
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 
-from ...robot_description import ViewManager
+from ...view_manager import ViewManager
 
 
 @dataclass
