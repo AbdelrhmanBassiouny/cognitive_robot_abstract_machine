@@ -371,6 +371,28 @@ def test_generate_with_more_than_one_source(handles_and_containers_world):
         assert sol[PC].child == sol[FC].parent
 
 
+def test_select_a_variable_from_set_of_in_another_query(handles_and_containers_world):
+    world = handles_and_containers_world
+
+    container = variable(Container, domain=world.bodies)
+    handle = variable(Handle, domain=world.bodies)
+    FC = variable(FixedConnection, domain=world.connections)
+    PC = variable(PrismaticConnection, domain=world.connections)
+
+    set_of_query = set_of(container, handle, FC, PC).where(
+            container == FC.parent,
+            handle == FC.child,
+            container == PC.child,
+        )
+
+    reselected = an(entity(set_of_query[container]))
+
+    orig_res = list(map(lambda r: r[container], set_of_query.tolist()))
+    reselected_res = reselected.tolist()
+    assert orig_res == reselected_res
+
+
+
 def test_generate_with_more_than_one_source_optimized(handles_and_containers_world):
     world = handles_and_containers_world
 

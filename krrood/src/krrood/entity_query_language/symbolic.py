@@ -160,6 +160,27 @@ class OperationResult:
 
 
 @dataclass(eq=False)
+class GroupOperationResult(OperationResult):
+    """
+    Results grouped by variables specified in the grouped_by clause.
+    """
+
+    group_key_variables: Tuple[Selectable, ...]
+    """
+    The variables specified in the `grouped_by` clause.
+    """
+
+    @cached_property
+    def group_key_value(self) -> Dict[Selectable, Any]:
+        """
+        A dictionary mapping group key variables to their values.
+        """
+        return {
+            var: self.bindings[var._binding_id_] for var in self.group_key_variables
+        }
+
+
+@dataclass(eq=False)
 class SymbolicExpression(Generic[T], ABC):
     """
     Base class for all symbolic expressions.
@@ -646,6 +667,12 @@ class ResultProcessor(CanBehaveLikeAVariable[T], ABC):
             self._child_._build__()
         super().__post_init__()
 
+    def tolist(self):
+        """
+        Evaluate and return the results as a list.
+        """
+        return list(self.evaluate())
+
     @property
     def _name_(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -775,7 +802,7 @@ class Count(Aggregator[T]):
         self, child_results: Iterable[OperationResult]
     ) -> Iterator[Bindings]:
         for res in child_results:
-            yield {self._binding_id_: len(list(res.value))}
+            yield {self._binding_id_: len(make_list(res.value))}
 
 
 @dataclass(eq=False, repr=False)
@@ -1771,7 +1798,47 @@ class SetOf(QueryObjectDescriptor[T]):
             {v._var_: result[v._binding_id_] for v in self._selected_variables}
         )
 
-    def __getitem__(self, key: Selectable[T]) -> T: ...
+    def __getitem__(self, selected_variable: TypingUnion[CanBehaveLikeAVariable[T], T]) -> TypingUnion[T, SetOfSelectable[T]]:
+        """
+        Select one of the set of variables, this is useful when you have another query that uses this set of and
+        wants to select a specific variable out of the set of variables.
+
+        :param selected_variable: The selected variable from the set of variables.
+        """
+        self._build__()
+        return SetOfSelectable(self, selected_variable)
+
+@dataclass(eq=False, repr=False)
+class SetOfSelectable(CanBehaveLikeAVariable[T]):
+    """
+    A selected variable from the SetOf operation selected variables.
+    """
+
+    _set_of_: SetOf[T]
+    """
+    The SetOf operation from which `_selected_var_` was selected.
+    """
+    _selected_var_: CanBehaveLikeAVariable[T]
+    """
+    The selected variable in the SetOf.
+    """
+
+    def __post_init__(self):
+        self._child_ = self._set_of_
+        self._var_ = self
+        super().__post_init__()
+
+    def _evaluate__(self, sources: Optional[Bindings] = None, parent: Optional[SymbolicExpression] = None) -> Iterator[OperationResult]:
+        for v in self._set_of_._evaluate_(sources, self):
+            yield OperationResult({**v.bindings, self._binding_id_: v[self._selected_var_._binding_id_]}, False, self)
+
+    @property
+    def _name_(self) -> str:
+        return f"{self._set_of_._name_}.{self._selected_var_._name_}"
+
+    @cached_property
+    def _all_variable_instances_(self) -> List[Variable]:
+        return self._set_of_._all_variable_instances_
 
 
 @dataclass(eq=False, repr=False)
@@ -2034,7 +2101,7 @@ class Literal(Variable[T]):
             if type_:
                 name = type_.__name__
             else:
-                if isinstance(data, CanBehaveLikeAVariable):
+                if isinstance(data, Selectable):
                     name = data._name_
                 else:
                     name = type(original_data).__name__

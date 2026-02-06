@@ -128,14 +128,13 @@ def test_having_with_max(handles_and_containers_world):
     assert len(results) == 1
 
 
-@pytest.mark.skip(reason="Needs Refactoring")
-def test_multiple_per_variables(handles_and_containers_world):
+def test_multiple_grouped_variables(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     drawer = variable_from(cabinet.drawers)
 
     # Group by both cabinet and drawer (silly, but tests multiple variables)
-    query = a(set_of(cabinet, count := eql.count(drawer)).grouped_by(cabinet, drawer))
+    query = a(set_of(cabinet, count:= eql.count(drawer), drawer).grouped_by(cabinet, drawer))
     results = list(query.evaluate())
 
     # Each result should have count=1 because each (cabinet, drawer) pair is unique here
@@ -145,16 +144,15 @@ def test_multiple_per_variables(handles_and_containers_world):
         assert res[drawer] is not None
 
 
-@pytest.mark.skip(reason="Needs Refactoring")
-def test_sum_per(handles_and_containers_world):
+def test_sum_grouped_by(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     drawer = variable_from(cabinet.drawers)
     # Give drawers a numeric property to sum. They don't have one, but we can use a key func.
     # Let's sum the length of handle names per cabinet.
 
-    total_characters = eql.sum(drawer, key=lambda d: len(d.handle.name)).per(cabinet)
-    results = list(total_characters.evaluate())
+    query = a(set_of(total_characters:=eql.sum(drawer, key=lambda d: len(d.handle.name)), cabinet).grouped_by(cabinet))
+    results = list(query.evaluate())
 
     expected_cabinets = [c for c in world.views if isinstance(c, Cabinet)]
     assert len(results) == len(expected_cabinets)
@@ -165,18 +163,17 @@ def test_sum_per(handles_and_containers_world):
         assert s == sum(len(d.handle.name) for d in c.drawers)
 
 
-@pytest.mark.skip(reason="Needs Refactoring")
-def test_count_per(handles_and_containers_world):
+def test_count_grouped_by(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     cabinet_drawers = variable_from(cabinet.drawers)
-    query = eql.count(cabinet_drawers).per(cabinet)
+    query = an(entity(eql.count(cabinet_drawers)).grouped_by(cabinet))
     result = list(query.evaluate())
     expected = [len(c.drawers) for c in world.views if isinstance(c, Cabinet)]
-    assert [r[query] for r in result] == expected
+    assert result == expected
 
-    # without per should be all drawers of all cabinets
-    query_all = eql.count(cabinet_drawers)
+    # without grouped_by should be all drawers of all cabinets
+    query_all = an(entity(eql.count(cabinet_drawers)))
     results = list(query_all.evaluate())
     assert len(results) == 1
     result_all = results[0]
@@ -184,15 +181,16 @@ def test_count_per(handles_and_containers_world):
     assert result_all == expected_all
 
 
-@pytest.mark.skip(reason="Needs Refactoring")
-def test_max_count_per(handles_and_containers_world):
+def test_max_count_grouped_by(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     cabinet_drawers = variable_from(cabinet.drawers)
-    query = eql.max(eql.count(cabinet_drawers).per(cabinet))
+    count_query = an(entity(eql.count(cabinet_drawers)).grouped_by(cabinet))
+    query = an(entity(eql.max(count_query)))
+    # query = an(entity(eql.max(eql.count(cabinet_drawers)).grouped_by(cabinet)))
     result = list(query.evaluate())
     assert len(result) == 1
-    result_max = result[0][query]
+    result_max = result[0]
     expected = 0
     for c in world.views:
         if isinstance(c, Cabinet) and len(c.drawers) > expected:
