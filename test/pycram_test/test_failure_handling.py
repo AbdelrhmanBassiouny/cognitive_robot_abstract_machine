@@ -6,7 +6,7 @@ from pycram.robot_plans import ParkArmsAction, ParkArmsActionDescription
 from pycram.datastructures.enums import ObjectType, Arms, WorldMode
 from pycram.failure_handling import Retry
 from pycram.failures import PlanFailure
-from pycram.process_module import ProcessModule, simulated_robot
+from pycram.motion_executor import simulated_robot
 
 
 # start ik_and_description.launch

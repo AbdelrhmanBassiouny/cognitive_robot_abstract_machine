@@ -16,7 +16,7 @@ from pycram.datastructures.grasp import GraspDescription
 from pycram.datastructures.pose import PoseStamped
 from pycram.language import SequentialPlan
 from pycram.plan import MotionNode
-from pycram.process_module import simulated_robot, no_execution, real_robot
+from pycram.motion_executor import simulated_robot, no_execution, real_robot
 from pycram.robot_plans import (
     MoveMotion,
     BaseMotion,

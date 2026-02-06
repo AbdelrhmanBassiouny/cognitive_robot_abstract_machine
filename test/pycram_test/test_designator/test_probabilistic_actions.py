@@ -14,7 +14,7 @@ from pycram.failures import PlanFailure
 from pycram.language import SequentialPlan
 from pycram.orm.ormatic_interface import Base, ActionNodeMappingDAO
 from pycram.plan import Plan, ActionNode
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 from pycram.robot_plans import MoveAndPickUpActionDescription, MoveAndPickUpAction
 from pycram.testing import ApartmentWorldTestCase
 

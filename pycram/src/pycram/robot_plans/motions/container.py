@@ -5,7 +5,6 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from .base import BaseMotion
 from ...datastructures.enums import Arms
-from ...process_module import ProcessModuleManager
 from ...robot_description import ViewManager
 
 
