@@ -158,27 +158,6 @@ class OperationResult:
 
 
 @dataclass(eq=False)
-class GroupOperationResult(OperationResult):
-    """
-    Results grouped by variables specified in the grouped_by clause.
-    """
-
-    group_key_variables: Tuple[Selectable, ...]
-    """
-    The variables specified in the `grouped_by` clause.
-    """
-
-    @cached_property
-    def group_key_value(self) -> Dict[Selectable, Any]:
-        """
-        A dictionary mapping group key variables to their values.
-        """
-        return {
-            var: self.bindings[var._binding_id_] for var in self.group_key_variables
-        }
-
-
-@dataclass(eq=False)
 class SymbolicExpression(Generic[T], ABC):
     """
     Base class for all symbolic expressions.
@@ -196,6 +175,9 @@ class SymbolicExpression(Generic[T], ABC):
     Unique identifier of this node.
     """
     _node_: RWXNode = field(init=False, default=None, repr=False)
+    """
+    The rustworkx node of this symbolic expression.
+    """
     _id_expression_map_: ClassVar[Dict[int, SymbolicExpression]] = {}
     """
     A mapping of symbolic expression IDs to symbolic expressions. This is used to retrieve symbolic expressions by ID
@@ -1195,7 +1177,7 @@ class OrderByParams:
     """
 
 
-GroupBindings = Dict[GroupKey, GroupOperationResult]
+GroupBindings = Dict[GroupKey, OperationResult]
 """
 A dictionary for grouped bindings which maps a group key to its corresponding bindings.
 """
@@ -1212,12 +1194,12 @@ class GroupBy(SymbolicExpression[T]):
         self._child_ = self.query_descriptor._where_expression_
         super().__post_init__()
 
-    def _evaluate__(self, sources: Bindings = None) -> Iterator[GroupOperationResult]:
+    def _evaluate__(self, sources: Bindings = None) -> Iterator[OperationResult]:
         """
         Generate results grouped by the specified variables in the grouped_by clause.
 
         :param sources: The current bindings.
-        :return: An iterator of GroupOperationResult objects, each representing a group of child results.
+        :return: An iterator of OperationResult objects, each representing a group of child results.
         """
 
         if any(self.aggregators_of_grouped_by_variables_that_are_not_count()):
@@ -1245,9 +1227,7 @@ class GroupBy(SymbolicExpression[T]):
         :return: A tuple containing the dictionary of groups and the dictionary of group keys to their corresponding counts.
         """
 
-        groups = defaultdict(
-            lambda: GroupOperationResult({}, False, self, self.variables_to_group_by)
-        )
+        groups = defaultdict(lambda: OperationResult({}, False, self))
         group_key_count = defaultdict(lambda: 0)
 
         for res in self.get_constrained_values(sources):
@@ -1268,9 +1248,7 @@ class GroupBy(SymbolicExpression[T]):
 
         return groups, group_key_count
 
-    def update_group_from_bindings(
-        self, group: GroupOperationResult, results: Bindings
-    ):
+    def update_group_from_bindings(self, group: OperationResult, results: Bindings):
         """
         Updates the group with the given results.
 
@@ -2356,6 +2334,9 @@ class Concatenate(CanBehaveLikeAVariable[T]):
     """
 
     _variables_: List[Selectable[T]] = field(default_factory=list)
+    """
+    The variables to concatenate.
+    """
 
     def __post_init__(self):
         self._child_ = None
@@ -2363,13 +2344,7 @@ class Concatenate(CanBehaveLikeAVariable[T]):
         self._update_children_(*self._variables_)
         self._var_ = self
 
-    def _evaluate__(
-        self,
-        sources: Bindings = None,
-    ) -> Iterable[OperationResult]:
-        if self._id_ in sources:
-            yield OperationResult(sources, self._is_false_, self)
-            return
+    def _evaluate__(self, sources: Bindings) -> Iterable[OperationResult]:
 
         for var in self._variables_:
             for var_val in var._evaluate_(sources, self):
@@ -2406,6 +2381,9 @@ class DomainMapping(CanBehaveLikeAVariable[T], ABC):
     """
 
     _child_: CanBehaveLikeAVariable[T]
+    """
+    The child expression to apply the domain mapping to.
+    """
 
     def __post_init__(self):
         super().__post_init__()
@@ -2563,6 +2541,9 @@ class Index(DomainMapping):
     """
 
     _key_: Any
+    """
+    The key to index with.
+    """
 
     def _apply_mapping_(self, value: Any) -> Iterable[Any]:
         yield value[self._key_]
@@ -2579,7 +2560,13 @@ class Call(DomainMapping):
     """
 
     _args_: Tuple[Any, ...] = field(default_factory=tuple)
+    """
+    The arguments to call the method with.
+    """
     _kwargs_: Dict[str, Any] = field(default_factory=dict)
+    """
+    The keyword arguments to call the method with.
+    """
 
     def _apply_mapping_(self, value: Any) -> Iterable[Any]:
         if len(self._args_) > 0 or len(self._kwargs_) > 0:
@@ -2630,8 +2617,13 @@ class BinaryOperator(SymbolicExpression, ABC):
     """
 
     left: SymbolicExpression
+    """
+    The left operand of the binary operator.
+    """
     right: SymbolicExpression
-    _child_: SymbolicExpression = field(init=False, default=None)
+    """
+    The right operand of the binary operator.
+    """
 
     def __post_init__(self):
         super().__post_init__()
