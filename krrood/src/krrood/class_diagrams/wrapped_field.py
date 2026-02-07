@@ -4,6 +4,7 @@ import enum
 import inspect
 import logging
 import sys
+import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
