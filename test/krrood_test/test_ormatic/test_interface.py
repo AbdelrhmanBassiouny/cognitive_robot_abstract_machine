@@ -767,5 +767,5 @@ def test_generic_class(session, database):
     assert reconstructed.associated_value == obj.associated_value
     assert len(reconstructed.associated_value_list) == 2
     assert reconstructed.associated_value_list == obj.associated_value_list
-    assert reconstructed.associated_value_not_parametrized == None
+    assert reconstructed.associated_value_not_parametrized is None
     assert reconstructed.associated_value_not_parametrized_list == []

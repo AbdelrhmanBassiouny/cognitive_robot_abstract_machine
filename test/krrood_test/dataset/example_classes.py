@@ -675,14 +675,18 @@ class ChildEnum2(PolymorphicEnum):
 class PolymorphicEnumAssociation:
     value: PolymorphicEnum
 
+
 @dataclass
 class GenericClass(Generic[T]):
     value: T
+
 
 @dataclass
 class GenericClassAssociation:
     associated_value: GenericClass[float]
     associated_value_list: List[GenericClass[Position]]
 
-    associated_value_not_parametrized: GenericClass
-    associated_value_not_parametrized_list: List[GenericClass]
+    associated_value_not_parametrized: GenericClass = None
+    associated_value_not_parametrized_list: List[GenericClass] = field(
+        default_factory=list
+    )
