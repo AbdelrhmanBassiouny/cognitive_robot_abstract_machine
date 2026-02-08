@@ -113,8 +113,6 @@ class WrappedField:
             except NameError as e:
                 found_class = self._find_class_by_name(e.name)
                 local_namespace[e.name] = found_class
-            except Exception as e:
-                pass
 
     def _build_initial_namespace(self) -> dict:
         """
