@@ -1,32 +1,23 @@
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import IntEnum
 from typing import Callable, Self
 
-from typing_extensions import Generic, TypeVar, List, Optional, Dict, Any
-
-from krrood.adapters.json_serializer import (
-    SubclassJSONSerializer,
-    DataclassJSONSerializer,
-)
+from typing_extensions import Generic, TypeVar, List, Optional
 
 T = TypeVar("T")
 
 
 class Derivatives(IntEnum):
     """
-    Enumaration of interpretation for the order of derivativeson the spatial positions
+    Enumeration of interpretation for the order of derivatives on spatial positions.
     """
 
     position = 0
     velocity = 1
     acceleration = 2
     jerk = 3
-    snap = 4
-    crackle = 5
-    pop = 6
 
     @classmethod
     def range(cls, start: Derivatives, stop: Derivatives, step: int = 1):
@@ -49,9 +40,6 @@ class DerivativeMap(Generic[T]):
     velocity: Optional[T] = None
     acceleration: Optional[T] = None
     jerk: Optional[T] = None
-    snap: Optional[T] = None
-    crackle: Optional[T] = None
-    pop: Optional[T] = None
 
     @property
     def data(self) -> List[Optional[T]]:
@@ -75,9 +63,6 @@ class DerivativeMap(Generic[T]):
             operand(self.velocity),
             operand(self.acceleration),
             operand(self.jerk),
-            operand(self.snap),
-            operand(self.crackle),
-            operand(self.pop),
         )
 
     def __mul__(self, other: float) -> DerivativeMap[T]:

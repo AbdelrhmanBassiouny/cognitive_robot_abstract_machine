@@ -708,15 +708,6 @@ class DerivativeMap_floatDAO(
     jerk: Mapped[typing.Optional[builtins.float]] = mapped_column(
         use_existing_column=True
     )
-    snap: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-    crackle: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-    pop: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
 
 
 class AccelerationVariableDAO(
