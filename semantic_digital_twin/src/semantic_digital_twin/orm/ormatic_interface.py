@@ -174,12 +174,12 @@ class WorldMappingDAO_degrees_of_freedom_association(Base, AssociationDataAccess
     source_worldmappingdao_id: Mapped[int] = mapped_column(
         ForeignKey("WorldMappingDAO.database_id")
     )
-    target_degreeoffreedommappingdao_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomMappingDAO.database_id")
+    target_degreeoffreedomdao_id: Mapped[int] = mapped_column(
+        ForeignKey("DegreeOfFreedomDAO.database_id")
     )
 
-    target: Mapped[DegreeOfFreedomMappingDAO] = relationship(
-        "DegreeOfFreedomMappingDAO", foreign_keys=[target_degreeoffreedommappingdao_id]
+    target: Mapped[DegreeOfFreedomDAO] = relationship(
+        "DegreeOfFreedomDAO", foreign_keys=[target_degreeoffreedomdao_id]
     )
 
 
@@ -735,16 +735,13 @@ class AccelerationVariableDAO(
     name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     dof_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomMappingDAO.database_id", use_alter=True),
+        ForeignKey("DegreeOfFreedomDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    dof: Mapped[DegreeOfFreedomMappingDAO] = relationship(
-        "DegreeOfFreedomMappingDAO",
-        uselist=False,
-        foreign_keys=[dof_id],
-        post_update=True,
+    dof: Mapped[DegreeOfFreedomDAO] = relationship(
+        "DegreeOfFreedomDAO", uselist=False, foreign_keys=[dof_id], post_update=True
     )
 
 
@@ -999,16 +996,13 @@ class JerkVariableDAO(
     name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     dof_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomMappingDAO.database_id", use_alter=True),
+        ForeignKey("DegreeOfFreedomDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    dof: Mapped[DegreeOfFreedomMappingDAO] = relationship(
-        "DegreeOfFreedomMappingDAO",
-        uselist=False,
-        foreign_keys=[dof_id],
-        post_update=True,
+    dof: Mapped[DegreeOfFreedomDAO] = relationship(
+        "DegreeOfFreedomDAO", uselist=False, foreign_keys=[dof_id], post_update=True
     )
 
 
@@ -1240,16 +1234,13 @@ class PositionVariableDAO(
     name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     dof_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomMappingDAO.database_id", use_alter=True),
+        ForeignKey("DegreeOfFreedomDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    dof: Mapped[DegreeOfFreedomMappingDAO] = relationship(
-        "DegreeOfFreedomMappingDAO",
-        uselist=False,
-        foreign_keys=[dof_id],
-        post_update=True,
+    dof: Mapped[DegreeOfFreedomDAO] = relationship(
+        "DegreeOfFreedomDAO", uselist=False, foreign_keys=[dof_id], post_update=True
     )
 
 
@@ -1631,16 +1622,13 @@ class VelocityVariableDAO(
     name: Mapped[builtins.str] = mapped_column(String(255), use_existing_column=True)
 
     dof_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomMappingDAO.database_id", use_alter=True),
+        ForeignKey("DegreeOfFreedomDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    dof: Mapped[DegreeOfFreedomMappingDAO] = relationship(
-        "DegreeOfFreedomMappingDAO",
-        uselist=False,
-        foreign_keys=[dof_id],
-        post_update=True,
+    dof: Mapped[DegreeOfFreedomDAO] = relationship(
+        "DegreeOfFreedomDAO", uselist=False, foreign_keys=[dof_id], post_update=True
     )
 
 
@@ -2262,17 +2250,23 @@ class ActuatorDAO(
     }
 
 
-class DegreeOfFreedomMappingDAO(
+class DegreeOfFreedomDAO(
     WorldEntityWithIDDAO,
-    DataAccessObject[semantic_digital_twin.orm.model.DegreeOfFreedomMapping],
+    DataAccessObject[
+        semantic_digital_twin.world_description.degree_of_freedom.DegreeOfFreedom
+    ],
 ):
 
-    __tablename__ = "DegreeOfFreedomMappingDAO"
+    __tablename__ = "DegreeOfFreedomDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(WorldEntityWithIDDAO.database_id),
         primary_key=True,
         use_existing_column=True,
+    )
+
+    has_hardware_interface: Mapped[builtins.bool] = mapped_column(
+        use_existing_column=True
     )
 
     limits_id: Mapped[int] = mapped_column(
@@ -2289,7 +2283,7 @@ class DegreeOfFreedomMappingDAO(
     )
 
     __mapper_args__ = {
-        "polymorphic_identity": "DegreeOfFreedomMappingDAO",
+        "polymorphic_identity": "DegreeOfFreedomDAO",
         "inherit_condition": database_id == WorldEntityWithIDDAO.database_id,
     }
 
@@ -5673,16 +5667,13 @@ class AddDegreeOfFreedomModificationDAO(
     )
 
     dof_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomMappingDAO.database_id", use_alter=True),
+        ForeignKey("DegreeOfFreedomDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    dof: Mapped[DegreeOfFreedomMappingDAO] = relationship(
-        "DegreeOfFreedomMappingDAO",
-        uselist=False,
-        foreign_keys=[dof_id],
-        post_update=True,
+    dof: Mapped[DegreeOfFreedomDAO] = relationship(
+        "DegreeOfFreedomDAO", uselist=False, foreign_keys=[dof_id], post_update=True
     )
 
     __mapper_args__ = {

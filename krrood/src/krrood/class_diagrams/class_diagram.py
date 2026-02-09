@@ -4,7 +4,7 @@ import dataclasses
 import logging
 from abc import ABC
 from copy import copy
-from dataclasses import dataclass, make_dataclass
+from dataclasses import dataclass, make_dataclass, is_dataclass
 from dataclasses import field, InitVar
 from functools import cached_property, lru_cache
 from typing import get_args, get_origin, _GenericAlias, Any
@@ -763,6 +763,9 @@ class ClassDiagram:
                 continue
             except ClassIsUnMappedInClassDiagram:
                 pass
+
+            if not is_dataclass(get_origin(next_type)):
+                continue
 
             node = WrappedSpecializedGeneric(next_type)
             self.add_node(node)
