@@ -25,7 +25,11 @@ from semantic_digital_twin.collision_checking.collision_variable_managers import
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.abstract_robot import AbstractRobot
-from semantic_digital_twin.spatial_types import Vector3, HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types import (
+    Vector3,
+    HomogeneousTransformationMatrix,
+    Point3,
+)
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -138,42 +142,49 @@ class ExternalCollisionAvoidanceTask(CollisionAvoidanceTask):
         ).safe_division(sm.min(number_of_external_collisions, max_avoided_bodies))
         return weight
 
+    @property
+    def root_V_contact_normal(self) -> Vector3:
+        return self.external_collision_manager.get_root_V_contact_normal_symbol(
+            self.tip, self.collision_index
+        )
+
+    @property
+    def group_a_P_point_on_a(self) -> Point3:
+        return self.external_collision_manager.get_group_a_P_point_on_a_symbol(
+            self.tip, self.collision_index
+        )
+
+    @property
+    def contact_distance(self):
+        return self.external_collision_manager.get_contact_distance_symbol(
+            self.tip, self.collision_index
+        )
+
+    @property
+    def buffer_zone_distance(self):
+        return self.external_collision_manager.get_buffer_distance_symbol(
+            self.tip, self.collision_index
+        )
+
+    @property
+    def violated_distance(self):
+        return self.external_collision_manager.get_violated_distance_symbol(
+            self.tip, self.collision_index
+        )
+
     def build(self, context: BuildContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
-
-        root_V_contact_normal = (
-            self.external_collision_manager.get_root_V_contact_normal_symbol(
-                self.tip, self.collision_index
-            )
-        )
-        tip_P_contact = self.external_collision_manager.get_group_a_P_point_on_a_symbol(
-            self.tip, self.collision_index
-        )
-        distance_expression = (
-            self.external_collision_manager.get_contact_distance_symbol(
-                self.tip, self.collision_index
-            )
-        )
-
-        buffer_zone_expr = self.external_collision_manager.get_buffer_distance_symbol(
-            self.tip, self.collision_index
-        )
-        violated_distance = (
-            self.external_collision_manager.get_violated_distance_symbol(
-                self.tip, self.collision_index
-            )
-        )
 
         map_T_a = context.world.compose_forward_kinematics_expression(
             context.world.root, self.tip
         )
 
-        map_V_pa = (map_T_a @ tip_P_contact).to_vector3()
+        map_V_pa = (map_T_a @ self.group_a_P_point_on_a).to_vector3()
 
         # the position distance is not accurate, but the derivative is still correct
-        dist = root_V_contact_normal @ map_V_pa
+        dist = self.root_V_contact_normal @ map_V_pa
 
-        lower_limit = buffer_zone_expr - distance_expression
+        lower_limit = self.buffer_zone_distance - self.contact_distance
 
         artifacts.constraints.add_inequality_constraint(
             name=self.name,
@@ -186,9 +197,9 @@ class ExternalCollisionAvoidanceTask(CollisionAvoidanceTask):
             upper_slack_limit=self.create_upper_slack(
                 context=context,
                 lower_limit=lower_limit,
-                buffer_zone_expr=buffer_zone_expr,
-                violated_distance=violated_distance,
-                distance_expression=sm.Scalar(distance_expression),
+                buffer_zone_expr=self.buffer_zone_distance,
+                violated_distance=self.violated_distance,
+                distance_expression=sm.Scalar(self.contact_distance),
             ),
         )
 
