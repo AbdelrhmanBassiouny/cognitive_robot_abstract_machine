@@ -72,9 +72,8 @@ def test_create_fully_factorized_distribution():
         Continuous("Variable.B"),
     ]
     parameterizer = Parameterizer()
-    probabilistic_circuit = parameterizer.create_fully_factorized_distribution(
-        variables
-    )
+    parameterizer.variables = variables
+    probabilistic_circuit = parameterizer.create_fully_factorized_distribution()
     assert len(probabilistic_circuit.variables) == 2
     assert set(probabilistic_circuit.variables) == set(variables)
 

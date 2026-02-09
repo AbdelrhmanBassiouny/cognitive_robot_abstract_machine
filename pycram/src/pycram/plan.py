@@ -97,6 +97,10 @@ class Plan:
     """
     Callbacks to be called when a node of the given type is ended.
     """
+    parameterizer: Parameterizer = field(init=False)
+    """
+    Parameterizer used to parameterize the plan.
+    """
 
     def __init__(self, root: PlanNode, context: Context):
         super().__init__()
@@ -113,6 +117,7 @@ class Plan:
         self.current_node: PlanNode = self.root
         if self.super_plan:
             self.super_plan.add_edge(self.super_plan.current_node, self.root)
+        self.parameterizer = Parameterizer()
 
     @property
     def nodes(self) -> List[PlanNode]:
@@ -636,19 +641,22 @@ class Plan:
             node for node in ordered_nodes if isinstance(node, DesignatorNode)
         ]
 
-        parameterizer = Parameterizer()
-
         all_variables = []
         simple_event = SimpleEvent({})
 
         for index, node in enumerate(designator_nodes):
             prefix = f"{node.designator_type.__name__}_{index}"
             dao = to_dao(node.designator_type(**node.kwargs))
-            variables, new_event = parameterizer.parameterize_dao(dao, prefix=prefix)
+            variables, new_event = self.parameterizer.parameterize_dao(
+                dao, prefix=prefix
+            )
             simple_event = SimpleEvent({**simple_event, **new_event})
             all_variables.extend(variables)
 
         return all_variables, simple_event
+
+    def create_fully_factorized_distribution(self):
+        return self.parameterizer.create_fully_factorized_distribution()
 
 
 def managed_node(func: Callable) -> Callable:

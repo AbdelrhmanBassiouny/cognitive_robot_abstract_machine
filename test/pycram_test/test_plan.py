@@ -686,9 +686,7 @@ def test_algebra_sequentialplan(immutable_model_world):
     variables, simple_event = sp.parameterize()
     variables_map = {v.name: v for v in variables}
 
-    probabilistic_circuit = Parameterizer().create_fully_factorized_distribution(
-        variables
-    )
+    probabilistic_circuit = sp.create_fully_factorized_distribution()
 
     torso_1 = variables_map["MoveTorsoAction_0.torso_state"]
     torso_2 = variables_map["MoveTorsoAction_2.torso_state"]
@@ -771,9 +769,7 @@ def test_algebra_parallelplan(immutable_model_world):
     assert "MoveTorsoAction_0.torso_state" in variables_map
     assert "ParkArmsAction_1.arm" in variables_map
 
-    probabilistic_circuit = Parameterizer().create_fully_factorized_distribution(
-        variables
-    )
+    probabilistic_circuit = sp.parameterizer.create_fully_factorized_distribution()
 
     arm_var = variables_map["ParkArmsAction_1.arm"]
     torso_var = variables_map["MoveTorsoAction_0.torso_state"]
@@ -827,9 +823,7 @@ def test_parameterize_movetorse_navigate(immutable_model_world):
 
     assert set(variables.keys()) == expected_names
 
-    probabilistic_circuit = Parameterizer.create_fully_factorized_distribution(
-        all_variables
-    )
+    probabilistic_circuit = plan.parameterizer.create_fully_factorized_distribution()
 
     expected_distribution_names = expected_names - {
         "NavigateAction_1.target_location.header.sequence",
@@ -928,8 +922,8 @@ def test_parameterize_pickup_navigate_place(immutable_model_world):
 
     assert set(variables.keys()) == expected_variables
 
-    probabilistic_distribution = Parameterizer.create_fully_factorized_distribution(
-        all_variables
+    probabilistic_distribution = (
+        plan.parameterizer.create_fully_factorized_distribution()
     )
 
     expected_distribution = expected_variables - {
