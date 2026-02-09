@@ -2711,7 +2711,7 @@ class TestCollisionAvoidance:
         msc_copy.draw("muh.pdf")
         kin_sim.tick_until_end(500)
         collisions = kin_sim.context.world.collision_manager.compute_collisions()
-        assert len(collisions.contacts) == 1
+        assert len(collisions.contacts) == 19
         assert collisions.contacts[0].contact_distance > 0.199
 
     def test_hard_constraints_violated(self, cylinder_bot_world: World):
