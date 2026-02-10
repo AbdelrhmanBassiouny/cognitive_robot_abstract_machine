@@ -63,6 +63,7 @@ class ForwardKinematicsManager(ModelChangeCallback):
         if len(self.world.kinematic_structure_entities) == 0:
             return
         self.update_root_T_kse_expression_cache()
+        self.compose_expression.cache_clear()
         self.compile()
         self.recompute()  # we need to recompute because other model updaters might need fk.
 
