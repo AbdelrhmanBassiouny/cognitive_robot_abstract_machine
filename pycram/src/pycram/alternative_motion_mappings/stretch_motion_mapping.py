@@ -69,7 +69,11 @@ class StretchMoveSim(MoveMotion, AlternativeMotion[Stretch]):
         )
 
 
-class StretchClos(ClosingMotion, AlternativeMotion[Stretch]):
+class StretchClose(ClosingMotion, AlternativeMotion[Stretch]):
+    """
+    Optimized close motion for the stretch robot. This puts the stretch directly in front of the container while holding
+    the handle and then pushes it arm forward to close the container.
+    """
 
     execution_type = ExecutionType.SIMULATED
 
