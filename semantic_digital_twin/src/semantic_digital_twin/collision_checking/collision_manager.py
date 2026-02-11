@@ -67,7 +67,15 @@ class CollisionGroup:
 
 @dataclass
 class CollisionConsumer(ABC):
+    """
+    Interface for classes that want to be notified about changes in the collision matrix or when collision checking is performed.
+    These classes are used for postprocessing collision checking results for specific purposes, like external/self collision avoidance tasks in giskard.
+    """
+
     collision_manager: CollisionManager = field(init=False)
+    """
+    Backreference to the collision manager that owns this consumer.
+    """
 
     @abstractmethod
     def on_compute_collisions(self, collision_results: CollisionCheckingResult):
@@ -77,10 +85,17 @@ class CollisionConsumer(ABC):
         """
 
     @abstractmethod
-    def on_world_model_update(self, world: World): ...
+    def on_world_model_update(self, world: World):
+        """
+        Called when the world model changes.
+        :param world: Reference to the updated world.
+        """
 
     @abstractmethod
-    def on_collision_matrix_update(self): ...
+    def on_collision_matrix_update(self):
+        """
+        Called when the collision matrix is updated.
+        """
 
 
 @dataclass
@@ -253,6 +268,11 @@ class CollisionManager(ModelChangeCallback):
         return collision_results
 
     def get_max_avoided_bodies(self, body: Body) -> int:
+        """
+        Returns the maximum number of collisions `body` should avoid.
+        :param body:
+        :return: Maximum number of collisions that are allowed between two bodies.
+        """
         for rule in reversed(self.max_avoided_bodies_rules):
             max_avoided_bodies = rule.get_max_avoided_collisions(body)
             if max_avoided_bodies is not None:
@@ -261,7 +281,7 @@ class CollisionManager(ModelChangeCallback):
 
     def get_buffer_zone_distance(self, body_a: Body, body_b: Body) -> float:
         """
-        Returns the buffer-zone distance for the body by scanning rules from highest to lowest priority.
+        Returns the buffer-zone distance for the body pair by scanning rules from highest to lowest priority.
         """
         for rule in reversed(self.rules):
             if isinstance(rule, AvoidCollisionRule):
@@ -272,7 +292,7 @@ class CollisionManager(ModelChangeCallback):
 
     def get_violated_distance(self, body_a: Body, body_b: Body) -> float:
         """
-        Returns the violated distance for the body by scanning rules from highest to lowest priority.
+        Returns the violated distance for the body pair by scanning rules from highest to lowest priority.
         """
         for rule in reversed(self.rules):
             if isinstance(rule, AvoidCollisionRule):
@@ -283,4 +303,7 @@ class CollisionManager(ModelChangeCallback):
 
     @property
     def rules(self) -> List[CollisionRule]:
+        """
+        :return: all rules in the order they are applied.
+        """
         return self.default_rules + self.temporary_rules + self.ignore_collision_rules
