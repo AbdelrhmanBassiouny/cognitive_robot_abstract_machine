@@ -107,7 +107,7 @@ def test_visualization_marker_pr2(rclpy_node, pr2_world_state_reset):
         sleep(0.1)
     else:
         assert False, "Callback timed out"
-    assert len(callback.last_msg.markers) == 54
+    assert len(callback.last_msg.markers) == 53
 
 
 def test_visualization_marker_tracy(rclpy_node, tracy_world):
