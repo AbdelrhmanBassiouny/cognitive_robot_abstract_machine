@@ -201,7 +201,7 @@ class StateSynchronizer(StateChangeCallback, SynchronizerOnCallback):
         if indices:
             self.world.state.data[0, indices] = np.asarray(msg.states, dtype=float)
             self.update_previous_world_state()
-            self.world.notify_state_change()
+            self.world.notify_state_change(publish_changes=False)
 
     def world_callback(self, publish_changes: bool = True):
         """
@@ -336,7 +336,7 @@ class ModelReloadSynchronizer(Synchronizer):
         )
         new_world = self.session.scalars(query).one().from_dao()
         self._replace_world(new_world)
-        self.world._notify_model_change(msg.meta_data.world_id)
+        self.world._notify_model_change(publish_changes=False)
 
     def _replace_world(self, new_world: World):
         """

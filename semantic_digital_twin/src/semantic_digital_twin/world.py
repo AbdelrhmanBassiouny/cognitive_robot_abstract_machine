@@ -171,11 +171,17 @@ class WorldModelUpdateContextManager:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if (
+            len(
+                self.world._model_manager._active_world_model_update_context_manager_ids
+            )
+            == 1
+        ):
+            self.world.delete_orphaned_dofs()
         self.world._model_manager._active_world_model_update_context_manager_ids.remove(
             self._id
         )
         if not self.world._model_manager._active_world_model_update_context_manager_ids:
-            self.world.delete_orphaned_dofs()
             self.world.get_world_model_manager().model_modification_blocks.append(
                 self.world.get_world_model_manager().current_model_modification_block
             )
