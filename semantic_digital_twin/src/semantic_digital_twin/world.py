@@ -1,9 +1,10 @@
 from __future__ import absolute_import
 from __future__ import annotations
 
-import copy
 import inspect
 import logging
+import threading
+import uuid
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import wraps, lru_cache, cached_property
@@ -27,11 +28,10 @@ from typing_extensions import (
 from typing_extensions import List
 from typing_extensions import Type, Set
 
-from .collision_checking.pybullet_collision_detector import BulletCollisionDetector
-from .mixin import HasSimulatorProperties
 from .callbacks.callback import ModelChangeCallback
 from .collision_checking.collision_detector import CollisionDetector
 from .collision_checking.collision_manager import CollisionManager
+from .collision_checking.pybullet_collision_detector import BulletCollisionDetector
 from .collision_checking.trimesh_collision_detector import TrimeshCollisionDetector
 from .datastructures.prefixed_name import PrefixedName
 from .datastructures.types import NpMatrix4x4
@@ -42,7 +42,9 @@ from .exceptions import (
     MissingWorldModificationContextError,
     WorldEntityWithIDNotFoundError,
     MissingReferenceFrameError,
+    MismatchingPublishChangesAttribute,
 )
+from .mixin import HasSimulatorProperties
 from .spatial_computations.forward_kinematics import ForwardKinematicsManager
 from .spatial_computations.ik_solver import InverseKinematicsSolver
 from .spatial_computations.raytracer import RayTracer
@@ -138,38 +140,63 @@ class WorldModelUpdateContextManager:
     desired updates have been performed.
     """
 
+    publish_changes: bool = True
+    """
+    Whether to publish the changes made to the world after exiting the context.
+    """
+
     world: World = field(kw_only=True, repr=False)
     """
     The world to manage updates for.
     """
 
-    first: bool = True
+    _id: UUID = field(default_factory=uuid.uuid4)
     """
-    First time flag.
+    Unique identifier for this context manager instance, used to track active world model updates.
     """
 
     def __enter__(self):
-        if self.world.world_is_being_modified:
-            self.first = False
-        self.world.world_is_being_modified = True
-
-        if self.first:
-            self.world.get_world_model_manager().current_model_modification_block = (
-                WorldModelModificationBlock()
+        self.world._model_manager._world_lock.acquire()
+        model_manager = self.world._model_manager
+        if model_manager._current_modifications_will_be_published is None:
+            model_manager._current_modifications_will_be_published = (
+                self.publish_changes
             )
+
+        if (
+            not model_manager._current_modifications_will_be_published
+            == self.publish_changes
+        ):
+            raise MismatchingPublishChangesAttribute(
+                model_manager._current_modifications_will_be_published,
+                self.publish_changes,
+            )
+
+        self.world.world_is_being_modified = True
+        model_manager._active_world_model_update_context_manager_ids.append(self._id)
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.first:
-            self.world.delete_orphaned_dofs()
-            self.world.get_world_model_manager().model_modification_blocks.append(
-                self.world.get_world_model_manager().current_model_modification_block
+        self.world.delete_orphaned_dofs()
+        model_manager = self.world._model_manager
+        model_manager._active_world_model_update_context_manager_ids.remove(self._id)
+
+        if not model_manager._active_world_model_update_context_manager_ids:
+            model_manager.model_modification_blocks.append(
+                model_manager.current_model_modification_block
             )
-            self.world.get_world_model_manager().current_model_modification_block = None
+            model_manager.current_model_modification_block = (
+                WorldModelModificationBlock()
+            )
             if exc_type is None:
-                self.world._notify_model_change()
+                self.world._notify_model_change(publish_changes=self.publish_changes)
+
             self.world.world_is_being_modified = False
+            model_manager._current_modifications_will_be_published = None
+
+        # keep outside the if block, as it needs to be released as many times as it was acquired
+        model_manager._world_lock.release()
 
 
 class AtomicWorldModificationNotAtomic(Exception):
@@ -217,8 +244,7 @@ def atomic_world_modification(
             bound_args = dict(bound.arguments)
             bound_args.pop("self", None)
             if (
-                current_world.get_world_model_manager().current_model_modification_block
-                is None
+                not current_world._model_manager._active_world_model_update_context_manager_ids
             ):
                 raise MissingWorldModificationContextError(func)
             current_world.get_world_model_manager().current_model_modification_block.append(
@@ -259,8 +285,8 @@ class WorldModelManager:
     The inner list is a block of modifications where change callbacks must not be called in between.
     """
 
-    current_model_modification_block: Optional[WorldModelModificationBlock] = field(
-        default=None, repr=False, init=False
+    current_model_modification_block: WorldModelModificationBlock = field(
+        default_factory=WorldModelModificationBlock, repr=False, init=False
     )
     """
     The current modification block called within one context of @atomic_world_modification.
@@ -273,7 +299,28 @@ class WorldModelManager:
     Callbacks to be called when the model of the world changes.
     """
 
-    def update_model_version_and_notify_callbacks(self) -> None:
+    _active_world_model_update_context_manager_ids: List[UUID] = field(
+        init=False, default_factory=list, repr=False
+    )
+    """
+    List of active world model managers currently modifying this world
+    """
+
+    _current_modifications_will_be_published: Optional[bool] = field(
+        init=False, default=None
+    )
+    """
+    Indicates if the current modifications will be published via a synchronizer. If None, then there are no active contexts.
+    """
+
+    _world_lock: threading.RLock = field(
+        default_factory=threading.RLock, init=False, repr=False
+    )
+    """
+    Lock used to prevent multiple threads from modifying the world at the same time.
+    """
+
+    def update_model_version_and_notify_callbacks(self, **kwargs) -> None:
         """
         Notifies the system of a model change and updates necessary states, caches,
         and forward kinematics expressions while also triggering registered callbacks
@@ -281,7 +328,7 @@ class WorldModelManager:
         """
         self.version += 1
         for callback in self.model_change_callbacks:
-            callback.notify()
+            callback.notify(**kwargs)
 
 
 _LRU_CACHE_SIZE: int = 2048
@@ -342,6 +389,12 @@ class World(HasSimulatorProperties):
     """
     Flag that indicates if an atomic world operation is currently being executed.
     See `atomic_world_modification` for more information.
+    """
+
+
+    _id: UUID = field(init=False, default_factory=uuid.uuid4)
+    """
+    Unique identifier for this world instance.
     """
 
     _model_manager: WorldModelManager = field(
@@ -1319,24 +1372,25 @@ class World(HasSimulatorProperties):
         return new_world
 
     # %% Change Notifications
-    def notify_state_change(self) -> None:
+    def notify_state_change(self, publish_changes: bool = True, **kwargs) -> None:
         """
         If you have changed the state of the world, call this function to trigger necessary events and increase
         the state version.
         """
         if not self.is_empty():
             self._forward_kinematic_manager.recompute()
-        self.state._notify_state_change()
+        self.state._notify_state_change(publish_changes=publish_changes, **kwargs)
 
-    def _notify_model_change(self) -> None:
+    def _notify_model_change(self, publish_changes: bool = True, **kwargs) -> None:
         """
         Notifies the system of a model change and updates the necessary states, caches,
         and forward kinematics expressions while also triggering registered callbacks
         for model changes.
         """
-        self._model_manager.update_model_version_and_notify_callbacks()
-        # self._compile_forward_kinematics_expressions()
-        self.notify_state_change()
+        self._model_manager.update_model_version_and_notify_callbacks(
+            publish_changes=publish_changes, **kwargs
+        )
+        self.notify_state_change(publish_changes=publish_changes, **kwargs)
 
         for callback in self.state.state_change_callbacks:
             callback.update_previous_world_state()
@@ -1798,8 +1852,12 @@ class World(HasSimulatorProperties):
 
     # %% Associations
 
-    def modify_world(self) -> WorldModelUpdateContextManager:
-        return WorldModelUpdateContextManager(world=self)
+    def modify_world(
+        self, publish_changes: bool = True
+    ) -> WorldModelUpdateContextManager:
+        return WorldModelUpdateContextManager(
+            world=self, publish_changes=publish_changes
+        )
 
     def reset_state_context(self) -> ResetStateContextManager:
         return ResetStateContextManager(self)

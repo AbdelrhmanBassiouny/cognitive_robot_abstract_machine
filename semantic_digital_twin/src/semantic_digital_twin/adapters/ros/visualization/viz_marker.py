@@ -1,5 +1,7 @@
 import time
 from dataclasses import dataclass, field
+from typing import Optional
+from uuid import UUID
 
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy
@@ -63,7 +65,7 @@ class VizMarkerPublisher(ModelChangeCallback):
         """
         TFPublisher(self.world, self.node)
 
-    def _notify(self):
+    def _notify(self, **kwargs):
         self.markers = MarkerArray()
         for body in self.world.bodies:
             marker_ns = str(body.name)
