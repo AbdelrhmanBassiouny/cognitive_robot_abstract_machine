@@ -6,7 +6,6 @@ import json
 import types
 from contextlib import suppress
 from enum import Enum
-from types import ModuleType
 
 import sqlalchemy
 from sqlalchemy import (
@@ -16,19 +15,15 @@ from sqlalchemy import (
     create_engine as create_sqlalchemy_engine,
     URL,
 )
-from sqlalchemy.orm import DeclarativeBase
 from typing_extensions import (
     TypeVar,
     Type,
     List,
     Iterable,
     Union,
-    Tuple,
-    Dict,
     Any,
 )
 
-from .dao import AlternativeMapping, DataAccessObject
 from ..adapters.json_serializer import to_json, from_json
 
 
@@ -149,40 +144,6 @@ def is_direct_subclass(cls: Type, *bases: Type) -> bool:
     :return: Whether 'cls' is directly derived from any of the given base classes or is the same class.
     """
     return cls in bases or (set(cls.__bases__) & set(bases))
-
-
-def get_classes_of_ormatic_interface(
-    interface: ModuleType,
-) -> Tuple[List[Type], List[Type[AlternativeMapping]], Dict]:
-    """
-    Get all classes and alternative mappings of an existing ormatic interface.
-
-    :param interface: The ormatic interface to extract the information from.
-    :return: A list of classes and a list of alternative mappings used in the interface.
-    """
-    classes = []
-    alternative_mappings = []
-    classes_of_ormatic_interface = classes_of_module(interface)
-    type_mappings = {}
-
-    for cls in filter(
-        lambda x: issubclass(x, DataAccessObject), classes_of_ormatic_interface
-    ):
-        original_class = cls.original_class()
-
-        if issubclass(original_class, AlternativeMapping):
-            alternative_mappings.append(original_class)
-            classes.append(original_class.original_class())
-        else:
-            classes.append(original_class)
-
-    # get the type mappings from the direct subclass of declarative base
-    for cls in filter(
-        lambda x: is_direct_subclass(x, DeclarativeBase), classes_of_ormatic_interface
-    ):
-        type_mappings.update(cls.type_mappings)
-
-    return classes, alternative_mappings, type_mappings
 
 
 def create_engine(url: Union[str, URL], **kwargs: Any) -> Engine:

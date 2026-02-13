@@ -201,6 +201,10 @@ class WorldModelSnapshot(SubclassJSONSerializer):
     def apply_to_json_snapshot_to_world(
         world: World, json_data: Dict[str, Any], **kwargs
     ):
+        """
+        1. deserialize modifications from json and apply them to the world, block by block
+        2. deserialize state from json and apply it to the world
+        """
         with world.modify_world():
             for modification in json_data.get("modifications", []):
                 WorldModelModificationBlock.apply_from_json(
@@ -214,6 +218,9 @@ class WorldModelSnapshot(SubclassJSONSerializer):
 
     @staticmethod
     def _apply_json_state(world: World, ids: list[float], states: list[UUID]):
+        """
+        Apply the state contained in the json snapshot to the world.
+        """
         if not (ids or states):
             return
         indices = [world.state._index.get(_id) for _id in ids]

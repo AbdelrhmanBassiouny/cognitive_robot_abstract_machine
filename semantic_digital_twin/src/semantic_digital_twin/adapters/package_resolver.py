@@ -169,9 +169,6 @@ class CompositePathResolver(PathResolver):
             except ParsingError as error:
                 errors.append(str(error))
 
-        for resolver in self.resolvers:
-            if isinstance(resolver, FileUriResolver):
-                return resolver.resolve(uri)
         raise ParsingError(
             message=f"Could not resolve path '{uri}'. Details: {'; '.join(errors)}"
         )
