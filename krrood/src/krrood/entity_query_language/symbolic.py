@@ -314,6 +314,9 @@ class SymbolicExpression(ABC):
         for k, v in children.items():
             if not isinstance(v, SymbolicExpression):
                 children[k] = Literal(v)
+            elif isinstance(v, QueryObjectDescriptor):
+                v.build()
+                children[k] = v._expression_
         for k, v in children.items():
             # With graph structure, do not copy nodes; just connect an edge.
             v._parent_ = self

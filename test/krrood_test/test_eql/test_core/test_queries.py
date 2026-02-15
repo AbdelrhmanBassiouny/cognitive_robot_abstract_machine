@@ -1147,13 +1147,19 @@ def test_subquery_independence():
     count = entity(eql.count(var1))
     assert count.tolist() == [4]
 
-    # query = the(entity(var1).where(count == var1))
-    # assert query.tolist() == [4]
-    #
-    # # To check order doesn't matter
-    # query = the(entity(var1).where(var1 == count))
-    # assert query.tolist() == [4]
+    query = the(entity(var1).where(count == var1))
+    assert query.tolist() == [4]
+
+    # To check order doesn't matter
+    query = the(entity(var1).where(var1 == count))
+    assert query.tolist() == [4]
 
     # select the same variable as the outer query
-    query = the(entity(var1).where(var1 != the(entity(var1).where(var1 == 2))))
+    query = an(entity(var1).where(var1 != the(entity(var1).where(var1 == 2))))
+    # QueryGraph(query.build()).visualize()
+    assert query.tolist() == [1, 4, 3]
+
+    # test with an()
+    query = an(entity(var1).where(var1 != an(entity(var1).where(var1 == 2))))
+    # QueryGraph(query.build()).visualize()
     assert query.tolist() == [1, 4, 3]
