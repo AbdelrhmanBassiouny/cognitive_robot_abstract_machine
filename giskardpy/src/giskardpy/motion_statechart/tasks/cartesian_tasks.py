@@ -9,7 +9,7 @@ from giskardpy.motion_statechart.binding_policy import (
     GoalBindingPolicy,
     ForwardKinematicsBinding,
 )
-from giskardpy.motion_statechart.context import BuildContext, ExecutionContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.goals.templates import Parallel
 from giskardpy.motion_statechart.graph_node import (
@@ -71,7 +71,7 @@ class CartesianPosition(Task):
 
     _fk_binding: ForwardKinematicsBinding = field(kw_only=True, init=False, repr=False)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the goal position.
 
@@ -107,7 +107,7 @@ class CartesianPosition(Task):
         artifacts.observation = distance_to_goal < self.threshold
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -155,7 +155,7 @@ class CartesianPositionStraight(Task):
 
     _fk_binding: ForwardKinematicsBinding = field(kw_only=True, init=False)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the goal along a straight line.
 
@@ -236,7 +236,7 @@ class CartesianPositionStraight(Task):
         artifacts.observation = dist < self.threshold
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -288,7 +288,7 @@ class CartesianOrientation(Task):
 
     _fk_binding: ForwardKinematicsBinding = field(kw_only=True, init=False)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the goal orientation.
 
@@ -325,7 +325,7 @@ class CartesianOrientation(Task):
         artifacts.observation = sm.abs(rotation_error) < self.threshold
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -375,7 +375,7 @@ class CartesianPose(Task):
     weight: float = field(default=DefaultWeights.WEIGHT_BELOW_CA, kw_only=True)
     """Task priority relative to other tasks."""
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the full 6D goal pose.
 
@@ -458,7 +458,7 @@ class CartesianPose(Task):
 
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -510,7 +510,7 @@ class CartesianPositionVelocityLimit(Task):
     over lower weighted constraints when conflicts occur.
     """
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
         root_P_tip = context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
@@ -564,7 +564,7 @@ class CartesianRotationVelocityLimit(Task):
     limit is enforced. Higher weights give this constraint soft priority
     over lower weighted constraints when conflicts occur."""
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
 
         root_R_tip = context.world.compose_forward_kinematics_expression(

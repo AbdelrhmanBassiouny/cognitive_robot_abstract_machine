@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.middleware import get_middleware
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.graph_node import (
     Goal,
@@ -41,7 +41,7 @@ from semantic_digital_twin.world_description.world_entity import (
 class CollisionAvoidanceTask(Task):
     def create_upper_slack(
         self,
-        context: BuildContext,
+        context: MotionStatechartContext,
         lower_limit: sm.Scalar,
         buffer_zone_expr: sm.Scalar,
         violated_distance: sm.Scalar,
@@ -91,7 +91,7 @@ class ExternalCollisionDistanceMonitor(MotionStatechartNode):
     collision_index: int = field(default=0, kw_only=True)
     external_collision_manager: ExternalCollisionVariableManager = field(kw_only=True)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
 
         artifacts.observation = (
@@ -121,7 +121,7 @@ class ExternalCollisionAvoidanceTask(CollisionAvoidanceTask):
     def tip(self) -> KinematicStructureEntity:
         return self.collision_group.root
 
-    def create_weight(self, context: BuildContext) -> sm.Scalar:
+    def create_weight(self, context: MotionStatechartContext) -> sm.Scalar:
         """
         Creates a weight for this task which is scaled by the number of external collisions.
         :return:
@@ -173,7 +173,7 @@ class ExternalCollisionAvoidanceTask(CollisionAvoidanceTask):
             self.collision_group, self.collision_index
         )
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
 
         root_T_group_a = context.world.compose_forward_kinematics_expression(
@@ -215,7 +215,7 @@ class ExternalCollisionAvoidance(Goal):
     robot: AbstractRobot = field(kw_only=True)
     max_velocity: float = field(default=0.2, kw_only=True)
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         external_collision_manager = ExternalCollisionVariableManager(
             context.float_variable_data
         )
@@ -254,7 +254,7 @@ class SelfCollisionDistanceMonitor(MotionStatechartNode):
     collision_index: int = field(default=0, kw_only=True)
     self_collision_manager: SelfCollisionVariableManager = field(kw_only=True)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
 
         artifacts.observation = self.self_collision_manager.get_contact_distance_symbol(
@@ -309,7 +309,7 @@ class SelfCollisionAvoidanceTask(CollisionAvoidanceTask):
             self.collision_group_a, self.collision_group_b
         )
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
 
         group_b_T_group_a = context.world.compose_forward_kinematics_expression(
@@ -352,7 +352,7 @@ class SelfCollisionAvoidance(Goal):
     robot: AbstractRobot = field(kw_only=True)
     max_velocity: float = field(default=0.2, kw_only=True)
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         self_collision_manager = SelfCollisionVariableManager(
             context.float_variable_data
         )
@@ -407,7 +407,7 @@ class SelfCollisionAvoidance(Goal):
 class CollisionAvoidance(Goal):
     collision_rules: List[CollisionRule] = field(default_factory=list)
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         context.collision_manager.temporary_rules.extend(self.collision_rules)
         context.collision_manager.add_collision_consumer(
             ExternalCollisionVariableManager()
@@ -429,7 +429,9 @@ class CollisionAvoidance(Goal):
         )
         context.collision_expression_manager.set_collision_matrix(collision_matrix)
 
-    def add_external_collision_avoidance_constraints(self, context: BuildContext):
+    def add_external_collision_avoidance_constraints(
+        self, context: MotionStatechartContext
+    ):
         robot: AbstractRobot
         # thresholds = god_map.collision_scene.matrix_manager.external_thresholds
         for robot in context.world.get_semantic_annotations_by_type(AbstractRobot):
@@ -464,7 +466,9 @@ class CollisionAvoidance(Goal):
 
         # get_middleware().loginfo(f'Adding {num_constrains} external collision avoidance constraints.')
 
-    def add_self_collision_avoidance_constraints(self, context: BuildContext):
+    def add_self_collision_avoidance_constraints(
+        self, context: MotionStatechartContext
+    ):
         counter: Dict[Tuple[Body, Body], float] = defaultdict(float)
         num_constr = 0
         robot: AbstractRobot

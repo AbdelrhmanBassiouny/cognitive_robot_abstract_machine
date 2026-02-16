@@ -58,50 +58,40 @@ class TestExternalCollisionExpressionManager:
         collision_manager.update_collision_matrix()
         collisions = collision_manager.compute_collisions()
 
+        group = external_collisions.get_collision_group(robot.root)
+
         # test point on a
-        point1 = external_collisions.get_group_a_P_point_on_a_symbol(robot.root, 0)
+        point1 = external_collisions.get_group_a_P_point_on_a_symbol(group, 0)
         assert np.allclose(point1.evaluate(), np.array([0.0, 0.05, 0.499, 1.0]))
-        point2 = external_collisions.get_group_a_P_point_on_a_symbol(robot.root, 1)
+        point2 = external_collisions.get_group_a_P_point_on_a_symbol(group, 1)
         assert np.allclose(
             point2.evaluate(), np.array([0.05, 0.0, 0.499, 1.0]), atol=1e-4
         )
 
         # test contact normal
-        contact_normal1 = external_collisions.get_root_V_contact_normal_symbol(
-            robot.root, 0
-        )
+        contact_normal1 = external_collisions.get_root_V_contact_normal_symbol(group, 0)
         assert np.allclose(contact_normal1.evaluate(), np.array([0.0, -1.0, 0.0, 0.0]))
-        contact_normal2 = external_collisions.get_root_V_contact_normal_symbol(
-            robot.root, 1
-        )
+        contact_normal2 = external_collisions.get_root_V_contact_normal_symbol(group, 1)
         assert np.allclose(
             contact_normal2.evaluate(), np.array([-1, 0.0, 0.0, 0.0]), atol=1e-4
         )
 
         # test buffer distance
-        buffer_distance1 = external_collisions.get_buffer_distance_symbol(robot.root, 0)
+        buffer_distance1 = external_collisions.get_buffer_distance_symbol(group, 0)
         assert np.allclose(buffer_distance1.evaluate()[0], 15)
-        buffer_distance2 = external_collisions.get_buffer_distance_symbol(robot.root, 1)
+        buffer_distance2 = external_collisions.get_buffer_distance_symbol(group, 1)
         assert np.allclose(buffer_distance2.evaluate()[0], 10)
 
         # test contact distance
-        contact_distance1 = external_collisions.get_contact_distance_symbol(
-            robot.root, 0
-        )
+        contact_distance1 = external_collisions.get_contact_distance_symbol(group, 0)
         assert np.allclose(contact_distance1.evaluate()[0], 0.2)
-        contact_distance2 = external_collisions.get_contact_distance_symbol(
-            robot.root, 1
-        )
+        contact_distance2 = external_collisions.get_contact_distance_symbol(group, 1)
         assert np.allclose(contact_distance2.evaluate()[0], 0.7)
 
         # test violated distance
-        violated_distance1 = external_collisions.get_violated_distance_symbol(
-            robot.root, 0
-        )
+        violated_distance1 = external_collisions.get_violated_distance_symbol(group, 0)
         assert np.allclose(violated_distance1.evaluate()[0], 0.23)
-        violated_distance2 = external_collisions.get_violated_distance_symbol(
-            robot.root, 1
-        )
+        violated_distance2 = external_collisions.get_violated_distance_symbol(group, 1)
         assert np.allclose(violated_distance2.evaluate()[0], 0.0)
 
         # test full expr
@@ -116,21 +106,17 @@ class TestExternalCollisionExpressionManager:
 
         # test specific expression
         group_a_P_point_on_a = external_collisions.get_group_a_P_point_on_a_symbol(
-            robot.root, 0
+            group, 0
         )
         root_b_V_contact_normal = external_collisions.get_root_V_contact_normal_symbol(
-            robot.root, 0
+            group, 0
         )
         expr = root_b_V_contact_normal @ group_a_P_point_on_a.to_vector3()
         compiled_expression = expr.compile(VariableParameters.from_lists(variables))
         result = compiled_expression(external_collisions.float_variable_data.data)
         expected = (
-            external_collisions.get_root_V_contact_normal_symbol(
-                robot.root, 0
-            ).evaluate()
-            @ external_collisions.get_group_a_P_point_on_a_symbol(
-                robot.root, 0
-            ).evaluate()
+            external_collisions.get_root_V_contact_normal_symbol(group, 0).evaluate()
+            @ external_collisions.get_group_a_P_point_on_a_symbol(group, 0).evaluate()
         )
         assert np.allclose(result, expected)
 
@@ -162,7 +148,7 @@ class TestSelfCollisionExpressionManager:
         collision_manager.add_collision_consumer(
             self_collisions := SelfCollisionVariableManager(float_variable_data)
         )
-        self_collisions.register_body_combination(l_tip, r_tip)
+        self_collisions.register_groups_of_body_combination(l_tip, r_tip)
         assert len(self_collisions.registered_group_combinations) == 1
         group_a, group_b = list(self_collisions.registered_group_combinations.keys())[0]
 

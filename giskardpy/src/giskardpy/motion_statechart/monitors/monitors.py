@@ -5,7 +5,7 @@ from abc import ABC
 from dataclasses import field
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import (
     MotionStatechartNode,
@@ -39,7 +39,7 @@ class LocalMinimumReached(MotionStatechartNode):
     joint_convergence_threshold: float = 0.01
     windows_size: int = 1
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
 
         ref = []

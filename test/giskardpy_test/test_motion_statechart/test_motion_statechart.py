@@ -11,7 +11,7 @@ import pytest
 from giskardpy.data_types.exceptions import DuplicateNameException
 from giskardpy.executor import Executor, SimulationPacer
 from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import (
     LifeCycleValues,
     ObservationStateValues,
@@ -1799,7 +1799,7 @@ class TestCartesianTasks:
         msc.add_node(cart_straight)
         msc.add_node(EndMotion.when_true(cart_straight))
 
-        kin_sim = Executor(BuildContext(world=pr2_world_state_reset))
+        kin_sim = Executor(MotionStatechartContext(world=pr2_world_state_reset))
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
 
@@ -1849,7 +1849,7 @@ class TestDiffDriveBaseGoal:
         msc.add_node(goal := DiffDriveBaseGoal(goal_pose=goal_pose))
         msc.add_node(EndMotion.when_true(goal))
 
-        kin_sim = Executor(BuildContext(world=cylinder_bot_diff_world))
+        kin_sim = Executor(MotionStatechartContext(world=cylinder_bot_diff_world))
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
 

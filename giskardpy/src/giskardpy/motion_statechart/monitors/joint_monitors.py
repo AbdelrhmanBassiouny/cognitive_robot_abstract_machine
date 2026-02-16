@@ -1,7 +1,7 @@
 from dataclasses import field, dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
@@ -15,7 +15,7 @@ class JointPositionReached(MotionStatechartNode):
     position: float = field(kw_only=True)
     threshold: float = field(default=0.01, kw_only=True)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         current = self.connection.dof.variables.position
         if (
             isinstance(self.connection, RevoluteConnection)

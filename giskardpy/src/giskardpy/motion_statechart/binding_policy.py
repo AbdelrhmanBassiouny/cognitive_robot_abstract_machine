@@ -3,7 +3,7 @@ from enum import Enum
 
 import numpy as np
 
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.variable_managers.auxiliary_variable_manager import (
     AuxiliaryVariableManager,
 )
@@ -39,7 +39,7 @@ class ForwardKinematicsBinding:
     ..warning:: Ensure to keep a reference to this instance in the MotionStatechartNode.
     """
 
-    build_context: InitVar[BuildContext]
+    build_context: InitVar[MotionStatechartContext]
     """Current context of the build() of a MotionStatechartNode."""
     name: PrefixedName
     """
@@ -58,7 +58,7 @@ class ForwardKinematicsBinding:
     )
     """The TransformationMatrix root_T_tip, represented using auxiliary variables."""
 
-    def __post_init__(self, build_context: BuildContext):
+    def __post_init__(self, build_context: MotionStatechartContext):
         self._root_T_tip_expr = HomogeneousTransformationMatrix.create_with_variables(
             str(self.name)
         )
@@ -75,7 +75,7 @@ class ForwardKinematicsBinding:
     def root_T_tip(self):
         return self._root_T_tip_expr
 
-    def bind(self, context: BuildContext):
+    def bind(self, context: MotionStatechartContext):
         """
         Will update root_T_tip to the current state of the kinematic chain.
         Call during on_start() etc. of a MotionStatechartNode.

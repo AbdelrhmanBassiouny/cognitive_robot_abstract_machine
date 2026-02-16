@@ -11,11 +11,8 @@ from semantic_digital_twin.world_description.world_state_trajectory_plotter impo
     WorldStateTrajectoryPlotter,
 )
 from .data_types.exceptions import NoQPControllerConfigException
-from .motion_statechart.context import BuildContext, ExecutionContext
+from .motion_statechart.context import MotionStatechartContext
 from .motion_statechart.motion_statechart import MotionStatechart
-from .motion_statechart.variable_managers.auxiliary_variable_manager import (
-    AuxiliaryVariableManager,
-)
 from .qp.exceptions import EmptyProblemException
 from .qp.qp_controller import QPController
 from .qp.qp_controller_config import QPControllerConfig
@@ -88,7 +85,7 @@ class Executor:
     scenes, and control cycles for the robot's operations.
     """
 
-    context: BuildContext
+    context: MotionStatechartContext
 
     tmp_folder: str = field(default="/tmp/")
     """Path to safe temporary files."""
@@ -127,7 +124,7 @@ class Executor:
     def create_from_parts(cls, world: World, pacer: Pacer | None = None):
         if pacer is None:
             pacer = SimulationPacer()
-        return cls(BuildContext(world=world), pacer=pacer)
+        return cls(MotionStatechartContext(world=world), pacer=pacer)
 
     @property
     def time(self) -> float:
@@ -160,10 +157,6 @@ class Executor:
             self.context.world.state, time=self.time
         )
         self.context.collision_manager.update_collision_matrix()
-
-    @property
-    def execution_context(self) -> ExecutionContext:
-        return self.context
 
     def tick(self):
         self.control_cycles += 1

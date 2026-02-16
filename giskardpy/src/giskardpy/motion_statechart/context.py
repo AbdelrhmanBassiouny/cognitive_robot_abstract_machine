@@ -12,8 +12,7 @@ from .variable_managers.auxiliary_variable_manager import AuxiliaryVariableManag
 from krrood.symbolic_math.float_variable_data import FloatVariableData
 from ..qp.qp_controller_config import QPControllerConfig
 
-if TYPE_CHECKING:
-    from .exceptions import MissingContextExtensionError
+from .exceptions import MissingContextExtensionError
 
 
 @dataclass
@@ -28,7 +27,7 @@ GenericContextExtension = TypeVar("GenericContextExtension", bound=ContextExtens
 
 
 @dataclass
-class BuildContext:
+class MotionStatechartContext:
     """
     Context used during the build phase of a MotionStatechartNode.
     """
@@ -86,15 +85,5 @@ class BuildContext:
         return cls(
             world=World(),
             float_variable_data=None,
-            auxiliary_variable_manager=None,
             qp_controller_config=None,
-            control_cycle_variable=None,
         )
-
-
-@dataclass
-class ExecutionContext:
-    world: World
-    self_collision_data_data: np.ndarray
-    auxiliar_variables_data: np.ndarray
-    control_cycle_counter: int

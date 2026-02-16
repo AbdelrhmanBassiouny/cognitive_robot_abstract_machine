@@ -3,7 +3,7 @@ from __future__ import division
 from dataclasses import dataclass, field
 from typing import Optional
 
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.graph_node import Goal, NodeArtifacts
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
@@ -36,7 +36,7 @@ class Open(Goal):
 
     weight: float = field(default=DefaultWeights.WEIGHT_ABOVE_CA, kw_only=True)
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         self.connection = self.environment_link.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
@@ -68,7 +68,7 @@ class Open(Goal):
             ]
         )
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
             observation=trinary_logic_and(
                 *[node.observation_variable for node in self.nodes]
@@ -96,7 +96,7 @@ class Close(Open):
 
     weight: float = field(default=DefaultWeights.WEIGHT_ABOVE_CA, kw_only=True)
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         self.connection = self.environment_link.get_first_parent_connection_of_type(
             ActiveConnection1DOF
         )
@@ -128,7 +128,7 @@ class Close(Open):
             ]
         )
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
             observation=trinary_logic_and(
                 *[node.observation_variable for node in self.nodes]

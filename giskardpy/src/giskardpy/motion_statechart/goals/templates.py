@@ -5,7 +5,7 @@ from typing import List
 
 from typing_extensions import Optional
 
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.graph_node import (
     Goal,
     MotionStatechartNode,
@@ -23,7 +23,7 @@ class Sequence(Goal):
 
     nodes: List[MotionStatechartNode] = field(default_factory=list, init=True)
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         last_node: Optional[MotionStatechartNode] = None
         for i, node in enumerate(self.nodes):
             self.add_node(node)
@@ -32,7 +32,7 @@ class Sequence(Goal):
             node.end_condition = node.observation_variable
             last_node = node
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=self.nodes[-1].observation_variable)
 
 
@@ -45,11 +45,11 @@ class Parallel(Goal):
 
     nodes: List[MotionStatechartNode] = field(default_factory=list, init=True)
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         for node in self.nodes:
             self.add_node(node)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
             observation=trinary_logic_and(
                 *[node.observation_variable for node in self.nodes]

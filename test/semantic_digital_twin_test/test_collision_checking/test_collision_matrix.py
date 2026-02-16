@@ -50,6 +50,7 @@ class TestCollisionRules:
         head_pan_link = pr2_world_state_reset.get_body_by_name("head_pan_link")
 
         pr2 = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
+
         collision_manager = CollisionManager(
             pr2_world_state_reset,
             collision_detector=BulletCollisionDetector(pr2_world_state_reset),
@@ -89,8 +90,8 @@ class TestCollisionRules:
         override_rule = AvoidAllCollisions(
             buffer_zone_distance=0.5, violated_distance=0.1, world=pr2_world_state_reset
         )
-        collision_manager.ignore_collision_rules.append(override_rule)
-
+        collision_manager.add_temporary_rule(override_rule)
+        collision_manager.update_collision_matrix()
         assert collision_manager.get_buffer_zone_distance(base_link, env) == 0.5
         assert collision_manager.get_violated_distance(base_link, env) == 0.1
 

@@ -8,7 +8,7 @@ import numpy as np
 from mpl_toolkits.axes_grid1 import make_axes_locatable, axes_size
 
 from .styles import LiftCycleStateToColor, ObservationStateToColor
-from ..context import BuildContext
+from ..context import MotionStatechartContext
 from ..data_types import LifeCycleValues, ObservationStateValues
 from ..graph_node import Goal, MotionStatechartNode
 from ...middleware import get_middleware
@@ -36,7 +36,7 @@ class HistoryGanttChartPlotter:
 
     motion_statechart: MotionStatechart
     """Plots history of this motion statechart."""
-    context: BuildContext | None = None
+    context: MotionStatechartContext | None = None
     """
     Optional context to use for time conversion. 
     If not provided, control cycles are used instead of second.

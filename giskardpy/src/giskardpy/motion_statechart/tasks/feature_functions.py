@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 
 import krrood.symbolic_math.symbolic_math as sm
 
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import DefaultWeights
 from giskardpy.motion_statechart.graph_node import Task, NodeArtifacts, DebugExpression
 from semantic_digital_twin.spatial_types import Point3, Vector3
@@ -54,7 +54,7 @@ class FeatureFunctionGoal(Task, ABC):
         """
         raise NotImplementedError
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         self.controlled_feature, self.reference_feature = (
             self.get_controlled_and_reference_features()
         )
@@ -154,7 +154,7 @@ class AlignPerpendicular(FeatureFunctionGoal):
     def get_controlled_and_reference_features(self):
         return self.tip_normal, self.reference_normal
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = super().build(context)
 
         expr = self.root_V_reference_feature @ self.root_V_controlled_feature
@@ -299,7 +299,7 @@ class AngleGoal(FeatureFunctionGoal):
     def get_controlled_and_reference_features(self):
         return self.tip_vector, self.reference_vector
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = super().build(context)
 
         expr = self.root_V_reference_feature.angle_between(

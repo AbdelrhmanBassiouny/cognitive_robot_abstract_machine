@@ -5,7 +5,7 @@ from typing import Optional, Type, Tuple
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.exceptions import NodeInitializationError
-from giskardpy.motion_statechart.context import BuildContext, ExecutionContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.graph_node import (
     MotionStatechartNode,
     NodeArtifacts,
@@ -29,10 +29,10 @@ class SetSeedConfiguration(MotionStatechartNode):
 
     seed_configuration: JointState = field(kw_only=True)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         # TODO does notify state change too often
         for connection, value in self.seed_configuration.items():
             connection.position = value
@@ -44,7 +44,7 @@ class SetOdometry(MotionStatechartNode):
     _odom_joints: Tuple[Type[Connection], ...] = field(default=(OmniDrive,), init=False)
     odom_connection: Optional[OmniDrive] = field(default=None, kw_only=True)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         if self.odom_connection is None:
             drive_connections = context.world.get_connections_by_type(self._odom_joints)
             if len(drive_connections) == 0:
@@ -60,7 +60,7 @@ class SetOdometry(MotionStatechartNode):
                 )
         return NodeArtifacts(observation=sm.Scalar.const_true())
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         parent_T_pose_ref = HomogeneousTransformationMatrix(
             context.world.compute_forward_kinematics_np(
                 self.odom_connection.parent, self.base_pose.reference_frame

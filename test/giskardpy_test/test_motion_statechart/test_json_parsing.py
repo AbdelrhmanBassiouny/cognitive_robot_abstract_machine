@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from giskardpy.executor import Executor
-from giskardpy.motion_statechart.context import BuildContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import (
     LifeCycleValues,
     ObservationStateValues,
@@ -63,26 +63,6 @@ def test_TrueMonitor():
     new_json_data = json.loads(json_str)
     node_copy = ConstTrueNode.from_json(new_json_data)
     assert node_copy.name == node.name
-
-
-def test_CollisionRequest(pr2_world_setup: World):
-    robot = pr2_world_setup.get_semantic_annotations_by_type(AbstractRobot)[0]
-    collision_request = CollisionRule(
-        type_=CollisionAvoidanceTypes.AVOID_COLLISION,
-        distance=0.2,
-        body_group1=robot.bodies,
-        body_group2=robot.bodies,
-    )
-    json_data = collision_request.to_json()
-    json_str = json.dumps(json_data)
-    new_json_data = json.loads(json_str)
-    tracker = WorldEntityWithIDKwargsTracker.from_world(pr2_world_setup)
-    kwargs = tracker.create_kwargs()
-    collision_request_copy = CollisionRule.from_json(new_json_data, **kwargs)
-    assert collision_request_copy.type_ == collision_request.type_
-    assert collision_request_copy.distance == collision_request.distance
-    assert collision_request_copy.body_group_a == collision_request.body_group1
-    assert collision_request_copy.body_group_b == collision_request.body_group2
 
 
 def test_trinary_transition():
@@ -149,7 +129,7 @@ def test_start_condition(mini_world):
     new_json_data = json.loads(json_str)
     msc_copy = MotionStatechart.from_json(new_json_data, world=mini_world)
 
-    kin_sim = Executor(world=mini_world)
+    kin_sim = Executor(context=MotionStatechartContext(world=mini_world))
     kin_sim.compile(motion_statechart=msc_copy)
     for index, node in enumerate(msc.nodes):
         assert node.name == msc_copy.nodes[index].name
@@ -211,8 +191,10 @@ def test_executing_json_parsed_statechart():
     )
 
     kin_sim = Executor(
-        world=world,
-        controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        context=MotionStatechartContext(
+            world=world,
+            qp_controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        )
     )
     kin_sim.compile(motion_statechart=msc_copy)
 
@@ -274,8 +256,10 @@ def test_cart_goal_simple(pr2_world_setup: World):
     msc_copy = MotionStatechart.from_json(new_json_data, **kwargs)
 
     kin_sim = Executor(
-        world=pr2_world_setup,
-        controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        context=MotionStatechartContext(
+            world=pr2_world_setup,
+            qp_controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        )
     )
 
     kin_sim.compile(motion_statechart=msc_copy)
@@ -304,7 +288,7 @@ def test_compressed_copy_can_be_plotted(pr2_world_setup: World):
     end.start_condition = cart_goal.observation_variable
     msc.add_node(CancelMotion.when_true(cart_goal))
 
-    msc._expand_goals(BuildContext.empty())
+    msc._expand_goals(MotionStatechartContext.empty())
     json_data = msc.create_structure_copy().to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
@@ -328,7 +312,7 @@ def test_nested_goals():
     )
     msc.add_node(EndMotion.when_true(sequence))
 
-    msc._expand_goals(BuildContext.empty())
+    msc._expand_goals(MotionStatechartContext.empty())
     json_data = msc.create_structure_copy().to_json()
     json_str = json.dumps(json_data)
     new_json_data = json.loads(json_str)
@@ -357,7 +341,7 @@ def test_cancel_motion():
     msc_copy = MotionStatechart.from_json(new_json_data)
 
     kin_sim = Executor(
-        world=World(),
+        context=MotionStatechartContext(world=World()),
     )
 
     kin_sim.compile(motion_statechart=msc_copy)
@@ -393,8 +377,10 @@ def test_unreachable_cart_goal(pr2_world_setup):
     msc_copy = MotionStatechart.from_json(new_json_data, **kwargs)
 
     kin_sim = Executor(
-        world=pr2_world_setup,
-        controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        context=MotionStatechartContext(
+            world=pr2_world_setup,
+            qp_controller_config=QPControllerConfig.create_with_simulation_defaults(),
+        )
     )
 
     kin_sim.compile(motion_statechart=msc_copy)
