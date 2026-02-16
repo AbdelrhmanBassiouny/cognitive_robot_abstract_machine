@@ -28,7 +28,7 @@ class ConclusionSelector(LogicalOperator, ABC):
 
 
 @dataclass(eq=False)
-class ExceptIf(ConclusionSelector, BinaryExpression):
+class ExceptIf(LogicalBinaryOperator, ConclusionSelector):
     """
     Conditional branch that yields left unless the right side produces values.
 
