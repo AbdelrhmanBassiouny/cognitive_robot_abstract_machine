@@ -5,6 +5,8 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
+import numpy as np
+
 from random_events.product_algebra import SimpleEvent
 from random_events.set import Set
 from random_events.variable import Continuous, Integer, Symbolic, Variable
@@ -320,3 +322,12 @@ class Parameterizer:
         :return: A fully factorized probabilistic circuit.
         """
         return self.parameterization.create_fully_factorized_distribution()
+
+    def construct_object_from_sample(self, sample: np.ndarray) -> Any:
+        """
+        Construct an object from a sample.
+        The sample has to be constructed from a circuit that matches the variables of this parameterizer.
+
+        :param sample: The sample to construct an object from.
+        :return: The constructed object.
+        """
