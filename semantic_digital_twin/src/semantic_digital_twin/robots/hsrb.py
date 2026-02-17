@@ -20,7 +20,6 @@ from .robot_mixins import HasNeck, HasArms
 from ..collision_checking.collision_matrix import MaxAvoidedCollisionsOverride
 from ..collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
-    AvoidAllCollisions,
     AvoidExternalCollisions,
     AvoidSelfCollisions,
 )
