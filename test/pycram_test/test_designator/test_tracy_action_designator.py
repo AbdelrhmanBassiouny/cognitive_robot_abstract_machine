@@ -19,7 +19,7 @@ from pycram.robot_plans import (
     GraspingActionDescription,
     PickUpActionDescription,
     PlaceActionDescription,
-    SetGripperActionDescription,
+    SetGripperActionDescription, SimpleMoveTCPActionDescription,
 )
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
@@ -268,3 +268,82 @@ def test_place_multi(mutable_tracy_block_world):
 
     assert len(plan.nodes) == len(plan.all_nodes)
     assert len(plan.edges) == len(plan.all_nodes) - 1
+
+def _make_sine_scan_poses(
+    anchor: PoseStamped,
+    lanes: int = 6,
+    lane_spacing: float = 0.03,
+    y_span: float = 0.18,
+    amplitude: float = 0.005,
+    wiggles: float = 1.0,
+    points_per_lane: int = 16,
+    lane_axis: str = "z",
+) -> list[PoseStamped]:
+    x0 = anchor.pose.position.x
+    y0 = anchor.pose.position.y
+    z0 = anchor.pose.position.z
+    q = anchor.pose.orientation
+
+    y_min = y0 - 0.5 * y_span
+    y_max = y0 + 0.5 * y_span
+    poses: list[PoseStamped] = []
+
+    if lane_axis not in ("x", "z"):
+        raise ValueError(f"lane_axis must be 'x' or 'z', got: {lane_axis}")
+
+    for i in range(lanes):
+        yc = np.linspace(y_min, y_max, points_per_lane)
+        if i % 2 == 1:
+            yc = yc[::-1]
+
+        phase = 2.0 * np.pi * wiggles * (yc - y_min) / max(y_span, 1e-9)
+        wiggle = amplitude * np.sin(phase)
+        if lane_axis == "x":
+            lane_center = x0 + i * lane_spacing
+            xc = lane_center + wiggle
+            zc = np.full_like(yc, z0, dtype=float)
+        else:
+            lane_center = z0 + i * lane_spacing
+            zc = lane_center + wiggle
+            xc = np.full_like(yc, x0, dtype=float)
+
+        for x, y, z in zip(xc, yc, zc):
+            poses.append(
+                PoseStamped.from_list(
+                    position=[float(x), float(y), float(z)],
+                    orientation=[q.x, q.y, q.z, q.w],
+                    frame=anchor.frame_id,
+                )
+            )
+    return poses
+
+def test_simple_move_tcp_follows_sine_waypoints(immutable_tracy_block_world):
+    world, view, context = immutable_tracy_block_world
+    right_arm = ViewManager.get_arm_view(Arms.RIGHT, view)
+    anchor = PoseStamped.from_list([0.85, -0.25, 0.95], frame=world.root)
+    anchor_T = anchor.to_spatial_type()
+    offset_T = HomogeneousTransformationMatrix.from_xyz_axis_angle(
+        z=-0.03,
+        axis=(0, 1, 0),
+        angle=np.pi / 2,
+        reference_frame=world.root,
+    )
+    target_pose = PoseStamped.from_spatial_type(anchor_T @ offset_T)
+    waypoints = _make_sine_scan_poses(target_pose, lane_axis="z")
+
+    plan = SequentialPlan(
+        context,
+        SimpleMoveTCPActionDescription(target_locations=waypoints, arm=Arms.RIGHT),
+    )
+    with simulated_robot:
+        plan.perform()
+
+    tip_pose = right_arm.manipulator.tool_frame.global_pose
+    tip_position = tip_pose.to_position().to_np()
+    tip_orientation = tip_pose.to_quaternion().to_np()
+    expected = waypoints[-1]
+
+    assert tip_position[:3] == pytest.approx(expected.position.to_list(), abs=0.03)
+    compare_orientations(
+        tip_orientation, expected.orientation.to_numpy(), decimal=1
+    )

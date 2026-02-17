@@ -12,14 +12,14 @@ from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
 )
-from ....datastructures.enums import AxisIdentifier, Arms
+from ....datastructures.enums import AxisIdentifier, Arms, MovementType
 from ....datastructures.partial_designator import PartialDesignator
-from ....datastructures.pose import Vector3Stamped
+from ....datastructures.pose import Vector3Stamped, PoseStamped
 from ....failures import TorsoGoalNotReached, ConfigurationNotReached
 from ....language import SequentialPlan
 from ....view_manager import ViewManager
 from ....robot_plans.actions.base import ActionDescription
-from ....robot_plans.motions.gripper import MoveGripperMotion
+from ....robot_plans.motions.gripper import MoveGripperMotion, MoveTCPMotion, MoveTCPWaypointsMotion
 from ....robot_plans.motions.robot_body import MoveJointsMotion
 from ....validation.goal_validator import create_multiple_joint_goal_validator
 
@@ -303,7 +303,80 @@ class CarryAction(ActionDescription):
         )
 
 
+@dataclass
+class SimpleMoveTCPAction(ActionDescription):
+    """
+    Represents an action to move a robotic arm's TCP (Tool Center Point) to a target
+    location or through a series of waypoints.
+    """
+
+    target_location: Union[Iterable[PoseStamped], PoseStamped]
+    """
+    Target location(s) for the TCP motion. Can be a single PoseStamped object or an iterable of PoseStamped objects.
+    """
+
+    arm: Arms
+    """
+    Entry from the enum for which arm should be parked.
+    """
+
+    def execute(self) -> None:
+        if isinstance(self.target_location, PoseStamped):
+            motion = MoveTCPMotion(
+                self.target_location,
+                self.arm,
+                allow_gripper_collision=True,
+                movement_type=MovementType.CARTESIAN,
+            )
+        else:
+            motion = MoveTCPWaypointsMotion(
+                list(self.target_location),
+                self.arm,
+                allow_gripper_collision=True,
+            )
+
+        SequentialPlan(self.context, motion).perform()
+
+    def validate(
+        self,
+        result: Optional[Any] = None,
+        max_wait_time: timedelta = timedelta(seconds=2),
+    ):
+        pass
+
+    @classmethod
+    def description(
+        cls,
+        target_location: Union[Iterable[PoseStamped], PoseStamped] = None,
+        arm: Union[Iterable[Arms], Arms] = None,
+        target_locations: Union[Iterable[PoseStamped], PoseStamped] = None,
+    ) -> PartialDesignator[Type[SimpleMoveTCPAction]]:
+        resolved_target = (
+            target_location if target_location is not None else target_locations
+        )
+        if resolved_target is None:
+            raise ValueError(
+                "Provide either target_location or target_locations."
+            )
+        if arm is None:
+            raise ValueError("Provide arm.")
+
+        if isinstance(resolved_target, PoseStamped):
+            target_for_designator = resolved_target
+        else:
+            resolved_target_list = list(resolved_target)
+            if all(isinstance(pose, PoseStamped) for pose in resolved_target_list):
+                target_for_designator = [resolved_target_list]
+            else:
+                target_for_designator = resolved_target
+
+        return PartialDesignator(
+            cls, target_location=target_for_designator, arm=arm
+        )
+
+
 MoveTorsoActionDescription = MoveTorsoAction.description
 SetGripperActionDescription = SetGripperAction.description
 ParkArmsActionDescription = ParkArmsAction.description
 CarryActionDescription = CarryAction.description
+SimpleMoveTCPActionDescription = SimpleMoveTCPAction.description
