@@ -1866,14 +1866,6 @@ class World(HasSimulatorProperties):
         return self._model_manager
 
     @cached_property
-    def collision_detector(self) -> CollisionDetector:
-        """
-        A collision detector for the world.
-        :return: A collision detector for the world.
-        """
-        return TrimeshCollisionDetector(self)
-
-    @cached_property
     def ray_tracer(self) -> RayTracer:
         """
         A ray tracer for the world.

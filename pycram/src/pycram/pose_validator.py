@@ -159,9 +159,7 @@ def pose_sequence_reachability_validator(
     return True
 
 
-def collision_check(
-    robot: AbstractRobot, allowed_collision: List[Body], world: World
-) -> List[ClosestPoints]:
+def collision_check(world: World) -> List[ClosestPoints]:
     """
     This method checks if a given robot collides with any object within the world
     which it is not allowed to collide with.
@@ -175,41 +173,6 @@ def collision_check(
     :param world: The world in which collision should be checked
     :raises: RobotInCollision if the robot collides with an object it is not allowed to collide with.
     """
-    collision_matrix = create_collision_matrix(allowed_collision, world, robot)
-
-    return world.collision_manager.collision_detector.check_collisions(
-        collision_matrix
-    ).contacts
-
-
-def create_collision_matrix(
-    ignore_collision_with: List[Body], world: World, robot: AbstractRobot
-) -> CollisionMatrix:
-    """
-    Creates a collision matrix that should be performed
-
-    :param ignore_collision_with: List of objects for which collision should be ignored
-    :param world: The world in which the collision check should be performed
-    :param robot: The robot for which the collision check should be performed
-    :return: A collision matrix that should be performed
-    """
-
-    collision_matrix = CollisionMatrix()
-    avoid_external = AvoidExternalCollisions(
-        bodies=robot.bodies_with_collision, world=world, buffer_zone_distance=0.01
-    )
-    avoid_external.apply_to_collision_matrix(collision_matrix)
-
-    attached_bodies = set(robot.bodies) - set(
-        world.get_kinematic_structure_entities_of_branch(robot.root)
-    )
-    allowed_collision_with = ignore_collision_with + list(attached_bodies)
-
-    if allowed_collision_with:
-        allow_rule = AllowCollisionBetweenGroups(
-            body_group_a=robot.bodies_with_collision,
-            body_group_b=allowed_collision_with,
-        )
-        allow_rule.apply_to_collision_matrix(collision_matrix)
-
-    return collision_matrix
+    world.collision_manager.clear_temporary_rules()
+    world.collision_manager.update_collision_matrix(buffer=0.0)
+    return world.collision_manager.compute_collisions().contacts

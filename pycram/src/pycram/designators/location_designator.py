@@ -77,8 +77,8 @@ from ..pose_validator import (
     collision_check,
     pose_sequence_reachability_validator,
 )
-from ..view_manager import ViewManager
 from ..utils import link_pose_for_joint_config
+from ..view_manager import ViewManager
 
 logger = logging.getLogger("pycram")
 
@@ -289,8 +289,6 @@ class CostmapLocation(LocationDesignatorDescription):
                 )
 
                 collisions = collision_check(
-                    test_robot,
-                    allowed_collision=params_box.ignore_collision_with,
                     world=test_world,
                 )
 
@@ -550,7 +548,7 @@ class AccessingLocation(LocationDesignatorDescription):
                     pose_candidate.to_spatial_type()
                 )
                 try:
-                    collision_check(test_robot, [], test_world)
+                    collision_check(test_world)
                 except RobotInCollision:
                     continue
 
@@ -1095,7 +1093,7 @@ class ProbabilisticSemanticLocation(LocationDesignatorDescription):
                 # for example with the arms
                 test_robot.root.parent_connection.origin = nav_pose.to_spatial_type()
                 try:
-                    collision_check(test_robot, [], test_world)
+                    collision_check(test_world)
                 except RobotInCollision:
                     continue
 
@@ -1478,9 +1476,7 @@ class ProbabilisticCostmapLocation(LocationDesignatorDescription):
                 )
 
                 try:
-                    collision_check(
-                        test_robot, params_box.ignore_collision_with, self.test_world
-                    )
+                    collision_check(self.test_world)
                 except RobotInCollision:
                     continue
 
