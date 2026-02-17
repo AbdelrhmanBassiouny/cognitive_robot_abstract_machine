@@ -9,7 +9,7 @@ from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
 from inspect import isclass
-from types import NoneType, GenericAlias
+from types import NoneType
 from copy import copy
 from typing import Generic
 
@@ -201,12 +201,7 @@ class WrappedField:
 
     @cached_property
     def is_enum(self) -> bool:
-        if self.is_container or not inspect.isclass(self.resolved_type):
-            return False
-        if self.is_optional:
-            return issubclass(self.contained_type, enum.Enum)
-
-        return issubclass(self.resolved_type, enum.Enum)
+        return issubclass(self.type_endpoint, enum.Enum)
 
     @cached_property
     def is_one_to_one_relationship(self) -> bool:
