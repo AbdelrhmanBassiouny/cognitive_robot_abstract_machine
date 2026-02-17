@@ -19,6 +19,7 @@ from pycram.datastructures.grasp import GraspDescription
 from pycram.datastructures.pose import PoseStamped
 from pycram.language import SequentialPlan
 from pycram.motion_executor import simulated_robot
+from pycram.testing import _make_sine_scan_poses
 from pycram.view_manager import ViewManager
 from pycram.robot_plans import (
     MoveTorsoAction,
@@ -132,55 +133,6 @@ def mutable_multiple_robot_apartment(setup_multi_robot_apartment):
     copy_world = deepcopy(world)
     copy_view = view.from_world(copy_world)
     return copy_world, copy_view, Context(copy_world, copy_view)
-
-
-def _make_sine_scan_poses(
-    anchor: PoseStamped,
-    lanes: int = 3,
-    lane_spacing: float = 0.03,
-    y_span: float = 0.12,
-    amplitude: float = 0.004,
-    wiggles: float = 1.0,
-    points_per_lane: int = 6,
-    lane_axis: str = "z",
-) -> list[PoseStamped]:
-    x0 = anchor.pose.position.x
-    y0 = anchor.pose.position.y
-    z0 = anchor.pose.position.z
-    q = anchor.pose.orientation
-
-    y_min = y0 - 0.5 * y_span
-    y_max = y0 + 0.5 * y_span
-    poses: list[PoseStamped] = []
-
-    if lane_axis not in ("x", "z"):
-        raise ValueError(f"lane_axis must be 'x' or 'z', got: {lane_axis}")
-
-    for i in range(lanes):
-        yc = np.linspace(y_min, y_max, points_per_lane)
-        if i % 2 == 1:
-            yc = yc[::-1]
-
-        phase = 2.0 * np.pi * wiggles * (yc - y_min) / max(y_span, 1e-9)
-        wiggle = amplitude * np.sin(phase)
-        if lane_axis == "x":
-            lane_center = x0 + i * lane_spacing
-            xc = lane_center + wiggle
-            zc = np.full_like(yc, z0, dtype=float)
-        else:
-            lane_center = z0 + i * lane_spacing
-            zc = lane_center + wiggle
-            xc = np.full_like(yc, x0, dtype=float)
-
-        for x, y, z in zip(xc, yc, zc):
-            poses.append(
-                PoseStamped.from_list(
-                    position=[float(x), float(y), float(z)],
-                    orientation=[q.x, q.y, q.z, q.w],
-                    frame=anchor.frame_id,
-                )
-            )
-    return poses
 
 
 def test_move_torso_multi(immutable_multiple_robot_apartment):
