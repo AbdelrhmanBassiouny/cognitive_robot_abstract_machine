@@ -7,6 +7,8 @@ from random_events.variable import Variable
 
 from ..entity_query_language.symbolic import Index, Attribute
 
+AttributeAccessLike = Index | Attribute
+
 
 @dataclass
 class ObjectAccessVariable:
@@ -19,13 +21,13 @@ class ObjectAccessVariable:
     The random events variable used to represent the object field.
     """
 
-    attribute: Index | Attribute
+    attribute: AttributeAccessLike
     """
     The list of access paths used to access the object field.
     """
 
     @property
-    def access_path(self) -> List[Index | Attribute]:
+    def access_path(self) -> List[AttributeAccessLike]:
         """
         :return: The access path of the variable as a list of operations.
         """

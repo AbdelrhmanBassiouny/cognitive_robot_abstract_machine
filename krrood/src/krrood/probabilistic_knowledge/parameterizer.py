@@ -18,10 +18,19 @@ from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
 )
+
+from .object_access_variable import ObjectAccessVariable, AttributeAccessLike
 from ..adapters.json_serializer import list_like_classes
 from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
-from ..ormatic.dao import DataAccessObject, get_dao_class, to_dao
+from ..entity_query_language.entity import variable_from
+from ..entity_query_language.symbolic import Index, Selectable
+from ..ormatic.dao import (
+    DataAccessObject,
+    get_dao_class,
+    to_dao,
+    ToDataAccessObjectState,
+)
 
 
 @dataclass
@@ -30,7 +39,7 @@ class Parameterization:
     A class that contains the variables and simple event resulting from parameterizing a DataAccessObject.
     """
 
-    variables: List[Variable] = field(default_factory=list)
+    variables: List[ObjectAccessVariable] = field(default_factory=list)
     """
     A list of random event variables that are being parameterized.
     """
@@ -39,10 +48,14 @@ class Parameterization:
     A SimpleEvent containing the values of the variables.
     """
 
-    def fill_missing_variables(self):
-        self.simple_event.fill_missing_variables(self.variables)
+    @property
+    def random_events_variables(self) -> List[Variable]:
+        return [v.variable for v in self.variables]
 
-    def extend_variables(self, variables: List[Variable]):
+    def fill_missing_variables(self):
+        self.simple_event.fill_missing_variables(self.random_events_variables)
+
+    def extend_variables(self, variables: List[ObjectAccessVariable]):
         """
         Update the variables by extending them with the given variables.
         """
@@ -93,29 +106,33 @@ class Parameterizer:
     Parameterization containing the variables and simple event resulting from parameterizing a DataAccessObject.
     """
 
-    def parameterize(self, object: Any, prefix: str) -> Parameterization:
+    def parameterize(self, obj: Any) -> Parameterization:
         """
         Create variables for all fields of an object.
 
-        :param object: The object to parameterize.
-        :param prefix: The prefix to use for variable names.
+        :param obj: The object to parameterize.
 
         :return: Parameterization containing the variables and simple event.
         """
-        if type(object) in list_like_classes:
-            for i, value in enumerate(object):
-                self.parameterize(value, f"{prefix}[{i}]")
-            return self.parameterization
+        if type(obj) in list_like_classes:
+            state = ToDataAccessObjectState()
+            dao = [to_dao(element, state) for element in obj]
         else:
-            dao = to_dao(object)
-            return self.parameterize_dao(dao, prefix)
+            dao = to_dao(obj)
 
-    def parameterize_dao(self, dao: DataAccessObject, prefix: str) -> Parameterization:
+        dao_variable = variable_from([dao])
+        self.parameterize_dao(dao, dao_variable)
+
+        return self.parameterization
+
+    def parameterize_dao(
+        self, dao: DataAccessObject, dao_variable: Selectable
+    ) -> Parameterization:
         """
         Create variables for all fields of a DataAccessObject.
 
         :param dao: The DataAccessObject to parameterize.
-        :param prefix: The prefix to use for variable names.
+        :param dao_variable: The EQL variable corresponding to the DataAccessObject for symbolic access.
 
         :return: A Parameterization containing the variables and simple event.
         """
@@ -123,11 +140,13 @@ class Parameterizer:
 
         for wrapped_field in WrappedClass(dao.original_class()).fields:
             for relationship in sql_alchemy_mapper.relationships:
-                self._process_relationship(relationship, wrapped_field, dao, prefix)
+                self._process_relationship(
+                    relationship, wrapped_field, dao, dao_variable
+                )
 
             for column in sql_alchemy_mapper.columns:
                 variables, attribute_values = self._process_column(
-                    column, wrapped_field, dao, prefix
+                    column, wrapped_field, dao, dao_variable
                 )
                 self._update_variables_and_event(variables, attribute_values)
 
