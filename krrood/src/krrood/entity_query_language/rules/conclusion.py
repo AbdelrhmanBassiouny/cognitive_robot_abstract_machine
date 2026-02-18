@@ -60,26 +60,6 @@ class Conclusion(BinaryExpression, ABC):
 
 
 @dataclass(eq=False)
-class Set(Conclusion):
-    """Set the value of a variable in the current solution binding."""
-
-    def _evaluate__(
-        self,
-        sources: Bindings,
-    ) -> Iterable[OperationResult]:
-
-        if self.variable._binding_id_ not in sources:
-            parent_value = next(iter(self.variable._evaluate_(sources, parent=self)))[
-                self.variable._binding_id_
-            ]
-            sources[self.variable._binding_id_] = parent_value
-        sources[self.variable._binding_id_] = next(
-            iter(self.value._evaluate_(sources, parent=self))
-        )[self.value._binding_id_]
-        yield OperationResult(sources, False, self)
-
-
-@dataclass(eq=False)
 class Add(Conclusion):
     """Add a new value to the domain of a variable."""
 
