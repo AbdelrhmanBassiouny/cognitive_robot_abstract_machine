@@ -94,6 +94,24 @@ class SelfCollisionMatrixInterface:
             if body not in self.collision_matrix.allowed_collision_bodies
         ]
 
+    def sort_bodies(self, body_a: Body, body_b: Body) -> tuple[Body, Body]:
+        if body_a == body_b:
+            return body_a, body_b
+        collision_check = CollisionCheck.create_and_validate(body_a, body_b)
+        return collision_check.body_a, collision_check.body_b
+
+    def get_reason_for_pair(
+        self, body_a: Body, body_b: Body
+    ) -> Optional[DisableCollisionReason]:
+        body_a, body_b = self.sort_bodies(body_a, body_b)
+        return self._reasons.get((body_a, body_b), None)
+
+    def set_reason_for_pair(
+        self, body_a: Body, body_b: Body, reason: DisableCollisionReason | None
+    ):
+        body_a, body_b = self.sort_bodies(body_a, body_b)
+        self._reasons[body_a, body_b] = reason
+
     def load_urdf(self, urdf_path: str):
         self.world = URDFParser.from_file(urdf_path).parse()
         self.collision_matrix = SelfCollisionMatrixRule()
@@ -107,24 +125,37 @@ class SelfCollisionMatrixInterface:
     def remove_body(self, body: Body):
         self.collision_matrix.allowed_collision_bodies.discard(body)
 
+    def add_pair(self, body_a: Body, body_b: Body, reason: DisableCollisionReason):
+        collision_check = CollisionCheck.create_and_validate(body_a, body_b)
+        self.collision_matrix.allowed_collision_pairs.add(collision_check)
+        self.set_reason_for_pair(body_a, body_b, reason)
 
+    def remove_pair(self, body_a: Body, body_b: Body):
+        collision_check = CollisionCheck.create_and_validate(body_a, body_b)
+        self.collision_matrix.allowed_collision_pairs.remove(collision_check)
+        self.set_reason_for_pair(body_a, body_b, None)
+
+
+@dataclass
 class ReasonCheckBox(QCheckBox):
     row: int
     column: int
     table: Table
+    self_collision_matrix_interface: SelfCollisionMatrixInterface
+    reason: Optional[DisableCollisionReason] = None
 
-    def __init__(self, table: Table, row: int, column: int) -> None:
+    def __post_init__(self):
         super().__init__()
-        self.reason = None
-        self.row = row
-        self.column = column
-        self.table = table
 
     def connect_callback(self):
         self.stateChanged.connect(self.checkbox_callback)
 
     def sync_reason(self):
-        reason = self.table.reason_from_index(self.row, self.column)
+        body_a = self.table.table_id_to_body(self.row)
+        body_b = self.table.table_id_to_body(self.column)
+        reason = self.self_collision_matrix_interface.get_reason_for_pair(
+            body_a, body_b
+        )
         self.setChecked(reason is not None)
         self.setStyleSheet(f"background-color: rgb{reason_color_map[reason]};")
 
@@ -137,13 +168,13 @@ class ReasonCheckBox(QCheckBox):
                         item = self.table.get_widget(row, column)
                         if state != item.checkState():
                             item.checkbox_callback(state, False)
-        link1 = self.table.table_id_to_link_name(self.row)
-        link2 = self.table.table_id_to_link_name(self.column)
+        body_a = self.table.table_id_to_body(self.row)
+        body_b = self.table.table_id_to_body(self.column)
         if state == Qt.Checked:
             reason = DisableCollisionReason.Unknown
         else:
             reason = None
-        self.table.update_reason(link1, link2, reason)
+        self.table.update_reason(body_a, body_b, reason)
 
 
 @dataclass
@@ -187,40 +218,29 @@ class Table(QTableWidget):
     ) -> Dict[Tuple[PrefixedName, PrefixedName], DisableCollisionReason]:
         return self._reasons
 
-    def table_id_to_link_name(self, index: int) -> str:
+    def table_id_to_body(self, index: int) -> Body:
         return self.bodies[index]
 
-    def sort_bodies(self, body_a: Body, body_b: Body) -> tuple[Body, Body]:
-        collision_check = CollisionCheck.create_and_validate(body_a, body_b)
-        return collision_check.body_a, collision_check.body_b
+    def body_to_table_id(self, body: Body) -> int:
+        return self.bodies.index(body)
 
     def update_reason(
-        self, body_a: str, body_b: str, new_reason: Optional[DisableCollisionReason]
+        self, body_a: Body, body_b: Body, new_reason: Optional[DisableCollisionReason]
     ):
-        body_a = self.world.get_body_by_name(body_a)
-        body_b = self.world.get_body_by_name(body_b)
-        key = self.sort_bodies(body_a, body_b)
         if new_reason is None:
-            if key in self._reasons:
-                del self._reasons[key]
-        else:
-            self._reasons[key] = new_reason
-        row = self.bodies.index(body_a.short_name)
-        column = self.bodies.index(body_b.short_name)
+            self.self_collision_matrix_interface.remove_pair(body_a, body_b)
+        self.self_collision_matrix_interface.set_reason_for_pair(
+            body_a, body_b, new_reason
+        )
+        row = self.body_to_table_id(body_a)
+        column = self.body_to_table_id(body_b)
         self.get_widget(row, column).sync_reason()
         self.get_widget(column, row).sync_reason()
 
     def reason_from_index(self, row, column):
-        link1 = self.table_id_to_link_name(row)
-        link2 = self.table_id_to_link_name(column)
-        key = tuple(sorted((link1, link2)))
-        r_key = (key[1], key[0])
-        reasons = self.str_reasons
-        if key in reasons:
-            return reasons[key]
-        elif r_key in reasons:
-            return reasons[r_key]
-        return None
+        body_a = self.table_id_to_body(row)
+        body_b = self.table_id_to_body(column)
+        return self.self_collision_matrix_interface.get_reason_for_pair(body_a, body_b)
 
     def table_item_callback(self, row, column):
         self.ros_visualizer.clear_marker("")
@@ -254,30 +274,16 @@ class Table(QTableWidget):
         self.ros_visualizer.publish_markers()
 
     @property
-    def bodies(self) -> List[Body]:
-        return list(
-            sorted(
-                self.self_collision_matrix_interface.world.bodies_with_collision,
-                key=lambda x: x.name.name,
-            )
-        )
-
-    @property
-    def enabled_bodies(self) -> List[Body]:
-        return list(
-            sorted(
-                body
-                for body in self.world.bodies_with_collision
-                if body not in self._disabled_links
-            )
-        )
-
-    @property
     def disabled_link_prefix_names(self) -> List[PrefixedName]:
         return list(self._disabled_links)
 
     def add_table_item(self, row, column):
-        checkbox = ReasonCheckBox(self, row, column)
+        checkbox = ReasonCheckBox(
+            table=self,
+            row=row,
+            column=column,
+            self_collision_matrix_interface=self.self_collision_matrix_interface,
+        )
         checkbox.sync_reason()
         checkbox.connect_callback()
         if row == column:
@@ -292,20 +298,27 @@ class Table(QTableWidget):
         widget.setLayout(layout)
         self.setCellWidget(row, column, widget)
 
-    def synchronize(
-        self,
-        reasons: Optional[
-            Dict[Tuple[PrefixedName, PrefixedName], DisableCollisionReason]
-        ] = None,
-    ):
+    @property
+    def bodies(self) -> list[Body]:
+        return self.self_collision_matrix_interface.bodies
+
+    @property
+    def enabled_bodies(self) -> list[Body]:
+        return self.self_collision_matrix_interface.enabled_bodies
+
+    @property
+    def body_names(self) -> list[str]:
+        return [body.name.name for body in self.bodies]
+
+    def synchronize(self):
         # self.table.update_disabled_links(disabled_links)
-        if reasons is not None:
-            self._reasons = {self.sort_bodies(*k): v for k, v in reasons.items()}
+        # if reasons is not None:
+        #     self._reasons = {self.sort_bodies(*k): v for k, v in reasons.items()}
         self.clear()
         self.setRowCount(len(self.bodies))
         self.setColumnCount(len(self.bodies))
-        self.setHorizontalHeaderLabels(self.bodies)
-        self.setVerticalHeaderLabels(self.bodies)
+        self.setHorizontalHeaderLabels(self.body_names)
+        self.setVerticalHeaderLabels(self.body_names)
 
         for row_id, link1 in enumerate(self.bodies):
             if link1 not in self.enabled_bodies:
