@@ -5,23 +5,14 @@ from functools import lru_cache
 import numpy as np
 from line_profiler.explicit_profiler import profile
 
-from krrood.symbolic_math.symbolic_math import FloatVariable
-from semantic_digital_twin.collision_checking.collision_detector import (
-    CollisionCheckingResult,
-    ClosestPoints,
-)
-from semantic_digital_twin.collision_checking.collision_groups import (
-    CollisionGroupConsumer,
-    CollisionGroup,
-)
-from semantic_digital_twin.spatial_types import Vector3, Point3
-from semantic_digital_twin.world_description.world_entity import (
-    Body,
-    KinematicStructureEntity,
-)
 from krrood.symbolic_math.float_variable_data import (
     FloatVariableData,
 )
+from krrood.symbolic_math.symbolic_math import FloatVariable
+from .collision_detector import CollisionCheckingResult, ClosestPoints
+from .collision_groups import CollisionGroupConsumer, CollisionGroup
+from ..spatial_types import Vector3, Point3
+from ..world_description.world_entity import Body
 
 
 @dataclass

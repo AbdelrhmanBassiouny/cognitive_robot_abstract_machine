@@ -135,18 +135,30 @@ class CollisionRule(ABC):
 
 @dataclass
 class MaxAvoidedCollisionsRule(ABC):
+    """
+    Base class for collision rules that define the maximum number of collisions that can be avoided for a given body.
+    """
+
     @abstractmethod
     def get_max_avoided_collisions(self, body: Body) -> int | None: ...
 
 
 @dataclass
 class DefaultMaxAvoidedCollisions(MaxAvoidedCollisionsRule):
+    """
+    Default implementation of MaxAvoidedCollisionsRule that sets the maximum number of avoided collisions to 1 for all bodies.
+    """
+
     def get_max_avoided_collisions(self, body: Body) -> int | None:
         return 1
 
 
 @dataclass
 class MaxAvoidedCollisionsOverride(MaxAvoidedCollisionsRule):
+    """
+    Implementation of MaxAvoidedCollisionsRule that overrides the maximum number of avoided collisions for specific bodies.
+    """
+
     value: int
     bodies: set[Body]
 

@@ -180,6 +180,10 @@ class AvoidSelfCollisions(AvoidCollisionRule):
 
 @dataclass
 class AllowAllCollisions(AllowCollisionRule):
+    """
+    Removed all collision checks from the collision matrix.
+    """
+
     world: World = field(kw_only=True)
 
     def _update(self, world: World):
@@ -188,6 +192,10 @@ class AllowAllCollisions(AllowCollisionRule):
 
 @dataclass
 class AllowCollisionBetweenGroups(AllowCollisionRule):
+    """
+    Allows collision checks between two groups of bodies.
+    """
+
     body_group_a: List[Body] = field(default_factory=list)
     body_group_b: List[Body] = field(default_factory=list)
 
@@ -205,6 +213,9 @@ class AllowCollisionBetweenGroups(AllowCollisionRule):
 
 @dataclass
 class AllowNonRobotCollisions(AllowCollisionRule):
+    """
+    Allows collision checks between all bodies that do not belong to any robot.
+    """
 
     def _update(self, world: World):
         """
@@ -231,6 +242,10 @@ class AllowNonRobotCollisions(AllowCollisionRule):
 
 @dataclass
 class AllowSelfCollisions(AllowCollisionRule):
+    """
+    Allows collision checks between all body pairs of the robot managed by the rule.
+    """
+
     robot: AbstractRobot = field(kw_only=True)
 
     def _update(self, world: World):
@@ -242,6 +257,9 @@ class AllowSelfCollisions(AllowCollisionRule):
 
 @dataclass
 class AllowCollisionForAdjacentPairs(AllowCollisionRule):
+    """
+    Allow collision between body pairs of a robot that are connected by a chain that has no controllable connection.
+    """
 
     def _update(self, world: World):
         for body_a, body_b in combinations(world.bodies_with_collision, 2):
