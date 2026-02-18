@@ -11,14 +11,21 @@ import numpy as np
 import rclpy  # type: ignore
 import std_msgs.msg
 from krrood.ormatic.dao import to_dao
-from krrood.adapters.json_serializer import SubclassJSONSerializer, from_json
+from krrood.adapters.json_serializer import from_json, to_json
 from rclpy.node import Node as RosNode
 from rclpy.publisher import Publisher
 from rclpy.subscription import Subscription
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .messages import MetaData, WorldStateUpdate, Message, ModificationBlock, LoadModel
+from .messages import (
+    MetaData,
+    WorldStateUpdate,
+    Message,
+    ModificationBlock,
+    LoadModel,
+    Acknowledgment,
+)
 from ..world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
 from ...callbacks.callback import Callback, StateChangeCallback, ModelChangeCallback
 from ...exceptions import MissingPublishChangesKWARG
@@ -29,9 +36,26 @@ from ...world import World
 @dataclass
 class Synchronizer(ABC):
     """
-    Abstract Synchronizer class to manage world synchronizations between processes running semantic digital twin.
+    Abstract synchronizer to manage world synchronizations between processes running semantic digital twin.
+
     It manages publishers and subscribers, ensuring proper cleanup after use.
     The communication is JSON string based.
+
+    .. warning::
+
+        When ``synchronous=True`` is used on a :class:`SynchronizerOnCallback`, publication
+        blocks until **all** current subscribers acknowledge receipt or a 5-second timeout
+        elapses. If a subscriber process crashes or exits without unsubscribing, the publisher
+        will wait for the full timeout on every synchronous publish because the dead process
+        never acknowledges.
+
+        To mitigate this, always clean up synchronizers when shutting down::
+
+            import atexit
+            atexit.register(synchronizer.close)
+
+        This gives some assurance that the ROS subscriber is destroyed on exit, so other publishers
+        will no longer expect an acknowledgment from the terminated process.
     """
 
     node: RosNode
@@ -74,25 +98,17 @@ class Synchronizer(ABC):
     The subscriber that receives acknowledgment messages from other nodes.
     """
 
-    message_type: ClassVar[Optional[Type[SubclassJSONSerializer]]] = None
-    """
-    The type of the message that is sent and received.
-    """
+    message_type: ClassVar[Optional[Type[Message]]] = None
+    """The type of the message that is sent and received."""
 
-    _current_event_id: Optional[UUID] = None
-    """
-    The UUID of the most recently published event awaiting acknowledgment.
-    """
+    _current_publication_event_id: Optional[UUID] = None
+    """The UUID of the most recently published message awaiting acknowledgment."""
 
-    _expected_acknowledgments: Set[String] = field(default_factory=set)
-    """
-    Node names of all subscribers that must acknowledge the current event before synchronous publication unblocks.
-    """
+    _expected_acknowledgments: Set[str] = field(default_factory=set)
+    """Node names of all subscribers that must acknowledge the current event before synchronous publication unblocks."""
 
-    _received_acknowledgments: Set[String] = field(default_factory=set)
-    """
-    Node names of subscribers that have acknowledged the current event so far.
-    """
+    _received_acknowledgments: Set[str] = field(default_factory=set)
+    """Node names of subscribers that have acknowledged the current event so far."""
 
     _acknowledge_condition_variable: threading.Condition = field(
         default_factory=threading.Condition
@@ -135,19 +151,19 @@ class Synchronizer(ABC):
     def subscription_callback(self, msg: std_msgs.msg.String):
         """
         Wrap the origin subscription callback by self-skipping and disabling the next world callback.
+
+        :param msg: The incoming ROS string message containing a serialized synchronization message.
         """
         tracker = WorldEntityWithIDKwargsTracker.from_world(self.world)
 
-        msg = self.message_type.from_json(
-            json.loads(msg.data), **tracker.create_kwargs()
-        )
+        msg = from_json(json.loads(msg.data), **tracker.create_kwargs())
 
+        acknowledgment = Acknowledgment(
+            publication_event_id=msg.publication_event_id,
+            node_name=self.node.get_name(),
+        )
         self.acknowledge_publisher.publish(
-            std_msgs.msg.String(
-                data=json.dumps(
-                    {"event_id": str(msg.event_id), "node_name": self.node.get_name()}
-                )
-            )
+            std_msgs.msg.String(data=json.dumps(to_json(acknowledgment)))
         )
         if msg.meta_data == self.meta_data:
             return
@@ -156,25 +172,35 @@ class Synchronizer(ABC):
     def acknowledge_callback(self, msg: std_msgs.msg.String):
         """
         Called when subscribers of the sync topic acknowledge receipt of synchronization notifications.
+
+        :param msg: The incoming ROS string message containing a serialized acknowledgment.
         """
-        msg_dic = json.loads(msg.data)
+        acknowledgment = from_json(json.loads(msg.data))
 
         with self._acknowledge_condition_variable:
-            if not self._expected_acknowledgments or not self._current_event_id:
+            if (
+                not self._expected_acknowledgments
+                or not self._current_publication_event_id
+            ):
                 return
 
-            if msg_dic["event_id"] != str(self._current_event_id):
+            if (
+                acknowledgment.publication_event_id
+                != self._current_publication_event_id
+            ):
                 return
 
-            if msg_dic["node_name"] in self._expected_acknowledgments:
-                self._received_acknowledgments.add(msg_dic["node_name"])
+            if acknowledgment.node_name in self._expected_acknowledgments:
+                self._received_acknowledgments.add(acknowledgment.node_name)
 
             if self._received_acknowledgments == self._expected_acknowledgments:
                 self._acknowledge_condition_variable.notify_all()
 
-    def _snapshot_subscribers(self) -> Set[String]:
+    def _snapshot_subscribers(self) -> Set[str]:
         """
         Return the node names of all current subscribers to the synchronization topic.
+
+        :return: Set of node name strings for all current subscribers on this synchronizer's topic.
         """
         infos = self.node.get_subscriptions_info_by_topic(self.topic_name)
         expected = set()
@@ -197,7 +223,7 @@ class Synchronizer(ABC):
         :param msg: The message to publish.
         :param synchronous: If True, block until all subscribers acknowledge receipt.
         """
-        self._current_event_id = msg.event_id
+        self._current_publication_event_id = msg.publication_event_id
 
         if synchronous:
             with self._acknowledge_condition_variable:
@@ -205,7 +231,7 @@ class Synchronizer(ABC):
                 self._received_acknowledgments = set()
 
                 self.publisher.publish(
-                    std_msgs.msg.String(data=json.dumps(msg.to_json()))
+                    std_msgs.msg.String(data=json.dumps(to_json(msg)))
                 )
 
                 success = self._acknowledge_condition_variable.wait_for(
@@ -218,11 +244,11 @@ class Synchronizer(ABC):
                         "Message was not acknowledged, timeout"
                     )
 
-                self._current_event_id = None
+                self._current_publication_event_id = None
                 self._expected_acknowledgments = set()
                 self._received_acknowledgments = set()
         else:
-            self.publisher.publish(std_msgs.msg.String(data=json.dumps(msg.to_json())))
+            self.publisher.publish(std_msgs.msg.String(data=json.dumps(to_json(msg))))
 
     def close(self):
         """
@@ -250,15 +276,6 @@ class SynchronizerOnCallback(Synchronizer, Callback, ABC):
     synchronous: bool = False
     """
     If True, world_callback will block until all subscribers acknowledge receipt of the published message.
-    """
-
-    _skip_next_world_callback: bool = False
-    """
-    Flag to indicate if the next world callback should be skipped.
-
-    An incoming message from some other world might trigger a change in this world that produces a notify callback that
-    will try to send a message.
-    If the callback is triggered by a message, this synchronizer should not republish the change.
     """
 
     missed_messages: List = field(default_factory=list, init=False, repr=False)
@@ -320,7 +337,7 @@ class StateSynchronizer(StateChangeCallback, SynchronizerOnCallback):
     Synchronizes the state (values of free variables) of the semantic digital twin with the associated ROS topic.
     """
 
-    message_type: ClassVar[Optional[Type[SubclassJSONSerializer]]] = WorldStateUpdate
+    message_type: ClassVar[Optional[Type[Message]]] = WorldStateUpdate
 
     topic_name: str = "/semantic_digital_twin/world_state"
 
@@ -397,7 +414,7 @@ class ModelSynchronizer(
     Synchronizes the model (addition/removal of bodies/DOFs/connections) with the associated ROS topic.
     """
 
-    message_type: ClassVar[Type[SubclassJSONSerializer]] = ModificationBlock
+    message_type: ClassVar[Type[Message]] = ModificationBlock
     topic_name: str = "/semantic_digital_twin/world_model"
 
     def __post_init__(self):
@@ -442,7 +459,7 @@ class ModelReloadSynchronizer(Synchronizer):
     to force all processes to load your world model. Note that this may take a couple of seconds.
     """
 
-    message_type: ClassVar[Type[SubclassJSONSerializer]] = LoadModel
+    message_type: ClassVar[Type[Message]] = LoadModel
 
     session: Session = None
     """

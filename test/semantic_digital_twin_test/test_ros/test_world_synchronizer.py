@@ -50,7 +50,13 @@ from semantic_digital_twin.world_description.world_modification import (
     AttributeUpdateModification,
     synchronized_attribute_modification,
 )
-from krrood.adapters.json_serializer import JSONAttributeDiff
+from krrood.adapters.json_serializer import JSONAttributeDiff, to_json, from_json
+from semantic_digital_twin.adapters.ros.messages import (
+    MetaData,
+    WorldStateUpdate,
+    LoadModel,
+    Acknowledgment,
+)
 
 
 def create_dummy_world(w: Optional[World] = None) -> World:
@@ -1025,6 +1031,61 @@ def test_dont_publish_changes(rclpy_node):
 
     synchronizer_1.close()
     synchronizer_2.close()
+
+
+def test_world_state_update_serialization_round_trip():
+    """
+    Verify that WorldStateUpdate survives a to_json/from_json round trip.
+    """
+    meta = MetaData(node_name="test_node", process_id=42)
+    original = WorldStateUpdate(
+        meta_data=meta,
+        ids=[uuid.uuid4(), uuid.uuid4()],
+        states=[1.5, 2.5],
+    )
+
+    serialized = to_json(original)
+    restored = from_json(serialized)
+
+    assert isinstance(restored, WorldStateUpdate)
+    assert restored.meta_data.node_name == original.meta_data.node_name
+    assert restored.meta_data.process_id == original.meta_data.process_id
+    assert restored.ids == original.ids
+    assert restored.states == original.states
+    assert restored.publication_event_id == original.publication_event_id
+
+
+def test_load_model_serialization_round_trip():
+    """
+    Verify that LoadModel survives a to_json/from_json round trip.
+    """
+    meta = MetaData(node_name="loader", process_id=99)
+    original = LoadModel(meta_data=meta, primary_key=7)
+
+    serialized = to_json(original)
+    restored = from_json(serialized)
+
+    assert isinstance(restored, LoadModel)
+    assert restored.primary_key == 7
+    assert restored.meta_data.node_name == "loader"
+    assert restored.publication_event_id == original.publication_event_id
+
+
+def test_acknowledgment_serialization_round_trip():
+    """
+    Verify that Acknowledgment survives a to_json/from_json round trip.
+    """
+    event_id = uuid.uuid4()
+    original = Acknowledgment(
+        publication_event_id=event_id, node_name="acknowledgment_node"
+    )
+
+    serialized = to_json(original)
+    restored = from_json(serialized)
+
+    assert isinstance(restored, Acknowledgment)
+    assert restored.publication_event_id == event_id
+    assert restored.node_name == "acknowledgment_node"
 
 
 if __name__ == "__main__":

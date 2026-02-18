@@ -1,9 +1,8 @@
 import uuid
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 from functools import lru_cache
 from uuid import UUID
-import uuid
 
 from typing_extensions import Dict, Any, Self, List
 
@@ -22,19 +21,13 @@ class MetaData(SubclassJSONSerializer):
     """
 
     node_name: str
-    """
-    The name of the node that published this message
-    """
+    """The name of the node that published this message."""
 
     process_id: int
-    """
-    The id of the process that published this message
-    """
+    """The id of the process that published this message."""
 
     world_id: UUID = field(default_factory=uuid.uuid4)
-    """
-    The id of the origin world. This is used to identify messages that were published by the same publisher.
-    """
+    """The id of the origin world. This is used to identify messages that were published by the same publisher."""
 
     @lru_cache(maxsize=None)
     def to_json(self) -> Dict[str, Any]:
@@ -58,26 +51,36 @@ class MetaData(SubclassJSONSerializer):
 
 
 @dataclass
-class Message(SubclassJSONSerializer, ABC):
+class Message(ABC):
+    """
+    Abstract base class for all messages.
+    """
 
     meta_data: MetaData
-    """
-    Message origin meta data.
+    """Message origin meta data."""
+
+    publication_event_id: UUID = field(default_factory=uuid.uuid4, kw_only=True)
+    """UUID uniquely identifying the event (world update / state update / ...) that originated this message.
+
+    Recipients can use this UUID in responses to refer to this event.
+    Allows the publication/subscription mechanism to track what messages have been received and acknowledged.
     """
 
-    event_id: UUID = field(default_factory=uuid.uuid4, kw_only=True)
+
+@dataclass
+class Acknowledgment:
     """
-    UUID identifying the event that caused the publication of this message.
-    This allows the publication/subscription mechanism to track what messages have
-    been received and acknowledged.
+    Message acknowledging receipt of a published event.
+
+    :param publication_event_id: The UUID of the publication event being acknowledged.
+    :param node_name: The name of the node sending the acknowledgment.
     """
 
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "event_id": str(self.event_id),
-            "meta_data": self.meta_data.to_json(),
-        }
+    publication_event_id: UUID
+    """The UUID of the publication event being acknowledged."""
+
+    node_name: str
+    """The name of the node sending the acknowledgment."""
 
 
 @dataclass
@@ -87,30 +90,10 @@ class WorldStateUpdate(Message):
     """
 
     ids: List[UUID]
-    """
-    The ids of the changed free variables.
-    """
+    """The ids of the changed free variables."""
 
     states: List[float]
-    """
-    The states of the changed free variables.
-    """
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "ids": to_json(self.ids),
-            "states": list(self.states),
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(
-            event_id=data["event_id"] if "event_id" in data else uuid.uuid4(),
-            meta_data=MetaData.from_json(data["meta_data"], **kwargs),
-            ids=from_json(data["ids"]),
-            states=data["states"],
-        )
+    """The states of the changed free variables."""
 
 
 @dataclass
@@ -120,25 +103,7 @@ class ModificationBlock(Message):
     """
 
     modifications: WorldModelModificationBlock
-    """
-    The modifications done to a world.
-    """
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "modifications": self.modifications.to_json(),
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(
-            event_id=data["event_id"] if "event_id" in data else uuid.uuid4(),
-            meta_data=MetaData.from_json(data["meta_data"], **kwargs),
-            modifications=WorldModelModificationBlock.from_json(
-                data["modifications"], **kwargs
-            ),
-        )
+    """The modifications done to a world."""
 
 
 @dataclass
@@ -148,23 +113,7 @@ class LoadModel(Message):
     """
 
     primary_key: int
-    """
-    The primary key identifying the model to be loaded.
-    """
-
-    def to_json(self) -> Dict[str, Any]:
-        return {
-            **super().to_json(),
-            "primary_key": self.primary_key,
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(
-            event_id=data["event_id"] if "event_id" in data else uuid.uuid4(),
-            meta_data=MetaData.from_json(data["meta_data"], **kwargs),
-            primary_key=data["primary_key"],
-        )
+    """The primary key identifying the model to be loaded."""
 
 
 @dataclass
@@ -174,19 +123,13 @@ class WorldModelSnapshot(SubclassJSONSerializer):
     """
 
     modifications: List[WorldModelModificationBlock]
-    """
-    The ordered list of world model modification blocks.
-    """
+    """The ordered list of world model modification blocks."""
 
     ids: List[UUID]
-    """
-    The names of the free variables contained in the state snapshot.
-    """
+    """The names of the free variables contained in the state snapshot."""
 
     states: List[float]
-    """
-    The values of the free variables contained in the state snapshot.
-    """
+    """The values of the free variables contained in the state snapshot."""
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -215,8 +158,13 @@ class WorldModelSnapshot(SubclassJSONSerializer):
         world: World, json_data: Dict[str, Any], **kwargs
     ):
         """
-        1. deserialize modifications from json and apply them to the world, block by block
-        2. deserialize state from json and apply it to the world
+        Deserialize modifications and state from JSON and apply them to the world.
+
+        1. Deserialize modifications from JSON and apply them to the world, block by block.
+        2. Deserialize state from JSON and apply it to the world.
+
+        :param world: The world to apply the snapshot to.
+        :param json_data: The JSON data containing the snapshot.
         """
         with world.modify_world():
             for modification in json_data.get("modifications", []):
@@ -232,7 +180,11 @@ class WorldModelSnapshot(SubclassJSONSerializer):
     @staticmethod
     def _apply_json_state(world: World, ids: list[float], states: list[UUID]):
         """
-        Apply the state contained in the json snapshot to the world.
+        Apply the state contained in the JSON snapshot to the world.
+
+        :param world: The world whose state to update.
+        :param ids: The ids of the free variables.
+        :param states: The values of the free variables.
         """
         if not (ids or states):
             return
