@@ -68,7 +68,7 @@ class Stretch(AbstractRobot, HasArms, HasNeck):
             root=self._world.get_body_by_name("link_straight_gripper"),
             tool_frame=self._world.get_body_by_name("link_grasp_center"),
             front_facing_orientation=Quaternion(0, 0, 0, 1),
-            front_facing_axis=Vector3(0, 0, 1),
+            front_facing_axis=Vector3(1, 0, 0),
             thumb=gripper_thumb,
             finger=gripper_finger,
             _world=self._world,
