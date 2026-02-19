@@ -570,12 +570,9 @@ class World(HasSimulatorProperties):
         :param connection: The connection to be added to the kinematic structure.
         """
         connection.add_to_world(self)
-        try:
-            self.kinematic_structure.add_edge(
-                connection.parent.index, connection.child.index, connection
-            )
-        except TypeError:
-            ...
+        self.kinematic_structure.add_edge(
+            connection.parent.index, connection.child.index, connection
+        )
 
     def add_body(
         self,

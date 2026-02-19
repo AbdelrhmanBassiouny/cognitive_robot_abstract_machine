@@ -151,8 +151,6 @@ class SynchronizerOnCallback(Synchronizer, Callback, ABC):
     def _subscription_callback(self, msg: Message):
         if self._is_paused:
             self.missed_messages.append(msg)
-            print(f"{self._world.name=}, {type(self)}")
-            print(len(self.missed_messages))
         else:
             self.apply_message(msg)
 
@@ -194,8 +192,8 @@ class StateSynchronizer(StateChangeCallback, SynchronizerOnCallback):
     topic_name: str = "/semantic_digital_twin/world_state"
 
     def __post_init__(self):
-        super().__post_init__()
-        SynchronizerOnCallback.__post_init__(self)
+        StateChangeCallback.__post_init__(self)
+        Synchronizer.__post_init__(self)
 
     def apply_message(self, msg: WorldStateUpdate):
         """
@@ -267,10 +265,6 @@ class ModelSynchronizer(
 
     message_type: ClassVar[Type[SubclassJSONSerializer]] = ModificationBlock
     topic_name: str = "/semantic_digital_twin/world_model"
-
-    def __post_init__(self):
-        super().__post_init__()
-        SynchronizerOnCallback.__post_init__(self)
 
     def apply_message(self, msg: ModificationBlock):
         running_callbacks = [

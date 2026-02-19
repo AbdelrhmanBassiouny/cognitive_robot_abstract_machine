@@ -366,7 +366,7 @@ def test_callback_pausing(rclpy_node):
         c = Connection6DoF.create_with_dofs(parent=b2, child=new_body, world=w1)
         w1.add_connection(c)
 
-    time.sleep(1000.2)
+    time.sleep(0.2)
     assert len(model_synchronizer_2.missed_messages) == 1
     assert len(w1.kinematic_structure_entities) == 2
     assert len(w2.kinematic_structure_entities) == 0
@@ -565,7 +565,7 @@ def test_attribute_updates(rclpy_node):
             name=PrefixedName("left_door"),
             world=world1,
         )
-    time.sleep(1000)
+    time.sleep(1)
     assert [hash(sa) for sa in world1.semantic_annotations] == [
         hash(sa) for sa in world2.semantic_annotations
     ], f"{[sa.name for sa in world1.semantic_annotations]} vs {[sa.name for sa in world2.semantic_annotations]}"
@@ -574,7 +574,7 @@ def test_attribute_updates(rclpy_node):
     with world1.modify_world():
         fridge.add_door(door)
 
-    time.sleep(1000)
+    time.sleep(1)
     assert [hash(sa) for sa in world1.semantic_annotations] == [
         hash(sa) for sa in world2.semantic_annotations
     ], f"{[sa.name for sa in world1.semantic_annotations]} vs {[sa.name for sa in world2.semantic_annotations]}"
