@@ -398,6 +398,7 @@ class AllowNeverInCollision(AllowCollisionRule):
             for key, distances in list(distances_cache.items()):
                 mean = np.mean(distances)
                 std = np.std(distances)
+                # 99.7% is close enough
                 if mean - 3 * std > self.distance_threshold_zero:
                     self.allowed_collision_pairs.add(key)
                 if mean + 3 * std < self.distance_threshold_range:

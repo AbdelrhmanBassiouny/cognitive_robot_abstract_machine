@@ -56,6 +56,7 @@ from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.utils import robot_name_from_urdf_string
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import Body
 
 
@@ -105,6 +106,15 @@ class SelfCollisionMatrixInterface:
             self.world.merge_world(
                 robot_world, FixedConnection(parent=map, child=robot_world.root)
             )
+
+    def dye_all_bodies_white_transparent(self):
+        with self.world.modify_world():
+            for body in self.world.bodies_with_collision:
+                for shape in body.collision.shapes:
+                    if body in self.collision_matrix.allowed_collision_bodies:
+                        shape.color = Color(1.0, 0.0, 0.0, 0.25)
+                        continue
+                    shape.color = Color(1.0, 1.0, 1.0, 0.5)
 
     @property
     def bodies(self) -> List[Body]:
@@ -208,13 +218,7 @@ class ReasonCheckBox(QCheckBox):
 
     def checkbox_callback(self, state, update_range: bool = True):
         if update_range:
-            self.table.selectedRanges()
-            for range_ in self.table.selectedRanges():
-                for row in range(range_.topRow(), range_.bottomRow() + 1):
-                    for column in range(range_.leftColumn(), range_.rightColumn() + 1):
-                        item = self.table.get_widget(row, column)
-                        if state != item.checkState():
-                            item.checkbox_callback(state, False)
+            self.update_range(state)
         body_a = self.table.table_id_to_body(self.row)
         body_b = self.table.table_id_to_body(self.column)
         if state == Qt.Checked:
@@ -222,6 +226,15 @@ class ReasonCheckBox(QCheckBox):
         else:
             reason = None
         self.table.update_reason(body_a, body_b, reason)
+
+    def update_range(self, state: Qt.CheckState):
+        self.table.selectedRanges()
+        for range_ in self.table.selectedRanges():
+            for row in range(range_.topRow(), range_.bottomRow() + 1):
+                for column in range(range_.leftColumn(), range_.rightColumn() + 1):
+                    item = self.table.get_widget(row, column)
+                    if state != item.checkState():
+                        item.checkbox_callback(state, False)
 
 
 @dataclass
@@ -290,39 +303,17 @@ class Table(QTableWidget):
         return self.self_collision_matrix_interface.get_reason_for_pair(body_a, body_b)
 
     def table_item_callback(self, row, column):
-        # self.ros_visualizer.clear_marker("")
-        # todo color body
-        link1 = self.world.get_body_by_name(self.bodies[row])
-        link2 = self.world.get_body_by_name(self.bodies[column])
-        key = self.sort_bodies(link1, link2)
-        reason = self.reasons.get(key, None)
-        color = reason_color_map[reason]
-        color_msg = ColorRGBA(
-            r=color[0] / 255.0, g=color[1] / 255.0, b=color[2] / 255.0, a=1.0
+        body_a = self.table_id_to_body(row)
+        body_b = self.table_id_to_body(column)
+        color = reason_color_map[DisableCollisionReason.Unknown]
+        color_msg = Color(
+            R=color[0] / 255.0, G=color[1] / 255.0, B=color[2] / 255.0, A=1.0
         )
-        self.world.links[link1].dye_collisions(color_msg)
-        self.world.links[link2].dye_collisions(color_msg)
-        self.world.clear_all_lru_caches()
-        self.ros_visualizer.clear_marker_cache()
-        self.ros_visualizer.publish_markers()
 
-    def dye_disabled_links(self, disabled_color: Optional[ColorRGBA] = None):
-        if disabled_color is None:
-            disabled_color = ColorRGBA(1, 0, 0, 1)
-        self.ros_visualizer.clear_marker("")
-        for link_name in self.world.link_names_with_collisions:
-            if link_name.short_name in self.enabled_bodies:
-                self.world.links[link_name].dye_collisions(
-                    self.world.default_link_color
-                )
-            else:
-                self.world.links[link_name].dye_collisions(disabled_color)
-        self.world.clear_all_lru_caches()
-        self.ros_visualizer.publish_markers()
-
-    @property
-    def disabled_link_prefix_names(self) -> List[PrefixedName]:
-        return list(self._disabled_links)
+        with self.self_collision_matrix_interface.world.modify_world():
+            self.self_collision_matrix_interface.dye_all_bodies_white_transparent()
+            body_a.collision.dye_shapes(color_msg)
+            body_b.collision.dye_shapes(color_msg)
 
     def add_table_item(self, row, column):
         checkbox = ReasonCheckBox(
@@ -610,7 +601,7 @@ class DisableBodyItem(QWidget):
             self.self_collision_matrix_interface.remove_body(self.body)
         else:
             self.self_collision_matrix_interface.add_body(self.body)
-        # self.table.dye_disabled_links()
+        self.self_collision_matrix_interface.dye_all_bodies_white_transparent()
 
     def set_checked(self, new_state: bool):
         self.checkbox.setChecked(new_state)
