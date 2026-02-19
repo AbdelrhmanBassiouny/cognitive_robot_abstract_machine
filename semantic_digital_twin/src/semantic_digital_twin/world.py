@@ -1761,7 +1761,7 @@ class World(HasSimulatorProperties):
 
             self.semantic_annotations.clear()
             self.degrees_of_freedom.clear()
-            self.state = WorldState(_world=self)
+            self.state.clear()
         self._world_entity_hash_table.clear()
         self._model_manager.model_modification_blocks.clear()
 

@@ -114,6 +114,12 @@ class WorldState(MutableMapping[UUID, WorldStateEntryView]):
         for callback in self.state_change_callbacks:
             callback.notify(**kwargs)
 
+    def clear(self):
+        self.data = np.zeros((4, 0), dtype=float)
+        self._ids = []
+        self._index = {}
+        self.version += 1
+
     def _add_dof(self, uuid: UUID) -> None:
         idx = len(self._ids)
         self._ids.append(uuid)
