@@ -29,6 +29,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
     AllowDefaultInCollision,
     AllowAlwaysInCollision,
+    AllowNeverInCollision,
 )
 from semantic_digital_twin.collision_checking.pybullet_collision_detector import (
     BulletCollisionDetector,
@@ -283,8 +284,16 @@ class TestCollisionRules:
 
     def test_compute_self_collision_matrix(self, pr2_world_state_reset):
         pr2 = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
+        collision_checks = {
+            CollisionCheck(body_a, body_b)
+            for body_a, body_b in combinations(
+                pr2_world_state_reset.bodies_with_collision, 2
+            )
+        }
         rule = SelfCollisionMatrixRule()
         rule.compute_self_collision_matrix(pr2)
+        assert 0 < len(rule.allowed_collision_pairs) < len(collision_checks)
+        rule.save_self_collision_matrix(robot_name=pr2.name.name, file_name="test.srdf")
 
     def test_AllowAlwaysInSelfCollision(self, pr2_world_state_reset):
         robot = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
@@ -308,6 +317,18 @@ class TestCollisionRules:
             )
         }
         rule = AllowAlwaysInCollision(robot=robot, collision_checks=collision_checks)
+        rule.update(pr2_world_state_reset)
+        assert 0 < len(rule.allowed_collision_pairs) < len(collision_checks)
+
+    def test_AllowNeverInCollision(self, pr2_world_state_reset):
+        robot = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
+        collision_checks = {
+            CollisionCheck(body_a, body_b)
+            for body_a, body_b in combinations(
+                pr2_world_state_reset.bodies_with_collision, 2
+            )
+        }
+        rule = AllowNeverInCollision(robot=robot, collision_checks=collision_checks)
         rule.update(pr2_world_state_reset)
         assert 0 < len(rule.allowed_collision_pairs) < len(collision_checks)
 

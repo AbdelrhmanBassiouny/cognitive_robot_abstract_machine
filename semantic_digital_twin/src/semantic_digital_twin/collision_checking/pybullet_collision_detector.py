@@ -289,14 +289,6 @@ class BulletCollisionDetector(CollisionDetector):
     This is only a cache for performance reasons.
     """
 
-    query: Optional[
-        Dict[Tuple[bullet.CollisionObject, bullet.CollisionObject], float]
-    ] = field(default=None, init=False)
-    """
-    A cache for the last collision query to bullet.
-    A query is a collision matrix in a format that bullet likes.
-    """
-
     def sync_world_model(self) -> None:
         self.reset_cache()
         self.clear()
@@ -324,7 +316,7 @@ class BulletCollisionDetector(CollisionDetector):
         self.body_to_bullet_object[body] = o
 
     def reset_cache(self):
-        self.query = None
+        self.collision_matrix_to_bullet_query.cache_clear()
 
     def __hash__(self):
         return hash(id(self))
