@@ -13,6 +13,9 @@ from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
 )
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
+from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+    VizMarkerPublisher,
+)
 from semantic_digital_twin.adapters.ros.world_fetcher import (
     FetchWorldServer,
     fetch_world_from_service,
@@ -51,6 +54,10 @@ def test_execute_collision_goal_in_fetched_world(rclpy_node, pr2_world_state_res
     )
 
     time.sleep(2)
+
+    viz = VizMarkerPublisher(_world=pr2_world_copy, node=rclpy_node)
+    viz.with_tf_publisher()
+
     fetched_pr2 = pr2_world_copy.get_semantic_annotations_by_type(PR2)[0]
 
     r_tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(

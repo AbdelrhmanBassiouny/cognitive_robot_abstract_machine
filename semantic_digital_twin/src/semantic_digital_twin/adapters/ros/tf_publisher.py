@@ -25,7 +25,7 @@ from ...world_description.world_entity import KinematicStructureEntity
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(eq=False)
 class TfPublisherModelCallback(ModelChangeCallback):
     """
     Publishes the TF tree of the world.
@@ -62,7 +62,7 @@ class TfPublisherModelCallback(ModelChangeCallback):
 
     def update_connections_to_expression(self):
         self.connections_to_expression.clear()
-        for connection in self.world.connections:
+        for connection in self._world.connections:
             if (
                 connection.parent in self.ignored_kinematic_structure_entities
                 and connection.child in self.ignored_kinematic_structure_entities
@@ -76,12 +76,12 @@ class TfPublisherModelCallback(ModelChangeCallback):
         tf = Matrix.vstack([pose for pose in self.connections_to_expression.values()])
         self.compiled_tf = tf.compile(
             parameters=VariableParameters.from_lists(
-                self.world.state.position_float_variables
+                self._world.state.position_float_variables
             )
         )
         if self.compiled_tf.is_result_empty():
             return
-        self.compiled_tf.bind_args_to_memory_view(0, self.world.state.positions)
+        self.compiled_tf.bind_args_to_memory_view(0, self._world.state.positions)
 
     def init_tf_message(self):
         self.tf_message = TFMessage()
@@ -91,10 +91,10 @@ class TfPublisherModelCallback(ModelChangeCallback):
         for i, (parent_link_id, child_link_id) in enumerate(
             self.connections_to_expression
         ):
-            parent_link = self.world.get_kinematic_structure_entity_by_id(
+            parent_link = self._world.get_kinematic_structure_entity_by_id(
                 parent_link_id
             )
-            child_link = self.world.get_kinematic_structure_entity_by_id(child_link_id)
+            child_link = self._world.get_kinematic_structure_entity_by_id(child_link_id)
 
             self.tf_message.transforms[i].header.frame_id = str(parent_link.name)
             self.tf_message.transforms[i].child_frame_id = str(child_link.name)
@@ -115,7 +115,7 @@ class TfPublisherModelCallback(ModelChangeCallback):
             p_T_c.transform.rotation.w = pose[6]
 
 
-@dataclass
+@dataclass(eq=False)
 class TFPublisher(StateChangeCallback):
     """
     On state change, publishes the TF tree of the world.

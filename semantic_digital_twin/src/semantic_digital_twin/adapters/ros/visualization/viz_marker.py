@@ -34,7 +34,7 @@ class ShapeSource(Enum):
     """
 
 
-@dataclass
+@dataclass(eq=False)
 class VizMarkerPublisher(ModelChangeCallback):
     """
     Publishes the world model as a visualization marker.
@@ -87,7 +87,7 @@ class VizMarkerPublisher(ModelChangeCallback):
         """
         Launches a tf publisher in conjunction with the VizMarkerPublisher.
         """
-        TFPublisher(self._world, self.node)
+        TFPublisher(_world=self._world, node=self.node)
 
     def _select_shapes(self, body):
         if self.shape_source is ShapeSource.VISUAL_ONLY:
