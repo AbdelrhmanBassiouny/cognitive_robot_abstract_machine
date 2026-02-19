@@ -156,14 +156,10 @@ class CVVisualizer(Visualizer, Visualizer.Observer):
         active_annotator_instance: BaseAnnotator = vis_state.active_annotator
         active_annotator_instance.mouse_callback(event, x, y, flags, param)
 
-    def window_title(self):
+    def window_title(self) -> str:
         """Get the window title for this visualizer.
-
-        :returns: Window title in format "RoboKudo/pipeline_name"
-        :rtype: str
         """
-        window_name = "RoboKudo/" + self.pipeline.name
-        return window_name
+        return self.identifier()
 
     def notify(self, observable, *args, **kwargs):
         """Handle notification of state changes.

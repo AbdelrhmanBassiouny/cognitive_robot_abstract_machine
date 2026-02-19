@@ -132,21 +132,10 @@ class O3DVisualizer(Visualizer, Visualizer.Observer):
         if not tick_result:
             self.indicate_termination_var = True
 
-    def window_title(self):
+    def window_title(self) -> str:
         """Get the window title for this visualizer.
-
-        Returns
-        -------
-        str
-            Window title in format "RoboKudo/pipeline_name"
-
-        Notes
-        -----
-        .. todo::
-           Refactor with CVVisualizer
         """
-        window_name = "RoboKudo/" + self.pipeline.name
-        return window_name
+        return self.identifier()
 
 
 class Viewer3D(object):

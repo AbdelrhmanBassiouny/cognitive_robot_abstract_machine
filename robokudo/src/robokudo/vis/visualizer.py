@@ -186,6 +186,10 @@ class Visualizer(object):
 
         self.rk_logger = logging.getLogger(robokudo.defs.PACKAGE_NAME)
 
+    def identifier(self):
+        """Get a unique identifier for this visualizer."""
+        return "RoboKudo/" + self.pipeline.name
+
     def pre_tick(self):
         """Prepare for visualization update.
 
