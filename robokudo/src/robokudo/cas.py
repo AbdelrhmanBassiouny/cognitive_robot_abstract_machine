@@ -113,7 +113,6 @@ class CAS:
         dt_timestamp = datetime.fromtimestamp(self.timestamp)
         self.timestamp_readable = dt_timestamp.strftime("%Y-%m-%d %H:%M:%S")
 
-    # TODO Revisit this later on to check if we rename this to get_ref and get to be complied with set
     def get(self, view_name: str) -> Any:
         """Get a view by name.
 
@@ -158,6 +157,7 @@ class CAS:
         self.views[view_name] = value
 
     T = TypeVar("T")
+
     @staticmethod
     def filter_by_type(type_to_include: Type[T], input_list: List[Any]) -> List[T]:
         """Filter a list to include only objects of a specific type.
@@ -181,7 +181,7 @@ class CAS:
 
     @staticmethod
     def _filter_objects(
-        objects: List[Any], criteria: Dict[str, Tuple[str, Any]]
+            objects: List[Any], criteria: Dict[str, Tuple[str, Any]]
     ) -> List[Any]:
         """
         Filters a list of objects based on specified criteria.
@@ -216,10 +216,10 @@ class CAS:
         return [obj for obj in objects if matches_criteria(obj)]
 
     def filter_by_type_and_criteria(
-        self,
-        type_to_include: Type,
-        input_list: List[Any],
-        criteria: Dict[str, Tuple[str, Any]],
+            self,
+            type_to_include: Type,
+            input_list: List[Any],
+            criteria: Dict[str, Tuple[str, Any]],
     ) -> List[Any]:
         """Filters a list of objects based on specified criteria. Objects must be of type 'type_to_include'
 
