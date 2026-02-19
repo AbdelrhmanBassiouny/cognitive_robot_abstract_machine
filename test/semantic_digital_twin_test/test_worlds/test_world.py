@@ -1104,3 +1104,14 @@ def test_reattach_child_to_new_parent(world_setup):
     assert l2 not in world.compute_child_kinematic_structure_entities(l1)
     new_child_global_pose = l2.global_pose
     assert np.allclose(old_child_global_pose, new_child_global_pose)
+
+
+def test_reset_state_context(pr2_world_state_reset):
+    state_copy = pr2_world_state_reset.state.data.copy()
+    with pr2_world_state_reset.reset_state_context():
+        pr2_world_state_reset.get_body_by_name(
+            "base_footprint"
+        ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+            10, 10, 0
+        )
+    assert np.allclose(state_copy, pr2_world_state_reset.state.data)
