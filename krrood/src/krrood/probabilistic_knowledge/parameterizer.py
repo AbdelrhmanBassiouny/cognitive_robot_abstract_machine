@@ -92,7 +92,8 @@ class Parameterization:
         :param dao: The DataAccessObject to parameterize in place.
         :param sample: The sample to apply to the object.
         """
-        [variable.set_value(dao, value) for variable, value in sample.items()]
+        for variable, value in sample.items():
+            variable.set_value(dao, value)
 
     def parameterize_object_with_sample(
         self, obj: Any, sample: Dict[ObjectAccessVariable, Any]
