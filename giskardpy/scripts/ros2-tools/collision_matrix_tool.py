@@ -1,0 +1,872 @@
+#!/usr/bin/env python
+
+from __future__ import annotations
+
+import os
+import signal
+import sys
+import traceback
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Set, Tuple, List, Optional, Dict, Union
+
+import pandas as pd
+import rclpy
+from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QDoubleValidator, QIntValidator
+from PyQt5.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QTableWidget,
+    QCheckBox,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLineEdit,
+    QFileDialog,
+    QMessageBox,
+    QProgressBar,
+    QLabel,
+    QDialog,
+    QDialogButtonBox,
+    QFrame,
+    QScrollArea,
+)
+from std_msgs.msg import ColorRGBA
+
+from giskardpy.middleware import get_middleware
+from giskardpy.middleware.ros2 import rospy
+from giskardpy.model.world_config import EmptyWorld
+from giskardpy.qp.qp_controller_config import QPControllerConfig
+from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
+from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+    VizMarkerPublisher,
+)
+from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionCheck
+from semantic_digital_twin.collision_checking.collision_rules import (
+    SelfCollisionMatrixRule,
+)
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.minimal_robot import MinimalRobot
+from semantic_digital_twin.utils import robot_name_from_urdf_string
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
+
+
+class DisableCollisionReason(Enum):
+    Unknown = -1
+    Never = 1
+    Adjacent = 2
+    Default = 3
+    AlmostAlways = 4
+
+
+reason_color_map = {
+    DisableCollisionReason.Never: (163, 177, 233),  # blue
+    DisableCollisionReason.Adjacent: (233, 163, 163),  # red
+    DisableCollisionReason.AlmostAlways: (233, 163, 231),  # purple
+    DisableCollisionReason.Default: (233, 231, 163),  # yellow
+    DisableCollisionReason.Unknown: (153, 76, 0),  # brown
+    None: (0, 255, 0),
+}
+
+
+@dataclass
+class SelfCollisionMatrixInterface:
+    world: World = field(init=False)
+    _reasons: Dict[Tuple[Body, Body], DisableCollisionReason] = field(
+        init=False, default_factory=dict
+    )
+    _disabled_links: Set[Body] = field(init=False, default_factory=set)
+    collision_matrix: SelfCollisionMatrixRule = field(init=False)
+
+    @property
+    def bodies(self) -> List[Body]:
+        return list(sorted(self.world.bodies_with_collision, key=lambda x: x.name.name))
+
+    @property
+    def enabled_bodies(self) -> List[Body]:
+        return [
+            body
+            for body in self.bodies
+            if body not in self.collision_matrix.allowed_collision_bodies
+        ]
+
+    def sort_bodies(self, body_a: Body, body_b: Body) -> tuple[Body, Body]:
+        if body_a == body_b:
+            return body_a, body_b
+        collision_check = CollisionCheck.create_and_validate(body_a, body_b)
+        return collision_check.body_a, collision_check.body_b
+
+    def get_reason_for_pair(
+        self, body_a: Body, body_b: Body
+    ) -> Optional[DisableCollisionReason]:
+        body_a, body_b = self.sort_bodies(body_a, body_b)
+        return self._reasons.get((body_a, body_b), None)
+
+    def set_reason_for_pair(
+        self, body_a: Body, body_b: Body, reason: DisableCollisionReason | None
+    ):
+        body_a, body_b = self.sort_bodies(body_a, body_b)
+        self._reasons[body_a, body_b] = reason
+
+    def load_urdf(self, urdf_path: str):
+        self.world = URDFParser.from_file(urdf_path).parse()
+        self.collision_matrix = SelfCollisionMatrixRule()
+        MinimalRobot.from_world(self.world)
+
+    def load_srdf(self, srdf_path: str):
+        self.collision_matrix = SelfCollisionMatrixRule.from_collision_srdf(
+            srdf_path, self.world
+        )
+        for collision_check in self.collision_matrix.allowed_collision_pairs:
+            self.set_reason_for_pair(
+                collision_check.body_a,
+                collision_check.body_b,
+                DisableCollisionReason.Unknown,
+            )
+
+    def add_body(self, body: Body):
+        self.collision_matrix.allowed_collision_bodies.discard(body)
+
+    def remove_body(self, body: Body):
+        self.collision_matrix.allowed_collision_bodies.add(body)
+
+    def add_pair(self, body_a: Body, body_b: Body, reason: DisableCollisionReason):
+        collision_check = CollisionCheck.create_and_validate(body_a, body_b)
+        self.collision_matrix.allowed_collision_pairs.add(collision_check)
+        self.set_reason_for_pair(body_a, body_b, reason)
+
+    def remove_pair(self, body_a: Body, body_b: Body):
+        collision_check = CollisionCheck.create_and_validate(body_a, body_b)
+        self.collision_matrix.allowed_collision_pairs.remove(collision_check)
+        self.set_reason_for_pair(body_a, body_b, None)
+
+
+@dataclass
+class ReasonCheckBox(QCheckBox):
+    row: int
+    column: int
+    table: Table
+    self_collision_matrix_interface: SelfCollisionMatrixInterface
+    reason: Optional[DisableCollisionReason] = None
+
+    def __post_init__(self):
+        super().__init__()
+
+    def connect_callback(self):
+        self.stateChanged.connect(self.checkbox_callback)
+
+    def sync_reason(self):
+        body_a = self.table.table_id_to_body(self.row)
+        body_b = self.table.table_id_to_body(self.column)
+        reason = self.self_collision_matrix_interface.get_reason_for_pair(
+            body_a, body_b
+        )
+        self.setChecked(reason is not None)
+        self.setStyleSheet(f"background-color: rgb{reason_color_map[reason]};")
+
+    def checkbox_callback(self, state, update_range: bool = True):
+        if update_range:
+            self.table.selectedRanges()
+            for range_ in self.table.selectedRanges():
+                for row in range(range_.topRow(), range_.bottomRow() + 1):
+                    for column in range(range_.leftColumn(), range_.rightColumn() + 1):
+                        item = self.table.get_widget(row, column)
+                        if state != item.checkState():
+                            item.checkbox_callback(state, False)
+        body_a = self.table.table_id_to_body(self.row)
+        body_b = self.table.table_id_to_body(self.column)
+        if state == Qt.Checked:
+            reason = DisableCollisionReason.Unknown
+        else:
+            reason = None
+        self.table.update_reason(body_a, body_b, reason)
+
+
+@dataclass
+class Table(QTableWidget):
+    self_collision_matrix_interface: SelfCollisionMatrixInterface
+
+    def __post_init__(self):
+        super().__init__()
+        self.cellClicked.connect(self.table_item_callback)
+
+    def update_disabled_links(self, bodies: Set[Body]):
+        for body in bodies:
+            self.self_collision_matrix_interface.add_body(body)
+        self.synchronize()
+
+    def disable_link(self, body_name: str):
+        body = self.world.get_body_by_name(body_name)
+        self.self_collision_matrix_interface.remove_body(body)
+
+    def enable_link(self, body_name: str):
+        body = self.world.get_body_by_name(body_name)
+        self.self_collision_matrix_interface.add_body(body)
+
+    def get_widget(self, row, column):
+        return self.cellWidget(row, column).layout().itemAt(0).widget()
+
+    def prefix_reasons_to_str_reasons(
+        self, reasons: Dict[Tuple[PrefixedName, PrefixedName], DisableCollisionReason]
+    ) -> Dict[Tuple[str, str], DisableCollisionReason]:
+        return {
+            (x[0].short_name, x[1].short_name): reason for x, reason in reasons.items()
+        }
+
+    @property
+    def str_reasons(self) -> Dict[Tuple[str, str], DisableCollisionReason]:
+        return self.prefix_reasons_to_str_reasons(self._reasons)
+
+    @property
+    def reasons(
+        self,
+    ) -> Dict[Tuple[PrefixedName, PrefixedName], DisableCollisionReason]:
+        return self._reasons
+
+    def table_id_to_body(self, index: int) -> Body:
+        return self.bodies[index]
+
+    def body_to_table_id(self, body: Body) -> int:
+        return self.bodies.index(body)
+
+    def update_reason(
+        self, body_a: Body, body_b: Body, new_reason: Optional[DisableCollisionReason]
+    ):
+        if new_reason is None:
+            self.self_collision_matrix_interface.remove_pair(body_a, body_b)
+        self.self_collision_matrix_interface.set_reason_for_pair(
+            body_a, body_b, new_reason
+        )
+        row = self.body_to_table_id(body_a)
+        column = self.body_to_table_id(body_b)
+        self.get_widget(row, column).sync_reason()
+        self.get_widget(column, row).sync_reason()
+
+    def reason_from_index(self, row, column):
+        body_a = self.table_id_to_body(row)
+        body_b = self.table_id_to_body(column)
+        return self.self_collision_matrix_interface.get_reason_for_pair(body_a, body_b)
+
+    def table_item_callback(self, row, column):
+        self.ros_visualizer.clear_marker("")
+        # todo color body
+        link1 = self.world.get_body_by_name(self.bodies[row])
+        link2 = self.world.get_body_by_name(self.bodies[column])
+        key = self.sort_bodies(link1, link2)
+        reason = self.reasons.get(key, None)
+        color = reason_color_map[reason]
+        color_msg = ColorRGBA(
+            r=color[0] / 255.0, g=color[1] / 255.0, b=color[2] / 255.0, a=1.0
+        )
+        self.world.links[link1].dye_collisions(color_msg)
+        self.world.links[link2].dye_collisions(color_msg)
+        self.world.clear_all_lru_caches()
+        self.ros_visualizer.clear_marker_cache()
+        self.ros_visualizer.publish_markers()
+
+    def dye_disabled_links(self, disabled_color: Optional[ColorRGBA] = None):
+        if disabled_color is None:
+            disabled_color = ColorRGBA(1, 0, 0, 1)
+        self.ros_visualizer.clear_marker("")
+        for link_name in self.world.link_names_with_collisions:
+            if link_name.short_name in self.enabled_bodies:
+                self.world.links[link_name].dye_collisions(
+                    self.world.default_link_color
+                )
+            else:
+                self.world.links[link_name].dye_collisions(disabled_color)
+        self.world.clear_all_lru_caches()
+        self.ros_visualizer.publish_markers()
+
+    @property
+    def disabled_link_prefix_names(self) -> List[PrefixedName]:
+        return list(self._disabled_links)
+
+    def add_table_item(self, row, column):
+        checkbox = ReasonCheckBox(
+            table=self,
+            row=row,
+            column=column,
+            self_collision_matrix_interface=self.self_collision_matrix_interface,
+        )
+        checkbox.sync_reason()
+        checkbox.connect_callback()
+        if row == column:
+            checkbox.setDisabled(True)
+
+        widget = QWidget()
+        layout = QVBoxLayout()
+        layout.addWidget(checkbox)
+        layout.setAlignment(checkbox, Qt.AlignCenter)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        widget.setLayout(layout)
+        self.setCellWidget(row, column, widget)
+
+    @property
+    def bodies(self) -> list[Body]:
+        return self.self_collision_matrix_interface.bodies
+
+    @property
+    def enabled_bodies(self) -> list[Body]:
+        return self.self_collision_matrix_interface.enabled_bodies
+
+    @property
+    def body_names(self) -> list[str]:
+        return [body.name.name for body in self.bodies]
+
+    def synchronize(self):
+        # self.table.update_disabled_links(disabled_links)
+        # if reasons is not None:
+        #     self._reasons = {self.sort_bodies(*k): v for k, v in reasons.items()}
+        self.clear()
+        self.setRowCount(len(self.bodies))
+        self.setColumnCount(len(self.bodies))
+        self.setHorizontalHeaderLabels(self.body_names)
+        self.setVerticalHeaderLabels(self.body_names)
+
+        for row_id, link1 in enumerate(self.bodies):
+            if link1 not in self.enabled_bodies:
+                self.hideRow(row_id)
+            for column_id, link2 in enumerate(self.bodies):
+                self.add_table_item(row_id, column_id)
+                if link2 not in self.enabled_bodies:
+                    self.hideColumn(column_id)
+
+        num_rows = self.rowCount()
+
+        widths = []
+
+        for row_id in range(num_rows):
+            item = self.item(row_id, 0)
+            if item is not None:
+                widths.append(item.sizeHint().width())
+        if widths:
+            self.setColumnWidth(0, max(widths))
+
+
+def get_readable_color(red: float, green: float, blue: float) -> Tuple[int, int, int]:
+    luminance = ((0.299 * red) + (0.587 * green) + (0.114 * blue)) / 255
+    if luminance > 0.5:
+        return 0, 0, 0
+    else:
+        return 255, 255, 255
+
+
+class MyProgressBar(QProgressBar):
+    def set_progress(self, value: int, text: Optional[str] = None):
+        value = int(min(max(value, 0), 100))
+        self.setValue(value)
+        if text is not None:
+            self.setFormat(f"{text}: %p%")
+        self.parent().repaint()
+
+
+class HLine(QFrame):
+    def __init__(self):
+        super().__init__()
+        self.setFrameShape(QFrame.HLine)
+        self.setFrameShadow(QFrame.Sunken)
+
+
+class ComputeSelfCollisionMatrixParameterDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.setWindowTitle("Set Parameters")
+
+        self.parameters = {}
+
+        self.layout = QVBoxLayout(self)
+        self.layout.addWidget(
+            QLabel(
+                "Set Thresholds for computing the self collision matrix. \n"
+                "Collision checks for entries in this matrix will not be performed."
+            )
+        )
+        self.layout.addWidget(HLine())
+        self.layout.addWidget(
+            QLabel(
+                "Phase 1: Add link pairs that are in contact in default joint state."
+            )
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "Distance threshold:", 0.0, "distance_threshold_zero"
+            )
+        )
+        self.layout.addWidget(HLine())
+        self.layout.addWidget(
+            QLabel("Phase 2: Add link pairs that are (almost) always in collision.")
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "Do distance checks for:",
+                200,
+                "number_of_tries_always",
+                unit="random configurations.",
+                int_=True,
+            )
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "Add all pairs that were closer than",
+                0.005,
+                "distance_threshold_always",
+            )
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "in", 0.95, "almost_percentage", unit="% of configurations."
+            )
+        )
+        self.layout.addWidget(HLine())
+        self.layout.addWidget(
+            QLabel("Phase 3: Add link pairs that are never in collision.")
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "Do distance checks for ",
+                10000,
+                "number_of_tries_never",
+                unit="random configurations.",
+                int_=True,
+            )
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "Out of all pairs that are between",
+                -0.02,
+                "distance_threshold_never_min",
+            )
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "and ", 0.05, "distance_threshold_never_max", unit="m apart."
+            )
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "Step 3.1: Add pairs that were always above",
+                0.0,
+                "distance_threshold_never_zero",
+                unit="m apart.",
+            )
+        )
+        self.layout.addLayout(
+            self.make_parameter_entry(
+                "Step 3.2: Add links that were never further than",
+                0.05,
+                "distance_threshold_never_range",
+                unit="m apart.",
+            )
+        )
+
+        self.buttonBox = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self
+        )
+        self.buttonBox.accepted.connect(self.accept)
+        self.buttonBox.rejected.connect(self.reject)
+        self.layout.addWidget(self.buttonBox)
+
+    def make_parameter_entry(
+        self,
+        text: str,
+        default: float,
+        parameter_name: str,
+        int_: bool = False,
+        unit: str = "m",
+    ) -> QVBoxLayout:
+        inner_box = QHBoxLayout()
+        edit = QLineEdit(self)
+        inner_box.addWidget(QLabel(text))
+        inner_box.addWidget(edit)
+        inner_box.addWidget(QLabel(unit))
+        edit.setText(str(default))
+        if int_:
+            edit.setValidator(QIntValidator(self))
+        else:
+            edit.setValidator(QDoubleValidator(self))
+
+        outer_box = QVBoxLayout()
+        outer_box.addLayout(inner_box)
+        self.parameters[parameter_name] = edit
+        return outer_box
+
+    def get_parameter_map(self) -> Dict[str, float]:
+        params = {
+            param_name: float(edit.text())
+            for param_name, edit in self.parameters.items()
+        }
+        return params
+
+
+# class RosparamSelectionDialog(QDialog):
+#     default_option = '/robot_description'
+#
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#
+#         self.setWindowTitle("File Selection")
+#
+#         self.layout = QVBoxLayout(self)
+#
+#         self.label = QLabel("Please select an option:")
+#         self.layout.addWidget(self.label)
+#
+#         self.combo_box = QComboBox(self)
+#         self.combo_box.setEditable(True)  # Make the combo box editable
+#         self.layout.addWidget(self.combo_box)
+#
+#         # Add the options to the combobox
+#         self.combo_box.addItems(rospy.get_param_names())
+#         if rospy.has_param(self.default_option):
+#             self.combo_box.setCurrentText(self.default_option)
+#
+#         self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, self)
+#         self.buttonBox.accepted.connect(self.accept)
+#         self.buttonBox.rejected.connect(self.reject)
+#         self.layout.addWidget(self.buttonBox)
+#
+#     def get_selected_option(self):
+#         return self.combo_box.currentText()
+
+
+class ClickableLabel(QLabel):
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+
+    def mousePressEvent(self, event):
+        self.parent().checkbox.click()
+
+
+@dataclass
+class DisableBodyItem(QWidget):
+    body: Body
+    self_collision_matrix_interface: SelfCollisionMatrixInterface
+    parent: Optional[QWidget] = None
+
+    def __post_init__(self):
+        super().__init__(self.parent)
+        self.checkbox = QCheckBox()
+        self.checkbox.stateChanged.connect(self.checkbox_callback)
+        self.label = ClickableLabel(self.text, self)
+
+        layout = QHBoxLayout()
+        layout.addWidget(self.checkbox)
+        layout.addWidget(self.label)
+        layout.addStretch()
+        self.setLayout(layout)
+
+    @property
+    def text(self) -> str:
+        return self.body.name.name
+
+    def checkbox_callback(self, state):
+        if state == Qt.Checked:
+            self.self_collision_matrix_interface.remove_body(self.body)
+        else:
+            self.self_collision_matrix_interface.add_body(self.body)
+        # self.table.dye_disabled_links()
+
+    def set_checked(self, new_state: bool):
+        self.checkbox.setChecked(new_state)
+
+    def is_checked(self):
+        return self.checkbox.isChecked()
+
+
+@dataclass
+class DisableBodiesDialog(QDialog):
+    self_collision_matrix_interface: SelfCollisionMatrixInterface
+
+    def __post_init__(self):
+        super().__init__()
+        self.setWindowTitle("Disable Bodies")
+        self.layout = QVBoxLayout(self)
+
+        self.scrollArea = QScrollArea(self)
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollAreaWidgetContents = QWidget()
+        self.scrollArea.setWidget(self.scrollAreaWidgetContents)
+        self.layout.addWidget(self.scrollArea)
+
+        self.scrollLayout = QVBoxLayout(self.scrollAreaWidgetContents)
+
+        self.checkbox_widgets = []
+        for body in self.self_collision_matrix_interface.bodies:
+            checkbox_widget = DisableBodyItem(
+                body, self.self_collision_matrix_interface
+            )
+            self.checkbox_widgets.append(checkbox_widget)
+            self.scrollLayout.addWidget(checkbox_widget)
+            checkbox_widget.set_checked(
+                body not in self.self_collision_matrix_interface.enabled_bodies
+            )
+
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok)
+        self.buttonBox.accepted.connect(self.accept)
+        self.layout.addWidget(self.buttonBox)
+
+    def checked_links(self) -> List[str]:
+        return [
+            self.links[i]
+            for i, cbw in enumerate(self.checkbox_widgets)
+            if cbw.is_checked()
+        ]
+
+
+@dataclass
+class Application(QMainWindow):
+    self_collision_matrix_interface: SelfCollisionMatrixInterface = field(init=False)
+    timer: QTimer = field(init=False, default_factory=QTimer)
+
+    def __post_init__(self):
+        super().__init__()
+        self.self_collision_matrix_interface = SelfCollisionMatrixInterface()
+        self.timer.start(1000)  # Time in milliseconds
+        self.timer.timeout.connect(lambda: None)
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle("Self Collision Matrix Tool")
+        self.setMinimumSize(800, 600)
+
+        self.progress = MyProgressBar(self)
+
+        self.table = Table(self.self_collision_matrix_interface)
+
+        layout = QVBoxLayout()
+        layout.addLayout(self._create_urdf_box_layout())
+        self.horizontalLine = QFrame()
+        self.horizontalLine.setFrameShape(QFrame.HLine)
+        self.horizontalLine.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(self.horizontalLine)
+        layout.addLayout(self._create_srdf_box_layout())
+        layout.addWidget(self.progress)
+        layout.addLayout(self._create_legend_box_layout())
+        layout.addWidget(self.table)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+
+        self.progress.set_progress(0, "Load urdf")
+
+    def _create_srdf_box_layout(self) -> QHBoxLayout:
+        self.load_srdf_button = QPushButton("Load from srdf")
+        self.load_srdf_button.clicked.connect(self._load_srdf_button_callback)
+        self.compute_srdf_button = QPushButton("Compute self collision matrix")
+        self.compute_srdf_button.clicked.connect(self._compute_srdf_button_callback)
+        self.disable_bodies_button = QPushButton("Disable links")
+        self.disable_bodies_button.clicked.connect(self._disable_bodies_button_callback)
+        self.save_srdf_button = QPushButton("Save as srdf")
+        self.save_srdf_button.clicked.connect(self._save_srdf_button_callback)
+        srdf_bottoms = QHBoxLayout()
+        srdf_bottoms.addWidget(self.compute_srdf_button)
+        srdf_bottoms.addWidget(self.disable_bodies_button)
+        srdf_bottoms.addWidget(self.load_srdf_button)
+        srdf_bottoms.addWidget(self.save_srdf_button)
+        self.disable_srdf_buttons()
+        return srdf_bottoms
+
+    def _create_urdf_box_layout(self) -> QHBoxLayout:
+        self.load_urdf_file_button = QPushButton("Load urdf from file")
+        self.load_urdf_file_button.clicked.connect(self._load_urdf_file_button_callback)
+        # self.load_urdf_param_button = QPushButton('Load urdf from parameter server')
+        # self.load_urdf_param_button.clicked.connect(self.load_urdf_from_paramserver)
+        self.urdf_progress = MyProgressBar(self)
+        self.urdf_progress.set_progress(0, "No urdf loaded")
+        urdf_section = QHBoxLayout()
+        urdf_section.addWidget(self.load_urdf_file_button)
+        # urdf_section.addWidget(self.load_urdf_param_button)
+        urdf_section.addWidget(self.urdf_progress)
+        return urdf_section
+
+    def _create_legend_box_layout(self) -> QHBoxLayout:
+        legend = QHBoxLayout()
+
+        for reason, color in reason_color_map.items():
+            if reason is not None:
+                label = QLabel(reason.name)
+            else:
+                label = QLabel("check collision")
+            label.setStyleSheet(
+                f"background-color: rgb{color}; color: rgb{get_readable_color(*color)};"
+            )
+            if reason == DisableCollisionReason.Never:
+                label.setToolTip("These links are never in contact.")
+            elif reason == DisableCollisionReason.Unknown:
+                label.setToolTip("This link pair was disabled for an unknown reason.")
+            elif reason == DisableCollisionReason.Adjacent:
+                label.setToolTip(
+                    "This link pair is only connected by joints that cannot move."
+                )
+            elif reason == DisableCollisionReason.Default:
+                label.setToolTip(
+                    "This link pair is in collision in the robot's default state."
+                )
+            elif reason == DisableCollisionReason.AlmostAlways:
+                label.setToolTip("This link pair is almost always in collision.")
+            else:
+                label.setToolTip("Collisions will be computed.")
+            legend.addWidget(label)
+        return legend
+
+    def _compute_srdf_button_callback(self):
+        dialog = ComputeSelfCollisionMatrixParameterDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            parameters = dialog.get_parameter_map()
+            reasons = (
+                god_map.collision_expression_manager._compute_srdf_button_callback(
+                    self.group_name,
+                    save_to_tmp=False,
+                    progress_callback=self.progress.set_progress,
+                    **parameters,
+                )
+            )
+            self.table.synchronize(reasons)
+            self.progress.set_progress(100, "Done checking collisions")
+        else:
+            self.progress.set_progress(0, "Canceled collision checking")
+
+    def _disable_bodies_button_callback(self):
+        dialog = DisableBodiesDialog(self.self_collision_matrix_interface)
+        dialog.exec_()
+        self.table.synchronize()
+
+    @property
+    def self_collision_matrix_rule(self) -> SelfCollisionMatrixRule:
+        return self.world.collision_manager.ignore_collision_rules[0]
+
+    def set_tmp_srdf_path(self):
+        self.__srdf_path = get_middleware().resolve_iri(
+            "package://giskardpy_ros/self_collision_matrices/"
+        )
+
+    def disable_srdf_buttons(self):
+        self.__disable_srdf_buttons(True)
+
+    def enable_srdf_buttons(self):
+        self.__disable_srdf_buttons(False)
+
+    def __disable_srdf_buttons(self, active: bool):
+        self.save_srdf_button.setDisabled(active)
+        self.load_srdf_button.setDisabled(active)
+        self.disable_bodies_button.setDisabled(active)
+        self.compute_srdf_button.setDisabled(active)
+
+    def _load_srdf_button_callback(self):
+        srdf_file = self.popup_srdf_path_with_dialog(False)
+        if srdf_file is None:
+            return
+        try:
+            if os.path.isfile(srdf_file):
+                self.self_collision_matrix_interface.load_srdf(srdf_file)
+                self.table.synchronize()
+                self.progress.set_progress(100, f"Loaded {srdf_file}")
+            else:
+                QMessageBox.critical(
+                    self, "Error", f"File does not exist: \n{srdf_file}"
+                )
+        except Exception as e:
+            traceback.print_exc()
+            QMessageBox.critical(self, "Error", str(e))
+
+    def _load_urdf_file_button_callback(self):
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        urdf_file, _ = QFileDialog.getOpenFileName(
+            self,
+            "QFileDialog.getOpenFileName()",
+            "",
+            "urdf files (*.urdf);;All files (*)",
+            options=options,
+        )
+        if urdf_file:
+            if not os.path.isfile(urdf_file):
+                QMessageBox.critical(
+                    self, "Error", f"File does not exist: \n{urdf_file}"
+                )
+                return
+
+            self.self_collision_matrix_interface.load_urdf(urdf_file)
+            self.urdf_progress.set_progress(0, f"Loading {urdf_file}")
+            self.urdf_progress.set_progress(10, f"Parsing {urdf_file}")
+            self.urdf_progress.set_progress(
+                50, f"Applying vhacd to concave meshes of {urdf_file}"
+            )
+            self.urdf_progress.set_progress(80, f"Updating table {urdf_file}")
+            # reasons = {
+            #     (body.name.name, body.name.name): DisableCollisionReason.Adjacent
+            #     for body in self.world.bodies_with_collision
+            # }
+            self.table.synchronize()
+            self.set_tmp_srdf_path()
+            self.enable_srdf_buttons()
+            self.urdf_progress.set_progress(100, f"Loaded {urdf_file}")
+
+    @property
+    def group_name(self):
+        return list(self.world.group_names)[0]
+
+    def popup_srdf_path_with_dialog(self, save: bool) -> str:
+        options = QFileDialog.Options()
+        options |= QFileDialog.ReadOnly
+        if save:
+            srdf_file, _ = QFileDialog.getSaveFileName(
+                self,
+                "QFileDialog.getSaveFileName()",
+                self.__srdf_path,
+                "srdf files (*.srdf);;All files (*)",
+                options=options,
+            )
+        else:
+            srdf_file, _ = QFileDialog.getOpenFileName(
+                self,
+                "QFileDialog.getOpenFileName()",
+                self.__srdf_path,
+                "srdf files (*.srdf);;All files (*)",
+                options=options,
+            )
+
+        if srdf_file:
+            self.__srdf_path = srdf_file
+        else:
+            srdf_file = None
+
+        return srdf_file
+
+    def _save_srdf_button_callback(self):
+        srdf_path = self.popup_srdf_path_with_dialog(True)
+        if srdf_path is not None:
+            god_map.collision_expression_manager.save_self_collision_matrix(
+                self.world.groups[self.group_name],
+                self.table.reasons,
+                self.table.disabled_link_prefix_names,
+                file_name=srdf_path,
+            )
+            self.progress.set_progress(100, f"Saved {self.__srdf_path}")
+
+    def die(self):
+        if not rclpy.ok():
+            QApplication.quit()
+
+
+def handle_sigint(sig, frame):
+    """Handler for the SIGINT signal."""
+    QApplication.quit()
+
+
+if __name__ == "__main__":
+    rospy.init_node("self_collision_matrix_updater")
+    signal.signal(signal.SIGINT, handle_sigint)
+
+    app = QApplication(sys.argv)
+    window = Application()
+    window.show()
+    sys.exit(app.exec_())
