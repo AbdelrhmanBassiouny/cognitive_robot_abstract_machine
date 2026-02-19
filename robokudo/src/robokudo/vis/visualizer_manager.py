@@ -106,9 +106,6 @@ class VisualizationManager(Behaviour):
         -----
         Creates one instance of each visualizer type and associates them
         with the pipeline. All visualizers share a common visualization state.
-
-        .. warning::
-           Not all visualizers need shared state - TODO: Handle this case
         """
         # TODO Handle shared visualization context - Not all Visualizers need one!
         shared_state = robokudo.vis.visualizer.Visualizer.SharedState()
@@ -197,7 +194,6 @@ class VisualizationManager(Behaviour):
             if pipeline_name not in self.visualizers:
                 self.create_visualizers_for_pipeline(self.pipelines[pipeline_name])
 
-            # TODO Maybe this should be another variable!
             # Ping Visualizers if there is new data for this Pipeline
             if annotator_output_pipeline_map_visualized.map[pipeline_name].redraw:
                 for visualizer in self.visualizers[pipeline_name]:

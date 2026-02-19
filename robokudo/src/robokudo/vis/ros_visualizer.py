@@ -142,16 +142,13 @@ class AllAnnotatorROSVisualizer(Visualizer, Node):
         * Maintains existing publishers
 
         TODO: Consider removing publishers for non-existing annotators. May not be
-        worth the cost if re-instantiation is frequent due to changing annotator lists.
+         worth the cost if re-instantiation is frequent due to changing annotator lists.
         """
         annotator_list = self.pipeline.get_annotators()
         for annotator in annotator_list:
             if annotator.name not in self.ros_image_publishers:
                 self.ros_image_publishers[annotator.name] = self.create_publisher(
                     Image, f"{self.pipeline.name}/{annotator.name}/output_image", 10)
-
-        # TODO Remove publishers of non-existing annotators? Might not be worth the cost of re-instantiation is
-        # often necessary due to changing annotator lists
 
     def tick(self):
         """Update all visualization displays.
