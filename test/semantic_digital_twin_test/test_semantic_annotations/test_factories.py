@@ -531,6 +531,7 @@ class TestFactories(unittest.TestCase):
             surface = table.calculate_supporting_surface()
 
         self.assertIsNotNone(surface)
+        self.assertEqual(surface, table.supporting_surface)
         self.assertEqual(len(world.regions), 1)
         self.assertTrue(len(surface.area.combined_mesh.vertices) > 0)
 

@@ -6,15 +6,6 @@ from typing import Tuple
 
 import numpy as np
 import trimesh
-from probabilistic_model.probabilistic_circuit.rx.helper import (
-    uniform_measure_of_event,
-)
-from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-    ProbabilisticCircuit,
-    ProductUnit,
-    SumUnit,
-    leaf,
-)
 from random_events.product_algebra import Event
 from typing_extensions import (
     TYPE_CHECKING,
@@ -27,6 +18,15 @@ from typing_extensions import (
 
 from krrood.ormatic.utils import classproperty
 from probabilistic_model.distributions import GaussianDistribution
+from probabilistic_model.probabilistic_circuit.rx.helper import (
+    uniform_measure_of_event,
+)
+from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
+    ProbabilisticCircuit,
+    ProductUnit,
+    SumUnit,
+    leaf,
+)
 from ..datastructures.prefixed_name import PrefixedName
 from ..datastructures.variables import SpatialVariables
 from ..exceptions import (
@@ -706,6 +706,7 @@ class HasSupportingSurface(HasStorageSpace, ABC):
         )
         self._world.add_region(supporting_surface)
         self._world.add_connection(self_C_supporting_surface)
+        self.add_supporting_surface(supporting_surface)
         return supporting_surface
 
     @synchronized_attribute_modification
@@ -720,14 +721,15 @@ class HasSupportingSurface(HasStorageSpace, ABC):
         amount: int = 100,
     ) -> List[Point3]:
         """
-        Samples points from a surface considering constraints such as object collisions, object
-        dimensions, and specified categories of interest.
+        Samples points from a surface around the semantic annotation. The surface is determined by the supporting
+        surface of the semantic annotation and is truncated by the objects on the surface. The points are sampled
+        using a Gaussian mixture model.
 
         ..warning:: Calling this method when the self.supporting_surface is None will cause the method to calculate the
             surface and add it to the world, resulting in model updates being published if the synchronizer is running.
 
         :param body_to_sample_for: The physical object to sample points for.
-        :param category_of_interest: The object to place the sampled points around.
+        :param category_of_interest: The type of object sample points around.
         :param amount: The number of points to sample.
 
         :return: A list of sampled points, sorted by distance to the around_object.
@@ -735,7 +737,8 @@ class HasSupportingSurface(HasStorageSpace, ABC):
         if self.supporting_surface is None:
             with self._world.modify_world():
                 supporting_surface = self.calculate_supporting_surface()
-                self.add_supporting_surface(supporting_surface)
+            if supporting_surface is None:
+                return []
 
         largest_xy_object_dimension = 0.1
         z_object_dimension = 0.0
@@ -751,8 +754,34 @@ class HasSupportingSurface(HasStorageSpace, ABC):
             self_max_z + (z_object_dimension / 2),
         )
 
+        surface_circuit = self._build_surface_circuit(
+            category_of_interest=category_of_interest,
+            object_bloat_and_standard_deviation=largest_xy_object_dimension
+        )
+
+        if surface_circuit is None:
+            return []
+
+        samples = surface_circuit.sample(amount)
+        samples = samples[np.argsort(surface_circuit.log_likelihood(samples))[::-1]]
+        samples = np.concatenate((samples, z_coordinate), axis=1)
+        return [Point3(*s, reference_frame=self.root) for s in samples]
+
+    def _build_surface_circuit(
+        self,
+        category_of_interest: Optional[Type[SemanticAnnotation]] = None,
+        object_bloat_and_standard_deviation: float = 0.1,
+    ):
+        """
+        Build a probabilistic circuit representing the supporting surface, truncated by the objects on the surface,
+        and with Gaussian mixtures around the objects of interest.
+
+        :param category_of_interest: The type of object sample points around.
+        :param object_bloat_and_standard_deviation: The amount of bloat to apply to the object events, and the standard
+            deviation to use for the Gaussian mixtures.
+        """
         truncated_event_2d = self._2d_event_truncated_by_objects(
-            largest_xy_object_dimension
+            object_bloat_and_standard_deviation
         )
 
         objects_of_interest = (
@@ -761,30 +790,22 @@ class HasSupportingSurface(HasStorageSpace, ABC):
             else []
         )
         if objects_of_interest:
-
-            surface_circuit = self._gaussian_mixture_from_points_truncated_by_event(
+            return self._gaussian_mixture_from_points_truncated_by_event(
                 world_P_obj_list=[
                     obj.root.global_pose.to_position() for obj in objects_of_interest
                 ],
-                standard_deviation=largest_xy_object_dimension,
+                standard_deviation=object_bloat_and_standard_deviation,
                 event=truncated_event_2d,
             )
-
-            if surface_circuit is None:
-                return []
-
         else:
-            surface_circuit = uniform_measure_of_event(truncated_event_2d)
-
-        samples = surface_circuit.sample(amount)
-
-        samples = samples[np.argsort(surface_circuit.log_likelihood(samples))[::-1]]
-
-        samples = np.concatenate((samples, z_coordinate), axis=1)
-
-        return [Point3(*s, reference_frame=self.root) for s in samples]
+            return uniform_measure_of_event(truncated_event_2d)
 
     def _2d_event_truncated_by_objects(self, object_event_bloat: float) -> Event:
+        """
+        Compute a 2D event representing the supporting surface, truncated by the objects on the surface.
+
+        :param object_event_bloat: The amount of bloat to apply to the object events.
+        """
         area_of_self = BoundingBoxCollection.from_shapes(self.supporting_surface.area)
         area_of_self.transform_all_shapes_to_own_frame()
         event = area_of_self.event
