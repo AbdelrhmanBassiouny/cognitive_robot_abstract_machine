@@ -2,8 +2,7 @@ from dataclasses import dataclass
 
 from typing_extensions import List, Optional
 
-from ..predicate import Symbol
-from ..symbol_graph import SymbolGraph, WrappedInstance, PredicateClassRelation
+from krrood.symbol_graph.symbol_graph import SymbolGraph, WrappedInstance, PredicateClassRelation, Symbol
 from ...ormatic.dao import AlternativeMapping, T
 
 

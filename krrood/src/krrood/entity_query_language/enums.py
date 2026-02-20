@@ -54,16 +54,15 @@ class EQLMode(Enum):
     """
 
 
-class PredicateType(Enum):
+class DomainSource(Enum):
     """
-    The type of a predicate.
+    The domain source of a variable.
     """
-
-    SubClassOfPredicate = auto()
+    EXPLICIT = auto()
     """
-    The predicate is an instance of Predicate class.
+    Explicitly provided domain.
     """
-    DecoratedMethod = auto()
+    DEDUCED = auto()
     """
-    The predicate is a method decorated with @predicate decorator.
+    Inferred using deductive reasoning.
     """
