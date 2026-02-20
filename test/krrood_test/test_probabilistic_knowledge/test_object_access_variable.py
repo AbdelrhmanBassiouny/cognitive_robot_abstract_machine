@@ -1,8 +1,6 @@
-from random_events.set import Set
-
-from krrood.entity_query_language.entity import variable_from
+from krrood.entity_query_language.factories import variable_from
 from krrood.ormatic.dao import to_dao
-from random_events.variable import Continuous, Symbolic
+from random_events.variable import Continuous, Symbolic, Set
 
 from krrood.probabilistic_knowledge.object_access_variable import ObjectAccessVariable
 from ..dataset.example_classes import Position, Positions

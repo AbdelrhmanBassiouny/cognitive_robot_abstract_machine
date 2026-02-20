@@ -5,7 +5,7 @@ import datetime
 from random_events.set import Set
 from random_events.variable import Continuous, Symbolic
 
-from krrood.entity_query_language.entity import variable_from
+from krrood.entity_query_language.factories import variable_from
 from krrood.ormatic.dao import to_dao
 from krrood.probabilistic_knowledge.object_access_variable import ObjectAccessVariable
 from krrood.probabilistic_knowledge.parameterizer import Parameterizer, Parameterization

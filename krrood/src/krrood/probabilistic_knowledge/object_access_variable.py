@@ -4,7 +4,7 @@ from typing_extensions import List, Any, Union
 from random_events.variable import Variable
 
 
-from ..entity_query_language.symbolic import Index, Attribute
+from ..entity_query_language.core.domain_mapping import Index, Attribute
 
 AttributeAccessLike = Union[Index, Attribute]
 
