@@ -273,6 +273,9 @@ class MatchVariable(Match[T]):
         super().__call__(**kwargs)
         return self.expression
 
+    def _construct_object_from_expression_(self):
+        return self._type_
+
 
 @dataclass(eq=False)
 class AttributeMatch(AbstractMatchExpression[T]):

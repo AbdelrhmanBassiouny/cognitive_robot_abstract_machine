@@ -1,8 +1,11 @@
+import enum
 from dataclasses import dataclass
+from typing import assert_never
+
+from random_events.set import Set
 from typing_extensions import List, Any, Union
 
-from random_events.variable import Variable
-
+from random_events.variable import Variable, Symbolic, Continuous, Integer
 
 from ..entity_query_language.core.domain_mapping import Index, Attribute
 
@@ -56,3 +59,20 @@ class ObjectAccessVariable:
 
     def __hash__(self):
         return hash(self.variable)
+
+    @classmethod
+    def from_attribute_access_and_type(
+        cls, attribute_access: AttributeAccessLike, type_: type
+    ):
+        if issubclass(type_, enum.Enum):
+            result = Symbolic(str(attribute_access), Set.from_iterable(type_))
+        elif issubclass(type_, bool):
+            result = Symbolic(str(attribute_access), Set.from_iterable([True, False]))
+        elif issubclass(type_, int):
+            result = Integer(str(attribute_access))
+        elif issubclass(type_, float):
+            result = Continuous(str(attribute_access))
+        else:
+            assert_never(type_)
+
+        return cls(result, attribute_access)

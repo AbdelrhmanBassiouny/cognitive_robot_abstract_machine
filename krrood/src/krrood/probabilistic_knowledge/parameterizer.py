@@ -379,23 +379,10 @@ class Parameterizer:
 
         :return: A object access variable or raise error if the type is not supported.
         """
-
-        if issubclass(field_type, enum.Enum):
-            result = Symbolic(
-                str(symbolic_access_variable), Set.from_iterable(field_type)
-            )
-        elif issubclass(field_type, bool):
-            result = Symbolic(
-                str(symbolic_access_variable), Set.from_iterable([True, False])
-            )
-        elif issubclass(field_type, int):
-            result = Integer(str(symbolic_access_variable))
-        elif issubclass(field_type, float):
-            result = Continuous(str(symbolic_access_variable))
-        else:
-            assert_never(field_type)
-
-        return ObjectAccessVariable(result, symbolic_access_variable)
+        return ObjectAccessVariable.from_attribute_access_and_type(
+            symbolic_access_variable,
+            field_type,
+        )
 
     def create_fully_factorized_distribution(
         self,
