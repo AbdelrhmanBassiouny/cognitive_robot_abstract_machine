@@ -11,10 +11,10 @@ from std_msgs.msg import String
 import rospy
 from ..utils import serialization as serializer
 from py_trees.common import Status
-from .core import BaseAnnotator
+from . import core
 
 
-class AnnotationStorageWriter(BaseAnnotator):
+class AnnotationStorageWriter(core.BaseAnnotator):
     """Annotator for writing annotations to storage in JSON format.
 
     This annotator writes the current CAS annotations to files in a specified
@@ -24,7 +24,7 @@ class AnnotationStorageWriter(BaseAnnotator):
     :type counter: int
     """
 
-    class Descriptor(BaseAnnotator.Descriptor):
+    class Descriptor(core.BaseAnnotator.Descriptor):
         """Configuration descriptor for annotation storage writer."""
 
         class Parameters:
@@ -91,7 +91,7 @@ class AnnotationStorageWriter(BaseAnnotator):
         return Status.SUCCESS
 
 
-class AnnotationPublisherWriter(BaseAnnotator):
+class AnnotationPublisherWriter(core.BaseAnnotator):
     """Annotator for publishing annotations via ROS topics.
 
     This annotator publishes the current CAS annotations as JSON-encoded
@@ -101,7 +101,7 @@ class AnnotationPublisherWriter(BaseAnnotator):
     :type pub: rospy.Publisher
     """
 
-    class Descriptor(BaseAnnotator.Descriptor):
+    class Descriptor(core.BaseAnnotator.Descriptor):
         """Configuration descriptor for annotation publisher."""
 
         class Parameters:
