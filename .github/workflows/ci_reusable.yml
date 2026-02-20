@@ -47,7 +47,7 @@ jobs:
       - name: Restore cache
         uses: actions/cache/restore@v4
         with:
-          path: /github/home/.cache
+          path: /github/home/.cache/semantic_digital_twin
           key: ${{ runner.os }}-cache-${{ github.ref_name }}-${{ inputs.lib }}
           restore-keys: |
             ${{ runner.os }}-cache-
@@ -67,8 +67,8 @@ jobs:
           python -m pytest -sv cognitive_robot_abstract_machine/test/${{ inputs.lib }}_test
 
       - name: Save cache
-        if: always()
+        if: ${{inputs.lib == 'pycram'}}
         uses: actions/cache/save@v4
         with:
-          path: /github/home/.cache
+          path: /github/home/.cache/semantic_digital_twin
           key: ${{ runner.os }}-cache-${{ github.ref_name }}-${{ inputs.lib }}
