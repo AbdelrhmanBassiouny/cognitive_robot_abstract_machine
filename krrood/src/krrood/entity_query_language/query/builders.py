@@ -245,9 +245,9 @@ class GroupedByBuilder(ExpressionBuilder):
             return True
         elif (
             isinstance(variable, Variable)
-            and isinstance(variable._domain_source_, Selectable)
+            and isinstance(variable._domain_, Selectable)
             and self.variable_is_in_or_derived_from_a_grouped_by_variable(
-                variable._domain_source_
+                variable._domain_
             )
         ):
             return True

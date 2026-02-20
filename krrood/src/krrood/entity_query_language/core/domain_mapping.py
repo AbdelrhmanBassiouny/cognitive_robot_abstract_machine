@@ -95,7 +95,7 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
             raise AttributeError(
                 f"{self.__class__.__name__} object has no attribute {name}"
             )
-        return self._get_domain_mapping_(Attribute, name, self._type__)
+        return self._get_domain_mapping_(Attribute, name)
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
         return self._get_domain_mapping_(Index, key)
@@ -140,9 +140,12 @@ class DomainMapping(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         super().__post_init__()
         self._var_ = self
 
-    @cached_property
-    def _type_(self):
-        return self._child_._type_
+    def _update_type_(self) -> None:
+        """
+        Update the `_type_` attribute with the type of the values of this attribute.
+        """
+        # Default implementation is that the type is the child type.
+        self._type_ = self._child_._type_
 
     def _evaluate__(
         self,
@@ -198,10 +201,9 @@ class Attribute(DomainMapping):
     The name of the attribute.
     """
 
-    _owner_class_: Type
-    """
-    The class that owns this attribute.
-    """
+    def __post_init__(self):
+        super().__post_init__()
+        self._update_type_()
 
     @property
     def _original_value_is_iterable_and_this_operation_preserves_that_(self):
@@ -210,9 +212,15 @@ class Attribute(DomainMapping):
         return self._wrapped_field_.is_iterable
 
     @cached_property
-    def _type_(self) -> Optional[Type]:
+    def _owner_class_(self):
         """
-        :return: The type of the accessed attribute.
+        The class that owns this attribute.
+        """
+        return self._child_._type_
+
+    def _update_type_(self) -> None:
+        """
+        Update the `_type_` attribute with the type of the values of this attribute.
         """
 
         if not is_dataclass(self._owner_class_):
@@ -224,7 +232,7 @@ class Attribute(DomainMapping):
         if self._wrapped_owner_class_:
             # try to get the type endpoint from a field
             try:
-                return self._wrapped_field_.type_endpoint
+                self._type_ = self._wrapped_field_.type_endpoint
             except (KeyError, AttributeError):
                 return None
         else:
@@ -239,7 +247,7 @@ class Attribute(DomainMapping):
                 ][0],
             )
             try:
-                return wrapped_field.type_endpoint
+                self._type_ = wrapped_field.type_endpoint
             except (AttributeError, RuntimeError):
                 return None
 

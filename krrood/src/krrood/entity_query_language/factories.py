@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import operator
 
+from traitlets import Instance
 from typing_extensions import Union, Iterable
 
 from .core.base_expressions import SymbolicExpression
-from .enums import RDREdge
+from .enums import RDREdge, DomainSource
 from .failures import UnsupportedExpressionTypeForDistinct
 from .query.match import Match, MatchVariable
 from .operators.aggregators import Max, Min, Sum, Average, Count
@@ -28,7 +29,7 @@ from .query.query import Entity, SetOf, Query
 from .utils import is_iterable
 from .core.variable import (
     DomainType,
-    Literal,
+    Literal, ExternallySetVariable,
 )
 from .core.domain_mapping import Flatten, CanBehaveLikeAVariable
 from .predicate import *  # type: ignore
@@ -98,8 +99,6 @@ def match_variable(
 def variable(
     type_: Type[T],
     domain: DomainType,
-    name: Optional[str] = None,
-    inferred: bool = False,
 ) -> Union[T, Selectable[T]]:
     """
     Declare a symbolic variable that can be used inside queries.
@@ -115,39 +114,43 @@ def variable(
     :param domain: Iterable of potential values for the variable or None.
      If None, the domain will be inferred from the SymbolGraph for Symbol types, else should not be evaluated by EQL
       but by another evaluator (e.g., EQL To SQL converter in Ormatic).
-    :param name: The variable name, only required for pretty printing.
-    :param inferred: Whether the variable is inferred or not.
     :return: A Variable that can be queried for.
     """
     # Determine the domain source
     if is_iterable(domain):
-        domain_source = filter(lambda x: isinstance(x, type_), domain)
-    elif domain is None and not inferred and issubclass(type_, Symbol):
-        domain_source = SymbolGraph().get_instances_of_type(type_)
+        domain = filter(lambda x: isinstance(x, type_), domain)
+    elif domain is None and issubclass(type_, Symbol):
+        domain = SymbolGraph().get_instances_of_type(type_)
     else:
-        domain_source = domain
-
-    if name is None:
-        name = type_.__name__
+        domain = domain
 
     result = Variable(
         _type_=type_,
-        _domain_source_=domain_source,
-        _name__=name,
-        _is_inferred_=inferred,
+        _domain_=domain,
     )
 
     return result
 
 
+def deduced_variable(
+    type_: Optional[Type[T]] = None,
+) -> Union[Type[T], ExternallySetVariable[T]]:
+    """
+    Create a variable that is inferred through deductive reasoning.
+
+    :param type_: The type of the variable values.
+    :return: An instance of `ExternallySetVariable[T]`.
+    """
+    return ExternallySetVariable(_type_=type_, _domain_source_=DomainSource.DEDUCED)
+
+
 def variable_from(
     domain: Union[Iterable[T], Selectable[T]],
-    name: Optional[str] = None,
 ) -> Union[T, Selectable[T]]:
     """
-    Similar to `variable` but constructed from a domain directly wihout specifying its type.
+    Similar to `variable` but constructed from a domain directly without specifying its type.
     """
-    return Literal(data=domain, name=name, wrap_in_iterator=False)
+    return Literal(domain, _wrap_in_iterator_=False)
 
 
 # %% Operators on Variables
@@ -315,7 +318,6 @@ def inference(
     """
     return lambda **kwargs: InstantiatedVariable(
         _type_=type_,
-        _name__=type_.__name__,
         _kwargs_=kwargs,
     )
 

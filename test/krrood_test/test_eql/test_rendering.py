@@ -63,7 +63,7 @@ def test_render_rx_graph_as_igraph_complex(doors_and_drawers_world):
     )
     prismatic_connection = variable(PrismaticConnection, domain=world.connections)
     revolute_connection = variable(RevoluteConnection, domain=world.connections)
-    views = variable(View, domain=None, inferred=True)
+    views = variable(View, domain=None, deduced=True)
     rule = an(
         entity(views).where(
             fixed_connection_condition,

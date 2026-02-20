@@ -169,7 +169,7 @@ def test_generate_with_using_in(handles_and_containers_world):
     """
     world = handles_and_containers_world
 
-    B = variable(Body, domain=world.bodies, name="B")
+    B = variable(Body, domain=world.bodies)
     query = an(
         entity(B).where(
             in_("Handle", B.name),
@@ -891,15 +891,13 @@ def test_distinct_with_order_by():
 
 
 def test_variable_domain(handles_and_containers_world):
-    world = variable(World, domain=[handles_and_containers_world])
-    body = variable(Body, domain=world.bodies)
+    body = variable(Body, domain=handles_and_containers_world.bodies)
     query = an(entity(body).where(contains(body.name, "Handle")))
     assert len(list(query.evaluate())) == 3
 
 
 def test_variable_from(handles_and_containers_world):
-    world = variable(World, domain=[handles_and_containers_world])
-    body = variable_from(world.bodies)
+    body = variable_from(handles_and_containers_world.bodies)
     query = an(entity(body).where(contains(body.name, "Handle")))
     assert len(list(query.evaluate())) == 3
 
@@ -907,7 +905,7 @@ def test_variable_from(handles_and_containers_world):
 def test_multiple_dependent_selectables(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
-    cabinet_drawers = variable_from(cabinet.drawers)
+    cabinet_drawers = flatten(cabinet.drawers)
     old_evaluate = cabinet_drawers._evaluate__
 
     def _cabinet_drawers_evaluate__(bindings):
