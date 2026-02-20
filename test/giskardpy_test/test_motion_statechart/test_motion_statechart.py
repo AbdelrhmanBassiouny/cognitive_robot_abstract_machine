@@ -137,23 +137,23 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 
-@pytest.fixture
-def pr2_with_box(pr2_world_state_reset) -> World:
-    with pr2_world_state_reset.modify_world():
+@pytest.fixture(scope="function")
+def pr2_with_box(pr2_world_copy) -> World:
+    with pr2_world_copy.modify_world():
         box = Body(
             name=PrefixedName("box"),
             visual=ShapeCollection(shapes=[Box(scale=Scale(1, 1, 1))]),
             collision=ShapeCollection(shapes=[Box(scale=Scale(1, 1, 1))]),
         )
         root_C_box = FixedConnection(
-            parent=pr2_world_state_reset.root,
+            parent=pr2_world_copy.root,
             child=box,
             parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                x=1.2, z=0.3, reference_frame=pr2_world_state_reset.root
+                x=1.2, z=0.3, reference_frame=pr2_world_copy.root
             ),
         )
-        pr2_world_state_reset.add_connection(root_C_box)
-    return pr2_world_state_reset
+        pr2_world_copy.add_connection(root_C_box)
+    return pr2_world_copy
 
 
 def test_condition_to_str():

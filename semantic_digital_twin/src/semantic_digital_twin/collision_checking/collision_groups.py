@@ -47,6 +47,10 @@ class CollisionGroup:
     def __hash__(self):
         return hash((self.root, tuple(sorted(self.bodies, key=lambda b: b.id))))
 
+    def add_body(self, body: Body):
+        if body.has_collision():
+            self.bodies.add(body)
+
     def get_max_avoided_bodies(self, collision_manager: CollisionManager) -> int:
         """
         Returns the maximum number of collisions `self` should avoid.
@@ -115,7 +119,7 @@ class CollisionGroupConsumer(CollisionConsumer, ABC):
         :return: the collision group for the given body.
         """
         for group in self.collision_groups:
-            if body in group.bodies or body == group.root:
+            if body in group:
                 return group
         raise Exception(f"No collision group found for {body}")
 
