@@ -11,7 +11,68 @@ on:
     branches: [ main ]
 
 jobs:
+  to-lowercase:
+    runs-on: ubuntu-latest
+    outputs:
+      repo_lowercase: ${{ steps.lowercase.outputs.repository }}
+    steps:
+      - id: lowercase
+        run: |
+          echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}:jazzy" >> $GITHUB_OUTPUT
+
+  create_mesh_cache:
+    needs: to-lowercase
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ needs.to-lowercase.outputs.repo_lowercase }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: cognitive_robot_abstract_machine
+          submodules: recursive
+
+      - name: Initialize submodules explicitly
+        run: |
+          cd cognitive_robot_abstract_machine
+          git config --global --add safe.directory "*"
+          git submodule sync --recursive
+          git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: |
+          cd cognitive_robot_abstract_machine
+          source /opt/ros/cram-env/bin/activate
+          poetry install
+
+      - name: Build ORM
+        run: |
+          cd cognitive_robot_abstract_machine/pycram/scripts/
+          source /opt/ros/overlay_ws/install/setup.bash
+          source /opt/ros/cram-env/bin/activate
+          python generate_orm.py
+
+      - name: Restore cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /github/home/.cache/semantic_digital_twin
+          key: ${{ runner.os }}-cache-${{ github.ref_name }}
+          restore-keys: |
+            ${{ runner.os }}-cache-
+
+      - name: Run test_multi_robot_action_designator
+        run: |
+          source /opt/ros/overlay_ws/install/setup.bash
+          source /opt/ros/cram-env/bin/activate
+          python -m pytest -sv cognitive_robot_abstract_machine/test/pycram_test/test_designator/test_multi_robot_action_designator.py
+
+      - name: Save cache
+        uses: actions/cache/save@v4
+        with:
+          path: /github/home/.cache/semantic_digital_twin
+          key: ${{ runner.os }}-cache-${{ github.ref_name }}
+
   test_each_lib:
+    needs: [to-lowercase, create_mesh_cache]
     strategy:
       fail-fast: false
       matrix:
@@ -26,3 +87,4 @@ jobs:
     uses: ./.github/workflows/ci_reusable.yml
     with:
       lib: ${{ matrix.lib }}
+      repo_lowercase: ${{ needs.to-lowercase.outputs.repo_lowercase }}
