@@ -178,7 +178,7 @@ def test_condition_to_str():
     assert a == '("ConstTrueNode#0" and ("ConstTrueNode#1" or not "ConstTrueNode#2"))'
 
 
-def test_motion_statechart_to_dot():
+def test_motion_statechart_to_dot(tmp_path):
     msc = MotionStatechart()
     node1 = ConstTrueNode()
     msc.add_node(node1)
@@ -190,7 +190,7 @@ def test_motion_statechart_to_dot():
     end.start_condition = trinary_logic_and(
         node1.observation_variable, node2.observation_variable
     )
-    msc.draw("muh.pdf")
+    msc.draw(str(tmp_path / "muh.pdf"))
 
 
 def test_print():
@@ -287,7 +287,7 @@ def test_print():
     assert msc.is_end_motion()
 
 
-def test_draw_with_invisible_node():
+def test_draw_with_invisible_node(tmp_path):
     msc = MotionStatechart()
     msc.add_nodes(
         [
@@ -307,7 +307,7 @@ def test_draw_with_invisible_node():
 
     kin_sim = Executor(MotionStatechartContext(world=World()))
     kin_sim.compile(motion_statechart=msc)
-    msc.draw("muh.pdf")
+    msc.draw(str(tmp_path / "muh.pdf"))
 
 
 class TestConditions:
@@ -435,7 +435,7 @@ def test_thread_payload_monitor_non_blocking_and_caching():
 
 class TestMotionStatechartLogic:
 
-    def test_transition_triggers(self):
+    def test_transition_triggers(self, tmp_path):
         msc = MotionStatechart()
 
         changer = ChangeStateOnEvents()
@@ -470,29 +470,29 @@ class TestMotionStatechartLogic:
         assert changer.state is None
 
         kin_sim.tick()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         kin_sim.tick()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert changer.life_cycle_state == LifeCycleValues.RUNNING
         assert changer.state == "on_start"
 
         kin_sim.tick()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert changer.life_cycle_state == LifeCycleValues.PAUSED
         assert changer.state == "on_pause"
 
         kin_sim.tick()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert changer.life_cycle_state == LifeCycleValues.RUNNING
         assert changer.state == "on_unpause"
 
         kin_sim.tick()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert changer.life_cycle_state == LifeCycleValues.DONE
         assert changer.state == "on_end"
 
         kin_sim.tick()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert changer.life_cycle_state == LifeCycleValues.NOT_STARTED
         assert changer.state == "on_reset"
 
@@ -511,7 +511,7 @@ class TestMotionStatechartLogic:
         with pytest.raises(NotInMotionStatechartError):
             node.reset_condition = node.observation_variable
 
-    def test_cancel_motion(self):
+    def test_cancel_motion(self, tmp_path):
         msc = MotionStatechart()
         node1 = ConstTrueNode()
         msc.add_node(node1)
@@ -526,7 +526,7 @@ class TestMotionStatechartLogic:
         kin_sim.tick()  # second tick, cancel goes into running
         with pytest.raises(Exception):
             kin_sim.tick()  # third tick, cancel goes true and triggers
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
 
     def test_motion_statechart(self):
         msc = MotionStatechart()
@@ -614,7 +614,7 @@ class TestMotionStatechartLogic:
             ObservationStateValues.TRUE,
         ]
 
-    def test_goal(self):
+    def test_goal(self, tmp_path):
         msc = MotionStatechart()
 
         node1 = ConstTrueNode()
@@ -729,9 +729,9 @@ class TestMotionStatechartLogic:
             ObservationStateValues.UNKNOWN,
             ObservationStateValues.TRUE,
         ]
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
 
-    def test_reset(self):
+    def test_reset(self, tmp_path):
         msc = MotionStatechart()
         node1 = ConstTrueNode()
         msc.add_node(node1)
@@ -753,7 +753,7 @@ class TestMotionStatechartLogic:
 
         kin_sim = Executor(MotionStatechartContext(world=World()))
         kin_sim.compile(motion_statechart=msc)
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
 
         kin_sim.tick()
         assert node1.observation_state == ObservationStateValues.UNKNOWN
@@ -1059,7 +1059,7 @@ def test_set_seed_odometry(pr2_world_state_reset):
 
 
 class TestJointTasks:
-    def test_joint_goal(self):
+    def test_joint_goal(self, tmp_path):
         world = World()
         with world.modify_world():
             root = Body(name=PrefixedName("root"))
@@ -1114,9 +1114,9 @@ class TestJointTasks:
         assert end.observation_state == ObservationStateValues.UNKNOWN
         assert task1.life_cycle_state == LifeCycleValues.NOT_STARTED
         assert end.life_cycle_state == LifeCycleValues.NOT_STARTED
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         kin_sim.tick_until_end()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert len(msc.history) == 6
         assert (
             msc.history.get_observation_history_of_node(task1)[-1]
@@ -2365,7 +2365,7 @@ def test_count_ticks():
 
 
 class TestEndMotion:
-    def test_end_motion_when_all_done1(self):
+    def test_end_motion_when_all_done1(self, tmp_path):
         msc = MotionStatechart()
         msc.add_nodes(
             [
@@ -2383,10 +2383,10 @@ class TestEndMotion:
         )
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert end.life_cycle_state == LifeCycleValues.RUNNING
 
-    def test_end_motion_when_all_done2(self):
+    def test_end_motion_when_all_done2(self, tmp_path):
         msc = MotionStatechart()
         msc.add_nodes(
             [
@@ -2405,10 +2405,10 @@ class TestEndMotion:
         kin_sim.compile(motion_statechart=msc)
         with pytest.raises(TimeoutError):
             kin_sim.tick_until_end()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert end.life_cycle_state == LifeCycleValues.NOT_STARTED
 
-    def test_end_motion_when_any_done1(self):
+    def test_end_motion_when_any_done1(self, tmp_path):
         msc = MotionStatechart()
         msc.add_nodes(
             [
@@ -2426,10 +2426,10 @@ class TestEndMotion:
         )
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert end.life_cycle_state == LifeCycleValues.RUNNING
 
-    def test_end_motion_when_any_done2(self):
+    def test_end_motion_when_any_done2(self, tmp_path):
         msc = MotionStatechart()
         msc.add_nodes(
             [
@@ -2448,7 +2448,7 @@ class TestEndMotion:
         kin_sim.compile(motion_statechart=msc)
         with pytest.raises(TimeoutError):
             kin_sim.tick_until_end()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert end.life_cycle_state == LifeCycleValues.NOT_STARTED
 
     def test_goals_cannot_have_end_motion(self):
@@ -2465,7 +2465,7 @@ class TestEndMotion:
 
 class TestTemplates:
 
-    def test_sequence_goal(self):
+    def test_sequence_goal(self, tmp_path):
         msc = MotionStatechart()
         node = Sequence(
             nodes=[
@@ -2481,7 +2481,7 @@ class TestTemplates:
         kin_sim = Executor(MotionStatechartContext(world=World()))
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
         assert kin_sim.control_cycles == 7
         assert msc.nodes[0].life_cycle_state == LifeCycleValues.RUNNING
         assert msc.nodes[1].life_cycle_state == LifeCycleValues.RUNNING
@@ -2600,7 +2600,7 @@ class TestTemplates:
 
 
 class TestOpenClose:
-    def test_open(self, pr2_world_copy):
+    def test_open(self, pr2_world_copy, tmp_path):
 
         with pr2_world_copy.modify_world():
             door = Door.create_with_new_body_in_world(
@@ -2709,7 +2709,7 @@ class TestOpenClose:
         )
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
-        msc.draw("muh.pdf")
+        msc.draw(str(tmp_path / "muh.pdf"))
 
         assert opened.observation_state == ObservationStateValues.TRUE
         assert closed.observation_state == ObservationStateValues.TRUE
@@ -2990,7 +2990,6 @@ class TestCollisionAvoidance:
         )
         kin_sim.compile(motion_statechart=msc_copy)
 
-        msc_copy.draw("muh.pdf")
         with pytest.raises(HardConstraintsViolatedException):
             kin_sim.tick_until_end()
 

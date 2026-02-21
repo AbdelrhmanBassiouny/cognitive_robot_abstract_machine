@@ -138,7 +138,7 @@ def test_start_condition(mini_world):
         assert edge == msc_copy.edges[index]
 
 
-def test_executing_json_parsed_statechart():
+def test_executing_json_parsed_statechart(tmp_path):
     world = World()
     with world.modify_world():
         root = Body(name=PrefixedName("root"))
@@ -204,9 +204,9 @@ def test_executing_json_parsed_statechart():
     assert end_copy.observation_state == ObservationStateValues.UNKNOWN
     assert task1_copy.life_cycle_state == LifeCycleValues.NOT_STARTED
     assert end_copy.life_cycle_state == LifeCycleValues.NOT_STARTED
-    msc_copy.draw("muh.pdf")
+    msc.draw(str(tmp_path / "muh.pdf"))
     kin_sim.tick_until_end()
-    msc_copy.draw("muh.pdf")
+    msc.draw(str(tmp_path / "muh.pdf"))
     assert task1_copy.observation_state == ObservationStateValues.TRUE
     assert end_copy.observation_state == ObservationStateValues.TRUE
     assert task1_copy.life_cycle_state == LifeCycleValues.RUNNING
@@ -269,7 +269,7 @@ def test_cart_goal_simple(pr2_world_state_reset: World):
     assert np.allclose(fk, tip_goal, atol=cart_goal.threshold)
 
 
-def test_compressed_copy_can_be_plotted(pr2_world_state_reset: World):
+def test_compressed_copy_can_be_plotted(pr2_world_state_reset: World, tmp_path):
     tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name("base_footprint")
     root = pr2_world_state_reset.get_kinematic_structure_entity_by_name("odom_combined")
     tip_goal = HomogeneousTransformationMatrix.from_xyz_quaternion(
@@ -297,10 +297,10 @@ def test_compressed_copy_can_be_plotted(pr2_world_state_reset: World):
     msc_copy._add_transitions()
     assert isinstance(msc_copy.nodes[-2], EndMotion)
     assert isinstance(msc_copy.nodes[-1], CancelMotion)
-    msc_copy.draw("muh.pdf")
+    msc.draw(str(tmp_path / "muh.pdf"))
 
 
-def test_nested_goals():
+def test_nested_goals(tmp_path):
     msc = MotionStatechart()
     msc.add_node(
         sequence := Sequence(
@@ -319,7 +319,7 @@ def test_nested_goals():
 
     msc_copy = MotionStatechart.from_json(new_json_data)
     msc_copy._add_transitions()
-    msc_copy.draw("muh.pdf")
+    msc.draw(str(tmp_path / "muh.pdf"))
 
     for node in msc.nodes:
         node_copy = msc_copy.get_node_by_index(node.index)

@@ -117,7 +117,13 @@ class AvoidCollisionBetweenGroups(AvoidCollisionRule):
     """
 
     body_group_a: List[Body] = field(default_factory=list)
+    """
+    List of bodies that should not collide with bodies in `body_group_b`.
+    """
     body_group_b: List[Body] = field(default_factory=list)
+    """
+    List of bodies that should not collide with bodies in `body_group_a`.
+    """
 
     def _update(self, world: World):
         self.added_collision_checks = set()

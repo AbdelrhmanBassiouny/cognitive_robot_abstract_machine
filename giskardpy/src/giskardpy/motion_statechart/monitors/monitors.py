@@ -36,17 +36,17 @@ class LocalMinimumReached(MotionStatechartNode):
     by checking if all velocities are below a degree of freedoms' max velocity *`joint_convergence_threshold`.
     """
 
-    min_cut_off: float = 0.01
-    """
-    Minimum velocity threshold for joint convergence.
-    """
-    max_cut_off: float = 0.06
-    """
-    Maximum velocity threshold for joint convergence.
-    """
     joint_convergence_threshold: float = 0.01
     """
-    Windows size for joint convergence check.
+    if a degree of freedom velocity is below its maximum velocity * this value, it is considered as not moving. 
+    """
+    minimum_threshold: float = 0.01
+    """
+    Minimum value for degree of freedom velocity * joint_convergence_threshold. 
+    """
+    maximum_threshold: float = 0.06
+    """
+    Maximum value for degree of freedom velocity * joint_convergence_threshold. 
     """
     windows_size: int = 1
     """
@@ -62,7 +62,7 @@ class LocalMinimumReached(MotionStatechartNode):
             velocity_limit = dof.limits.upper.velocity
             velocity_limit *= self.joint_convergence_threshold
             velocity_limit = min(
-                max(self.min_cut_off, velocity_limit), self.max_cut_off
+                max(self.minimum_threshold, velocity_limit), self.maximum_threshold
             )
             ref.append(velocity_limit)
             symbols.append(dof.variables.velocity)

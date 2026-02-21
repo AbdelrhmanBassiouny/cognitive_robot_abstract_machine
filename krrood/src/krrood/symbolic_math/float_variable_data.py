@@ -15,7 +15,13 @@ class FloatVariableData:
     """
 
     variables: List[FloatVariable] = field(default_factory=list)
+    """
+    All FloatVariables managed by this data object.
+    """
     data: np.ndarray = field(default_factory=lambda: np.array([], dtype=np.float64))
+    """
+    Flat array of values for all `variables`.
+    """
 
     def add_variable(self, variable: FloatVariable) -> int:
         """

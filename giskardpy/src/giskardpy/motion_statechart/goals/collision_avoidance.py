@@ -127,9 +127,9 @@ class ExternalCollisionDistanceMonitor(MotionStatechartNode):
 class ExternalCollisionAvoidanceTask(CollisionAvoidanceTask):
     """
     Avoids external collisions between a collision group and its collision_index-closest object in the environment.
-    Moves root_T_tip @ tip_P_contact in root_T_contact_normal direction until the distance is larger than buffer_zone.
+    Moves `root_T_tip @ tip_P_contact` in `root_T_contact_normal` direction until the distance is larger than buffer_zone.
     Limits the slack variables to prevent the tip from coming closer than violated_distance.
-    Can result in insolvable QPs if multiple of these constraints are violated.
+    .. warning: Can result in insolvable QPs if multiple of these constraints are violated.
     """
 
     collision_group: CollisionGroup = field(kw_only=True)
@@ -340,7 +340,7 @@ class SelfCollisionDistanceMonitor(MotionStatechartNode):
 class SelfCollisionAvoidanceTask(CollisionAvoidanceTask):
     """
     Avoids self collisions between two collision groups.
-    Moves group_a_P_point_on_a @ group_b_P_point_on_b in group_a_T_group_b_contact_normal direction until the distance is larger than buffer_zone.
+    Moves `group_a_P_point_on_a @ group_b_P_point_on_b` in `group_a_T_group_b_contact_normal` direction until the distance is larger than buffer_zone.
     Limits the slack variables to prevent the tip from coming closer than violated_distance.
     """
 
