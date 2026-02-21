@@ -1,12 +1,11 @@
 from typing_extensions import List
 
 from krrood.entity_query_language.factories import (
-    variable_from,
     contains,
     entity,
     inference,
     variable,
-    set_of,
+    match_variable,
 )
 from ...semantic_annotations.semantic_annotations import (
     Wardrobe,
@@ -21,6 +20,7 @@ from ...world_description.connections import (
     PrismaticConnection,
     RevoluteConnection,
 )
+from ...world_description.world_entity import Body
 
 
 def conditions_90574698325129464513441443063592862114(case) -> bool:
@@ -34,7 +34,7 @@ def conditions_90574698325129464513441443063592862114(case) -> bool:
 def conclusion_90574698325129464513441443063592862114(case) -> List[Handle]:
     def get_handles(case: World) -> List[Handle]:
         """Get possible value(s) for World.semantic_annotations of types list/set of Handle"""
-        kse = variable_from(case.kinematic_structure_entities)
+        kse = variable(Body, case.kinematic_structure_entities)
         return (
             entity(inference(Handle)(root=kse))
             .where(contains(kse.name.name.lower(), "handle"))
@@ -56,16 +56,13 @@ def conclusion_331345798360792447350644865254855982739(case) -> List[Drawer]:
     def get_drawers(case: World) -> List[Drawer]:
         """Get possible value(s) for World.semantic_annotations of types list/set of Drawer"""
         handle = variable(Handle, case.semantic_annotations)
-        fixed_connection = variable(FixedConnection, case.connections)
         prismatic_connection = variable(PrismaticConnection, case.connections)
-        return (
-            entity(inference(Drawer)(root=fixed_connection.parent, handle=handle))
-            .where(
-                fixed_connection.child == handle.root,
-                fixed_connection.parent == prismatic_connection.child,
-            )
-            .tolist()
+        fixed_connection = match_variable(FixedConnection, case.connections)(
+            parent=prismatic_connection.child, child=handle.root
         )
+        return inference(Drawer)(
+            root=fixed_connection.parent, handle=fixed_connection.child
+        ).tolist()
 
     return get_drawers(case)
 
@@ -110,16 +107,13 @@ def conclusion_59112619694893607910753808758642808601(case) -> List[Door]:
     def get_doors(case: World) -> List[Door]:
         """Get possible value(s) for World.semantic_annotations  of type Door."""
         handle = variable(Handle, case.semantic_annotations)
-        fixed_connection = variable(FixedConnection, case.connections)
         revolute_connection = variable(RevoluteConnection, case.connections)
-        return (
-            entity(inference(Door)(root=fixed_connection.parent, handle=handle))
-            .where(
-                fixed_connection.child == handle.root,
-                fixed_connection.parent == revolute_connection.child,
-            )
-            .tolist()
+        fixed_connection = match_variable(FixedConnection, case.connections)(
+            parent=revolute_connection.child, child=handle.root
         )
+        return inference(Door)(
+            root=fixed_connection.parent, handle=fixed_connection.child
+        ).tolist()
 
     return get_doors(case)
 
