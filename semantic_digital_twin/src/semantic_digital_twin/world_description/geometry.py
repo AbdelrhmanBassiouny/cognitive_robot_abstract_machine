@@ -873,16 +873,13 @@ class BoundingBox:
         self.max_y += max_y
         self.max_z += max_z
 
-    def enlarge_all(self, amount: float) -> Self:
+    def enlarge_all(self, amount: float):
         """
         Enlarge the axis-aligned bounding box in all dimensions by a given amount in-place.
 
         :param amount: The amount to enlarge the bounding box
-
-        :return: The enlarged bounding box (self)
         """
         self.enlarge(amount, amount, amount, amount, amount, amount)
-        return self
 
     @classmethod
     def from_mesh(
