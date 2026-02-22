@@ -29,13 +29,19 @@ class BaseCollisionVariableManager(CollisionGroupConsumer, ABC):
     """
     Cache for symbolic variables.
     """
-    _reset_data: np.ndarray = field(init=False, default_factory=lambda: np.array([]))
+    _block_start_indices: list[int] = field(default_factory=list, init=False)
     """
-    The data that is used to reset the whole collision data.
+    The indices of the collision data blocks in the `float_variable_manager`.
     """
-    _collision_data_start_index: int = field(init=False, default=None)
+    _reset_indices: np.ndarray = field(
+        default_factory=lambda: np.array([], dtype=int), init=False
+    )
     """
-    The index of the first collision data block in the `float_variable_manager`.
+    Indices in the data buffer that need to be reset.
+    """
+    _reset_values: np.ndarray = field(default_factory=lambda: np.array([]), init=False)
+    """
+    Values to write to the reset indices.
     """
     _single_reset_block: np.ndarray = field(init=False)
     """
@@ -45,6 +51,16 @@ class BaseCollisionVariableManager(CollisionGroupConsumer, ABC):
     def __post_init__(self):
         self._single_reset_block = np.zeros(self.block_size)
         self._single_reset_block[self.get_contact_distance_offset()] = 100
+
+    def _update_reset_indices(self, start_idx: int):
+        """
+        Updates the reset indices and values when a new block is registered.
+        """
+        block_indices = np.arange(start_idx, start_idx + self.block_size)
+        self._reset_indices = np.concatenate([self._reset_indices, block_indices])
+        self._reset_values = np.concatenate(
+            [self._reset_values, self._single_reset_block]
+        )
 
     def __hash__(self):
         return hash(id(self))
@@ -82,10 +98,7 @@ class BaseCollisionVariableManager(CollisionGroupConsumer, ABC):
         """
         Resets the collision data buffer to the default values.
         """
-        if self._collision_data_start_index is not None:
-            start_index = self._collision_data_start_index
-            end_index = start_index + self._reset_data.size
-            self.float_variable_data.data[start_index:end_index] = self._reset_data
+        self.float_variable_data.data[self._reset_indices] = self._reset_values
 
     def on_collision_matrix_update(self):
         pass
@@ -227,16 +240,17 @@ class ExternalCollisionVariableManager(BaseCollisionVariableManager):
         group = self.get_collision_group(body)
         if group in self.registered_groups:
             return
-        self.registered_groups[group] = len(self.float_variable_data.data)
-        if self._collision_data_start_index is None:
-            self._collision_data_start_index = self.registered_groups[group]
+        start_idx = len(self.float_variable_data.data)
+        self.registered_groups[group] = start_idx
         for index in range(group.get_max_avoided_bodies(self.collision_manager)):
+            block_start_idx = len(self.float_variable_data.data)
+            self._block_start_indices.append(block_start_idx)
+            self._update_reset_indices(block_start_idx)
             self.get_group_a_P_point_on_a_symbol(group, index)
             self.get_root_V_contact_normal_symbol(group, index)
             self.get_contact_distance_symbol(group, index)
             self.get_buffer_distance_symbol(group, index)
             self.get_violated_distance_symbol(group, index)
-            self._reset_data = np.append(self._reset_data, self._single_reset_block)
 
     def get_group_a_P_point_on_a_symbol(
         self, group: CollisionGroup, idx: int
@@ -451,16 +465,16 @@ class SelfCollisionVariableManager(BaseCollisionVariableManager):
         if key in self.registered_group_combinations:
             return
 
-        self.registered_group_combinations[key] = len(self.float_variable_data.data)
-        if self._collision_data_start_index is None:
-            self._collision_data_start_index = self.registered_group_combinations[key]
+        start_idx = len(self.float_variable_data.data)
+        self.registered_group_combinations[key] = start_idx
+        self._block_start_indices.append(start_idx)
+        self._update_reset_indices(start_idx)
         self.get_group_a_P_point_on_a_symbol(*key)
         self.get_group_b_P_point_on_b_symbol(*key)
         self.get_group_b_V_contact_normal_symbol(*key)
         self.get_contact_distance_symbol(*key)
         self.get_buffer_distance_symbol(*key)
         self.get_violated_distance_symbol(*key)
-        self._reset_data = np.append(self._reset_data, self._single_reset_block)
 
     def get_group_a_P_point_on_a_symbol(
         self,

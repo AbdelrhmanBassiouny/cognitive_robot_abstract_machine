@@ -92,7 +92,7 @@ class TestExternalCollisionExpressionManager:
 
         # test full expr
         variables = external_collisions.float_variable_data.variables
-        assert len(variables) == external_collisions._block_size * 2 + 1
+        assert len(variables) == external_collisions.block_size * 2 + 1
         expression = Vector(variables)
         compiled_expression = expression.compile(
             VariableParameters.from_lists(variables)
