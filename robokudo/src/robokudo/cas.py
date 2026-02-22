@@ -19,9 +19,14 @@ import copy
 from datetime import datetime
 import time
 from dataclasses import dataclass, field
-from typing import TypeVar
+from typing import TypeVar, Optional
+import open3d
 
+import numpy as np
+import sensor_msgs.msg
 from typing_extensions import TYPE_CHECKING, Any, Tuple, Dict, List, Type
+
+from .types.tf import StampedTransform
 
 if TYPE_CHECKING:
     from .types.core import Annotation
@@ -54,7 +59,8 @@ class CASViews:
     """Open3D pinhole camera intrinsic model for RGB to be set by the camera driver."""
 
     PC_CAM_INTRINSIC: str = "pc_cam_intrinsic"
-    """Camera intrinsic that has been used for point cloud generation."""
+    """Camera intrinsic that has been used for point cloud generation. This can be different, 
+    because depth and RGB resolutions might mismatch."""
 
     CLOUD: str = "cloud"
     """Point cloud data"""
@@ -89,6 +95,9 @@ class CAS:
     retrieve information. Each pipeline has its own CAS instance that maintains
     views (singular data like sensor readings) and annotations (multiple descriptors
     of the same data).
+
+    Views can be extended during runtime as they are supposed to be flexibly extended by different Annotators.
+    However, some views are prevalent in most pipelines and can be accessed directly via @property.
     """
 
     timestamp: float = field(default_factory=time.time)
@@ -112,6 +121,94 @@ class CAS:
     def __post_init__(self):
         dt_timestamp = datetime.fromtimestamp(self.timestamp)
         self.timestamp_readable = dt_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+
+    @property
+    def color_image(self) -> Optional[np.ndarray]:
+        return self.views.get(CASViews.COLOR_IMAGE)
+
+    @color_image.setter
+    def color_image(self, value: np.ndarray) -> None:
+        self.views[CASViews.COLOR_IMAGE] = value
+
+    @property
+    def depth_image(self) -> Optional[np.ndarray]:
+        return self.views.get(CASViews.DEPTH_IMAGE)
+
+    @depth_image.setter
+    def depth_image(self, value: np.ndarray) -> None:
+        self.views[CASViews.DEPTH_IMAGE] = value
+
+    @property
+    def color2depth_ratio(self) -> Optional[Tuple[float, float]]:
+        return self.views.get(CASViews.COLOR2DEPTH_RATIO)
+
+    @color2depth_ratio.setter
+    def color2depth_ratio(self, value: Tuple[float, float]) -> None:
+        self.views[CASViews.COLOR2DEPTH_RATIO] = value
+
+    @property
+    def cam_info(self) -> Optional[sensor_msgs.msg.CameraInfo]:
+        return self.views.get(CASViews.CAM_INFO)
+
+    @cam_info.setter
+    def cam_info(self, value: sensor_msgs.msg.CameraInfo) -> None:
+        self.views[CASViews.CAM_INFO] = value
+
+    @property
+    def cam_intrinsic(self) -> Optional[open3d.camera.PinholeCameraIntrinsic]:
+        return self.views.get(CASViews.CAM_INTRINSIC)
+
+    @cam_intrinsic.setter
+    def cam_intrinsic(self, value: open3d.camera.PinholeCameraIntrinsic) -> None:
+        self.views[CASViews.CAM_INTRINSIC] = value
+
+    @property
+    def pc_cam_intrinsic(self) -> Optional[open3d.camera.PinholeCameraIntrinsic]:
+        return self.views.get(CASViews.PC_CAM_INTRINSIC)
+
+    @pc_cam_intrinsic.setter
+    def pc_cam_intrinsic(self, value: open3d.camera.PinholeCameraIntrinsic) -> None:
+        self.views[CASViews.PC_CAM_INTRINSIC] = value
+
+    @property
+    def cloud(self) -> Optional[open3d.geometry.PointCloud]:
+        return self.views.get(CASViews.CLOUD)
+
+    @cloud.setter
+    def cloud(self, value: open3d.geometry.PointCloud) -> None:
+        self.views[CASViews.CLOUD] = value
+
+    @property
+    def cloud_organized(self) -> Optional[Any]:
+        return self.views.get(CASViews.CLOUD_ORGANIZED)
+
+    @cloud_organized.setter
+    def cloud_organized(self, value: Any) -> None:
+        self.views[CASViews.CLOUD_ORGANIZED] = value
+
+    @property
+    def viewpoint_cam_to_world(self) -> Optional[StampedTransform]:
+        return self.views.get(CASViews.VIEWPOINT_CAM_TO_WORLD)
+
+    @viewpoint_cam_to_world.setter
+    def viewpoint_cam_to_world(self, value: StampedTransform) -> None:
+        self.views[CASViews.VIEWPOINT_CAM_TO_WORLD] = value
+
+    @property
+    def viewpoint_world_to_cam(self) -> Optional[StampedTransform]:
+        return self.views.get(CASViews.VIEWPOINT_WORLD_TO_CAM)
+
+    @viewpoint_world_to_cam.setter
+    def viewpoint_world_to_cam(self, value: StampedTransform) -> None:
+        self.views[CASViews.VIEWPOINT_WORLD_TO_CAM] = value
+
+    @property
+    def query(self) -> Optional[Any]:
+        return self.views.get(CASViews.QUERY)
+
+    @query.setter
+    def query(self, value: Any) -> None:
+        self.views[CASViews.QUERY] = value
 
     def get(self, view_name: str) -> Any:
         """Get a view by name.
