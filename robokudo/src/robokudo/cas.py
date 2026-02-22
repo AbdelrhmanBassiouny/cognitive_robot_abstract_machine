@@ -81,10 +81,11 @@ class CASViews:
     """World to camera transform"""
 
     OBJECT_IMAGE: str = "object_image"
-    """Object image data"""
+    """Object image data. This view is used in imagistic reasoning pipelines where a 
+    rendered scene can be fully segmented per object."""
 
     OBJECT_COLOR_MAP: str = "object_color_map"
-    """Object color mapping data"""
+    """Object color mapping data which assigns objects visible in OBJECT_IMAGE to entity names."""
 
 
 @dataclass
