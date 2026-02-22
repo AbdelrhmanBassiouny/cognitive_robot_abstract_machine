@@ -55,7 +55,7 @@ sudo apt-get install libxcb-cursor-dev
 Then, you can enable the GUI in your script as follows:
 ```python
 # Optionally Enable GUI if available
-from ripple_down_rules.helpers import enable_gui
+from krrood.ripple_down_rules.helpers import enable_gui
 enable_gui()
 ```
 
@@ -66,7 +66,7 @@ The output type is specified as `PhysicalObject`, and there can be multiple cont
 Optionally enable the GUI.
 
 ```python
-from ripple_down_rules import CaseQuery, GeneralRDR
+from krrood.ripple_down_rules import CaseQuery, GeneralRDR
 
 grdr = GeneralRDR(save_dir='./', model_name='part_containment_rdr')
 
