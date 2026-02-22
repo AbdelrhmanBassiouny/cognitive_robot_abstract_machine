@@ -1065,6 +1065,27 @@ class CollisionGroupConsumerDAO(
     }
 
 
+class BaseCollisionVariableManagerDAO(
+    CollisionGroupConsumerDAO,
+    DataAccessObject[
+        semantic_digital_twin.collision_checking.collision_variable_managers.BaseCollisionVariableManager
+    ],
+):
+
+    __tablename__ = "BaseCollisionVariableManagerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(CollisionGroupConsumerDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "BaseCollisionVariableManagerDAO",
+        "inherit_condition": database_id == CollisionGroupConsumerDAO.database_id,
+    }
+
+
 class CollisionMatrixDAO(
     Base,
     DataAccessObject[
@@ -1637,7 +1658,7 @@ class DegreeOfFreedomLimitsDAO(
 
 
 class ExternalCollisionVariableManagerDAO(
-    CollisionGroupConsumerDAO,
+    BaseCollisionVariableManagerDAO,
     DataAccessObject[
         semantic_digital_twin.collision_checking.collision_variable_managers.ExternalCollisionVariableManager
     ],
@@ -1646,14 +1667,14 @@ class ExternalCollisionVariableManagerDAO(
     __tablename__ = "ExternalCollisionVariableManagerDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(CollisionGroupConsumerDAO.database_id),
+        ForeignKey(BaseCollisionVariableManagerDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
 
     __mapper_args__ = {
         "polymorphic_identity": "ExternalCollisionVariableManagerDAO",
-        "inherit_condition": database_id == CollisionGroupConsumerDAO.database_id,
+        "inherit_condition": database_id == BaseCollisionVariableManagerDAO.database_id,
     }
 
 
@@ -2148,7 +2169,7 @@ class SelfCollisionMatrixRuleDAO(
 
 
 class SelfCollisionVariableManagerDAO(
-    CollisionGroupConsumerDAO,
+    BaseCollisionVariableManagerDAO,
     DataAccessObject[
         semantic_digital_twin.collision_checking.collision_variable_managers.SelfCollisionVariableManager
     ],
@@ -2157,14 +2178,14 @@ class SelfCollisionVariableManagerDAO(
     __tablename__ = "SelfCollisionVariableManagerDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(CollisionGroupConsumerDAO.database_id),
+        ForeignKey(BaseCollisionVariableManagerDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
 
     __mapper_args__ = {
         "polymorphic_identity": "SelfCollisionVariableManagerDAO",
-        "inherit_condition": database_id == CollisionGroupConsumerDAO.database_id,
+        "inherit_condition": database_id == BaseCollisionVariableManagerDAO.database_id,
     }
 
 

@@ -516,3 +516,28 @@ class SelfCollisionAvoidance(Goal):
             )
             self.add_node(task)
             task.pause_condition = distance_monitor.observation_variable
+
+
+@dataclass(eq=False, repr=False)
+class SelfCollisionDistanceMonitor(MotionStatechartNode):
+    """
+    Monitors the distance to the closest external object for a specific body.
+    Turns True if the distance falls below a given threshold.
+    """
+
+    body_a: Body = field(kw_only=True)
+    """First robot body to monitor."""
+    body_b: Body = field(kw_only=True)
+    """Second robot body to monitor."""
+    threshold: float = field(default=0.05, kw_only=True)
+    """Distance threshold in meters."""
+
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+        manager = context.self_collision_manager
+
+        manager.register_groups_of_body_combination(self.body_a, self.body_b)
+        (group_a, group_b) = manager.body_pair_to_group_pair(self.body_a, self.body_b)
+
+        distance_symbol = manager.get_contact_distance_symbol(group_a, group_b)
+
+        return NodeArtifacts(observation=distance_symbol < self.threshold)

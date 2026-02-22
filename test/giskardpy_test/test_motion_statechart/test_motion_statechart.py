@@ -33,6 +33,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
     SelfCollisionAvoidance,
     ExternalCollisionDistanceMonitor,
+    SelfCollisionDistanceMonitor,
 )
 from giskardpy.motion_statechart.goals.open_close import Open, Close
 from giskardpy.motion_statechart.goals.templates import Sequence, Parallel
@@ -107,6 +108,7 @@ from semantic_digital_twin.collision_checking.collision_matrix import (
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidCollisionBetweenGroups,
     AvoidExternalCollisions,
+    AvoidAllCollisions,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.abstract_robot import Manipulator, AbstractRobot
@@ -133,7 +135,12 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedom,
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Cylinder, Box, Scale
+from semantic_digital_twin.world_description.geometry import (
+    Cylinder,
+    Box,
+    Scale,
+    Sphere,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -2741,6 +2748,9 @@ class TestCollisionAvoidance:
         msc = MotionStatechart()
         msc.add_nodes(
             [
+                distance_violated := ExternalCollisionDistanceMonitor(
+                    body=robot.root, threshold=0.049
+                ),
                 CartesianPose(
                     root_link=cylinder_bot_world.root,
                     tip_link=tip,
@@ -2750,9 +2760,6 @@ class TestCollisionAvoidance:
                 ),
                 ExternalCollisionAvoidance(robot=robot),
                 local_min := LocalMinimumReached(),
-                distance_violated := ExternalCollisionDistanceMonitor(
-                    body=robot.root, threshold=0.049
-                ),
             ]
         )
         msc.add_node(EndMotion.when_true(local_min))
@@ -2769,7 +2776,6 @@ class TestCollisionAvoidance:
         kin_sim = Executor(MotionStatechartContext(world=cylinder_bot_world))
         kin_sim.compile(motion_statechart=msc_copy)
 
-        msc_copy.draw("muh.pdf")
         kin_sim.tick_until_end(500)
         collisions = kin_sim.context.world.collision_manager.compute_collisions()
         assert len(collisions.contacts) == 1
@@ -3126,6 +3132,12 @@ class TestCollisionAvoidance:
         r_tip = pr2_with_box.get_kinematic_structure_entity_by_name(
             "r_gripper_tool_frame"
         )
+        l_forearm_link = pr2_with_box.get_kinematic_structure_entity_by_name(
+            "l_forearm_link"
+        )
+        r_palm_link = pr2_with_box.get_kinematic_structure_entity_by_name(
+            "r_gripper_palm_link"
+        )
         base_footprint = pr2_with_box.get_kinematic_structure_entity_by_name(
             "base_footprint"
         )
@@ -3160,13 +3172,19 @@ class TestCollisionAvoidance:
                                 weight=DefaultWeights.WEIGHT_ABOVE_CA,
                             ),
                             SelfCollisionAvoidance(robot=robot),
-                        ]
+                        ],
                     ),
-                ]
+                ],
+            ),
+        )
+        msc.add_node(
+            contact := SelfCollisionDistanceMonitor(
+                body_a=r_palm_link, body_b=l_forearm_link, threshold=0.01
             )
         )
         msc.add_node(local_min := LocalMinimumReached())
         msc.add_node(EndMotion.when_true(local_min))
+        msc.add_node(CancelMotion.when_true(contact))
 
         kin_sim = Executor(MotionStatechartContext(world=pr2_with_box))
         kin_sim.compile(motion_statechart=msc)
