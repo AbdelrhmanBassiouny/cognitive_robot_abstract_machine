@@ -2751,7 +2751,7 @@ class TestCollisionAvoidance:
                 ExternalCollisionAvoidance(robot=robot),
                 local_min := LocalMinimumReached(),
                 distance_violated := ExternalCollisionDistanceMonitor(
-                    body=robot.root, threshold=0.04
+                    body=robot.root, threshold=0.049
                 ),
             ]
         )

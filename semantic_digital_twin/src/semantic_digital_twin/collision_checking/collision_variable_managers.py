@@ -1,14 +1,14 @@
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from dataclasses import dataclass, field
-from functools import lru_cache
+from typing import Callable
 
 import numpy as np
 
-from giskardpy.utils.decorators import memoize
 from krrood.symbolic_math.float_variable_data import (
     FloatVariableData,
 )
-from krrood.symbolic_math.symbolic_math import FloatVariable
+from krrood.symbolic_math.symbolic_math import FloatVariable, SymbolicMathType
 from .collision_detector import CollisionCheckingResult, ClosestPoints
 from .collision_groups import CollisionGroupConsumer, CollisionGroup
 from ..spatial_types import Vector3, Point3
@@ -16,18 +16,89 @@ from ..world_description.world_entity import Body
 
 
 @dataclass
-class ExternalCollisionVariableManager(CollisionGroupConsumer):
+class BaseCollisionVariableManager(CollisionGroupConsumer, ABC):
+    """
+    Base class for collision variable managers that handles symbolic caching and data buffer management.
+    """
+
+    float_variable_data: FloatVariableData = field(default_factory=FloatVariableData)
+    """
+    Reference to the FloatVariableManager that stores the collision data.
+    """
+    _symbol_cache: dict = field(default_factory=dict, init=False)
+    """
+    Cache for symbolic variables.
+    """
+    _reset_data: np.ndarray = field(init=False, default_factory=lambda: np.array([]))
+    """
+    The data that is used to reset the whole collision data.
+    """
+    _collision_data_start_index: int = field(init=False, default=None)
+    """
+    The index of the first collision data block in the `float_variable_manager`.
+    """
+    _single_reset_block: np.ndarray = field(init=False)
+    """
+    A block that is used to reset the collision data.
+    """
+
+    def __post_init__(self):
+        self._single_reset_block = np.zeros(self.block_size)
+        self._single_reset_block[self.get_contact_distance_offset()] = 100
+
+    def __hash__(self):
+        return hash(id(self))
+
+    @property
+    @abstractmethod
+    def block_size(self) -> int:
+        """
+        The block size in the `float_variable_manager` of all float variables belonging to a collision.
+        """
+
+    @abstractmethod
+    def get_contact_distance_offset(self) -> int:
+        """
+        Offset of the contact_distance variable in the block.
+        """
+
+    def _get_cached_symbol(
+        self, method_name: str, identifier: tuple, creator_func: Callable
+    ):
+        """
+        Get a symbolic variable from the cache or create it if it doesn't exist.
+        """
+        cache_key = (method_name, *identifier)
+        if cache_key not in self._symbol_cache:
+            symbol = creator_func()
+            if isinstance(symbol, SymbolicMathType):
+                self.float_variable_data.add_variables_of_expression(symbol)
+            else:
+                self.float_variable_data.add_variable(symbol)
+            self._symbol_cache[cache_key] = symbol
+        return self._symbol_cache[cache_key]
+
+    def reset_collision_data(self):
+        """
+        Resets the collision data buffer to the default values.
+        """
+        if self._collision_data_start_index is not None:
+            start_index = self._collision_data_start_index
+            end_index = start_index + self._reset_data.size
+            self.float_variable_data.data[start_index:end_index] = self._reset_data
+
+    def on_collision_matrix_update(self):
+        pass
+
+
+@dataclass
+class ExternalCollisionVariableManager(BaseCollisionVariableManager):
     """
     Transforms collision results for registered groups into local frames convenient for external (registered vs non-registered groups) collision avoidance,
     saves the data in a FloatVariableManager,
     and provides spatial objects that refer to them.
 
     For each registered group, the closest collisions are stored, depending on their maximum number of avoided collisions.
-    """
-
-    float_variable_data: FloatVariableData = field(default_factory=FloatVariableData)
-    """
-    Reference to the FloatVariableManager that stores the collision data.
     """
 
     registered_groups: dict[CollisionGroup, int] = field(
@@ -37,17 +108,10 @@ class ExternalCollisionVariableManager(CollisionGroupConsumer):
     Maps bodies to the index of point_on_body_a in the collision buffer.
     """
 
-    _block_size: int = field(default=9, init=False)
-    """
-    The block size in the `float_variable_manager` of all float variables belonging to a collision.
-    block layout:
-        9 per collision
-        point_on_body_a,  (3)
-        contact_normal,  (3)
-        contact_distance, (1)
-        buffer_distance,  (1)
-        violated_distance (1)
-    """
+    @property
+    def block_size(self) -> int:
+        return 9
+
     _point_on_a_offset: int = field(init=False, default=0)
     """
     Offset of the point_on_body_a variable in the block.
@@ -69,28 +133,8 @@ class ExternalCollisionVariableManager(CollisionGroupConsumer):
     Offset of the violated_distance variable in the block.
     """
 
-    _collision_data_start_index: int = field(init=False, default=None)
-    """
-    The index of the first collision data block in the `float_variable_manager`.
-    """
-    _single_reset_block: np.ndarray = field(init=False)
-    """
-    A block that is used to reset the collision data.
-    """
-    _reset_data: np.ndarray = field(init=False, default_factory=lambda: np.array([]))
-    """
-    The data that is used to reset the whole collision data.
-    """
-
-    def __post_init__(self):
-        self._single_reset_block = np.zeros(self._block_size)
-        self._single_reset_block[self._contact_distance_offset] = 100
-
-    def __hash__(self):
-        return hash(id(self))
-
-    def on_collision_matrix_update(self):
-        pass
+    def get_contact_distance_offset(self) -> int:
+        return self._contact_distance_offset
 
     def on_compute_collisions(self, collision: CollisionCheckingResult):
         """
@@ -157,7 +201,7 @@ class ExternalCollisionVariableManager(CollisionGroupConsumer):
         :param buffer_distance: Buffer distance for collision detection.
         :param violated_distance: Violated distance for collision detection.
         """
-        start_idx = self.registered_groups[group] + idx * self._block_size
+        start_idx = self.registered_groups[group] + idx * self.block_size
         self.float_variable_data.data[
             start_idx : start_idx + self._contact_normal_offset
         ] = group_a_P_point_on_a[:3]
@@ -175,11 +219,6 @@ class ExternalCollisionVariableManager(CollisionGroupConsumer):
         self.float_variable_data.data[start_idx + self._violated_distance_offset] = (
             violated_distance
         )
-
-    def reset_collision_data(self):
-        start_index = self._collision_data_start_index
-        end_index = start_index + self._reset_data.size
-        self.float_variable_data.data[start_index:end_index] = self._reset_data
 
     def register_group_of_body(self, body: Body):
         """
@@ -199,64 +238,64 @@ class ExternalCollisionVariableManager(CollisionGroupConsumer):
             self.get_violated_distance_symbol(group, index)
             self._reset_data = np.append(self._reset_data, self._single_reset_block)
 
-    @lru_cache
     def get_group_a_P_point_on_a_symbol(
         self, group: CollisionGroup, idx: int
     ) -> Point3:
-        point = Point3.create_with_variables(
-            name=f"group_a_P_point_on_a({group.root.name}, {idx})",
+        return self._get_cached_symbol(
+            "get_group_a_P_point_on_a_symbol",
+            (group.root.name, idx),
+            lambda: Point3.create_with_variables(
+                name=f"group_a_P_point_on_a({group.root.name}, {idx})",
+            ),
         )
-        self.float_variable_data.add_variables_of_expression(point)
-        return point
 
-    @lru_cache
     def get_root_V_contact_normal_symbol(
         self, group: CollisionGroup, idx: int
     ) -> Vector3:
-        vector = Vector3.create_with_variables(
-            f"root_V_contact_normal({group.root.name}, {idx})",
+        return self._get_cached_symbol(
+            "get_root_V_contact_normal_symbol",
+            (group.root.name, idx),
+            lambda: Vector3.create_with_variables(
+                f"root_V_contact_normal({group.root.name}, {idx})",
+            ),
         )
-        self.float_variable_data.add_variables_of_expression(vector)
-        return vector
 
-    @lru_cache
     def get_contact_distance_symbol(
         self, group: CollisionGroup, idx: int
     ) -> FloatVariable:
-        variable = FloatVariable(f"contact_distance({group.root.name}, {idx})")
-        self.float_variable_data.add_variable(variable)
-        return variable
+        return self._get_cached_symbol(
+            "get_contact_distance_symbol",
+            (group.root.name, idx),
+            lambda: FloatVariable(f"contact_distance({group.root.name}, {idx})"),
+        )
 
-    @lru_cache
     def get_buffer_distance_symbol(
         self, group: CollisionGroup, idx: int
     ) -> FloatVariable:
-        variable = FloatVariable(f"buffer_distance({group.root.name}, {idx})")
-        self.float_variable_data.add_variable(variable)
-        return variable
+        return self._get_cached_symbol(
+            "get_buffer_distance_symbol",
+            (group.root.name, idx),
+            lambda: FloatVariable(f"buffer_distance({group.root.name}, {idx})"),
+        )
 
-    @lru_cache
     def get_violated_distance_symbol(
         self, group: CollisionGroup, idx: int
     ) -> FloatVariable:
-        variable = FloatVariable(f"violated_distance({group.root.name}, {idx})")
-        self.float_variable_data.add_variable(variable)
-        return variable
+        return self._get_cached_symbol(
+            "get_violated_distance_symbol",
+            (group.root.name, idx),
+            lambda: FloatVariable(f"violated_distance({group.root.name}, {idx})"),
+        )
 
 
 @dataclass
-class SelfCollisionVariableManager(CollisionGroupConsumer):
+class SelfCollisionVariableManager(BaseCollisionVariableManager):
     """
     Transforms collision results for registered groups into local frames convenient for self (registered vs registered groups) collision avoidance,
     saves the data in a FloatVariableManager,
     and provides spatial objects that refer to them.
 
     For each combination of registered group, the closest collision is stored.
-    """
-
-    float_variable_data: FloatVariableData = field(default_factory=FloatVariableData)
-    """
-    The FloatVariableData that stores the collision data.
     """
 
     registered_group_combinations: dict[tuple[CollisionGroup, CollisionGroup], int] = (
@@ -266,18 +305,10 @@ class SelfCollisionVariableManager(CollisionGroupConsumer):
     Maps body combinations to the index of point_on_body_a in the collision buffer.
     """
 
-    block_size: int = field(default=12, init=False)
-    """
-    The block size in the `float_variable_manager` of all float variables belonging to a collision.
-    block layout:
-        12 per collision
-        point_on_body_a,  (3)
-        point_on_body_b,  (3)
-        contact_normal,  (3)
-        contact_distance, (1)
-        buffer_distance,  (1)
-        violated_distance (1)
-    """
+    @property
+    def block_size(self) -> int:
+        return 12
+
     _point_on_a_offset: int = field(init=False, default=0)
     """
     Offset of the point_on_body_a variable in the block.
@@ -303,28 +334,8 @@ class SelfCollisionVariableManager(CollisionGroupConsumer):
     Offset of the violated_distance variable in the block.
     """
 
-    _collision_data_start_index: int = field(init=False, default=None)
-    """
-    The start index of the collision data in the `float_variable_manager`.
-    """
-    _single_reset_block: np.ndarray = field(init=False)
-    """
-    A block of reset data that is inserted at the beginning of each collision data block.
-    """
-    _reset_data: np.ndarray = field(init=False, default_factory=lambda: np.array([]))
-    """
-    The reset data that is inserted at the beginning of each collision data block.
-    """
-
-    def __post_init__(self):
-        self._single_reset_block = np.zeros(self.block_size)
-        self._single_reset_block[self._contact_distance_offset] = 100
-
-    def __hash__(self):
-        return hash(id(self))
-
-    def on_collision_matrix_update(self):
-        pass
+    def get_contact_distance_offset(self) -> int:
+        return self._contact_distance_offset
 
     def on_compute_collisions(self, collision_result: CollisionCheckingResult):
         """
@@ -422,11 +433,6 @@ class SelfCollisionVariableManager(CollisionGroupConsumer):
             block_start_idx + self._violated_distance_offset
         ] = violated_distance
 
-    def reset_collision_data(self):
-        start_index = self._collision_data_start_index
-        end_index = start_index + self._reset_data.size
-        self.float_variable_data.data[start_index:end_index] = self._reset_data
-
     def body_pair_to_group_pair(
         self, body_a: Body, body_b: Body
     ) -> tuple[CollisionGroup, CollisionGroup]:
@@ -456,68 +462,80 @@ class SelfCollisionVariableManager(CollisionGroupConsumer):
         self.get_violated_distance_symbol(*key)
         self._reset_data = np.append(self._reset_data, self._single_reset_block)
 
-    @lru_cache
     def get_group_a_P_point_on_a_symbol(
         self,
         group_a: CollisionGroup,
         group_b: CollisionGroup,
     ) -> Point3:
-        point = Point3.create_with_variables(
-            name=f"group_a_P_point_on_a({group_a}, {group_b})",
+        return self._get_cached_symbol(
+            "get_group_a_P_point_on_a_symbol",
+            (group_a.root.name, group_b.root.name),
+            lambda: Point3.create_with_variables(
+                name=f"group_a_P_point_on_a({group_a.root.name}, {group_b.root.name})",
+            ),
         )
-        self.float_variable_data.add_variables_of_expression(point)
-        return point
 
-    @lru_cache
     def get_group_b_P_point_on_b_symbol(
         self,
         group_a: CollisionGroup,
         group_b: CollisionGroup,
     ) -> Point3:
-        point = Point3.create_with_variables(
-            name=f"group_b_P_point_on_b({group_a}, {group_b})",
+        return self._get_cached_symbol(
+            "get_group_b_P_point_on_b_symbol",
+            (group_a.root.name, group_b.root.name),
+            lambda: Point3.create_with_variables(
+                name=f"group_b_P_point_on_b({group_a.root.name}, {group_b.root.name})",
+            ),
         )
-        self.float_variable_data.add_variables_of_expression(point)
-        return point
 
-    @lru_cache
     def get_group_b_V_contact_normal_symbol(
         self,
         group_a: CollisionGroup,
         group_b: CollisionGroup,
     ) -> Vector3:
-        vector = Vector3.create_with_variables(
-            f"group_b_V_contact_normal({group_a}, {group_b})",
+        return self._get_cached_symbol(
+            "get_group_b_V_contact_normal_symbol",
+            (group_a.root.name, group_b.root.name),
+            lambda: Vector3.create_with_variables(
+                f"group_b_V_contact_normal({group_a.root.name}, {group_b.root.name})",
+            ),
         )
-        self.float_variable_data.add_variables_of_expression(vector)
-        return vector
 
-    @lru_cache
     def get_contact_distance_symbol(
         self,
         group_a: CollisionGroup,
         group_b: CollisionGroup,
     ) -> FloatVariable:
-        variable = FloatVariable(f"contact_distance({group_a}, {group_b})")
-        self.float_variable_data.add_variable(variable)
-        return variable
+        return self._get_cached_symbol(
+            "get_contact_distance_symbol",
+            (group_a.root.name, group_b.root.name),
+            lambda: FloatVariable(
+                f"contact_distance({group_a.root.name}, {group_b.root.name})"
+            ),
+        )
 
-    @lru_cache
     def get_buffer_distance_symbol(
         self,
         group_a: CollisionGroup,
         group_b: CollisionGroup,
     ) -> FloatVariable:
-        variable = FloatVariable(f"buffer_distance({group_a}, {group_b})")
-        self.float_variable_data.add_variable(variable)
-        return variable
+        return self._get_cached_symbol(
+            "get_buffer_distance_symbol",
+            (group_a.root.name, group_b.root.name),
+            lambda: FloatVariable(
+                f"buffer_distance({group_a.root.name}, {group_b.root.name})"
+            ),
+        )
 
-    @lru_cache
     def get_violated_distance_symbol(
         self,
         group_a: CollisionGroup,
         group_b: CollisionGroup,
     ) -> FloatVariable:
-        variable = FloatVariable(f"violated_distance({group_a}, {group_b})")
-        self.float_variable_data.add_variable(variable)
-        return variable
+        return self._get_cached_symbol(
+            "get_violated_distance_symbol",
+            (group_a.root.name, group_b.root.name),
+            lambda: FloatVariable(
+                f"violated_distance({group_a.root.name}, {group_b.root.name})"
+            ),
+        )
