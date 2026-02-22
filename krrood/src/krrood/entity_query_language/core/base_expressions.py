@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 Bindings = Dict[uuid.UUID, Any]
 """
-A dictionary for variable bindings in EQL operations
+A dictionary for expressions' bindings in EQL that maps the expression's unique identifier to its value.
 """
 
 
