@@ -15,6 +15,7 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
+    Body,
 )
 from ..context import MotionStatechartContext
 from ..data_types import DefaultWeights
@@ -286,6 +287,39 @@ class ExternalCollisionAvoidance(Goal):
                 )
                 self.add_node(task)
                 task.pause_condition = distance_monitor.observation_variable
+
+
+@dataclass(eq=False, repr=False)
+class ExternalCollisionDistanceMonitor(MotionStatechartNode):
+    """
+    Monitors the distance to the closest external object for a specific body.
+    Turns True if the distance falls below a given threshold.
+    """
+
+    body: Body = field(kw_only=True)
+    """The robot body to monitor."""
+    threshold: float = field(default=0.05, kw_only=True)
+    """Distance threshold in meters."""
+    collision_index: int = field(default=0, kw_only=True)
+    """Index of the closest collision (0 = closest, 1 = second closest, etc.)."""
+
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+        # 1. Access the shared external collision manager
+        # This automatically registers the manager with the CollisionManager
+        manager = context.external_collision_manager
+
+        # 2. Register the body to ensure the manager tracks its collisions
+        manager.register_group_of_body(self.body)
+        group = manager.get_collision_group(self.body)
+
+        # 3. Retrieve the symbolic variable for the contact distance
+        distance_symbol = manager.get_contact_distance_symbol(
+            group=group, idx=self.collision_index
+        )
+
+        # 4. Return an observation artifact
+        # The node's observation_variable will be True when distance < threshold
+        return NodeArtifacts(observation=distance_symbol < self.threshold)
 
 
 @dataclass(eq=False, repr=False)

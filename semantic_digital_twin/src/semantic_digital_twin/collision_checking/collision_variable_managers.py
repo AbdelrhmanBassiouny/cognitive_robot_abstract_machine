@@ -4,6 +4,7 @@ from functools import lru_cache
 
 import numpy as np
 
+from giskardpy.utils.decorators import memoize
 from krrood.symbolic_math.float_variable_data import (
     FloatVariableData,
 )

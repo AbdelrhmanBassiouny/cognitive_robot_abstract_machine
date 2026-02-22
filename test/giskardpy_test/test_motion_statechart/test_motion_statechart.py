@@ -32,6 +32,7 @@ from giskardpy.motion_statechart.goals.cartesian_goals import (
 from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
     SelfCollisionAvoidance,
+    ExternalCollisionDistanceMonitor,
 )
 from giskardpy.motion_statechart.goals.open_close import Open, Close
 from giskardpy.motion_statechart.goals.templates import Sequence, Parallel
@@ -2749,9 +2750,13 @@ class TestCollisionAvoidance:
                 ),
                 ExternalCollisionAvoidance(robot=robot),
                 local_min := LocalMinimumReached(),
+                distance_violated := ExternalCollisionDistanceMonitor(
+                    body=robot.root, threshold=0.04
+                ),
             ]
         )
         msc.add_node(EndMotion.when_true(local_min))
+        msc.add_node(CancelMotion.when_true(distance_violated))
 
         json_data = msc.to_json()
         json_str = json.dumps(json_data)
