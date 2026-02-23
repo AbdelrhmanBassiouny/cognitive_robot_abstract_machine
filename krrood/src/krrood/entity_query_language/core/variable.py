@@ -32,13 +32,13 @@ from .base_expressions import (
 from .mapped_variable import CanBehaveLikeAVariable
 from ..cache_data import ReEnterableLazyIterable
 from ..enums import DomainSource
+from ..failures import NoChildToReplace
 from ..operators.set_operations import MultiArityExpressionThatPerformsACartesianProduct
 from ..utils import (
     T,
     is_iterable,
     make_list,
 )
-
 
 DomainType = Iterable[T]
 """
@@ -119,7 +119,7 @@ class Variable(CanHaveDomainSource[T]):
     def _replace_child_field_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
     ):
-        raise ValueError(f"class {self.__class__} does not have children")
+        raise NoChildToReplace(self, old_child, new_child)
 
     @cached_property
     def _name_(self) -> str:

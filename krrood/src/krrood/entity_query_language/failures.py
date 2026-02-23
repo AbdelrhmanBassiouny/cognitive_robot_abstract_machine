@@ -243,7 +243,7 @@ class UnsupportedAggregationOfAGroupedByVariable(AggregationUsageError):
     def __post_init__(self):
         self.message = (
             f"Aggregation over grouped_by variable that is not Count "
-            f"{self.grouped_by.aggregators_of_grouped_by_variables_that_are_not_count} in the grouped_by operation"
+            f"{self.grouped_by.aggregators_of_grouped_by_variables} in the grouped_by operation"
             f" {self.grouped_by}"
         )
         super().__post_init__()
@@ -577,4 +577,28 @@ class NoneWrappedFieldError(ClassDiagramError):
 
     def __post_init__(self):
         self.message = f"Field '{self.attr_name}' of class '{self.clazz.__name__}' is not wrapped by a WrappedField."
+        super().__post_init__()
+
+
+@dataclass
+class NoChildToReplace(DataclassException):
+    """
+    Raised when trying to replace a child of an expression that has no children.
+    """
+
+    expression: SymbolicExpression
+    """
+    The expression that has no children.
+    """
+    old_child: SymbolicExpression
+    """
+    The child that was attempted to be replaced.
+    """
+    new_child: SymbolicExpression
+    """
+    The new child that was attempted to be set.
+    """
+
+    def __post_init__(self):
+        self.message = f"Expression '{self.expression}' has no child '{self.old_child}' to replace with '{self.new_child}'."
         super().__post_init__()

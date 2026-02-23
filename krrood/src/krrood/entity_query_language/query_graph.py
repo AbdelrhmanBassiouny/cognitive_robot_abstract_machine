@@ -134,13 +134,15 @@ class QueryGraph:
         :param parent_node: The parent node of the children to add.
         """
         parent_expression = parent_node.data
+        selected_var_ids = (
+            [v._binding_id_ for v in parent_expression._selected_variables_]
+            if isinstance(parent_expression, Query)
+            else []
+        )
         for child in parent_expression._children_:
             child_node = self.construct_graph(child)
-            if isinstance(parent_expression, Query):
-                if child._binding_id_ in [
-                    v._binding_id_ for v in parent_expression._selected_variables_
-                ]:
-                    child_node.enclosed = True
+            if child._binding_id_ in selected_var_ids:
+                child_node.enclosed = True
             child_node.parent = parent_node
 
 

@@ -30,7 +30,7 @@ from ..operators.comparator import Comparator
 from ..utils import (
     T,
     merge_args_and_kwargs,
-    convert_args_and_kwargs_into_a_hashable_key,
+    convert_args_and_kwargs_into_hashable_key,
 )
 
 from ...symbol_graph.helpers import get_field_type_endpoint
@@ -80,7 +80,7 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         """
         args = (self,) + args
         all_kwargs = merge_args_and_kwargs(type_, args, kwargs, ignore_first=True)
-        return convert_args_and_kwargs_into_a_hashable_key(all_kwargs)
+        return convert_args_and_kwargs_into_hashable_key(all_kwargs)
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
         # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
@@ -300,9 +300,7 @@ class MappedVariableCacheItem:
 
     @cached_property
     def hashable_key(self):
-        return (self.type,) + convert_args_and_kwargs_into_a_hashable_key(
-            self.all_kwargs
-        )
+        return (self.type,) + convert_args_and_kwargs_into_hashable_key(self.all_kwargs)
 
     def __hash__(self):
         return hash(self.hashable_key)

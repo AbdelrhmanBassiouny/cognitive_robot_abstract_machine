@@ -34,7 +34,6 @@ from ..core.base_expressions import Selectable
 from ..core.mapped_variable import Attribute, FlatVariable, CanBehaveLikeAVariable
 from ..utils import T
 
-
 if TYPE_CHECKING:
     from ..factories import ConditionType
     from .query import Entity
@@ -69,7 +68,7 @@ class AbstractMatchExpression(Generic[T], ABC):
     """
     Whether the match is resolved or not.
     """
-    id: int = field(init=False, default_factory=lambda: uuid.uuid4().int)
+    id: uuid.UUID = field(init=False, default_factory=uuid.uuid4)
     """
     The unique identifier of the match expression.
     """
@@ -132,7 +131,7 @@ class AbstractMatchExpression(Generic[T], ABC):
         return hash(self) == hash(other)
 
     def __hash__(self):
-        return id(self)
+        return hash(self.id)
 
 
 @dataclass(eq=False)
