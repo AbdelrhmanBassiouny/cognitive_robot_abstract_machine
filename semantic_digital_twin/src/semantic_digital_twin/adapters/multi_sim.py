@@ -921,7 +921,7 @@ class MujocoTendon(SimulatorAdditionalProperty):
     Range of allowed tendon lengths.
     """
 
-    rgba: List[float] = field(default_factory=lambda: Color(0.5, 0.5, 0.5, 1))
+    rgba: Color = field(default_factory=lambda: Color(0.5, 0.5, 0.5, 1))
     """
     Color and transparency of the tendon.
     """
