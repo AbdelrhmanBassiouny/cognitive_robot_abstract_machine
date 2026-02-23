@@ -578,7 +578,7 @@ def test_synchronous_model_synchronization(rclpy_node):
         )
 
         # Allow time for publishers/subscribers to discover each other
-        time.sleep(0.2)
+        time.sleep(0.5)
 
         with w1.modify_world():
             new_body = Body(name=PrefixedName("b3"))
