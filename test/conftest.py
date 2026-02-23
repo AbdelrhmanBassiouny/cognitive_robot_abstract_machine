@@ -666,7 +666,6 @@ def pr2_world_state_reset(pr2_world_setup):
     state = world.state.data.copy()
     yield world
     world.state.data[:] = state
-    world.notify_state_change()
 
 
 ###############################
