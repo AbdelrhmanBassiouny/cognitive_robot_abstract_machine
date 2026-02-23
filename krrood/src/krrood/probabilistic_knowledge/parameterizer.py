@@ -7,24 +7,21 @@ from datetime import datetime
 from typing import Dict, Iterable
 
 import numpy as np
-from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
-from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
-    ProbabilisticCircuit,
-)
-from random_events.set import Set
-from random_events.variable import Continuous, Integer, Symbolic, Variable
 from sqlalchemy import inspect, Column
 from sqlalchemy.orm import Relationship
 from typing_extensions import List, Optional, assert_never, Any, Tuple, Type
 
+from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
+from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
+    ProbabilisticCircuit,
+)
+from random_events.variable import Continuous, Integer, Variable
 from .object_access_variable import ObjectAccessVariable, AttributeAccessLike
 from ..adapters.json_serializer import list_like_classes
 from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
-from ..entity_query_language.core.domain_mapping import Selectable
-from ..entity_query_language.factories import variable_from
-from ..entity_query_language.factories import variable_from, variable
-from ..entity_query_language.core.mapped_variable import Index, Selectable
+from ..entity_query_language.core.mapped_variable import Selectable
+from ..entity_query_language.factories import variable
 from ..ormatic.dao import (
     DataAccessObject,
     to_dao,

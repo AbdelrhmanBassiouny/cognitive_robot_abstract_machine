@@ -47,7 +47,7 @@ def test_object_access_variable_nested():
 
 
 def test_object_access_variable_container():
-    obj = Positions([Position(None, None, None), Position(None, None, None)], [None])
+    obj = Positions([Position(..., ..., ...), Position(..., ..., ...)], [...])
     dao: PositionsDAO = to_dao(obj)
 
     dao_variable = variable_from([dao])

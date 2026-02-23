@@ -8,8 +8,6 @@ from typing_extensions import List, Any, Union
 
 from random_events.variable import Variable, Symbolic, Continuous, Integer
 
-from ..entity_query_language.core.domain_mapping import Index, Attribute
-
 from ..entity_query_language.core.mapped_variable import (
     Index,
     Attribute,
