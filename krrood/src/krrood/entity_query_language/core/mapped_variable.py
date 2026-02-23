@@ -32,11 +32,8 @@ from ..utils import (
     merge_args_and_kwargs,
     convert_args_and_kwargs_into_a_hashable_key,
 )
-from ...class_diagrams.class_diagram import WrappedClass, ParseError
-from ...class_diagrams.failures import ClassIsUnMappedInClassDiagram
-from ...class_diagrams.wrapped_field import WrappedField
-from ...symbol_graph.helpers import get_field_type
-from ...symbol_graph.symbol_graph import SymbolGraph
+
+from ...symbol_graph.helpers import get_field_type_endpoint
 
 
 @dataclass(eq=False, repr=False)
@@ -192,7 +189,7 @@ class Attribute(MappedVariable):
         """
         Update the `_type_` attribute with the type of the values of this attribute.
         """
-        self._type_ = get_field_type(self._owner_class_, self._attribute_name_)
+        self._type_ = get_field_type_endpoint(self._owner_class_, self._attribute_name_)
 
     def _apply_mapping_(self, value: Any) -> Iterable[Any]:
         yield getattr(value, self._attribute_name_)

@@ -8,7 +8,7 @@ from ..class_diagrams.wrapped_field import WrappedField
 from .symbol_graph import SymbolGraph
 
 
-def get_field_type(owner_class: Type, field_name: str) -> Optional[Type]:
+def get_field_type_endpoint(owner_class: Type, field_name: str) -> Optional[Type]:
     """
     :param owner_class: The class of that owns the field.
     :param field_name: The name of the field.
