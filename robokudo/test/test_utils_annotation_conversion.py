@@ -19,12 +19,7 @@ from robokudo.utils.annotation_conversion import PoseAnnotationToStampedPoseAnno
 from robokudo_msgs.msg import ObjectDesignator, ShapeSize
 
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-
-
-def assert_quat_equal_up_to_sign(actual_quat, expected_quat):
-    actual = np.array(actual_quat)
-    expected = np.array(expected_quat)
-    assert np.allclose(actual, expected) or np.allclose(actual, -expected)
+from . import _assertions
 
 
 class TestUtilsAnnotationConversion(object):
@@ -269,7 +264,7 @@ class TestUtilsAnnotationConversion(object):
         assert pose.pose.position.x == position_annotation.translation[2] + 0.5
         assert pose.pose.position.y == -position_annotation.translation[0] + 0.5
         assert pose.pose.position.z == -position_annotation.translation[1] + 0.5
-        assert_quat_equal_up_to_sign(
+        _assertions.assert_quat_equal_up_to_sign(
             [
                 pose.pose.orientation.x,
                 pose.pose.orientation.y,
@@ -306,7 +301,7 @@ class TestUtilsAnnotationConversion(object):
         assert pose.pose.position.x == stamped_pose_annotation.translation[2] + 0.5
         assert pose.pose.position.y == -stamped_pose_annotation.translation[0] + 0.5
         assert pose.pose.position.z == -stamped_pose_annotation.translation[1] + 0.5
-        assert_quat_equal_up_to_sign(
+        _assertions.assert_quat_equal_up_to_sign(
             [
                 pose.pose.orientation.x,
                 pose.pose.orientation.y,

@@ -70,7 +70,7 @@ class TestUtilsDecorators(object):
         timer(self=dummy)
 
         dummy.rk_logger.info.assert_called_once()
-        assert "Function '<class 'test_utils_decorators.DummyTimerClass'>.timer' took" in \
+        assert "Function '<class 'test.test_utils_decorators.DummyTimerClass'>.timer' took" in \
                dummy.rk_logger.info.call_args[0][0]
 
     def test_timer_decorator_class_method_with_logger(self):
@@ -79,7 +79,7 @@ class TestUtilsDecorators(object):
 
         dummy.timer()
         dummy.rk_logger.info.assert_called_once()
-        assert "Function '<class 'test_utils_decorators.DummyTimerClass'>.timer' took" in \
+        assert "Function '<class 'test.test_utils_decorators.DummyTimerClass'>.timer' took" in \
                dummy.rk_logger.info.call_args[0][0]
 
     def test_record_time(self):

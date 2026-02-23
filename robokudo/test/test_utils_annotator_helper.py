@@ -15,6 +15,7 @@ from robokudo.utils.annotator_helper import transform_pose_from_cam_to_world, tr
     transform_cloud_from_world_to_cam, transform_cloud_from_cam_to_world, get_cam_to_world_transform_matrix, \
     get_world_to_cam_transform_matrix, draw_bounding_boxes_from_object_hypotheses, scale_cam_intrinsics, \
     get_color_image, resize_mask, generate_source_name
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 
 
 class TestUtilsAnnotatorHelper(object):
@@ -43,14 +44,24 @@ class TestUtilsAnnotatorHelper(object):
         """Creates a CAS containing an identify cam to world transform."""
         cas = robokudo.cas.CAS()
 
-        cam_to_world = robokudo.types.tf.StampedTransform()
-        cam_to_world.child_frame = 'map'
-        cam_to_world.frame = 'head_rgbd_sensor_rgb_frame'
-        cam_to_world.rotation = [0.0, 0.0, 0.0, 1.0]
-        cam_to_world.translation = [0.0, 0.0, 0.0]
-        cam_to_world.timestamp = None  # rospy.Time[1741809308248347990] would be an example value if needed
+        # cam_to_world = robokudo.types.tf.StampedTransform()
+        # cam_to_world.child_frame = 'map'
+        # cam_to_world.frame = 'head_rgbd_sensor_rgb_frame'
+        # cam_to_world.rotation = [0.0, 0.0, 0.0, 1.0]
+        # cam_to_world.translation = [0.0, 0.0, 0.0]
+        # cam_to_world.timestamp = None  # rospy.Time[1741809308248347990] would be an example value if needed
 
-        cas.set(CASViews.VIEWPOINT_CAM_TO_WORLD, cam_to_world)
+        # TODO Set frame names?
+        cas.cam_to_world_transform = HomogeneousTransformationMatrix.from_xyz_quaternion(
+            pos_x=0.0,
+            pos_y=0.0,
+            pos_z=0.0,
+            quat_x=0.0,
+            quat_y=0.0,
+            quat_z=0.0,
+            quat_w=1.0
+        )
+        # cas.set(CASViews.VIEWPOINT_CAM_TO_WORLD, cam_to_world)
         return cas
 
     @pytest.fixture()
@@ -59,14 +70,24 @@ class TestUtilsAnnotatorHelper(object):
         cas = CAS()
 
         # Create a fake cam to world transform
-        cam_to_world = robokudo.types.tf.StampedTransform()
-        cam_to_world.child_frame = 'map'
-        cam_to_world.frame = 'head_rgbd_sensor_rgb_frame'
-        cam_to_world.rotation = [0.6586514783471038, -0.009324217076086938, 0.006825388323024484, -0.7523594241593126]
-        cam_to_world.translation = [2.6818742474793744, 1.9778799779168073, 0.9607137539544703]
-        cam_to_world.timestamp = None  # rospy.Time[1741809308248347990] would be an example value if needed
+        # cam_to_world = robokudo.types.tf.StampedTransform()
+        # cam_to_world.child_frame = 'map'
+        # cam_to_world.frame = 'head_rgbd_sensor_rgb_frame'
+        # cam_to_world.rotation = [0.6586514783471038, -0.009324217076086938, 0.006825388323024484, -0.7523594241593126]
+        # cam_to_world.translation = [2.6818742474793744, 1.9778799779168073, 0.9607137539544703]
+        # cam_to_world.timestamp = None  # rospy.Time[1741809308248347990] would be an example value if needed
+        #
+        # cas.set(CASViews.VIEWPOINT_CAM_TO_WORLD, cam_to_world)
 
-        cas.set(CASViews.VIEWPOINT_CAM_TO_WORLD, cam_to_world)
+        cas.cam_to_world_transform = HomogeneousTransformationMatrix.from_xyz_quaternion(
+            pos_x=2.6818742474793744,
+            pos_y=1.9778799779168073,
+            pos_z=0.9607137539544703,
+            quat_x=0.6586514783471038,
+            quat_y=-0.009324217076086938,
+            quat_z=0.006825388323024484,
+            quat_w=-0.7523594241593126,
+        )
         return cas
 
     ######################
