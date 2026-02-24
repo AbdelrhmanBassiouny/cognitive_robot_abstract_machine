@@ -1,0 +1,99 @@
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.16.4
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
+---
+
+# Aggregation and Grouping
+
+EQL supports powerful aggregation functions that allow you to summarize data across groups of entities. This includes common operations like counting, summing, and averaging.
+
+## Grouping Results
+
+The `.grouped_by()` method allows you to group results by one or more symbolic variables. When you use an aggregator in a query, EQL automatically calculates it for each group.
+
+```python
+from krrood.entity_query_language.factories import entity, count
+
+# Group robots by their 'type' and count them
+query = entity(r.type).grouped_by(r.type)
+```
+
+## Using Aggregators
+
+Aggregators are functions that take a symbolic variable (or its attribute) and return a summary value.
+
+Available aggregators include:
+- `count()`: Counts the number of items in the group.
+- `sum()`: Calculates the sum of a numeric attribute.
+- `average()`: Calculates the average of a numeric attribute.
+- `max()` and `min()`: Find the maximum or minimum value.
+
+```python
+from krrood.entity_query_language.factories import sum, average
+
+# Calculate the total and average battery level per robot type
+query = set_of(r.type, sum(r.battery), average(r.battery)).grouped_by(r.type)
+```
+
+💡 **Hint**: You can use `.distinct()` inside an aggregator to count only unique values: `count(r.name, distinct=True)`.
+
+## Post-Aggregation Filtering with `.having()`
+
+While `.where()` filters individual entities *before* they are grouped, `.having()` filters the results *after* they have been aggregated.
+
+```python
+# Only show types that have more than 5 robots
+query = entity(r.type).grouped_by(r.type).having(count(r) > 5)
+```
+
+⚠️ **Warning**: Always use `.where()` for conditions that can be evaluated on individual objects. Use `.having()` only for conditions that depend on group-level aggregates.
+
+## Full Example: World Statistics
+
+```{code-cell} ipython3
+from dataclasses import dataclass
+from krrood.entity_query_language.factories import variable, set_of, Symbol, count, sum, average
+
+@dataclass
+class Robot(Symbol):
+    name: str
+    type: str
+    battery: int
+
+robots = [
+    Robot("R1", "Astromech", 100),
+    Robot("R2", "Astromech", 80),
+    Robot("C1", "Protocol", 20),
+    Robot("C2", "Protocol", 40),
+    Robot("K1", "Security", 90)
+]
+
+r = variable(Robot, domain=robots)
+
+# We want to see:
+# 1. The type of robot
+# 2. How many of each type (count)
+# 3. The average battery for that type
+# BUT only for types where the total battery sum > 50
+query = set_of(r.type, count(r), average(r.battery)) \
+    .grouped_by(r.type) \
+    .having(sum(r.battery) > 50)
+
+for robot_type, num, avg_batt in query.evaluate():
+    print(f"Type: {robot_type} | Count: {num} | Avg Battery: {avg_batt}%")
+```
+
+## API Reference
+- {py:func}`~krrood.entity_query_language.factories.count`
+- {py:func}`~krrood.entity_query_language.factories.sum`
+- {py:func}`~krrood.entity_query_language.factories.average`
+- {py:meth}`~krrood.entity_query_language.query.query.Query.grouped_by`
+- {py:meth}`~krrood.entity_query_language.query.query.Query.having`
