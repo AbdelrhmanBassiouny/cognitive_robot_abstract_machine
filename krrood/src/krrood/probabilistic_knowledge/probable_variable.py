@@ -1,9 +1,9 @@
 import operator
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from itertools import groupby
-from typing import assert_never, List, Dict
+from typing import assert_never, List, Dict, Type
 
 import numpy as np
 
@@ -21,7 +21,7 @@ from ..entity_query_language.operators.core_logical_operators import OR, AND
 from ..entity_query_language.predicate import symbolic_function
 from ..entity_query_language.query.query import Entity
 from ..entity_query_language.query_graph import QueryGraph
-from ..ormatic.dao import get_dao_class
+from ..ormatic.dao import get_dao_class, DataAccessObject
 
 
 @dataclass
@@ -305,3 +305,47 @@ def is_literal_comparator(expression: Comparator) -> bool:
     if not isinstance(expression.right, Literal):
         return False
     return True
+
+
+@dataclass
+class MatchToDAOTranslator:
+
+    statement: Entity
+
+    _data_access_object: DataAccessObject = field(init=False)
+
+    def __post_init__(self):
+        self.statement.build()
+        self._assert_all_comparators_are_equalities()
+
+    def _assert_all_comparators_are_equalities(self):
+        for comparator in self.comparators:
+            if comparator.operation != operator.eq:
+                raise ValueError(str(comparator) + " is not an equality comparison.")
+
+    @property
+    def comparators(self) -> List[Comparator]:
+        return [
+            comparator
+            for comparator in self.statement._where_expression_._descendants_
+            if isinstance(comparator, Comparator)
+        ]
+
+    @property
+    def class_to_construct(self) -> Type:
+        return self.statement._selected_variables_[0]
+
+    @property
+    def dao_class_to_construct(self) -> Type[DataAccessObject]:
+        return get_dao_class(self.class_to_construct)
+
+    def translate(self):
+        self._build_data_access_object()
+
+    def _build_data_access_object(self):
+        self._data_access_object = self.dao_class_to_construct()
+        print(
+            *[d for d in self.statement._descendants_ if isinstance(d, Variable)],
+            sep="\n",
+        )
+        print(*[type(d) for d in self.statement._descendants_], sep="\n")

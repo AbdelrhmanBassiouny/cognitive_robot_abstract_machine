@@ -1,29 +1,23 @@
-from itertools import groupby
-
 import numpy as np
+from random_events.interval import singleton, open, closed, closed_open
 from random_events.product_algebra import SimpleEvent, Event
-
-from random_events.interval import singleton, open_closed, open, closed, closed_open
-
 from random_events.variable import Continuous
 
 from krrood.entity_query_language.factories import (
-    match_variable,
     variable,
     entity,
-    match,
-    variable_from,
     and_,
     or_,
+    match_variable,
+    match,
+    Entity,
 )
-from krrood.entity_query_language.query_graph import QueryGraph
-from krrood.ormatic.dao import to_dao
-from krrood.probabilistic_knowledge.parameterizer import Parameterizer
 from krrood.probabilistic_knowledge.probable_variable import (
     QueryToRandomEventTranslator,
     is_disjunctive_normal_form,
+    MatchToDAOTranslator,
 )
-from ..dataset.example_classes import Position, Pose, Orientation, Positions
+from ..dataset.example_classes import Pose, Position
 from ..dataset.ormatic_interface import *  # type: ignore
 
 
@@ -115,3 +109,11 @@ def test_dnf_checking():
 
     assert (result_by_hand - translated).is_empty()
     assert (translated - result_by_hand).is_empty()
+
+
+def test_query_writing_with_match():
+    query: Entity = match_variable(Pose, None)(
+        position=match(Position)(x=0.1, y=..., z=...), orientation=None
+    )
+    translator = MatchToDAOTranslator(query)
+    translator.translate()
