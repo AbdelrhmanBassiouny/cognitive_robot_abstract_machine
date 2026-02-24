@@ -13,11 +13,13 @@ kernelspec:
 
 # Logical Operators
 
-EQL provides intuitive ways to combine multiple constraints using logical operators. These allow you to build complex filters beyond simple attribute checks.
+EQL provides intuitive ways to combine multiple constraints using logical operators. These allow you to build complex
+filters beyond simple attribute checks.
 
 ## The Conjunction (AND)
 
-You can combine conditions using the `&` or `and_()` operator or by passing multiple arguments to `.where()`. Both methods are equivalent.
+You can combine conditions using the `&` or `and_()` operator or by passing multiple arguments to `.where()`.
+Both methods are equivalent.
 
 ### 1. Multiple conditions in `.where()`
 ```python

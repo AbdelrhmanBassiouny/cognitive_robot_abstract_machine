@@ -20,12 +20,14 @@ Beyond simple queries, EQL supports an inference engine for building **Rule Tree
 A Rule Tree is built using three main components:
 1.  **`inference(Type)`**: A special variable constructor for objects that will be "materialized" by the rule.
 2.  **`Add(target, value)`**: A conclusion clause that assigns a value to a symbolic variable.
-3.  **Selectors**: Logical branches that control when conclusions are applied.
+3.  **ConclusionSelectors**: Logical branches that control rule evcaluation flow and choose which conclusions are applied.
+Examples: `refinement()`,`alternative()`, and `next_rule()`.
 
 ## Conclusion Selectors
 
 ### 1. `refinement()`
-Narrows the context with an additional condition. It behaves like a logical **AND** but is used specifically to specialize a rule.
+Narrows the context with an additional condition. It behaves like a logical **AND** but is used specifically to 
+specialize a rule.
 
 ```python
 with refinement(body.size > 1):
@@ -45,7 +47,8 @@ with alternative(body.is_fixed):
 
 ## The `with query:` Context
 
-To build a rule tree, you use the query object as a context manager. Any `Add`, `refinement`, or `alternative` inside this block becomes part of that query's rule structure.
+To build a rule tree, you use the query object as a context manager. Any `Add`, `refinement`, or `alternative` inside
+this block becomes part of that query's rule structure.
 
 ```python
 query = an(entity(views).where(...))

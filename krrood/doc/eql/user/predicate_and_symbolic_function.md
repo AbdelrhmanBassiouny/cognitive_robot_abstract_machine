@@ -13,14 +13,17 @@ kernelspec:
 
 # Predicates and Symbolic Functions
 
-EQL is highly extensible. You can define your own logic and integrate it into queries using **Predicates** for boolean checks and **Symbolic Functions** for transforming data.
+EQL is highly extensible. You can define your own logic and integrate it into queries using **Predicates** for boolean
+checks and **Symbolic Functions** for transforming data.
 
 ## Predicates
 
-A {py:class}`~krrood.entity_query_language.predicate.Predicate` is a special class that represents a boolean condition. When you call it with symbolic variables, it doesn't execute immediately; instead, it returns an `InstantiatedVariable` that becomes part of the query's execution graph.
+A {py:class}`~krrood.entity_query_language.predicate.Predicate` is a special class that represents a boolean condition.
+When you call it with symbolic variables, it doesn't execute immediately; instead, it returns an `InstantiatedVariable`
+that becomes part of the query's execution graph.
 
 ### The `HasType` Predicate
-One of the most useful built-in predicates is `HasType`, which checks if a variable matches a specific class.
+One of the most useful built-in predicates is `HasType`, which checks if a variable is an instnace of a specific class.
 
 ```python
 from krrood.entity_query_language.predicate import HasType
@@ -29,11 +32,13 @@ from krrood.entity_query_language.predicate import HasType
 query = entity(v).where(HasType(v, Handle))
 ```
 
-💡 **Hint**: `variable(Type, domain=...)` already includes an implicit `HasType` check. Use the predicate explicitly when you need to check the type of a {py:class}`~krrood.entity_query_language.core.mapped_variable.Attribute`.
+💡 **Hint**: `variable(Type, domain=...)` already includes an implicit `HasType` check. Use the predicate explicitly when
+you need to check the type of a {py:class}`~krrood.entity_query_language.core.mapped_variable.Attribute` for example.
 
 ## Symbolic Functions
 
-A **Symbolic Function** is a regular Python function decorated with `@symbolic_function`. When called with symbolic arguments, it defers execution until the query is evaluated.
+A **Symbolic Function** is a regular Python function decorated with `@symbolic_function`. When called with symbolic 
+arguments, it defers execution until the query is evaluated.
 
 ```python
 from krrood.entity_query_language.predicate import symbolic_function
@@ -46,9 +51,8 @@ def is_even(n: int) -> bool:
 query = entity(r).where(is_even(r.battery))
 ```
 
-📝 **Note**: EQL provides a built-in {py:func}`~krrood.entity_query_language.predicate.length` symbolic function for checking the size of collections.
-
-⚠️ **Warning**: Symbolic functions must be "pure" in the sense that they shouldn't have side effects, as they may be called multiple times during query optimization and execution.
+📝 **Note**: EQL provides a built-in {py:func}`~krrood.entity_query_language.predicate.length` symbolic function for
+checking the size of collections.
 
 ## Full Example: Custom Logic
 

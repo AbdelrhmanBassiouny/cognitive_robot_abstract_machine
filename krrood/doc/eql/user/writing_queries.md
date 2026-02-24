@@ -13,11 +13,13 @@ kernelspec:
 
 # Writing Basic Queries
 
-This guide covers the fundamental building blocks of EQL: defining variables with `variable()`, selecting them with `entity()`, and filtering them with `.where()`.
+This guide covers the fundamental building blocks of EQL: defining variables with `variable()`, selecting them with
+`entity()`, and filtering them with `.where()`.
 
 ## Defining Variables
 
-All EQL queries start with symbolic variables. A variable represents a set of possible values (the domain) of a certain type.
+All EQL queries start with symbolic variables. A variable represents a set of possible values (the domain) of a certain
+type.
 
 ### 1. Variables with Explicit Domains
 The most common way to define a variable is to provide a type and a collection of objects (the domain).
@@ -38,11 +40,13 @@ If no domain is provided, EQL will attempt to use a default domain. For `Symbol`
 r = variable(Robot, domain=None)
 ```
 
-💡 **Hint**: Always provide a domain if you know it. It significantly improves query performance by narrowing the search space early.
+💡 **Hint**: Always provide a domain if you know it. It significantly improves query performance by narrowing the search
+space early.
 
 ## Selecting Entities
 
-The `entity()` function specifies what you want to retrieve from the query. It returns a `Query` object that you can further refine.
+The `entity()` function specifies what you want to retrieve from the query. It returns a `Query` object that you can
+further refine.
 
 ```python
 from krrood.entity_query_language.factories import entity
@@ -55,14 +59,13 @@ query = entity(r)
 
 ## Adding Filters with `.where()`
 
-The `.where()` method is used to add constraints to your query. You can pass multiple conditions, which are treated as a logical **AND**.
+The `.where()` method is used to add constraints to your query. You can pass multiple conditions, which are treated as
+a logical **AND**.
 
 ```python
 # Select robots named 'R1'
 query = entity(r).where(r.name == "R1")
 ```
-
-⚠️ **Warning**: Comparisons inside `.where()` must involve symbolic variables. Standard Python `if` statements or boolean checks on raw objects will not work here, as EQL builds an execution graph for later evaluation.
 
 ## Full Example: Finding High-Battery Robots
 
@@ -74,7 +77,7 @@ from krrood.entity_query_language.factories import variable, entity, an, Symbol
 
 # Define our model
 @dataclass
-class Robot(Symbol):
+class Robot:
     name: str
     battery: int
 

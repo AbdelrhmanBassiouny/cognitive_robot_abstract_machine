@@ -28,7 +28,7 @@ robot_pattern = match(Robot)(name="R2D2")
 
 ## The `match_variable()` Function
 
-While `match()` describes a pattern, `match_variable()` creates a symbolic variable that is pre-filtered by that pattern and bound to a specific domain.
+While `match()` describes a pattern, `match_variable()` in addition binds to a specific domain.
 
 ```python
 from krrood.entity_query_language.factories import match_variable
@@ -37,7 +37,8 @@ from krrood.entity_query_language.factories import match_variable
 r = match_variable(Robot, domain=world.robots)(name="R2D2")
 ```
 
-💡 **Hint**: Use `match_variable` as the entry point for your structural queries, and use `match` for nested child attributes.
+💡 **Hint**: Use `match_variable` as the entry point for your structural queries when needing to specify a domain, and 
+use `match` for nested child attributes.
 
 ## Nested Matching
 
@@ -51,7 +52,8 @@ fixed_connection = match_variable(FixedConnection, domain=world.connections)(
 )
 ```
 
-📝 **Note**: `match_variable` is syntactic sugar. Under the hood, it creates a {py:func}`~krrood.entity_query_language.factories.variable` and automatically adds the corresponding {py:meth}`~krrood.entity_query_language.query.query.Query.where` clauses.
+📝 **Note**: `match_variable` is syntactic sugar. Under the hood, it creates a {py:func}`~krrood.entity_query_language.factories.variable`
+and automatically adds the corresponding {py:meth}`~krrood.entity_query_language.query.query.Query.where` clauses.
 
 ⚠️ **Warning**: Use `match_variable` instead of `variable` only when you have multiple attribute checks. For simple queries, `variable().where(...)` is often more readable.
 

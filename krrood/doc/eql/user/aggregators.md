@@ -54,7 +54,8 @@ While `.where()` filters individual entities *before* they are grouped, `.having
 query = entity(r.type).grouped_by(r.type).having(count(r) > 5)
 ```
 
-⚠️ **Warning**: Always use `.where()` for conditions that can be evaluated on individual objects. Use `.having()` only for conditions that depend on group-level aggregates.
+⚠️ **Warning**: Always use `.where()` for conditions that can be evaluated on individual objects. Use `.having()` only 
+for conditions that depend on group-level aggregates.
 
 ## Full Example: World Statistics
 

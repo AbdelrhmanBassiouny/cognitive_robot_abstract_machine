@@ -13,7 +13,8 @@ kernelspec:
 
 # Result Processors
 
-Once you have built a query and wrapped it in a quantifier, you need to execute it to retrieve the results. EQL provides three main methods for this: `.evaluate()`, `.tolist()`, and `.first()`.
+Once you have built a query, you need to execute it to retrieve the results.
+EQL provides three main methods for this: `.evaluate()`, `.tolist()`, and `.first()`.
 
 ## 1. The `.evaluate()` Method
 
@@ -27,7 +28,8 @@ for result in results_generator:
     print(result)
 ```
 
-💡 **Hint**: Use `.evaluate()` when you expect a large number of results and want to process them efficiently without loading everything into memory.
+💡 **Hint**: Use `.evaluate()` when you expect a large number of results and want to process them efficiently without
+loading everything into memory.
 
 ## 2. The `.tolist()` Method
 
@@ -50,7 +52,7 @@ The `.first()` method is a convenience for retrieving only the **first** result 
 top_result = query.first()
 ```
 
-⚠️ **Warning**: If the query returns no results, `.first()` will return `None`. Always check for `None` or ensure your query is guaranteed to have results (e.g., by using an appropriate domain or quantifier).
+⚠️ **Warning**: If the query returns no results, `.first()` will raise a `StopIteration` exception.
 
 ## Full Example: Different Ways to Consume Results
 

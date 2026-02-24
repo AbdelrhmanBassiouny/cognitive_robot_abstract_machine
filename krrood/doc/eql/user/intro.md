@@ -13,11 +13,18 @@ kernelspec:
 
 # Introduction to EQL
 
-The Entity Query Language (EQL) is a relational query language designed to be pythonic, intuitive, and expressive.
-It allows you to query complex object graphs as if they were simple collections, without the boilerplate of manual joins.
+Entity Query Language (EQL) is a Pythonic, intuitive, and expressive relational query language. It is not only a query
+language, but also a description language that lets you write description-logic-style statements directly in Python. You
+can also use any user-defined Python function inside a query.
 
-The philosophy of EQL is to mirror your intent in a query statement. If you want to find an object with certain 
-properties, you just describe it using standard Python syntax.
+Unlike SQL, EQL does not require explicit joins. It works naturally with Python’s built-in data structures, which can be
+nested arbitrarily.
+
+EQL operates directly on user-defined objects, without the need for an additional representation layer such as an 
+Object-Relational Mapper (ORM).
+
+The core idea behind EQL is simple: express your intent with minimal extra detail. If you want to find an object with
+certain properties, you describe it directly using standard Python syntax.
 
 ## The "Hello World" of EQL
 
@@ -63,10 +70,14 @@ print(results)
 
 ## Bit-by-Bit Explanation
 
-*   **`variable(Body, domain=world.bodies)`**: This creates a symbolic placeholder. It tells EQL that we are interested in objects of type `Body` that are found in the `world.bodies` collection. See {py:func}`~krrood.entity_query_language.factories.variable`.
-*   **`entity(body)`**: This starts the selection. We are saying "I want to select the objects represented by the `body` variable". See {py:func}`~krrood.entity_query_language.factories.entity`.
-*   **`.where(body.name == "Robot")`**: This adds a filter. Notice how we use standard Python comparison operators. EQL captures these and translates them into symbolic constraints.
-*   **`an(...)`**: This is an optional result quantifier. It tells EQL that we expect zero or more results. If no quantifier is provided, `an()` is assumed. See {py:func}`~krrood.entity_query_language.factories.an`.
+*   **`variable(Body, domain=world.bodies)`**: This creates a symbolic placeholder. It tells EQL that we are interested
+in objects of type `Body` that are found in the `world.bodies` collection. See {py:func}`~krrood.entity_query_language.factories.variable`.
+*   **`entity(body)`**: This starts the selection. We are saying "I want to select the objects represented by the `body`
+variable". See {py:func}`~krrood.entity_query_language.factories.entity`.
+*   **`.where(body.name == "Robot")`**: This adds a filter. Notice how we use standard Python comparison operators. EQL
+captures these and translates them into symbolic constraints.
+*   **`an(...)`**: This is an optional result quantifier. It tells EQL that we expect zero or more results. If no
+quantifier is provided, `an()` is assumed. See {py:func}`~krrood.entity_query_language.factories.an`.
 *   **`.evaluate()`**: This triggers the execution engine. It returns a generator of results that satisfy all conditions.
 
 📝 **Note**: All logic in EQL is deferred. The query is only executed when you call `.evaluate()` and iterate over it,

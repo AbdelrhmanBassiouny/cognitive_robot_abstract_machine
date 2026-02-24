@@ -13,11 +13,13 @@ kernelspec:
 
 # EQL for SQL Experts
 
-If you are coming from a relational database background, EQL will feel familiar but with several powerful abstractions that simplify complex queries. This guide compares EQL concepts with their SQL equivalents.
+If you are coming from a relational database background, EQL will feel familiar but with several powerful abstractions
+that simplify complex queries. This guide compares EQL concepts with their SQL equivalents.
 
 ## Implicit JOINs vs. Path Following
 
-The biggest difference between SQL and EQL is how relationships are handled. In SQL, you must explicitly JOIN tables using foreign keys. In EQL, you simply follow the attribute path.
+The biggest difference between SQL and EQL is how relationships are handled. In SQL, you must explicitly JOIN tables
+using foreign keys. In EQL, you simply follow the attribute path.
 
 ### SQL (Explicit JOIN)
 ```sql
@@ -36,11 +38,10 @@ query = entity(r.parts.name).where(
 )
 ```
 
-💡 **Hint**: EQL's path following is equivalent to a `LEFT JOIN` or `INNER JOIN` depending on whether the attribute exists and is populated.
-
 ## Filter Early, Filter Late
 
-In SQL, all filtering happens in the `WHERE` or `HAVING` clause. EQL maintains this distinction but applies it to object grouping.
+In SQL, all filtering happens in the `WHERE` or `HAVING` clause. EQL maintains this distinction but applies it to
+object grouping.
 
 | SQL Clause | EQL Method | Purpose |
 | :--- | :--- | :--- |
@@ -55,10 +56,11 @@ In SQL, all filtering happens in the `WHERE` or `HAVING` clause. EQL maintains t
 SQL queries always return a result set (even if empty). EQL uses quantifiers to express expectations about the result set size, which helps catch data integrity issues early.
 
 - **SQL**: Always returns 0..N rows.
-- **EQL `an()`**: Expects 1..N results.
+- **EQL `an()`**: Expects 0..N results.
 - **EQL `the()`**: Expects exactly 1 result (like `SELECT ... LIMIT 1` but with an assertion).
 
-📝 **Note**: EQL's `the()` is a great way to enforce business logic (e.g., "every robot must have exactly one serial number") directly in your query.
+📝 **Note**: EQL's `the()` is a great way to enforce domain cardinality logic (e.g., "every robot must have exactly
+one serial number") directly in your query.
 
 ## Set Operations
 
@@ -92,4 +94,6 @@ query = set_of(r.type, count(r), average(r.battery)) \
     .limit(5)
 ```
 
-⚠️ **Warning**: While EQL is powerful, remember that it operates on object graphs in memory (or via an ORM). For extremely large datasets typically found in data warehouses, SQL is still the preferred tool. EQL is optimized for complex symbolic reasoning over structured object models.
+⚠️ **Warning**: While EQL is powerful, remember that it operates on object graphs in memory. For extremely large datasets
+typically found in data warehouses, SQL is still the preferred tool. EQL is optimized for complex symbolic reasoning
+over structured object models.

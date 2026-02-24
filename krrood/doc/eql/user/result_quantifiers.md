@@ -42,8 +42,8 @@ from krrood.entity_query_language.factories import the
 query = the(entity(r).where(r.name == "R2D2"))
 ```
 
-⚠️ **Warning**: Using `the()` on a query that returns multiple results will raise a `MoreThanOneSolutionFound`. Use it
-only when you are certain of the uniqueness of your match.
+⚠️ **Warning**: Using `the()` on a query that returns multiple results will raise a `MoreThanOneSolutionFound`, and
+if no solution is found, a `NoSolutionFound` exception will be raised.
 
 ## Advanced Quantification
 
@@ -58,9 +58,6 @@ query = an(entity(r), quantification=Exactly(3))
 # Expect at most 5 results
 query = an(entity(r), quantification=AtMost(5))
 ```
-
-📝 **Note**: Quantifiers are {py:class}`~krrood.entity_query_language.core.base_expressions.DerivedExpression`s.
-They don't change the underlying data, but they wrap the result stream to enforce their constraints.
 
 ## Full Example: Finding a Unique Item
 
