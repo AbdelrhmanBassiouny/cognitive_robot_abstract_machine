@@ -6,8 +6,7 @@ from typing import List
 
 import numpy as np
 
-from krrood.entity_query_language.entity import entity, variable
-from krrood.entity_query_language.entity_result_processors import an, the
+from krrood.entity_query_language.factories import an, entity, variable
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
