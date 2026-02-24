@@ -445,10 +445,7 @@ class SymbolicExpression(ABC):
         Enter a context where this symbolic expression is the current parent symbolic expression. This updates the
         current parent symbolic expression, the context stack and returns this expression.
         """
-        expression = self
-        if (expression is self._root_) or (expression._parent_ is self._root_):
-            expression = expression._conditions_root_
-        SymbolicExpression._symbolic_expression_stack_.append(expression)
+        SymbolicExpression._symbolic_expression_stack_.append(self)
         return self
 
     def __exit__(self, *args):
@@ -723,6 +720,11 @@ class Selectable(SymbolicExpression, Generic[T], ABC):
     """
     The type of the selectable.
     """
+
+    def __post_init__(self):
+        super().__post_init__()
+        if self._type_ is None:
+            self._type_ = self._type__
 
     def _build_operation_result_and_update_truth_value_(
         self, bindings: Bindings, child_result: Optional[OperationResult] = None

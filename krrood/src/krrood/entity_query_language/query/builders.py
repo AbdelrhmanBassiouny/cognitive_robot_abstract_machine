@@ -104,6 +104,8 @@ class FilterBuilder(ExpressionBuilder, ABC):
 
             if isinstance(expr, Aggregator):
                 aggregators.append(expr)
+                # No need to traverse inside aggregators
+                return False
             elif isinstance(expr, Selectable) and not isinstance(expr, Literal):
                 non_aggregators.append(expr)
 
@@ -111,8 +113,8 @@ class FilterBuilder(ExpressionBuilder, ABC):
             if aggregators and non_aggregators:
                 return True
 
-            if isinstance(expr, (Query, Aggregator)):
-                # Subqueries/Aggregator are a boundary, we don't need to traverse inside them.
+            if isinstance(expr, Query):
+                # Subqueries are a boundary, we don't need to traverse inside them.
                 return False
 
             return any(walk(child) for child in expr._children_)
@@ -318,16 +320,17 @@ class GroupedByBuilder(ExpressionBuilder):
     def aggregators_and_non_aggregators_in_ordered_by(
         self,
     ) -> Tuple[List[Aggregator], List[Selectable]]:
-        non_aggregated_variables, aggregators = [], []
-        if self.query._ordered_by_builder_:
-            variable = self.query._ordered_by_builder_.variable
-            if isinstance(variable, Aggregator):
-                aggregators.append(variable)
-                if variable._child_ is not None:
-                    non_aggregated_variables.append(variable._child_)
-            else:
-                non_aggregated_variables.append(variable)
-        return aggregators, non_aggregated_variables
+        if not self.query._ordered_by_builder_:
+            return [], []
+
+        variable = self.query._ordered_by_builder_.variable
+
+        if isinstance(variable, Aggregator):
+            return [variable], (
+                [variable._child_] if variable._child_ is not None else []
+            )
+
+        return [], [variable]
 
     @cached_property
     def aggregators_in_selected_variables(self) -> Tuple[Aggregator, ...]:
@@ -343,6 +346,10 @@ class GroupedByBuilder(ExpressionBuilder):
 
 @dataclass(eq=False)
 class QuantifierBuilder(ExpressionBuilder):
+    """
+    Builds a result quantifier (An/The) of the specified type with the given child and quantification constraint.
+    """
+
     type: Type[ResultQuantifier] = An
     """
     The type of the quantifier to be built.

@@ -30,12 +30,10 @@ from ..operators.comparator import Comparator
 from ..utils import (
     T,
     merge_args_and_kwargs,
-    convert_args_and_kwargs_into_a_hashable_key,
+    convert_args_and_kwargs_into_hashable_key,
 )
-from ...class_diagrams.class_diagram import WrappedClass
-from ...class_diagrams.failures import ClassIsUnMappedInClassDiagram
-from ...class_diagrams.wrapped_field import WrappedField
-from ...symbol_graph.symbol_graph import SymbolGraph
+
+from ...symbol_graph.helpers import get_field_type_endpoint
 
 
 @dataclass(eq=False, repr=False)
@@ -82,7 +80,7 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         """
         args = (self,) + args
         all_kwargs = merge_args_and_kwargs(type_, args, kwargs, ignore_first=True)
-        return convert_args_and_kwargs_into_a_hashable_key(all_kwargs)
+        return convert_args_and_kwargs_into_hashable_key(all_kwargs)
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
         # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
@@ -132,15 +130,16 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
     """
 
     def __post_init__(self):
-        super().__post_init__()
         self._var_ = self
+        super().__post_init__()
+        self._update_type_()
 
     def _update_type_(self) -> None:
         """
         Update the `_type_` attribute.
         """
         # Default implementation is that the type is the child type.
-        self._type_ = self._child_._type_
+        self._type_ = self._child_._type_ if self._type_ is None else self._type_
 
     def _evaluate__(
         self,
@@ -179,12 +178,8 @@ class Attribute(MappedVariable):
     The name of the attribute.
     """
 
-    def __post_init__(self):
-        super().__post_init__()
-        self._update_type_()
-
     @cached_property
-    def _owner_class_(self):
+    def _owner_class_(self) -> Optional[Type]:
         """
         The class that owns this attribute.
         """
@@ -194,59 +189,14 @@ class Attribute(MappedVariable):
         """
         Update the `_type_` attribute with the type of the values of this attribute.
         """
-
-        if not is_dataclass(self._owner_class_):
-            return None
-
-        if self._attribute_name_ not in {f.name for f in fields(self._owner_class_)}:
-            return None
-
-        if self._wrapped_owner_class_:
-            # try to get the type endpoint from a field
-            try:
-                self._type_ = self._wrapped_field_.type_endpoint
-            except (KeyError, AttributeError):
-                return None
-        else:
-            wrapped_cls = WrappedClass(self._owner_class_)
-            wrapped_cls._class_diagram = SymbolGraph().class_diagram
-            wrapped_field = WrappedField(
-                wrapped_cls,
-                [
-                    f
-                    for f in fields(self._owner_class_)
-                    if f.name == self._attribute_name_
-                ][0],
-            )
-            try:
-                self._type_ = wrapped_field.type_endpoint
-            except (AttributeError, RuntimeError):
-                return None
-
-    @cached_property
-    def _wrapped_field_(self) -> Optional[WrappedField]:
-        if self._wrapped_owner_class_ is None:
-            return None
-        return self._wrapped_owner_class_._wrapped_field_name_map_.get(
-            self._attribute_name_, None
-        )
-
-    @cached_property
-    def _wrapped_owner_class_(self):
-        """
-        :return: The owner class of the attribute from the symbol graph.
-        """
-        try:
-            return SymbolGraph().class_diagram.get_wrapped_class(self._owner_class_)
-        except ClassIsUnMappedInClassDiagram:
-            return None
+        self._type_ = get_field_type_endpoint(self._owner_class_, self._attribute_name_)
 
     def _apply_mapping_(self, value: Any) -> Iterable[Any]:
         yield getattr(value, self._attribute_name_)
 
     @property
     def _name_(self):
-        return f"{self._child_._var_._name_}.{self._attribute_name_}"
+        return f"{self._child_._name_}.{self._attribute_name_}"
 
 
 @dataclass(eq=False, repr=False)
@@ -350,9 +300,7 @@ class MappedVariableCacheItem:
 
     @cached_property
     def hashable_key(self):
-        return (self.type,) + convert_args_and_kwargs_into_a_hashable_key(
-            self.all_kwargs
-        )
+        return (self.type,) + convert_args_and_kwargs_into_hashable_key(self.all_kwargs)
 
     def __hash__(self):
         return hash(self.hashable_key)

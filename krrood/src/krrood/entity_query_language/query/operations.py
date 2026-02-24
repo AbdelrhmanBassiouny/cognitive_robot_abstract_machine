@@ -7,6 +7,7 @@ symbolic expressions and their aggregated results.
 
 from __future__ import annotations
 
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
@@ -189,7 +190,10 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         :return: An iterator of OperationResult objects, each representing a group of child results.
         """
 
-        if len(self.aggregators_of_grouped_by_variables_that_are_not_count) > 0:
+        if any(
+            not isinstance(var, Count)
+            for var in self.aggregators_of_grouped_by_variables
+        ):
             raise UnsupportedAggregationOfAGroupedByVariable(self)
 
         groups, group_key_count = self.get_groups_and_group_key_count(sources)
@@ -228,17 +232,13 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
             self.update_group_from_bindings(groups[group_key], res.bindings)
 
         if len(groups) == 0:
-            for var in self.aggregated_variables:
+            # if there are no groups, add one empty group with an empty list for each aggregated variable.
+            for var in [
+                var._child_ for var in self.aggregators if var._child_ is not None
+            ]:
                 groups[()][var._binding_id_] = []
 
         return groups, group_key_count
-
-    @cached_property
-    def aggregated_variables(self) -> Tuple[SymbolicExpression, ...]:
-        """
-        :return: A tuple of the aggregated variables in the selected variables of the query descriptor.
-        """
-        return tuple(var._child_ for var in self.aggregators if var._child_ is not None)
 
     def update_group_from_bindings(self, group: OperationResult, results: Bindings):
         """
@@ -258,7 +258,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
                 group[id_].append(val)
 
     @lru_cache
-    def is_already_grouped(self, var_id: int) -> bool:
+    def is_already_grouped(self, var_id: uuid.UUID) -> bool:
         expression = self._get_expression_by_id_(var_id)
         return (
             len(self.variables_to_group_by) == 1
@@ -275,20 +275,6 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         return len(self.aggregators_of_grouped_by_variables) > 0
 
     @cached_property
-    def aggregators_of_grouped_by_variables_that_are_not_count(
-        self,
-    ) -> Tuple[Aggregator, ...]:
-        """
-        :return: Aggregators in the selected variables of the query descriptor that are aggregating over
-         expressions having variables that are in the grouped_by clause and are not Count.
-        """
-        return tuple(
-            var
-            for var in self.aggregators_of_grouped_by_variables
-            if not isinstance(var, Count)
-        )
-
-    @cached_property
     def aggregators_of_grouped_by_variables(self):
         """
         :return: A list of the aggregators in the selected variables of the query descriptor that are aggregating over
@@ -302,7 +288,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
         ]
 
     @cached_property
-    def ids_of_variables_to_group_by(self) -> Tuple[int, ...]:
+    def ids_of_variables_to_group_by(self) -> Tuple[uuid.UUID, ...]:
         """
         :return: A tuple of the binding IDs of the variables to group by.
         """

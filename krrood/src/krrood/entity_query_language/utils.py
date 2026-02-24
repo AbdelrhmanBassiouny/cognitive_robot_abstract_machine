@@ -211,7 +211,7 @@ def merge_args_and_kwargs(
     return all_kwargs
 
 
-def convert_args_and_kwargs_into_a_hashable_key(
+def convert_args_and_kwargs_into_hashable_key(
     dictionary: Dict[str, Any],
 ) -> Tuple[Any, ...]:
     """

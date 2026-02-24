@@ -7,6 +7,7 @@ that evaluate conditions over the values of a variable.
 
 from __future__ import annotations
 
+import uuid
 from abc import ABC
 from dataclasses import dataclass
 from functools import cached_property
@@ -27,17 +28,9 @@ class QuantifiedConditional(LogicalBinaryOperator, ABC):
     def variable(self):
         return self.left
 
-    @variable.setter
-    def variable(self, value):
-        self.left = value
-
     @property
     def condition(self):
         return self.right
-
-    @condition.setter
-    def condition(self, value):
-        self.right = value
 
 
 @dataclass(eq=False, repr=False)
@@ -48,7 +41,7 @@ class ForAll(QuantifiedConditional):
     """
 
     @cached_property
-    def condition_unique_variable_ids(self) -> List[int]:
+    def condition_unique_variable_ids(self) -> List[uuid.UUID]:
         return [
             v._binding_id_
             for v in self.condition._unique_variables_.difference(

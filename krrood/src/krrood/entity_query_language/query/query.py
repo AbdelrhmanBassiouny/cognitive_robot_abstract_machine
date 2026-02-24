@@ -264,7 +264,9 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         Make sure the query is built before entering the context manager for rule trees.
         """
         self.build()
-        super().__enter__()
+        expression = self._conditions_root_
+        SymbolicExpression._symbolic_expression_stack_.append(expression)
+        return expression
 
     def build(self) -> Self:
         """

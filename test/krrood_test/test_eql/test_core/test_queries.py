@@ -967,7 +967,7 @@ def test_exists_and_for_all(handles_and_containers_world):
         )
     )
 
-    QueryGraph(query.build()).visualize()
+    # QueryGraph(query.build()).visualize()
 
     results = list(query.evaluate())
 
@@ -1179,3 +1179,15 @@ def test_evaluating_a_variable_while_it_is_being_evaluated():
         for v2 in var1.evaluate():
             v1_v2_pairs.append((v, v2))
     assert v1_v2_pairs == list(itertools.product(domain, domain))
+
+
+def test_type_availability_in_mapped_variables(handles_and_containers_world):
+    cabinet = variable(Cabinet, handles_and_containers_world.views)
+    cabinet_drawers = cabinet.drawers
+    first_drawer = cabinet_drawers[0]
+    first_drawer_handle = first_drawer.handle
+
+    assert cabinet._type_ is Cabinet
+    assert cabinet_drawers._type_ is Drawer
+    assert first_drawer._type_ is Drawer
+    assert first_drawer_handle._type_ is Handle

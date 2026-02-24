@@ -53,28 +53,26 @@ class ConclusionSelector(TruthValueOperator, ABC):
         """
         new_condition = chained_logic(AND, *conditions)
 
-        current_conditions_root = (
-            cls._get_current_conditions_root_for_rule_type_from_context_stack()
+        current_context = cls._get_current_context_condition()
+
+        prev_parent = current_context._parent_
+
+        new_context = cls._create_between_two_expressions(
+            current_context, new_condition
         )
 
-        prev_parent = current_conditions_root._parent_
-
-        new_conditions_root = cls._create_between_two_expressions(
-            current_conditions_root, new_condition
-        )
-
-        if new_conditions_root is not current_conditions_root:
-            prev_parent._replace_child_(current_conditions_root, new_conditions_root)
+        if new_context is not current_context:
+            prev_parent._replace_child_(current_context, new_context)
 
         return new_condition
 
     @classmethod
     @abstractmethod
-    def _get_current_conditions_root_for_rule_type_from_context_stack(
+    def _get_current_context_condition(
         cls,
     ) -> SymbolicExpression:
         """
-        :return: The current conditions root to connect the new condition to via this ConclusionSelector.
+        :return: The condition that will be connected to the new condition via this ConclusionSelector.
         """
         ...
 
@@ -148,12 +146,9 @@ class Refinement(LogicalBinaryOperator, ConclusionSelector):
         self._conclusions_.clear()
 
     @classmethod
-    def _get_current_conditions_root_for_rule_type_from_context_stack(
+    def _get_current_context_condition(
         cls,
     ) -> ConditionType:
-        """
-        :return: The current conditions root to use for creating a new condition connected via alternative or next edge.
-        """
         return SymbolicExpression._current_parent_in_context_stack_()
 
     @classmethod
@@ -192,12 +187,17 @@ class Alternative(OR, ConclusionSelector):
             self._conclusions_.clear()
 
     @classmethod
-    def _get_current_conditions_root_for_rule_type_from_context_stack(
+    def _get_current_context_condition(
         cls,
     ) -> ConditionType:
-        return (
-            _get_current_conditions_root_for_alternative_or_next_rule_types_from_context_stack()
-        )
+        current_context = SymbolicExpression._current_parent_in_context_stack_()
+        current_context_parent = current_context._parent_
+        if (
+            isinstance(current_context_parent, Refinement)
+            and current_context is current_context_parent.right
+        ):
+            return current_context
+        return current_context._conditions_root_
 
     @classmethod
     def _create_between_two_expressions(
@@ -227,15 +227,11 @@ class Next(EQLUnion, ConclusionSelector):
             self._conclusions_.clear()
 
     @classmethod
-    def _get_current_conditions_root_for_rule_type_from_context_stack(
+    def _get_current_context_condition(
         cls,
     ) -> ConditionType:
-        """
-        :return: The current conditions root to use for creating a new condition connected via Next operator.
-        """
-        return (
-            _get_current_conditions_root_for_alternative_or_next_rule_types_from_context_stack()
-        )
+        current_context = SymbolicExpression._current_parent_in_context_stack_()
+        return current_context._conditions_root_
 
     @classmethod
     def _create_between_two_expressions(
@@ -248,23 +244,5 @@ class Next(EQLUnion, ConclusionSelector):
                 current_condition.add_child(new_condition)
                 new_conditions_root = current_condition
             case _:
-                new_conditions_root = Next((current_condition, new_condition))
+                new_conditions_root = cls((current_condition, new_condition))
         return new_conditions_root
-
-
-def _get_current_conditions_root_for_alternative_or_next_rule_types_from_context_stack() -> (
-    ConditionType
-):
-    """
-    :return: The current conditions root to use for creating a new condition connected via Alternative/Next operator.
-    """
-    current_node = SymbolicExpression._current_parent_in_context_stack_()
-    current_node_parent = current_node._parent_
-    if isinstance(current_node_parent, (Alternative, Next)):
-        current_node = current_node_parent
-    elif (
-        isinstance(current_node_parent, Refinement)
-        and current_node is current_node_parent.left
-    ):
-        current_node = current_node_parent
-    return current_node

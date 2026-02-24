@@ -419,7 +419,7 @@ def test_rule_tree_with_multiple_alternatives_better_rule_tree_optimized(
                 ),
             )
 
-    QueryGraph(query).visualize()
+    # QueryGraph(query).visualize()
 
     all_solutions = list(query.evaluate())
     assert len(all_solutions) == 3, "Should generate 1 drawer, 1 door and 1 wardrobe."
