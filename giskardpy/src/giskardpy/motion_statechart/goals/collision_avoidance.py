@@ -24,6 +24,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 from ..context import MotionStatechartContext
 from ..data_types import DefaultWeights
+from ..exceptions import NodeInitializationError
 from ..graph_node import Goal, MotionStatechartNode, NodeArtifacts
 from ..graph_node import Task
 from ...qp.qp_controller_config import QPControllerConfig
@@ -320,7 +321,7 @@ class ExternalCollisionAvoidance(Goal):
     The task will only be active if the monitor detects that a collision is close.
     """
 
-    robot: AbstractRobot = field(kw_only=True)
+    robot: AbstractRobot = field(kw_only=True, default=None)
     """
     The robot for which the collision avoidance goal is defined.
     """
@@ -334,6 +335,13 @@ class ExternalCollisionAvoidance(Goal):
     """
 
     def expand(self, context: MotionStatechartContext) -> None:
+        if self.robot is None:
+            robots = context.world.get_semantic_annotations_by_type(AbstractRobot)
+            if len(robots) != 1:
+                raise NodeInitializationError(
+                    self, f"Expected exactly one robot, got {len(robots)}"
+                )
+            self.robot = robots[0]
         self.external_collision_manager = context.external_collision_manager
 
         for body in self.robot.bodies_with_collision:
@@ -537,7 +545,7 @@ class SelfCollisionAvoidance(Goal):
     The task will only be active if the monitor detects that a collision is close.
     """
 
-    robot: AbstractRobot = field(kw_only=True)
+    robot: AbstractRobot = field(kw_only=True, default=None)
     """
     The robot for which the collision avoidance goal is defined.
     """
@@ -566,6 +574,14 @@ class SelfCollisionAvoidance(Goal):
         return collision_matrix
 
     def expand(self, context: MotionStatechartContext) -> None:
+        if self.robot is None:
+            robots = context.world.get_semantic_annotations_by_type(AbstractRobot)
+            if len(robots) != 1:
+                raise NodeInitializationError(
+                    self, f"Expected exactly one robot, got {len(robots)}"
+                )
+            self.robot = robots[0]
+
         self.self_collision_manager = context.self_collision_manager
         collision_matrix = self.create_self_collision_matrix(context)
 
