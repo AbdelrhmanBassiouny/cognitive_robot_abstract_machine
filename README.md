@@ -129,6 +129,8 @@ Example:
 
     - Use absolute imports always within the package as this is easier to maintain and clearer to read and understand.
 
+    - Use relative imports always in tests when importing modules defined in the same test folder/package.
+
     - When importing types, use typing extensions instead of typing or the standard library types;
 
     - Avoid importing types directly from modules if you don't need to construct an instance of the type inside the module. Annotations can be imported with the TYPE_CHECKING guard.
