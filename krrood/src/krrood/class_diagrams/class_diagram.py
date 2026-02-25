@@ -14,7 +14,7 @@ import rustworkx as rx
 from krrood.utils import module_and_class_name
 
 try:
-    from rustworkx_utils import RWXNode
+    from krrood.rustworkx_utils import RWXNode
 except ImportError:
     RWXNode = None
 from typing_extensions import (

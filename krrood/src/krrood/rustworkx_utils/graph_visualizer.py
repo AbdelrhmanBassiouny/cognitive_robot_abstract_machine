@@ -11,10 +11,10 @@ from matplotlib import pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 from matplotlib.path import Path
 
-from rustworkx_utils.utils import ColorLegend
+from krrood.rustworkx_utils.utils import ColorLegend
 
 if TYPE_CHECKING:
-    from rustworkx_utils.rxnode import RWXNode
+    from krrood.rustworkx_utils.rxnode import RWXNode
 
 
 class GraphVisualizer:
