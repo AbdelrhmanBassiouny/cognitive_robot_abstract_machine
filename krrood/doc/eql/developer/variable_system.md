@@ -23,7 +23,9 @@ The {py:class}`~krrood.entity_query_language.core.mapped_variable.CanBehaveLikeA
 - **`__getitem__`**: Captures indexing and returns an {py:class}`~krrood.entity_query_language.core.mapped_variable.Index`.
 - **`__call__`**: Captures method calls and returns a {py:class}`~krrood.entity_query_language.core.mapped_variable.Call`.
 
-💡 **Hint**: This is why you can write `robot.name == "R2D2"`. The `robot` variable captures the `.name` access and returns a symbolic `Attribute` node.
+```{hint}
+This is why you can write `robot.name == "R2D2"`. The `robot` variable captures the `.name` access and returns a symbolic `Attribute` node.
+```
 
 ## Mapped Variables
 
@@ -38,14 +40,18 @@ Represents access to a dictionary key or list index. It uses `value[key]`.
 ### 3. `Call`
 Represents a symbolic method call. It stores the arguments and keyword arguments, and executes the call during evaluation.
 
-📝 **Note**: Mapped variables are cached internally to ensure that the same symbolic path (e.g., `robot.name`) always resolves to the same expression object within a query context.
+```{note}
+Mapped variables are cached internally to ensure that the same symbolic path (e.g., `robot.name`) always resolves to the same expression object within a query context.
+```
 
 ## Flattening with `FlatVariable`
 
 The {py:class}`~krrood.entity_query_language.core.mapped_variable.FlatVariable` is a special mapped variable used when an attribute returns an iterable, but you want to treat its elements as individual bindings in the result stream.
 
-📝 **Note**: Use `flat_variable()` explicitly when you want to iterate over elements of attributes that are iterable.
+```{note}
+Use `flat_variable()` explicitly when you want to iterate over elements of attributes that are iterable.
 Standard attribute access on an iterable valued attribute will return the iterables as values, not their elements.
+```
 
 ## API Reference
 - {py:class}`~krrood.entity_query_language.core.mapped_variable.CanBehaveLikeAVariable`

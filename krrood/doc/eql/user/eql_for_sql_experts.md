@@ -63,8 +63,10 @@ set size, which helps catch data integrity issues early.
 - **EQL `an()`**: Expects 0..N results.
 - **EQL `the()`**: Expects exactly 1 result (like `SELECT ... LIMIT 1` but with an assertion).
 
-📝 **Note**: EQL's `the()` is a great way to enforce domain cardinality logic (e.g., "every robot must have exactly
+```{note}
+EQL's `the()` is a great way to enforce domain cardinality logic (e.g., "every robot must have exactly
 one serial number") directly in your query.
+```
 
 ## Set Operations
 
@@ -102,7 +104,9 @@ query = set_of(r.type, count(r), average(r.battery)) \
     .limit(5)
 ```
 
-⚠️ **Warning**: While EQL is powerful, remember that it operates on object graphs in memory. For extremely large
+```{warning}
+While EQL is powerful, remember that it operates on object graphs in memory. For extremely large
 datasets
 typically found in data warehouses, SQL is still the preferred tool. EQL is optimized for complex symbolic reasoning
 over structured object models.
+```

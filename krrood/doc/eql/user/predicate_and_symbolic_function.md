@@ -32,8 +32,10 @@ from krrood.entity_query_language.predicate import HasType
 query = entity(v).where(HasType(v, Handle))
 ```
 
-💡 **Hint**: `variable(Type, domain=...)` already includes an implicit `HasType` check. Use the predicate explicitly when
+```{hint}
+`variable(Type, domain=...)` already includes an implicit `HasType` check. Use the predicate explicitly when
 you need to check the type of a {py:class}`~krrood.entity_query_language.core.mapped_variable.Attribute` for example.
+```
 
 ## Symbolic Functions
 
@@ -51,8 +53,10 @@ def is_even(n: int) -> bool:
 query = entity(r).where(is_even(r.battery))
 ```
 
-📝 **Note**: EQL provides a built-in {py:func}`~krrood.entity_query_language.predicate.length` symbolic function for
+```{note}
+EQL provides a built-in {py:func}`~krrood.entity_query_language.predicate.length` symbolic function for
 checking the size of collections.
+```
 
 ## Full Example: Custom Logic
 

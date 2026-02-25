@@ -37,8 +37,10 @@ from krrood.entity_query_language.factories import match_variable
 r = match_variable(Robot, domain=world.robots)(name="R2D2")
 ```
 
-💡 **Hint**: Use `match_variable` as the entry point for your structural queries when needing to specify a domain, and 
+```{hint}
+Use `match_variable` as the entry point for your structural queries when needing to specify a domain, and
 use `match` for nested child attributes.
+```
 
 ## Nested Matching
 
@@ -52,10 +54,14 @@ fixed_connection = match_variable(FixedConnection, domain=world.connections)(
 )
 ```
 
-📝 **Note**: `match_variable` is syntactic sugar. Under the hood, it creates a {py:func}`~krrood.entity_query_language.factories.variable`
+```{note}
+`match_variable` is syntactic sugar. Under the hood, it creates a {py:func}`~krrood.entity_query_language.factories.variable`
 and automatically adds the corresponding {py:meth}`~krrood.entity_query_language.query.query.Query.where` clauses.
+```
 
-⚠️ **Warning**: Use `match_variable` instead of `variable` only when you have multiple attribute checks. For simple queries, `variable().where(...)` is often more readable.
+```{warning}
+Use `match_variable` instead of `variable` only when you have multiple attribute checks. For simple queries, `variable().where(...)` is often more readable.
+```
 
 ## Full Example: Finding Connected Parts
 

@@ -48,7 +48,9 @@ from krrood.entity_query_language.factories import sum, average
 query = set_of(r.type, sum(r.battery), average(r.battery)).grouped_by(r.type)
 ```
 
-💡 **Hint**: You can use `.distinct()` inside an aggregator to count only unique values: `count(r.name, distinct=True)`.
+```{hint}
+You can use `.distinct()` inside an aggregator to count only unique values: `count(r.name, distinct=True)`.
+```
 
 ## Finding Extremes with `max()` and `min()`
 
@@ -74,8 +76,10 @@ While `.where()` filters individual entities *before* they are grouped, `.having
 query = entity(r.type).grouped_by(r.type).having(count(r) > 5)
 ```
 
-⚠️ **Warning**: Always use `.where()` for conditions that can be evaluated on individual objects. Use `.having()` only 
+```{warning}
+Always use `.where()` for conditions that can be evaluated on individual objects. Use `.having()` only
 for conditions that depend on group-level aggregates.
+```
 
 ## Full Example: World Statistics
 

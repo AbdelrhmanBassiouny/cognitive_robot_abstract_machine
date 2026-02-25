@@ -80,8 +80,10 @@ captures these and translates them into symbolic constraints.
 quantifier is provided, `an()` is assumed. See {py:func}`~krrood.entity_query_language.factories.an`.
 *   **`.evaluate()`**: This triggers the execution engine. It returns a generator of results that satisfy all conditions.
 
-📝 **Note**: All logic in EQL is deferred. The query is only executed when you call `.evaluate()` and iterate over it,
+```{note}
+All logic in EQL is deferred. The query is only executed when you call `.evaluate()` and iterate over it,
 or when you call `.tolist()`, or `.first()`.
+```
 
 ## Full Example
 

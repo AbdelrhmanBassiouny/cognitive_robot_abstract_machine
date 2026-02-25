@@ -33,7 +33,9 @@ query = entity(r).where(r.name == "R2D2", r.battery > 50)
 query = entity(r).where((r.name == "R2D2") & (r.battery > 50))
 ```
 
-💡 **Hint**: Using multiple arguments in `.where()` is generally cleaner for simple conjunctions.
+```{hint}
+Using multiple arguments in `.where()` is generally cleaner for simple conjunctions.
+```
 
 ## The Disjunction (OR)
 
@@ -44,7 +46,9 @@ Use the `|` or `or_()` operator to specify that at least one of the conditions m
 query = entity(r).where((r.name == "R2D2") | (r.battery < 10))
 ```
 
-⚠️ **Warning**: Always use parentheses around your conditions when using `&` or `|` to ensure correct operator precedence.
+```{warning}
+Always use parentheses around your conditions when using `&` or `|` to ensure correct operator precedence.
+```
 
 ## The Negation (NOT)
 
@@ -55,7 +59,9 @@ The `not_()` operator inverts a condition. It returns results that do **not** sa
 query = entity(r).where(not_(r.name == "R2D2"))
 ```
 
-📝 **Note**: Negation can be particularly useful for "anti-joins" or excluding specific subsets from your results.
+```{note}
+Negation can be particularly useful for "anti-joins" or excluding specific subsets from your results.
+```
 
 ## Full Example: Complex Logic
 

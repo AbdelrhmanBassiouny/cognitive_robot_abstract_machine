@@ -28,7 +28,9 @@ from krrood.entity_query_language.factories import an, entity
 query = an(entity(r).where(r.battery > 50))
 ```
 
-💡 **Hint**: Use `an()` when you are searching for any number of matching entities and want a generator of results.
+```{hint}
+Use `an()` when you are searching for any number of matching entities and want a generator of results.
+```
 
 ## The `the()` Quantifier
 
@@ -42,8 +44,10 @@ from krrood.entity_query_language.factories import the
 query = the(entity(r).where(r.name == "R2D2"))
 ```
 
-⚠️ **Warning**: Using `the()` on a query that returns multiple results will raise a `MoreThanOneSolutionFound`, and
+```{warning}
+Using `the()` on a query that returns multiple results will raise a `MoreThanOneSolutionFound`, and
 if no solution is found, a `NoSolutionFound` exception will be raised.
+```
 
 ## Advanced Quantification
 

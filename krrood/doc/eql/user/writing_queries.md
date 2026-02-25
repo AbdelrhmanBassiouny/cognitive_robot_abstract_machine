@@ -40,8 +40,10 @@ If no domain is provided, EQL will attempt to use a default domain. For `Symbol`
 r = variable(Robot, domain=None)
 ```
 
-💡 **Hint**: Always provide a domain if you know it. It significantly improves query performance by narrowing the search
+```{hint}
+Always provide a domain if you know it. It significantly improves query performance by narrowing the search
 space early.
+```
 
 ## Selecting Entities
 
@@ -55,7 +57,9 @@ from krrood.entity_query_language.factories import entity
 query = entity(r)
 ```
 
-📝 **Note**: If you need to select multiple variables at once, use {py:func}`~krrood.entity_query_language.factories.set_of` instead.
+```{note}
+If you need to select multiple variables at once, use {py:func}`~krrood.entity_query_language.factories.set_of` instead.
+```
 
 ## Adding Filters with `.where()`
 

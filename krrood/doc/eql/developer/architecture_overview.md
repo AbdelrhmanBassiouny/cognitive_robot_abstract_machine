@@ -34,7 +34,9 @@ forming a symbolic execution graph.
 | **Builder** | `WhereBuilder`, `GroupedByBuilder`, ... | Collects metadata, validates structure, and stores constraints. |
 | **Expression** | `Where`, `GroupedBy`, ...               | Implements the actual evaluation logic (`_evaluate__`). |
 
-💡 **Hint**: The separation allows EQL to validate the query structure (e.g., checking if aggregators are used correctly in `having`) *before* the expensive evaluation process begins.
+```{hint}
+The separation allows EQL to validate the query structure (e.g., checking if aggregators are used correctly in `having`) *before* the expensive evaluation process begins.
+```
 
 ## The Query Lifecycle
 
@@ -43,9 +45,13 @@ forming a symbolic execution graph.
 It converts all builders into their corresponding expression nodes.
 3.  **Evaluation**: The root expression (a `ResultQuantifier`) calls `_evaluate_()` on its children, starting the recursive evaluation process.
 
-📝 **Note**: The `@modifies_query_structure` decorator ensures that once a query has been built into an execution graph, its structure cannot be modified further.
+```{note}
+The `@modifies_query_structure` decorator ensures that once a query has been built into an execution graph, its structure cannot be modified further.
+```
 
-⚠️ **Warning**: Directly manipulating expression nodes is discouraged for end-users. Always use the `factories` and `Query` methods to build your queries.
+```{warning}
+Directly manipulating expression nodes is discouraged for end-users. Always use the `factories` and `Query` methods to build your queries.
+```
 
 ## Simplified Visualization of the Pipeline
 

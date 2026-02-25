@@ -26,7 +26,9 @@ You can use the following operators directly on symbolic attributes:
 query = entity(r).where(r.battery >= 80)
 ```
 
-💡 **Hint**: EQL automatically handles type coercion where appropriate, making your queries more resilient to minor data differences.
+```{hint}
+EQL automatically handles type coercion where appropriate, making your queries more resilient to minor data differences.
+```
 
 ## Membership Checks
 
@@ -53,7 +55,9 @@ from krrood.entity_query_language.factories import contains
 query = entity(r).where(contains(r.equipment, "laser"))
 ```
 
-⚠️ **Warning**: Python's native `in` operator (e.g., `value in container`) cannot be overridden to return a symbolic expression. You **must** use EQL's `in_()` or `contains()` functions for these checks inside a query.
+```{warning}
+Python's native `in` operator (e.g., `value in container`) cannot be overridden to return a symbolic expression. You **must** use EQL's `in_()` or `contains()` functions for these checks inside a query.
+```
 
 ## Full Example: Filtering by Categories and Capabilities
 

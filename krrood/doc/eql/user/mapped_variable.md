@@ -27,7 +27,9 @@ robot = variable(Robot, domain=my_robots)
 name_attr = robot.name
 ```
 
-💡 **Hint**: You can chain attribute accesses, e.g., `robot.parent.name`. EQL will handle the traversal automatically.
+```{hint}
+You can chain attribute accesses, e.g., `robot.parent.name`. EQL will handle the traversal automatically.
+```
 
 ## Index and Key Access
 
@@ -52,7 +54,9 @@ from krrood.entity_query_language.factories import flat_variable
 part = flat_variable(robot.parts)
 ```
 
-📝 **Note**: `flat_variable` behaves similarly to a `JOIN` or `UNNEST` in SQL, creating a new solution for every element in the collection while keeping the original variable bindings.
+```{note}
+`flat_variable` behaves similarly to a `JOIN` or `UNNEST` in SQL, creating a new solution for every element in the collection while keeping the original variable bindings.
+```
 
 ## Symbolic Method Calls
 
@@ -63,7 +67,9 @@ You can also call methods on symbolic variables. These calls are deferred and ex
 status = robot.get_status()
 ```
 
-⚠️ **Warning**: The method must exist on the underlying objects in the domain. If the method takes arguments, those arguments can also be symbolic variables!
+```{warning}
+The method must exist on the underlying objects in the domain. If the method takes arguments, those arguments can also be symbolic variables!
+```
 
 ## Full Example: Mapping and Flattening
 

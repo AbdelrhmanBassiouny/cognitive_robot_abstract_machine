@@ -23,7 +23,9 @@ Unlike previous versions of EQL, there is no longer a global singleton graph. Ea
 - **Local Scope**: Every query has its own graph, preventing side effects between different queries.
 - **Node-Edge Structure**: Each {py:class}`~krrood.entity_query_language.core.base_expressions.SymbolicExpression` is a node, and relationships (like child-parent) are edges.
 
-💡 **Hint**: You can access a query's graph after it has been built to inspect its structure.
+```{hint}
+You can access a query's graph after it has been built to inspect its structure.
+```
 
 ## Visualization with `rustworkx`
 
@@ -41,7 +43,9 @@ graph = QueryGraph(query)
 graph.visualize()
 ```
 
-📝 **Note**: The visualization layer uses a "tidy" layout by default, which is optimized for tree-like structures common in EQL queries.
+```{note}
+The visualization layer uses a "tidy" layout by default, which is optimized for tree-like structures common in EQL queries.
+```
 
 ## Color Coding and Legends
 

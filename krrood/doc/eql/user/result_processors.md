@@ -28,8 +28,10 @@ for result in results_generator:
     print(result)
 ```
 
-💡 **Hint**: Use `.evaluate()` when you expect a large number of results and want to process them efficiently without
+```{hint}
+Use `.evaluate()` when you expect a large number of results and want to process them efficiently without
 loading everything into memory.
+```
 
 ## 2. The `.tolist()` Method
 
@@ -41,7 +43,9 @@ results_list = query.tolist()
 print(f"Total results: {len(results_list)}")
 ```
 
-📝 **Note**: `.tolist()` is a convenience method equivalent to `list(query.evaluate())`.
+```{note}
+`.tolist()` is a convenience method equivalent to `list(query.evaluate())`.
+```
 
 ## 3. The `.first()` Method
 
@@ -52,7 +56,9 @@ The `.first()` method is a convenience for retrieving only the **first** result 
 top_result = query.first()
 ```
 
-⚠️ **Warning**: If the query returns no results, `.first()` will raise a `StopIteration` exception.
+```{warning}
+If the query returns no results, `.first()` will raise a `StopIteration` exception.
+```
 
 ## Full Example: Different Ways to Consume Results
 

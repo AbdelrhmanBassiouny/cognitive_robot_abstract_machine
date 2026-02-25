@@ -32,7 +32,9 @@ To simplify implementation, EQL provides base classes for different numbers of c
 - **{py:class}`~krrood.entity_query_language.core.base_expressions.BinaryExpression`**: Operations with two children (e.g., `AND`, `OR`, `Comparator`, `Conclusion`).
 - **{py:class}`~krrood.entity_query_language.core.base_expressions.MultiArityExpression`**: Operations with N children (e.g., `Union`, `Query`).
 
-💡 **Hint**: When extending EQL, choose the base class that matches your operator's arity. This handles the child field management for you automatically.
+```{hint}
+When extending EQL, choose the base class that matches your operator's arity. This handles the child field management for you automatically.
+```
 
 ## Behavioral Mixins
 
@@ -47,10 +49,14 @@ Represents operations that transform the result stream (like sorting or quantifi
 ### 3. `Selectable`
 A specialized expression that can be "selected" in a query's result set. Variables and aggregators are selectables.
 
-📝 **Note**: The hierarchy is designed to enable deeply nested expressions having subqueries as children of parent queries.
+```{note}
+The hierarchy is designed to enable deeply nested expressions having subqueries as children of parent queries.
+```
 
-⚠️ **Warning**: Directly overriding `_evaluate_` (single underscore) is dangerous. Always override `_evaluate__` 
+```{warning}
+Directly overriding `_evaluate_` (single underscore) is dangerous. Always override `_evaluate__`
 (double underscore) to ensure that parent/child tracking and result processing are handled correctly.
+```
 
 ## API Reference
 - {py:class}`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`

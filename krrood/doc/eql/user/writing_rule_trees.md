@@ -44,7 +44,9 @@ with alternative(body.is_fixed):
     add(views, inference(Drawer)(...))
 ```
 
-💡 **Hint**: Use `refinement` for specialization (exceptions) and `alternative` for mutually exclusive cases.
+```{hint}
+Use `refinement` for specialization (exceptions) and `alternative` for mutually exclusive cases.
+```
 
 ## The `with query:` Context
 
@@ -60,7 +62,9 @@ with query:
         add(views, specialized_conclusion)
 ```
 
-⚠️ **Warning**: Rule trees are for **inference** (adding data). For simple filtering, stick to `.where()` and standard queries.
+```{warning}
+Rule trees are for **inference** (adding data). For simple filtering, stick to `.where()` and standard queries.
+```
 
 ## Full Example: Categorizing Connections
 
