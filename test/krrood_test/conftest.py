@@ -32,6 +32,7 @@ from .dataset.semantic_world_like_classes import *
 from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
     HandlesAndContainersWorld,
+    InferredCabinetsWorld,
 )
 
 
@@ -129,6 +130,12 @@ from .dataset.ormatic_interface import *
 @pytest.fixture
 def handles_and_containers_world() -> World:
     world = HandlesAndContainersWorld().create()
+    return world
+
+
+@pytest.fixture
+def inferred_cabinets_world() -> World:
+    world = InferredCabinetsWorld().create()
     return world
 
 
