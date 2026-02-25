@@ -547,8 +547,6 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
             )
 
     def __hash__(self):
-        if self._world is None:
-            raise SemanticAnnotationNotInWorldError(self)
         return hash(
             tuple(
                 [self.__class__]
@@ -603,9 +601,10 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
                     )
 
         for entity in list(entities):
-            if self._world.is_kinematic_structure_entity_in_world(entity):
+            world = entity._world
+            if world.is_kinematic_structure_entity_in_world(entity):
                 entities.update(
-                    self._world.get_kinematic_structure_entities_of_branch(entity)
+                    world.get_kinematic_structure_entities_of_branch(entity)
                 )
 
         return list(entities)

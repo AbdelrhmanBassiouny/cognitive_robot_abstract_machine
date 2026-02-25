@@ -466,7 +466,9 @@ def apartment_world_setup():
             2.37, 1.8, 1.05, reference_frame=apartment_world.root
         ),
     )
-    milk_view = Milk(root=apartment_world.get_body_by_name("milk.stl"))
+    milk_view = Milk(
+        root=apartment_world.get_body_by_name("milk.stl"), _world=apartment_world
+    )
     with apartment_world.modify_world():
         apartment_world.add_semantic_annotation(milk_view)
 
