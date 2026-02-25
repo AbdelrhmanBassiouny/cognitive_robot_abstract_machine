@@ -28,13 +28,18 @@ query = entity(r.type).grouped_by(r.type)
 
 ## Using Aggregators
 
-Aggregators are functions that take a symbolic variable (or its attribute) and return a summary value.
+Aggregators are functions that take a symbolic variable and return a summary value.
 
 Available aggregators include:
 - `count()`: Counts the number of items in the group.
 - `sum()`: Calculates the sum of a numeric attribute.
 - `average()`: Calculates the average of a numeric attribute.
 - `max()` and `min()`: Find the maximum or minimum value.
+
+Most aggregators support these optional parameters:
+- `key`: A function to extract the value for aggregation/comparison from the object.
+- `default`: The value to return if the group is empty.
+- `distinct`: Whether to consider only unique values.
 
 ```python
 from krrood.entity_query_language.factories import sum, average
@@ -44,6 +49,21 @@ query = set_of(r.type, sum(r.battery), average(r.battery)).grouped_by(r.type)
 ```
 
 💡 **Hint**: You can use `.distinct()` inside an aggregator to count only unique values: `count(r.name, distinct=True)`.
+
+## Finding Extremes with `max()` and `min()`
+
+The `max()` and `min()` aggregators find the extreme values in a group. While they often operate on numeric attributes, you can use the `key` argument to find the object that has an extreme property.
+
+```python
+import krrood.entity_query_language.factories as eql
+
+# Find the maximum battery level
+query = eql.max(r.battery)
+
+# Find the robot object with the highest battery level
+# This returns the Robot instance itself, not just the battery number
+query = eql.max(r, key=lambda robot: robot.battery)
+```
 
 ## Post-Aggregation Filtering with `.having()`
 
@@ -96,5 +116,7 @@ for robot_type, num, avg_batt in query.evaluate():
 - {py:func}`~krrood.entity_query_language.factories.count`
 - {py:func}`~krrood.entity_query_language.factories.sum`
 - {py:func}`~krrood.entity_query_language.factories.average`
+- {py:func}`~krrood.entity_query_language.factories.max`
+- {py:func}`~krrood.entity_query_language.factories.min`
 - {py:meth}`~krrood.entity_query_language.query.query.Query.grouped_by`
 - {py:meth}`~krrood.entity_query_language.query.query.Query.having`
