@@ -13,8 +13,8 @@ kernelspec:
 
 # Developer Guide
 If you are interested in the internals of EQL or wish to extend it:
-1.  **[Architecture Overview](../developer/architecture_overview.md)**: A high-level view of the system's design, focusing on the separation between builders and execution graphs.
-2.  **[Expression Hierarchy](../developer/expression_hierarchy.md)**: An exploration of the symbolic tree structure and the base classes for all EQL operations.
-3.  **[Variable System](../developer/variable_system.md)**: A deep dive into how symbolic variables and domains are handled internally.
-4.  **[Execution Engine](../developer/execution_engine.md)**: Details on the mechanics of query evaluation and result binding.
-5.  **[Graph and Visualization](../developer/graph_and_visualization.md)**: Tools and techniques for debugging and visualizing query plans and execution graphs.
+1.  **[Architecture Overview](architecture_overview.md)**: A high-level view of the system's design, focusing on the separation between builders and execution graphs.
+2.  **[Expression Hierarchy](expression_hierarchy.md)**: An exploration of the symbolic tree structure and the base classes for all EQL operations.
+3.  **[Variable System](variable_system.md)**: A deep dive into how symbolic variables and domains are handled internally.
+4.  **[Execution Engine](execution_engine.md)**: Details on the mechanics of query evaluation and result binding.
+5.  **[Graph and Visualization](graph_and_visualization.md)**: Tools and techniques for debugging and visualizing query plans and execution graphs.

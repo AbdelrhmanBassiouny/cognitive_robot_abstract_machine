@@ -41,7 +41,7 @@ Provides a sibling branch that is only evaluated if the previous branches didn't
 
 ```python
 with alternative(body.is_fixed):
-    Add(views, inference(Drawer)(...))
+    add(views, inference(Drawer)(...))
 ```
 
 💡 **Hint**: Use `refinement` for specialization (exceptions) and `alternative` for mutually exclusive cases.

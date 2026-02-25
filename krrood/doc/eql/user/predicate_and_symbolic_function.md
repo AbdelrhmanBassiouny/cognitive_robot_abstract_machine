@@ -23,7 +23,7 @@ When you call it with symbolic variables, it doesn't execute immediately; instea
 that becomes part of the query's execution graph.
 
 ### The `HasType` Predicate
-One of the most useful built-in predicates is `HasType`, which checks if a variable is an instnace of a specific class.
+One of the most useful built-in predicates is `HasType`, which checks if a variable is an instance of a specific class.
 
 ```python
 from krrood.entity_query_language.predicate import HasType

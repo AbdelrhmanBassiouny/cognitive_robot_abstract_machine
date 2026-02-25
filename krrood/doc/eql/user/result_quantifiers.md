@@ -19,7 +19,7 @@ constraints on its cardinality during execution.
 ## The `an()` Quantifier
 
 The `an()` quantifier expresses that you expect **zero or more** results by default, or a custom cardinality by specifying
-the qunatification constriants as keyword arguments.
+the qunatification constraints as keyword arguments.
 
 ```python
 from krrood.entity_query_language.factories import an, entity
