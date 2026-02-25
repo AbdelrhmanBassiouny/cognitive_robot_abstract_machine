@@ -21,7 +21,7 @@ The {py:class}`~krrood.entity_query_language.core.base_expressions.SymbolicExpre
 
 ### Key Responsibilities:
 - **`_evaluate__`**: The internal method that subclasses must implement to yield {py:class}`~krrood.entity_query_language.core.base_expressions.OperationResult` objects.
-- **Parent/Child Management**: Expressions maintain references to their parents and children to build a tree/DAG.
+- **Parent/Child Management**: Expressions maintain references to their parents and children to build a rooted DAG.
 - **Public API**: Methods like `evaluate`, `tolist`, and `first` that trigger graph execution.
 
 ## Arity-based Specialization
@@ -47,9 +47,10 @@ Represents operations that transform the result stream (like sorting or quantifi
 ### 3. `Selectable`
 A specialized expression that can be "selected" in a query's result set. Variables and aggregators are selectables.
 
-📝 **Note**: The hierarchy is designed to be deeply nested. A `Query` object is itself a `MultiArityExpression` that can be a child of another expression (like a `ResultQuantifier`).
+📝 **Note**: The hierarchy is designed to enable deeply nested expressions having subqueries as children of parent queries.
 
-⚠️ **Warning**: Directly overriding `_evaluate_` (single underscore) is dangerous. Always override `_evaluate__` (double underscore) to ensure that parent/child tracking and result processing are handled correctly.
+⚠️ **Warning**: Directly overriding `_evaluate_` (single underscore) is dangerous. Always override `_evaluate__` 
+(double underscore) to ensure that parent/child tracking and result processing are handled correctly.
 
 ## API Reference
 - {py:class}`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`

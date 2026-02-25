@@ -19,24 +19,29 @@ The Entity Query Language (EQL) is built on a clear separation between query def
 
 Every EQL query passes through three distinct lifecycle stages:
 
-1.  **Builder (Blueprint)**: The user interacts with {py:class}`~krrood.entity_query_language.query.builders.ExpressionBuilder`s to define the query's structure (where, having, grouped_by, etc.).
-2.  **Expression (Execution Graph)**: When `.build()` is called, the builders materialize into {py:class}`~krrood.entity_query_language.core.base_expressions.SymbolicExpression` nodes, forming an execution graph.
+1.  **Builder (Blueprint)**: The user interacts with {py:class}`~krrood.entity_query_language.query.query.Query`
+that uses builders of type {py:class}`~krrood.entity_query_language.query.builders.ExpressionBuilder`s to define the 
+query's structure (where, having, grouped_by, etc.).
+2.  **Expression (Execution Graph)**: When `.build()` is called on the {py:class}`~krrood.entity_query_language.query.query.Query`
+object, the builders materialize into nodes of type {py:class}`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`,
+forming a symbolic execution graph.
 3.  **Execution (Evaluation)**: The graph is traversed using {py:meth}`~krrood.entity_query_language.core.base_expressions.SymbolicExpression.evaluate`, which yields results as a stream of bindings.
 
 ## Builders vs. Expressions
 
-| Stage | Class | Responsibility |
-| :--- | :--- | :--- |
-| **Builder** | `WhereBuilder`, `GroupedByBuilder` | Collects metadata, validates structure, and stores constraints. |
-| **Expression** | `AND`, `Comparator`, `Query` | Implements the actual evaluation logic (`_evaluate__`). |
+| Stage | Class                                   | Responsibility |
+| :--- |:----------------------------------------| :--- |
+| **Builder** | `WhereBuilder`, `GroupedByBuilder`, ... | Collects metadata, validates structure, and stores constraints. |
+| **Expression** | `Where`, `GroupedBy`, ...               | Implements the actual evaluation logic (`_evaluate__`). |
 
 💡 **Hint**: The separation allows EQL to validate the query structure (e.g., checking if aggregators are used correctly in `having`) *before* the expensive evaluation process begins.
 
 ## The Query Lifecycle
 
 1.  **Definition**: You call `entity(v).where(...)`. This populates the internal builders of the `Query` object.
-2.  **Building**: When you call a result processor or quantifier (like `an()`), the query's `.build()` method is triggered. It converts all builders into their corresponding expression nodes.
-3.  **Evaluation**: The root expression (usually a `ResultQuantifier` or `Query`) calls `_evaluate_()` on its children, starting the recursive evaluation process.
+2.  **Building**: When you call `evaluate()` method or use the query as part of another query, the `.build()` method is triggered.
+It converts all builders into their corresponding expression nodes.
+3.  **Evaluation**: The root expression (a `ResultQuantifier`) calls `_evaluate_()` on its children, starting the recursive evaluation process.
 
 📝 **Note**: The `@modifies_query_structure` decorator ensures that once a query has been built into an execution graph, its structure cannot be modified further.
 

@@ -43,8 +43,6 @@ graph.visualize()
 
 📝 **Note**: The visualization layer uses a "tidy" layout by default, which is optimized for tree-like structures common in EQL queries.
 
-⚠️ **Warning**: Visualization is meant for debugging small to medium-sized queries. Visualizing extremely large rule trees with thousands of nodes may be slow and produce cluttered diagrams.
-
 ## Color Coding and Legends
 
 The {py:class}`~krrood.entity_query_language.query_graph.ColorLegend` class provides automatic color-coding for different types of nodes:

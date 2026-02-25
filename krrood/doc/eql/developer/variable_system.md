@@ -44,7 +44,8 @@ Represents a symbolic method call. It stores the arguments and keyword arguments
 
 The {py:class}`~krrood.entity_query_language.core.mapped_variable.FlatVariable` is a special mapped variable used when an attribute returns an iterable, but you want to treat its elements as individual bindings in the result stream.
 
-⚠️ **Warning**: Use `flat_variable()` explicitly when you want to "JOIN" into a collection. Standard attribute access on a list will return the list itself, not its elements.
+📝 **Note**: Use `flat_variable()` explicitly when you want to iterate over elements of attributes that are iterable.
+Standard attribute access on an iterable valued attribute will return the iterables as values, not their elements.
 
 ## API Reference
 - {py:class}`~krrood.entity_query_language.core.mapped_variable.CanBehaveLikeAVariable`
