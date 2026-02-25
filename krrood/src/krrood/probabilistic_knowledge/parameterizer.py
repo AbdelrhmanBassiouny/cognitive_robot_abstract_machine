@@ -21,7 +21,7 @@ from ..adapters.json_serializer import list_like_classes
 from ..class_diagrams.class_diagram import WrappedClass
 from ..class_diagrams.wrapped_field import WrappedField
 from ..entity_query_language.core.mapped_variable import Selectable
-from ..entity_query_language.factories import variable
+from ..entity_query_language.factories import variable, variable_from
 from ..ormatic.dao import (
     DataAccessObject,
     to_dao,
@@ -163,22 +163,20 @@ class Parameterizer:
     Parameterization containing the variables and simple event resulting from parameterizing a DataAccessObject.
     """
 
-    def parameterize(self, obj: Any) -> Parameterization:
+    def parameterize(self, dao: DataAccessObject) -> Parameterization:
         """
         Create variables for all fields of an object.
 
-        :param obj: The object to generate the parametrization from.
+        :param dao: The DataAccessObject to generate the parametrization from.
 
         :return: Parameterization containing the variables and simple event.
         """
-        if type(obj) in list_like_classes:
+        if type(dao) in list_like_classes:
             raise NotImplementedError(
                 "Parameterization of list-like types is not supported directly."
             )
 
-        dao = to_dao(obj)
-
-        dao_variable = variable(type(dao), [dao])
+        dao_variable = variable_from([dao])
 
         self._parameterize_dao(dao, dao_variable)
 
@@ -392,3 +390,35 @@ class Parameterizer:
         :return: A fully factorized probabilistic circuit.
         """
         return self.parameterization.create_fully_factorized_distribution()
+
+
+@dataclass
+class Parameterizer2:
+
+    parameterization: Parameterization = field(default_factory=Parameterization)
+    """
+    Parameterization containing the variables and simple event resulting from parameterizing a DataAccessObject.
+    """
+
+    def parameterize(self, obj: Any) -> Parameterization:
+        if type(obj) in list_like_classes:
+            raise NotImplementedError(
+                "Parameterization of list-like types is not supported directly."
+            )
+
+        obj_variable = variable_from([obj])
+
+        self._parameterize(obj, obj_variable)
+
+        return self.parameterization
+
+    def _parameterize(self, obj: Any, obj_variable: Selectable) -> Parameterization:
+
+        for key in obj.__dir__():
+            if key.startswith("_"):
+                continue
+            try:
+                value = getattr(obj, key)
+            except Exception:
+                value = None
+            print(value)

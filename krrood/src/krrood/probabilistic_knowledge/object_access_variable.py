@@ -8,6 +8,7 @@ from typing_extensions import List, Any, Union
 
 from random_events.variable import Variable, Symbolic, Continuous, Integer
 
+from ..entity_query_language.core.base_expressions import SymbolicExpression
 from ..entity_query_language.core.mapped_variable import (
     Index,
     Attribute,
@@ -84,3 +85,11 @@ class ObjectAccessVariable:
             assert_never(type_)
 
         return cls(result, attribute_access)
+
+    @classmethod
+    def from_expression(
+        cls, attribute_access: AttributeAccessLike, expression: SymbolicExpression
+    ):
+        domain = expression.tolist()
+        variable = Symbolic(str(attribute_access), Set.from_iterable(domain))
+        return cls(variable, attribute_access)

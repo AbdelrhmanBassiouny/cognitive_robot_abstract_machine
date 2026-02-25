@@ -4,15 +4,25 @@ import time
 import pytest
 from random_events.product_algebra import SimpleEvent, Event
 
-from krrood.probabilistic_knowledge.parameterizer import Parameterizer
+
+from krrood.entity_query_language.factories import (
+    variable_from,
+    probable_variable,
+    probable,
+)
+from krrood.probabilistic_knowledge.parameterizer import Parameterizer, Parameterizer2
+from krrood.probabilistic_knowledge.probable_variable import MatchToDAOTranslator
 from pycram.datastructures.dataclasses import Context
 from pycram.datastructures.enums import TaskStatus
 from pycram.language import ParallelPlan, CodeNode
 from pycram.plan import PlanNode, Plan, ActionDescriptionNode, ActionNode, MotionNode
 from pycram.motion_executor import simulated_robot
 from pycram.robot_plans import *
+from random_events.variable import Symbolic, Set
 from semantic_digital_twin.adapters.urdf import URDFParser
 from pycram.orm.ormatic_interface import *
+from semantic_digital_twin.robots.abstract_robot import SemanticRobotAnnotation
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 
 
 @pytest.fixture(scope="session")
@@ -709,4 +719,30 @@ def test_algebra_sequential_plan(mutable_model_world):
     new_plan = SequentialPlan(context, *new_actions)
     with simulated_robot:
         new_plan.perform()
-    print(robot_view.root.global_pose)
+
+
+def test_parameterization_of_pick_up(mutable_model_world):
+    world, robot_view, context = mutable_model_world
+
+    milk = world.get_body_by_name("milk.stl")
+
+    milk_variable = variable_from([milk])
+
+    pick_up_description = probable_variable(PickUpAction)(
+        object_designator=milk_variable,
+        arm=...,
+        grasp_description=probable(GraspDescription)(
+            approach_direction=...,
+            vertical_alignment=...,
+            manipulator=None,
+            rotate_gripper=...,
+            manipulation_offset=0.05,
+        ),
+    )
+    obj: PickUpAction = MatchToDAOTranslator(pick_up_description).translate()
+
+    p = Parameterizer2().parameterize(obj)
+
+    object_designator_variable = Symbolic(
+        "object_designator", Set.from_iterable(milk_variable.tolist())
+    )

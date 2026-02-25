@@ -10,18 +10,21 @@ import numpy as np
 from random_events.interval import open_closed, closed_open, closed
 
 from random_events.product_algebra import Event, SimpleEvent
+from typing_extensions import Any
 
 from .exceptions import WhereExpressionNotInDisjunctiveNormalForm
 from .object_access_variable import ObjectAccessVariable, AttributeAccessLike
+from ..adapters.json_serializer import list_like_classes
 from ..entity_query_language.core.base_expressions import Selectable, SymbolicExpression
 from ..entity_query_language.core.variable import Variable, Literal
 from ..entity_query_language.factories import entity, variable_from, set_of
 from ..entity_query_language.operators.comparator import Comparator
 from ..entity_query_language.operators.core_logical_operators import OR, AND
 from ..entity_query_language.predicate import symbolic_function
+from ..entity_query_language.query.match import construct_graph_and_get_root, Match
 from ..entity_query_language.query.query import Entity
 from ..entity_query_language.query_graph import QueryGraph
-from ..ormatic.dao import get_dao_class, DataAccessObject
+from ..ormatic.dao import get_dao_class, DataAccessObject, to_dao
 
 
 @dataclass
@@ -50,8 +53,10 @@ class QueryToRandomEventTranslator:
 
         simple_events = []
 
-        # get all roots of and expressions
-        queue = deque(self.query._where_expression_._children_)
+        # Traverse the logical tree starting from the conditions root
+        root = self.query._conditions_root_
+
+        queue = deque([root])
         while queue:
             expression = queue.popleft()
 
@@ -111,9 +116,8 @@ class QueryToRandomEventTranslator:
 
     @property
     def all_variables(self) -> List[ObjectAccessVariable]:
-        return list(
-            self.comparators_grouped_by_variable(self.query._where_expression_).keys()
-        )
+        root = self.query._conditions_root_
+        return list(self.comparators_grouped_by_variable(root).keys())
 
     def comparators_grouped_by_variable(
         self, expression: SymbolicExpression
@@ -125,16 +129,14 @@ class QueryToRandomEventTranslator:
         :return: A dictionary mapping ObjectAccessVariables to lists of their corresponding comparators.
         """
 
-        # Get all descendants of the expression that are Comparators
-        comparators = [
-            expr for expr in expression._descendants_ if isinstance(expr, Comparator)
-        ]
-
-        c = variable_from(comparators)
-        key = self._object_access_variable_from_comparator(c)
-        comparators_grouped_by_variable = set_of(c, key).grouped_by(key).tolist()
-
-        return {v[key]: v[c] for v in comparators_grouped_by_variable}
+        # Collect all Comparator descendants and group them by their accessed variable
+        grouped: Dict[ObjectAccessVariable, List[Comparator]] = {}
+        for expr in expression._descendants_:
+            if not isinstance(expr, Comparator):
+                continue
+            key = self._object_access_variable_from_comparator(expr)
+            grouped.setdefault(key, []).append(expr)
+        return grouped
 
     def _translate_comparators(
         self,
@@ -246,6 +248,9 @@ def is_disjunctive_normal_form(query: Entity) -> bool:
     query.build()
 
     condition_root = query._conditions_root_
+    # Unwrap filter-like wrappers (e.g., Where) if present
+    if hasattr(condition_root, "condition"):
+        condition_root = condition_root.condition
 
     return (
         is_disjunction_of_conjunction_of_literal_comparators(condition_root)
@@ -310,18 +315,22 @@ def is_literal_comparator(expression: Comparator) -> bool:
 @dataclass
 class MatchToDAOTranslator:
 
-    statement: Entity
+    match: Match
 
     _data_access_object: DataAccessObject = field(init=False)
 
     def __post_init__(self):
-        self.statement.build()
+        # self.statement.build()
         self._assert_all_comparators_are_equalities()
 
     def _assert_all_comparators_are_equalities(self):
         for comparator in self.comparators:
             if comparator.operation != operator.eq:
                 raise ValueError(str(comparator) + " is not an equality comparison.")
+
+    @property
+    def statement(self) -> Entity:
+        return self.match.expression
 
     @property
     def comparators(self) -> List[Comparator]:
@@ -331,21 +340,25 @@ class MatchToDAOTranslator:
             if isinstance(comparator, Comparator)
         ]
 
-    @property
-    def class_to_construct(self) -> Type:
-        return self.statement._selected_variables_[0]
+    def translate(self) -> DataAccessObject:
+        return self._construct_from_match(self.match)
 
-    @property
-    def dao_class_to_construct(self) -> Type[DataAccessObject]:
-        return get_dao_class(self.class_to_construct)
+    def _construct_from_match(self, match: Match) -> Any:
+        obj = match.type_.__new__(match.type)
+        for key, argument in match.kwargs.items():
 
-    def translate(self):
-        self._build_data_access_object()
+            if isinstance(argument, list_like_classes):
+                value_to_set = []
+                for item in argument:
+                    if isinstance(item, Match):
+                        value_to_set.append(self._construct_from_match(item))
+                    else:
+                        value_to_set.append(item)
+                setattr(obj, key, type(argument)(value_to_set))
 
-    def _build_data_access_object(self):
-        self._data_access_object = self.dao_class_to_construct()
-        print(
-            *[d for d in self.statement._descendants_ if isinstance(d, Variable)],
-            sep="\n",
-        )
-        print(*[type(d) for d in self.statement._descendants_], sep="\n")
+            elif isinstance(argument, Match):
+                setattr(obj, key, self._construct_from_match(argument))
+
+            else:
+                setattr(obj, key, argument)
+        return obj
