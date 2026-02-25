@@ -1,14 +1,36 @@
+from dataclasses import dataclass
+
 import pytest
 
-from krrood.entity_query_language.factories import entity, set_of, variable, the, match, match_variable
+from krrood.entity_query_language.factories import (
+    entity,
+    set_of,
+    variable,
+    the,
+    match,
+    match_variable,
+)
 from krrood.entity_query_language.failures import NoKwargsInMatchVar
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.core.base_expressions import UnificationDict
+from krrood.entity_query_language.query_graph import QueryGraph
 from ..dataset.semantic_world_like_classes import (
     FixedConnection,
     Container,
     Handle,
 )
+
+
+def test_doc_match():
+    @dataclass(unsafe_hash=True)
+    class Robot:
+        name: str
+        battery: int
+
+    robots = [Robot("R2D2", 100), Robot("C3PO", 0)]
+    query = match_variable(Robot, domain=robots)(name="R2D2", battery=100)
+    # QueryGraph(query).visualize()
+    assert query.tolist()[0].name == "R2D2"
 
 
 def test_match(handles_and_containers_world):

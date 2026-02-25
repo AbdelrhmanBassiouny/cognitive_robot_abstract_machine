@@ -23,6 +23,7 @@ from .query.quantifiers import (
     The,
     ResultQuantifier,
 )
+from .rules.conclusion import Add
 from .rules.conclusion_selector import Refinement, Alternative, Next
 from .query.query import Entity, SetOf, Query
 from .utils import is_iterable
@@ -307,6 +308,17 @@ def the(
 # %% Rules
 
 
+def add(variable: Any, value: Any) -> None:
+    """
+    Add a value to a variable.
+
+    :param variable: The variable to which the value will be added.
+    :param value: The value to be added to the variable.
+    :return: None
+    """
+    Add(variable, value)
+
+
 def inference(
     type_: Type[T],
 ) -> Union[Type[T], Callable[[Any], Variable[T]]]:
@@ -362,7 +374,9 @@ def next_rule(*conditions: ConditionType) -> SymbolicExpression:
     """
     return Next.create_and_update_rule_tree(*conditions)
 
+
 # %% Aggregators
+
 
 def max(
     variable: Selectable[T],

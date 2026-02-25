@@ -86,6 +86,8 @@ def test_empty_conditions_and_no_domain(
     B = variable(Body, domain=None)
     query = an(entity(B).where(B.world == world))
 
+    # QueryGraph(query).visualize()
+
     assert len(list(query.evaluate())) == len(world.bodies), "Should generate 6 bodies."
 
 

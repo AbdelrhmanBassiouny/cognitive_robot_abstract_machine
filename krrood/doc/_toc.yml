@@ -6,12 +6,11 @@ root: intro
 parts:
 - caption: Entity Query Language
   chapters:
-    - file: eql/user/intro
-    - title: User Guide
+    - file: eql/intro
+    - file: eql/user/index
       sections:
         - file: eql/user/writing_queries
         - file: eql/user/mapped_variable
-        - file: eql/user/eql_for_sql_experts
         - file: eql/user/comparators
         - file: eql/user/logical_operators
         - file: eql/user/aggregators
@@ -19,8 +18,9 @@ parts:
         - file: eql/user/result_processors
         - file: eql/user/predicate_and_symbolic_function
         - file: eql/user/match
+        - file: eql/user/eql_for_sql_experts
         - file: eql/user/writing_rule_trees
-    - title: Developer Guide
+    - file: eql/developer/index
       sections:
         - file: eql/developer/architecture_overview
         - file: eql/developer/expression_hierarchy

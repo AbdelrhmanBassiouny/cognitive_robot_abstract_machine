@@ -104,12 +104,12 @@ r = variable(Robot, domain=robots)
 # 2. How many of each type (count)
 # 3. The average battery for that type
 # BUT only for types where the total battery sum > 50
-query = set_of(r.type, count(r), average(r.battery)) \
+query = set_of(r.type, c:=count(r), avg_batt:=average(r.battery)) \
     .grouped_by(r.type) \
     .having(sum(r.battery) > 50)
 
-for robot_type, num, avg_batt in query.evaluate():
-    print(f"Type: {robot_type} | Count: {num} | Avg Battery: {avg_batt}%")
+for result in query.evaluate():
+    print(f"Type: {result[r.type]} | Count: {result[c]} | Avg Battery: {result[avg_batt]}%")
 ```
 
 ## API Reference

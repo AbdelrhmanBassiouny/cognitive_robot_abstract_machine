@@ -131,32 +131,9 @@ robot = Body("Robot")
 human = Body("Human")
 
 # No explicit domain provided to variable(); it's inferred from SymbolGraph
-body = variable(Body)
+body = variable(Body, domain=None)
 query = an(entity(body).where(body.name == "Robot"))
 
 for result in query.evaluate():
     print(f"Found: {result.name}")
 ```
-
-## Documentation Roadmap
-
-The EQL documentation is organized into two main paths: one for users who want to query their data, and one for developers who want to understand or extend the core engine.
-
-### User Guide
-For most users, we recommend following the documentation in this order:
-1.  **[Writing Basic Queries](writing_queries.md)**: Learn the fundamentals of EQL, including defining variables, selecting entities, and applying basic filters.
-2.  **[Mapped Variables and Attribute Access](mapped_variable.md)**: Discover how to traverse object relationships, access attributes symbolically, and handle nested data collections.
-3.  **[EQL for SQL Experts](eql_for_sql_experts.md)**: A comparative guide for those with a relational database background, mapping EQL concepts to SQL equivalents.
-4.  **[Comparators](comparators.md)** and **[Logical Operators](logical_operators.md)**: Detailed references for the symbolic comparison and logical operators used to build query conditions.
-5.  **[Aggregators](aggregators.md)**: Learn how to perform calculations like `count` and `average` over your result sets.
-6.  **[Result Quantifiers](result_quantifiers.md)** and **[Result Processors](result_processors.md)**: Tools for controlling the expected cardinality (e.g., `an`, `the`) and the final presentation (sorting, limiting, grouping) of your results.
-7.  **[Predicates and Symbolic Functions](predicate_and_symbolic_function.md)**: Instructions on how to integrate custom Python logic and predicates directly into your symbolic queries.
-8.  **[Pattern Matching](match.md)** and **[Writing Rule Trees](writing_rule_trees.md)**: Advanced features for complex reasoning and matching against structured data.
-
-### Developer Guide
-If you are interested in the internals of EQL or wish to extend it:
-1.  **[Architecture Overview](../developer/architecture_overview.md)**: A high-level view of the system's design, focusing on the separation between builders and execution graphs.
-2.  **[Expression Hierarchy](../developer/expression_hierarchy.md)**: An exploration of the symbolic tree structure and the base classes for all EQL operations.
-3.  **[Variable System](../developer/variable_system.md)**: A deep dive into how symbolic variables and domains are handled internally.
-4.  **[Execution Engine](../developer/execution_engine.md)**: Details on the mechanics of query evaluation and result binding.
-5.  **[Graph and Visualization](../developer/graph_and_visualization.md)**: Tools and techniques for debugging and visualizing query plans and execution graphs.

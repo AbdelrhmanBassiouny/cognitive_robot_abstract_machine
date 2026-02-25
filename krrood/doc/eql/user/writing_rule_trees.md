@@ -18,9 +18,10 @@ Beyond simple queries, EQL supports an inference engine for building **Rule Tree
 ## Core Concepts
 
 A Rule Tree is built using three main components:
-1.  **`inference(Type)`**: A special variable constructor for objects that will be "materialized" by the rule.
-2.  **`Add(target, value)`**: A conclusion clause that assigns a value to a symbolic variable.
-3.  **ConclusionSelectors**: Logical branches that control rule evcaluation flow and choose which conclusions are applied.
+1.  **`deduced_variable(Type)`**: A special variable for objects that will be deduced by the rule.
+2.  **`inference(Type)(**kwargs)`**: A special variable constructor for objects that will be "materialized" by the rule.
+2.  **`add(target, value)`**: A conclusion clause that assigns a value to a symbolic variable.
+3.  **ConclusionSelectors**: Logical branches that control rule evaluation flow and choose which conclusions are applied.
 Examples: `refinement()`,`alternative()`, and `next_rule()`.
 
 ## Conclusion Selectors
@@ -32,7 +33,7 @@ specialize a rule.
 ```python
 with refinement(body.size > 1):
     # This only happens if the body is big
-    Add(views, inference(Door)(handle=handle, body=body))
+    add(views, inference(Door)(handle=handle, body=body))
 ```
 
 ### 2. `alternative()`
@@ -54,9 +55,9 @@ this block becomes part of that query's rule structure.
 query = an(entity(views).where(...))
 
 with query:
-    Add(views, default_conclusion)
+    add(views, default_conclusion)
     with refinement(extra_condition):
-        Add(views, specialized_conclusion)
+        add(views, specialized_conclusion)
 ```
 
 ⚠️ **Warning**: Rule trees are for **inference** (adding data). For simple filtering, stick to `.where()` and standard queries.
@@ -68,15 +69,17 @@ This example demonstrates how to build a rule tree that categorizes connections 
 ```{code-cell} ipython3
 from dataclasses import dataclass
 from krrood.entity_query_language.factories import (
-    variable, entity, an, Symbol, inference, refinement, alternative, Add
+    variable, entity, an, Symbol, deduced_variable, refinement, alternative, add, inference
 )
 
 @dataclass
 class Connection(Symbol):
     type_code: int
+    name: str
 
 @dataclass
-class View(Symbol): pass
+class View(Symbol):
+    connection: Connection
 
 @dataclass
 class FixedView(View): pass
@@ -85,30 +88,35 @@ class FixedView(View): pass
 class RevoluteView(View): pass
 
 # Data
-conns = [Connection(1), Connection(2), Connection(3)]
+conns = [Connection(1, 'c1'), Connection(2, 'c2'), Connection(3, 'c3'), Connection(4, 'm4')]
 c = variable(Connection, domain=conns)
-views = inference(View)()
+view = deduced_variable(View)
 
 # 1. Base query
-query = an(entity(views))
+query = entity(view).where(c.name.startswith('c'))
 
 # 2. Rule Tree definition
 with query:
+    # Default case:
+    add(view, inference(View)(connection=c))
+    
     # If type_code is 1, it's a FixedView
     with refinement(c.type_code == 1):
-        Add(views, inference(FixedView)())
+        add(view, inference(FixedView)(connection=c))
     
     # Otherwise, if type_code is 2, it's a RevoluteView
     with alternative(c.type_code == 2):
-        Add(views, inference(RevoluteView)())
+        add(view, inference(RevoluteView)(connection=c))
 
 # 3. Execution
 results = query.tolist()
 print(f"Inferred {len(results)} views from {len(conns)} connections.")
+print("\n".join([str(v) for v in results]))
 ```
 
 ## API Reference
+- {py:func}`~krrood.entity_query_language.factories.deduced_variable`
 - {py:func}`~krrood.entity_query_language.factories.inference`
-- {py:class}`~krrood.entity_query_language.rules.conclusion.Add`
+- {py:func}`~krrood.entity_query_language.factories.add`
 - {py:func}`~krrood.entity_query_language.factories.refinement`
 - {py:func}`~krrood.entity_query_language.factories.alternative`

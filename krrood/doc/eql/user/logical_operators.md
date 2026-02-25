@@ -48,11 +48,11 @@ query = entity(r).where((r.name == "R2D2") | (r.battery < 10))
 
 ## The Negation (NOT)
 
-The `~` or `not_()` operator inverts a condition. It returns results that do **not** satisfy the specified constraint.
+The `not_()` operator inverts a condition. It returns results that do **not** satisfy the specified constraint.
 
 ```python
 # Select all robots EXCEPT those named 'R2D2'
-query = entity(r).where(~(r.name == "R2D2"))
+query = entity(r).where(not_(r.name == "R2D2"))
 ```
 
 📝 **Note**: Negation can be particularly useful for "anti-joins" or excluding specific subsets from your results.
@@ -63,7 +63,7 @@ Let's build a query that combines all these operators.
 
 ```{code-cell} ipython3
 from dataclasses import dataclass
-from krrood.entity_query_language.factories import variable, entity, an, Symbol
+from krrood.entity_query_language.factories import variable, entity, an, Symbol, not_
 
 @dataclass
 class Robot(Symbol):
@@ -82,7 +82,7 @@ r = variable(Robot, domain=robots)
 
 # We want robots that are (ONLINE and (battery > 50)) OR (NOT ONLINE and battery < 30)
 query = an(entity(r).where(
-    (r.online & (r.battery > 50)) | (~r.online & (r.battery < 30))
+    (r.online & (r.battery > 50)) | (not_(r.online) & (r.battery < 30))
 ))
 
 for robot in query.evaluate():

@@ -45,11 +45,7 @@ graph.visualize()
 
 ## Color Coding and Legends
 
-The {py:class}`~krrood.entity_query_language.query_graph.ColorLegend` class provides automatic color-coding for different types of nodes:
-- **Variables**: Blue
-- **Logical Operators**: Green
-- **Aggregators**: Yellow
-- **Conclusions**: Red
+The {py:class}`~krrood.entity_query_language.query_graph.ColorLegend` class provides automatic color-coding for different types of nodes.
 
 ## Full Example: Visualizing a Structural Match
 
@@ -58,22 +54,32 @@ This example shows how to generate a visualization for a nested structural query
 ```{code-cell} ipython3
 from krrood.entity_query_language.factories import match_variable, match, entity, an
 from krrood.entity_query_language.query_graph import QueryGraph
+from dataclasses import dataclass
+
+
+@dataclass(unsafe_hash=True)
+class Robot:
+    name: str
+    battery: int
+    
+robots = [Robot("R2D2", 100), Robot("C3PO", 0)]
 
 # Define a complex nested query
-r = match_variable(Robot, domain=robots)(
-    name="R2D2",
-    battery=match(int)(value=100)
-)
-query = an(entity(r))
+query = match_variable(Robot, domain=robots)(name="R2D2", battery=100)
 
-# Build and visualize
-query.build()
-graph = QueryGraph(expression=query)
+# Visualize
+query_graph = QueryGraph(query)
 
 # Note: This requires rustworkx and matplotlib
-# graph.visualize(figure_size=(10, 8))
-print("Graph constructed with", len(graph.nodes), "nodes.")
+# query_graph.visualize()
+
+print("Graph constructed with", len(query_graph.graph.nodes()), "nodes.")
 ```
+
+<iframe src="../../_static/files/match_query_graph.pdf"
+        width="100%"
+        height="600px">
+</iframe>
 
 ## API Reference
 - {py:class}`~krrood.entity_query_language.query_graph.QueryGraph`
