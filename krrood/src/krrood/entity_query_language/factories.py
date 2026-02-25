@@ -11,7 +11,7 @@ from typing_extensions import Union, Iterable
 from .core.base_expressions import SymbolicExpression
 from .enums import DomainSource
 from .failures import UnsupportedExpressionTypeForDistinct
-from .query.match import Match, MatchVariable
+from .query.match import Match, MatchVariable, ProbableVariable
 from .operators.aggregators import Max, Min, Sum, Average, Count
 from .operators.comparator import Comparator
 from .operators.core_logical_operators import chained_logic, AND, OR
@@ -80,8 +80,8 @@ def match(
 
 
 def match_variable(
-    type_: Union[Type[T], Selectable[T]], domain: Optional[DomainType]
-) -> Union[Type[T], An[T], CanBehaveLikeAVariable[T], MatchVariable[T]]:
+    type_: Union[Type[T], Selectable[T]], domain: DomainType
+) -> Union[T, CanBehaveLikeAVariable[T], MatchVariable[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.match` but with a domain to use for the variable created
      by the match.
@@ -91,6 +91,30 @@ def match_variable(
     :return: The Match instance.
     """
     return MatchVariable(type_=type_, domain=domain)
+
+
+def probable_variable(
+    type_: Union[Type[T], Selectable[T]],
+) -> Union[T, CanBehaveLikeAVariable[T], MatchVariable[T]]:
+    """
+    Same as :py:func:`krrood.entity_query_language.match.match_variable` but instead of searching for solutions in
+    the domain objects, it is used as a query for probabilistic models to infer solutions that satisfy the constraints
+    in the query.
+    """
+    return ProbableVariable(type_=type_)
+
+
+def probable(
+    type_: Optional[Union[Type[T], Selectable[T]]] = None,
+) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
+    """
+    Create a random (probable) variable matching the type and the provided keyword arguments. This is used for easy
+    variable definitions when there are structural constraints.
+
+    :param type_: The type of the variable (i.e., The class you want to instantiate).
+    :return: The Match instance.
+    """
+    return Match(type_=type_)
 
 
 # %% Variable Declaration

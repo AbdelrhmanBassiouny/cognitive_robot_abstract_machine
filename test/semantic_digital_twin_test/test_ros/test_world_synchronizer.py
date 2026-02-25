@@ -1122,5 +1122,53 @@ def test_acknowledgment_serialization_round_trip():
     assert restored.node_meta_data.process_id == 1
 
 
+def test_acknowledgement_with_missed_messages(rclpy_node):
+    import rclpy
+    from rclpy.executors import SingleThreadedExecutor
+
+    receiver_node = rclpy.create_node("test_sync_state_receiver")
+    receiver_executor = SingleThreadedExecutor()
+    receiver_executor.add_node(receiver_node)
+    receiver_thread = threading.Thread(
+        target=receiver_executor.spin, daemon=True, name="sync-state-receiver"
+    )
+    receiver_thread.start()
+    time.sleep(0.1)
+
+    try:
+        w1 = create_dummy_world()
+        w2 = create_dummy_world()
+
+        synchronizer_1 = StateSynchronizer(
+            node=rclpy_node,
+            world=w1,
+            synchronous=True,
+        )
+        synchronizer_2 = StateSynchronizer(
+            node=receiver_node,
+            world=w2,
+        )
+        synchronizer_2.pause()
+
+        # Allow time for publishers/subscribers to discover each other
+        time.sleep(0.5)
+
+        w1.state.data[0, 0] = 1.0
+        w1.notify_state_change()
+
+        # the notify should time out giving us the old state
+        assert w2.state.data[0, 0] == 0
+        synchronizer_2.apply_missed_messages()
+        # after apply message we should have the correct state
+        assert w1.state.data[0, 0] == w2.state.data[0, 0]
+
+        synchronizer_1.close()
+        synchronizer_2.close()
+    finally:
+        receiver_executor.shutdown()
+        receiver_thread.join(timeout=2.0)
+        receiver_node.destroy_node()
+
+
 if __name__ == "__main__":
     unittest.main()
