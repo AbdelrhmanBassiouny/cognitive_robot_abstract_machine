@@ -35,7 +35,7 @@ If you have `rustworkx` and `matplotlib` installed, you can visualize any query 
 ```python
 # Create a query graph from an expression
 from krrood.entity_query_language.query_graph import QueryGraph
-graph = QueryGraph(expression=query)
+graph = QueryGraph(query)
 
 # Render the graph
 graph.visualize()
