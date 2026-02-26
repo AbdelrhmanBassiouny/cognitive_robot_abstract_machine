@@ -36,6 +36,9 @@ parts:
     - file: ormatic/eql_for_ormatic
     - file: ormatic/tips_and_tricks
     - file: ormatic/json
+- caption: rustworkx_utils
+  chapters:
+    - file: rustworkx_utils/visualize_graph
 
 - caption: Miscellaneous
   chapters:

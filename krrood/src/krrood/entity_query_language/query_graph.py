@@ -19,16 +19,11 @@ from .core.variable import Variable, Literal
 from .core.mapped_variable import MappedVariable
 from .operators.comparator import Comparator
 
-try:
-    from rustworkx_utils import (
-        GraphVisualizer,
-        RWXNode as RXUtilsNode,
-        ColorLegend as RXUtilsColorLegend,
-    )
-except ImportError:
-    GraphVisualizer = None
-    RXUtilsNode = type
-    RXUtilsColorLegend = type
+from ..rustworkx_utils import (
+    GraphVisualizer,
+    RWXNode as RXUtilsNode,
+    ColorLegend as RXUtilsColorLegend,
+)
 
 import rustworkx as rx
 

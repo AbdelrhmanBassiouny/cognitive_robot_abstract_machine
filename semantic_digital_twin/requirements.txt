@@ -22,8 +22,6 @@ pathlib
 probabilistic_model
 python-fcl
 manifold3d
-krrood>=2.0.2
-rustworkx_utils
 polytope
 ortools
 fbxloader
