@@ -7,7 +7,7 @@ from krrood.entity_query_language.query.match import (
     AbstractMatchExpression,
     construct_graph_and_get_root,
 )
-from krrood.probabilistic_knowledge.parameterizer import Parameterizer
+from krrood.probabilistic_knowledge.parameterizer import DataAccessObjectParameterizer
 from krrood.rustworkx_utils import RWXNode
 from random_events.interval import singleton, open, closed, closed_open
 from random_events.product_algebra import SimpleEvent, Event
@@ -27,7 +27,7 @@ from krrood.entity_query_language.factories import (
 from krrood.probabilistic_knowledge.probable_variable import (
     QueryToRandomEventTranslator,
     is_disjunctive_normal_form,
-    MatchToDAOTranslator,
+    MatchToInstanceTranslator,
 )
 from pycram.robot_plans import PickUpActionDescription
 from ..dataset.example_classes import Pose, Position, Orientation
@@ -129,5 +129,5 @@ def test_query_writing_with_match():
         position=probable(Position)(x=0.1, y=..., z=...), orientation=None
     )
 
-    translator = MatchToDAOTranslator(var)
+    translator = MatchToInstanceTranslator(var)
     dao = translator.translate()

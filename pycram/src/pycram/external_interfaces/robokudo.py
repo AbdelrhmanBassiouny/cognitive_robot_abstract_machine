@@ -108,11 +108,11 @@ def send_query(
     goal = QueryGoal()
 
     if obj_type:
-        goal.obj.type = obj_type
+        goal.instance.type = obj_type
     if region:
-        goal.obj.location = region
+        goal.instance.location = region
     if attributes:
-        goal.obj.attribute = attributes
+        goal.instance.attribute = attributes
 
     query_result = None
 
@@ -152,9 +152,9 @@ def query_all_objects() -> dict:
 def query_object(obj_desc: ObjectDesignatorDescription) -> dict:
     """Query RoboKudo for an object that fits the description."""
     goal = QueryGoal()
-    goal.obj.type = str(obj_desc.types[0])
+    goal.instance.type = str(obj_desc.types[0])
 
-    result = send_query(obj_type=goal.obj.type)
+    result = send_query(obj_type=goal.instance.type)
 
     return result
 

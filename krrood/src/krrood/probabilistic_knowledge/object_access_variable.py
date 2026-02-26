@@ -82,7 +82,7 @@ class ObjectAccessVariable:
         elif issubclass(type_, float):
             result = Continuous(str(attribute_access))
         else:
-            assert_never(type_)
+            assert_never((attribute_access, type_))
 
         return cls(result, attribute_access)
 
@@ -91,5 +91,5 @@ class ObjectAccessVariable:
         cls, attribute_access: AttributeAccessLike, expression: SymbolicExpression
     ):
         domain = expression.tolist()
-        variable = Symbolic(str(attribute_access), Set.from_iterable(domain))
+        variable = Symbolic(attribute_access._name_, Set.from_iterable(domain))
         return cls(variable, attribute_access)

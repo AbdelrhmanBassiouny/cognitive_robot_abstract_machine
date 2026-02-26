@@ -9,9 +9,13 @@ from krrood.entity_query_language.factories import (
     variable_from,
     probable_variable,
     probable,
+    variable,
 )
-from krrood.probabilistic_knowledge.parameterizer import Parameterizer, Parameterizer2
-from krrood.probabilistic_knowledge.probable_variable import MatchToDAOTranslator
+from krrood.probabilistic_knowledge.parameterizer import (
+    DataAccessObjectParameterizer,
+    MatchParameterizer,
+)
+from krrood.probabilistic_knowledge.probable_variable import MatchToInstanceTranslator
 from pycram.datastructures.dataclasses import Context
 from pycram.datastructures.enums import TaskStatus
 from pycram.language import ParallelPlan, CodeNode
@@ -21,7 +25,10 @@ from pycram.robot_plans import *
 from random_events.variable import Symbolic, Set
 from semantic_digital_twin.adapters.urdf import URDFParser
 from pycram.orm.ormatic_interface import *
-from semantic_digital_twin.robots.abstract_robot import SemanticRobotAnnotation
+from semantic_digital_twin.robots.abstract_robot import (
+    SemanticRobotAnnotation,
+    Manipulator,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 
 
@@ -734,15 +741,38 @@ def test_parameterization_of_pick_up(mutable_model_world):
         grasp_description=probable(GraspDescription)(
             approach_direction=...,
             vertical_alignment=...,
-            manipulator=None,
             rotate_gripper=...,
             manipulation_offset=0.05,
+            manipulator=variable(
+                Manipulator, world.get_semantic_annotations_by_type(Manipulator)
+            ),
         ),
     )
-    obj: PickUpAction = MatchToDAOTranslator(pick_up_description).translate()
 
-    p = Parameterizer2().parameterize(obj)
+    obj: PickUpAction = MatchToInstanceTranslator(pick_up_description).translate()
 
-    object_designator_variable = Symbolic(
-        "object_designator", Set.from_iterable(milk_variable.tolist())
+    parametrization = MatchParameterizer(obj).parameterize()
+
+    assert len(parametrization.variables) == 7
+
+    [manipulator_offset] = [
+        v
+        for v in parametrization.variables
+        if v.variable.name.endswith("manipulation_offset")
+    ]
+
+    assert parametrization.assignments == {manipulator_offset: 0.05}
+
+    distribution = parametrization.create_fully_factorized_distribution()
+    action_params = parametrization.create_assignment_from_variables_and_sample(
+        distribution.variables, distribution.sample(1)[0]
     )
+    action = parametrization.parameterize_object_with_sample(obj, action_params)
+
+    plan = SequentialPlan(context, action)
+
+    with simulated_robot:
+        try:
+            plan.perform()
+        except TimeoutError:
+            pass

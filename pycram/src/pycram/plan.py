@@ -38,8 +38,8 @@ from semantic_digital_twin.world_description.world_modification import (
 )
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.probabilistic_knowledge.parameterizer import (
-    Parameterizer,
-    Parameterizer,
+    DataAccessObjectParameterizer,
+    DataAccessObjectParameterizer,
     Parameterization,
 )
 from .datastructures.dataclasses import ExecutionData, Context
@@ -99,7 +99,7 @@ class Plan:
     """
     Callbacks to be called when a node of the given type is ended.
     """
-    parameterizer: Parameterizer = field(init=False)
+    parameterizer: DataAccessObjectParameterizer = field(init=False)
     """
     Parameterizer used to generate parameterizations the plan.
     """
@@ -119,7 +119,7 @@ class Plan:
         self.current_node: PlanNode = self.root
         if self.super_plan:
             self.super_plan.add_edge(self.super_plan.current_node, self.root)
-        self.parameterizer = Parameterizer()
+        self.parameterizer = DataAccessObjectParameterizer()
 
     @property
     def nodes(self) -> List[PlanNode]:
@@ -648,7 +648,9 @@ class Plan:
         result = []
         for index, node in enumerate(designator_nodes):
             action = node.designator_type(**node.kwargs)
-            result.append((action, Parameterizer().parameterize(action)))
+            result.append(
+                (action, DataAccessObjectParameterizer().parameterize(action))
+            )
         return result
 
 

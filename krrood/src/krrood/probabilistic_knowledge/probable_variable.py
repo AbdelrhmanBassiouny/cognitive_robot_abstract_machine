@@ -313,17 +313,25 @@ def is_literal_comparator(expression: Comparator) -> bool:
 
 
 @dataclass
-class MatchToDAOTranslator:
+class MatchToInstanceTranslator:
+    """
+    Class that translates a Match statement into a python instance that follows the match conditions.
+    This only works if the Match statement only contains equality comparisons.
+    This class uses the `__new__` method to construct the python instance in order to avoid side effects.
+    """
 
     match: Match
-
-    _data_access_object: DataAccessObject = field(init=False)
+    """
+    The match statement to translate.
+    """
 
     def __post_init__(self):
-        # self.statement.build()
         self._assert_all_comparators_are_equalities()
 
     def _assert_all_comparators_are_equalities(self):
+        """
+        Checks if all comparators used in the Match are equalities.
+        """
         for comparator in self.comparators:
             if comparator.operation != operator.eq:
                 raise ValueError(str(comparator) + " is not an equality comparison.")
@@ -340,10 +348,20 @@ class MatchToDAOTranslator:
             if isinstance(comparator, Comparator)
         ]
 
-    def translate(self) -> DataAccessObject:
+    def translate(self) -> Any:
+        """
+        Translates the Match statement into a python instance.
+
+        :return: The python instance.
+        """
         return self._construct_from_match(self.match)
 
     def _construct_from_match(self, match: Match) -> Any:
+        """
+        Constructs a python object from a Match statement using its `__new__` method.
+        :param match: The Match statement to translate.
+        :return: The python instance.
+        """
         obj = match.type_.__new__(match.type)
         for key, argument in match.kwargs.items():
 
