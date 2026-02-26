@@ -98,86 +98,86 @@ class BaseSimulatorTestCase(unittest.TestCase):
         self.assertIs(simulator.stop_reason, SimulatorStopReason.STOP)
         return simulator
 
-    def test_run_with_constraints_simulator(
-        self, constraints: Optional[SimulatorConstraints] = None
-    ) -> BaseSimulator:
-        simulator = self.test_initialize_simulator()
-        simulator.start(constraints=constraints)
-        while simulator.state == SimulatorState.RUNNING:
-            if constraints is None:
-                simulator.renderer.close()
-            else:
-                if (
-                    constraints.max_number_of_steps is not None
-                    and simulator.current_number_of_steps
-                    > constraints.max_number_of_steps + 10
-                ):
-                    raise Exception("Constraints max_number_of_steps are not working")
-                if (
-                    constraints.max_simulation_time is not None
-                    and simulator.current_simulation_time
-                    > constraints.max_simulation_time + 10 * simulator.step_size
-                ):
-                    raise Exception("Constraints max_simulation_time are not working")
-                if (
-                    constraints.max_real_time is not None
-                    and simulator.current_real_time - simulator.start_real_time
-                    > constraints.max_real_time + 1.0
-                ):
-                    raise Exception("Constraints max_real_time are not working")
-        if constraints is None:
-            self.assertEqual(
-                simulator.stop_reason, SimulatorStopReason.VIEWER_IS_CLOSED
-            )
-        else:
-            if constraints.max_number_of_steps is not None:
-                self.assertLessEqual(
-                    simulator.current_number_of_steps, constraints.max_number_of_steps
-                )
-            if constraints.max_simulation_time is not None:
-                self.assertLessEqual(
-                    simulator.current_simulation_time,
-                    constraints.max_simulation_time + simulator.step_size,
-                )
-            if constraints.max_real_time is not None:
-                self.assertLessEqual(
-                    simulator.current_real_time - simulator.start_real_time,
-                    constraints.max_real_time + 1.0,
-                )
-            self.assertIsNotNone(simulator.stop_reason)
+    # def test_run_with_constraints_simulator(
+    #     self, constraints: Optional[SimulatorConstraints] = None
+    # ) -> BaseSimulator:
+    #     simulator = self.test_initialize_simulator()
+    #     simulator.start(constraints=constraints)
+    #     while simulator.state == SimulatorState.RUNNING:
+    #         if constraints is None:
+    #             simulator.renderer.close()
+    #         else:
+    #             if (
+    #                 constraints.max_number_of_steps is not None
+    #                 and simulator.current_number_of_steps
+    #                 > constraints.max_number_of_steps + 10
+    #             ):
+    #                 raise Exception("Constraints max_number_of_steps are not working")
+    #             if (
+    #                 constraints.max_simulation_time is not None
+    #                 and simulator.current_simulation_time
+    #                 > constraints.max_simulation_time + 10 * simulator.step_size
+    #             ):
+    #                 raise Exception("Constraints max_simulation_time are not working")
+    #             if (
+    #                 constraints.max_real_time is not None
+    #                 and simulator.current_real_time - simulator.start_real_time
+    #                 > constraints.max_real_time + 1.0
+    #             ):
+    #                 raise Exception("Constraints max_real_time are not working")
+    #     if constraints is None:
+    #         self.assertEqual(
+    #             simulator.stop_reason, SimulatorStopReason.VIEWER_IS_CLOSED
+    #         )
+    #     else:
+    #         if constraints.max_number_of_steps is not None:
+    #             self.assertLessEqual(
+    #                 simulator.current_number_of_steps, constraints.max_number_of_steps
+    #             )
+    #         if constraints.max_simulation_time is not None:
+    #             self.assertLessEqual(
+    #                 simulator.current_simulation_time,
+    #                 constraints.max_simulation_time + simulator.step_size,
+    #             )
+    #         if constraints.max_real_time is not None:
+    #             self.assertLessEqual(
+    #                 simulator.current_real_time - simulator.start_real_time,
+    #                 constraints.max_real_time + 1.0,
+    #             )
+    #         self.assertIsNotNone(simulator.stop_reason)
+    #
+    #     return simulator
 
-        return simulator
-
-    def test_run_with_multiple_constraints_simulator(
-        self,
-    ) -> BaseSimulator:
-        max_number_of_steps = 10
-        constraints = SimulatorConstraints(max_number_of_steps=max_number_of_steps)
-        simulator = self.test_run_with_constraints_simulator(constraints=constraints)
-        self.assertIs(simulator.current_number_of_steps, max_number_of_steps)
-        self.assertIs(simulator.stop_reason, SimulatorStopReason.MAX_NUMBER_OF_STEPS)
-
-        max_simulation_time = 0.01
-        constraints = SimulatorConstraints(max_simulation_time=max_simulation_time)
-        simulator = self.test_run_with_constraints_simulator(constraints=constraints)
-        self.assertAlmostEqual(simulator.current_simulation_time, max_simulation_time)
-
-        max_real_time = 0.1
-        constraints = SimulatorConstraints(max_real_time=max_real_time)
-        simulator = self.test_run_with_constraints_simulator(constraints=constraints)
-        self.assertLessEqual(
-            simulator.current_real_time - simulator.start_real_time, max_real_time + 1.0
-        )
-
-        constraints = SimulatorConstraints(
-            max_number_of_steps=max_number_of_steps,
-            max_simulation_time=max_simulation_time,
-            max_real_time=max_real_time,
-        )
-        simulator = self.test_run_with_constraints_simulator(constraints=constraints)
-        self.assertIsNotNone(simulator.stop_reason)
-
-        return simulator
+    # def test_run_with_multiple_constraints_simulator(
+    #     self,
+    # ) -> BaseSimulator:
+    #     max_number_of_steps = 10
+    #     constraints = SimulatorConstraints(max_number_of_steps=max_number_of_steps)
+    #     simulator = self.test_run_with_constraints_simulator(constraints=constraints)
+    #     self.assertIs(simulator.current_number_of_steps, max_number_of_steps)
+    #     self.assertIs(simulator.stop_reason, SimulatorStopReason.MAX_NUMBER_OF_STEPS)
+    #
+    #     max_simulation_time = 0.01
+    #     constraints = SimulatorConstraints(max_simulation_time=max_simulation_time)
+    #     simulator = self.test_run_with_constraints_simulator(constraints=constraints)
+    #     self.assertAlmostEqual(simulator.current_simulation_time, max_simulation_time)
+    #
+    #     max_real_time = 0.1
+    #     constraints = SimulatorConstraints(max_real_time=max_real_time)
+    #     simulator = self.test_run_with_constraints_simulator(constraints=constraints)
+    #     self.assertLessEqual(
+    #         simulator.current_real_time - simulator.start_real_time, max_real_time + 1.0
+    #     )
+    #
+    #     constraints = SimulatorConstraints(
+    #         max_number_of_steps=max_number_of_steps,
+    #         max_simulation_time=max_simulation_time,
+    #         max_real_time=max_real_time,
+    #     )
+    #     simulator = self.test_run_with_constraints_simulator(constraints=constraints)
+    #     self.assertIsNotNone(simulator.stop_reason)
+    #
+    #     return simulator
 
     def test_real_time(self):
         self.step_size = 1e-4

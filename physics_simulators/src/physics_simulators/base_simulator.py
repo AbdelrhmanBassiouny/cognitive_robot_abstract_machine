@@ -126,7 +126,7 @@ class SimulatorCallback:
             simulator.renderer.sync()
         return result
 
-@dataclass
+
 class BaseSimulator:
     """Base class for Base Simulator"""
 
@@ -145,10 +145,10 @@ class BaseSimulator:
     logger: logging.Logger = logging.getLogger(__name__)
     """Logger for the simulator"""
 
-    class_level_callbacks: List[SimulatorCallback] = field(default_factory=lambda: [])
+    class_level_callbacks: List[SimulatorCallback] = []
     """Class level callback functions"""
 
-    instance_level_callbacks: List[SimulatorCallback] = field(default_factory=lambda: None)
+    instance_level_callbacks: List[SimulatorCallback] = None
     """Instance level callback functions"""
 
     def __init__(
