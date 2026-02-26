@@ -73,6 +73,13 @@ class ObjectAccessVariable:
     def from_attribute_access_and_type(
         cls, attribute_access: AttributeAccessLike, type_: type
     ):
+        """
+        Create an ObjectAccessVariable from the given attribute and type.
+
+        :param attribute_access: A symbolic expression representing access to the attribute.
+        :param type_: The type to construct the variable for
+        :return: The ObjectAccessVariable
+        """
         if issubclass(type_, enum.Enum):
             result = Symbolic(str(attribute_access), Set.from_iterable(type_))
         elif issubclass(type_, bool):
@@ -90,6 +97,14 @@ class ObjectAccessVariable:
     def from_expression(
         cls, attribute_access: AttributeAccessLike, expression: SymbolicExpression
     ):
+        """
+        Create an ObjectAccessVariable from the given attribute and a symbolic expression.
+        The symbolic expression is converted to a list and used for the domain of the variable.
+
+        :param attribute_access: A symbolic expression representing access to the attribute.
+        :param expression: The symbolic expression to use for the domain
+        :return: The ObjectAccessVariable
+        """
         domain = expression.tolist()
         variable = Symbolic(attribute_access._name_, Set.from_iterable(domain))
         return cls(variable, attribute_access)

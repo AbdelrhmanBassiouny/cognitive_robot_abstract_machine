@@ -9,6 +9,9 @@ from itertools import chain
 import numpy as np
 import rustworkx as rx
 import rustworkx.visualization
+
+from krrood.entity_query_language.query.match import Match
+from krrood.probabilistic_knowledge.probable_variable import MatchToInstanceTranslator
 from random_events.variable import Variable
 from typing_extensions import (
     Optional,
@@ -41,6 +44,7 @@ from krrood.probabilistic_knowledge.parameterizer import (
     DataAccessObjectParameterizer,
     DataAccessObjectParameterizer,
     Parameterization,
+    MatchParameterizer,
 )
 from .datastructures.dataclasses import ExecutionData, Context
 from .datastructures.enums import TaskStatus
@@ -99,10 +103,6 @@ class Plan:
     """
     Callbacks to be called when a node of the given type is ended.
     """
-    parameterizer: DataAccessObjectParameterizer = field(init=False)
-    """
-    Parameterizer used to generate parameterizations the plan.
-    """
 
     def __init__(self, root: PlanNode, context: Context):
         super().__init__()
@@ -119,7 +119,6 @@ class Plan:
         self.current_node: PlanNode = self.root
         if self.super_plan:
             self.super_plan.add_edge(self.super_plan.current_node, self.root)
-        self.parameterizer = DataAccessObjectParameterizer()
 
     @property
     def nodes(self) -> List[PlanNode]:
@@ -630,7 +629,7 @@ class Plan:
 
     def generate_parameterizations(
         self,
-    ) -> List[Tuple[ActionDescription, Parameterization]]:
+    ) -> List[Tuple[ActionDescription, Optional[Parameterization]]]:
         """
         Parameterize all parameters of a plan using the krrood parameterizer.
 
@@ -646,11 +645,11 @@ class Plan:
         ]
 
         result = []
-        for index, node in enumerate(designator_nodes):
-            action = node.designator_type(**node.kwargs)
-            result.append(
-                (action, DataAccessObjectParameterizer().parameterize(action))
-            )
+        for node in designator_nodes:
+            if isinstance(node, Match):
+                obj = MatchToInstanceTranslator(node)
+            else:
+                result.append((node, None))
         return result
 
 

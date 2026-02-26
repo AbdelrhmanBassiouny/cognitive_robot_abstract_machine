@@ -130,4 +130,8 @@ def test_query_writing_with_match():
     )
 
     translator = MatchToInstanceTranslator(var)
-    dao = translator.translate()
+    obj = translator.translate()
+    assert obj.position.x == 0.1
+    assert obj.position.y == ...
+    assert obj.position.z == ...
+    assert obj.orientation is None

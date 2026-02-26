@@ -2,6 +2,14 @@ import os
 import time
 
 import pytest
+
+from krrood.entity_query_language.query.match import MatchVariable
+from pycram.datastructures.pose import (
+    PyCramPose,
+    Header,
+    PyCramVector3,
+    PyCramQuaternion,
+)
 from random_events.product_algebra import SimpleEvent, Event
 
 
@@ -693,39 +701,32 @@ def test_algebra_sequential_plan(mutable_model_world):
     """
     world, robot_view, context = mutable_model_world
 
-    target_location = PoseStamped.from_list([..., ..., 0], [0, 0, 0, 1], frame=None)
-
-    sp = SequentialPlan(
-        context,
-        MoveTorsoActionDescription(TorsoState.LOW),
-        NavigateActionDescription(
-            target_location=target_location,
-            keep_joint_states=...,
+    target_location = probable(PoseStamped)(
+        pose=probable(PyCramPose)(
+            position=probable(PyCramVector3)(x=..., y=..., z=0),
+            orientation=probable(PyCramQuaternion)(x=0, y=0, z=0, w=1),
         ),
-        MoveTorsoActionDescription(torso_state=...),
+        header=probable(Header)(frame_id=variable_from([robot_view.root])),
+    )
+    navigate_action = probable_variable(NavigateAction)(
+        target_location=target_location,
+        keep_joint_states=...,
     )
 
-    parameterization = sp.generate_parameterizations()
-    target_location.frame_id = world.root
-    new_actions = []
+    navigate_example = MatchToInstanceTranslator(navigate_action).translate()
+    navigate_parameters = MatchParameterizer(navigate_example).parameterize()
+    navigate_model = navigate_parameters.create_fully_factorized_distribution()
+    sample = navigate_parameters.create_assignment_from_variables_and_sample(
+        navigate_model.variables, navigate_model.sample(1)[0]
+    )
+    resolved_navigate = navigate_parameters.parameterize_object_with_sample(
+        navigate_example, sample
+    )
 
-    for action, parameters in parameterization:
-        distribution = parameters.create_fully_factorized_distribution()
-        distribution, _ = distribution.conditional(
-            parameters.assignments_for_conditioning
-        )
-        sample = distribution.sample(1)[0]
+    plan = SequentialPlan(context, MoveTorsoAction(TorsoState.LOW), resolved_navigate)
 
-        sample_dict = parameters.create_assignment_from_variables_and_sample(
-            distribution.variables, sample
-        )
-
-        parameterized = parameters.parameterize_object_with_sample(action, sample_dict)
-        new_actions.append(parameterized)
-
-    new_plan = SequentialPlan(context, *new_actions)
     with simulated_robot:
-        new_plan.perform()
+        plan.perform()
 
 
 def test_parameterization_of_pick_up(mutable_model_world):
@@ -743,9 +744,7 @@ def test_parameterization_of_pick_up(mutable_model_world):
             vertical_alignment=...,
             rotate_gripper=...,
             manipulation_offset=0.05,
-            manipulator=variable(
-                Manipulator, world.get_semantic_annotations_by_type(Manipulator)
-            ),
+            manipulator=variable(Manipulator, world.semantic_annotations),
         ),
     )
 

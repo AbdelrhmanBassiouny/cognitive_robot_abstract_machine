@@ -1,30 +1,23 @@
 import operator
 from collections import deque
-from dataclasses import dataclass, field
-from functools import cached_property
-from itertools import groupby
-from typing import assert_never, List, Dict, Type
+from dataclasses import dataclass
+from typing import assert_never, List, Dict
 
 import numpy as np
-
-from random_events.interval import open_closed, closed_open, closed
-
-from random_events.product_algebra import Event, SimpleEvent
 from typing_extensions import Any
 
+from random_events.interval import closed_open, closed, open
+from random_events.product_algebra import Event, SimpleEvent
 from .exceptions import WhereExpressionNotInDisjunctiveNormalForm
 from .object_access_variable import ObjectAccessVariable, AttributeAccessLike
 from ..adapters.json_serializer import list_like_classes
-from ..entity_query_language.core.base_expressions import Selectable, SymbolicExpression
-from ..entity_query_language.core.variable import Variable, Literal
-from ..entity_query_language.factories import entity, variable_from, set_of
+from ..entity_query_language.core.base_expressions import SymbolicExpression
+from ..entity_query_language.core.variable import Literal
 from ..entity_query_language.operators.comparator import Comparator
 from ..entity_query_language.operators.core_logical_operators import OR, AND
 from ..entity_query_language.predicate import symbolic_function
-from ..entity_query_language.query.match import construct_graph_and_get_root, Match
+from ..entity_query_language.query.match import Match
 from ..entity_query_language.query.query import Entity
-from ..entity_query_language.query_graph import QueryGraph
-from ..ormatic.dao import get_dao_class, DataAccessObject, to_dao
 
 
 @dataclass
@@ -200,7 +193,7 @@ class QueryToRandomEventTranslator:
         object_access_variable: ObjectAccessVariable,
         result: SimpleEvent,
     ):
-        result[object_access_variable.variable] &= open_closed(
+        result[object_access_variable.variable] &= open(
             comparator.right._domain_[0], np.inf
         )
 
@@ -248,9 +241,6 @@ def is_disjunctive_normal_form(query: Entity) -> bool:
     query.build()
 
     condition_root = query._conditions_root_
-    # Unwrap filter-like wrappers (e.g., Where) if present
-    if hasattr(condition_root, "condition"):
-        condition_root = condition_root.condition
 
     return (
         is_disjunction_of_conjunction_of_literal_comparators(condition_root)

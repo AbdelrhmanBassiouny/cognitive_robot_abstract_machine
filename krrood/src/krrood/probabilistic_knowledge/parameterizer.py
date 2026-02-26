@@ -441,7 +441,7 @@ class MatchParameterizer:
             )
             parametrization.variables.append(object_access_variable)
 
-        elif value == Ellipsis:
+        elif isinstance(value, type(Ellipsis)):
             # get type hint
             wrapped_class = WrappedClass(type(obj))
             [wrapped_field] = [f for f in wrapped_class.fields if f.name == key]
