@@ -5,10 +5,17 @@ from dataclasses import dataclass, field
 from typing_extensions import Optional, Tuple, Union, List
 from urdf_parser_py import urdf as urdfpy
 
-from semantic_digital_twin.adapters.package_resolver import CompositePathResolver, PathResolver
+from semantic_digital_twin.adapters.package_resolver import (
+    CompositePathResolver,
+    PathResolver,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import NegativeConnectionVelocity
 from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
-from semantic_digital_twin.spatial_types.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3,
+)
 from semantic_digital_twin.utils import (
     suppress_stdout_stderr,
     hacky_urdf_parser_fix,
@@ -20,7 +27,10 @@ from semantic_digital_twin.world_description.connections import (
     PrismaticConnection,
     FixedConnection,
 )
-from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
+from semantic_digital_twin.world_description.degree_of_freedom import (
+    DegreeOfFreedom,
+    DegreeOfFreedomLimits,
+)
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Sphere,
@@ -350,6 +360,6 @@ class URDFParser:
                         origin=origin_transform,
                         filename=self.path_resolver.resolve(geom.geometry.filename),
                         scale=Scale(*(geom.geometry.scale or (1, 1, 1))),
-                    ).to_triangle_mesh()
+                    )
                 )
         return ShapeCollection(res, reference_frame=body)
