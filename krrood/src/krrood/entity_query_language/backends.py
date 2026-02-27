@@ -97,7 +97,7 @@ class ProbabilisticBackend(GenerativeBackend):
             raise NoSolutionFound(expression.expression)
 
         samples = truncated.sample(self.number_of_samples)
-        print(truncated.variables)
+
         for sample in samples:
 
             sample_dict = parameters.create_assignment_from_variables_and_sample(
