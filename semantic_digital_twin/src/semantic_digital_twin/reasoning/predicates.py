@@ -3,35 +3,38 @@ from abc import ABC
 from dataclasses import dataclass
 
 import numpy as np
+import math
 import trimesh.boolean
 from krrood.entity_query_language.predicate import (
     Predicate,
     Symbol,
+    symbolic_function,
 )
 from random_events.interval import Interval
 from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
-from ..collision_checking.trimesh_collision_detector import TrimeshCollisionDetector
-from ..datastructures.prefixed_name import PrefixedName
-from ..datastructures.variables import SpatialVariables
-from ..spatial_computations.ik_solver import (
+from semantic_digital_twin.collision_checking.trimesh_collision_detector import FCLCollisionDetector
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.spatial_computations.ik_solver import (
     MaxIterationsException,
     UnreachableException,
 )
-from ..spatial_computations.raytracer import RayTracer
-from ..spatial_types import Vector3
-from ..spatial_types.spatial_types import HomogeneousTransformationMatrix
-from ..world import World
-from ..world_description.connections import FixedConnection
-from ..world_description.geometry import TriangleMesh
-from ..world_description.world_entity import Body, Region, KinematicStructureEntity
+from semantic_digital_twin.spatial_computations.raytracer import RayTracer
+from semantic_digital_twin.spatial_types import Vector3, Point3
+from semantic_digital_twin.spatial_types.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import TriangleMesh
+from semantic_digital_twin.world_description.world_entity import Body, Region, KinematicStructureEntity
 
 if TYPE_CHECKING:
-    from ..robots.abstract_robot import (
+    from semantic_digital_twin.robots.abstract_robot import (
         Camera,
     )
 
 
+@symbolic_function
 def stable(obj: Body) -> bool:
     """
     Checks if an object is stable in the world. Stable meaning that its position will not change after simulating
@@ -44,6 +47,7 @@ def stable(obj: Body) -> bool:
     raise NotImplementedError("Needs multiverse")
 
 
+@symbolic_function
 def contact(
     body1: Body,
     body2: Body,
@@ -57,14 +61,15 @@ def contact(
     :param threshold: The threshold for contact detection
     :return: True if the two objects are in contact False else
     """
-    tcd = TrimeshCollisionDetector(body1._world)
+    tcd = FCLCollisionDetector(_world=body1._world)
     result = tcd.check_collision_between_bodies(body1, body2)
 
     if result is None:
         return False
-    return result.contact_distance < threshold
+    return result.distance < threshold
 
 
+@symbolic_function
 def get_visible_bodies(camera: Camera) -> List[KinematicStructureEntity]:
     """
     Get all bodies and regions that are visible from the given camera using a segmentation mask.
@@ -82,7 +87,7 @@ def get_visible_bodies(camera: Camera) -> List[KinematicStructureEntity]:
     seg = rt.create_segmentation_mask(
         HomogeneousTransformationMatrix(cam_pose, reference_frame=camera._world.root),
         resolution=256,
-        min_dist=0.2,
+        min_distance=0.2,
     )
     indices = np.unique(seg)
     indices = indices[indices > -1]
@@ -91,6 +96,7 @@ def get_visible_bodies(camera: Camera) -> List[KinematicStructureEntity]:
     return bodies
 
 
+@symbolic_function
 def visible(camera: Camera, obj: KinematicStructureEntity) -> bool:
     """
     Checks if a body/region is visible by the given camera.
@@ -98,6 +104,7 @@ def visible(camera: Camera, obj: KinematicStructureEntity) -> bool:
     return obj in get_visible_bodies(camera)
 
 
+@symbolic_function
 def occluding_bodies(camera: Camera, body: Body) -> List[Body]:
     """
     Determines the bodies that occlude a given body in the scene as seen from a specified camera.
@@ -137,7 +144,7 @@ def occluding_bodies(camera: Camera, body: Body) -> List[Body]:
     ray_tracer_without_occlusion.update_scene()
     segmentation_mask_without_occlusion = (
         ray_tracer_without_occlusion.create_segmentation_mask(
-            camera_pose, resolution=256
+            camera_pose, resolution=256, min_distance=0.1
         )
     )
 
@@ -145,7 +152,9 @@ def occluding_bodies(camera: Camera, body: Body) -> List[Body]:
     ray_tracer_with_occlusion = RayTracer(camera._world)
     ray_tracer_with_occlusion.update_scene()
     segmentation_mask_with_occlusion = (
-        ray_tracer_with_occlusion.create_segmentation_mask(camera_pose, resolution=256)
+        ray_tracer_with_occlusion.create_segmentation_mask(
+            camera_pose, resolution=256, min_distance=0.1
+        )
     )
 
     mask_without_occluders = segmentation_mask_without_occlusion[
@@ -161,6 +170,7 @@ def occluding_bodies(camera: Camera, body: Body) -> List[Body]:
     return bodies
 
 
+@symbolic_function
 def reachable(pose: HomogeneousTransformationMatrix, root: Body, tip: Body) -> bool:
     """
     Checks if a manipulator can reach a given position.
@@ -182,6 +192,7 @@ def reachable(pose: HomogeneousTransformationMatrix, root: Body, tip: Body) -> b
     return True
 
 
+@symbolic_function
 def is_supported_by(
     supported_body: Body, supporting_body: Body, max_intersection_height: float = 0.1
 ) -> bool:
@@ -194,7 +205,11 @@ def is_supported_by(
     If the intersection is higher than this value, the check returns False due to unhandled clipping.
     :return: True if the second object is supported by the first object, False otherwise
     """
-    if Below(supported_body, supporting_body, supported_body.global_pose)():
+    if Below(
+        supported_body.center_of_mass,
+        supporting_body.center_of_mass,
+        supported_body.global_pose,
+    )():
         return False
     bounding_box_supported_body = (
         supported_body.collision.as_bounding_box_collection_at_origin(
@@ -219,6 +234,7 @@ def is_supported_by(
     return size < max_intersection_height
 
 
+@symbolic_function
 def is_body_in_region(body: Body, region: Region) -> float:
     """
     Check if the body is in the region by computing the fraction of the body's
@@ -250,10 +266,10 @@ def is_body_in_region(body: Body, region: Region) -> float:
 
 
 @dataclass
-class SpatialRelation(Symbol, ABC):
+class KinematicStructureEntitySpatialRelation(Symbol, ABC):
     """
-    Check if the KSE is spatially related to the other KSE if you are looking from the point of semantic annotation.
-    The comparison is done using the centers of mass computed from the KSE's collision geometry.
+    Base class for spatial relations between two KinematicStructureEntity instances.
+    Implementations typically compare the centers of mass computed from the KSE's collision geometry.
     """
 
     body: KinematicStructureEntity
@@ -264,11 +280,28 @@ class SpatialRelation(Symbol, ABC):
     other: KinematicStructureEntity
     """
     The other KSE.
-     """
+    """
 
 
 @dataclass
-class ViewDependentSpatialRelation(SpatialRelation, ABC):
+class PointSpatialRelation(Symbol, ABC):
+    """
+    Check if the point is spatially related to the other point.
+    """
+
+    point: Point3
+    """
+    The point for which the check should be done.
+    """
+
+    other: Point3
+    """
+    The other point.
+    """
+
+
+@dataclass
+class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
 
     point_of_semantic_annotation: HomogeneousTransformationMatrix
     """
@@ -284,15 +317,14 @@ class ViewDependentSpatialRelation(SpatialRelation, ABC):
 
     def _signed_distance_along_direction(self, index: int) -> float:
         """
-        Calculate the spatial relation between self.body and self.other with respect to a given
+        Calculate the spatial relation between self.point and self.other with respect to a given
         reference point (self.point_of_semantic_annotation) and a specified axis index. This function computes the
         signed distance along a specified direction derived from the reference point
-        to compare the positions of the centers of mass of the two bodies.
+        to compare the positions.
 
         :param index: The index of the axis in the transformation matrix along which
             the spatial relation is computed.
-        :return: The signed distance between the first and the second body's centers
-            of mass along the given direction.
+        :return: The signed distance between the first and the second points along the given direction.
         """
         ref_np = self.point_of_semantic_annotation.to_np()
         front_world = ref_np[:3, index]
@@ -304,8 +336,8 @@ class ViewDependentSpatialRelation(SpatialRelation, ABC):
             reference_frame=self.point_of_semantic_annotation.reference_frame,
         )
 
-        s_body = front_norm.dot(self.body.center_of_mass.to_vector3())
-        s_other = front_norm.dot(self.other.center_of_mass.to_vector3())
+        s_body = front_norm.dot(self.point.to_vector3())
+        s_other = front_norm.dot(self.other.to_vector3())
         return (s_body - s_other).compile()()
 
 
@@ -376,7 +408,7 @@ class InFrontOf(ViewDependentSpatialRelation):
 
 
 @dataclass
-class InsideOf(SpatialRelation):
+class InsideOf(KinematicStructureEntitySpatialRelation):
     """
     The "inside of" relation is defined as the fraction of the volume of self.body
     that lies within the bounding box of self.other.

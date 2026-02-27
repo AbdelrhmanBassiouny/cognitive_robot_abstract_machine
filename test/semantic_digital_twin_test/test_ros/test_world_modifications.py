@@ -1,13 +1,14 @@
 import unittest
 
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
-    KinematicStructureEntityKwargsTracker,
+    WorldEntityWithIDKwargsTracker,
 )
-from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Handle,
+    Door,
+)
 from semantic_digital_twin.spatial_types.spatial_types import Vector3
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle, Door
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
@@ -15,6 +16,7 @@ from semantic_digital_twin.world_description.connections import (
     PrismaticConnection,
     RevoluteConnection,
 )
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import Body, Actuator
 from semantic_digital_twin.world_description.world_modification import (
     WorldModelModificationBlock,
@@ -112,13 +114,14 @@ class ConnectionModificationTestCase(unittest.TestCase):
         # reconstruct this world
         w2 = World()
 
-        tracker = KinematicStructureEntityKwargsTracker()
+        tracker = WorldEntityWithIDKwargsTracker()
         kwargs = tracker.create_kwargs()
         # copy modifications
         modifications_copy = WorldModelModificationBlock.from_json(
             modifications.to_json(), **kwargs
         )
-        modifications_copy.apply(w2)
+        with w2.modify_world():
+            modifications_copy.apply(w2)
         self.assertEqual(len(w2.bodies), 3)
         self.assertEqual(len(w2.connections), 2)
 
@@ -134,15 +137,17 @@ class ConnectionModificationTestCase(unittest.TestCase):
         modifications_copy = WorldModelModificationBlock.from_json(
             modifications.to_json()
         )
-        modifications_copy.apply(w2)
+        with w2.modify_world():
+            modifications_copy.apply(w2)
         self.assertEqual(len(w2.bodies), 2)
         self.assertEqual(len(w2.connections), 1)
 
     def test_semantic_annotation_modifications(self):
         w = World()
-        b1 = Body(name=PrefixedName("b1"))
-        v1 = Handle(body=b1)
-        v2 = Door(body=b1, handle=v1)
+        with w.modify_world():
+            w.add_kinematic_structure_entity(b1 := Body(name=PrefixedName("b1")))
+        v1 = Handle(root=b1)
+        v2 = Door(root=b1, handle=v1)
 
         add_v1 = AddSemanticAnnotationModification(v1)
         add_v2 = AddSemanticAnnotationModification(v2)
@@ -188,7 +193,7 @@ class ConnectionModificationTestCase(unittest.TestCase):
             w.add_connection(c2)
 
         modifications = w.get_world_model_manager().model_modification_blocks[-1]
-        tracker = KinematicStructureEntityKwargsTracker()
+        tracker = WorldEntityWithIDKwargsTracker()
         kwargs = tracker.create_kwargs()
 
         modifications_copy = WorldModelModificationBlock.from_json(
@@ -216,7 +221,7 @@ class ConnectionModificationTestCase(unittest.TestCase):
             w.add_actuator(actuator)
 
         modifications = w.get_world_model_manager().model_modification_blocks[-1]
-        tracker = KinematicStructureEntityKwargsTracker()
+        tracker = WorldEntityWithIDKwargsTracker()
         kwargs = tracker.create_kwargs()
 
         modifications_copy = WorldModelModificationBlock.from_json(

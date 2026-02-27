@@ -7,7 +7,7 @@ from functools import lru_cache, cached_property
 from uuid import UUID
 
 from typing_extensions import List, Type, Generic, TYPE_CHECKING, Optional
-from typing_extensions import TypeVar, get_origin, get_args
+from typing_extensions import TypeVar, get_origin, get_args, Any
 
 
 def classes_of_module(module) -> List[Type]:

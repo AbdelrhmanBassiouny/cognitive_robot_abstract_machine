@@ -4,6 +4,7 @@ import itertools
 import os
 import tempfile
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 
@@ -14,19 +15,32 @@ from PIL import Image
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
-from typing_extensions import Optional, List, Dict, Any, Self, Tuple
+from typing_extensions import Optional, List, Dict, Any, Self, Tuple, TYPE_CHECKING
 
 from krrood.adapters.exceptions import JSON_TYPE_NAME
-from krrood.adapters.json_serializer import SubclassJSONSerializer
-from ..datastructures.variables import SpatialVariables
-from ..spatial_types import HomogeneousTransformationMatrix, Point3
-from ..utils import IDGenerator
+from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+    Vector3,
+)
+from semantic_digital_twin.utils import IDGenerator
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.world_description.world_entity import (
+        KinematicStructureEntity,
+    )
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.world import World
 
 id_generator = IDGenerator()
 
 
 @dataclass
-class Color(SubclassJSONSerializer):
+class Color:
     """
     Dataclass for storing rgba_color as an RGBA value.
     The values are stored as floats between 0 and 1.
@@ -62,19 +76,12 @@ class Color(SubclassJSONSerializer):
         self.B = float(self.B)
         self.A = float(self.A)
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "R": self.R, "G": self.G, "B": self.B, "A": self.A}
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(R=data["R"], G=data["G"], B=data["B"], A=data["A"])
-
     def to_rgba(self) -> Tuple[float, float, float, float]:
         return (self.R, self.G, self.B, self.A)
 
 
 @dataclass
-class Scale(SubclassJSONSerializer):
+class Scale:
     """
     Dataclass for storing the scale of geometric objects.
     """
@@ -94,12 +101,8 @@ class Scale(SubclassJSONSerializer):
     The scale in the z direction.
     """
 
-    def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "x": self.x, "y": self.y, "z": self.z}
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
-        return cls(x=data["x"], y=data["y"], z=data["z"])
+    def __hash__(self):
+        return hash((self.x, self.y, self.z))
 
     def __post_init__(self):
         """
@@ -109,9 +112,12 @@ class Scale(SubclassJSONSerializer):
         self.y = float(self.y)
         self.z = float(self.z)
 
-    @property
-    def simple_event(self) -> SimpleEvent:
-        return SimpleEvent(
+    def to_simple_event(
+        self,
+        extend_result_in_direction: Optional[Vector3] = None,
+        amount: float = 0.0,
+    ) -> SimpleEvent:
+        simple_event = SimpleEvent(
             {
                 SpatialVariables.x.value: closed(-self.x / 2, self.x / 2),
                 SpatialVariables.y.value: closed(-self.y / 2, self.y / 2),
@@ -119,9 +125,61 @@ class Scale(SubclassJSONSerializer):
             }
         )
 
+        if extend_result_in_direction is not None:
+            self._extend_simple_event_in_direction(
+                simple_event, extend_result_in_direction, amount
+            )
+
+        return simple_event
+
+    def _extend_simple_event_in_direction(
+        self, simple_event: SimpleEvent, direction: Vector3, amount: float
+    ) -> SimpleEvent:
+        """
+        Extend the inner event in the specified direction to create the container opening in that direction.
+
+
+        :return: The modified inner event with the specified direction extended.
+        """
+        match direction.to_np().tolist():
+            case [1, 0, 0, 0]:
+                simple_event[SpatialVariables.x.value] = closed(
+                    -self.x / 2, self.x / 2 + amount
+                )
+            case [0, 1, 0, 0]:
+                simple_event[SpatialVariables.y.value] = closed(
+                    -self.y / 2, self.y / 2 + amount
+                )
+            case [0, 0, 1, 0]:
+                simple_event[SpatialVariables.z.value] = closed(
+                    -self.z / 2, self.z / 2 + amount
+                )
+            case [-1, 0, 0, 0]:
+                simple_event[SpatialVariables.x.value] = closed(
+                    -(self.x / 2 + amount), self.x / 2
+                )
+            case [0, -1, 0, 0]:
+                simple_event[SpatialVariables.y.value] = closed(
+                    -(self.y / 2 + amount), self.y / 2
+                )
+            case [0, 0, -1, 0]:
+                simple_event[SpatialVariables.z.value] = closed(
+                    -(self.z / 2 + amount), self.z / 2
+                )
+
+        return simple_event
+
+    def to_bounding_box(self) -> BoundingBox:
+        min_point = Point3(-self.x / 2, -self.y / 2, -self.z / 2)
+        max_point = Point3(self.x / 2, self.y / 2, self.z / 2)
+        return BoundingBox.from_min_max(min_point, max_point)
+
+    def to_np(self) -> np.ndarray:
+        return np.array([self.x, self.y, self.z])
+
 
 @dataclass
-class Shape(ABC, SubclassJSONSerializer):
+class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     """
     Base class for all shapes in the world.
     """
@@ -150,8 +208,8 @@ class Shape(ABC, SubclassJSONSerializer):
     def to_json(self) -> Dict[str, Any]:
         return {
             **super().to_json(),
-            "origin": self.origin.to_json(),
-            "color": self.color.to_json(),
+            "origin": to_json(self.origin),
+            "color": to_json(self.color),
         }
 
     def __eq__(self, other: Shape) -> bool:
@@ -173,6 +231,26 @@ class Shape(ABC, SubclassJSONSerializer):
             return False
 
         return True
+
+    def copy_for_world(self, world: World) -> Self:
+        """
+        Copies this shape with references to the given world.
+        :param world: The world to copy to.
+        :return: A copy of this shape with references to the given world.
+        """
+        new_origin = HomogeneousTransformationMatrix(
+            self.origin.to_np(),
+            reference_frame=world.get_kinematic_structure_entity_by_name(
+                self.origin.reference_frame.name
+            ),
+        )
+        shape_props = fields(self)
+        new_props = {
+            f.name: deepcopy(getattr(self, f.name))
+            for f in shape_props
+            if f.name not in ["origin"]
+        }
+        return self.__class__(origin=new_origin, **new_props)
 
 
 @dataclass(eq=False)
@@ -205,7 +283,7 @@ class Mesh(Shape, ABC):
         return {
             **super().to_json(),
             "mesh": self.mesh.to_dict(),
-            "scale": self.scale.to_json(),
+            "scale": to_json(self.scale),
         }
 
     @classmethod
@@ -237,6 +315,17 @@ class Mesh(Shape, ABC):
         mesh.visual.material = SimpleMaterial(name=material_name, image=image)
         return mesh
 
+    def scale_mesh(self, scale: Scale) -> trimesh.Trimesh:
+        """
+        Scales the mesh according to the given scale.
+
+        :param scale: The scale of the mesh.
+        :return: A scaled mesh object.
+        """
+        copy_mesh = deepcopy(self.mesh)
+        copy_mesh.apply_scale(scale.to_np())
+        return copy_mesh
+
 
 @dataclass(eq=False)
 class FileMesh(Mesh):
@@ -255,14 +344,20 @@ class FileMesh(Mesh):
         The mesh object.
         """
         mesh = trimesh.load_mesh(self.filename)
+        mesh.apply_scale(self.scale.to_np())
         mesh.visual.vertex_colors = trimesh.visual.color.to_rgba(self.color.to_rgba())
         return mesh
+
+    def to_triangle_mesh(self) -> TriangleMesh:
+        return TriangleMesh(
+            mesh=self.mesh, origin=self.origin, color=self.color, scale=self.scale
+        )
 
     def to_json(self) -> Dict[str, Any]:
         json = {
             **super().to_json(),
             "mesh": self.mesh.to_dict(),
-            "scale": self.scale.to_json(),
+            "scale": to_json(self.scale),
         }
         json[JSON_TYPE_NAME] = json[JSON_TYPE_NAME].replace("FileMesh", "TriangleMesh")
         return json
@@ -304,11 +399,20 @@ class TriangleMesh(Mesh):
     The loaded mesh object.
     """
 
+    def __post_init__(self):
+        self.mesh.apply_scale(self.scale.to_np())
+
+    @property
+    def filename(self) -> str:
+        return self.file.name
+
     @cached_property
     def file(
         self, dirname: str = "/tmp", file_type: str = "obj"
-    ) -> tempfile.NamedTemporaryFile:
-        f = tempfile.NamedTemporaryFile(dir=dirname, delete=False)
+    ) -> tempfile._TemporaryFileWrapper:
+        f = tempfile.NamedTemporaryFile(
+            dir=dirname, suffix=f".{file_type}", delete=False
+        )
         if file_type == "obj":
             self.mesh.export(f.name, file_type="obj")
             old_mtl_file = "material.mtl"
@@ -363,9 +467,83 @@ class TriangleMesh(Mesh):
         mesh = trimesh.Trimesh(
             vertices=data["mesh"]["vertices"], faces=data["mesh"]["faces"]
         )
-        origin = HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs)
-        scale = Scale.from_json(data["scale"], **kwargs)
+        origin = from_json(data["origin"], **kwargs)
+        scale = from_json(data["scale"], **kwargs)
         return cls(mesh=mesh, origin=origin, scale=scale)
+
+    @classmethod
+    def from_3d_points(
+        cls,
+        points_3d: List[Point3],
+        reference_frame: Optional[KinematicStructureEntity] = None,
+        minimum_thickness: float = 0.005,
+        sv_ratio_tol: float = 1e-7,
+    ) -> Self:
+        """
+        Constructs a Region from a list of 3D points by creating a convex hull around them.
+        The points are analyzed to determine if they are approximately planar. If they are,
+        a minimum thickness is added to ensure the region has a non-zero volume.
+
+        :param name: Prefixed name for the region.
+        :param points_3d: List of 3D points.
+        :param reference_frame: Optional reference frame.
+        :param minimum_thickness: Minimum thickness to add if points are near-planar.
+        :param sv_ratio_tol: Tolerance for determining planarity based on singular value ratio.
+
+        :return: Region object.
+        """
+        points = np.asarray([point.to_np()[:3] for point in points_3d], dtype=float)
+        points = np.unique(points, axis=0)
+        assert (
+            len(points) >= 3
+        ), "At least 4 unique points are required to define a 3D region."
+
+        centered_points = points - points.mean(axis=0, keepdims=True)
+        assert np.any(centered_points), "Points must not be all identical."
+
+        # We compute the principal axes of the point cloud using SVD.
+        # This allows us to reason about the geometric thickness of our point cloud.
+        # The axis with the smallest variance, located at the last index if our `principal_axis` is our `normal`
+        # indicating the direction of the region's thickness.
+        _, variance, principal_axis = np.linalg.svd(
+            centered_points, full_matrices=False
+        )
+        smallest_variance_axis = principal_axis[-1]  # this is our normal
+        unit_vector_normal = smallest_variance_axis / np.linalg.norm(
+            smallest_variance_axis
+        )
+
+        # We compute the thickness, peak-to-peak (max - min), along the normal direction, to get the thickness of
+        # the region.
+        thickness_in_normal_direction = np.ptp(centered_points @ unit_vector_normal)
+        is_near_planar = variance[0] > 0 and variance[-1] / variance[0] < sv_ratio_tol
+        thickness_padding = (
+            minimum_thickness / 2
+            if thickness_in_normal_direction < minimum_thickness or is_near_planar
+            else 0.0
+        )
+
+        # We do not provide any 2d shapes, since they would be very weird to handle with raytracing etc.
+        # Thus we decided that in near-planar cases we add a minimum thickness to ensure we get a 3d shape.
+        if thickness_padding > 0:
+            P_aug = np.vstack(
+                [
+                    centered_points + thickness_padding * unit_vector_normal,
+                    centered_points - thickness_padding * unit_vector_normal,
+                ]
+            )
+        else:
+            P_aug = centered_points
+
+        hull = trimesh.points.PointCloud(P_aug).convex_hull
+        hull.remove_unreferenced_vertices()
+        hull.update_faces(hull.nondegenerate_faces())
+        hull.process()
+
+        return cls(
+            mesh=hull,
+            origin=HomogeneousTransformationMatrix(reference_frame=reference_frame),
+        )
 
 
 @dataclass(eq=False)
@@ -410,8 +588,8 @@ class Sphere(Shape):
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         return cls(
             radius=data["radius"],
-            origin=HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs),
-            color=Color.from_json(data["color"], **kwargs),
+            origin=from_json(data["origin"], **kwargs),
+            color=from_json(data["color"], **kwargs),
         )
 
 
@@ -461,8 +639,8 @@ class Cylinder(Shape):
         return cls(
             width=data["width"],
             height=data["height"],
-            origin=HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs),
-            color=Color.from_json(data["color"], **kwargs),
+            origin=from_json(data["origin"], **kwargs),
+            color=from_json(data["color"], **kwargs),
         )
 
 
@@ -504,14 +682,14 @@ class Box(Shape):
         )
 
     def to_json(self) -> Dict[str, Any]:
-        return {**super().to_json(), "scale": self.scale.to_json()}
+        return {**super().to_json(), "scale": to_json(self.scale)}
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
         return cls(
-            scale=Scale.from_json(data["scale"], **kwargs),
-            origin=HomogeneousTransformationMatrix.from_json(data["origin"], **kwargs),
-            color=Color.from_json(data["color"], **kwargs),
+            scale=from_json(data["scale"], **kwargs),
+            origin=from_json(data["origin"], **kwargs),
+            color=from_json(data["color"], **kwargs),
         )
 
 
@@ -614,9 +792,9 @@ class BoundingBox:
     @property
     def dimensions(self) -> List[float]:
         """
-        :return: The dimensions of the bounding box as a list [width, height, depth].
+        :return: The dimensions of the bounding box as a list [width, depth, height].
         """
-        return [self.width, self.height, self.depth]
+        return [self.depth, self.width, self.height]
 
     def bloat(
         self, x_amount: float = 0.0, y_amount: float = 0, z_amount: float = 0
@@ -643,7 +821,10 @@ class BoundingBox:
         """
         Check if the bounding box contains a point.
         """
-        x, y, z = (float(point.x), float(point.y), float(point.z))
+        point_in_bb = point.reference_frame._world.transform(
+            point, self.origin.reference_frame
+        )
+        x, y, z = (float(point_in_bb.x), float(point_in_bb.y), float(point_in_bb.z))
         return self.simple_event.contains((x, y, z))
 
     @classmethod
@@ -710,7 +891,9 @@ class BoundingBox:
 
     @classmethod
     def from_mesh(
-        cls, mesh: trimesh.Trimesh, origin: HomogeneousTransformationMatrix
+        cls,
+        mesh: trimesh.Trimesh,
+        origin: HomogeneousTransformationMatrix,
     ) -> Self:
         """
         Create a bounding box from a trimesh object.
@@ -718,6 +901,7 @@ class BoundingBox:
         :param origin: The origin of the bounding box.
         :return: The bounding box.
         """
+
         bounds = mesh.bounds
         return cls(
             bounds[0][0],
@@ -750,7 +934,6 @@ class BoundingBox:
         :param min_point: The minimum point
         :param max_point: The maximum point
         """
-        assert min_point.reference_frame is not None
         assert (
             min_point.reference_frame == max_point.reference_frame
         ), "The reference frames of the minimum and maximum points must be the same."

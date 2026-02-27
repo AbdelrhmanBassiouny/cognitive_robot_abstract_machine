@@ -20,25 +20,25 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
-from .datastructures.dataclasses import Context
-from .datastructures.enums import TaskStatus, MonitorBehavior
-from .datastructures.partial_designator import PartialDesignator
-from .failures import PlanFailure
-from .fluent import Fluent
-from .plan import (
+from pycram.datastructures.dataclasses import Context
+from pycram.datastructures.enums import TaskStatus, MonitorBehavior
+from pycram.datastructures.partial_designator import PartialDesignator
+from pycram.failures import PlanFailure
+from pycram.fluent import Fluent
+from pycram.plan import (
     PlanNode,
     Plan,
     managed_node,
-    ActionNode,
+    ActionDescriptionNode,
     MotionNode,
-    ResolvedActionNode,
+    ActionNode,
 )
-from .ros import sleep
+from pycram.ros import sleep
 
 if TYPE_CHECKING:
-    from .robot_plans.actions.base import ActionDescription
+    from pycram.robot_plans.actions.base import ActionDescription
 
-    from .robot_plans import BaseMotion
+    from pycram.robot_plans import BaseMotion
 
 logger = logging.getLogger(__name__)
 
@@ -69,14 +69,14 @@ class LanguagePlan(Plan):
             if isinstance(child, Plan):
                 self.mount(child, self.root)
             elif isinstance(child, PartialDesignator):
-                node = ActionNode(
+                node = ActionDescriptionNode(
                     designator_ref=child,
                     designator_type=child.performable,
                     kwargs=child.kwargs,
                 )
                 self.add_edge(self.root, node)
             elif "ActionDescription" in [c.__name__ for c in child.__class__.__mro__]:
-                node = ResolvedActionNode(
+                node = ActionNode(
                     designator_ref=child,
                     designator_type=child.__class__,
                     kwargs=child.__dict__,
@@ -247,7 +247,7 @@ class CodePlan(LanguagePlan):
         super().__init__(code, context)
 
 
-@dataclass
+@dataclass(eq=False)
 class LanguageNode(PlanNode):
     designator_type: Type[LanguageNode] = field(default_factory=lambda: LanguageNode)
     """

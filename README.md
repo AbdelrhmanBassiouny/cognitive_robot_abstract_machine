@@ -9,11 +9,47 @@ To install the CRAM architecture, follow these steps:
 Setup the Python venvironment:
 
 ```bash
-python3 -m venv cram-env
-source cram-env/bin/activate
+sudo apt install -y virtualenv virtualenvwrapper && \
+grep -qxF 'export WORKON_HOME=$HOME/.virtualenvs' ~/.bashrc || echo 'export WORKON_HOME=$HOME/.virtualenvs' >> ~/.bashrc && \
+grep -qxF 'export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3' ~/.bashrc || echo 'export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3' >> ~/.bashrc && \
+grep -qxF 'source /usr/share/virtualenvwrapper/virtualenvwrapper.sh' ~/.bashrc || echo 'source /usr/share/virtualenvwrapper/virtualenvwrapper.sh' >> ~/.bashrc && \
+source ~/.bashrc && \
+mkvirtualenv cram-env
+```
+Activate / deactivate
+
+```
+workon cram-env
+deactivate
 ```
 
-We use poetry to manage dependencies. Install poetry if you haven't already:
+Pull the submodules: 
+```bash
+cd cognitive_robot_abstract_machine
+git submodule update --init --recursive
+```
+
+### Install using UV 
+
+To install the whole repo we use uv (https://github.com/astral-sh/uv), first to install uv:
+
+```bash 
+# On macOS and Linux.
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+then install packages:
+
+```bash
+uv sync --active
+```
+
+
+### Alternative: Poetry
+
+Alternatively you can use poetry to install all packages in the repository.
+
+Install poetry if you haven't already:
 
 ```bash
 pip install poetry
@@ -21,8 +57,7 @@ pip install poetry
 
 Install the CRAM package along with its dependencies:
 
-```bash
-cd cognitive_robot_abstract_machine
+```bash 
 poetry install
 ```
 
@@ -92,7 +127,9 @@ Example:
 
     Import Strategy:
 
-    - Use relative importing (e.g., from . import utils) always within the package.
+    - Use absolute imports always within the package as this is easier to maintain and clearer to read and understand.
+
+    - Use relative imports always in tests when importing modules defined in the same test folder/package.
 
     - When importing types, use typing extensions instead of typing or the standard library types;
 

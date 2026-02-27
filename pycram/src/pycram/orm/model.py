@@ -7,21 +7,21 @@ from krrood.ormatic.dao import AlternativeMapping, T, to_dao
 from sqlalchemy import TypeDecorator, types
 from typing_extensions import Optional
 
-from ..datastructures.dataclasses import ExecutionData
-from ..datastructures.enums import TaskStatus
-from ..datastructures.pose import PyCramQuaternion
-from ..designator import DesignatorDescription
-from ..failures import PlanFailure
-from ..language import TryInOrderNode, ParallelNode, TryAllNode, CodeNode, MonitorNode
-from ..plan import (
-    ActionNode,
+from pycram.datastructures.dataclasses import ExecutionData
+from pycram.datastructures.enums import TaskStatus
+from pycram.datastructures.pose import PyCramQuaternion
+from pycram.designator import DesignatorDescription
+from pycram.failures import PlanFailure
+from pycram.language import TryInOrderNode, ParallelNode, TryAllNode, CodeNode, MonitorNode
+from pycram.plan import (
+    ActionDescriptionNode,
     MotionNode,
     PlanNode,
-    ResolvedActionNode,
+    ActionNode,
     DesignatorNode,
     Plan,
 )
-from ..robot_plans import ActionDescription, BaseMotion
+from pycram.robot_plans import ActionDescription, BaseMotion
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -42,7 +42,7 @@ class PyCRAMQuaternionMapping(AlternativeMapping[PyCramQuaternion]):
 
     @classmethod
     def from_domain_object(cls, obj: T):
-        return PyCramQuaternion(obj.x, obj.y, obj.z, obj.w)
+        return cls(obj.x, obj.y, obj.z, obj.w)
 
     def to_domain_object(self) -> T:
         return PyCramQuaternion(self.x, self.y, self.z, self.w)
@@ -95,10 +95,12 @@ class DesignatorNodeMapping(PlanNodeMapping, AlternativeMapping[DesignatorNode])
 
 
 @dataclass
-class ActionNodeMapping(DesignatorNodeMapping, AlternativeMapping[ActionNode]):
+class ActionDescriptionNodeMapping(
+    DesignatorNodeMapping, AlternativeMapping[ActionDescriptionNode]
+):
 
     @classmethod
-    def from_domain_object(cls, obj: ActionNode):
+    def from_domain_object(cls, obj: ActionDescriptionNode):
         """
         Convert an ActionNode to an ActionNodeDAO.
         """
@@ -135,14 +137,12 @@ class MotionNodeMapping(DesignatorNodeMapping, AlternativeMapping[MotionNode]):
 
 
 @dataclass
-class ResolvedActionNodeMapping(
-    DesignatorNodeMapping, AlternativeMapping[ResolvedActionNode]
-):
+class ActionNodeMapping(DesignatorNodeMapping, AlternativeMapping[ActionNode]):
     designator_ref: ActionDescription = None
     execution_data: ExecutionData = None
 
     @classmethod
-    def from_domain_object(cls, obj: ResolvedActionNode):
+    def from_domain_object(cls, obj: ActionNode):
         """
         Convert a ResolvedActionNode to a ResolvedActionNodeDAO.
         """

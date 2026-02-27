@@ -3,28 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cached_property
 
-from typing_extensions import (
-    Optional,
-    Type,
-    Iterable,
-    Tuple,
-    List,
-    TYPE_CHECKING,
-    Union,
-    Iterator,
+from krrood.class_diagrams.class_diagram import Association
+from krrood.class_diagrams.wrapped_field import WrappedField
+from krrood.ontomatic.property_descriptor.mixins import (
+    TransitiveProperty,
+    HasInverseProperty,
 )
-
-from .mixins import TransitiveProperty, HasInverseProperty
-from ...class_diagrams.class_diagram import Association, AssociationThroughRoleTaker
-from ...class_diagrams.wrapped_field import WrappedField
-from ...entity_query_language.symbol_graph import (
+from krrood.symbol_graph.symbol_graph import (
     PredicateClassRelation,
     SymbolGraph,
     WrappedInstance,
 )
 
 if TYPE_CHECKING:
-    from .property_descriptor import PropertyDescriptor
+    from krrood.ontomatic.property_descriptor.property_descriptor import (
+        PropertyDescriptor,
+    )
 
 
 @dataclass(unsafe_hash=True)

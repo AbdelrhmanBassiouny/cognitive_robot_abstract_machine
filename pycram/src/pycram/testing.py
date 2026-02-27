@@ -1,83 +1,36 @@
 import logging
 import os
-import threading
 import time
 import unittest
 from copy import deepcopy
 
-import pytest
+import numpy as np
 
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
 )
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.utils import rclpy_installed
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import OmniDrive
-from .datastructures.dataclasses import Context
-from .datastructures.enums import WorldMode
-from .plan import Plan
-from .robot_descriptions.pr2_states import *
+from pycram.datastructures.dataclasses import Context
+from pycram.datastructures.pose import PoseStamped
+from pycram.plan import Plan
 
 logger = logging.getLogger(__name__)
 
 try:
-    from semantic_digital_twin.adapters.viz_marker import VizMarkerPublisher
+    from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+        VizMarkerPublisher,
+    )
 except ImportError:
     logger.info(
         "Could not import VizMarkerPublisher. This is probably because you are not running ROS."
     )
-
-
-@pytest.fixture(autouse=True, scope="session")
-def cleanup_ros():
-    """
-    Fixture to ensure that ROS is properly cleaned up after all tests.
-    """
-    if os.environ.get("ROS_VERSION") == "2":
-        import rclpy
-
-        if not rclpy.ok():
-            rclpy.init()
-    yield
-    if os.environ.get("ROS_VERSION") == "2":
-        if rclpy.ok():
-            rclpy.shutdown()
-
-
-@pytest.fixture(scope="function")
-def rclpy_node():
-    if not rclpy_installed():
-        pytest.skip("ROS not installed")
-    import rclpy
-    from rclpy.executors import SingleThreadedExecutor
-
-    rclpy.init()
-    node = rclpy.create_node("test_node")
-
-    executor = SingleThreadedExecutor()
-    executor.add_node(node)
-
-    thread = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
-    thread.start()
-    time.sleep(0.1)
-    try:
-        yield node
-    finally:
-        # Stop executor cleanly and wait for the thread to exit
-        executor.shutdown()
-        thread.join(timeout=2.0)
-
-        # Remove the node from the executor and destroy it
-        # (executor.shutdown() takes care of spinning; add_node is safe to keep as-is)
-        node.destroy_node()
-
-        # Shut down the ROS client library
-        rclpy.shutdown()
 
 
 def setup_world() -> World:
@@ -141,7 +94,7 @@ def setup_world() -> World:
     ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
         2.37, 1.8, 1.05, reference_frame=apartment_world.root
     )
-    milk_view = Milk(body=apartment_world.get_body_by_name("milk.stl"))
+    milk_view = Milk(root=apartment_world.get_body_by_name("milk.stl"))
     with apartment_world.modify_world():
         apartment_world.add_semantic_annotation(milk_view)
 
@@ -176,47 +129,50 @@ class SemanticWorldTestCase(unittest.TestCase):
         cls.apartment_world.merge_world(cls.pr2_sem_world)
 
 
-class EmptyWorldTestCase(unittest.TestCase):
-    """
-    Base class for unit tests that require and ordinary setup and teardown of the empty bullet-world.
-    """
+def _make_sine_scan_poses(
+    anchor: PoseStamped,
+    lanes: int = 6,
+    lane_spacing: float = 0.03,
+    y_span: float = 0.18,
+    amplitude: float = 0.005,
+    wiggles: float = 1.0,
+    points_per_lane: int = 16,
+    lane_axis: str = "z",
+) -> list[PoseStamped]:
+    x0 = anchor.pose.position.x
+    y0 = anchor.pose.position.y
+    z0 = anchor.pose.position.z
+    q = anchor.pose.orientation
 
-    world: World
-    # viz_marker_publisher: VizMarkerPublisher
-    render_mode = WorldMode.DIRECT
+    y_min = y0 - 0.5 * y_span
+    y_max = y0 + 0.5 * y_span
+    poses: list[PoseStamped] = []
 
-    @classmethod
-    def setUpClass(cls):
-        cls.world = World()
-        # if "ROS_VERSION" in os.environ:
-        #     cls.viz_marker_publisher = VizMarkerPublisher()
+    if lane_axis not in ("x", "z"):
+        raise ValueError(f"lane_axis must be 'x' or 'z', got: {lane_axis}")
 
-    def setUp(self):
-        Plan.current_plan = None
+    for i in range(lanes):
+        yc = np.linspace(y_min, y_max, points_per_lane)
+        if i % 2 == 1:
+            yc = yc[::-1]
 
-    def tearDown(self):
-        time.sleep(0.05)
+        phase = 2.0 * np.pi * wiggles * (yc - y_min) / max(y_span, 1e-9)
+        wiggle = amplitude * np.sin(phase)
+        if lane_axis == "x":
+            lane_center = x0 + i * lane_spacing
+            xc = lane_center + wiggle
+            zc = np.full_like(yc, z0, dtype=float)
+        else:
+            lane_center = z0 + i * lane_spacing
+            zc = lane_center + wiggle
+            xc = np.full_like(yc, x0, dtype=float)
 
-
-class ApartmentWorldTestCase(EmptyWorldTestCase):
-    """
-    Class for unit tests that require a bullet-world with a PR2, kitchen, milk and cereal.
-    """
-
-    @classmethod
-    def setUpClass(cls):
-        logger.setLevel(logging.DEBUG)
-        super().setUpClass()
-
-        cls.apartment_world = setup_world()
-
-        cls.robot_view = PR2.from_world(cls.apartment_world)
-
-        cls.context = Context(cls.apartment_world, cls.robot_view, None)
-
-        cls.original_state_data = deepcopy(cls.apartment_world.state.data)
-        cls.world = cls.apartment_world
-
-    def tearDown(self):
-        self.world.state.data = deepcopy(self.original_state_data)
-        self.world.notify_state_change()
+        for x, y, z in zip(xc, yc, zc):
+            poses.append(
+                PoseStamped.from_list(
+                    position=[float(x), float(y), float(z)],
+                    orientation=[q.x, q.y, q.z, q.w],
+                    frame=anchor.frame_id,
+                )
+            )
+    return poses

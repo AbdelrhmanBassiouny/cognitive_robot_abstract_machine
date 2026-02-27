@@ -1,13 +1,23 @@
 from __future__ import annotations
 
+import copy
+import dataclasses
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, Field, is_dataclass
 from dataclasses import fields as dc_fields
 
-from typing_extensions import List, Type, Optional, TYPE_CHECKING
+from typing_extensions import (
+    List,
+    Type,
+    Optional,
+    TYPE_CHECKING,
+    get_origin,
+    get_args,
+    TypeVar,
+)
 
 if TYPE_CHECKING:
-    from ..ontomatic.property_descriptor import PropertyDescriptor
+    from krrood.ontomatic.property_descriptor import PropertyDescriptor
 
 
 @dataclass
@@ -56,7 +66,10 @@ class DataclassOnlyIntrospector(AttributeIntrospector):
             return [
                 DiscoveredAttribute(public_name=f.name, field=f)
                 for f in dc_fields(owner_cls)
-                if not f.name.startswith("_")
+                if not self.skip_field(f)
             ]
         else:
             return []
+
+    def skip_field(self, field_: Field) -> bool:
+        return field_.name.startswith("_") or not field_.init

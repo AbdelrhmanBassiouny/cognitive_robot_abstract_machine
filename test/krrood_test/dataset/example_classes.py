@@ -4,15 +4,16 @@ import importlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import Enum, auto
 from types import FunctionType
+from typing import Set, Generic
 
 from sqlalchemy import types, TypeDecorator, JSON
 from typing_extensions import Dict, Any, Sequence, Self
 from typing_extensions import List, Optional, Type
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
-from krrood.entity_query_language.predicate import Symbol
+from krrood.symbol_graph.symbol_graph import Symbol
 from krrood.ormatic.dao import AlternativeMapping, T
 
 
@@ -31,9 +32,7 @@ class PositionTypeWrapper(Symbol):
 
 
 # check that flat classes work
-
-
-@dataclass
+@dataclass(unsafe_hash=True)
 class Position(Symbol):
     x: float
     y: float
@@ -41,8 +40,6 @@ class Position(Symbol):
 
 
 # check that classes with optional values work
-
-
 @dataclass
 class Orientation(Symbol):
     x: float
@@ -52,17 +49,13 @@ class Orientation(Symbol):
 
 
 # check that one to one relationship work
-
-
 @dataclass
 class Pose(Symbol):
     position: Position
     orientation: Orientation
 
 
-# check that one to many relationship to built in types and non built in types work
-
-
+# check that many to many relationship to built in types and non built in types work
 @dataclass
 class Positions(Symbol):
     positions: List[Position]
@@ -75,8 +68,6 @@ class PositionsSubclassWithAnotherPosition(Positions):
 
 
 # check that one to many relationships work where the many side is of the same type
-
-
 @dataclass
 class DoublePositionAggregator(Symbol):
     positions1: List[Position]
@@ -654,3 +645,59 @@ class Person:
     name: str
 
     knows: List[Person] = field(default_factory=list)
+
+
+@dataclass
+class UnderspecifiedTypesContainer:
+    any_list: List[Any] = field(default_factory=list)
+    any_field: Any = None
+
+
+@dataclass
+class TestPositionSet:
+    positions: Set[Position] = field(default_factory=set)
+
+
+class PolymorphicEnum(Enum): ...
+
+
+class ChildEnum1(PolymorphicEnum):
+    A = auto()
+    B = auto()
+
+
+class ChildEnum2(PolymorphicEnum):
+    B = auto()
+    C = auto()
+
+
+@dataclass
+class PolymorphicEnumAssociation:
+    value: PolymorphicEnum
+
+
+@dataclass(frozen=True)
+class NamedNumbers:
+    name: str
+    numbers: List[int] = field(default_factory=list)
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+@dataclass
+class GenericClass(Generic[T]):
+    value: T
+    optional_value: Optional[T] = None
+    container: List[T] = field(default_factory=list)
+
+
+@dataclass
+class GenericClassAssociation:
+    associated_value: GenericClass[float]
+    associated_value_list: List[GenericClass[Position]]
+
+    associated_value_not_parametrized: GenericClass = None
+    associated_value_not_parametrized_list: List[GenericClass] = field(
+        default_factory=list
+    )

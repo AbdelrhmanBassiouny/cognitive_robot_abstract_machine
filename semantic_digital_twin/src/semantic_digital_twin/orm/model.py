@@ -5,28 +5,26 @@ from uuid import UUID
 import numpy as np
 import trimesh
 import trimesh.exchange.stl
-from krrood.ormatic.dao import AlternativeMapping
 from sqlalchemy import TypeDecorator, types
 from typing_extensions import List
 from typing_extensions import Optional
 
-from ..datastructures.prefixed_name import PrefixedName
-from ..spatial_types import (
+from krrood.ormatic.dao import AlternativeMapping
+from semantic_digital_twin.spatial_types import (
     RotationMatrix,
     Vector3,
     Point3,
     HomogeneousTransformationMatrix,
 )
-from ..spatial_types.derivatives import DerivativeMap
-from ..spatial_types.spatial_types import Quaternion, Pose
-from ..world import World
-from ..world_description.connections import Connection
-from ..world_description.degree_of_freedom import DegreeOfFreedom
-from ..world_description.world_entity import (
+from semantic_digital_twin.spatial_types.spatial_types import Quaternion, Pose
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import Connection
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     KinematicStructureEntity,
 )
-from ..world_description.world_state import WorldState
+from semantic_digital_twin.world_description.world_state import WorldState
 
 
 @dataclass
@@ -56,19 +54,14 @@ class WorldMapping(AlternativeMapping[World]):
             for entity in self.kinematic_structure_entities:
                 result.add_kinematic_structure_entity(entity)
             for dof in self.degrees_of_freedom:
-                d = DegreeOfFreedom(
-                    name=dof.name,
-                    lower_limits=dof.lower_limits,
-                    upper_limits=dof.upper_limits,
-                    id=dof.id,
-                )
-                result.add_degree_of_freedom(d)
+                result.add_degree_of_freedom(dof)
             for connection in self.connections:
                 result.add_connection(connection)
             for semantic_annotation in self.semantic_annotations:
                 result.add_semantic_annotation(semantic_annotation)
             result.delete_orphaned_dofs()
             result.state = self.state
+            result.state._world = result
 
         return result
 
@@ -236,33 +229,6 @@ class PoseMapping(AlternativeMapping[Pose]):
         )
 
 
-@dataclass
-class DegreeOfFreedomMapping(AlternativeMapping[DegreeOfFreedom]):
-    name: PrefixedName
-    lower_limits: List[float]
-    upper_limits: List[float]
-    id: UUID
-
-    @classmethod
-    def from_domain_object(cls, obj: DegreeOfFreedom):
-        return cls(
-            name=obj.name,
-            lower_limits=obj.lower_limits.data,
-            upper_limits=obj.upper_limits.data,
-            id=obj.id,
-        )
-
-    def to_domain_object(self) -> DegreeOfFreedom:
-        lower_limits = DerivativeMap(data=self.lower_limits)
-        upper_limits = DerivativeMap(data=self.upper_limits)
-        return DegreeOfFreedom(
-            name=self.name,
-            lower_limits=lower_limits,
-            upper_limits=upper_limits,
-            id=self.id,
-        )
-
-
 class TrimeshType(TypeDecorator):
     """
     Type that casts fields that are of type `type` to their class name on serialization and converts the name
@@ -270,6 +236,7 @@ class TrimeshType(TypeDecorator):
     """
 
     impl = types.LargeBinary(4 * 1024 * 1024 * 1024 - 1)  # 4 GB max
+    cache_ok = True
 
     def process_bind_param(self, value: trimesh.Trimesh, dialect):
         # return binary version of trimesh

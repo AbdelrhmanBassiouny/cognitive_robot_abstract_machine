@@ -2,6 +2,7 @@ import enum
 from dataclasses import dataclass
 from typing import Type
 
+import numpy as np
 from probabilistic_model.distributions import SymbolicDistribution
 from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized, leaf
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
@@ -10,12 +11,20 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProductUnit,
 )
 from probabilistic_model.utils import MissingDict
-from random_events.product_algebra import SimpleEvent
+from random_events.product_algebra import SimpleEvent, Event
 from random_events.set import Set
 from random_events.variable import Symbolic, Continuous
+from random_events_lib import singleton
+
+from sortedcontainers import SortedSet
+
+from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.graph_of_convex_sets import (
+    GraphOfConvexSets,
+)
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
 )
@@ -23,13 +32,11 @@ from semantic_digital_twin.world_description.world_entity import Body
 from sqlalchemy import select
 from typing_extensions import Optional, List
 
-from ....robot_plans import MoveAndPickUpAction
-from ....datastructures.enums import Arms, Grasp, VerticalAlignment, ApproachDirection
-from ....datastructures.grasp import GraspDescription
-from ....datastructures.partial_designator import PartialDesignator
-from ....datastructures.pose import PoseStamped
-from ....parameterizer import collision_free_event
-from ....utils import classproperty
+from pycram.robot_plans import MoveAndPickUpAction
+from pycram.datastructures.enums import Arms, Grasp, VerticalAlignment, ApproachDirection
+from pycram.datastructures.grasp import GraspDescription
+from pycram.datastructures.partial_designator import PartialDesignator
+from pycram.datastructures.pose import PoseStamped
 
 
 class Variables(enum.Enum):
@@ -89,7 +96,7 @@ class MoveAndPickUpVariables(Variables):
 @dataclass
 class MoveAndPickUpParameterizer(ProbabilisticAction):
     """
-    Action that moves the agent to an object and picks it up using probability tools to parameterize.
+    Action that moves the agent to an object and picks it up using probability tools to generate parameterizations.
     """
 
     variables = MoveAndPickUpVariables
@@ -113,8 +120,55 @@ class MoveAndPickUpParameterizer(ProbabilisticAction):
         bb_collection = BoundingBoxCollection(
             [search_space], reference_frame=self.world.root
         )
-        navigate_conditions = collision_free_event(obj._world, bb_collection)
+        navigate_conditions = self.collision_free_event(obj._world, bb_collection)
         return navigate_conditions
+
+    def collision_free_event(
+        world: World, search_space: Optional[BoundingBoxCollection] = None
+    ) -> Event:
+        """
+        Create an event that describes the free space of the world.
+        :param world: The world to create the event from.
+        :param search_space: The search space to limit the collision free event to.
+        :return: An event that describes the free space.
+        """
+
+        xy = SpatialVariables.xy
+
+        # create search space for calculations
+        if search_space is None:
+            search_space = BoundingBoxCollection(
+                [
+                    BoundingBox(
+                        -np.inf,
+                        -np.inf,
+                        -np.inf,
+                        np.inf,
+                        np.inf,
+                        np.inf,
+                        origin=HomogeneousTransformationMatrix(
+                            reference_frame=world.root
+                        ),
+                    )
+                ],
+            )
+
+        # remove the z axis
+        search_event = search_space.event
+
+        # get obstacles
+        obstacles = GraphOfConvexSets.obstacles_from_world(world, search_space)
+
+        free_space = search_event - obstacles
+        free_space = free_space.marginal(xy)
+
+        # create floor level
+        z_event = SimpleEvent({SpatialVariables.z.value: 0.0}).as_composite_set()
+        z_event.fill_missing_variables(xy)
+        free_space.fill_missing_variables(SortedSet([SpatialVariables.z.value]))
+        free_space &= z_event
+
+        return free_space
 
     def accessing_distribution_for_object(
         self, obj: Body, object_variable: Symbolic

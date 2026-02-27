@@ -6,6 +6,7 @@ import threading
 from abc import ABC
 from dataclasses import field, dataclass, fields
 
+import numpy as np
 from typing_extensions import (
     Dict,
     Any,
@@ -18,12 +19,23 @@ from typing_extensions import (
 )
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.motion_statechart.context import BuildContext, ExecutionContext
-from giskardpy.motion_statechart.data_types import (
-    LifeCycleValues,
-    ObservationStateValues,
-    TransitionKind,
+from krrood.adapters.json_serializer import (
+    SubclassJSONSerializer,
+    JSON_TYPE_NAME,
+    to_json,
 )
+from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar, trinary_logic_not
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types import (
+    Point3,
+    Vector3,
+    Quaternion,
+    RotationMatrix,
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world_description.geometry import Color
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import LifeCycleValues, ObservationStateValues, TransitionKind
 from giskardpy.motion_statechart.exceptions import (
     NotInMotionStatechartError,
     EndMotionInGoalError,
@@ -35,21 +47,6 @@ from giskardpy.motion_statechart.exceptions import (
 from giskardpy.motion_statechart.plotters.plot_specs import NodePlotSpec
 from giskardpy.qp.constraint_collection import ConstraintCollection
 from giskardpy.utils.utils import string_shortener
-from krrood.adapters.json_serializer import (
-    SubclassJSONSerializer,
-    JSON_TYPE_NAME,
-    to_json,
-)
-from krrood.symbolic_math.symbolic_math import FloatVariable, Scalar
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types import (
-    Point3,
-    Vector3,
-    Quaternion,
-    RotationMatrix,
-    HomogeneousTransformationMatrix,
-)
-from semantic_digital_twin.world_description.geometry import Color
 
 if TYPE_CHECKING:
     from giskardpy.motion_statechart.motion_statechart import (
@@ -83,7 +80,7 @@ class TrinaryCondition(SubclassJSONSerializer):
     """
 
     def __hash__(self) -> int:
-        return hash((str(self), self.kind))
+        return hash((str(self), self.kind, self.owner.index))
 
     def __eq__(self, other):
         return hash(self) == hash(other)
@@ -323,6 +320,13 @@ class DebugExpression:
     The color used when this expression is rendered in visualization tools.
     """
 
+    def __repr__(self) -> str:
+        return self.name
+
+    @property
+    def evaluated(self) -> np.ndarray:
+        return self.expression.evaluate()
+
 
 @dataclass
 class NodeArtifacts:
@@ -446,6 +450,21 @@ class MotionStatechartNode(SubclassJSONSerializer):
         if self.parent_node_index is None:
             return None
         return self._motion_statechart.get_node_by_index(self.parent_node_index)
+
+    @property
+    def depth(self) -> int:
+        """
+        Distance (in edges) from this node to the root of the motion statechart.
+
+        The root node (no parent) has depth 0, its children depth 1, and so on.
+        """
+        depth = 0
+        current = self
+        # Walk up the parent chain until there is no parent
+        while current.parent_node is not None:
+            depth += 1
+            current = current.parent_node
+        return depth
 
     @parent_node.setter
     def parent_node(self, parent_node: Optional[MotionStatechartNode]) -> None:
@@ -678,7 +697,7 @@ class MotionStatechartNode(SubclassJSONSerializer):
     def motion_statechart(self, motion_statechart: MotionStatechart) -> None:
         self._motion_statechart = motion_statechart
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Called exactly once during motion statechart compilation.
         Use this method for any setup steps.
@@ -688,7 +707,9 @@ class MotionStatechartNode(SubclassJSONSerializer):
         """
         return NodeArtifacts()
 
-    def on_tick(self, context: ExecutionContext) -> Optional[ObservationStateValues]:
+    def on_tick(
+        self, context: MotionStatechartContext
+    ) -> Optional[ObservationStateValues]:
         """
         Triggered when the node is ticked.
         .. warning:: This method is called inside a control loop, make sure it is fast.
@@ -697,34 +718,40 @@ class MotionStatechartNode(SubclassJSONSerializer):
         :return: An optional observation state overwrite
         """
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Triggered when the node transitions from NOT_STARTED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
 
-    def on_pause(self, context: ExecutionContext):
+    def on_pause(self, context: MotionStatechartContext):
         """
         Triggered when the node transitions from RUNNING to PAUSED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
 
-    def on_unpause(self, context: ExecutionContext):
+    def on_unpause(self, context: MotionStatechartContext):
         """
         Triggered when the node transitions from PAUSED to RUNNING.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
 
-    def on_end(self, context: ExecutionContext):
+    def on_end(self, context: MotionStatechartContext):
         """
         Triggered when the node transitions from RUNNING to DONE.
         .. warning:: This method is called inside a control loop, make sure it is fast.
         """
 
-    def on_reset(self, context: ExecutionContext):
+    def on_reset(self, context: MotionStatechartContext):
         """
         Triggered when the node transitions from any state to NOT_STARTED.
         .. warning:: This method is called inside a control loop, make sure it is fast.
+        """
+
+    def cleanup(self, context: MotionStatechartContext):
+        """
+        Triggered after an EndMotion or CancelMotion was triggered.
+        Place code here to clean up after execution.
         """
 
     def __hash__(self):
@@ -752,8 +779,6 @@ class MotionStatechartNode(SubclassJSONSerializer):
     def start_condition(self, expression: Scalar) -> None:
         if self._start_condition is None:
             raise NotInMotionStatechartError(self.name)
-        free_variables = expression.free_variables
-
         self._start_condition.update_expression(expression, self)
 
     @property
@@ -869,7 +894,7 @@ class Goal(MotionStatechartNode):
         default_factory=NodePlotSpec.create_goal_style, kw_only=True, init=False
     )
 
-    def expand(self, context: BuildContext) -> None:
+    def expand(self, context: MotionStatechartContext) -> None:
         """
         Instantiate child nodes, add them to this goal, and wire their life cycle transition conditions.
         ..warning:: Nodes have not been built yet.
@@ -971,7 +996,7 @@ class EndMotion(MotionStatechartNode):
         default_factory=NodePlotSpec.create_end_style, kw_only=True, init=False
     )
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=Scalar.const_true())
 
     @classmethod
@@ -981,6 +1006,15 @@ class EndMotion(MotionStatechartNode):
         """
         end = cls()
         end.start_condition = node.observation_variable
+        return end
+
+    @classmethod
+    def when_false(cls, node: MotionStatechartNode) -> Self:
+        """
+        Factory method for creating an EndMotion node that activates when the given node has a false observation state.
+        """
+        end = cls()
+        end.start_condition = trinary_logic_not(node.observation_variable)
         return end
 
     @classmethod
@@ -1017,10 +1051,10 @@ class CancelMotion(MotionStatechartNode):
         default_factory=NodePlotSpec.create_cancel_style, kw_only=True, init=False
     )
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=Scalar.const_true())
 
-    def on_tick(self, context: ExecutionContext) -> Optional[float]:
+    def on_tick(self, context: MotionStatechartContext) -> Optional[float]:
         raise self.exception
 
     def to_json(self) -> Dict[str, Any]:

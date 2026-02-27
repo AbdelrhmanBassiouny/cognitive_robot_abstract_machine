@@ -5,19 +5,6 @@ import numpy as np
 from typing_extensions import List
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.motion_statechart.binding_policy import (
-    GoalBindingPolicy,
-    ForwardKinematicsBinding,
-)
-from giskardpy.motion_statechart.context import BuildContext, ExecutionContext
-from giskardpy.motion_statechart.data_types import DefaultWeights
-from giskardpy.motion_statechart.goals.templates import Parallel
-from giskardpy.motion_statechart.graph_node import (
-    NodeArtifacts,
-    DebugExpression,
-    MotionStatechartNode,
-)
-from giskardpy.motion_statechart.graph_node import Task
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import (
     Vector3,
@@ -30,9 +17,15 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
 )
+from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy, ForwardKinematicsBinding
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.goals.templates import Parallel
+from giskardpy.motion_statechart.graph_node import NodeArtifacts, DebugExpression, MotionStatechartNode
+from giskardpy.motion_statechart.graph_node import Task
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class CartesianPosition(Task):
     """
     Move a tip link to a goal position in 3D space.
@@ -69,9 +62,9 @@ class CartesianPosition(Task):
     )
     """Describes when the goal is computed. See GoalBindingPolicy for more information."""
 
-    _fk_binding: ForwardKinematicsBinding = field(kw_only=True, init=False)
+    _fk_binding: ForwardKinematicsBinding = field(kw_only=True, init=False, repr=False)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the goal position.
 
@@ -107,7 +100,7 @@ class CartesianPosition(Task):
         artifacts.observation = distance_to_goal < self.threshold
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -116,10 +109,10 @@ class CartesianPosition(Task):
         :param context: Provides access to current world state.
         """
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._fk_binding.bind(context.world)
+            self._fk_binding.bind(context)
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class CartesianPositionStraight(Task):
     """
     Move a tip link to a goal position along a straight line.
@@ -155,7 +148,7 @@ class CartesianPositionStraight(Task):
 
     _fk_binding: ForwardKinematicsBinding = field(kw_only=True, init=False)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the goal along a straight line.
 
@@ -236,7 +229,7 @@ class CartesianPositionStraight(Task):
         artifacts.observation = dist < self.threshold
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -245,10 +238,10 @@ class CartesianPositionStraight(Task):
         :param context: Provides access to current world state.
         """
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._fk_binding.bind(context.world)
+            self._fk_binding.bind(context)
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class CartesianOrientation(Task):
     """
     Rotate a tip link to match a goal orientation.
@@ -288,7 +281,7 @@ class CartesianOrientation(Task):
 
     _fk_binding: ForwardKinematicsBinding = field(kw_only=True, init=False)
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the goal orientation.
 
@@ -325,7 +318,7 @@ class CartesianOrientation(Task):
         artifacts.observation = sm.abs(rotation_error) < self.threshold
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -334,7 +327,7 @@ class CartesianOrientation(Task):
         :param context: Provides access to current world state.
         """
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._fk_binding.bind(context.world)
+            self._fk_binding.bind(context)
 
 
 @dataclass(eq=False, repr=False)
@@ -375,7 +368,7 @@ class CartesianPose(Task):
     weight: float = field(default=DefaultWeights.WEIGHT_BELOW_CA, kw_only=True)
     """Task priority relative to other tasks."""
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the full 6D goal pose.
 
@@ -458,7 +451,7 @@ class CartesianPose(Task):
 
         return artifacts
 
-    def on_start(self, context: ExecutionContext):
+    def on_start(self, context: MotionStatechartContext):
         """
         Called when task starts execution.
 
@@ -467,7 +460,7 @@ class CartesianPose(Task):
         :param context: Provides access to current world state.
         """
         if self.binding_policy == GoalBindingPolicy.Bind_on_start:
-            self._fk_binding.bind(context.world)
+            self._fk_binding.bind(context)
 
 
 @dataclass(eq=False, repr=False)
@@ -488,19 +481,29 @@ class CartesianPositionVelocityLimit(Task):
     """
 
     root_link: KinematicStructureEntity = field(kw_only=True)
-    """Root link of the kinematic chain. Defines the reference frame from which the tip's motion is measured."""
+    """
+    Root link of the kinematic chain. 
+    Defines the reference frame from which the tip's motion is measured.
+    """
     tip_link: KinematicStructureEntity = field(kw_only=True)
-    """Tip link of the kinematic chain. The translational velocity of this link (expressed in the root link frame) is constrained."""
+    """
+    Tip link of the kinematic chain. 
+    The translational velocity of this link (expressed in the root link frame) is constrained.
+    """
     max_linear_velocity: float = field(default=0.1, kw_only=True)
-    """Maximum allowed linear speed of the tip in meters per second (m/s).
+    """
+    Maximum allowed linear speed of the tip in meters per second (m/s).
     Default: 0.1 m/s. The enforcement ensures the Euclidean norm of the
-    tip-frame translational velocity does not exceed this value."""
+    tip-frame translational velocity does not exceed this value.
+    """
     weight: float = field(default=DefaultWeights.WEIGHT_ABOVE_CA, kw_only=True)
-    """Optimization weight determining how strongly the linear velocity
+    """
+    Optimization weight determining how strongly the linear velocity
     limit is enforced. Higher weights give this constraint soft priority
-    over lower weighted constraints when conflicts occur."""
+    over lower weighted constraints when conflicts occur.
+    """
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
         root_P_tip = context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
@@ -554,7 +557,7 @@ class CartesianRotationVelocityLimit(Task):
     limit is enforced. Higher weights give this constraint soft priority
     over lower weighted constraints when conflicts occur."""
 
-    def build(self, context: BuildContext) -> NodeArtifacts:
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
         artifacts = NodeArtifacts()
 
         root_R_tip = context.world.compose_forward_kinematics_expression(
@@ -633,7 +636,7 @@ class CartesianVelocityLimit(Parallel):
         self.nodes.append(rotational)
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class CartesianPositionVelocityTarget(Task):
     root_link: Body = field(kw_only=True)
     tip_link: Body = field(kw_only=True)
@@ -675,7 +678,7 @@ class CartesianPositionVelocityTarget(Task):
         )
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class JustinTorsoLimitCart(Task):
     root_link: Body = field(kw_only=True)
     tip_link: Body = field(kw_only=True)

@@ -5,7 +5,7 @@ from typing_extensions import Type, Any
 
 from sqlalchemy.orm import RelationshipProperty
 
-from ..utils import DataclassException
+from krrood.utils import DataclassException
 
 
 @dataclass
@@ -67,7 +67,7 @@ class NoDAOFoundDuringParsingError(NoDAOFoundError):
             f"Class {type(obj)} does not have a DAO. This happened when trying "
             f"to create a dao for {dao}) on the relationship {relationship} with the "
             f"relationship value {obj}. "
-            f"Expected a relationship value of type {relationship.target}."
+            f"Expected a relationship value of type {relationship.target if relationship else "Unknown"}."
         )
 
 

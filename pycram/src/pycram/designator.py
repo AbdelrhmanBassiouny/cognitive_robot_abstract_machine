@@ -5,18 +5,26 @@ import inspect
 from dataclasses import dataclass, field
 from typing import get_type_hints
 
-from krrood.entity_query_language.entity import entity, contains, variable
-from krrood.entity_query_language.entity_result_processors import an, the
+from krrood.entity_query_language.factories import entity, variable, contains, an
 from semantic_digital_twin.robots.abstract_robot import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import List, Dict, Any, Optional, Iterator, Iterable, Union
+from typing_extensions import (
+    List,
+    Dict,
+    Any,
+    Optional,
+    Iterator,
+    Iterable,
+    Union,
+    TypeVar,
+)
 
-from .datastructures.dataclasses import Context
-from .datastructures.partial_designator import PartialDesignator
-from .datastructures.pose import PoseStamped
-from .plan import Plan, PlanNode
-from .utils import bcolors
+from pycram.datastructures.dataclasses import Context
+from pycram.datastructures.partial_designator import PartialDesignator
+from pycram.datastructures.pose import PoseStamped
+from pycram.plan import Plan, PlanNode
+from pycram.utils import bcolors
 
 
 class DesignatorError(Exception):
@@ -162,6 +170,11 @@ class LocationDesignatorDescription(DesignatorDescription, PartialDesignator):
 
     def __init__(self):
         super().__init__()
+        self._last_result = None
+
+    @property
+    def last_result(self) -> Iterator[PoseStamped]:
+        yield self._last_result
 
     def ground(self) -> PoseStamped:
         """
@@ -263,3 +276,6 @@ class NamedObject(ObjectDesignatorDescription, PartialDesignator):
 
             for obj in query.evaluate():
                 yield obj
+
+
+DesignatorType = TypeVar("DesignatorType", bound=DesignatorDescription)
