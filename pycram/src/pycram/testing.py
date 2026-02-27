@@ -7,7 +7,6 @@ from copy import deepcopy
 import numpy as np
 
 from semantic_digital_twin.adapters.mesh import STLParser
-from semantic_digital_twin.adapters.package_resolver import StaticPathPrefixResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
