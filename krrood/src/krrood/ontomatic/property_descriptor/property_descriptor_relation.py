@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cached_property
 
-from krrood.class_diagrams.class_diagram import Association
+from typing_extensions import TYPE_CHECKING, Optional, Type, Iterator, Tuple, Union
+
+from krrood.class_diagrams.class_diagram import Association, AssociationThroughRoleTaker
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.ontomatic.property_descriptor.mixins import (
     TransitiveProperty,
@@ -107,7 +109,7 @@ class PropertyDescriptorRelation(PredicateClassRelation):
             ).update_source_and_add_to_graph_and_apply_implications()
 
     @cached_property
-    def super_relations(self) -> Iterable[Tuple[WrappedInstance, WrappedField]]:
+    def super_relations(self) -> Iterator[Tuple[WrappedInstance, WrappedField]]:
         """
         Find neighboring symbols connected by super edges.
 

@@ -6,12 +6,13 @@ import os
 from abc import ABC
 from copy import copy
 from dataclasses import dataclass, make_dataclass, is_dataclass
-from dataclasses import field, InitVar
+from dataclasses import field as dataclass_field, InitVar
 from functools import cached_property, lru_cache
 from typing import get_args, get_origin, _GenericAlias, Any
 
 import rustworkx as rx
 
+from krrood import logger
 from krrood.utils import module_and_class_name
 
 try:
@@ -30,6 +31,7 @@ from typing_extensions import (
     TYPE_CHECKING,
     TypeVar,
     get_type_hints,
+    Iterator,
 )
 
 
@@ -37,7 +39,8 @@ from krrood.class_diagrams.attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
-from krrood.class_diagrams.utils import Role, get_generic_type_param
+from krrood.class_diagrams.utils import get_generic_type_param
+from krrood.class_diagrams.role import Role
 from krrood.class_diagrams.wrapped_field import WrappedField
 
 from krrood.class_diagrams.failures import ClassIsUnMappedInClassDiagram
@@ -1098,7 +1101,7 @@ def make_specialized_dataclass(alias: _GenericAlias) -> Type:
             kwargs.pop("default")
         if kwargs["default_factory"] is dataclasses.MISSING:
             kwargs.pop("default_factory")
-        new_fields.append((f.name, new_type, field(**kwargs)))
+        new_fields.append((f.name, new_type, dataclass_field(**kwargs)))
 
     # Name and namespace
     arg_names = [getattr(a, "__name__", repr(a)) for a in args]
