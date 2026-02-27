@@ -49,10 +49,6 @@ jobs:
             ${{ runner.os }}-cache-${{ inputs.lib }}
             ${{ runner.os }}-cache-
 
-      - name: List files in cache 1
-        run: |
-          ls -R /github/home/.cache/semantic_digital_twin
-
       - name: Build ORM
         if: ${{inputs.lib == 'pycram' || inputs.lib == 'semantic_digital_twin'}}
         run: |
@@ -73,7 +69,3 @@ jobs:
         with:
           path: /github/home/.cache/semantic_digital_twin
           key: ${{ runner.os }}-cache-${{ inputs.lib }}-${{ github.ref_name }}-${{ github.run_id }}
-
-      - name: List files in cache 2
-        run: |
-          ls -R /github/home/.cache/semantic_digital_twin
