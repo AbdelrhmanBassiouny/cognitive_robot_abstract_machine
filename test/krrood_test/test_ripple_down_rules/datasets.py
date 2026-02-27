@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pickle
+import uuid
 from dataclasses import dataclass, field
 
 import sqlalchemy
@@ -109,7 +110,6 @@ def load_zoo_dataset(
         "molusc",
     ]
     category_id_to_name = {i + 1: name for i, name in enumerate(category_names)}
-    # targets = [getattr(SpeciesCol, category_id_to_name[i]) for i in y.values.flatten()]
     targets = [Species.from_str(category_id_to_name[i]) for i in y.values.flatten()]
     return all_cases, targets
 
@@ -123,6 +123,38 @@ def load_zoo_cases(cache_file: Optional[str] = None) -> List[Case]:
     """
     all_cases, _ = load_zoo_dataset(cache_file)
     return all_cases
+
+
+@dataclass
+class Animal:
+    id: uuid.UUID = field(init=False, default_factory=uuid.uuid4, repr=False)
+    name: str
+    hair: bool
+    feathers: bool
+    eggs: bool
+    milk: bool
+    airborne: bool
+    aquatic: bool
+    predator: bool
+    toothed: bool
+    backbone: bool
+    breathes: bool
+    venomous: bool
+    fins: bool
+    legs: int
+    tail: bool
+    domestic: bool
+    catsize: bool
+    species: Species = None
+    habitats: Set[Habitat] = field(default_factory=set)
+
+    def __hash__(self):
+        return hash(self.id)
+
+    def __eq__(self, other):
+        if not isinstance(other, Animal):
+            return False
+        return self.id == other.id
 
 
 class Species(Category):

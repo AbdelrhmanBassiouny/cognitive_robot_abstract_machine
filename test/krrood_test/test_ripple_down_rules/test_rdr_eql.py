@@ -3,18 +3,24 @@ from dataclasses import dataclass
 from typing import ClassVar, Iterable
 
 import pytest
-from typing_extensions import T, Generic
+from typing_extensions import Generic, TypeVar
 
 from krrood.entity_query_language.factories import match_variable
 from krrood.ripple_down_rules import CaseQuery, SingleClassRDR
 from krrood.ripple_down_rules.datastructures.case import Case
 from krrood.ripple_down_rules.experts import Human
-from krrood_test.test_ripple_down_rules.datasets import load_zoo_dataset, Species, load_zoo_cases
+from krrood_test.test_ripple_down_rules.datasets import (
+    load_zoo_dataset,
+    Species,
+    load_zoo_cases,
+)
 
 
 @dataclass
 class TestDataDirectories:
-    test_results_dir: ClassVar[str] = os.path.join(os.path.dirname(__file__), "test_results")
+    test_results_dir: ClassVar[str] = os.path.join(
+        os.path.dirname(__file__), "test_results"
+    )
     expert_answers_dir: ClassVar[str] = os.path.join(
         os.path.dirname(__file__), "test_expert_answers"
     )
@@ -34,6 +40,9 @@ def ensure_folders_exist():
             os.makedirs(test_dir)
 
 
+T = TypeVar("T")
+
+
 @dataclass
 class Target(Generic[T]):
     value: T
@@ -51,14 +60,11 @@ def zoo_dataset_case_queries():
     all_cases, targets = load_zoo_dataset(cache_file=cache_file)
 
     new_case_queries = match_variable(Case, all_cases)(species=Targets(targets))
+
     old_case_queries = [
-        CaseQuery(
-            case,
-            "species",
-            Species,
-            True,
-            _target=target)
-        for case, target in zip(all_cases, targets)]
+        CaseQuery(case, "species", Species, True, _target=target)
+        for case, target in zip(all_cases, targets)
+    ]
     return [
         CaseQuery(
             case,
@@ -85,9 +91,7 @@ def test_classify_scrdr(zoo_dataset_case_queries):
         expert.load_answers(filename)
 
     scrdr = SingleClassRDR()
-    cat = scrdr.fit_case(
-        case_queries[0], expert=expert, scenario=test_classify_scrdr
-    )
+    cat = scrdr.fit_case(case_queries[0], expert=expert, scenario=test_classify_scrdr)
     assert cat == case_queries[0].target_value
 
     if save_answers:
