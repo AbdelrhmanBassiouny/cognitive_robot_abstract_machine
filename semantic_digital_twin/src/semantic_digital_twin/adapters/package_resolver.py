@@ -136,6 +136,7 @@ class FileUriResolver(PathResolver):
             )
         return path
 
+
 @dataclass
 class CompositePathResolver(PathResolver):
     """

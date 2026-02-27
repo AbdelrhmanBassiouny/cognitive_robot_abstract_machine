@@ -304,8 +304,8 @@ class HumanoidGripper(Manipulator):
 
     def assign_to_robot(self, robot: AbstractRobot):
         """
-        Assigns the parallel gripper to the given robot and calls the appropriate methods for the its finger and thumb.
-         This method ensures that the parallel gripper is only assigned to one robot at a time, and raises an error if
+        Assigns the humanoid gripper to the given robot and calls the appropriate methods for the its finger and thumb.
+         This method ensures that the humanoid gripper is only assigned to one robot at a time, and raises an error if
          it is already assigned to another
         """
         if self._robot is not None and self._robot != robot:
