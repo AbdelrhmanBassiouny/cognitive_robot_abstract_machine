@@ -37,27 +37,29 @@ from krrood.entity_query_language.predicate import Symbol
 from krrood.ormatic.utils import classproperty
 from krrood.symbolic_math.symbolic_math import Matrix
 from krrood.utils import get_full_class_name
-from .geometry import TriangleMesh
-from .inertial_properties import Inertial
-from .shape_collection import ShapeCollection, BoundingBoxCollection
-from ..mixin import HasSimulatorProperties
-from ..adapters.world_entity_kwargs_tracker import (
+from semantic_digital_twin.world_description.geometry import TriangleMesh
+from semantic_digital_twin.world_description.inertial_properties import Inertial
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection, BoundingBoxCollection
+from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
-from ..datastructures.prefixed_name import PrefixedName
-from ..exceptions import (
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import (
     ReferenceFrameMismatchError,
     SemanticAnnotationNotInWorldError,
 )
-from ..spatial_types.spatial_types import (
+from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
 )
-from ..utils import IDGenerator, camel_case_split
+from semantic_digital_twin.utils import IDGenerator, camel_case_split
 
 if TYPE_CHECKING:
-    from ..world_description.degree_of_freedom import DegreeOfFreedom
-    from ..world import World, GenericSemanticAnnotation
+    from semantic_digital_twin.world_description.degree_of_freedom import (
+        DegreeOfFreedom,
+    )
+    from semantic_digital_twin.world import World, GenericSemanticAnnotation
 
 id_generator = IDGenerator()
 

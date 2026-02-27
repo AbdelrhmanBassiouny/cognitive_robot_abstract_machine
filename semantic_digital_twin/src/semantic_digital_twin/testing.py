@@ -4,23 +4,23 @@ import pytest
 from pkg_resources import resource_filename
 from typing_extensions import Tuple
 
-from .adapters.urdf import URDFParser
-from .datastructures.prefixed_name import PrefixedName
-from .spatial_types import HomogeneousTransformationMatrix
-from .spatial_types.derivatives import DerivativeMap
-from .spatial_types.spatial_types import Vector3
-from .world import World
-from .world_description.connections import (
+from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.spatial_types.spatial_types import Vector3
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     PrismaticConnection,
     RevoluteConnection,
     FixedConnection,
     OmniDrive,
 )
-from .world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
-from .world_description.geometry import Box, Scale, Sphere, Cylinder, FileMesh
-from .world_description.shape_collection import ShapeCollection
-from .world_description.world_entity import Body
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
+from semantic_digital_twin.world_description.geometry import Box, Scale, Sphere, Cylinder, FileMesh
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 @pytest.fixture

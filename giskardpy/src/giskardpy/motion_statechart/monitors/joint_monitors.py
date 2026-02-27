@@ -5,8 +5,8 @@ from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
     ActiveConnection1DOF,
 )
-from ..context import MotionStatechartContext
-from ..graph_node import MotionStatechartNode, NodeArtifacts
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
 
 
 @dataclass(eq=False, repr=False)

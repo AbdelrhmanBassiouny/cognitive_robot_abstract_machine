@@ -12,10 +12,10 @@ import pydot
 import rustworkx as rx
 from typing_extensions import Any, Type, ClassVar, Dict, List, Optional, Tuple, Generator
 
-from .field_info import FieldInfo
-from .. import logger
-from ..rules import Rule
-from ..utils import recursive_subclasses
+from krrood.ripple_down_rules.datastructures.field_info import FieldInfo
+from krrood.ripple_down_rules import logger
+from krrood.ripple_down_rules.rules import Rule
+from krrood.ripple_down_rules.utils import recursive_subclasses
 
 
 class Direction(Enum):

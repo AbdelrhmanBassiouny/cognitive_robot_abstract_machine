@@ -2,9 +2,9 @@ import time
 from dataclasses import field, dataclass
 from typing import Optional, Callable
 
-from ..context import MotionStatechartContext
-from ..data_types import ObservationStateValues
-from ..graph_node import MotionStatechartNode, NodeArtifacts
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import ObservationStateValues
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
 
 
 @dataclass(eq=False, repr=False)

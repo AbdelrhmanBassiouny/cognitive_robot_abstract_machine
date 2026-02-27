@@ -17,18 +17,18 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
 )
 from random_events.variable import Continuous, Integer, Variable
-from .object_access_variable import ObjectAccessVariable, AttributeAccessLike
-from ..adapters.json_serializer import list_like_classes
-from ..class_diagrams.class_diagram import WrappedClass
-from ..class_diagrams.wrapped_field import WrappedField
-from ..entity_query_language.core.base_expressions import SymbolicExpression
-from ..entity_query_language.core.mapped_variable import Selectable
-from ..entity_query_language.factories import variable, variable_from
-from ..ormatic.dao import (
+from krrood.probabilistic_knowledge.object_access_variable import ObjectAccessVariable, AttributeAccessLike
+from krrood.adapters.json_serializer import list_like_classes
+from krrood.class_diagrams.class_diagram import WrappedClass
+from krrood.class_diagrams.wrapped_field import WrappedField
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.mapped_variable import Selectable
+from krrood.entity_query_language.factories import variable, variable_from
+from krrood.ormatic.dao import (
     DataAccessObject,
     to_dao,
 )
-from ..ormatic.utils import leaf_types
+from krrood.ormatic.utils import leaf_types
 
 
 @dataclass

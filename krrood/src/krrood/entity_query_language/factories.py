@@ -8,32 +8,32 @@ import operator
 
 from typing_extensions import Union, Iterable
 
-from .core.base_expressions import SymbolicExpression
-from .enums import DomainSource
-from .failures import UnsupportedExpressionTypeForDistinct
-from .query.match import Match, MatchVariable, ProbableVariable
-from .operators.aggregators import Max, Min, Sum, Average, Count
-from .operators.comparator import Comparator
-from .operators.core_logical_operators import chained_logic, AND, OR
-from .operators.logical_quantifiers import ForAll, Exists
-from .operators.concatenation import Concatenation
-from .query.quantifiers import (
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.enums import DomainSource
+from krrood.entity_query_language.failures import UnsupportedExpressionTypeForDistinct
+from krrood.entity_query_language.query.match import Match, MatchVariable, ProbableVariable
+from krrood.entity_query_language.operators.aggregators import Max, Min, Sum, Average, Count
+from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.operators.core_logical_operators import chained_logic, AND, OR
+from krrood.entity_query_language.operators.logical_quantifiers import ForAll, Exists
+from krrood.entity_query_language.operators.concatenation import Concatenation
+from krrood.entity_query_language.query.quantifiers import (
     ResultQuantificationConstraint,
     An,
     The,
     ResultQuantifier,
 )
-from .rules.conclusion_selector import Refinement, Alternative, Next
-from .query.query import Entity, SetOf, Query
-from .utils import is_iterable
-from .core.variable import (
+from krrood.entity_query_language.rules.conclusion_selector import Refinement, Alternative, Next
+from krrood.entity_query_language.query.query import Entity, SetOf, Query
+from krrood.entity_query_language.utils import is_iterable
+from krrood.entity_query_language.core.variable import (
     DomainType,
     Literal,
     ExternallySetVariable,
 )
-from .core.mapped_variable import FlatVariable, CanBehaveLikeAVariable
-from .predicate import *  # type: ignore
-from ..symbol_graph.symbol_graph import Symbol, SymbolGraph
+from krrood.entity_query_language.core.mapped_variable import FlatVariable, CanBehaveLikeAVariable
+from krrood.entity_query_language.predicate import *  # type: ignore
+from krrood.symbol_graph.symbol_graph import Symbol, SymbolGraph
 
 ConditionType = Union[SymbolicExpression, bool, Predicate]
 """

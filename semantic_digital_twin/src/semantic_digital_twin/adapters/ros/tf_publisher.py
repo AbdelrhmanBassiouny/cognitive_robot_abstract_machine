@@ -16,11 +16,11 @@ from krrood.symbolic_math.symbolic_math import (
     VariableParameters,
     CompiledFunction,
 )
-from .tfwrapper import TFWrapper
-from ...callbacks.callback import StateChangeCallback, ModelChangeCallback
-from ...robots.abstract_robot import AbstractRobot
-from ...world import World
-from ...world_description.world_entity import KinematicStructureEntity
+from semantic_digital_twin.adapters.ros.tfwrapper import TFWrapper
+from semantic_digital_twin.callbacks.callback import StateChangeCallback, ModelChangeCallback
+from semantic_digital_twin.robots.abstract_robot import AbstractRobot
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import KinematicStructureEntity
 
 logger = logging.getLogger(__name__)
 

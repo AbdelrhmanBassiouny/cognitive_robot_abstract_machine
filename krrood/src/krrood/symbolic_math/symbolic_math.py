@@ -47,7 +47,7 @@ from typing_extensions import (
     Type,
 )
 
-from .exceptions import (
+from krrood.symbolic_math.exceptions import (
     HasFreeVariablesError,
     DuplicateVariablesError,
     WrongNumberOfArgsError,

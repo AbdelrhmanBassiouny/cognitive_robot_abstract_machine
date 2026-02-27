@@ -5,13 +5,13 @@ import numpy as np
 from trimesh.collision import CollisionManager, mesh_to_BVH
 from typing_extensions import Optional, Dict
 
-from .collision_detector import (
+from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionDetector,
     ClosestPoints,
     CollisionCheckingResult,
 )
-from .collision_matrix import CollisionMatrix
-from ..world_description.world_entity import Body
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionMatrix
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass

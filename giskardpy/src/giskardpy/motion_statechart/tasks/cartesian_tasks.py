@@ -17,12 +17,12 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
 )
-from ..binding_policy import GoalBindingPolicy, ForwardKinematicsBinding
-from ..context import MotionStatechartContext
-from ..data_types import DefaultWeights
-from ..goals.templates import Parallel
-from ..graph_node import NodeArtifacts, DebugExpression, MotionStatechartNode
-from ..graph_node import Task
+from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy, ForwardKinematicsBinding
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.goals.templates import Parallel
+from giskardpy.motion_statechart.graph_node import NodeArtifacts, DebugExpression, MotionStatechartNode
+from giskardpy.motion_statechart.graph_node import Task
 
 
 @dataclass(eq=False, repr=False)

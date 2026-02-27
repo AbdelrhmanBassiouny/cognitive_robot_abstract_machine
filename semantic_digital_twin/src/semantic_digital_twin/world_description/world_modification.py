@@ -22,19 +22,19 @@ from krrood.adapters.json_serializer import (
     list_like_classes,
     shallow_diff_json,
 )
-from .degree_of_freedom import DegreeOfFreedom
-from .world_entity import (
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
     SemanticAnnotation,
     Connection,
     Actuator,
     WorldEntityWithID,
 )
-from ..adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
-from ..exceptions import MissingWorldModificationContextError
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
+from semantic_digital_twin.exceptions import MissingWorldModificationContextError
 
 if TYPE_CHECKING:
-    from ..world import World
+    from semantic_digital_twin.world import World
 
 
 @dataclass

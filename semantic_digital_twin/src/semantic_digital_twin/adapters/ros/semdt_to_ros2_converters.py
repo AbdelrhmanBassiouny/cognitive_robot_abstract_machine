@@ -9,15 +9,15 @@ from std_msgs.msg import ColorRGBA
 from trimesh.visual import TextureVisuals
 from visualization_msgs.msg import Marker
 
-from .msg_converter import SemDTToRos2Converter, InputType
-from ...spatial_types import (
+from semantic_digital_twin.adapters.ros.msg_converter import SemDTToRos2Converter, InputType
+from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
     Vector3,
     Quaternion,
 )
-from ...spatial_types.spatial_types import Pose
-from ...world_description.geometry import (
+from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
     Sphere,

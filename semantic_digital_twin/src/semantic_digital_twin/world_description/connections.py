@@ -9,17 +9,17 @@ import numpy as np
 from typing_extensions import List, TYPE_CHECKING, Union, Optional, Dict, Any, Self
 
 from krrood.adapters.json_serializer import from_json, to_json
-from .connection_properties import JointDynamics
-from .degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
-from .world_entity import Connection, KinematicStructureEntity
-from ..adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
-from ..datastructures.prefixed_name import PrefixedName
-from ..datastructures.types import NpMatrix4x4
-from ..spatial_types import HomogeneousTransformationMatrix, Vector3, Point3, Quaternion
-from ..spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.world_description.connection_properties import JointDynamics
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
+from semantic_digital_twin.world_description.world_entity import Connection, KinematicStructureEntity
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.types import NpMatrix4x4
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3, Point3, Quaternion
+from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 
 if TYPE_CHECKING:
-    from ..world import World
+    from semantic_digital_twin.world import World
 
 
 class HasUpdateState(ABC):

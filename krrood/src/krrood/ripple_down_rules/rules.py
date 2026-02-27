@@ -9,12 +9,12 @@ from uuid import uuid4
 from anytree import Node
 from typing_extensions import List, Optional, Self, Union, Dict, Any, Tuple, Type, Set
 
-from .datastructures.callable_expression import CallableExpression
-from .datastructures.case import Case
-from .datastructures.dataclasses import CaseFactoryMetaData, CaseQuery
-from .datastructures.enums import RDREdge, Stop
-from .helpers import get_an_updated_case_copy
-from .utils import SubclassJSONSerializer, conclusion_to_json, get_full_class_name, get_type_from_string
+from krrood.ripple_down_rules.datastructures.callable_expression import CallableExpression
+from krrood.ripple_down_rules.datastructures.case import Case
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseFactoryMetaData, CaseQuery
+from krrood.ripple_down_rules.datastructures.enums import RDREdge, Stop
+from krrood.ripple_down_rules.helpers import get_an_updated_case_copy
+from krrood.ripple_down_rules.utils import SubclassJSONSerializer, conclusion_to_json, get_full_class_name, get_type_from_string
 
 
 @dataclass

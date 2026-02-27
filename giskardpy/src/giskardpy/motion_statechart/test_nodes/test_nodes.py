@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import krrood.symbolic_math.symbolic_math as sm
-from ..context import MotionStatechartContext
-from ..goals.templates import Sequence
-from ..graph_node import MotionStatechartNode, Goal, NodeArtifacts, CancelMotion
-from ..monitors.payload_monitors import CountControlCycles, Pulse
-from ...data_types.exceptions import GiskardException
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.goals.templates import Sequence
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode, Goal, NodeArtifacts, CancelMotion
+from giskardpy.motion_statechart.monitors.payload_monitors import CountControlCycles, Pulse
+from giskardpy.data_types.exceptions import GiskardException
 
 
 @dataclass(eq=False, repr=False)

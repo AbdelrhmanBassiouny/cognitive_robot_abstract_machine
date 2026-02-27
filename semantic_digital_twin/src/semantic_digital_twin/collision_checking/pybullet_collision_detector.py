@@ -16,14 +16,14 @@ from platformdirs import user_cache_dir
 from trimesh import Trimesh
 
 from giskardpy.utils.utils import create_path
-from .collision_detector import (
+from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionDetector,
     CollisionCheckingResult,
     ClosestPoints,
 )
-from .collision_matrix import CollisionMatrix
-from ..utils import suppress_stdout_stderr
-from ..world_description.geometry import (
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionMatrix
+from semantic_digital_twin.utils import suppress_stdout_stderr
+from semantic_digital_twin.world_description.geometry import (
     Shape,
     Box,
     Sphere,
@@ -33,7 +33,7 @@ from ..world_description.geometry import (
     FileMesh,
     Mesh,
 )
-from ..world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
 

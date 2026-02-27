@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from ..entity_query_language.query.operations import Where
-from ..utils import DataclassException
+from krrood.entity_query_language.query.operations import Where
+from krrood.utils import DataclassException
 
 
 @dataclass

@@ -61,8 +61,8 @@ from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
 )
 from semantic_digital_twin.world_description.world_entity import Body
-from ..config.action_conf import ActionConfig
-from ..costmaps import (
+from pycram.config.action_conf import ActionConfig
+from pycram.costmaps import (
     OccupancyCostmap,
     VisibilityCostmap,
     SemanticCostmap,
@@ -71,24 +71,24 @@ from ..costmaps import (
     OrientationGenerator,
     RingCostmap,
 )
-from ..datastructures.enums import (
+from pycram.datastructures.enums import (
     Arms,
     Grasp,
     ApproachDirection,
     VerticalAlignment,
 )
-from ..datastructures.grasp import GraspDescription
-from ..datastructures.partial_designator import PartialDesignator
-from ..datastructures.pose import PoseStamped, GraspPose, PyCramVector3
-from ..designator import LocationDesignatorDescription
-from ..failures import RobotInCollision
-from ..pose_validator import (
+from pycram.datastructures.grasp import GraspDescription
+from pycram.datastructures.partial_designator import PartialDesignator
+from pycram.datastructures.pose import PoseStamped, GraspPose, PyCramVector3
+from pycram.designator import LocationDesignatorDescription
+from pycram.failures import RobotInCollision
+from pycram.pose_validator import (
     visibility_validator,
     collision_check,
     pose_sequence_reachability_validator,
 )
-from ..utils import link_pose_for_joint_config
-from ..view_manager import ViewManager
+from pycram.utils import link_pose_for_joint_config
+from pycram.view_manager import ViewManager
 
 logger = logging.getLogger("pycram")
 

@@ -20,7 +20,7 @@ from matplotlib import pyplot as plt
 import matplotlib.colors as mcolors
 from semantic_digital_twin.world_description.world_entity import Body
 
-from .tf_transformations import (
+from pycram.tf_transformations import (
     quaternion_about_axis,
     quaternion_multiply,
     quaternion_matrix,
@@ -36,10 +36,10 @@ from typing_extensions import (
     Iterable,
 )
 
-from .datastructures.pose import PoseStamped
+from pycram.datastructures.pose import PoseStamped
 
 if TYPE_CHECKING:
-    from .view_manager import CameraDescription
+    from pycram.view_manager import CameraDescription
 
 
 def link_pose_for_joint_config(

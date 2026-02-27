@@ -13,8 +13,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Draw
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Union, Optional, Type, Any, Iterable
 
-from .facing import FaceAtActionDescription
-from ..core import (
+from pycram.robot_plans.actions.composite.facing import FaceAtActionDescription
+from pycram.robot_plans.actions.core import (
     ParkArmsActionDescription,
     NavigateActionDescription,
     PickUpActionDescription,
@@ -22,20 +22,20 @@ from ..core import (
     OpenActionDescription,
     MoveTorsoActionDescription,
 )
-from ....config.action_conf import ActionConfig
-from ....datastructures.enums import Arms, Grasp, VerticalAlignment
-from ....datastructures.grasp import GraspDescription
-from ....datastructures.partial_designator import PartialDesignator
-from ....datastructures.pose import PoseStamped
-from ....designators.location_designator import (
+from pycram.config.action_conf import ActionConfig
+from pycram.datastructures.enums import Arms, Grasp, VerticalAlignment
+from pycram.datastructures.grasp import GraspDescription
+from pycram.datastructures.partial_designator import PartialDesignator
+from pycram.datastructures.pose import PoseStamped
+from pycram.designators.location_designator import (
     ProbabilisticCostmapLocation,
     CostmapLocation,
     GiskardLocation,
 )
-from ....designators.object_designator import BelieveObject
-from ....failures import ObjectUnfetchable, ConfigurationNotReached
-from ....language import SequentialPlan
-from ....robot_plans.actions.base import ActionDescription
+from pycram.designators.object_designator import BelieveObject
+from pycram.failures import ObjectUnfetchable, ConfigurationNotReached
+from pycram.language import SequentialPlan
+from pycram.robot_plans.actions.base import ActionDescription
 
 
 @dataclass

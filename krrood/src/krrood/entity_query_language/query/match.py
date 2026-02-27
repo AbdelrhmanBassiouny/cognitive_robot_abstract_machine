@@ -25,20 +25,20 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
-from .quantifiers import An
-from ..core.base_expressions import Selectable
-from ..core.mapped_variable import Attribute, FlatVariable, CanBehaveLikeAVariable
-from ..core.variable import Literal, DomainType
-from ..failures import (
+from krrood.entity_query_language.query.quantifiers import An
+from krrood.entity_query_language.core.base_expressions import Selectable
+from krrood.entity_query_language.core.mapped_variable import Attribute, FlatVariable, CanBehaveLikeAVariable
+from krrood.entity_query_language.core.variable import Literal, DomainType
+from krrood.entity_query_language.failures import (
     NoKwargsInMatchVar,
 )
-from ..predicate import HasType
-from ..utils import T
-from ...rustworkx_utils import RWXNode
+from krrood.entity_query_language.predicate import HasType
+from krrood.entity_query_language.utils import T
+from krrood.rustworkx_utils import RWXNode
 
 if TYPE_CHECKING:
-    from ..factories import ConditionType
-    from .query import Entity
+    from krrood.entity_query_language.factories import ConditionType
+    from krrood.entity_query_language.query.query import Entity
 
 
 @dataclass
@@ -174,7 +174,7 @@ class Match(AbstractMatchExpression[T]):
         """
         Return the entity expression corresponding to the match query.
         """
-        from ..factories import entity
+        from krrood.entity_query_language.factories import entity
 
         if self.variable is None:
             self.resolve()
@@ -228,7 +228,7 @@ class Match(AbstractMatchExpression[T]):
         self.parent = parent
 
     def create_variable(self):
-        from ..factories import variable
+        from krrood.entity_query_language.factories import variable
 
         self.variable = variable(self.type, domain=None)
 
@@ -266,7 +266,7 @@ class MatchVariable(Match[T]):
     """
 
     def create_variable(self):
-        from ..factories import variable
+        from krrood.entity_query_language.factories import variable
 
         self.variable = variable(self.type, domain=self.domain)
 

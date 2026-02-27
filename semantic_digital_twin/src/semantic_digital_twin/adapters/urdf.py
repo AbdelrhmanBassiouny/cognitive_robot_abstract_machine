@@ -5,23 +5,23 @@ from dataclasses import dataclass, field
 from typing_extensions import Optional, Tuple, Union, List
 from urdf_parser_py import urdf as urdfpy
 
-from .package_resolver import CompositePathResolver, PathResolver
-from ..datastructures.prefixed_name import PrefixedName
-from ..spatial_types.derivatives import Derivatives, DerivativeMap
-from ..spatial_types.spatial_types import HomogeneousTransformationMatrix, Vector3
-from ..utils import (
+from semantic_digital_twin.adapters.package_resolver import CompositePathResolver, PathResolver
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
+from semantic_digital_twin.spatial_types.spatial_types import HomogeneousTransformationMatrix, Vector3
+from semantic_digital_twin.utils import (
     suppress_stdout_stderr,
     hacky_urdf_parser_fix,
     robot_name_from_urdf_string,
 )
-from ..world import World
-from ..world_description.connections import (
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
     PrismaticConnection,
     FixedConnection,
 )
-from ..world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
-from ..world_description.geometry import (
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
+from semantic_digital_twin.world_description.geometry import (
     Box,
     Sphere,
     Cylinder,
@@ -29,8 +29,8 @@ from ..world_description.geometry import (
     Scale,
     Color,
 )
-from ..world_description.shape_collection import ShapeCollection
-from ..world_description.world_entity import Body, Connection
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body, Connection
 
 connection_type_map = {  # 'unknown': JointType.UNKNOWN,
     "revolute": RevoluteConnection,

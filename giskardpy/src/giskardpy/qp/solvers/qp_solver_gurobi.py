@@ -8,11 +8,11 @@ import gurobipy
 import numpy as np
 from gurobipy import GRB, GurobiError
 
-from .qp_solver import QPSolver
-from .qp_solver_ids import SupportedQPSolver
-from ..adapters.explicit_adapter import GiskardToExplicitQPAdapter
-from ..adapters.qp_adapter import QPData
-from ..exceptions import QPSolverException, InfeasibleException
+from giskardpy.qp.solvers.qp_solver import QPSolver
+from giskardpy.qp.solvers.qp_solver_ids import SupportedQPSolver
+from giskardpy.qp.adapters.explicit_adapter import GiskardToExplicitQPAdapter
+from giskardpy.qp.adapters.qp_adapter import QPData
+from giskardpy.qp.exceptions import QPSolverException, InfeasibleException
 
 logger = logging.getLogger(__name__)
 

@@ -15,15 +15,15 @@ from krrood.symbolic_math.symbolic_math import (
     VariableParameters,
     FloatVariable,
 )
-from ..callbacks.callback import ModelChangeCallback
-from ..datastructures.types import NpMatrix4x4
-from ..spatial_types import HomogeneousTransformationMatrix
-from ..spatial_types.math import inverse_frame
-from ..utils import copy_lru_cache
-from ..world_description.world_entity import Connection, KinematicStructureEntity
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
+from semantic_digital_twin.datastructures.types import NpMatrix4x4
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types.math import inverse_frame
+from semantic_digital_twin.utils import copy_lru_cache
+from semantic_digital_twin.world_description.world_entity import Connection, KinematicStructureEntity
 
 if TYPE_CHECKING:
-    from ..world import World
+    from semantic_digital_twin.world import World
 
 
 @dataclass

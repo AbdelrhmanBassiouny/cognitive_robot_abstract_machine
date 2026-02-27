@@ -8,16 +8,16 @@ from typing_extensions import Any
 
 from random_events.interval import closed_open, closed, open
 from random_events.product_algebra import Event, SimpleEvent
-from .exceptions import WhereExpressionNotInDisjunctiveNormalForm
-from .object_access_variable import ObjectAccessVariable, AttributeAccessLike
-from ..adapters.json_serializer import list_like_classes
-from ..entity_query_language.core.base_expressions import SymbolicExpression
-from ..entity_query_language.core.variable import Literal
-from ..entity_query_language.operators.comparator import Comparator
-from ..entity_query_language.operators.core_logical_operators import OR, AND
-from ..entity_query_language.predicate import symbolic_function
-from ..entity_query_language.query.match import Match
-from ..entity_query_language.query.query import Entity
+from krrood.probabilistic_knowledge.exceptions import WhereExpressionNotInDisjunctiveNormalForm
+from krrood.probabilistic_knowledge.object_access_variable import ObjectAccessVariable, AttributeAccessLike
+from krrood.adapters.json_serializer import list_like_classes
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.variable import Literal
+from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.operators.core_logical_operators import OR, AND
+from krrood.entity_query_language.predicate import symbolic_function
+from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.query.query import Entity
 
 
 @dataclass

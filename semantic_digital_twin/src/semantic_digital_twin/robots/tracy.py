@@ -7,16 +7,16 @@ from typing import Self
 
 from pkg_resources import resource_filename
 
-from ..collision_checking.collision_rules import (
+from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
     AvoidAllCollisions,
     AvoidExternalCollisions,
     AvoidSelfCollisions,
 )
-from ..datastructures.definitions import StaticJointState, GripperState
-from ..datastructures.joint_state import JointState
-from ..datastructures.prefixed_name import PrefixedName
-from ..robots.abstract_robot import (
+from semantic_digital_twin.datastructures.definitions import StaticJointState, GripperState
+from semantic_digital_twin.datastructures.joint_state import JointState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.abstract_robot import (
     Finger,
     ParallelGripper,
     Arm,
@@ -25,10 +25,10 @@ from ..robots.abstract_robot import (
     Neck,
     AbstractRobot,
 )
-from .robot_mixins import HasNeck, SpecifiesLeftRightArm
-from ..spatial_types import Quaternion, Vector3
-from ..world import World
-from ..world_description.connections import FixedConnection, ActiveConnection
+from semantic_digital_twin.robots.robot_mixins import HasNeck, SpecifiesLeftRightArm
+from semantic_digital_twin.spatial_types import Quaternion, Vector3
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection, ActiveConnection
 
 
 @dataclass(eq=False)

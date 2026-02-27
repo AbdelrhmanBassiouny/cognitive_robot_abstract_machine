@@ -13,8 +13,8 @@ from semantic_digital_twin.collision_checking.collision_variable_managers import
     ExternalCollisionVariableManager,
 )
 from semantic_digital_twin.world import World
-from .exceptions import MissingContextExtensionError, DuplicateContextExtensionError
-from ..qp.qp_controller_config import QPControllerConfig
+from giskardpy.motion_statechart.exceptions import MissingContextExtensionError, DuplicateContextExtensionError
+from giskardpy.qp.qp_controller_config import QPControllerConfig
 
 
 @dataclass

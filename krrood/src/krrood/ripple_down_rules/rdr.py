@@ -10,10 +10,10 @@ from io import TextIOWrapper
 from pathlib import Path
 from types import NoneType, ModuleType
 
-from .datastructures.dataclasses import CaseFactoryMetaData
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseFactoryMetaData
 
-from . import logger
-from .failures import RDRLoadError
+from krrood.ripple_down_rules import logger
+from krrood.ripple_down_rules.failures import RDRLoadError
 
 try:
     from matplotlib import pyplot as plt
@@ -39,19 +39,25 @@ from typing_extensions import (
     Set,
 )
 
-from .datastructures.callable_expression import CallableExpression
-from .datastructures.case import Case, CaseAttribute, create_case
-from .datastructures.dataclasses import CaseQuery
-from .datastructures.enums import MCRDRMode, RDREdge
-from .experts import Expert, Human
-from .helpers import (
+from krrood.ripple_down_rules.datastructures.callable_expression import (
+    CallableExpression,
+)
+from krrood.ripple_down_rules.datastructures.case import (
+    Case,
+    CaseAttribute,
+    create_case,
+)
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
+from krrood.ripple_down_rules.datastructures.enums import MCRDRMode, RDREdge
+from krrood.ripple_down_rules.experts import Expert, Human
+from krrood.ripple_down_rules.helpers import (
     is_matching,
     general_rdr_classify,
     get_an_updated_case_copy,
     update_case_and_conclusions_with_rule_output,
     update_case_with_conclusion_output,
 )
-from .rules import (
+from krrood.ripple_down_rules.rules import (
     Rule,
     SingleClassRule,
     MultiClassTopRule,
@@ -64,7 +70,7 @@ try:
     from .user_interface.gui import RDRCaseViewer
 except ImportError as e:
     RDRCaseViewer = None
-from .utils import (
+from krrood.ripple_down_rules.utils import (
     draw_tree,
     make_set,
     SubclassJSONSerializer,

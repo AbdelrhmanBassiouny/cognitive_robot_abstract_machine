@@ -12,10 +12,10 @@ from krrood.symbolic_math.symbolic_math import (
     VariableParameters,
     CompiledFunction,
 )
-from .collision_matrix import CollisionMatrix, CollisionCheck
-from ..callbacks.callback import ModelChangeCallback, StateChangeCallback
-from ..spatial_types import HomogeneousTransformationMatrix
-from ..world_description.world_entity import (
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionMatrix, CollisionCheck
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback, StateChangeCallback
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world_description.world_entity import (
     Body,
     WorldEntityWithID,
     WorldEntityWithClassBasedID,

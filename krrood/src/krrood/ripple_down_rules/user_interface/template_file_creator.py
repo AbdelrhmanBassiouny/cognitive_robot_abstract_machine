@@ -10,10 +10,10 @@ from textwrap import indent, dedent
 from colorama import Fore, Style
 from typing_extensions import Optional, Type, List, Callable, Tuple, Dict, Any, Union
 
-from ..datastructures.case import Case
-from ..datastructures.dataclasses import CaseQuery
-from ..datastructures.enums import Editor, PromptFor
-from ..utils import str_to_snake_case, get_imports_from_scope, make_list, stringify_hint, \
+from krrood.ripple_down_rules.datastructures.case import Case
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
+from krrood.ripple_down_rules.datastructures.enums import Editor, PromptFor
+from krrood.ripple_down_rules.utils import str_to_snake_case, get_imports_from_scope, make_list, stringify_hint, \
     get_imports_from_types, extract_function_or_class_file, extract_imports, get_types_to_import_from_type_hints, \
     extract_function_or_class_from_source
 

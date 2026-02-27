@@ -29,7 +29,7 @@ from krrood.probabilistic_knowledge.probable_variable import (
     is_disjunctive_normal_form,
     MatchToInstanceTranslator,
 )
-from pycram.robot_plans import PickUpActionDescription
+
 from ..dataset.example_classes import Pose, Position, Orientation
 from ..dataset.ormatic_interface import *  # type: ignore
 

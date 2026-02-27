@@ -6,20 +6,20 @@ from typing import Optional, List
 import trimesh.sample
 from krrood.entity_query_language.factories import entity, variable, and_, not_, contains, an, the
 
-from ..collision_checking.collision_detector import ClosestPoints, CollisionCheck
-from ..collision_checking.collision_manager import CollisionManager
-from ..collision_checking.collision_matrix import CollisionMatrix
-from ..collision_checking.collision_rules import (
+from semantic_digital_twin.collision_checking.collision_detector import ClosestPoints, CollisionCheck
+from semantic_digital_twin.collision_checking.collision_manager import CollisionManager
+from semantic_digital_twin.collision_checking.collision_matrix import CollisionMatrix
+from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionBetweenGroups,
     AvoidExternalCollisions,
     AllowSelfCollisions,
 )
-from ..collision_checking.pybullet_collision_detector import BulletCollisionDetector
-from ..collision_checking.trimesh_collision_detector import FCLCollisionDetector
-from ..robots.abstract_robot import AbstractRobot, ParallelGripper
-from ..spatial_computations.raytracer import RayTracer
-from ..spatial_types import HomogeneousTransformationMatrix
-from ..world_description.world_entity import Body
+from semantic_digital_twin.collision_checking.pybullet_collision_detector import BulletCollisionDetector
+from semantic_digital_twin.collision_checking.trimesh_collision_detector import FCLCollisionDetector
+from semantic_digital_twin.robots.abstract_robot import AbstractRobot, ParallelGripper
+from semantic_digital_twin.spatial_computations.raytracer import RayTracer
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 def robot_in_collision(

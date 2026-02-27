@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing_extensions import List
 
-from .symbolic_math import FloatVariable, SymbolicMathType
+from krrood.symbolic_math.symbolic_math import FloatVariable, SymbolicMathType
 
 
 @dataclass

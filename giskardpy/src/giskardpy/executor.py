@@ -10,12 +10,12 @@ from semantic_digital_twin.world_description.world_state import WorldStateTrajec
 from semantic_digital_twin.world_description.world_state_trajectory_plotter import (
     WorldStateTrajectoryPlotter,
 )
-from .data_types.exceptions import NoQPControllerConfigException
-from .motion_statechart.context import MotionStatechartContext
-from .motion_statechart.motion_statechart import MotionStatechart
-from .qp.exceptions import EmptyProblemException
-from .qp.qp_controller import QPController
-from .qp.qp_controller_config import QPControllerConfig
+from giskardpy.data_types.exceptions import NoQPControllerConfigException
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from giskardpy.qp.exceptions import EmptyProblemException
+from giskardpy.qp.qp_controller import QPController
+from giskardpy.qp.qp_controller_config import QPControllerConfig
 
 
 @dataclass

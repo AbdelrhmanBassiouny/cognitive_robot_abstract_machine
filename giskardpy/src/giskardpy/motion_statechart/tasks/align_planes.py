@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 
-from ..context import MotionStatechartContext
-from ..data_types import DefaultWeights
-from ..graph_node import Task, NodeArtifacts, DebugExpression
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.graph_node import Task, NodeArtifacts, DebugExpression
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (

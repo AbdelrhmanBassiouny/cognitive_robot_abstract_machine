@@ -22,12 +22,12 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
     Body,
 )
-from ..context import MotionStatechartContext
-from ..data_types import DefaultWeights
-from ..exceptions import NodeInitializationError
-from ..graph_node import Goal, MotionStatechartNode, NodeArtifacts
-from ..graph_node import Task
-from ...qp.qp_controller_config import QPControllerConfig
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.exceptions import NodeInitializationError
+from giskardpy.motion_statechart.graph_node import Goal, MotionStatechartNode, NodeArtifacts
+from giskardpy.motion_statechart.graph_node import Task
+from giskardpy.qp.qp_controller_config import QPControllerConfig
 
 
 @dataclass(eq=False, repr=False)

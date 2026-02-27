@@ -5,10 +5,10 @@ from abc import ABC
 from dataclasses import field
 
 import krrood.symbolic_math.symbolic_math as sm
-from ..context import MotionStatechartContext
-from ..data_types import ObservationStateValues
-from ..graph_node import MotionStatechartNode, NodeArtifacts
-from ...utils.decorators import dataclass
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import ObservationStateValues
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
+from giskardpy.utils.decorators import dataclass
 
 
 @dataclass

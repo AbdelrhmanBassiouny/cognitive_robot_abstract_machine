@@ -11,9 +11,9 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
 )
-from ..context import MotionStatechartContext
-from ..data_types import DefaultWeights
-from ..graph_node import Task, NodeArtifacts, DebugExpression
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.graph_node import Task, NodeArtifacts, DebugExpression
 
 
 @dataclass(eq=False, repr=False)

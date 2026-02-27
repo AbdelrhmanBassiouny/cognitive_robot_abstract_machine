@@ -13,23 +13,23 @@ from krrood.entity_query_language.predicate import (
 from random_events.interval import Interval
 from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
-from ..collision_checking.trimesh_collision_detector import FCLCollisionDetector
-from ..datastructures.prefixed_name import PrefixedName
-from ..datastructures.variables import SpatialVariables
-from ..spatial_computations.ik_solver import (
+from semantic_digital_twin.collision_checking.trimesh_collision_detector import FCLCollisionDetector
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.spatial_computations.ik_solver import (
     MaxIterationsException,
     UnreachableException,
 )
-from ..spatial_computations.raytracer import RayTracer
-from ..spatial_types import Vector3, Point3
-from ..spatial_types.spatial_types import HomogeneousTransformationMatrix
-from ..world import World
-from ..world_description.connections import FixedConnection
-from ..world_description.geometry import TriangleMesh
-from ..world_description.world_entity import Body, Region, KinematicStructureEntity
+from semantic_digital_twin.spatial_computations.raytracer import RayTracer
+from semantic_digital_twin.spatial_types import Vector3, Point3
+from semantic_digital_twin.spatial_types.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import TriangleMesh
+from semantic_digital_twin.world_description.world_entity import Body, Region, KinematicStructureEntity
 
 if TYPE_CHECKING:
-    from ..robots.abstract_robot import (
+    from semantic_digital_twin.robots.abstract_robot import (
         Camera,
     )
 

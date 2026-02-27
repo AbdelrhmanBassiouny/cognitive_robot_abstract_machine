@@ -29,7 +29,7 @@ import inspect
 import six
 from graphviz import Source
 from sqlalchemy.exc import NoInspectionAvailable
-from . import logger
+from krrood.ripple_down_rules import logger
 
 try:
     import matplotlib

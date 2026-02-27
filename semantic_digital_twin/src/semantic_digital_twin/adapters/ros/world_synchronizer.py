@@ -18,7 +18,7 @@ from rclpy.subscription import Subscription
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .messages import (
+from semantic_digital_twin.adapters.ros.messages import (
     MetaData,
     WorldStateUpdate,
     Message,
@@ -26,12 +26,12 @@ from .messages import (
     LoadModel,
     Acknowledgment,
 )
-from ..world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
-from ...callbacks.callback import Callback, StateChangeCallback, ModelChangeCallback
-from ...exceptions import MissingPublishChangesKWARG
-from ...orm.ormatic_interface import *
-from ...world import World
-from ...world_description.world_entity import (
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
+from semantic_digital_twin.callbacks.callback import Callback, StateChangeCallback, ModelChangeCallback
+from semantic_digital_twin.exceptions import MissingPublishChangesKWARG
+from semantic_digital_twin.orm.ormatic_interface import *
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import (
     WorldEntityWithClassBasedID,
     WorldEntityWithID,
 )

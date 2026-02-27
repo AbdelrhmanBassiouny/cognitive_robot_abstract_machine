@@ -4,13 +4,13 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Self
 
-from ..datastructures.prefixed_name import PrefixedName
-from ..robots.abstract_robot import (
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.abstract_robot import (
     AbstractRobot,
 )
-from ..world import World
-from ..world_description.connections import OmniDrive, ActiveConnection
-from ..world_description.world_entity import KinematicStructureEntity
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import OmniDrive, ActiveConnection
+from semantic_digital_twin.world_description.world_entity import KinematicStructureEntity
 
 
 @dataclass

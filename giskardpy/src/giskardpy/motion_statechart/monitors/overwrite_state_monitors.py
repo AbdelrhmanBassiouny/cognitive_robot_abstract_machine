@@ -9,10 +9,10 @@ from semantic_digital_twin.world_description.connections import (
     OmniDrive,
 )
 from semantic_digital_twin.world_description.world_entity import Connection
-from ..context import MotionStatechartContext
-from ..exceptions import NodeInitializationError
-from ..graph_node import MotionStatechartNode, NodeArtifacts
-from ..tasks.joint_tasks import JointState
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.exceptions import NodeInitializationError
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
+from giskardpy.motion_statechart.tasks.joint_tasks import JointState
 
 
 @dataclass(eq=False, repr=False)

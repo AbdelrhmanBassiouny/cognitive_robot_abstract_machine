@@ -8,27 +8,27 @@ from typing import Dict, Any, Self
 from typing_extensions import List, TYPE_CHECKING
 
 from krrood.adapters.json_serializer import to_json, from_json
-from .collision_detector import (
+from semantic_digital_twin.collision_checking.collision_detector import (
     CollisionMatrix,
     CollisionCheckingResult,
     CollisionDetector,
 )
-from .collision_matrix import (
+from semantic_digital_twin.collision_checking.collision_matrix import (
     CollisionRule,
     MaxAvoidedCollisionsRule,
     DefaultMaxAvoidedCollisions,
     CollisionCheck,
 )
-from .collision_rules import (
+from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionForAdjacentPairs,
     AllowNonRobotCollisions,
     AvoidCollisionRule,
     AllowCollisionRule,
 )
-from .pybullet_collision_detector import BulletCollisionDetector
-from ..callbacks.callback import ModelChangeCallback
-from ..world_description.world_entity import Body
-from ..world_description.world_modification import synchronized_attribute_modification
+from semantic_digital_twin.collision_checking.pybullet_collision_detector import BulletCollisionDetector
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
+from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_modification import synchronized_attribute_modification
 
 if TYPE_CHECKING:
     from ..world import World

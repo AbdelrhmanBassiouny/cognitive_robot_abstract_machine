@@ -46,18 +46,18 @@ from krrood.probabilistic_knowledge.parameterizer import (
     Parameterization,
     MatchParameterizer,
 )
-from .datastructures.dataclasses import ExecutionData, Context
-from .datastructures.enums import TaskStatus
-from .datastructures.pose import PoseStamped
-from .failures import PlanFailure
-from .motion_executor import MotionExecutor
+from pycram.datastructures.dataclasses import ExecutionData, Context
+from pycram.datastructures.enums import TaskStatus
+from pycram.datastructures.pose import PoseStamped
+from pycram.failures import PlanFailure
+from pycram.motion_executor import MotionExecutor
 
 if TYPE_CHECKING:
-    from .robot_plans import ActionDescription
-    from .designator import DesignatorDescription, DesignatorType
-    from .datastructures.partial_designator import PartialDesignator
-    from .robot_plans.actions.base import ActionType
-    from .robot_plans.motions.base import MotionType
+    from pycram.robot_plans import ActionDescription
+    from pycram.designator import DesignatorDescription, DesignatorType
+    from pycram.datastructures.partial_designator import PartialDesignator
+    from pycram.robot_plans.actions.base import ActionType
+    from pycram.robot_plans.motions.base import MotionType
 else:
     ActionType = TypeVar("ActionType")
     MotionType = TypeVar("MotionType")

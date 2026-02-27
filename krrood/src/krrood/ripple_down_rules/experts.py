@@ -12,18 +12,18 @@ from typing_extensions import Tuple, Dict
 
 from typing_extensions import Optional, TYPE_CHECKING, List
 
-from .datastructures.callable_expression import CallableExpression
-from .datastructures.case import show_current_and_corner_cases
-from .datastructures.dataclasses import CaseQuery
-from .datastructures.enums import PromptFor
-from .user_interface.template_file_creator import TemplateFileCreator
-from .utils import extract_imports, extract_function_or_class_file, get_imports_from_scope, get_class_file_path
+from krrood.ripple_down_rules.datastructures.callable_expression import CallableExpression
+from krrood.ripple_down_rules.datastructures.case import show_current_and_corner_cases
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
+from krrood.ripple_down_rules.datastructures.enums import PromptFor
+from krrood.ripple_down_rules.user_interface.template_file_creator import TemplateFileCreator
+from krrood.ripple_down_rules.utils import extract_imports, extract_function_or_class_file, get_imports_from_scope, get_class_file_path
 
 try:
     from .user_interface.gui import RDRCaseViewer
 except ImportError as e:
     RDRCaseViewer = None
-from .user_interface.prompt import UserPrompt
+from krrood.ripple_down_rules.user_interface.prompt import UserPrompt
 
 if TYPE_CHECKING:
     from .rdr import Rule

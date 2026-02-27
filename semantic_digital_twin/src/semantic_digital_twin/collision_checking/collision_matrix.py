@@ -8,13 +8,13 @@ from typing import Dict, Any
 from typing_extensions import Tuple, TYPE_CHECKING, Self
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
-from ..adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
-from ..exceptions import (
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
+from semantic_digital_twin.exceptions import (
     NegativeCollisionCheckingDistanceError,
     InvalidBodiesInCollisionCheckError,
     BodyHasNoGeometryError,
 )
-from ..world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
     from semantic_digital_twin.collision_checking.collision_groups import CollisionGroup

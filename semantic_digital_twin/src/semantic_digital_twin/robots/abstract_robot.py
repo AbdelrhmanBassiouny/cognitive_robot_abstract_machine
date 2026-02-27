@@ -14,36 +14,36 @@ from typing_extensions import (
     List,
 )
 
-from ..datastructures.definitions import JointStateType
-from ..datastructures.joint_state import JointState
-from ..datastructures.prefixed_name import PrefixedName
-from ..exceptions import NoJointStateWithType
-from ..spatial_types.derivatives import DerivativeMap
-from ..spatial_types.spatial_types import (
+from semantic_digital_twin.datastructures.definitions import JointStateType
+from semantic_digital_twin.datastructures.joint_state import JointState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import NoJointStateWithType
+from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.spatial_types.spatial_types import (
     Vector3,
     Quaternion,
 )
-from ..world_description.connections import (
+from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
     OmniDrive,
     ActiveConnection1DOF,
 )
-from ..world_description.degree_of_freedom import DegreeOfFreedom
-from ..world_description.geometry import BoundingBox
-from ..world_description.shape_collection import BoundingBoxCollection
-from ..world_description.world_entity import (
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.shape_collection import BoundingBoxCollection
+from semantic_digital_twin.world_description.world_entity import (
     Body,
     RootedSemanticAnnotation,
     Agent,
     Connection,
 )
-from ..world_description.world_entity import (
+from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
     Region,
 )
 
 if TYPE_CHECKING:
-    from ..world import World
+    from semantic_digital_twin.world import World
 
 
 @dataclass

@@ -12,13 +12,13 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
 )
-from .templates import Sequence, Parallel
-from ..binding_policy import GoalBindingPolicy
-from ..context import MotionStatechartContext
-from ..data_types import DefaultWeights
-from ..exceptions import NodeInitializationError
-from ..graph_node import Goal, MotionStatechartNode
-from ..tasks.cartesian_tasks import (
+from giskardpy.motion_statechart.goals.templates import Sequence, Parallel
+from giskardpy.motion_statechart.binding_policy import GoalBindingPolicy
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.exceptions import NodeInitializationError
+from giskardpy.motion_statechart.graph_node import Goal, MotionStatechartNode
+from giskardpy.motion_statechart.tasks.cartesian_tasks import (
     CartesianOrientation,
     CartesianPositionStraight,
     CartesianPose,

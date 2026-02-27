@@ -9,10 +9,10 @@ from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
-from ..context import MotionStatechartContext
-from ..data_types import DefaultWeights
-from ..graph_node import NodeArtifacts, DebugExpression
-from ..graph_node import Task
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import DefaultWeights
+from giskardpy.motion_statechart.graph_node import NodeArtifacts, DebugExpression
+from giskardpy.motion_statechart.graph_node import Task
 
 
 @dataclass(eq=False, repr=False)

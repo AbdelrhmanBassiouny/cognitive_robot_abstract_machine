@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing_extensions import ClassVar, Optional, List
 
-from .graph_visualizer import GraphVisualizer
-from .utils import ColorLegend
+from krrood.rustworkx_utils.graph_visualizer import GraphVisualizer
+from krrood.rustworkx_utils.utils import ColorLegend
 
 import rustworkx as rx
 

@@ -32,7 +32,7 @@ from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
 )
-from .datastructures.pose import PoseStamped
+from pycram.datastructures.pose import PoseStamped
 
 logger = logging.getLogger("pycram")
 

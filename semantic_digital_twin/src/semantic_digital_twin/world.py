@@ -28,12 +28,12 @@ from typing_extensions import (
 from typing_extensions import List
 from typing_extensions import Type, Set
 
-from .callbacks.callback import ModelChangeCallback
-from .collision_checking.collision_manager import CollisionManager
-from .collision_checking.pybullet_collision_detector import BulletCollisionDetector
-from .datastructures.prefixed_name import PrefixedName
-from .datastructures.types import NpMatrix4x4
-from .exceptions import (
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
+from semantic_digital_twin.collision_checking.collision_manager import CollisionManager
+from semantic_digital_twin.collision_checking.pybullet_collision_detector import BulletCollisionDetector
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.types import NpMatrix4x4
+from semantic_digital_twin.exceptions import (
     DuplicateWorldEntityError,
     WorldEntityNotFoundError,
     AlreadyBelongsToAWorldError,
@@ -42,23 +42,23 @@ from .exceptions import (
     MissingReferenceFrameError,
     MismatchingPublishChangesAttribute,
 )
-from .mixin import HasSimulatorProperties
-from .spatial_computations.forward_kinematics import ForwardKinematicsManager
-from .spatial_computations.ik_solver import InverseKinematicsSolver
-from .spatial_computations.raytracer import RayTracer
-from .spatial_types import HomogeneousTransformationMatrix, Quaternion
-from .spatial_types.derivatives import Derivatives
-from .utils import IDGenerator
-from .world_description.connections import (
+from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.spatial_computations.forward_kinematics import ForwardKinematicsManager
+from semantic_digital_twin.spatial_computations.ik_solver import InverseKinematicsSolver
+from semantic_digital_twin.spatial_computations.raytracer import RayTracer
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Quaternion
+from semantic_digital_twin.spatial_types.derivatives import Derivatives
+from semantic_digital_twin.utils import IDGenerator
+from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     ActiveConnection1DOF,
     FixedConnection,
     ActiveConnection,
 )
-from .world_description.connections import HasUpdateState
-from .world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
-from .world_description.visitors import CollisionBodyCollector, ConnectionCollector
-from .world_description.world_entity import (
+from semantic_digital_twin.world_description.connections import HasUpdateState
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
+from semantic_digital_twin.world_description.visitors import CollisionBodyCollector, ConnectionCollector
+from semantic_digital_twin.world_description.world_entity import (
     Connection,
     SemanticAnnotation,
     WorldEntityWithID,
@@ -71,7 +71,7 @@ from .world_description.world_entity import (
     GenericWorldEntity,
     Actuator,
 )
-from .world_description.world_modification import (
+from semantic_digital_twin.world_description.world_modification import (
     WorldModelModification,
     WorldModelModificationBlock,
     SetDofHasHardwareInterface,
@@ -86,10 +86,10 @@ from .world_description.world_modification import (
     AddActuatorModification,
     RemoveActuatorModification,
 )
-from .world_description.world_state import WorldState
+from semantic_digital_twin.world_description.world_state import WorldState
 
 if TYPE_CHECKING:
-    from .spatial_types import GenericSpatialType
+    from semantic_digital_twin.spatial_types import GenericSpatialType
 
 logger = logging.getLogger(__name__)
 

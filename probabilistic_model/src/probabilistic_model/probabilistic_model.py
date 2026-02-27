@@ -9,9 +9,9 @@ from random_events.product_algebra import *
 from random_events.set import *
 from random_events.variable import *
 
-from .constants import *
-from .error import IntractableError, UndefinedOperationError
-from .utils import neighbouring_points
+from probabilistic_model.constants import *
+from probabilistic_model.error import IntractableError, UndefinedOperationError
+from probabilistic_model.utils import neighbouring_points
 
 # Type definitions
 FullEvidenceType = np.array  # [Union[float, int, SetElement]]

@@ -15,10 +15,10 @@ from giskardpy.motion_statechart.plotters.gantt_chart_plotter import (
 )
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from krrood.symbolic_math.symbolic_math import VariableParameters
-from .context import MotionStatechartContext
-from .data_types import LifeCycleValues, ObservationStateValues
-from .exceptions import EmptyMotionStatechartError
-from .graph_node import (
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import LifeCycleValues, ObservationStateValues
+from giskardpy.motion_statechart.exceptions import EmptyMotionStatechartError
+from giskardpy.motion_statechart.graph_node import (
     MotionStatechartNode,
     TrinaryCondition,
     Goal,
@@ -28,9 +28,9 @@ from .graph_node import (
     ObservationVariable,
     LifeCycleVariable,
 )
-from .graph_node import Task
-from .plotters.graphviz import MotionStatechartGraphviz
-from ..qp.constraint_collection import ConstraintCollection
+from giskardpy.motion_statechart.graph_node import Task
+from giskardpy.motion_statechart.plotters.graphviz import MotionStatechartGraphviz
+from giskardpy.qp.constraint_collection import ConstraintCollection
 
 
 @dataclass(repr=False, eq=False)

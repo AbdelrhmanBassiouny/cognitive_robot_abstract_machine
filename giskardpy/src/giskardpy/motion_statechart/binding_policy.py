@@ -6,7 +6,7 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
-from .context import MotionStatechartContext
+from giskardpy.motion_statechart.context import MotionStatechartContext
 
 
 class GoalBindingPolicy(Enum):

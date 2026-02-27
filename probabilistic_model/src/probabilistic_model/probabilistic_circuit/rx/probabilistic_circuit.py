@@ -33,18 +33,18 @@ from typing_extensions import (
     Union,
 )
 
-from ...distributions import (
+from probabilistic_model.distributions import (
     UnivariateDistribution,
     IntegerDistribution,
     SymbolicDistribution,
     DiscreteDistribution,
     ContinuousDistribution,
 )
-from ...distributions.helper import make_dirac
-from ...error import IntractableError
-from ...interfaces.drawio.drawio import DrawIOInterface, circled_product, circled_sum
-from ...probabilistic_model import ProbabilisticModel, OrderType, CenterType, MomentType
-from ...utils import MissingDict
+from probabilistic_model.distributions.helper import make_dirac
+from probabilistic_model.error import IntractableError
+from probabilistic_model.interfaces.drawio.drawio import DrawIOInterface, circled_product, circled_sum
+from probabilistic_model.probabilistic_model import ProbabilisticModel, OrderType, CenterType, MomentType
+from probabilistic_model.utils import MissingDict
 
 
 class PlotAlignment(IntEnum):

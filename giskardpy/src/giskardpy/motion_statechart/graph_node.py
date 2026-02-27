@@ -34,9 +34,9 @@ from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
 )
 from semantic_digital_twin.world_description.geometry import Color
-from .context import MotionStatechartContext
-from .data_types import LifeCycleValues, ObservationStateValues, TransitionKind
-from .exceptions import (
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import LifeCycleValues, ObservationStateValues, TransitionKind
+from giskardpy.motion_statechart.exceptions import (
     NotInMotionStatechartError,
     EndMotionInGoalError,
     InputNotExpressionError,
@@ -44,9 +44,9 @@ from .exceptions import (
     NonObservationVariableError,
     NodeAlreadyBelongsToDifferentNodeError,
 )
-from .plotters.plot_specs import NodePlotSpec
-from ..qp.constraint_collection import ConstraintCollection
-from ..utils.utils import string_shortener
+from giskardpy.motion_statechart.plotters.plot_specs import NodePlotSpec
+from giskardpy.qp.constraint_collection import ConstraintCollection
+from giskardpy.utils.utils import string_shortener
 
 if TYPE_CHECKING:
     from giskardpy.motion_statechart.motion_statechart import (

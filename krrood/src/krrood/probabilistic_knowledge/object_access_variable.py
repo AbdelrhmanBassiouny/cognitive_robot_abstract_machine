@@ -8,8 +8,8 @@ from typing_extensions import List, Any, Union
 
 from random_events.variable import Variable, Symbolic, Continuous, Integer
 
-from ..entity_query_language.core.base_expressions import SymbolicExpression
-from ..entity_query_language.core.mapped_variable import (
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.mapped_variable import (
     Index,
     Attribute,
     MappedVariable,

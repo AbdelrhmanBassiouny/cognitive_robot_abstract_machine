@@ -7,10 +7,10 @@ from typing_extensions import Dict, Any
 
 import krrood.symbolic_math.symbolic_math as sm
 from krrood.adapters.json_serializer import SubclassJSONSerializer, from_json, to_json
-from .world_entity import WorldEntityWithID
-from ..datastructures.prefixed_name import PrefixedName
-from ..exceptions import UsageError, InvalidConnectionLimits
-from ..spatial_types.derivatives import Derivatives, DerivativeMap
+from semantic_digital_twin.world_description.world_entity import WorldEntityWithID
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import UsageError, InvalidConnectionLimits
+from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
 
 
 @dataclass(eq=False, init=False)

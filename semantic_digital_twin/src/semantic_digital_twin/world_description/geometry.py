@@ -19,16 +19,22 @@ from typing_extensions import Optional, List, Dict, Any, Self, Tuple, TYPE_CHECK
 
 from krrood.adapters.exceptions import JSON_TYPE_NAME
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
-from ..datastructures.variables import SpatialVariables
-from ..mixin import HasSimulatorProperties
-from ..spatial_types import HomogeneousTransformationMatrix, Point3, Vector3
-from ..utils import IDGenerator
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+    Vector3,
+)
+from semantic_digital_twin.utils import IDGenerator
 
 if TYPE_CHECKING:
-    from .world_entity import KinematicStructureEntity
+    from semantic_digital_twin.world_description.world_entity import (
+        KinematicStructureEntity,
+    )
 
 if TYPE_CHECKING:
-    from ..world import World
+    from semantic_digital_twin.world import World
 
 id_generator = IDGenerator()
 

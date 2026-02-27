@@ -9,7 +9,7 @@ import numpy as np
 from typing_extensions import Dict
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer
-from ..world_description.world_entity import WorldEntityWithClassBasedID
+from semantic_digital_twin.world_description.world_entity import WorldEntityWithClassBasedID
 
 logger = logging.getLogger(__name__)
 

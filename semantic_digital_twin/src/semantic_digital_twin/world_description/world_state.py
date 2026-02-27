@@ -8,20 +8,20 @@ from typing_extensions import MutableMapping, List, Dict, Self, TYPE_CHECKING
 import numpy as np
 
 from krrood.symbolic_math.symbolic_math import FloatVariable
-from .degree_of_freedom import DegreeOfFreedom
-from ..callbacks.callback import StateChangeCallback
-from ..datastructures.prefixed_name import PrefixedName
-from ..exceptions import (
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.callbacks.callback import StateChangeCallback
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import (
     DofNotInWorldStateError,
     IncorrectWorldStateValueShapeError,
     MismatchingCommandLengthError,
     WrongWorldModelVersion,
     NonMonotonicTimeError,
 )
-from ..spatial_types.derivatives import Derivatives
+from semantic_digital_twin.spatial_types.derivatives import Derivatives
 
 if TYPE_CHECKING:
-    from ..world import World
+    from semantic_digital_twin.world import World
 
 
 class WorldStateEntryView:

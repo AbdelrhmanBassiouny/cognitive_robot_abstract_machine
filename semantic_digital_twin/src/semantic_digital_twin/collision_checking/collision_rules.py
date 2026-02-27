@@ -18,15 +18,15 @@ from typing_extensions import (
     ClassVar,
 )
 
-from .collision_detector import ClosestPoints, CollisionCheckingResult
+from semantic_digital_twin.collision_checking.collision_detector import ClosestPoints, CollisionCheckingResult
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
-from .collision_matrix import (
+from semantic_digital_twin.collision_checking.collision_matrix import (
     CollisionRule,
     CollisionMatrix,
     CollisionCheck,
 )
-from ..adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
-from ..robots.abstract_robot import AbstractRobot
+from semantic_digital_twin.adapters.world_entity_kwargs_tracker import WorldEntityWithIDKwargsTracker
+from semantic_digital_twin.robots.abstract_robot import AbstractRobot
 
 if TYPE_CHECKING:
     from ..world import World

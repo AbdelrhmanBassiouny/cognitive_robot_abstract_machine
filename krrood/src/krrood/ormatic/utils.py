@@ -24,7 +24,7 @@ from typing_extensions import (
     Any,
 )
 
-from ..adapters.json_serializer import to_json, from_json
+from krrood.adapters.json_serializer import to_json, from_json
 
 
 class classproperty:

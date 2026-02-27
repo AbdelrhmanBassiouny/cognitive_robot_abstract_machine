@@ -10,10 +10,10 @@ from rclpy.subscription import Subscription
 from typing_extensions import Generic, Type
 
 import krrood.symbolic_math.symbolic_math as sm
-from ..context import MotionStatechartContext
-from ..data_types import ObservationStateValues
-from ..graph_node import MotionStatechartNode, NodeArtifacts
-from ..ros_context import RosContextExtension
+from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import ObservationStateValues
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
+from giskardpy.motion_statechart.ros_context import RosContextExtension
 
 
 @dataclass(eq=False, repr=False)

@@ -13,7 +13,7 @@ from typing import List, Optional
 import numpy as np
 from typing_extensions import Dict, Any, Self, Union, Type, TypeVar
 
-from .exceptions import (
+from krrood.adapters.exceptions import (
     MissingTypeError,
     InvalidTypeFormatError,
     UnknownModuleError,
@@ -21,10 +21,10 @@ from .exceptions import (
     ClassNotSerializableError,
     JSON_TYPE_NAME,
 )
-from ..class_diagrams.attribute_introspector import DataclassOnlyIntrospector
-from ..ormatic.dao import HasGeneric
-from ..singleton import SingletonMeta
-from ..utils import get_full_class_name, recursive_subclasses, inheritance_path_length
+from krrood.class_diagrams.attribute_introspector import DataclassOnlyIntrospector
+from krrood.ormatic.dao import HasGeneric
+from krrood.singleton import SingletonMeta
+from krrood.utils import get_full_class_name, recursive_subclasses, inheritance_path_length
 
 list_like_classes = (
     list,

@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import List
 
-from ..exceptions import ParsingError
+from semantic_digital_twin.exceptions import ParsingError
 
 
 class PackageLocator(ABC):

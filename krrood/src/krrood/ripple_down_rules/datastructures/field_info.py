@@ -13,7 +13,7 @@ from types import NoneType
 
 from typing_extensions import Type, get_origin, Optional, get_type_hints, Tuple
 
-from ..utils import make_tuple
+from krrood.ripple_down_rules.utils import make_tuple
 
 
 class ParseError(TypeError):

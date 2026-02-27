@@ -3,9 +3,9 @@ from os.path import dirname
 
 from typing_extensions import Optional, List, Dict, Any, Type, Callable, ClassVar
 
-from ..world import World
-from ..world_description.world_entity import SemanticAnnotation
-from .reasoner import CaseReasoner
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
+from semantic_digital_twin.reasoning.reasoner import CaseReasoner
 
 
 @dataclass

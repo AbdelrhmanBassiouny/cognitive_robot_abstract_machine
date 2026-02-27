@@ -17,7 +17,7 @@ from typing_extensions import (
 )
 
 if TYPE_CHECKING:
-    from ..ontomatic.property_descriptor import PropertyDescriptor
+    from krrood.ontomatic.property_descriptor import PropertyDescriptor
 
 
 @dataclass
