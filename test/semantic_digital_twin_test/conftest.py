@@ -1,4 +1,5 @@
 from krrood.class_diagrams import ClassDiagram
+from krrood.class_diagrams.role import Role
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
 from krrood.ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
@@ -18,6 +19,8 @@ def pytest_configure(config):
     )
     # Execute the ORM generation script as a standalone module
     runpy.run_path(str(generate_orm_path), run_name="__main__")
+
+    # Build the symbol graph
     class_diagram = ClassDiagram(
         recursive_subclasses(Symbol) + [World],
         introspector=DescriptorAwareIntrospector(),
