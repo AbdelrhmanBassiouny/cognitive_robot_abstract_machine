@@ -22,9 +22,15 @@ from krrood.ontomatic.property_descriptor.monitored_container import (
     MonitoredContainer,
     monitored_type_map,
 )
-from krrood.ontomatic.property_descriptor.property_descriptor_relation import PropertyDescriptorRelation
+from krrood.ontomatic.property_descriptor.property_descriptor_relation import (
+    PropertyDescriptorRelation,
+)
 from krrood.ontomatic.failures import UnMonitoredContainerTypeForDescriptor
-from krrood.class_diagrams.class_diagram import WrappedClass, Association
+from krrood.class_diagrams.class_diagram import (
+    WrappedClass,
+    Association,
+    AssociationThroughRoleTaker,
+)
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.predicate import Symbol
 from krrood.symbol_graph.symbol_graph import (
@@ -302,7 +308,7 @@ class PropertyDescriptor(Symbol):
             lambda association: type(association.field.property_descriptor) is cls
         )
         result = next(
-            class_diagram.get_associations_with_condition(
+            class_diagram.get_outgoing_associations_with_condition(
                 domain_type, association_condition
             ),
             None,
@@ -329,7 +335,7 @@ class PropertyDescriptor(Symbol):
 
         class_diagram = SymbolGraph().class_diagram
 
-        associations_generator = class_diagram.get_associations_with_condition(
+        associations_generator = class_diagram.get_outgoing_associations_with_condition(
             domain_type, association_condition
         )
         return tuple(associations_generator)

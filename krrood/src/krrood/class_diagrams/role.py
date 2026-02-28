@@ -64,10 +64,9 @@ class Role(Generic[T], ABC):
         Set an attribute on the role taker instance if the role taker has this attribute,
          otherwise set on this instance directly.
         """
-        if key != self.role_taker_field().name and hasattr(self.role_taker, key):
+        super().__setattr__(key, value)
+        if key != self.role_taker_field().name:
             setattr(self.role_taker, key, value)
-        else:
-            super().__setattr__(key, value)
 
     def __hash__(self):
         return hash(self.root_persistent_entity)

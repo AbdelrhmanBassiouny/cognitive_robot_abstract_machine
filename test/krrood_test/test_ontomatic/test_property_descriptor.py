@@ -4,8 +4,10 @@ from krrood.symbol_graph.symbol_graph import SymbolGraph
 from ..dataset.university_ontology_like_classes import (
     Company,
     Person,
-    CEO,
-    Representative,
+    CEOAsFirstRole,
+    RepresentativeAsSecondRole,
+    DelegateAsThirdRole,
+    Country,
 )
 
 SymbolGraph().clear()
@@ -52,7 +54,7 @@ def test_set_container_property():
 def test_setting_a_role_affects_role_taker():
     company = Company(name="BassCo")
     person1 = Person(name="Bass1")
-    ceo1 = CEO(person1)
+    ceo1 = CEOAsFirstRole(person1)
 
     ceo1.head_of = company
     assert ceo1.head_of == company
@@ -64,8 +66,8 @@ def test_setting_a_role_affects_role_taker():
 def test_setting_a_role_affects_role_taker_chain():
     company = Company(name="BassCo")
     person1 = Person(name="Bass1")
-    ceo1 = CEO(person1)
-    representative1 = Representative(ceo1)
+    ceo1 = CEOAsFirstRole(person1)
+    representative1 = RepresentativeAsSecondRole(ceo1)
 
     representative1.head_of = company
     assert representative1.head_of == company
@@ -73,6 +75,21 @@ def test_setting_a_role_affects_role_taker_chain():
     assert ceo1.person.works_for == company
     assert ceo1 in company.members
     assert company in ceo1.person.member_of
+
+
+def test_setting_a_role_affects_role_taker_bigger_chain():
+    country = Country(name="BassCountry")
+    person1 = Person(name="Bass1")
+    ceo1 = CEOAsFirstRole(person1)
+    representative1 = RepresentativeAsSecondRole(ceo1)
+    delegate1 = DelegateAsThirdRole(representative1)
+
+    delegate1.delegate_of = country
+    assert representative1.head_of == country
+    assert ceo1.head_of == country
+    assert ceo1.person.works_for == country
+    assert ceo1 in country.members
+    assert country in ceo1.person.member_of
 
 
 def test_transitive_property():
