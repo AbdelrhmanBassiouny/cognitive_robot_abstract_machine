@@ -39,6 +39,13 @@ class Role(Generic[T], ABC):
         """
         return getattr(self, self.role_taker_field().name)
 
+    @cached_property
+    def root_persistent_entity(self):
+        root = self
+        while isinstance(root, Role):
+            root = root.role_taker
+        return root
+
     def __getattr__(self, item):
         """
         Get an attribute from the role taker when not found on the class.
@@ -63,9 +70,7 @@ class Role(Generic[T], ABC):
             super().__setattr__(key, value)
 
     def __hash__(self):
-        return hash((self.__class__, hash(self.role_taker)))
+        return hash(self.root_persistent_entity)
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            return False
         return hash(self) == hash(other)
