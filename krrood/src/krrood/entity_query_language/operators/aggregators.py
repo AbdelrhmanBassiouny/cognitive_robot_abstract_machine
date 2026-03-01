@@ -266,16 +266,6 @@ class Min(Extreme[T]):
 
 
 @dataclass(eq=False, repr=False)
-class Mode(Extreme[T]):
-    """
-    Find and return the mode value among the child results.
-    """
-
-    def aggregation_function(self, values: Iterable) -> Iterator[T]:
-        yield mode(values)
-
-
-@dataclass(eq=False, repr=False)
 class MultiMode(Extreme[T]):
     """
     Find and return all the equivalent mode values among the child results.
@@ -285,3 +275,13 @@ class MultiMode(Extreme[T]):
         counter = Counter(values)
         max_count = max(counter.values())
         yield from (k for k, v in counter.items() if v == max_count)
+
+
+@dataclass(eq=False, repr=False)
+class Mode(MultiMode[T]):
+    """
+    Find and return the mode value among the child results.
+    """
+
+    def aggregation_function(self, values: Iterable) -> Iterator[T]:
+        yield next(super().aggregation_function(values))
