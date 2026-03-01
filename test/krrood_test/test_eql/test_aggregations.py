@@ -32,10 +32,8 @@ from ..dataset.semantic_world_like_classes import Cabinet, Body, Container, Draw
 def test_count(handles_and_containers_world):
     world = handles_and_containers_world
     body = variable(type_=Body, domain=world.bodies)
-    query = eql.count(
-        entity(body).where(
-            contains(body.name, "Handle"),
-        )
+    query = entity(eql.count(body)).where(
+        contains(body.name, "Handle"),
     )
     assert query.tolist()[0] == len([b for b in world.bodies if "Handle" in b.name])
 
@@ -271,7 +269,7 @@ def test_count_grouped_by(handles_and_containers_world):
 def test_count_all_or_without_a_specific_child(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
-    query = a(set_of(count := eql.count(), cabinet).grouped_by(cabinet))
+    query = a(set_of(count := eql.count_all(), cabinet).grouped_by(cabinet))
     results = list(query.evaluate())
     expected = defaultdict(lambda: 0)
     for c in world.views:
@@ -332,7 +330,7 @@ def test_count_with_duplicates(handles_and_containers_world):
     cabinet = variable(Cabinet, domain=world.views)
     cabinet_drawer = flat_variable(cabinet.drawers)
     query = a(
-        set_of(count := eql.count(), cabinet, cabinet_drawer).grouped_by(
+        set_of(count := eql.count_all(), cabinet, cabinet_drawer).grouped_by(
             cabinet, cabinet_drawer
         )
     )
@@ -600,3 +598,15 @@ def test_where_with_aggregation_subquery_on_same_variable():
     query = entity(var1).where(var1 == entity(eql.max(var1)))
     # QueryGraph(query.build()).visualize()
     assert query.tolist() == [3]
+
+
+def test_mode():
+    domain = [1, 2, 3, 2, 2, 1, 3]
+    var1 = variable(int, domain=domain)
+    assert var1.tolist() == domain
+    count = set_of(var1, c := eql.count_all()).grouped_by(var1)
+    assert [(val[var1], val[c]) for val in count.evaluate()] == [(1, 2), (2, 3), (3, 2)]
+    # max_count = set_of(count[var1], eql.max(count[c]))
+    # assert [(val[var1], val[c]) for val in max_count.evaluate()] == [(2, 3)]
+    # query = entity(var1).where(count == max_count)
+    # assert query.tolist() == [2]

@@ -75,5 +75,5 @@ class Add(Conclusion):
     ) -> Iterable[OperationResult]:
 
         v = next(self.value._evaluate_(sources, parent=self)).value
-        sources[self.variable._binding_id_] = v
+        sources[self.variable._id_] = v
         yield OperationResult(sources, False, self)

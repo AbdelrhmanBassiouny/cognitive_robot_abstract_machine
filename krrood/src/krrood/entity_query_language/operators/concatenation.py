@@ -9,7 +9,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Tuple, Iterable
 
-from krrood.entity_query_language.core.base_expressions import Bindings, OperationResult, Selectable
+from krrood.entity_query_language.core.base_expressions import (
+    Bindings,
+    OperationResult,
+    Selectable,
+)
 from krrood.entity_query_language.operators.set_operations import Union
 from krrood.entity_query_language.utils import T
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
@@ -38,7 +42,7 @@ class Concatenation(Union, CanBehaveLikeAVariable[T]):
 
     def _evaluate__(self, sources: Bindings) -> Iterable[OperationResult]:
         yield from (
-            result.update({self._binding_id_: result.previous_operation_result.value})
+            result.update({self._id_: result.previous_operation_result.value})
             for result in super()._evaluate__(sources)
         )
 

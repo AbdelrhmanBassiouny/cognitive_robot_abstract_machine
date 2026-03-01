@@ -33,8 +33,9 @@ from krrood.entity_query_language.failures import (
     NestedAggregationError,
     InvalidChildType,
 )
+from krrood.entity_query_language.operators.set_operations import Union
 from krrood.entity_query_language.utils import T
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.variable import Variable, ExternallySetVariable
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 
 if TYPE_CHECKING:
@@ -82,7 +83,7 @@ class Aggregator(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
 
         return Entity(_selected_variables_=(self,)).evaluate()
 
-    def grouped_by(self, *variables: Variable) -> Entity[T]:
+    def grouped_by(self, *variables: Selectable) -> Entity:
         """
         Group the results by the given variables.
         """
@@ -123,19 +124,26 @@ class Count(Aggregator[T]):
     Count the number of child results.
     """
 
-    _child_: Optional[SymbolicExpression] = None
-    """
-    The child expression to be counted. If not given, the count of all results (by group if `grouped_by()` is specified)
-     is returned.
-    """
-
     def _apply_aggregation_function_and_get_bindings_(
         self, child_result: OperationResult
     ) -> Bindings:
         if self._distinct_:
-            return {self._binding_id_: len(set(child_result.value))}
+            return {self._id_: len(set(child_result.value))}
         else:
-            return {self._binding_id_: len(child_result.value)}
+            return {self._id_: len(child_result.value)}
+
+
+@dataclass(eq=False, repr=False)
+class CountAll(Count[T]):
+    """
+    Count all results per group.
+    """
+
+    _child_: Selectable[T] = field(init=False, default_factory=ExternallySetVariable)
+    """
+    The child expression to be counted. If not given, the count of all results (by group if `grouped_by()` is specified)
+     is returned.
+    """
 
 
 @dataclass(eq=False, repr=False)
@@ -190,11 +198,7 @@ class Sum(EntityAggregator[numbers.Number]):
     def _apply_aggregation_function_and_get_bindings_(
         self, child_result: OperationResult
     ) -> Dict[uuid.UUID, Optional[IntOrFloat]]:
-        return {
-            self._binding_id_: self.get_aggregation_result_from_child_result(
-                child_result
-            )
-        }
+        return {self._id_: self.get_aggregation_result_from_child_result(child_result)}
 
     def aggregation_function(self, result: Collection[IntOrFloat]) -> IntOrFloat:
         return sum(result)
@@ -223,7 +227,7 @@ class Extreme(EntityAggregator[T], ABC):
     ) -> Bindings:
         extreme_val = self.get_aggregation_result_from_child_result(child_result)
         bindings = child_result.bindings.copy()
-        bindings[self._binding_id_] = extreme_val
+        bindings[self._id_] = extreme_val
         return bindings
 
 

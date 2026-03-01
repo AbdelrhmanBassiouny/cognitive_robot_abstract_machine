@@ -18,7 +18,9 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     Bindings,
     OperationResult,
+    Selectable,
 )
+from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.failures import (
     NegativeQuantificationError,
     QuantificationConsistencyError,
@@ -160,16 +162,26 @@ class Range(ResultQuantificationConstraint):
 
 
 @dataclass(eq=False)
-class ResultQuantifier(UnaryExpression, DerivedExpression, ABC):
+class ResultQuantifier(
+    UnaryExpression, DerivedExpression, CanBehaveLikeAVariable[T], ABC
+):
     """
     Base for quantifiers that return concrete results from entity/set queries
     (e.g., An, The).
     """
 
+    _child_: Selectable[T]
+    """
+    The child expression of the quantifier.
+    """
     _quantification_constraint_: Optional[ResultQuantificationConstraint] = None
     """
     The quantification constraint that must be satisfied by the result quantifier if present.
     """
+
+    def __post_init__(self):
+        self._var_ = self._child_
+        super().__post_init__()
 
     @property
     def _original_expression_(self) -> SymbolicExpression:
@@ -187,7 +199,7 @@ class ResultQuantifier(UnaryExpression, DerivedExpression, ABC):
             self._assert_satisfaction_of_quantification_constraints_(
                 result_count, done=False
             )
-            yield OperationResult(value.bindings, False, self)
+            yield value
         self._assert_satisfaction_of_quantification_constraints_(
             result_count, done=True
         )
