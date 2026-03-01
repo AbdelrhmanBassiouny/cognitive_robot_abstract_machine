@@ -629,3 +629,13 @@ def test_mode():
     max_count = entity(eql.max(eql.count(var1).grouped_by(var1)))
     query = entity(var1).having(eql.count_all() == max_count).grouped_by(var1)
     assert query.tolist() == [2]
+    assert eql.mode(var1).tolist() == [2]
+    assert eql.multimode(var1).tolist() == [2]
+
+    domain = [1, 2, 3, 2, 2, 1, 3, 3]
+    var2 = variable(int, domain=domain)
+    max_count = entity(eql.max(eql.count(var2).grouped_by(var2)))
+    query = entity(var2).having(eql.count_all() == max_count).grouped_by(var2)
+    assert query.tolist() == [2, 3]
+    assert eql.mode(var2).tolist() == [2]
+    assert eql.multimode(var2).tolist() == [2, 3]

@@ -23,6 +23,8 @@ from krrood.entity_query_language.operators.aggregators import (
     Average,
     Count,
     CountAll,
+    Mode,
+    MultiMode,
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import (
@@ -434,6 +436,38 @@ def max(
     return Max(
         variable, _key_function_=key, _default_value_=default, _distinct_=distinct
     )
+
+
+def mode(
+    variable: Selectable[T],
+    default: Optional[T] = None,
+    distinct: bool = False,
+) -> Union[T, Max[T]]:
+    """
+    Maps the variable values to their mode value.
+
+    :param variable: The variable for which the mode value is to be found.
+    :param default: The value returned when the iterable is empty.
+    :param distinct: Whether to only consider distinct values.
+    :return: A Max object that can be evaluated to find the mode value.
+    """
+    return Mode(variable, _default_value_=default, _distinct_=distinct)
+
+
+def multimode(
+    variable: Selectable[T],
+    default: Optional[T] = None,
+    distinct: bool = False,
+) -> Union[T, Max[T]]:
+    """
+    Maps the variable values to all equivalent mode value.
+
+    :param variable: The variable for which the mode value is to be found.
+    :param default: The value returned when the iterable is empty.
+    :param distinct: Whether to only consider distinct values.
+    :return: A Max object that can be evaluated to find the mode value.
+    """
+    return MultiMode(variable, _default_value_=default, _distinct_=distinct)
 
 
 def min(
