@@ -383,7 +383,7 @@ def test_max_count_grouped_by_wrong(handles_and_containers_world):
         query = eql.max(eql.count(cabinet_drawers))
 
 
-def test_max_min_no_variable():
+def test_max_min_on_entity():
     values = [2, 1, 3, 5, 4]
     value = variable(int, domain=values)
 
