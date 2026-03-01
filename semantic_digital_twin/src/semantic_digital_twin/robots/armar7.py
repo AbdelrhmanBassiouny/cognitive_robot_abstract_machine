@@ -100,8 +100,8 @@ class Armar7(AbstractRobot, SpecifiesLeftRightArm, HasNeck):
             state_type=GripperState.CLOSE,
         )
 
-        self.right_arm.manipulator.add_joint_state(left_gripper_close)
-        self.right_arm.manipulator.add_joint_state(left_gripper_open)
+        self.left_arm.manipulator.add_joint_state(left_gripper_close)
+        self.left_arm.manipulator.add_joint_state(left_gripper_open)
 
         right_gripper_joints = [
             c
