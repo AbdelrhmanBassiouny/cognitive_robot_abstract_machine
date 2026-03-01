@@ -6,6 +6,7 @@ It contains classes for simple variables, constant literals, and variables that 
 
 from __future__ import annotations
 
+import uuid
 from abc import ABC
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -33,7 +34,9 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 from krrood.entity_query_language.cache_data import ReEnterableLazyIterable
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.failures import NoChildToReplace
-from krrood.entity_query_language.operators.set_operations import MultiArityExpressionThatPerformsACartesianProduct
+from krrood.entity_query_language.operators.set_operations import (
+    MultiArityExpressionThatPerformsACartesianProduct,
+)
 from krrood.entity_query_language.utils import (
     T,
     is_iterable,
@@ -113,7 +116,7 @@ class Variable(CanHaveDomainSource[T]):
         """
 
         for v in self._re_enterable_domain_generator_:
-            bindings = {**sources, self._binding_id_: v}
+            bindings = {**sources, self._id_: v}
             yield self._build_operation_result_and_update_truth_value_(bindings)
 
     def _replace_child_field_(
@@ -189,7 +192,7 @@ class InstantiatedVariable(
     """
     A dictionary mapping child variable names to variables, these are from the _kwargs_ dictionary. 
     """
-    _child_var_id_name_map_: Dict[int, str] = field(
+    _child_var_id_name_map_: Dict[uuid.UUID, str] = field(
         default_factory=dict, init=False, repr=False
     )
     """
@@ -216,7 +219,7 @@ class InstantiatedVariable(
                 if isinstance(v, SymbolicExpression)
                 else Literal(_value_=v, _name__=k)
             )
-            self._child_var_id_name_map_[self._child_vars_[k]._binding_id_] = k
+            self._child_var_id_name_map_[self._child_vars_[k]._id_] = k
 
     def _evaluate__(
         self,
@@ -238,7 +241,7 @@ class InstantiatedVariable(
                 if id_ in self._child_var_id_name_map_
             }
             instance = self._type_(**kwargs)
-            bindings = {self._binding_id_: instance} | child_result.bindings
+            bindings = {self._id_: instance} | child_result.bindings
             result = self._build_operation_result_and_update_truth_value_(
                 bindings, child_result
             )
@@ -254,7 +257,7 @@ class InstantiatedVariable(
         for k, v in self._child_vars_.items():
             if v is old_child:
                 self._child_vars_[k] = new_child
-                self._child_var_id_name_map_[self._child_vars_[k]._binding_id_] = k
+                self._child_var_id_name_map_[self._child_vars_[k]._id_] = k
                 break
 
     @cached_property

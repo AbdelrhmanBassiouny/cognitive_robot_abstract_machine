@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
+from ordered_set import OrderedSet
 from typing_extensions import Tuple, List, Type, Optional, Callable, TYPE_CHECKING
 
 from krrood.entity_query_language.core.base_expressions import (
@@ -126,7 +127,9 @@ class FilterBuilder(ExpressionBuilder, ABC):
                 aggregators.append(expr)
                 # No need to traverse inside aggregators
                 return False
-            elif isinstance(expr, Selectable) and not isinstance(expr, Literal):
+            elif isinstance(expr, Selectable) and not isinstance(
+                expr, (Literal, Query)
+            ):
                 non_aggregators.append(expr)
 
             # Stop traversal early if both found
@@ -227,10 +230,11 @@ class GroupedByBuilder(ExpressionBuilder):
     def expression(self) -> GroupedBy:
         aggregators, non_aggregators = self.aggregators_and_non_aggregators
         where = self.query._where_expression_
-        children = []
+        children = OrderedSet()
         if where:
-            children.append(where)
-        children.extend(non_aggregators)
+            children.add(where)
+        children.update(non_aggregators)
+        children.update(self.variables_to_group_by)
         return GroupedBy(
             _operation_children_=tuple(children),
             aggregators=tuple(aggregators),
@@ -245,7 +249,7 @@ class GroupedByBuilder(ExpressionBuilder):
         :raises UsageError: If the selected variables are not valid.
         """
         aggregators, non_aggregated_variables = (
-            self.query._aggregated_and_non_aggregated_variables_in_selection_
+            self.query._aggregators_and_non_aggregators_in_selection_
         )
         if aggregators and not all(
             self.variable_is_in_or_derived_from_a_grouped_by_variable(v)
@@ -267,9 +271,9 @@ class GroupedByBuilder(ExpressionBuilder):
 
         :param variable: The variable to check.
         """
-        if variable._binding_id_ in self.ids_of_variables_to_group_by:
+        if variable._id_ in self.ids_of_variables_to_group_by:
             return True
-        elif variable._binding_id_ in self.ids_of_aggregated_variables:
+        elif variable._id_ in self.ids_of_aggregated_variables:
             return False
         elif isinstance(variable, MappedVariable) and any(
             self.variable_is_in_or_derived_from_a_grouped_by_variable(d)
@@ -285,7 +289,7 @@ class GroupedByBuilder(ExpressionBuilder):
         :return: A tuple of ids of aggregated variables.
         """
         return tuple(
-            v._child_._binding_id_
+            v._child_._id_
             for v in self.aggregators_in_selected_variables
             if v._child_ is not None
         )
@@ -295,7 +299,7 @@ class GroupedByBuilder(ExpressionBuilder):
         """
         :return: A tuple of the binding IDs of the variables to group by.
         """
-        return tuple(var._binding_id_ for var in self.variables_to_group_by)
+        return tuple(var._id_ for var in self.variables_to_group_by)
 
     @cached_property
     def aggregators_and_non_aggregators(
@@ -304,37 +308,27 @@ class GroupedByBuilder(ExpressionBuilder):
         """
         :return: A tuple of lists of aggregator and non-aggregator variables used in the query.
         """
-        aggregated_variables, non_aggregated_variables = (
-            self.query._aggregated_and_non_aggregated_variables_in_selection_
+        all_aggregators = OrderedSet()
+        all_non_aggregators = OrderedSet()
+
+        aggregators_in_selection, non_aggregators_in_selection = (
+            self.query._aggregators_and_non_aggregators_in_selection_
         )
 
-        all_aggregators, non_aggregators = (
-            self.aggregators_and_non_aggregators_in_ordered_by
-        )
         # Extend aggregators
-        ids_of_aggregators = [v._id_ for v in all_aggregators]
-        all_aggregators.extend(
-            [
-                var
-                for var in self.aggregators_in_selected_variables
-                if var._id_ not in ids_of_aggregators
-            ]
-        )
+        all_aggregators.update(aggregators_in_selection)
 
         # Extend non-aggregators
-        ids_of_non_aggregated_variables = [v._id_ for v in non_aggregated_variables]
-        all_non_aggregators = non_aggregated_variables + [
-            var._child_
-            for var in aggregated_variables
-            if var._child_ is not None
-            and var._child_._id_ not in ids_of_non_aggregated_variables
-        ]
-        ids_of_non_aggregators = [v._id_ for v in all_non_aggregators]
-        all_non_aggregators.extend(
-            [var for var in non_aggregators if var._id_ not in ids_of_non_aggregators]
-        )
+        if self.query._ordered_by_builder_:
+            ordered_by_variable = self.query._ordered_by_builder_.variable
+            if isinstance(ordered_by_variable, Aggregator):
+                all_aggregators.add(ordered_by_variable)
+            else:
+                all_non_aggregators.add(ordered_by_variable)
+        all_non_aggregators.update(non_aggregators_in_selection)
+        all_non_aggregators.update([var._child_ for var in all_aggregators])
 
-        return all_aggregators, all_non_aggregators
+        return list(all_aggregators), list(all_non_aggregators)
 
     @cached_property
     def aggregators_and_non_aggregators_in_ordered_by(

@@ -21,7 +21,6 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
-from krrood.entity_query_language.query.quantifiers import The
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
     OperationResult,
@@ -29,7 +28,9 @@ from krrood.entity_query_language.core.base_expressions import (
     BinaryExpression,
     Selectable,
 )
-from krrood.entity_query_language.operators.set_operations import PerformsCartesianProduct
+from krrood.entity_query_language.operators.set_operations import (
+    PerformsCartesianProduct,
+)
 from krrood.entity_query_language.utils import is_iterable, make_set
 
 
@@ -82,8 +83,8 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
         :return: The result of the operation.
         """
         left_value, right_value = (
-            child_result[self.left._binding_id_],
-            child_result[self.right._binding_id_],
+            self.left._process_result_(child_result),
+            self.right._process_result_(child_result),
         )
         if (
             self.operation in [operator.eq, operator.ne]
@@ -95,21 +96,21 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
         res = self.operation(left_value, right_value)
         self._is_false_ = not res
         bindings = copy(child_result.bindings)
-        bindings[self._binding_id_] = res
+        bindings[self._id_] = res
         return OperationResult(bindings, self._is_false_, self, child_result)
 
     def _optimize_operands_order_(
         self, sources: Bindings
     ) -> Tuple[SymbolicExpression, SymbolicExpression]:
+        from krrood.entity_query_language.query.quantifiers import The
+
         left_has_the = any(isinstance(desc, The) for desc in self.left._descendants_)
         right_has_the = any(isinstance(desc, The) for desc in self.right._descendants_)
         if left_has_the and not right_has_the:
             return self.left, self.right
         elif not left_has_the and right_has_the:
             return self.right, self.left
-        if sources and any(
-            v._binding_id_ in sources for v in self.right._unique_variables_
-        ):
+        if sources and any(v._id_ in sources for v in self.right._unique_variables_):
             return self.right, self.left
         else:
             return self.left, self.right

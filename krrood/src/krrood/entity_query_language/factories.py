@@ -11,10 +11,25 @@ from typing_extensions import Union, Iterable
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.failures import UnsupportedExpressionTypeForDistinct
-from krrood.entity_query_language.query.match import Match, MatchVariable, ProbableVariable
-from krrood.entity_query_language.operators.aggregators import Max, Min, Sum, Average, Count
+from krrood.entity_query_language.query.match import (
+    Match,
+    MatchVariable,
+    ProbableVariable,
+)
+from krrood.entity_query_language.operators.aggregators import (
+    Max,
+    Min,
+    Sum,
+    Average,
+    Count,
+    CountAll,
+)
 from krrood.entity_query_language.operators.comparator import Comparator
-from krrood.entity_query_language.operators.core_logical_operators import chained_logic, AND, OR
+from krrood.entity_query_language.operators.core_logical_operators import (
+    chained_logic,
+    AND,
+    OR,
+)
 from krrood.entity_query_language.operators.logical_quantifiers import ForAll, Exists
 from krrood.entity_query_language.operators.concatenation import Concatenation
 from krrood.entity_query_language.query.quantifiers import (
@@ -23,7 +38,11 @@ from krrood.entity_query_language.query.quantifiers import (
     The,
     ResultQuantifier,
 )
-from krrood.entity_query_language.rules.conclusion_selector import Refinement, Alternative, Next
+from krrood.entity_query_language.rules.conclusion_selector import (
+    Refinement,
+    Alternative,
+    Next,
+)
 from krrood.entity_query_language.query.query import Entity, SetOf, Query
 from krrood.entity_query_language.utils import is_iterable
 from krrood.entity_query_language.core.variable import (
@@ -31,7 +50,10 @@ from krrood.entity_query_language.core.variable import (
     Literal,
     ExternallySetVariable,
 )
-from krrood.entity_query_language.core.mapped_variable import FlatVariable, CanBehaveLikeAVariable
+from krrood.entity_query_language.core.mapped_variable import (
+    FlatVariable,
+    CanBehaveLikeAVariable,
+)
 from krrood.entity_query_language.predicate import *  # type: ignore
 from krrood.symbol_graph.symbol_graph import Symbol, SymbolGraph
 
@@ -81,7 +103,7 @@ def match(
 
 def match_variable(
     type_: Union[Type[T], Selectable[T]], domain: DomainType
-) -> Union[T, CanBehaveLikeAVariable[T], MatchVariable[T]]:
+) -> Union[T, Entity[T], MatchVariable[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.match` but with a domain to use for the variable created
      by the match.
@@ -474,18 +496,25 @@ def average(
     )
 
 
-def count(
-    variable: Optional[Selectable[T]] = None, distinct: bool = False
-) -> Union[T, Count[T]]:
+def count(variable: Selectable[T], distinct: bool = False) -> Union[T, Count[T]]:
     """
     Count the number of values produced by the given variable.
 
-    :param variable: The variable for which the count is calculated, if not given, the count of all results (by group)
-     is returned.
+    :param variable: The variable for which the count is calculated.
     :param distinct: Whether to only consider distinct values.
     :return: A Count object that can be evaluated to count the number of values.
     """
     return Count(variable, _distinct_=distinct)
+
+
+def count_all(distinct: bool = False) -> Union[T, Count[T]]:
+    """
+    Count all results (by group).
+
+    :param distinct: Whether to only consider distinct values.
+    :return: A Count object that can be evaluated to count the number of values.
+    """
+    return CountAll(_distinct_=distinct)
 
 
 def distinct(

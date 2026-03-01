@@ -27,7 +27,11 @@ from typing_extensions import (
 
 from krrood.entity_query_language.query.quantifiers import An
 from krrood.entity_query_language.core.base_expressions import Selectable
-from krrood.entity_query_language.core.mapped_variable import Attribute, FlatVariable, CanBehaveLikeAVariable
+from krrood.entity_query_language.core.mapped_variable import (
+    Attribute,
+    FlatVariable,
+    CanBehaveLikeAVariable,
+)
 from krrood.entity_query_language.core.variable import Literal, DomainType
 from krrood.entity_query_language.failures import (
     NoKwargsInMatchVar,
@@ -270,7 +274,7 @@ class MatchVariable(Match[T]):
 
         self.variable = variable(self.type, domain=self.domain)
 
-    def __call__(self, **kwargs) -> Union[An[T], T]:
+    def __call__(self, **kwargs) -> Union[Entity[T], T]:
         """
         Add kwargs constraints and return the resolved expression as An() instance.
         """

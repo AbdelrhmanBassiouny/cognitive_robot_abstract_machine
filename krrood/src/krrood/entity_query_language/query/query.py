@@ -47,6 +47,7 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     UnaryExpression,
     Selectable,
+    UnificationDict,
 )
 from krrood.entity_query_language.cache_data import (
     SeenSet,
@@ -80,7 +81,9 @@ A function that maps the results of a query to a new set of results.
 
 
 @dataclass(eq=False, repr=False)
-class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
+class Query(
+    MultiArityExpressionThatPerformsACartesianProduct, CanBehaveLikeAVariable[T], ABC
+):
     """
     Describes the queried object(s), could be a query over a single variable or a set of variables,
     also describes the condition(s)/properties of the queried object(s).
@@ -132,11 +135,12 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
     """
 
     def __post_init__(self):
-        for var in self._selected_variables_:
-            if isinstance(var, Query):
-                var.build()
         self._operation_children_ = tuple(self._selected_variables_)
-        super().__post_init__()
+        MultiArityExpressionThatPerformsACartesianProduct.__post_init__(self)
+
+        self._var_ = self
+        Selectable.__post_init__(self)
+
         self._quantifier_builder_ = QuantifierBuilder(self)
 
     @staticmethod
@@ -337,10 +341,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         :return: The operation result.
         """
         return OperationResult(
-            {
-                v._binding_id_: child_result[v._binding_id_]
-                for v in self._selected_variables_
-            },
+            {v._id_: child_result[v._id_] for v in self._selected_variables_},
             self._is_false_,
             self,
             child_result,
@@ -380,7 +381,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         """
         Get the IDs of variables used for distinctness.
         """
-        return tuple(k._binding_id_ for k in self._distinct_on)
+        return tuple(k._id_ for k in self._distinct_on)
 
     def _get_distinct_results_(
         self, results_gen: Iterator[OperationResult]
@@ -416,14 +417,14 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         """
         :return: Whether the results should be grouped or not. Is true when an aggregator is selected.
         """
-        return (
-            len(self._aggregated_and_non_aggregated_variables_in_selection_[0]) > 0
-        ) or (self._grouped_by_builder_ is not None)
+        return (len(self._aggregators_and_non_aggregators_in_selection_[0]) > 0) or (
+            self._grouped_by_builder_ is not None
+        )
 
     @cached_property
-    def _aggregated_and_non_aggregated_variables_in_selection_(
+    def _aggregators_and_non_aggregators_in_selection_(
         self,
-    ) -> Tuple[List[Selectable], List[Selectable]]:
+    ) -> Tuple[List[Aggregator], List[Selectable]]:
         """
         :return: The aggregated and non-aggregated variables from the selected variables.
         """
@@ -434,10 +435,12 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
                 aggregated_variables.append(variable)
             elif isinstance(variable, InstantiatedVariable):
                 non_aggregated_variables.extend(variable._operation_children_)
-            elif (
-                isinstance(variable, ExternallySetVariable)
-                and variable._domain_source_ is DomainSource.DEDUCTION
-            ):
+            elif isinstance(
+                variable, ExternallySetVariable
+            ) and variable._domain_source_ in [
+                DomainSource.DEDUCTION,
+                DomainSource.GROUPING,
+            ]:
                 continue
             else:
                 non_aggregated_variables.append(variable)
@@ -484,69 +487,24 @@ class SetOf(Query):
     A query over a set of variables.
     """
 
-    def __getitem__(
-        self, selected_variable: TypingUnion[CanBehaveLikeAVariable[T], T]
-    ) -> TypingUnion[T, SetOfSelectable[T]]:
+    def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
         """
-        Select one of the set of variables, this is useful when you have another query that uses this set of and
-        wants to select a specific variable out of the set of variables.
-
-        :param selected_variable: The selected variable from the set of variables.
+        Update the result bindings with this operation's bindings.
         """
-        return SetOfSelectable(self, selected_variable)
-
-
-@dataclass(eq=False, repr=False)
-class SetOfSelectable(UnaryExpression, CanBehaveLikeAVariable[T]):
-    """
-    A selected variable from the SetOf operation selected variables.
-    """
-
-    _child_: SetOf
-    """
-    The SetOf operation from which `_selected_var_` was selected.
-    """
-    _selected_var_: CanBehaveLikeAVariable[T]
-    """
-    The selected variable in the SetOf.
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self._var_ = self
-
-    @property
-    def _set_of_(self) -> SetOf:
-        """
-        The SetOf operation from which `_selected_var_` was selected.
-        """
-        return self._child_
-
-    def _evaluate__(
-        self,
-        sources: Bindings,
-    ) -> Iterator[OperationResult]:
-        for v in self._set_of_._evaluate_(sources, self):
-            yield OperationResult(
-                {**v.bindings, self._binding_id_: v[self._selected_var_._binding_id_]},
-                False,
-                self,
+        operation_result = super()._get_operation_result_(child_result)
+        operation_result.bindings = {
+            self._id_: UnificationDict(
+                {var: operation_result[var._id_] for var in self._selected_variables_}
             )
-
-    @property
-    def _name_(self) -> str:
-        return f"{self._set_of_._name_}[{self._selected_var_._name_}]"
+        }
+        return operation_result
 
 
 @dataclass(eq=False, repr=False)
-class Entity(Query, CanBehaveLikeAVariable[T]):
+class Entity(Query[T]):
     """
     A query over a single variable.
     """
-
-    def __post_init__(self):
-        self._var_ = self
-        super().__post_init__()
 
     def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
         """
@@ -554,7 +512,7 @@ class Entity(Query, CanBehaveLikeAVariable[T]):
         """
         operation_result = super()._get_operation_result_(child_result)
         operation_result.bindings = {
-            self._binding_id_: operation_result[self.selected_variable._binding_id_]
+            self._id_: operation_result[self.selected_variable._id_]
         }
         return operation_result
 
