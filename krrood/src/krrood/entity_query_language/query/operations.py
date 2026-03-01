@@ -245,9 +245,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
                 frozenset(res[var._id_] for var in self.variables_to_group_by)
             )
 
-            if self.count_all:
-                res[self.count_all._child_._id_] = res.bindings
-
+            res[self._id_] = res.bindings
             group_key_count[group_key] += 1
 
             self.update_group_from_bindings(groups[group_key], res.bindings)
@@ -291,15 +289,6 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
             len(self.variables_to_group_by) == 1
             and isinstance(expression, MappedVariable)
             and expression._child_._id_ in self.ids_of_variables_to_group_by
-        )
-
-    @cached_property
-    def count_all(self) -> Optional[CountAll]:
-        """
-        :return: The CountAll aggregator if it exists, otherwise None.
-        """
-        return next(
-            (var for var in self.aggregators if isinstance(var, CountAll)), None
         )
 
     @cached_property

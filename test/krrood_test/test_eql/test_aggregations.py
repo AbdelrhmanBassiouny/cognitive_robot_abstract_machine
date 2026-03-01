@@ -17,6 +17,7 @@ from krrood.entity_query_language.factories import (
     flat_variable,
 )
 from krrood.entity_query_language.predicate import length
+from krrood.entity_query_language.query_graph import QueryGraph
 from ..dataset.example_classes import NamedNumbers
 from krrood.entity_query_language.failures import (
     NonAggregatedSelectedVariablesError,
@@ -604,9 +605,27 @@ def test_mode():
     domain = [1, 2, 3, 2, 2, 1, 3]
     var1 = variable(int, domain=domain)
     assert var1.tolist() == domain
-    count = set_of(var1, c := eql.count_all()).grouped_by(var1)
-    assert [(val[var1], val[c]) for val in count.evaluate()] == [(1, 2), (2, 3), (3, 2)]
-    # max_count = set_of(count[var1], eql.max(count[c]))
-    # assert [(val[var1], val[c]) for val in max_count.evaluate()] == [(2, 3)]
-    # query = entity(var1).where(count == max_count)
-    # assert query.tolist() == [2]
+    var_count = set_of(var1, c := eql.count_all()).grouped_by(var1)
+    assert [(val[var1], val[c]) for val in var_count.evaluate()] == [
+        (1, 2),
+        (2, 3),
+        (3, 2),
+    ]
+    # one-line query without using a previous set_of query
+    max_count = eql.max(eql.count_all().grouped_by(var1))
+    assert max_count.tolist() == [3]
+    # reusing set_of query by selecting the count from the selected variables
+    max_count_from_sub_query = eql.max(var_count[c])
+    assert max_count_from_sub_query.tolist() == [3]
+    # reusing set_of query by selecting the count from the selected variables as key for the max
+    var_max_count = eql.max(
+        set_of(var1, c := eql.count_all()).grouped_by(var1), key=lambda x: x[c]
+    )
+    results = var_max_count.tolist()
+    assert len(results) == 1
+    assert results[0][var1] == 2
+    assert results[0][c] == 3
+    # Independent subquery that calculates the max
+    max_count = entity(eql.max(eql.count(var1).grouped_by(var1)))
+    query = entity(var1).having(eql.count_all() == max_count).grouped_by(var1)
+    assert query.tolist() == [2]

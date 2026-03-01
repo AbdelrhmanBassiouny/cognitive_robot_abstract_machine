@@ -63,7 +63,7 @@ from krrood.entity_query_language.failures import (
     TryingToModifyAnAlreadyBuiltQuery,
     NonPositiveLimitValue,
 )
-from krrood.entity_query_language.operators.aggregators import Aggregator
+from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
 from krrood.entity_query_language.operators.set_operations import (
     MultiArityExpressionThatPerformsACartesianProduct,
 )
@@ -115,7 +115,7 @@ class Query(
     """
     The builder for the `GroupedBy` expression of the query.
     """
-    _having_builder: Optional[HavingBuilder] = field(init=False, default=None)
+    _having_builder_: Optional[HavingBuilder] = field(init=False, default=None)
     """
     The builder for the `Having` expression of the query.
     """
@@ -188,10 +188,10 @@ class Query(
         :param conditions: The conditions that describe the query object.
         :return: This query.
         """
-        if self._having_builder is None:
-            self._having_builder = HavingBuilder(conditions=conditions, query=self)
+        if self._having_builder_ is None:
+            self._having_builder_ = HavingBuilder(conditions=conditions, query=self)
         else:
-            self._having_builder.conditions += conditions
+            self._having_builder_.conditions += conditions
         return self
 
     def ordered_by(
@@ -295,13 +295,27 @@ class Query(
             self._grouped_by_builder_ = GroupedByBuilder(self)
 
         children = []
-        if self._having_builder is not None:
-            self._having_builder.grouped_by = self._grouped_by_builder_.expression
-            children.append(self._having_builder.expression)
+        if self._having_builder_ is not None:
+            self._having_builder_.grouped_by = self._grouped_by_builder_.expression
+            children.append(self._having_builder_.expression)
         elif self._grouped_by_builder_ is not None:
             children.append(self._grouped_by_builder_.expression)
         elif self._where_builder_ is not None:
             children.append(self._where_builder_.expression)
+
+        if self._grouped_by_builder_ is not None:
+            next(
+                (
+                    aggregator._replace_child_(
+                        aggregator._child_, self._grouped_by_builder_.expression
+                    )
+                    for aggregator in self._grouped_by_builder_.aggregators_and_non_aggregators[
+                        0
+                    ]
+                    if isinstance(aggregator, CountAll)
+                ),
+                None,
+            )
 
         children.extend(self._selected_variables_)
 
@@ -359,7 +373,7 @@ class Query(
         """
         The built `Having` expression.
         """
-        return self._having_builder.expression if self._having_builder else None
+        return self._having_builder_.expression if self._having_builder_ else None
 
     @property
     def _grouped_by_expression_(self) -> Optional[GroupedBy]:
@@ -435,12 +449,10 @@ class Query(
                 aggregated_variables.append(variable)
             elif isinstance(variable, InstantiatedVariable):
                 non_aggregated_variables.extend(variable._operation_children_)
-            elif isinstance(
-                variable, ExternallySetVariable
-            ) and variable._domain_source_ in [
-                DomainSource.DEDUCTION,
-                DomainSource.GROUPING,
-            ]:
+            elif (
+                isinstance(variable, ExternallySetVariable)
+                and variable._domain_source_ == DomainSource.DEDUCTION
+            ):
                 continue
             else:
                 non_aggregated_variables.append(variable)

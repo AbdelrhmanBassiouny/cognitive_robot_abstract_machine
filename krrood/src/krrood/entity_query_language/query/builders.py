@@ -20,11 +20,9 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     Selectable,
 )
-from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import (
     chained_logic,
     AND,
-    LogicalOperator,
 )
 from krrood.entity_query_language.failures import (
     NoConditionsProvided,
@@ -44,11 +42,9 @@ from krrood.entity_query_language.query.operations import (
     OrderedBy,
     GroupedBy,
 )
-from krrood.entity_query_language.operators.aggregators import Aggregator
+from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
 from krrood.entity_query_language.core.variable import (
     Literal,
-    Variable,
-    InstantiatedVariable,
 )
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 
@@ -117,8 +113,6 @@ class FilterBuilder(ExpressionBuilder, ABC):
         """
         :return: A tuple containing the aggregators and non-aggregators in the conditions.
         """
-        from krrood.entity_query_language.query.query import Query
-
         aggregators, non_aggregators = [], []
 
         def walk(expr: SymbolicExpression):
@@ -126,25 +120,21 @@ class FilterBuilder(ExpressionBuilder, ABC):
             if isinstance(expr, Aggregator):
                 aggregators.append(expr)
                 # No need to traverse inside aggregators
-                return False
+                return
             elif isinstance(expr, Selectable) and not isinstance(
-                expr, (Literal, Query)
+                expr, (Literal, ResultQuantifier)
             ):
                 non_aggregators.append(expr)
 
-            # Stop traversal early if both found
-            if aggregators and non_aggregators:
-                return True
-
-            if isinstance(expr, Query):
+            if isinstance(expr, ResultQuantifier):
                 # Subqueries are a boundary, we don't need to traverse inside them.
-                return False
+                return
 
-            return any(walk(child) for child in expr._children_)
+            for child in expr._children_:
+                walk(child)
 
         for condition in self.conditions:
-            if walk(condition):
-                break
+            walk(condition)
 
         return tuple(aggregators), tuple(non_aggregators)
 
@@ -192,23 +182,18 @@ class HavingBuilder(FilterBuilder):
      the aggregations of grouped results.
     """
 
-    def assert_correct_conditions(self):
-        """
-        Assert that the having conditions are correct.
-
-        :raises NonAggregatorInHavingConditionsError: If the having conditions contain any non-aggregator expressions.
-        """
-        super().assert_correct_conditions()
+    @cached_property
+    def expression(self) -> Having:
         aggregators, non_aggregators = (
             self.aggregators_and_non_aggregators_in_conditions
         )
-        if non_aggregators:
+        if any(
+            var._id_ not in self.grouped_by.ids_of_variables_to_group_by
+            for var in non_aggregators
+        ):
             raise NonAggregatorInHavingConditionsError(
                 non_aggregators, query=self.query
             )
-
-    @cached_property
-    def expression(self) -> Having:
         return Having(self.grouped_by, self.conditions_expression)
 
 
@@ -319,14 +304,29 @@ class GroupedByBuilder(ExpressionBuilder):
         all_aggregators.update(aggregators_in_selection)
 
         # Extend non-aggregators
+        all_non_aggregators.update(non_aggregators_in_selection)
+
+        if self.query._having_builder_:
+            having_aggregators, having_non_aggregators = (
+                self.query._having_builder_.aggregators_and_non_aggregators_in_conditions
+            )
+            all_aggregators.update(having_aggregators)
+            all_non_aggregators.update(having_non_aggregators)
+
         if self.query._ordered_by_builder_:
             ordered_by_variable = self.query._ordered_by_builder_.variable
             if isinstance(ordered_by_variable, Aggregator):
                 all_aggregators.add(ordered_by_variable)
             else:
                 all_non_aggregators.add(ordered_by_variable)
-        all_non_aggregators.update(non_aggregators_in_selection)
-        all_non_aggregators.update([var._child_ for var in all_aggregators])
+
+        all_non_aggregators.update(
+            [
+                aggregator._child_
+                for aggregator in all_aggregators
+                if not isinstance(aggregator, CountAll)
+            ]
+        )
 
         return list(all_aggregators), list(all_non_aggregators)
 
