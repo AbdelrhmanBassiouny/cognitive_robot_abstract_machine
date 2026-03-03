@@ -31,11 +31,11 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 from krrood.entity_query_language.query.builders import (
     WhereBuilder,
     HavingBuilder,
-    GroupedByBuilder,
+    GroupedQueryBuilder,
     QuantifierBuilder,
     OrderedByBuilder,
 )
-from krrood.entity_query_language.query.operations import GroupedQuery
+from krrood.entity_query_language.query.grouped_query import GroupedQuery
 from krrood.entity_query_language.query.filtered_query import Where, Having
 from krrood.entity_query_language.query.quantified_query import (
     QuantificationConstraint,
@@ -112,15 +112,15 @@ class Query(
     """
     The builder for the `Where` expression of the query.
     """
-    _grouped_by_builder_: Optional[GroupedByBuilder] = field(init=False, default=None)
+    _grouped_by_builder_: Optional[GroupedQueryBuilder] = field(init=False, default=None)
     """
     The builder for the `GroupedBy` expression of the query.
     """
-    _having_builder_: Optional[HavingBuilder] = field(init=False, default=None)
+    _having_expression_: Optional[HavingBuilder] = field(init=False, default=None)
     """
     The builder for the `Having` expression of the query.
     """
-    _ordered_by_builder_: Optional[OrderedByBuilder] = field(default=None, init=False)
+    _ordered_: Optional[OrderedByBuilder] = field(default=None, init=False)
     """
     The builder for the `OrderedBy` expression if present.
     """
@@ -189,10 +189,10 @@ class Query(
         :param conditions: The conditions that describe the query object.
         :return: This query.
         """
-        if self._having_builder_ is None:
-            self._having_builder_ = HavingBuilder(conditions=conditions, query=self)
+        if self._having_ is None:
+            self._having_expression_ = HavingBuilder(conditions=conditions, query=self)
         else:
-            self._having_builder_.conditions += conditions
+            self._having_.conditions += conditions
         return self
 
     def ordered_by(
@@ -208,7 +208,7 @@ class Query(
         :param descending: Whether to order the results in descending order.
         :param key: A function to extract the key from the variable value.
         """
-        self._ordered_by_builder_ = OrderedByBuilder(
+        self._ordered_ = OrderedByBuilder(
             self, variable, descending=descending, key=key
         )
         return self
@@ -238,7 +238,7 @@ class Query(
         :param variables_to_group_by: The variables to group the results by.
         :return: This query.
         """
-        self._grouped_by_builder_ = GroupedByBuilder(self, variables_to_group_by)
+        self._grouped_by_builder_ = GroupedQueryBuilder(self, variables_to_group_by)
         return self
 
     def limit(self, n: int) -> Self:
@@ -293,12 +293,12 @@ class Query(
         self._built_ = True
 
         if self._group_ and self._grouped_by_builder_ is None:
-            self._grouped_by_builder_ = GroupedByBuilder(self)
+            self._grouped_by_builder_ = GroupedQueryBuilder(self)
 
         children = []
-        if self._having_builder_ is not None:
-            self._having_builder_.grouped_by = self._grouped_by_builder_.expression
-            children.append(self._having_builder_.expression)
+        if self._having_ is not None:
+            self._having_.grouped_by = self._grouped_by_builder_.expression
+            children.append(self._having_.expression)
         elif self._grouped_by_builder_ is not None:
             children.append(self._grouped_by_builder_.expression)
         elif self._where_builder_ is not None:
@@ -322,9 +322,9 @@ class Query(
 
         self.update_children(*children)
 
-        if self._ordered_by_builder_ is not None:
-            self._ordered_by_builder_.data_source = self._expression_
-            self._expression_ = self._ordered_by_builder_.expression
+        if self._ordered_ is not None:
+            self._ordered_.data_source = self._expression_
+            self._expression_ = self._ordered_.expression
 
         self._quantifier_builder_.child = self._expression_
         self._expression_ = self._quantifier_builder_.expression
@@ -370,11 +370,11 @@ class Query(
         return self._where_builder_.expression if self._where_builder_ else None
 
     @property
-    def _having_expression_(self) -> Optional[Having]:
+    def _having_(self) -> Optional[Having]:
         """
         The built `Having` expression.
         """
-        return self._having_builder_.expression if self._having_builder_ else None
+        return self._having_.expression if self._having_ else None
 
     @property
     def _grouped_by_expression_(self) -> Optional[GroupedQuery]:

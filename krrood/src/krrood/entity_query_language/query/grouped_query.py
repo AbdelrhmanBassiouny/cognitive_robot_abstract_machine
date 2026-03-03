@@ -17,27 +17,21 @@ from typing_extensions import (
     Any,
     Iterator,
     Optional,
-    Dict,
-)
+    Dict, )
 
-from krrood.entity_query_language.operators.aggregators import (
-    Aggregator,
-    Count,
-)
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
     OperationResult,
-    Selectable,
-)
+    Selectable, )
+from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.entity_query_language.failures import (
-    UnsupportedAggregationOfAGroupedByVariable,
-)
-from krrood.entity_query_language.operators.set_operations import (
-    MultiArityExpressionThatPerformsACartesianProduct,
-)
+    UnsupportedAggregationOfAGroupedByVariable, )
+from krrood.entity_query_language.operators.aggregators import (
+    Aggregator,
+    Count, )
+from krrood.entity_query_language.query.builders import GroupedQueryBuilder
 from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.utils import ensure_hashable, is_iterable
-from krrood.entity_query_language.core.mapped_variable import MappedVariable
 
 GroupKey = Tuple[Any, ...]
 """
@@ -57,18 +51,32 @@ class GroupedQuery(Query):
     separately for each group.
     """
 
-    query: Query = field(kw_only=True)
+    _query_: Query = field(kw_only=True)
     """
     The query that will have its results grouped.
     """
-    aggregators: Tuple[Aggregator, ...] = field(default_factory=tuple)
-    """
-    The aggregators to apply to the grouped results.
-    """
-    variables_to_group_by: Tuple[Selectable, ...] = ()
+    _variables_to_group_by_: Tuple[Selectable, ...] = ()
     """
     The variables to group the results by their values.
     """
+    _aggregators_: Tuple[Aggregator, ...] = field(init=False, default_factory=tuple)
+    """
+    The aggregators to apply to the grouped results.
+    """
+    _builder_: GroupedQueryBuilder = field(init=False)
+    """
+    The builder that will update the fields of this query.
+    """
+
+    def __post_init__(self):
+        self._builder_ = GroupedQueryBuilder(self)
+        super().__post_init__()
+
+    def build(self):
+        """
+        Update the fields of the grouped query.
+        """
+        self._builder_.build()
 
     def _evaluate__(self, sources: Bindings = None) -> Iterator[OperationResult]:
         """
@@ -79,8 +87,8 @@ class GroupedQuery(Query):
         """
 
         if any(
-            not isinstance(var, Count)
-            for var in self.aggregators_of_grouped_by_variables
+                not isinstance(var, Count)
+                for var in self.aggregators_of_grouped_by_variables
         ):
             raise UnsupportedAggregationOfAGroupedByVariable(self)
 
@@ -95,7 +103,7 @@ class GroupedQuery(Query):
         yield from groups.values()
 
     def get_groups_and_group_key_count(
-        self, sources: Bindings
+            self, sources: Bindings
     ) -> Tuple[GroupBindings, Dict[GroupKey, int]]:
         """
         Create a dictionary of groups and a dictionary of group keys to their corresponding counts starting from the
@@ -110,9 +118,8 @@ class GroupedQuery(Query):
         group_key_count = defaultdict(lambda: 0)
 
         for res in self._evaluate_product_(sources):
-
             group_key = tuple(
-                ensure_hashable(res[var._id_]) for var in self.variables_to_group_by
+                ensure_hashable(res[var._id_]) for var in self._variables_to_group_by_
             )
 
             res[self._id_] = res.bindings
@@ -122,7 +129,7 @@ class GroupedQuery(Query):
 
         if len(groups) == 0:
             # if there are no groups, add one empty group with an empty list for each aggregated variable.
-            for aggregator in self.aggregators:
+            for aggregator in self._aggregators_:
                 groups[()][aggregator._child_._id_] = []
 
         return groups, group_key_count
@@ -148,9 +155,9 @@ class GroupedQuery(Query):
     def is_already_grouped(self, var_id: uuid.UUID) -> bool:
         expression = self._get_expression_by_id_(var_id)
         return (
-            len(self.variables_to_group_by) == 1
-            and isinstance(expression, MappedVariable)
-            and expression._child_._id_ in self.ids_of_variables_to_group_by
+                len(self._variables_to_group_by_) == 1
+                and isinstance(expression, MappedVariable)
+                and expression._child_._id_ in self.ids_of_variables_to_group_by
         )
 
     @cached_property
@@ -175,7 +182,7 @@ class GroupedQuery(Query):
         """
         return [
             var
-            for var in self.aggregators
+            for var in self._aggregators_
             if var._child_._id_ in self.ids_of_variables_to_group_by
         ]
 
@@ -184,8 +191,8 @@ class GroupedQuery(Query):
         """
         :return: A tuple of the binding IDs of the variables to group by.
         """
-        return tuple(var._id_ for var in self.variables_to_group_by)
+        return tuple(var._id_ for var in self._variables_to_group_by_)
 
     @property
     def _name_(self) -> str:
-        return f"{self.__class__.__name__}({', '.join([var._name_ for var in self.variables_to_group_by])})"
+        return f"{self.__class__.__name__}({', '.join([var._name_ for var in self._variables_to_group_by_])})"

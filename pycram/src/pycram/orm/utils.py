@@ -29,7 +29,7 @@ def write_database_to_file(
             to_json_dict = dict()
             for table in mapper_registry.metadata.sorted_tables:
                 list_of_row = list()
-                for column_object in session.query(table).all():
+                for column_object in session._query_(table).all():
                     list_of_row.append(column_object)
                 to_json_dict[table.name] = list_of_row
             json_data_dict = json.dumps(to_json_dict, default=str)
@@ -75,11 +75,11 @@ def update_primary_key(
             for key in list_of_primary_keys_of_this_table:
                 all_source_key_values = []
                 all_destination_key_values = []
-                for key_value_row in source_session.query(key).all():
+                for key_value_row in source_session._query_(key).all():
                     all_source_key_values.append(
                         key_value_row[0]
                     )  # get all values of key from source session
-                for key_value_row in destination_session.query(key).all():
+                for key_value_row in destination_session._query_(key).all():
                     all_destination_key_values.append(
                         key_value_row[0]
                     )  # get all values of key from source session
@@ -141,7 +141,7 @@ def copy_database(
     ):
         sorted_tables = mapper_registry.metadata.sorted_tables
         for table in sorted_tables:
-            for value in source_session.query(table).all():
+            for value in source_session._query_(table).all():
                 insert_statement = sqlalchemy.insert(table).values(value)
                 destination_session.execute(insert_statement)
             destination_session.commit()  # commit after every table

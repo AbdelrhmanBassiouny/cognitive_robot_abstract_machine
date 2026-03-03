@@ -9,7 +9,7 @@ from krrood.entity_query_language.rules.conclusion_selector import ConclusionSel
 from krrood.entity_query_language.query.query import (
     Query,
 )
-from krrood.entity_query_language.query.operations import GroupedQuery
+from krrood.entity_query_language.query.grouped_query import GroupedQuery
 from krrood.entity_query_language.query.ordered_query import OrderedQuery
 from krrood.entity_query_language.query.quantified_query import QuantifiedQuery
 from krrood.entity_query_language.operators.concatenation import Concatenation

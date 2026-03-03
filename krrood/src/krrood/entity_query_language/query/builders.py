@@ -36,7 +36,7 @@ from krrood.entity_query_language.query.quantified_query import (
     QuantifiedQuery,
     An,
 )
-from krrood.entity_query_language.query.operations import (
+from krrood.entity_query_language.query.grouped_query import (
     GroupedQuery,
 )
 from krrood.entity_query_language.query.filtered_query import Where, Having
@@ -188,32 +188,29 @@ class HavingBuilder(FilterBuilder):
 
 
 @dataclass(eq=False)
-class GroupedByBuilder(ExpressionBuilder):
+class GroupedQueryBuilder(ExpressionBuilder):
     """
     Metadata for the GroupedBy operation.
     """
 
-    variables_to_group_by: Tuple[Selectable, ...] = ()
+    query: GroupedQuery
     """
-    The variables to group the results by their values.
+    The Grouped query expression to update.
     """
 
     def __post_init__(self):
         self.assert_correct_selected_variables()
 
-    def build(self) -> GroupedQuery:
+    def build(self) -> None:
         aggregators, non_aggregators = self.aggregators_and_non_aggregators
+        self.query._aggregators_ = tuple(aggregators)
         where = self.query._where_expression_
         children = OrderedSet()
         if where:
             children.add(where)
         children.update(non_aggregators)
-        children.update(self.variables_to_group_by)
-        return GroupedQuery(
-            _operation_children_=tuple(children),
-            aggregators=tuple(aggregators),
-            variables_to_group_by=tuple(self.variables_to_group_by),
-        )
+        children.update(self.query._variables_to_group_by_)
+        self.query._operation_children_ = self.query._update_children_(*children)
 
     @lru_cache
     def assert_correct_selected_variables(self):
@@ -295,15 +292,15 @@ class GroupedByBuilder(ExpressionBuilder):
         # Extend non-aggregators
         all_non_aggregators.update(non_aggregators_in_selection)
 
-        if self.query._having_builder_:
+        if self.query._having_:
             having_aggregators, having_non_aggregators = (
-                self.query._having_builder_.aggregators_and_non_aggregators_in_conditions
+                self.query._having_.aggregators_and_non_aggregators_in_conditions
             )
             all_aggregators.update(having_aggregators)
             all_non_aggregators.update(having_non_aggregators)
 
-        if self.query._ordered_by_builder_:
-            ordered_by_variable = self.query._ordered_by_builder_.variable
+        if self.query._ordered_:
+            ordered_by_variable = self.query._ordered_.variable
             if isinstance(ordered_by_variable, Aggregator):
                 all_aggregators.add(ordered_by_variable)
             else:
@@ -323,10 +320,10 @@ class GroupedByBuilder(ExpressionBuilder):
     def aggregators_and_non_aggregators_in_ordered_by(
         self,
     ) -> Tuple[List[Aggregator], List[Selectable]]:
-        if not self.query._ordered_by_builder_:
+        if not self.query._ordered_:
             return [], []
 
-        variable = self.query._ordered_by_builder_.variable
+        variable = self.query._ordered_.variable
 
         if isinstance(variable, Aggregator):
             return [variable], (

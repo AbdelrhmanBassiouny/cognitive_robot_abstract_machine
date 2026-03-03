@@ -65,7 +65,7 @@ def _snapshot_tables(session_maker):
     with session_maker() as session:
         for table in pycram.orm.utils.mapper_registry.metadata.sorted_tables:
             table_content_set = set()
-            table_content_set.update(session.query(table).all())
+            table_content_set.update(session._query_(table).all())
             content[table] = table_content_set
     return content
 

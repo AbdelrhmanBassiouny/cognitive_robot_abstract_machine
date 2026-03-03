@@ -12,7 +12,7 @@ from krrood.entity_query_language.core.base_expressions import (
     OperationResult,
     BinaryExpression,
 )
-from krrood.entity_query_language.query.operations import GroupedQuery
+from krrood.entity_query_language.query.grouped_query import GroupedQuery
 from krrood.entity_query_language.query.query import Query
 
 
@@ -62,13 +62,6 @@ class Where(FilteredQuery):
     ungrouped data.
     """
 
-    def _evaluate__(self, sources: Bindings) -> Iterator[OperationResult]:
-        yield from (
-            result
-            for result in self.query._evaluate_(sources, parent=self)
-            if result.is_true
-        )
-
 
 @dataclass(eq=False, repr=False)
 class Having(FilteredQuery):
@@ -82,20 +75,3 @@ class Having(FilteredQuery):
     The grouped by expression that is used to group the results of the query. As the results need to be grouped before
      filtering using `Having`.
     """
-
-    def _evaluate__(
-        self,
-        sources: Bindings,
-    ) -> Iterable[OperationResult]:
-        yield from (
-            OperationResult(
-                grouping_result.bindings | annotated_result.bindings,
-                self._is_false_,
-                self,
-            )
-            for grouping_result in self.query._evaluate_(sources, parent=self)
-            for annotated_result in self.condition._evaluate_(
-                grouping_result.bindings, parent=self
-            )
-            if annotated_result.is_true
-        )

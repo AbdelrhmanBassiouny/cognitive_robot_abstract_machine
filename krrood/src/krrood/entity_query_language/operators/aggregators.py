@@ -39,7 +39,7 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.query.query import Entity
-    from krrood.entity_query_language.query.operations import GroupedQuery
+    from krrood.entity_query_language.query.grouped_query import GroupedQuery
 
 
 IntOrFloat = int | float

@@ -16,10 +16,10 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.query.query import (
         Query,
     )
-    from krrood.entity_query_language.query.operations import GroupedQuery
+    from krrood.entity_query_language.query.grouped_query import GroupedQuery
     from krrood.entity_query_language.query.quantified_query import QuantifiedQuery
     from krrood.entity_query_language.operators.aggregators import Aggregator
-    from krrood.entity_query_language.query.builders import GroupedByBuilder
+    from krrood.entity_query_language.query.builders import GroupedQueryBuilder
     from krrood.entity_query_language.core.base_expressions import (
         SymbolicExpression,
         Selectable,
@@ -260,9 +260,9 @@ class NonAggregatedSelectedVariablesError(AggregationUsageError):
     For further details, see :doc:`/krrood/doc/eql/result_processors`.
     """
 
-    grouped_by_builder: GroupedByBuilder
+    grouped_query: GroupedQuery
     """
-    The builder class for the GroupedDataSource operation.
+    The GroupedQuery instance that contains the grouped_by variables.
     """
     non_aggregated_variables: List[Selectable]
     """
@@ -277,7 +277,7 @@ class NonAggregatedSelectedVariablesError(AggregationUsageError):
         self.message = (
             f"The variables {self.non_aggregated_variables} are neither aggregated nor grouped by, they cannot be selected"
             f" along with the aggregated variables {self.aggregated_variables}. You can only select variables that are"
-            f" either aggregated or are in the grouped by variables {self.grouped_by_builder.variables_to_group_by}."
+            f" either aggregated or are in the grouped by variables {self.grouped_query._variables_to_group_by_}."
         )
         super().__post_init__()
 
