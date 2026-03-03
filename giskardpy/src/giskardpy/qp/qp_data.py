@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Union, TYPE_CHECKING
+from typing import Union
 
 import numpy as np
+import scipy.sparse as sp
 from scipy.sparse import issparse
-
-if TYPE_CHECKING:
-    import scipy.sparse as sp
 
 
 @dataclass
@@ -18,9 +16,9 @@ class Conditioning:
     Inherit from this to implement different strategies
     """
 
-    C: np.ndarray | None = field(init=False, default=None)
-    R_eq: np.ndarray | None = field(init=False, default=None)
-    R_neq: np.ndarray | None = field(init=False, default=None)
+    C: np.ndarray | None = field(default=None)
+    R_eq: np.ndarray | None = field(default=None)
+    R_neq: np.ndarray | None = field(default=None)
 
     def apply(self, qp_data: QPData) -> QPData:
         """
@@ -57,62 +55,74 @@ class Conditioning:
 
 
 @dataclass
-class QPData:
-    quadratic_weights: np.ndarray = field(default=None)
-    linear_weights: np.ndarray = field(default=None)
-
-    box_lower_constraints: np.ndarray = field(default=None)
-    box_upper_constraints: np.ndarray = field(default=None)
-
-    eq_matrix: Union[sp.csc_matrix, np.ndarray] = field(default=None)
-    eq_bounds: np.ndarray = field(default=None)
-
-    neq_matrix: Union[sp.csc_matrix, np.ndarray] = field(default=None)
-    neq_lower_bounds: np.ndarray = field(default=None)
-    neq_upper_bounds: np.ndarray = field(default=None)
-
-    num_eq_constraints: int = field(default=None)
-    num_neq_constraints: int = field(default=None)
-
-    R_eq: np.ndarray | None = None
-    C: np.ndarray | None = None
-
-    def explicit_data(self):
-        return (
-            self.quadratic_weights,
-            self.linear_weights,
-            self.box_lower_constraints,
-            self.box_upper_constraints,
-            self.eq_matrix,
-            self.eq_bounds,
-            self.neq_matrix,
-            self.neq_lower_bounds,
-            self.neq_upper_bounds,
+class MyConditioning:
+    def __post_init__(self):
+        C = np.ones(self.quadratic_weights.shape)
+        C[-3:] = 1 / np.sqrt(self.quadratic_weights[-3:])
+        C = np.diag(C)
+        new_eq_matrix = self.eq_matrix @ C
+        maxx = np.abs(new_eq_matrix[-3:, :]).max(axis=1)
+        R_eq = np.ones(self.eq_matrix.shape[0])
+        R_eq[-3:] = 1 / maxx
+        R_eq = np.diag(R_eq)
+        return QPData(
+            quadratic_weights=C @ self.quadratic_weights @ C,
+            linear_weights=self.linear_weights,
+            box_lower_constraints=self.box_lower_constraints @ C,
+            box_upper_constraints=self.box_upper_constraints @ C,
+            eq_matrix=R_eq @ self.eq_matrix @ C,
+            eq_bounds=R_eq @ self.eq_bounds,
+            neq_matrix=self.neq_matrix,
+            neq_lower_bounds=self.neq_lower_bounds,
+            neq_upper_bounds=self.neq_upper_bounds,
+            R_eq=R_eq,
+            C=C,
         )
 
-    @property
-    def sparse_hessian(self) -> sp.csc_matrix:
-        import scipy.sparse as sp
 
-        return sp.diags(self.quadratic_weights)
+@dataclass
+class Relaxo:
+    def partially_relaxed(self, relaxed_solution: np.ndarray) -> QPData:
+        relaxed_qp_data = QPData(
+            quadratic_weights=self.filtered.quadratic_weights.copy(),
+            linear_weights=self.filtered.linear_weights,
+            box_lower_constraints=self.filtered.box_lower_constraints.copy(),
+            box_upper_constraints=self.filtered.box_upper_constraints.copy(),
+            eq_matrix=self.filtered.eq_matrix,
+            eq_bounds=self.filtered.eq_bounds,
+            neq_matrix=self.filtered.neq_matrix,
+            neq_lower_bounds=self.filtered.neq_lower_bounds,
+            neq_upper_bounds=self.filtered.neq_upper_bounds,
+        )
+        lower_box_filter = relaxed_solution < self.filtered.box_lower_constraints
+        upper_box_filter = relaxed_solution > self.filtered.box_upper_constraints
+        relaxed_qp_data.box_lower_constraints[lower_box_filter] -= 100
+        relaxed_qp_data.box_upper_constraints[upper_box_filter] += 100
+        relaxed_qp_data.quadratic_weights[lower_box_filter | upper_box_filter] *= 1000
 
-    @property
-    def dense_hessian(self) -> np.ndarray:
-        return np.diag(self.quadratic_weights)
+        return relaxed_qp_data
 
-    @property
-    def dense_eq_matrix(self) -> np.ndarray:
-        try:
-            return self.eq_matrix.toarray()
-        except Exception:
-            return self.eq_matrix
+    def relaxed(self) -> QPData:
+        relaxed_qp_data = QPData(
+            quadratic_weights=self.filtered.quadratic_weights,
+            linear_weights=self.filtered.linear_weights,
+            box_lower_constraints=self.filtered.box_lower_constraints.copy(),
+            box_upper_constraints=self.filtered.box_upper_constraints.copy(),
+            eq_matrix=self.filtered.eq_matrix,
+            eq_bounds=self.filtered.eq_bounds,
+            neq_matrix=self.filtered.neq_matrix,
+            neq_lower_bounds=self.filtered.neq_lower_bounds,
+            neq_upper_bounds=self.filtered.neq_upper_bounds,
+        )
 
-    @property
-    def dense_neq_matrix(self) -> np.ndarray:
-        try:
-            return self.neq_matrix.toarray()
-        except Exception:
-            return self.neq_matrix
+        relaxed_qp_data.box_lower_constraints[self.num_non_constraints :] -= 100
+        relaxed_qp_data.box_upper_constraints[self.num_non_constraints :] += 100
+
+        return relaxed_qp_data
+
+
+@dataclass
+class ZeroWeightQPDataFilter:
 
     def apply_filters(
         self,
@@ -161,6 +171,49 @@ class QPData:
         qp_data_filtered.neq_upper_bounds = self.neq_upper_bounds[bA_filter]
         self.filtered = qp_data_filtered
 
+
+@dataclass
+class QPData:
+    """
+    Container for a QP of the form:
+
+    min_x 0.5 * x^T np.diag(quadratic_weights) x + linear_weights^T x
+    s.t. box_lower_constraints <= x <= box_upper_constraints
+         eq_matrix x = eq_bounds
+         neq_lower_bounds <= neq_matrix x <= neq_upper_bounds
+
+    .. note: matrices use sparse format
+    """
+
+    quadratic_weights: np.ndarray
+    linear_weights: np.ndarray
+
+    box_lower_constraints: np.ndarray
+    box_upper_constraints: np.ndarray
+
+    eq_matrix: sp.csc_matrix
+    eq_bounds: np.ndarray
+
+    neq_matrix: sp.csc_matrix
+    neq_lower_bounds: np.ndarray
+    neq_upper_bounds: np.ndarray
+
+    @property
+    def sparse_hessian(self) -> sp.csc_matrix:
+        return sp.diags(self.quadratic_weights)
+
+    @property
+    def dense_hessian(self) -> np.ndarray:
+        return np.diag(self.quadratic_weights)
+
+    @property
+    def dense_eq_matrix(self) -> np.ndarray:
+        return self.eq_matrix.toarray()
+
+    @property
+    def dense_neq_matrix(self) -> np.ndarray:
+        return self.neq_matrix.toarray()
+
     def to_print_testcase(self):
         testcase = (
             f"linear_weights = np.array({self.linear_weights.tolist()}, dtype=float)\n"
@@ -184,51 +237,13 @@ class QPData:
         )
         print(testcase)
 
-    def relaxed(self) -> QPData:
-        relaxed_qp_data = QPData(
-            quadratic_weights=self.filtered.quadratic_weights,
-            linear_weights=self.filtered.linear_weights,
-            box_lower_constraints=self.filtered.box_lower_constraints.copy(),
-            box_upper_constraints=self.filtered.box_upper_constraints.copy(),
-            eq_matrix=self.filtered.eq_matrix,
-            eq_bounds=self.filtered.eq_bounds,
-            neq_matrix=self.filtered.neq_matrix,
-            neq_lower_bounds=self.filtered.neq_lower_bounds,
-            neq_upper_bounds=self.filtered.neq_upper_bounds,
-        )
-
-        relaxed_qp_data.box_lower_constraints[self.num_non_constraints :] -= 100
-        relaxed_qp_data.box_upper_constraints[self.num_non_constraints :] += 100
-
-        return relaxed_qp_data
-
-    @property
-    def num_non_constraints(self) -> int:
-        return (
-            len(self.quadratic_weights)
-            - self.num_eq_constraints
-            - self.num_neq_constraints
-        )
-
-    def partially_relaxed(self, relaxed_solution: np.ndarray) -> QPData:
-        relaxed_qp_data = QPData(
-            quadratic_weights=self.filtered.quadratic_weights.copy(),
-            linear_weights=self.filtered.linear_weights,
-            box_lower_constraints=self.filtered.box_lower_constraints.copy(),
-            box_upper_constraints=self.filtered.box_upper_constraints.copy(),
-            eq_matrix=self.filtered.eq_matrix,
-            eq_bounds=self.filtered.eq_bounds,
-            neq_matrix=self.filtered.neq_matrix,
-            neq_lower_bounds=self.filtered.neq_lower_bounds,
-            neq_upper_bounds=self.filtered.neq_upper_bounds,
-        )
-        lower_box_filter = relaxed_solution < self.filtered.box_lower_constraints
-        upper_box_filter = relaxed_solution > self.filtered.box_upper_constraints
-        relaxed_qp_data.box_lower_constraints[lower_box_filter] -= 100
-        relaxed_qp_data.box_upper_constraints[upper_box_filter] += 100
-        relaxed_qp_data.quadratic_weights[lower_box_filter | upper_box_filter] *= 1000
-
-        return relaxed_qp_data
+    # @property
+    # def num_non_constraints(self) -> int:
+    #     return (
+    #         len(self.quadratic_weights)
+    #         - self.num_eq_constraints
+    #         - self.num_neq_constraints
+    #     )
 
     def pretty_print_problem(self):
         print("QP data")
@@ -308,29 +323,6 @@ class QPData:
             print(f"  Weight Matrix Condition Number: {condition_number}")
             if condition_number > 1_000:
                 print("  Warning: Weight Matrix is poorly conditioned.")
-
-    def improve_condition(self) -> QPData:
-        C = np.ones(self.quadratic_weights.shape)
-        C[-3:] = 1 / np.sqrt(self.quadratic_weights[-3:])
-        C = np.diag(C)
-        new_eq_matrix = self.eq_matrix @ C
-        maxx = np.abs(new_eq_matrix[-3:, :]).max(axis=1)
-        R_eq = np.ones(self.eq_matrix.shape[0])
-        R_eq[-3:] = 1 / maxx
-        R_eq = np.diag(R_eq)
-        return QPData(
-            quadratic_weights=C @ self.quadratic_weights @ C,
-            linear_weights=self.linear_weights,
-            box_lower_constraints=self.box_lower_constraints @ C,
-            box_upper_constraints=self.box_upper_constraints @ C,
-            eq_matrix=R_eq @ self.eq_matrix @ C,
-            eq_bounds=R_eq @ self.eq_bounds,
-            neq_matrix=self.neq_matrix,
-            neq_lower_bounds=self.neq_lower_bounds,
-            neq_upper_bounds=self.neq_upper_bounds,
-            R_eq=R_eq,
-            C=C,
-        )
 
     def _analyze_constraints(self):
         """

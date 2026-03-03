@@ -456,9 +456,12 @@ class QPController:
                 life_cycle_state,
                 float_variables,
             )
+            qp_data_used = qp_data.filtered.improve_condition()
             try:
-                self.xdot_full = self.qp_solver.solver_call(qp_data.filtered)
+                self.xdot_full = self.qp_solver.solver_call(qp_data_used)
             except InfeasibleException as e:
+                self.xdot_full = self.qp_solver.solver_call(qp_data_used)
+
                 self.config.retries_with_relaxed_constraints -= 1
                 self.xdot_full = self.qp_solver.solver_call(qp_data.filtered)
                 relaxed_solution = self.qp_solver.solver_call(qp_data.relaxed())
@@ -471,7 +474,9 @@ class QPController:
                 )
             # qp_data.filtered.analyze_well_posedness()
             self.debugger.update(self.xdot_full)
-            return self.xdot_to_control_commands(self.xdot_full)
+            return self.xdot_to_control_commands(
+                self.xdot_full, qp_data_used.R_eq, qp_data_used.C
+            )
 
         except InfeasibleException as e_original:
             self.xdot_full = None
@@ -484,7 +489,7 @@ class QPController:
             self.debugger.are_hard_limits_violated(str(e_original))
             raise
 
-    def xdot_to_control_commands(self, xdot: np.ndarray) -> np.ndarray:
+    def xdot_to_control_commands(self, xdot: np.ndarray, R_eq, C) -> np.ndarray:
         offset = len(self.active_dofs) * (self.config.prediction_horizon - 2)
         offset_end = offset + len(self.active_dofs)
         control_cmds = xdot[offset:offset_end] / self.config.mpc_dt**2

@@ -1,3 +1,5 @@
+from giskardpy.qp.solvers.qp_solver_ids import SupportedQPSolver
+
 from conftest import robot_factory
 from giskardpy.executor import Executor, SimulationPacer
 from giskardpy.motion_statechart.context import MotionStatechartContext
@@ -101,14 +103,16 @@ def execute(link_length: float, vel_limit: float, rclpy_node):
         MotionStatechartContext(
             world=fucking_huge_robot,
             qp_controller_config=QPControllerConfig(
-                target_frequency=100, prediction_horizon=35
+                target_frequency=100,
+                prediction_horizon=35,
+                # qp_solver_id=SupportedQPSolver.gurobi,
             ),
         ),
-        pacer=SimulationPacer(real_time_factor=1),
+        pacer=SimulationPacer(real_time_factor=2),
     )
     kin_sim.compile(motion_statechart=msc)
 
-    kin_sim.tick_until_end()
+    kin_sim.tick_until_end(10_000)
 
 
 def test_cart_goal(rclpy_node):
