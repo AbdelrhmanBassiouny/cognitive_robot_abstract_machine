@@ -11,8 +11,8 @@ from sqlalchemy.orm import Session
 from krrood.entity_query_language.query.query import (
     Query,
 )
-from krrood.entity_query_language.query.operations import Where
-from krrood.entity_query_language.query.quantifiers import ResultQuantifier, An, The
+from krrood.entity_query_language.query.filtered_query import Where
+from krrood.entity_query_language.query.quantified_query import QuantifiedQuery, An, The
 from krrood.entity_query_language.operators.core_logical_operators import AND, OR
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable, Literal
@@ -377,7 +377,7 @@ class EQLTranslator:
     join_manager: JoinManager = field(default_factory=JoinManager)
 
     @property
-    def quantifier(self) -> ResultQuantifier:
+    def quantifier(self) -> QuantifiedQuery:
         """Get the quantifier from the query."""
         return self.eql_query._quantifier_expression_
 

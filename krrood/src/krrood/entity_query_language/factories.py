@@ -34,11 +34,11 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 from krrood.entity_query_language.operators.logical_quantifiers import ForAll, Exists
 from krrood.entity_query_language.operators.concatenation import Concatenation
-from krrood.entity_query_language.query.quantifiers import (
-    ResultQuantificationConstraint,
+from krrood.entity_query_language.query.quantified_query import (
+    QuantificationConstraint,
     An,
     The,
-    ResultQuantifier,
+    QuantifiedQuery,
 )
 from krrood.entity_query_language.rules.conclusion_selector import (
     Refinement,
@@ -326,7 +326,7 @@ def exists(
 
 def an(
     entity_: Union[T, Query],
-    quantification: Optional[ResultQuantificationConstraint] = None,
+    quantification: Optional[QuantificationConstraint] = None,
 ) -> Union[T, Query]:
     """
     Select all values satisfying the given entity description.
@@ -561,7 +561,7 @@ def distinct(
     match expression:
         case Query():
             return expression.distinct(*on)
-        case ResultQuantifier():
+        case QuantifiedQuery():
             return expression._child_.distinct(*on)
         case Selectable():
             return entity(expression).distinct(*on)

@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.query.query import (
         Query,
     )
-    from krrood.entity_query_language.query.operations import GroupedBy
-    from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+    from krrood.entity_query_language.query.operations import GroupedQuery
+    from krrood.entity_query_language.query.quantified_query import QuantifiedQuery
     from krrood.entity_query_language.operators.aggregators import Aggregator
     from krrood.entity_query_language.query.builders import GroupedByBuilder
     from krrood.entity_query_language.core.base_expressions import (
@@ -39,7 +39,7 @@ class QuantificationNotSatisfiedError(DataclassException, ABC):
     For further details, see :doc:`/krrood/doc/eql/result_quantifiers`.
     """
 
-    expression: ResultQuantifier
+    expression: QuantifiedQuery
     """
     The result quantifier expression where the error occurred.
     """
@@ -238,7 +238,7 @@ class UnsupportedAggregationOfAGroupedByVariable(AggregationUsageError):
     For further details, see :doc:`/krrood/doc/eql/result_processors`.
     """
 
-    grouped_by: GroupedBy
+    grouped_by: GroupedQuery
     """
     The grouped_by operation that contains the grouped_by variable that is being aggregated over.
     """

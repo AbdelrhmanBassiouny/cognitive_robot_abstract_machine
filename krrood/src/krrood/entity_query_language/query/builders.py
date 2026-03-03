@@ -7,15 +7,15 @@ This module defines builder classes that collect metadata and produce symbolic e
 
 from __future__ import annotations
 
-import itertools
 import uuid
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
 from ordered_set import OrderedSet
 from typing_extensions import Tuple, List, Type, Optional, Callable, TYPE_CHECKING
 
+from krrood.entity_query_language.builder import ExpressionBuilder
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     Selectable,
@@ -31,17 +31,16 @@ from krrood.entity_query_language.failures import (
     NonAggregatorInHavingConditionsError,
     NonAggregatedSelectedVariablesError,
 )
-from krrood.entity_query_language.query.quantifiers import (
-    ResultQuantificationConstraint,
-    ResultQuantifier,
+from krrood.entity_query_language.query.quantified_query import (
+    QuantificationConstraint,
+    QuantifiedQuery,
     An,
 )
 from krrood.entity_query_language.query.operations import (
-    Where,
-    Having,
-    OrderedBy,
-    GroupedBy,
+    GroupedQuery,
 )
+from krrood.entity_query_language.query.filtered_query import Where, Having
+from krrood.entity_query_language.query.ordered_query import OrderedQuery
 from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
 from krrood.entity_query_language.core.variable import (
     Literal,
@@ -54,38 +53,17 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class ExpressionBuilder(ABC):
+class QueryBuilder(ExpressionBuilder, ABC):
     """
-    Base class for builder classes of symbolic expressions. This class collects meta-data about expressions to finally
-    build the expression.
+    Base class for builder classes of Query expressions. Query expressions are the expressions that are created through
+    the Query class by calling the relevant public methods like `.where()`, `.having()`, `.grouped_by()`, and
+     `.ordered_by`. These create instances of Where, Having, GroupedBy, and OrderedBy expressions, respectively.
     """
 
     query: Query
     """
     The query that the expression is being built for.
     """
-    _built_expression: Optional[SymbolicExpression] = field(init=False, default=None)
-    """
-    The expression that is built from the metadata.
-    """
-
-    @property
-    def expression(self) -> SymbolicExpression:
-        """
-        :return: The expression that is built from the metadata.
-        """
-        if self._built_expression is not None:
-            return self._built_expression
-        self._built_expression = self.build()
-        return self._built_expression
-
-    def build(self) -> SymbolicExpression:
-        """
-        :return: The expression that is built from the metadata.
-        """
-
-    def __hash__(self) -> int:
-        return hash((self.__class__, self.query))
 
 
 @dataclass(eq=False)
@@ -136,11 +114,11 @@ class FilterBuilder(ExpressionBuilder, ABC):
                 # No need to traverse inside aggregators
                 return
             elif isinstance(expr, Selectable) and not isinstance(
-                expr, (Literal, ResultQuantifier, Query)
+                expr, (Literal, QuantifiedQuery, Query)
             ):
                 non_aggregators.append(expr)
 
-            if isinstance(expr, (Literal, ResultQuantifier, Query)):
+            if isinstance(expr, (Literal, QuantifiedQuery, Query)):
                 # Subqueries are a boundary, we don't need to traverse inside them.
                 return
 
@@ -189,7 +167,7 @@ class HavingBuilder(FilterBuilder):
     Metadata for the `Having` Filter.
     """
 
-    grouped_by: GroupedBy = field(kw_only=True, default=None)
+    grouped_by: GroupedQuery = field(kw_only=True, default=None)
     """
     The GroupedBy expression associated with the having Filter, as the having conditions are applied on
      the aggregations of grouped results.
@@ -223,7 +201,7 @@ class GroupedByBuilder(ExpressionBuilder):
     def __post_init__(self):
         self.assert_correct_selected_variables()
 
-    def build(self) -> GroupedBy:
+    def build(self) -> GroupedQuery:
         aggregators, non_aggregators = self.aggregators_and_non_aggregators
         where = self.query._where_expression_
         children = OrderedSet()
@@ -231,7 +209,7 @@ class GroupedByBuilder(ExpressionBuilder):
             children.add(where)
         children.update(non_aggregators)
         children.update(self.variables_to_group_by)
-        return GroupedBy(
+        return GroupedQuery(
             _operation_children_=tuple(children),
             aggregators=tuple(aggregators),
             variables_to_group_by=tuple(self.variables_to_group_by),
@@ -375,11 +353,11 @@ class QuantifierBuilder(ExpressionBuilder):
     Builds a result quantifier (An/The) of the specified type with the given child and quantification constraint.
     """
 
-    type: Type[ResultQuantifier] = An
+    type: Type[QuantifiedQuery] = An
     """
     The type of the quantifier to be built.
     """
-    quantification_constraint: Optional[ResultQuantificationConstraint] = None
+    quantification_constraint: Optional[QuantificationConstraint] = None
     """
     The quantification constraint that must be satisfied by the result quantifier if present.
     """
@@ -388,7 +366,7 @@ class QuantifierBuilder(ExpressionBuilder):
     The child expression of the quantifier.
     """
 
-    def build(self) -> ResultQuantifier:
+    def build(self) -> QuantifiedQuery:
         """
         Builds a result quantifier of the specified type with the given child and quantification constraint.
         """
@@ -420,5 +398,5 @@ class OrderedByBuilder(ExpressionBuilder):
     The data source that generates the results to be ordered.
     """
 
-    def build(self) -> OrderedBy:
-        return OrderedBy(self.data_source, self.variable, self.descending, self.key)
+    def build(self) -> OrderedQuery:
+        return OrderedQuery(self.data_source, self.variable, self.descending, self.key)

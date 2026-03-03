@@ -102,7 +102,7 @@ class Comparator(BinaryExpression, PerformsCartesianProduct):
     def _optimize_operands_order_(
         self, sources: Bindings
     ) -> Tuple[SymbolicExpression, SymbolicExpression]:
-        from krrood.entity_query_language.query.quantifiers import The
+        from krrood.entity_query_language.query.quantified_query import The
 
         left_has_the = any(isinstance(desc, The) for desc in self.left._descendants_)
         right_has_the = any(isinstance(desc, The) for desc in self.right._descendants_)

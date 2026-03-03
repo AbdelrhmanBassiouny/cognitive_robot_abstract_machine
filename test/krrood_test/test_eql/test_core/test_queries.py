@@ -40,8 +40,8 @@ from krrood.entity_query_language.predicate import (
     symbolic_function,
     Predicate,
 )
-from krrood.entity_query_language.query.quantifiers import (
-    ResultQuantificationConstraint,
+from krrood.entity_query_language.query.quantified_query import (
+    QuantificationConstraint,
     Exactly,
     AtLeast,
     AtMost,
@@ -768,7 +768,7 @@ def test_unsupported_negation(handles_and_containers_world):
 def test_quantified_query(handles_and_containers_world):
     world = handles_and_containers_world
 
-    def get_quantified_query(quantification: ResultQuantificationConstraint):
+    def get_quantified_query(quantification: QuantificationConstraint):
         body = variable(type_=Body, domain=world.bodies)
         query = an(
             entity(body).where(

@@ -35,10 +35,11 @@ from krrood.entity_query_language.query.builders import (
     QuantifierBuilder,
     OrderedByBuilder,
 )
-from krrood.entity_query_language.query.operations import Where, Having, GroupedBy
-from krrood.entity_query_language.query.quantifiers import (
-    ResultQuantificationConstraint,
-    ResultQuantifier,
+from krrood.entity_query_language.query.operations import GroupedQuery
+from krrood.entity_query_language.query.filtered_query import Where, Having
+from krrood.entity_query_language.query.quantified_query import (
+    QuantificationConstraint,
+    QuantifiedQuery,
     An,
 )
 from krrood.entity_query_language.core.base_expressions import (
@@ -256,8 +257,8 @@ class Query(
 
     def _quantify_(
         self,
-        quantifier_type: Type[ResultQuantifier] = An,
-        quantification_constraint: Optional[ResultQuantificationConstraint] = None,
+        quantifier_type: Type[QuantifiedQuery] = An,
+        quantification_constraint: Optional[QuantificationConstraint] = None,
     ) -> Self:
         """
         Specify the quantifier type and constraint for the query results, also build the query.
@@ -376,7 +377,7 @@ class Query(
         return self._having_builder_.expression if self._having_builder_ else None
 
     @property
-    def _grouped_by_expression_(self) -> Optional[GroupedBy]:
+    def _grouped_by_expression_(self) -> Optional[GroupedQuery]:
         """
         The built `GroupedDataSource` expression.
         """
@@ -385,7 +386,7 @@ class Query(
         )
 
     @property
-    def _quantifier_expression_(self) -> Optional[ResultQuantifier]:
+    def _quantifier_expression_(self) -> Optional[QuantifiedQuery]:
         return (
             self._quantifier_builder_.expression if self._quantifier_builder_ else None
         )

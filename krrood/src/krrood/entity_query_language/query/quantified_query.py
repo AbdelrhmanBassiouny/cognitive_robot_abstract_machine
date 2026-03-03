@@ -30,18 +30,110 @@ from krrood.entity_query_language.failures import (
     NoSolutionFound,
     MultipleSolutionFound,
 )
+from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.utils import T
 
 
+@dataclass(eq=False)
+class QuantifiedQuery(
+    Query, ABC
+):
+    """
+    Base for quantified queries (e.g., An, The). These enforce quantification constraints on the number of results
+    yielded by the query.
+    """
+
+    _quantification_constraint_: Optional[QuantificationConstraint] = None
+    """
+    The quantification constraint that must be satisfied by the result quantifier if present.
+    """
+
+    def _evaluate__(
+        self,
+        sources: Bindings,
+    ) -> Iterable[T]:
+
+        result_count = 0
+        for value in super()._evaluate__(sources):
+            result_count += 1
+            self._assert_satisfaction_of_quantification_constraints_(
+                result_count, done=False
+            )
+            yield value
+        self._assert_satisfaction_of_quantification_constraints_(
+            result_count, done=True
+        )
+
+    def _assert_satisfaction_of_quantification_constraints_(
+        self, result_count: int, done: bool
+    ):
+        """
+        Assert the satisfaction of quantification constraints.
+
+        :param result_count: The current count of results
+        :param done: Whether all results have been processed
+        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
+        """
+        if self._quantification_constraint_:
+            self._quantification_constraint_.assert_satisfaction(
+                result_count, self, done
+            )
+
+    def _invert_(self):
+        raise UnsupportedNegation(self.__class__)
+
+    @property
+    def _name_(self):
+        name = f"{self.__class__.__name__}{super()._name_}"
+        if self._quantification_constraint_:
+            name += f"({self._quantification_constraint_})"
+        return name
+
+
+@dataclass(eq=False, repr=False)
+class An(QuantifiedQuery):
+    """Quantifier that yields all matching results one by one."""
+
+    ...
+
+
+@dataclass(eq=False, repr=False)
+class The(QuantifiedQuery):
+    """
+    Quantifier that expects exactly one result; raises MultipleSolutionFound if more, and NoSolutionFound if none.
+    """
+
+    _quantification_constraint_: QuantificationConstraint = field(
+        init=False, default_factory=lambda: Exactly(1)
+    )
+
+    def _evaluate__(
+        self,
+        sources: Bindings,
+    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]]:
+        """
+        Evaluates the query object descriptor with the given bindings and yields the results.
+
+        :raises MultipleSolutionFound: If more than one result is found.
+        :raises NoSolutionFound: If no result is found.
+        """
+        try:
+            yield from super()._evaluate__(sources)
+        except LessThanExpectedNumberOfSolutions:
+            raise NoSolutionFound(self)
+        except GreaterThanExpectedNumberOfSolutions:
+            raise MultipleSolutionFound(self)
+
+
 @dataclass
-class ResultQuantificationConstraint(ABC):
+class QuantificationConstraint(ABC):
     """
     A base class that represents a constraint for quantification.
     """
 
     @abstractmethod
     def assert_satisfaction(
-        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+        self, number_of_solutions: int, quantifier: QuantifiedQuery, done: bool
     ) -> None:
         """
         Check if the constraint is satisfied, if not, raise a QuantificationNotSatisfiedError exception.
@@ -58,7 +150,7 @@ class ResultQuantificationConstraint(ABC):
 
 
 @dataclass
-class SingleValueQuantificationConstraint(ResultQuantificationConstraint, ABC):
+class SingleValueQuantificationConstraint(QuantificationConstraint, ABC):
     """
     A class that represents a single value constraint on the result quantification.
     """
@@ -83,7 +175,7 @@ class Exactly(SingleValueQuantificationConstraint):
         return f"n=={self.value}"
 
     def assert_satisfaction(
-        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+        self, number_of_solutions: int, quantifier: QuantifiedQuery, done: bool
     ) -> None:
         if number_of_solutions > self.value:
             raise GreaterThanExpectedNumberOfSolutions(quantifier, self.value)
@@ -103,7 +195,7 @@ class AtLeast(SingleValueQuantificationConstraint):
         return f"n>={self.value}"
 
     def assert_satisfaction(
-        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+        self, number_of_solutions: int, quantifier: QuantifiedQuery, done: bool
     ) -> None:
         if done and number_of_solutions < self.value:
             raise LessThanExpectedNumberOfSolutions(
@@ -121,14 +213,14 @@ class AtMost(SingleValueQuantificationConstraint):
         return f"n<={self.value}"
 
     def assert_satisfaction(
-        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+        self, number_of_solutions: int, quantifier: QuantifiedQuery, done: bool
     ) -> None:
         if number_of_solutions > self.value:
             raise GreaterThanExpectedNumberOfSolutions(quantifier, self.value)
 
 
 @dataclass
-class Range(ResultQuantificationConstraint):
+class Range(QuantificationConstraint):
     """
     A class that represents a range constraint on the result quantification.
     """
@@ -152,115 +244,10 @@ class Range(ResultQuantificationConstraint):
             )
 
     def assert_satisfaction(
-        self, number_of_solutions: int, quantifier: ResultQuantifier, done: bool
+        self, number_of_solutions: int, quantifier: QuantifiedQuery, done: bool
     ) -> None:
         self.at_least.assert_satisfaction(number_of_solutions, quantifier, done)
         self.at_most.assert_satisfaction(number_of_solutions, quantifier, done)
 
     def __repr__(self):
         return f"{self.at_least}<=n<={self.at_most}"
-
-
-@dataclass(eq=False)
-class ResultQuantifier(
-    UnaryExpression, DerivedExpression, CanBehaveLikeAVariable[T], ABC
-):
-    """
-    Base for quantifiers that return concrete results from entity/set queries
-    (e.g., An, The).
-    """
-
-    _child_: Selectable[T]
-    """
-    The child expression of the quantifier.
-    """
-    _quantification_constraint_: Optional[ResultQuantificationConstraint] = None
-    """
-    The quantification constraint that must be satisfied by the result quantifier if present.
-    """
-
-    def __post_init__(self):
-        self._var_ = self._child_
-        super().__post_init__()
-
-    @property
-    def _original_expression_(self) -> SymbolicExpression:
-        return self._child_
-
-    def _evaluate__(
-        self,
-        sources: Bindings,
-    ) -> Iterable[T]:
-
-        result_count = 0
-        values = self._child_._evaluate_(parent=self)
-        for value in values:
-            result_count += 1
-            self._assert_satisfaction_of_quantification_constraints_(
-                result_count, done=False
-            )
-            yield OperationResult(
-                value.bindings | {self._id_: value.value}, False, self, value
-            )
-        self._assert_satisfaction_of_quantification_constraints_(
-            result_count, done=True
-        )
-
-    def _assert_satisfaction_of_quantification_constraints_(
-        self, result_count: int, done: bool
-    ):
-        """
-        Assert the satisfaction of quantification constraints.
-
-        :param result_count: The current count of results
-        :param done: Whether all results have been processed
-        :raises QuantificationNotSatisfiedError: If the quantification constraints are not satisfied.
-        """
-        if self._quantification_constraint_:
-            self._quantification_constraint_.assert_satisfaction(
-                result_count, self, done
-            )
-
-    def _invert_(self):
-        raise UnsupportedNegation(self.__class__)
-
-    def __repr__(self):
-        name = f"{self.__class__.__name__}"
-        if self._quantification_constraint_:
-            name += f"({self._quantification_constraint_})"
-        return name
-
-
-@dataclass(eq=False, repr=False)
-class An(ResultQuantifier):
-    """Quantifier that yields all matching results one by one."""
-
-    ...
-
-
-@dataclass(eq=False, repr=False)
-class The(ResultQuantifier):
-    """
-    Quantifier that expects exactly one result; raises MultipleSolutionFound if more, and NoSolutionFound if none.
-    """
-
-    _quantification_constraint_: ResultQuantificationConstraint = field(
-        init=False, default_factory=lambda: Exactly(1)
-    )
-
-    def _evaluate__(
-        self,
-        sources: Bindings,
-    ) -> Iterable[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]]:
-        """
-        Evaluates the query object descriptor with the given bindings and yields the results.
-
-        :raises MultipleSolutionFound: If more than one result is found.
-        :raises NoSolutionFound: If no result is found.
-        """
-        try:
-            yield from super()._evaluate__(sources)
-        except LessThanExpectedNumberOfSolutions:
-            raise NoSolutionFound(self)
-        except GreaterThanExpectedNumberOfSolutions:
-            raise MultipleSolutionFound(self)

@@ -39,7 +39,7 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.query.query import Entity
-    from krrood.entity_query_language.query.operations import GroupedBy
+    from krrood.entity_query_language.query.operations import GroupedQuery
 
 
 IntOrFloat = int | float
@@ -137,7 +137,7 @@ class CountAll(Count[T]):
     Count all results per group.
     """
 
-    _child_: Optional[GroupedBy] = field(init=False, default=None)
+    _child_: Optional[GroupedQuery] = field(init=False, default=None)
     """
     The child expression to be counted which is the GroupedBy Operation, this will count of all results per group.
     It is set later during the query build process.

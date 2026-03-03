@@ -9,7 +9,7 @@ from __future__ import annotations
 import itertools
 import uuid
 from abc import ABC, abstractmethod
-from collections import UserDict, deque
+from collections import UserDict
 from copy import copy
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
@@ -31,6 +31,7 @@ from typing_extensions import (
 )
 
 from krrood.entity_query_language.failures import NoExpressionFoundForGivenID
+from krrood.entity_query_language.query.filtered_query import FilteredQuery
 from krrood.entity_query_language.utils import make_list, T, make_set, is_iterable
 from krrood.symbol_graph.symbol_graph import SymbolGraph
 
@@ -340,7 +341,7 @@ class SymbolicExpression(ABC):
             (
                 expr.condition
                 for expr in self._all_expressions_
-                if isinstance(expr, Filter)
+                if isinstance(expr, FilteredQuery)
             ),
             self._root_,
         )
@@ -577,30 +578,6 @@ class DerivedExpression(SymbolicExpression, ABC):
 
     def _process_result_(self, result: OperationResult) -> Any:
         return self._original_expression_._process_result_(result)
-
-
-@dataclass(eq=False, repr=False)
-class Filter(DerivedExpression, TruthValueOperator, ABC):
-    """
-    Data source that evaluates the truth value for each data point according to a condition expression and filters out
-    the data points that do not satisfy the condition.
-    """
-
-    @property
-    def _original_expression_(self) -> SymbolicExpression:
-        return self.condition
-
-    @property
-    @abstractmethod
-    def condition(self) -> SymbolicExpression:
-        """
-        The conditions expression that generates the valid bindings that satisfy the constraints.
-        """
-        ...
-
-    @property
-    def _name_(self):
-        return self.__class__.__name__
 
 
 @dataclass

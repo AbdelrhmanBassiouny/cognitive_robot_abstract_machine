@@ -25,7 +25,7 @@ from krrood.entity_query_language.failures import (
     NestedAggregationError,
     UnsupportedAggregationOfAGroupedByVariable,
 )
-from krrood.entity_query_language.query.operations import GroupedBy
+from krrood.entity_query_language.query.operations import GroupedQuery
 from ..dataset.department_and_employee import Department, Employee
 from ..dataset.semantic_world_like_classes import Cabinet, Body, Container, Drawer
 
@@ -499,7 +499,7 @@ def test_having_node_hierarchy(departments_and_employees):
 
     # Graph hierarchy check
     assert query._having_expression_._parent_ is query
-    assert isinstance(query._having_expression_.grouped_by, GroupedBy)
+    assert isinstance(query._having_expression_.grouped_by, GroupedQuery)
     assert query._conditions_root_._name_ == ">"
 
 

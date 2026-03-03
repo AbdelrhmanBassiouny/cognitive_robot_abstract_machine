@@ -9,8 +9,9 @@ from krrood.entity_query_language.rules.conclusion_selector import ConclusionSel
 from krrood.entity_query_language.query.query import (
     Query,
 )
-from krrood.entity_query_language.query.operations import OrderedBy, GroupedBy
-from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+from krrood.entity_query_language.query.operations import GroupedQuery
+from krrood.entity_query_language.query.ordered_query import OrderedQuery
+from krrood.entity_query_language.query.quantified_query import QuantifiedQuery
 from krrood.entity_query_language.operators.concatenation import Concatenation
 from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.operators.core_logical_operators import (
@@ -18,8 +19,8 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
-    Filter,
 )
+from krrood.entity_query_language.query.filtered_query import FilteredQuery
 from krrood.entity_query_language.core.variable import Variable, Literal
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.entity_query_language.operators.comparator import Comparator
@@ -117,7 +118,7 @@ class QueryGraph:
         )
         self.expression_node_map[expression] = node
 
-        if isinstance(expression, ResultQuantifier):
+        if isinstance(expression, QuantifiedQuery):
             node.wrap_subtree = True
 
         self._add_children_to_graph(node)
@@ -157,12 +158,12 @@ class ColorLegend(RXUtilsColorLegend):
         name = expression.__class__.__name__
         color = "white"
         match expression:
-            case Filter() | OrderedBy() | GroupedBy():
+            case FilteredQuery() | OrderedQuery() | GroupedQuery():
                 color = "#17becf"
             case Aggregator():
                 name = "Aggregator"
                 color = "#F54927"
-            case ResultQuantifier():
+            case QuantifiedQuery():
                 name = "ResultQuantifier"
                 color = "#9467bd"
             case Query():

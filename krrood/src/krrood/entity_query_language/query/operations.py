@@ -16,28 +16,17 @@ from typing_extensions import (
     Tuple,
     Any,
     Iterator,
-    Iterable,
     Optional,
-    Callable,
     Dict,
-    FrozenSet,
-    Hashable,
 )
 
-from krrood.entity_query_language.core.variable import Literal, ExternallySetVariable
 from krrood.entity_query_language.operators.aggregators import (
     Aggregator,
     Count,
-    CountAll,
 )
 from krrood.entity_query_language.core.base_expressions import (
-    DerivedExpression,
-    SymbolicExpression,
-    UnaryExpression,
     Bindings,
     OperationResult,
-    BinaryExpression,
-    Filter,
     Selectable,
 )
 from krrood.entity_query_language.failures import (
@@ -46,6 +35,7 @@ from krrood.entity_query_language.failures import (
 from krrood.entity_query_language.operators.set_operations import (
     MultiArityExpressionThatPerformsACartesianProduct,
 )
+from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.utils import ensure_hashable, is_iterable
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 
@@ -54,131 +44,6 @@ GroupKey = Tuple[Any, ...]
 A tuple representing values of variables that are used in the grouped_by clause.
 """
 
-
-@dataclass(eq=False, repr=False)
-class Where(Filter, UnaryExpression):
-    """
-    A symbolic expression that represents the `where()` statement of `QueryObjectDescriptor`. It is used to filter
-    ungrouped data. Is constructed through the `Where()` method of the `QueryObjectDescriptor`.
-    """
-
-    @property
-    def condition(self) -> SymbolicExpression:
-        return self._child_
-
-    def _evaluate__(self, sources: Bindings) -> Iterator[OperationResult]:
-        yield from (
-            result
-            for result in self._child_._evaluate_(sources, parent=self)
-            if result.is_true
-        )
-
-
-@dataclass(eq=False, repr=False)
-class Having(Filter, BinaryExpression):
-    """
-    A symbolic having expression that can be used to filter the grouped results of a query.
-    Is constructed through the `QueryObjectDescriptor` using the `having()` method.
-    """
-
-    left: GroupedBy
-    """
-    The grouped by expression that is used to group the results of the query. This is a child of the Having expression.
-    As the results need to be grouped before filtering.
-    """
-    right: SymbolicExpression
-    """
-    The condition expression that is used to filter the grouped results of the query.
-    """
-
-    @property
-    def condition(self) -> SymbolicExpression:
-        return self.right
-
-    @property
-    def grouped_by(self) -> GroupedBy:
-        return self.left
-
-    def _evaluate__(
-        self,
-        sources: Bindings,
-    ) -> Iterable[OperationResult]:
-        yield from (
-            OperationResult(
-                grouping_result.bindings | annotated_result.bindings,
-                self._is_false_,
-                self,
-            )
-            for grouping_result in self.grouped_by._evaluate_(sources, parent=self)
-            for annotated_result in self.condition._evaluate_(
-                grouping_result.bindings, parent=self
-            )
-            if annotated_result.is_true
-        )
-
-
-@dataclass(eq=False, repr=False)
-class OrderedBy(BinaryExpression, DerivedExpression):
-    """
-    Represents an ordered by clause in a query. This orders the results of query according to the values of the
-    specified variable.
-    """
-
-    right: Selectable
-    """
-    The variable to order by.
-    """
-    descending: bool = False
-    """
-    Whether to order the results in descending order.
-    """
-    key: Optional[Callable] = None
-    """
-    A function to extract the key from the variable value.
-    """
-
-    @property
-    def _original_expression_(self) -> SymbolicExpression:
-        """
-        The original expression that this expression was derived from.
-        """
-        return self.left
-
-    @property
-    def variable(self) -> Selectable:
-        """
-        The variable to order by.
-        """
-        return self.right
-
-    def _evaluate__(self, sources: Bindings) -> Iterator[OperationResult]:
-        results = list(self.left._evaluate_(sources, parent=self))
-        yield from sorted(
-            results,
-            key=self.apply_key,
-            reverse=self.descending,
-        )
-
-    def apply_key(self, result: OperationResult) -> Any:
-        """
-        Apply the key function to the variable to extract the reference value to order the results by.
-        """
-        var = self.variable
-        var_id = var._id_
-        if var_id not in result.all_bindings:
-            variable_value = next(var._evaluate_(result.all_bindings, self)).value
-        else:
-            variable_value = result.all_bindings[var_id]
-        if self.key:
-            return self.key(variable_value)
-        else:
-            return variable_value
-
-    @property
-    def _name_(self) -> str:
-        return f"OrderedBy({self.variable._name_})"
-
-
 GroupBindings = Dict[GroupKey, OperationResult]
 """
 A dictionary for grouped bindings which maps a group key to its corresponding bindings.
@@ -186,12 +51,16 @@ A dictionary for grouped bindings which maps a group key to its corresponding bi
 
 
 @dataclass(eq=False, repr=False)
-class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
+class GroupedQuery(Query):
     """
     This operation groups the results of a query by specific variables. This is useful for aggregating results
     separately for each group.
     """
 
+    query: Query = field(kw_only=True)
+    """
+    The query that will have its results grouped.
+    """
     aggregators: Tuple[Aggregator, ...] = field(default_factory=tuple)
     """
     The aggregators to apply to the grouped results.

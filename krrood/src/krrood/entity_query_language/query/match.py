@@ -25,7 +25,7 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
-from krrood.entity_query_language.query.quantifiers import An
+from krrood.entity_query_language.query.quantified_query import An
 from krrood.entity_query_language.core.base_expressions import Selectable
 from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
