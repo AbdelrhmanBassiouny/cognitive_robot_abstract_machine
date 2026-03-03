@@ -4,7 +4,7 @@ import traceback
 from dataclasses import is_dataclass
 
 import pytest
-from sqlalchemy.orm import Session, configure_mappers
+from sqlalchemy.orm import Session, configure_mappers, sessionmaker
 
 import krrood.entity_query_language.orm.model
 import krrood.symbol_graph.symbol_graph
@@ -164,7 +164,8 @@ def engine():
 
 @pytest.fixture(scope="session")
 def session(engine):
-    session = Session(engine)
+    session_maker = sessionmaker(engine)
+    session = session_maker()
     yield session
     session.close()
 

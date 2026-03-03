@@ -605,3 +605,20 @@ class NoChildToReplace(DataclassException):
     def __post_init__(self):
         self.message = f"Expression '{self.expression}' has no child '{self.old_child}' to replace with '{self.new_child}'."
         super().__post_init__()
+
+
+@dataclass
+class GenerativeBackendQueryIsNotMatch(DataclassException):
+    """
+    Exception raised when a query is not a match inside a generative backend.
+    """
+
+    expression: Query
+    """
+    The query that was passed to the generative backend.
+    """
+
+    def __post_init__(self):
+        self.message = (
+            f"Query {self.expression} is not a match inside a generative backend."
+        )

@@ -119,7 +119,7 @@ def match_variable(
 
 def probable_variable(
     type_: Union[Type[T], Selectable[T]],
-) -> Union[Type[T], CanBehaveLikeAVariable[T], MatchVariable[T]]:
+) -> Union[Type[T], MatchVariable[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.match_variable` but instead of searching for solutions in
     the domain objects, it is used as a query for probabilistic models to infer solutions that satisfy the constraints
@@ -134,7 +134,7 @@ def probable_variable(
 
 def probable(
     type_: Union[Type[T], Selectable[T]],
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
+) -> Union[Type[T], Match[T]]:
     """
     Create a random (probable) variable matching the type and the provided keyword arguments. This is used for easy
     variable definitions when there are structural constraints.

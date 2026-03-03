@@ -8,8 +8,13 @@ from typing_extensions import Any
 
 from random_events.interval import closed_open, closed, open
 from random_events.product_algebra import Event, SimpleEvent
-from krrood.probabilistic_knowledge.exceptions import WhereExpressionNotInDisjunctiveNormalForm
-from krrood.probabilistic_knowledge.object_access_variable import ObjectAccessVariable, AttributeAccessLike
+from krrood.probabilistic_knowledge.exceptions import (
+    WhereExpressionNotInDisjunctiveNormalForm,
+)
+from krrood.probabilistic_knowledge.object_access_variable import (
+    ObjectAccessVariable,
+    AttributeAccessLike,
+)
 from krrood.adapters.json_serializer import list_like_classes
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Literal
@@ -151,6 +156,9 @@ class QueryToRandomEventTranslator:
 
         result[variable.variable] = variable.variable.domain
         for comparator in comparators:
+
+            if isinstance(comparator.right._value_, type(Ellipsis)):
+                continue
 
             match comparator.operation:
                 case operator.eq:
@@ -333,17 +341,6 @@ class MatchToInstanceTranslator:
     """
     The match statement to translate.
     """
-
-    def __post_init__(self):
-        self._assert_all_comparators_are_equalities()
-
-    def _assert_all_comparators_are_equalities(self):
-        """
-        Checks if all comparators used in the Match are equalities.
-        """
-        for comparator in self.comparators:
-            if comparator.operation != operator.eq:
-                raise ValueError(str(comparator) + " is not an equality comparison.")
 
     @property
     def statement(self) -> Entity:

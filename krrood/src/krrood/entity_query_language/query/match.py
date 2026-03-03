@@ -42,7 +42,7 @@ from krrood.rustworkx_utils import RWXNode
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
-    from krrood.entity_query_language.query.query import Entity
+    from krrood.entity_query_language.query.query import Entity, Query
 
 
 @dataclass
@@ -163,6 +163,12 @@ class Match(AbstractMatchExpression[T]):
     The keyword arguments to match against.
     """
 
+    _expression: Query = field(init=False, default=None)
+    """
+    Cache for the expression (the actual EQL query) as soon as it has been calculated.
+    This is needed to apply where conditions directly to the match instance. 
+    """
+
     def __call__(self, **kwargs) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
         """
         Update the match with new keyword arguments to constrain the type we are matching with.
@@ -173,18 +179,22 @@ class Match(AbstractMatchExpression[T]):
         self.kwargs = kwargs
         return self
 
-    @cached_property
+    @property
     def expression(self) -> Union[Entity[T], T]:
         """
         Return the entity expression corresponding to the match query.
         """
         from krrood.entity_query_language.factories import entity
 
+        if self._expression is not None:
+            return self._expression
+
         if self.variable is None:
             self.resolve()
         entity_ = entity(self.variable)
         if self.conditions:
             entity_ = entity_.where(*self.conditions)
+        self._expression = entity_
         return entity_
 
     def _resolve(
@@ -251,6 +261,10 @@ class Match(AbstractMatchExpression[T]):
 
     def __str__(self):
         return self.name
+
+    def where(self, *conditions: ConditionType) -> Match[T]:
+        self.expression.where(*conditions)
+        return self
 
 
 @dataclass(eq=False)
