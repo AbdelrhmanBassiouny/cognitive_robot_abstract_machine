@@ -2,6 +2,7 @@
 
 import os
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass, field, InitVar
 from typing import Optional, List, Set, Dict, Union, Any
 
 import mujoco
@@ -11,7 +12,6 @@ import numpy
 from physics_simulators.base_simulator import (
     BaseSimulator,
     SimulatorRenderer,
-    SimulatorCallback,
     SimulatorCallbackResult,
     SimulatorState,
 )
@@ -34,55 +34,49 @@ class MujocoRenderer(SimulatorRenderer):
     def mj_viewer(self) -> mujoco.viewer:
         return self._mj_viewer
 
-
+@dataclass
 class MujocoSimulator(BaseSimulator):
     """Mujoco Simulator class"""
 
-    def __init__(
-        self,
-        file_path: str,
-        headless: bool = False,
-        step_size: float = 1e-3,
-        callbacks: Optional[List[SimulatorCallback]] = None,
-        **kwargs,
-    ):
+    _name: str = field(init=False, repr=False)
+
+    _file_path: str = field(init=False, repr=False)
+
+    file_path: InitVar[str] = ""
+
+    def __post_init__(self, file_path: str = ""):
+        super().__post_init__()
         self._file_path = file_path
         root = ET.parse(file_path).getroot()
-        self.name = root.attrib.get("model", self.name)
-        super().__init__(
-            headless,
-            step_size,
-            callbacks,
-            **kwargs,
-        )
-        self._mj_spec = mujoco.MjSpec.from_file(filename=self.file_path)
+        self._name = root.attrib.get("model", self.name)
+        self._mj_spec = mujoco.MjSpec.from_file(filename=self._file_path)
         self._mj_spec.option.integrator = getattr(
-            mujoco.mjtIntegrator, f"mjINT_{kwargs.get('integrator', 'RK4')}"
+            mujoco.mjtIntegrator, f"mjINT_{self.config.get('integrator', 'RK4')}"
         )
-        self._mj_spec.option.noslip_iterations = int(kwargs.get("noslip_iterations", 0))
+        self._mj_spec.option.noslip_iterations = int(self.config.get("noslip_iterations", 0))
         self._mj_spec.option.noslip_tolerance = float(
-            kwargs.get("noslip_tolerance", 1e-6)
+            self.config.get("noslip_tolerance", 1e-6)
         )
         self._mj_spec.option.cone = getattr(
-            mujoco.mjtCone, f"mjCONE_{kwargs.get('cone', 'PYRAMIDAL')}"
+            mujoco.mjtCone, f"mjCONE_{self.config.get('cone', 'PYRAMIDAL')}"
         )
-        self._mj_spec.option.impratio = float(kwargs.get("impratio", 1))
+        self._mj_spec.option.impratio = float(self.config.get("impratio", 1))
         self._mj_spec.option.timestep = self.step_size
-        if kwargs.get("multiccd", False):
+        if self.config.get("multiccd", False):
             self._mj_spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_MULTICCD
-        if kwargs.get("energy", True):
+        if self.config.get("energy", True):
             self._mj_spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_ENERGY
-        if not kwargs.get("contact", True):
+        if not self.config.get("contact", True):
             self._mj_spec.option.disableflags |= mujoco.mjtDisableBit.mjDSBL_CONTACT
-        if not kwargs.get("gravity", True):
+        if not self.config.get("gravity", True):
             self._mj_spec.option.disableflags |= mujoco.mjtDisableBit.mjDSBL_GRAVITY
         if mujoco.mj_version() >= 330:
-            if not kwargs.get("nativeccd", True):
+            if not self.config.get("nativeccd", True):
                 self._mj_spec.option.disableflags |= (
                     mujoco.mjtDisableBit.mjDSBL_NATIVECCD
                 )
         else:
-            if kwargs.get("nativeccd", False):
+            if self.config.get("nativeccd", False):
                 self._mj_spec.option.enableflags |= mujoco.mjtEnableBit.mjENBL_NATIVECCD
         self._mj_model = self._mj_spec.compile()
         assert self._mj_model is not None

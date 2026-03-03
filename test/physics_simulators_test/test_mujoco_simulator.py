@@ -10,7 +10,6 @@ from physics_simulators.base_simulator import (
     SimulatorState,
     SimulatorCallbackResult,
 )
-from test_base_simulator import BaseSimulatorTestCase
 
 resources_path = os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
@@ -24,17 +23,16 @@ headless = os.environ.get("CI", "false").lower() == "true"
 # headless = False
 
 
-class MujocoSimulatorTestCase(BaseSimulatorTestCase):
+class MujocoSimulatorTestCase(unittest.TestCase):
     file_path = os.path.join(resources_path, "floor.xml")
-    Simulator = MujocoSimulator
     headless = headless
     step_size = 1e-3
 
     def test_functions(self):
-        simulator = self.Simulator(
+        simulator = MujocoSimulator(
+            _headless=self.headless,
+            _step_size=self.step_size,
             file_path=os.path.join(resources_path, "mjx_single_cube_no_mesh.xml"),
-            headless=self.headless,
-            step_size=self.step_size,
         )
         simulator.start(simulate_in_thread=False, render_in_thread=True)
 
@@ -460,14 +458,14 @@ class MujocoSimulatorTestCase(BaseSimulatorTestCase):
 
 
 # @unittest.skip("This test is not meant to be run in CI")
-class MujocoSimulatorComplexTestCase(MujocoSimulatorTestCase):
+class MujocoSimulatorComplexTestCase(unittest.TestCase):
     file_path = os.path.join(resources_path, "mjx_single_cube_no_mesh.xml")
     Simulator = MujocoSimulator
     headless = headless
     step_size = 5e-4
 
     def test_running_in_10s_in_1(self):
-        simulator = self.test_initialize_simulator()
+        simulator = MujocoSimulator(_headless=self.headless, _step_size=self.step_size, file_path=self.file_path)
         constraints = SimulatorConstraints(max_real_time=10.0)
         simulator.start(
             constraints=constraints, simulate_in_thread=True, render_in_thread=True
@@ -477,7 +475,7 @@ class MujocoSimulatorComplexTestCase(MujocoSimulatorTestCase):
         self.assertIs(simulator.state, SimulatorState.STOPPED)
 
     def test_running_in_10s_2(self):
-        simulator = self.test_initialize_simulator()
+        simulator = MujocoSimulator(_headless=self.headless, _step_size=self.step_size, file_path=self.file_path)
         constraints = SimulatorConstraints(max_real_time=10.0)
         simulator.start(
             constraints=constraints, simulate_in_thread=True, render_in_thread=False
@@ -487,7 +485,7 @@ class MujocoSimulatorComplexTestCase(MujocoSimulatorTestCase):
         self.assertIs(simulator.state, SimulatorState.STOPPED)
 
     def test_running_in_10s_3(self):
-        simulator = self.test_initialize_simulator()
+        simulator = MujocoSimulator(_headless=self.headless, _step_size=self.step_size, file_path=self.file_path)
         constraints = SimulatorConstraints(max_real_time=10.0)
         simulator.start(
             constraints=constraints, simulate_in_thread=False, render_in_thread=True
@@ -500,7 +498,7 @@ class MujocoSimulatorComplexTestCase(MujocoSimulatorTestCase):
         self.assertIs(simulator.state, SimulatorState.STOPPED)
 
     def test_running_in_10s_4(self):
-        simulator = self.test_initialize_simulator()
+        simulator = MujocoSimulator(_headless=self.headless, _step_size=self.step_size, file_path=self.file_path)
         constraints = SimulatorConstraints(max_real_time=10.0)
         simulator.start(
             constraints=constraints, simulate_in_thread=False, render_in_thread=False
@@ -514,12 +512,12 @@ class MujocoSimulatorComplexTestCase(MujocoSimulatorTestCase):
         self.assertIs(simulator.state, SimulatorState.STOPPED)
 
     def test_running_2_simulators(self):
-        simulator1 = self.test_initialize_simulator()
+        simulator1 = MujocoSimulator(_headless=self.headless, _step_size=self.step_size, file_path=self.file_path)
         simulator1.start(simulate_in_thread=False, render_in_thread=True)
         self.headless = True
-        simulator2 = self.test_initialize_simulator()
+        simulator2 = MujocoSimulator(_headless=self.headless, _step_size=self.step_size, file_path=self.file_path)
         simulator2.start(simulate_in_thread=False)
-        simulator3 = self.test_initialize_simulator()
+        simulator3 = MujocoSimulator(_headless=self.headless, _step_size=self.step_size, file_path=self.file_path)
         simulator3.start(simulate_in_thread=False)
         for step in range(10000):
             simulator1.step()

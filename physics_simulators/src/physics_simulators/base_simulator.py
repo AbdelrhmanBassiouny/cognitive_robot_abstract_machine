@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from functools import partial
 from threading import Thread
-from typing import Optional, List, Any, Callable, Union
+from typing import Optional, List, Any, Callable, Union, ClassVar
 
 import numpy
 
@@ -126,60 +126,67 @@ class SimulatorCallback:
             simulator.renderer.sync()
         return result
 
-
+@dataclass
 class BaseSimulator:
     """Base class for Base Simulator"""
 
-    name: str = "Base Simulation"
+    _headless: bool = field(repr=False)
+
+    _step_size: float = field(default=1e-3, repr=False)
+
+    _callbacks: List[SimulatorCallback] = field(default_factory=list, repr=False)
+
+    config: dict = field(default_factory=dict)
+    """Configuration for the simulator, it can be used to store any information that is needed for the simulator"""
+
+    name: ClassVar[str] = "Base Simulation"
     """Name of the simulator"""
 
-    ext: str = ""
+    ext: ClassVar[str] = ""
     """Extension of the simulator description file"""
 
-    simulation_thread: Thread = None
-    """Simulation thread, run step() method in this thread"""
-
-    render_thread: Thread = None
-    """Render thread, run render() method in this thread"""
-
-    logger: logging.Logger = logging.getLogger(__name__)
+    logger: ClassVar[logging.Logger] = logging.getLogger(__name__)
     """Logger for the simulator"""
 
-    class_level_callbacks: List[SimulatorCallback] = []
+    simulation_thread: Optional[Thread] = field(init=False, default=None)
+    """Simulation thread, run step() method in this thread"""
+
+    render_thread: Optional[Thread] = field(init=False, default=None)
+    """Render thread, run render() method in this thread"""
+
+    class_level_callbacks: ClassVar[List[SimulatorCallback]] = []
     """Class level callback functions"""
 
-    instance_level_callbacks: List[SimulatorCallback] = None
+    instance_level_callbacks: List[SimulatorCallback] = field(init=False, default_factory=list)
     """Instance level callback functions"""
 
-    def __init__(
-        self,
-        headless: bool = False,
-        step_size: float = 1e-3,
-        callbacks: List[SimulatorCallback] = None,
-        **kwargs,
-    ):
-        """
-        Initialize the simulator with the viewer and the following keyword arguments:
+    _current_number_of_steps: int = field(init=False, default=0, repr=False)
+    """Current number of steps in the simulation"""
 
-        :param viewer: viewer for the simulator
-        :param number_of_envs: number of environments
-        :param headless: True to run the simulator in headless mode
-        :param real_time_factor: real time factor
-        :param step_size: step size
-        :param callbacks: list of callback functions
-        """
-        self._headless = headless
-        self._step_size = step_size
-        self._current_number_of_steps = 0
+    _start_real_time: float = field(init=False, repr=False)
+    """Real time when the simulation starts, used for calculating the elapsed real time during the simulation"""
+
+    _current_render_time: float = field(init=False, repr=False)
+    """Real time when the renderer is last updated, used for calculating the elapsed real time during rendering"""
+
+    _state: SimulatorState = field(init=False, repr=False)
+    """Current state of the simulator"""
+
+    _stop_reason: Optional[SimulatorStopReason] = field(init=False, default=None, repr=False)
+    """Reason for stopping the simulator"""
+
+    _renderer: SimulatorRenderer = field(init=False, repr=False)
+    """Renderer for the simulator, it can be used to render the simulation in real time, and it can also be used to check if the renderer is still running or not."""
+
+    def __post_init__(self):
         self._start_real_time = self.current_real_time
         self._state = SimulatorState.STOPPED
         self._stop_reason = None
         self._renderer = SimulatorRenderer()
         self._current_render_time = self.current_real_time
         self.instance_level_callbacks = []
-        if callbacks is not None:
-            for func in callbacks:
-                self.add_instance_callback(func)
+        for func in self._callbacks:
+            self.add_instance_callback(func)
         atexit.register(self.stop)
 
     @property
@@ -365,7 +372,7 @@ class BaseSimulator:
         :return: bool, True if the simulator should stop, False otherwise
         """
         if constraints is None:
-            return None
+            return self.should_stop_callback()
         if (
             constraints.max_real_time is not None
             and self.current_real_time - self.start_real_time

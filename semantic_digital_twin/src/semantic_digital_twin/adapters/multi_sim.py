@@ -2399,9 +2399,9 @@ class MultiSim(ABC):
         self.builder_class().build_world(world=world, file_path=self.default_file_path)
         self.simulator = self.simulator_class(
             file_path=self.default_file_path,
-            headless=headless,
-            step_size=step_size,
-            **kwargs,
+            _headless=headless,
+            _step_size=step_size,
+            config=kwargs,
         )
         self.synchronizer = self.synchronizer_class(
             world=world,

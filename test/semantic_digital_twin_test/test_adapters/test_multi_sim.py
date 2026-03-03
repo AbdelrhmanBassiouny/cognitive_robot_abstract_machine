@@ -25,7 +25,6 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body, Region, Actuator
 
 from physics_simulators.mujoco_simulator import MujocoSimulator
-from physics_simulators.base_simulator import SimulatorState
 from semantic_digital_twin.adapters.mjcf import MJCFParser
 from semantic_digital_twin.adapters.multi_sim import MujocoSim, MujocoActuator
 
@@ -55,7 +54,7 @@ logger.setLevel(logging.DEBUG)
 headless = os.environ.get("CI", "false").lower() == "true"
 # headless = True
 only_run_test_in_CI = os.environ.get("CI", "false").lower() == "false"
-only_run_test_in_CI = False
+# only_run_test_in_CI = False
 
 
 @unittest.skipIf(
