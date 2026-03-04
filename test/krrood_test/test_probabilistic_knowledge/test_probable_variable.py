@@ -1,3 +1,6 @@
+from copy import deepcopy
+from typing import Callable
+
 import numpy as np
 from random_events.interval import singleton, open, closed, closed_open
 from random_events.product_algebra import SimpleEvent, Event
@@ -160,6 +163,12 @@ def test_new_underspecified_translator():
         orientation=Orientation(x=0.0, y=0.0, z=0.0, w=1.0),
     ).where(probable_pose.variable.position.x > 0.5)
 
-    print(type(prob_q))
     a = UnderspecifiedToParametersTranslator(prob_q).parameterize()
-    print(a)
+    assignments = a.flat_assignments
+    for v, k in assignments.items():
+        if isinstance(k, type(...)):
+            assignments[v] = 0.0
+
+    a.apply_assignments(assignments)
+    r = a.construct_instance()
+    assert r == Pose(Position(0.0, 0.0, 0.0), Orientation(0.0, 0.0, 0.0, 1.0))

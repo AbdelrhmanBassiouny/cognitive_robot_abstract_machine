@@ -30,7 +30,7 @@ from krrood.adapters.json_serializer import list_like_classes
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.mapped_variable import Selectable
+from krrood.entity_query_language.core.mapped_variable import Selectable, MappedVariable
 from krrood.entity_query_language.factories import variable, variable_from
 from krrood.ormatic.dao import (
     DataAccessObject,
@@ -534,22 +534,53 @@ class CallableAndKwargs:
             {name: deepcopy(value) for name, value in self.kwargs.items()},
         )
 
-    def variables(self):
+    @cached_property
+    def flat_assignments(self) -> Dict[MappedVariable, Any]:
         result = {}
         symbolic_access = variable(type(self), [])
-        self._variables(symbolic_access, result)
-        return symbolic_access.variables
+        self._flat_assignments(symbolic_access, result)
+        return result
 
-    def _variables(self, symbolic_access: AttributeAccessLike, result: Dict): ...
+    def _flat_assignments(self, symbolic_access: AttributeAccessLike, result: Dict):
+        symbolic_access = symbolic_access.kwargs
+        for key, value in self.kwargs.items():
+            current_symbolic_access = symbolic_access[key]
+            if isinstance(value, list_like_classes):
+                for index, element in enumerate(value):
+                    if isinstance(element, CallableAndKwargs):
+                        element._flat_assignments(
+                            current_symbolic_access[index], result
+                        )
+                    else:
+                        result[current_symbolic_access[index]] = element
+
+            elif isinstance(value, CallableAndKwargs):
+                value._flat_assignments(current_symbolic_access, result)
+            else:
+                result[current_symbolic_access] = value
+
+    def apply_assignments(self, bindings: Dict[AttributeAccessLike, Any]):
+        for variable, value in bindings.items():
+            variable._set_external_instace_value_(self, value)
+
+    def construct_instance(self):
+        constructed_kwargs = {}
         for key, value in self.kwargs.items():
             if isinstance(value, list_like_classes):
-                ...
-            elif isinstance(value, CallableAndKwargs):
-                ...
+                constructed_kwargs[key] = type(value)(
+                    (
+                        element.construct_instance()
+                        if isinstance(element, CallableAndKwargs)
+                        else element
+                    )
+                    for element in value
+                )
 
-@dataclass
-class CoolerParameters:
-    callable_and_kwargs: CallableAndKwargs
+            elif isinstance(value, CallableAndKwargs):
+                constructed_kwargs[key] = value.construct_instance()
+            else:
+                constructed_kwargs[key] = value
+        return self.callable(**constructed_kwargs)
 
 
 @dataclass
@@ -566,7 +597,7 @@ class UnderspecifiedToParametersTranslator:
         statement: UnderspecifiedVariable,
     ) -> CallableAndKwargs:
 
-        current_callable = statement.expression.selected_variable
+        current_callable = statement.expression.selected_variable._type_
 
         kwargs = dict()
 

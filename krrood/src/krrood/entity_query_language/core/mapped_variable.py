@@ -164,6 +164,48 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         """
         pass
 
+    @property
+    def _access_path_(self) -> List[Self]:
+        """
+        :return: The access path of the variable as a list of operations.
+        """
+        current = self
+        result = [current]
+        while isinstance(current, MappedVariable):
+            current = current._child_
+            result.append(current)
+        return result[:-1][::-1]
+
+    def _set_external_instace_value_(self, instance: Any, value: Any):
+        """
+        Set the field of the instance at this access path to the given value.
+        This modifies instance in-place.
+
+        .. warning::
+            This method is only for use cases where symbolic access is needed outside of EQLs query evaluation.
+
+
+        :param instance: The instance to be updated.
+        :param value: The value to set.
+        """
+        current = instance
+        for domain_mapping in self._access_path_[:-1]:
+            current = next(domain_mapping._apply_mapping_(current))
+
+        self._apply_final_operation_set_external_instace_value_(current, value)
+
+    def _apply_final_operation_set_external_instace_value_(
+        self, instance: Any, value: Any
+    ):
+        """
+        Set the field of the instance using this operation to the given value.
+        This modifies instance in-place.
+
+        :param instance: The instance to be updated.
+        :param value: The value to set.
+        """
+        raise NotImplementedError
+
 
 @dataclass(eq=False, repr=False)
 class Attribute(MappedVariable):
@@ -198,6 +240,9 @@ class Attribute(MappedVariable):
     def _name_(self):
         return f"{self._child_._name_}.{self._attribute_name_}"
 
+    def _apply_final_operation_set_external_instace_value_(self, obj: Any, value: Any):
+        setattr(current, self.attribute._attribute_name_, value)
+
 
 @dataclass(eq=False, repr=False)
 class Index(MappedVariable):
@@ -216,6 +261,11 @@ class Index(MappedVariable):
     @property
     def _name_(self):
         return f"{self._child_._var_._name_}[{self._key_}]"
+
+    def _apply_final_operation_set_external_instace_value_(
+        self, instance: Any, value: Any
+    ):
+        instance[self._key_] = value
 
 
 @dataclass(eq=False, repr=False)
