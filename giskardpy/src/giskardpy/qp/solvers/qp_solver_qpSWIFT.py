@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING
 
 from line_profiler.explicit_profiler import profile
 
-from giskardpy.qp.adapters.explicit_adapter import GiskardToExplicitQPAdapter
-from giskardpy.qp.adapters.qp_adapter import QPData
-from typing_extensions import ClassVar
+from giskardpy.qp.qp_data import QPDataExplicit
 
 if TYPE_CHECKING:
     pass
@@ -15,15 +13,9 @@ from enum import IntEnum
 
 import numpy as np
 
-from giskardpy.qp.exceptions import QPSolverException, InfeasibleException
 from giskardpy.qp.solvers.qp_solver import QPSolver
 
-try:
-    import qpSWIFT_sparse_bindings as qpSWIFT
-except ImportError:
-    import qpSWIFT_sparse_bindings as qpSWIFT
-
-from giskardpy.qp.solvers.qp_solver_ids import SupportedQPSolver
+import qpSWIFT_sparse_bindings as qpSWIFT
 
 
 class QPSWIFTExitFlags(IntEnum):
@@ -35,17 +27,13 @@ class QPSWIFTExitFlags(IntEnum):
 
 
 @dataclass
-class QPSolverQPSwift(QPSolver):
+class QPSolverQPSwift(QPSolver[QPDataExplicit]):
     """
     min_x 0.5 x^T P x + c^T x
     s.t.  Ax = b
           Gx <= h
     """
 
-    solver_id: ClassVar[SupportedQPSolver] = SupportedQPSolver.qpSWIFT
-    required_adapter_type: ClassVar[type[GiskardToExplicitQPAdapter]] = (
-        GiskardToExplicitQPAdapter
-    )
     ignore_fail: bool = False
 
     opts = {
@@ -59,7 +47,7 @@ class QPSolverQPSwift(QPSolver):
     }
 
     @profile
-    def solver_call_explicit_interface(self, qp_data: QPData) -> np.ndarray:
+    def solver_call_explicit_interface(self, qp_data: QPDataExplicit) -> np.ndarray:
         result = qpSWIFT.solve_sparse_H_diag(
             H=qp_data.quadratic_weights,
             g=qp_data.linear_weights,

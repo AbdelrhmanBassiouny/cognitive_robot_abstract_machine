@@ -7,8 +7,6 @@ import numpy as np
 from line_profiler import profile
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.qp.adapters.qp_adapter import GiskardToQPAdapter
-from giskardpy.qp.qp_data import QPData
 from krrood.symbolic_math.symbolic_math import VariableParameters
 
 if TYPE_CHECKING:
@@ -102,7 +100,7 @@ class QPDataInequalityOnly:
         return qp_data_filtered
 
 
-class GiskardToTwoSidedNeqQPAdapter(GiskardToQPAdapter):
+class GiskardToTwoSidedNeqQPAdapter:
     """
     Takes free variables and constraints and converts them to a QP problem in the following format, depending on the
     class attributes:

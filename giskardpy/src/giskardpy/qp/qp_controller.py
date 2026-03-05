@@ -9,23 +9,16 @@ from typing import List, Optional, TYPE_CHECKING
 import numpy as np
 import pandas
 import pandas as pd
-from giskardpy.qp.qp_data import (
-    QPData,
-    ZeroWeightQPDataFilter,
-    QPDataFilter,
-    HessianOneConditioning,
-    MyConditioning,
-    Conditioning,
-)
 from line_profiler import profile
 
 import krrood.symbolic_math.symbolic_math as sm
-from giskardpy.qp.adapters.qp_adapter import GiskardToQPAdapter
+from giskardpy.qp.adapters.qp_adapter import GiskardToQPAdapter, QPDataSymbolic
 from giskardpy.qp.constraint_collection import ConstraintCollection
 from giskardpy.qp.exceptions import (
     HardConstraintsViolatedException,
     InfeasibleException,
 )
+from giskardpy.qp.qp_data import QPDataExplicit, QPData, QPDataFactory
 from giskardpy.qp.solvers.qp_solver import QPSolver
 from giskardpy.utils.utils import create_path
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
@@ -135,7 +128,7 @@ class QPControllerDebugger:
             with open(file_name2, "w") as f:
                 f.write(csv_string)
 
-    def _update_quadratic_weights(self, qp_data: QPData):
+    def _update_quadratic_weights(self, qp_data: QPDataExplicit):
         self.p_weights = pd.DataFrame(
             qp_data.quadratic_weights,
             self.free_variable_names,
@@ -143,7 +136,7 @@ class QPControllerDebugger:
             dtype=float,
         )
 
-    def _update_linear_weights(self, qp_data: QPData):
+    def _update_linear_weights(self, qp_data: QPDataExplicit):
         self.p_g = pd.DataFrame(
             qp_data.linear_weights,
             self.free_variable_names,
@@ -151,7 +144,7 @@ class QPControllerDebugger:
             dtype=float,
         )
 
-    def _update_box_constraints(self, qp_data: QPData):
+    def _update_box_constraints(self, qp_data: QPDataExplicit):
         self.p_lb = pd.DataFrame(
             qp_data.box_lower_constraints,
             self.free_variable_names,
@@ -173,7 +166,7 @@ class QPControllerDebugger:
             dtype=float,
         )
 
-    def _update_eq_constraints(self, qp_data: QPData):
+    def _update_eq_constraints(self, qp_data: QPDataExplicit):
         if len(qp_data.eq_bounds) > 0:
             self.p_bE_raw = pd.DataFrame(
                 qp_data.eq_bounds,
@@ -190,7 +183,7 @@ class QPControllerDebugger:
         else:
             self.p_bE = pd.DataFrame()
 
-    def _update_inequality_constraints(self, qp_data: QPData):
+    def _update_inequality_constraints(self, qp_data: QPDataExplicit):
         if len(qp_data.neq_lower_bounds) > 0:
             self.p_lbA_raw = pd.DataFrame(
                 qp_data.neq_lower_bounds,
@@ -224,7 +217,7 @@ class QPControllerDebugger:
             self.p_lbA = pd.DataFrame()
             self.p_ubA = pd.DataFrame()
 
-    def _update_equality_matrix(self, qp_data: QPData):
+    def _update_equality_matrix(self, qp_data: QPDataExplicit):
         if len(qp_data.dense_eq_matrix) > 0:
             self.p_E = pd.DataFrame(
                 qp_data.dense_eq_matrix,
@@ -235,7 +228,7 @@ class QPControllerDebugger:
         else:
             self.p_E = pd.DataFrame()
 
-    def _update_inequality_matrix(self, qp_data: QPData):
+    def _update_inequality_matrix(self, qp_data: QPDataExplicit):
         if len(qp_data.dense_neq_matrix) > 0:
             self.p_A = pd.DataFrame(
                 qp_data.dense_neq_matrix,
@@ -247,7 +240,10 @@ class QPControllerDebugger:
             self.p_A = pd.DataFrame()
 
     def _update_xdot(
-        self, qp_data: QPData, filter: QPDataFilter, new_xdot_full: Optional[np.ndarray]
+        self,
+        qp_data: QPDataExplicit,
+        filter: QPDataFilter,
+        new_xdot_full: Optional[np.ndarray],
     ):
         self.p_xdot = None
         if new_xdot_full is None:
@@ -317,7 +313,10 @@ class QPControllerDebugger:
 
     @profile
     def update(
-        self, qp_data: QPData, filter: QPDataFilter, new_xdot_full: Optional[np.ndarray]
+        self,
+        qp_data: QPDataExplicit,
+        filter: QPDataFilter,
+        new_xdot_full: Optional[np.ndarray],
     ) -> None:
         self._update_quadratic_weights(qp_data)
         self._update_linear_weights(qp_data)
@@ -384,6 +383,7 @@ class QPController:
     float_variables: List[sm.FloatVariable]
 
     qp_adapter: GiskardToQPAdapter = field(default=None, init=False)
+    qp_data_factory: QPDataFactory = field(default=None, init=False)
     qp_solver: QPSolver = field(default=None, init=False)
     debugger: QPControllerDebugger = field(default=None, init=False)
 
@@ -396,18 +396,23 @@ class QPController:
                 f'sample period: "{self.config.mpc_dt}"s\n'
                 f'max derivative: "{self.config.max_derivative.name}"\n'
                 f'prediction horizon: "{self.config.prediction_horizon}"\n'
-                f'QP solver: "{self.config.qp_solver_id.name}"'
+                f'QP solver: "{self.config.qp_solver_class.__class__.__name__}"'
             )
         self.debugger = QPControllerDebugger(self)
         self._set_active_dofs(degrees_of_freedom)
-
-        self.qp_adapter = self.qp_solver.required_adapter_type(
-            world_state_symbols=self.world_state_symbols,
-            life_cycle_symbols=self.life_cycle_variables,
-            float_variables=self.float_variables,
+        generic_qp_data_symbolic = QPDataSymbolic.from_giskard(
             degrees_of_freedom=self.active_dofs,
             constraint_collection=self.constraint_collection,
             config=self.config,
+        )
+
+        self.qp_data_factory = self.qp_solver.qp_data_type.factory(
+            generic_qp_data_symbolic
+        )
+        self.qp_data_factory.compile(
+            world_state_symbols=self.world_state_symbols,
+            life_cycle_symbols=self.life_cycle_variables,
+            float_variables=self.float_variables,
         )
 
     def _set_active_dofs(self, degrees_of_freedom: List[DegreeOfFreedom]):
@@ -449,7 +454,7 @@ class QPController:
         return len(self.active_dofs) == 0
 
     @profile
-    def get_cmd(
+    def compute_command(
         self,
         world_state: np.ndarray,
         life_cycle_state: np.ndarray,
@@ -458,6 +463,19 @@ class QPController:
         """
         Uses substitutions for each symbol to compute the next commands for each joint.
         """
+        # 1. evaluate qp Data
+        qp_data_raw = self.qp_data_factory.evaluate(
+            world_state, life_cycle_state, float_variables
+        )
+        # 2. apply filter
+        qp_data_filtered = qp_data_raw.apply_filters()
+        # 3. apply conditioning
+        # 4. solve qp
+        xdot_full = self.qp_solver.solver_call(qp_data_filtered)
+        # 5. if fail backup strategy
+        # 6. turn xdot into control command
+        return self.xdot_to_control_commands(xdot_full)
+
         qp_data_raw = self.qp_adapter.evaluate(
             world_state,
             life_cycle_state,

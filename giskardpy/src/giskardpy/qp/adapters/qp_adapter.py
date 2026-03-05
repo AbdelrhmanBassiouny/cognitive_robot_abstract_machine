@@ -21,11 +21,11 @@ from giskardpy.qp.exceptions import (
     VelocityLimitUnreachableException,
 )
 from giskardpy.qp.pos_in_vel_limits import b_profile
-from giskardpy.qp.qp_data import QPData
 from giskardpy.qp.solvers.qp_solver import QPSolver
 from giskardpy.qp.weight_gain import QuadraticWeightGain, LinearWeightGain
 from giskardpy.utils.decorators import memoize
 from giskardpy.utils.math import mpc
+from krrood.symbolic_math.symbolic_math import Vector, Matrix
 from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 
@@ -1819,67 +1819,59 @@ class InequalityModel(ProblemDataPart):
 
 
 @dataclass
-class GiskardToQPAdapter:
-    """
-    Takes free variables and constraints and converts them to a QP problem in the following format, depending on the
-    class attributes:
-    min_x 0.5 x^T H x + g^T x
-    s.t.  lb <= x <= ub     (box constraints)
-          Edof x <= bE_dof          (equality constraints)
-          Eslack x <= bE_slack        (equality constraints)
-          lbA <= Adof x <= ubA_dof  (lower/upper inequality constraints)
-          lbA <= Aslack x <= ubA_slack  (lower/upper inequality constraints)
-    """
+class QPDataSymbolic:
+    quadratic_weights: Vector
+    linear_weights: Vector
 
-    world_state_symbols: List[sm.FloatVariable]
-    life_cycle_symbols: List[sm.FloatVariable]
-    float_variables: List[sm.FloatVariable]
+    box_lower_constraints: Vector
+    box_upper_constraints: Vector
 
-    degrees_of_freedom: List[DegreeOfFreedom]
-    constraint_collection: ConstraintCollection
-    config: QPControllerConfig
-    sparse: bool = field(default=True)
+    eq_matrix_dofs: Matrix
+    eq_matrix_slack: Matrix
+    eq_bounds: Vector
 
-    compute_nI_I: bool = True
-    _nAi_Ai_cache: dict = field(default_factory=dict)
+    neq_matrix_dofs: Matrix
+    neq_matrix_slack: Matrix
+    neq_lower_bounds: Vector
+    neq_upper_bounds: Vector
 
-    def __post_init__(self):
+    @classmethod
+    def from_giskard(
+        cls,
+        degrees_of_freedom: List[DegreeOfFreedom],
+        constraint_collection: ConstraintCollection,
+        config: QPControllerConfig,
+    ):
         kwargs = {
-            "degrees_of_freedom": self.degrees_of_freedom,
-            "constraint_collection": self.constraint_collection,
-            "config": self.config,
+            "degrees_of_freedom": degrees_of_freedom,
+            "constraint_collection": constraint_collection,
+            "config": config,
         }
-        self.weights = Weights(**kwargs)
-        self.free_variable_bounds = FreeVariableBounds(**kwargs)
-        self.equality_model = EqualityModel(**kwargs)
-        self.equality_bounds = EqualityBounds(**kwargs)
-        self.inequality_model = InequalityModel(**kwargs)
-        self.inequality_bounds = InequalityBounds(**kwargs)
+        weights = Weights(**kwargs)
+        free_variable_bounds = FreeVariableBounds(**kwargs)
+        equality_model = EqualityModel(**kwargs)
+        equality_bounds = EqualityBounds(**kwargs)
+        inequality_model = InequalityModel(**kwargs)
+        inequality_bounds = InequalityBounds(**kwargs)
 
-        quadratic_weights, linear_weights = self.weights.construct_expression()
+        quadratic_weights, linear_weights = weights.construct_expression()
         box_lower_constraints, box_upper_constraints = (
-            self.free_variable_bounds.construct_expression()
+            free_variable_bounds.construct_expression()
         )
-        eq_matrix_dofs, self.eq_matrix_slack = (
-            self.equality_model.construct_expression()
-        )
-        eq_bounds = self.equality_bounds.construct_expression()
-        neq_matrix_dofs, self.neq_matrix_slack = (
-            self.inequality_model.construct_expression()
-        )
-        neq_lower_bounds, neq_upper_bounds = (
-            self.inequality_bounds.construct_expression()
-        )
-        self.general_qp_to_specific_qp(
+        eq_matrix_dofs, eq_matrix_slack = equality_model.construct_expression()
+        eq_bounds = equality_bounds.construct_expression()
+        neq_matrix_dofs, neq_matrix_slack = inequality_model.construct_expression()
+        neq_lower_bounds, neq_upper_bounds = inequality_bounds.construct_expression()
+        return cls(
             quadratic_weights=quadratic_weights,
             linear_weights=linear_weights,
             box_lower_constraints=box_lower_constraints,
             box_upper_constraints=box_upper_constraints,
             eq_matrix_dofs=eq_matrix_dofs,
-            eq_matrix_slack=self.eq_matrix_slack,
+            eq_matrix_slack=eq_matrix_slack,
             eq_bounds=eq_bounds,
             neq_matrix_dofs=neq_matrix_dofs,
-            neq_matrix_slack=self.neq_matrix_slack,
+            neq_matrix_slack=neq_matrix_slack,
             neq_lower_bounds=neq_lower_bounds,
             neq_upper_bounds=neq_upper_bounds,
         )
@@ -1915,29 +1907,22 @@ class GiskardToQPAdapter:
     def num_non_slack_variables(self) -> int:
         return self.num_free_variable_constraints - self.num_slack_variables
 
-    def general_qp_to_specific_qp(
-        self,
-        quadratic_weights: sm.Vector,
-        linear_weights: sm.Vector,
-        box_lower_constraints: sm.Vector,
-        box_upper_constraints: sm.Vector,
-        eq_matrix_dofs: sm.Matrix,
-        eq_matrix_slack: sm.Matrix,
-        eq_bounds: sm.Vector,
-        neq_matrix_dofs: sm.Matrix,
-        neq_matrix_slack: sm.Matrix,
-        neq_lower_bounds: sm.Vector,
-        neq_upper_bounds: sm.Vector,
-    ):
-        raise NotImplementedError()
 
-    def evaluate(
-        self,
-        world_state: np.ndarray,
-        life_cycle_state: np.ndarray,
-        float_variables: np.ndarray,
-    ) -> QPData:
-        raise NotImplementedError()
+@dataclass
+class GiskardToQPAdapter:
+    """
+    Takes free variables and constraints and converts them to a QP problem in the following format, depending on the
+    class attributes:
+    min_x 0.5 x^T H x + g^T x
+    s.t.  lb <= x <= ub     (box constraints)
+          Edof x <= bE_dof          (equality constraints)
+          Eslack x <= bE_slack        (equality constraints)
+          lbA <= Adof x <= ubA_dof  (lower/upper inequality constraints)
+          lbA <= Aslack x <= ubA_slack  (lower/upper inequality constraints)
+    """
+
+    # compute_nI_I: bool = True
+    # _nAi_Ai_cache: dict = field(default_factory=dict)
 
     @profile
     def _direct_limit_model(

@@ -9,10 +9,9 @@ import numpy as np
 from gurobipy import GRB, GurobiError
 from line_profiler.explicit_profiler import profile
 
+from giskardpy.qp.qp_data import QPDataExplicit
 from giskardpy.qp.solvers.qp_solver import QPSolver
 from giskardpy.qp.solvers.qp_solver_ids import SupportedQPSolver
-from giskardpy.qp.adapters.explicit_adapter import GiskardToExplicitQPAdapter
-from giskardpy.qp.adapters.qp_adapter import QPData
 from giskardpy.qp.exceptions import QPSolverException, InfeasibleException
 
 logger = logging.getLogger(__name__)
@@ -66,7 +65,7 @@ error_info = {
 }
 
 
-class QPSolverGurobi(QPSolver):
+class QPSolverGurobi(QPSolver[QPDataExplicit]):
     """
     min_x 0.5 x^T P x + q^T x
     s.t.  Ax = b
@@ -75,7 +74,6 @@ class QPSolverGurobi(QPSolver):
     """
 
     solver_id = SupportedQPSolver.gurobi
-    required_adapter_type = GiskardToExplicitQPAdapter
     STATUS_VALUE_DICT = {
         getattr(gurobipy.GRB.status, name): name
         for name in dir(gurobipy.GRB.status)
@@ -84,7 +82,7 @@ class QPSolverGurobi(QPSolver):
     _times: Dict[Tuple[int, int, int], list] = defaultdict(list)
 
     @profile
-    def init(self, qp_data: QPData):
+    def init(self, qp_data: QPDataExplicit):
         import scipy.sparse as sp
 
         self.qpProblem = gurobipy.Model("qp")
@@ -153,7 +151,7 @@ class QPSolverGurobi(QPSolver):
         )
 
     @profile
-    def solver_call_explicit_interface(self, qp_data: QPData) -> np.ndarray:
+    def solver_call_explicit_interface(self, qp_data: QPDataExplicit) -> np.ndarray:
         self.init(qp_data)
         self.qpProblem.optimize()
         success = self.qpProblem.status

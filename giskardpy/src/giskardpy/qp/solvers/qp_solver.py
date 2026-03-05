@@ -1,30 +1,36 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Type, List
+from typing import Type
 
 import numpy as np
+from typing_extensions import ClassVar, TypeVar, Generic, get_args
 
-from giskardpy.qp.qp_data import QPData
+from giskardpy.qp.qp_data import QPDataExplicit, QPDataTwoSidedInequality
 from giskardpy.qp.solvers.qp_solver_ids import SupportedQPSolver
-from typing_extensions import ClassVar
 
-if TYPE_CHECKING:
-    from giskardpy.qp.adapters.qp_adapter import GiskardToQPAdapter
+T = TypeVar("T", QPDataExplicit, QPDataTwoSidedInequality)
 
 
 @dataclass
-class QPSolver:
+class QPSolver(Generic[T]):
     solver_id: ClassVar[SupportedQPSolver]
-    required_adapter_type: ClassVar[Type[GiskardToQPAdapter]]
 
-    def solver_call(self, qp_data: QPData) -> np.ndarray:
+    @classmethod
+    @property
+    def qp_data_type(cls) -> Type[T]:
+        """
+        The semDT type for which this converter handles conversion.
+        """
+        return get_args(cls.__orig_bases__[0])[0]
+
+    def get_factory(self):
+        return None
+
+    def solver_call(self, qp_data: T) -> np.ndarray:
         raise NotImplementedError()
 
-    def solver_call_batch(self, qps: List[QPData]) -> np.ndarray:
-        raise NotImplementedError()
-
-    def solver_call_explicit_interface(self, qp_data: QPData) -> np.ndarray:
+    def solver_call_explicit_interface(self, qp_data: QPDataExplicit) -> np.ndarray:
         """
         min_x 0.5 x^T H x + g^T x
         s.t.  lb <= x <= ub     (box constraints)

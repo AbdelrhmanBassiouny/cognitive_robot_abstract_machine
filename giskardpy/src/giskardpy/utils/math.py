@@ -2,8 +2,8 @@ from typing import Tuple, Union, Dict, Type, Optional, List
 
 import numpy as np
 
+from giskardpy.qp.qp_data import QPDataExplicit
 from semantic_digital_twin.spatial_types.derivatives import Derivatives
-from giskardpy.qp.qp_data import QPData
 from giskardpy.qp.solvers.qp_solver import QPSolver
 from giskardpy.utils.decorators import memoize
 
@@ -289,7 +289,7 @@ def mpc(
         bE = np.delete(bE, [0])
         lb[ph] = 0
         ub[ph] = 0
-    qp_data = QPData(
+    qp_data = QPDataExplicit(
         quadratic_weights=w,
         linear_weights=g,
         box_lower_constraints=lb,
@@ -299,6 +299,8 @@ def mpc(
         neq_matrix=empty,
         neq_lower_bounds=np.array([]),
         neq_upper_bounds=np.array([]),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     )
     result = solver.solver_call_explicit_interface(qp_data)
     return result
