@@ -3237,7 +3237,7 @@ class TestCollisionAvoidance:
                 qp_controller_config=QPControllerConfig(
                     target_frequency=100,
                     prediction_horizon=30,
-                    qp_solver_class=QPSolverOSQP,
+                    qp_solver_class=QPSolverQPSwift,
                 ),
             )
         )

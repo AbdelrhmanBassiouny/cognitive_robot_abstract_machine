@@ -18,7 +18,7 @@ from giskardpy.qp.exceptions import (
     HardConstraintsViolatedException,
     InfeasibleException,
 )
-from giskardpy.qp.qp_data import QPDataExplicit, QPData, QPDataFactory
+from giskardpy.qp.qp_data import QPDataExplicit, QPData, QPDataFactory, MyConditioning
 from giskardpy.qp.solvers.qp_solver import QPSolver
 from giskardpy.utils.utils import create_path
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
@@ -242,7 +242,7 @@ class QPControllerDebugger:
     def _update_xdot(
         self,
         qp_data: QPDataExplicit,
-        filter: QPDataFilter,
+        filter,
         new_xdot_full: Optional[np.ndarray],
     ):
         self.p_xdot = None
@@ -315,7 +315,7 @@ class QPControllerDebugger:
     def update(
         self,
         qp_data: QPDataExplicit,
-        filter: QPDataFilter,
+        filter,
         new_xdot_full: Optional[np.ndarray],
     ) -> None:
         self._update_quadratic_weights(qp_data)
@@ -470,10 +470,13 @@ class QPController:
         # 2. apply filter
         qp_data_filtered = qp_data_raw.apply_filters()
         # 3. apply conditioning
+        conditioning = MyConditioning()
+        qp_data_filtered = qp_data_filtered.apply_conditioning(conditioning)
         # 4. solve qp
         xdot_full = self.qp_solver.solver_call(qp_data_filtered)
         # 5. if fail backup strategy
         # 6. turn xdot into control command
+        xdot_full = conditioning.unapply(xdot_full)
         return self.xdot_to_control_commands(xdot_full)
 
         qp_data_raw = self.qp_adapter.evaluate(
