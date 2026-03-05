@@ -712,8 +712,14 @@ class HasSupportingSurface(HasStorageSpace, ABC):
             ),
             points_3d=points_3d,
         )
+
+        supporting_surface_z_position = self.root.collision.scale.z / 2
         self_C_supporting_surface = FixedConnection(
-            parent=self.root, child=supporting_surface
+            parent=self.root,
+            child=supporting_surface,
+            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                z=supporting_surface_z_position, reference_frame=self.root
+            ),
         )
         self._world.add_region(supporting_surface)
         self._world.add_connection(self_C_supporting_surface)
@@ -776,7 +782,7 @@ class HasSupportingSurface(HasStorageSpace, ABC):
         samples = surface_circuit.sample(amount)
         samples = samples[np.argsort(surface_circuit.log_likelihood(samples))[::-1]]
         samples = np.concatenate((samples, z_coordinate), axis=1)
-        return [Point3(*s, reference_frame=self.root) for s in samples]
+        return [Point3(*s, reference_frame=self.supporting_surface) for s in samples]
 
     def _build_surface_sampler(
         self,

@@ -2,10 +2,6 @@ from __future__ import annotations
 
 import datetime
 
-from random_events.set import Set
-from random_events.variable import Continuous, Symbolic
-
-from krrood.entity_query_language.factories import variable_from
 from krrood.entity_query_language.factories import variable_from, variable
 from krrood.ormatic.dao import to_dao
 from krrood.probabilistic_knowledge.object_access_variable import ObjectAccessVariable
@@ -13,6 +9,8 @@ from krrood.probabilistic_knowledge.parameterizer import (
     DataAccessObjectParameterizer,
     Parameterization,
 )
+from random_events.set import Set
+from random_events.variable import Continuous, Symbolic
 from ..dataset.example_classes import (
     Position,
     Pose,
@@ -23,7 +21,6 @@ from ..dataset.example_classes import (
     Atom,
     Element,
 )
-from ..dataset.ormatic_interface import ListOfEnumDAO
 
 
 def test_parameterize_position():

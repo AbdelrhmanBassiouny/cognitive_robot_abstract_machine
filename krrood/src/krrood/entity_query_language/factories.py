@@ -38,11 +38,8 @@ from krrood.entity_query_language.query.quantifiers import (
     The,
     ResultQuantifier,
 )
-from krrood.entity_query_language.rules.conclusion_selector import (
-    Refinement,
-    Alternative,
-    Next,
-)
+from krrood.entity_query_language.rules.conclusion import Add
+from krrood.entity_query_language.rules.conclusion_selector import Refinement, Alternative, Next
 from krrood.entity_query_language.query.query import Entity, SetOf, Query
 from krrood.entity_query_language.utils import is_iterable
 from krrood.entity_query_language.core.variable import (
@@ -117,7 +114,7 @@ def match_variable(
 
 def probable_variable(
     type_: Union[Type[T], Selectable[T]],
-) -> Union[Type[T], CanBehaveLikeAVariable[T], MatchVariable[T]]:
+) -> Union[Type[T], MatchVariable[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.match_variable` but instead of searching for solutions in
     the domain objects, it is used as a query for probabilistic models to infer solutions that satisfy the constraints
@@ -132,7 +129,7 @@ def probable_variable(
 
 def probable(
     type_: Union[Type[T], Selectable[T]],
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
+) -> Union[Type[T], Match[T]]:
     """
     Create a random (probable) variable matching the type and the provided keyword arguments. This is used for easy
     variable definitions when there are structural constraints.
@@ -355,6 +352,17 @@ def the(
 
 
 # %% Rules
+
+
+def add(variable: Any, value: Any) -> None:
+    """
+    Add a value to a variable.
+
+    :param variable: The variable to which the value will be added.
+    :param value: The value to be added to the variable.
+    :return: None
+    """
+    Add(variable, value)
 
 
 def inference(

@@ -7,7 +7,10 @@ from krrood.entity_query_language.query.match import (
     AbstractMatchExpression,
     construct_graph_and_get_root,
 )
-from krrood.probabilistic_knowledge.parameterizer import DataAccessObjectParameterizer
+from krrood.probabilistic_knowledge.parameterizer import (
+    DataAccessObjectParameterizer,
+    copy_partial_object,
+)
 from krrood.rustworkx_utils import RWXNode
 from random_events.interval import singleton, open, closed, closed_open
 from random_events.product_algebra import SimpleEvent, Event
@@ -124,7 +127,7 @@ def test_dnf_checking():
     assert (translated - result_by_hand).is_empty()
 
 
-def test_query_writing_with_match():
+def test_query_writing_with_match_and_copy():
     var: ProbableVariable = probable_variable(Pose)(
         position=probable(Position)(x=0.1, y=..., z=...), orientation=None
     )
@@ -135,3 +138,7 @@ def test_query_writing_with_match():
     assert obj.position.y == ...
     assert obj.position.z == ...
     assert obj.orientation is None
+
+    copied = copy_partial_object(obj)
+    assert obj is not copied
+    assert obj == copied
