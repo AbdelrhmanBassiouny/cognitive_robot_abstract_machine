@@ -40,11 +40,8 @@ from krrood.entity_query_language.query.quantified_query import (
     The,
     QuantifiedQuery,
 )
-from krrood.entity_query_language.rules.conclusion_selector import (
-    Refinement,
-    Alternative,
-    Next,
-)
+from krrood.entity_query_language.rules.conclusion import Add
+from krrood.entity_query_language.rules.conclusion_selector import Refinement, Alternative, Next
 from krrood.entity_query_language.query.query import Entity, SetOf, Query
 from krrood.entity_query_language.utils import is_iterable
 from krrood.entity_query_language.core.variable import (
@@ -357,6 +354,17 @@ def the(
 
 
 # %% Rules
+
+
+def add(variable: Any, value: Any) -> None:
+    """
+    Add a value to a variable.
+
+    :param variable: The variable to which the value will be added.
+    :param value: The value to be added to the variable.
+    :return: None
+    """
+    Add(variable, value)
 
 
 def inference(

@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import pytest
 
 from krrood.entity_query_language.factories import (
@@ -19,6 +21,17 @@ from ..dataset.semantic_world_like_classes import (
     Container,
     Handle,
 )
+
+
+def test_doc_match():
+    @dataclass(unsafe_hash=True)
+    class Robot:
+        name: str
+        battery: int
+
+    robots = [Robot("R2D2", 100), Robot("C3PO", 0)]
+    query = match_variable(Robot, domain=robots)(name="R2D2", battery=100)
+    assert query.tolist()[0].name == "R2D2"
 
 
 def test_match(handles_and_containers_world):
