@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, Field
 from functools import lru_cache, cached_property
+
 from typing_extensions import Generic, Type
 
 from krrood.class_diagrams.utils import T, get_generic_type_param

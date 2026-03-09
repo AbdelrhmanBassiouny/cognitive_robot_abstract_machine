@@ -22,6 +22,10 @@ class Company(RecognizedGroup): ...
 @dataclass(eq=False)
 class Country(RecognizedGroup): ...
 
+@dataclass(unsafe_hash=True)
+class Course(Symbol):
+    name: str
+
 @dataclass(eq=False)
 class Person(Symbol):
     name: str = field(kw_only=True, default=None)
@@ -30,12 +34,19 @@ class Person(Symbol):
     head_of: RecognizedGroup = field(kw_only=True, default=None)
     representative_of: RecognizedGroup = field(kw_only=True, default=None)
     delegate_of: RecognizedGroup = field(kw_only=True, default=None)
+    teacher_of: List[Course] = field(kw_only=True, default=None)
 
 @dataclass(eq=False)
 class CEOAsFirstRole(Person):
     person: Person
     # Original Owner of the head_of field
     head_of: RecognizedGroup = field(kw_only=True, default=None)
+
+@dataclass(eq=False)
+class ProfessorAsFirstRole(Person):
+    person: Person
+    # Original Owner of the teacher_of field
+    teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
 @dataclass(eq=False)
 class RepresentativeAsSecondRole(CEOAsFirstRole):

@@ -27,6 +27,11 @@ class Company(RecognizedGroup): ...
 class Country(RecognizedGroup): ...
 
 
+@dataclass(unsafe_hash=True)
+class Course(Symbol):
+    name: str
+
+
 @dataclass(eq=False)
 class Person(Symbol):
     name: str
@@ -41,6 +46,16 @@ class Person(Symbol):
 class CEOAsFirstRole(Role[Person], Symbol):
     person: Person
     head_of: RecognizedGroup = None
+
+    @classmethod
+    def role_taker_field(cls) -> Field:
+        return [f for f in fields(cls) if f.name == "person"][0]
+
+
+@dataclass(eq=False)
+class ProfessorAsFirstRole(Role[Person], Symbol):
+    person: Person
+    teacher_of: List[Course] = field(default_factory=list)
 
     @classmethod
     def role_taker_field(cls) -> Field:
