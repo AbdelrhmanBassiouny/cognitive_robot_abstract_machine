@@ -196,8 +196,8 @@ class QPDataExplicit(QPData):
         )
 
     def _apply_column_scaling(
-        self, conditioning: ConditioningStrategy, qp_data: QPData
-    ) -> QPData:
+        self, conditioning: ConditioningStrategy, qp_data: QPDataExplicit
+    ) -> QPDataExplicit:
         if conditioning.C is not None:
             qp_data.quadratic_weights = (
                 conditioning.C @ qp_data.quadratic_weights @ conditioning.C
@@ -220,19 +220,20 @@ class QPDataExplicit(QPData):
         return qp_data
 
     def _apply_row_scaling_eq(
-        self, conditioning: ConditioningStrategy, qp_data: QPData
-    ) -> QPData:
+        self, conditioning: ConditioningStrategy, qp_data: QPDataExplicit
+    ) -> QPDataExplicit:
         if conditioning.R_eq is not None:
             qp_data.eq_matrix = conditioning.R_eq @ qp_data.eq_matrix
             qp_data.eq_bounds = conditioning.R_eq @ qp_data.eq_bounds
         return qp_data
 
     def _apply_row_scaling_neq(
-        self, conditioning: ConditioningStrategy, qp_data: QPData
-    ) -> QPData:
+        self, conditioning: ConditioningStrategy, qp_data: QPDataExplicit
+    ) -> QPDataExplicit:
         if conditioning.R_neq is not None:
             qp_data.neq_matrix = conditioning.R_neq @ qp_data.neq_matrix
-            qp_data.neq_bounds = conditioning.R_neq @ qp_data.neq_bounds
+            qp_data.neq_lower_bounds = conditioning.R_neq @ qp_data.neq_lower_bounds
+            qp_data.neq_upper_bounds = conditioning.R_neq @ qp_data.neq_upper_bounds
         return qp_data
 
     def apply_filters(self) -> Self:

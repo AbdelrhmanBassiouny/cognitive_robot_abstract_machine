@@ -25,7 +25,7 @@ def simple_inequality_qp() -> tuple[QPData, np.ndarray]:
     expected solution:
         [-0.25, -0.25]
     """
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array([1.0, 1.0]),
         linear_weights=np.array([0.0, 0.0]),
         box_lower_constraints=np.array([-np.inf, -np.inf]),
@@ -35,6 +35,8 @@ def simple_inequality_qp() -> tuple[QPData, np.ndarray]:
         neq_matrix=sp.csc_matrix(np.array([[1.0, 1.0]])),
         neq_lower_bounds=np.array([-np.inf]),
         neq_upper_bounds=np.array([-0.5]),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     ), np.array([-0.25, -0.25])
 
 
@@ -50,7 +52,7 @@ def simple_eq_as_inequality_qp() -> tuple[QPData, np.ndarray]:
     expected solution:
         [-0.25, -0.25]
     """
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array([1.0, 1.0]),
         linear_weights=np.array([0.0, 0.0]),
         box_lower_constraints=np.array([-np.inf, -np.inf]),
@@ -60,6 +62,8 @@ def simple_eq_as_inequality_qp() -> tuple[QPData, np.ndarray]:
         neq_matrix=sp.csc_matrix(np.array([[1.0, 1.0]])),
         neq_lower_bounds=np.array([-0.5]),
         neq_upper_bounds=np.array([-0.5]),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     ), np.array([-0.25, -0.25])
 
 
@@ -75,7 +79,7 @@ def simple_equality_qp() -> tuple[QPData, np.ndarray]:
     expected solution:
         [-0.25, -0.25]
     """
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array([1.0, 1.0]),
         linear_weights=np.array([0.0, 0.0]),
         box_lower_constraints=np.array([-np.inf, -np.inf]),
@@ -85,6 +89,8 @@ def simple_equality_qp() -> tuple[QPData, np.ndarray]:
         neq_matrix=sp.csc_matrix(np.zeros((0, 2))),
         neq_lower_bounds=np.array([]),
         neq_upper_bounds=np.array([]),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     ), np.array([-0.25, -0.25])
 
 
@@ -99,7 +105,7 @@ def box_constraints_qp() -> tuple[QPData, np.ndarray]:
     expected solution:
         [0.0, 0.5]
     """
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array([2.0, 2.0]),
         linear_weights=np.array([0.0, 0.0]),
         box_lower_constraints=np.array([-1.0, 0.5]),
@@ -109,6 +115,8 @@ def box_constraints_qp() -> tuple[QPData, np.ndarray]:
         neq_matrix=sp.csc_matrix(np.zeros((0, 2))),
         neq_lower_bounds=np.array([]),
         neq_upper_bounds=np.array([]),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     ), np.array([0.0, 0.5])
 
 
@@ -146,7 +154,7 @@ def infeasible_qp() -> QPData:
         x1 = 1.0
         x1 = 2.0 (infeasible)
     """
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array([1.0]),
         linear_weights=np.array([0.0]),
         box_lower_constraints=np.array([-np.inf]),
@@ -156,6 +164,8 @@ def infeasible_qp() -> QPData:
         neq_matrix=sp.csc_matrix(np.zeros((0, 1))),
         neq_lower_bounds=np.array([]),
         neq_upper_bounds=np.array([]),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     )
 
 
@@ -169,7 +179,7 @@ def larger_qp() -> tuple[QPData, np.ndarray]:
     expected solution:
         [1/3, 1/3, 1/3]
     """
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array([2.0, 2.0, 2.0]),
         linear_weights=np.array([0.0, 0.0, 0.0]),
         box_lower_constraints=np.array([-np.inf, -np.inf, -np.inf]),
@@ -179,12 +189,14 @@ def larger_qp() -> tuple[QPData, np.ndarray]:
         neq_matrix=sp.csc_matrix(np.zeros((0, 3))),
         neq_lower_bounds=np.array([]),
         neq_upper_bounds=np.array([]),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     ), np.array([1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0])
 
 
 @pytest.fixture()
 def sadness_qp_raw():
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array(
             [
                 0.1,
@@ -2722,12 +2734,14 @@ def sadness_qp_raw():
         ),
         neq_lower_bounds=np.array([], dtype=float),
         neq_upper_bounds=np.array([], dtype=float),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     )
 
 
 @pytest.fixture()
 def sadness_qp17():
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array(
             [
                 0.1,
@@ -5265,12 +5279,14 @@ def sadness_qp17():
         ),
         neq_lower_bounds=np.array([], dtype=float),
         neq_upper_bounds=np.array([], dtype=float),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     )
 
 
 @pytest.fixture()
 def sadness_qp21():
-    return QPData(
+    return QPDataExplicit(
         quadratic_weights=np.array(
             [
                 0.1,
@@ -7808,12 +7824,13 @@ def sadness_qp21():
         ),
         neq_lower_bounds=np.array([], dtype=float),
         neq_upper_bounds=np.array([], dtype=float),
+        num_eq_slack_variables=0,
+        num_neq_slack_variables=0,
     )
 
 
 def test_qp_data_inequality(simple_inequality_qp):
     qp_data, expected = simple_inequality_qp
-    print(qp_data.pretty_print_problem())
     result = QPSolverQPSwift().solver_call(qp_data)
     assert np.allclose(result, expected)
 
@@ -7858,7 +7875,7 @@ def test_qp_data_larger_qp(larger_qp):
 def test_C_conditioning(simple_inequality_qp):
     qp_data, expected = simple_inequality_qp
     conditioning = ConditioningStrategy(C=sp.diags([69.0, 23.0]))
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, expected)
@@ -7867,7 +7884,7 @@ def test_C_conditioning(simple_inequality_qp):
 def test_R_conditioning(simple_equality_qp):
     qp_data, expected = simple_equality_qp
     conditioning = ConditioningStrategy(R_eq=sp.diags([23.0]))
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, expected)
@@ -7876,7 +7893,7 @@ def test_R_conditioning(simple_equality_qp):
 def test_R_neq_conditioning(simple_inequality_qp):
     qp_data, expected = simple_inequality_qp
     conditioning = ConditioningStrategy(R_neq=sp.diags([10.0]))
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, expected)
@@ -7885,7 +7902,7 @@ def test_R_neq_conditioning(simple_inequality_qp):
 def test_combined_conditioning(simple_inequality_qp):
     qp_data, expected = simple_inequality_qp
     conditioning = ConditioningStrategy(C=sp.diags([2.0, 0.5]), R_neq=sp.diags([10.0]))
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, expected)
@@ -7894,7 +7911,7 @@ def test_combined_conditioning(simple_inequality_qp):
 def test_identity_conditioning(simple_inequality_qp):
     qp_data, expected = simple_inequality_qp
     conditioning = ConditioningStrategy(C=sp.diags([1.0, 1.0]), R_neq=sp.diags([1.0]))
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, expected)
@@ -7903,7 +7920,7 @@ def test_identity_conditioning(simple_inequality_qp):
 def test_no_conditioning(simple_inequality_qp):
     qp_data, expected = simple_inequality_qp
     conditioning = ConditioningStrategy()
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, expected)
@@ -7913,7 +7930,7 @@ def test_sadness_qp_gurobi(sadness_qp17):
     qp_data = sadness_qp17
     normal_result = QPSolverGurobi().solver_call(qp_data)
     conditioning = HessianOneConditioningStrategy()
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverGurobi().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, normal_result)
@@ -7923,7 +7940,7 @@ def test_sadness_qp_gurobi_my_conditioning(sadness_qp_raw):
     qp_data = sadness_qp_raw
     normal_result = QPSolverGurobi().solver_call(qp_data)
     conditioning = JerkOneConditioningStrategy()
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverGurobi().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, normal_result)
@@ -7933,7 +7950,7 @@ def test_sadness_qp_qpswift_my_conditioning(sadness_qp_raw):
     qp_data = sadness_qp_raw
     normal_result = QPSolverQPSwift(ignore_fail=True).solver_call(qp_data)
     conditioning = JerkOneConditioningStrategy()
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, normal_result)
@@ -7943,7 +7960,7 @@ def test_sadness_qp_qpswift(sadness_qp21):
     qp_data = sadness_qp21
     # normal_result = QPSolverQPSwift(ignore_fail=True).solver_call(qp_data)
     conditioning = HessianOneConditioningStrategy()
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     # assert np.allclose(result, normal_result)
@@ -7953,7 +7970,7 @@ def test_hassian_one(larger_qp):
     qp_data, expected = larger_qp
     normal_result = QPSolverQPSwift().solver_call(qp_data)
     conditioning = HessianOneConditioningStrategy.from_qp_data(qp_data)
-    conditioned_qp_data = conditioning.apply(qp_data)
+    conditioned_qp_data = qp_data.apply_conditioning(conditioning)
     conditioned_result = QPSolverQPSwift().solver_call(conditioned_qp_data)
     result = conditioning.unapply(conditioned_result)
     assert np.allclose(result, normal_result)
