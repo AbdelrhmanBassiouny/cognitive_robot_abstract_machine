@@ -85,11 +85,6 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         return convert_args_and_kwargs_into_hashable_key(all_kwargs)
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
-        # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
-        if name.startswith("__") and name.endswith("__"):
-            raise AttributeError(
-                f"{self.__class__.__name__} object has no attribute {name}"
-            )
         return self._get_mapped_variable_(Attribute, name)
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
@@ -153,7 +148,7 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
 
         yield from (
             self._build_operation_result_and_update_truth_value_(
-                child_result.bindings | {self._binding_id_: mapped_value}, child_result
+                child_result.bindings | {self._id_: mapped_value}, child_result
             )
             for child_result in self._child_._evaluate_(sources, parent=self)
             for mapped_value in self._apply_mapping_(child_result.value)

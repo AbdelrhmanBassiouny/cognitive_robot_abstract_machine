@@ -14,7 +14,9 @@ from functools import cached_property
 from typing import List, Iterable
 
 from krrood.entity_query_language.core.base_expressions import Bindings, OperationResult
-from krrood.entity_query_language.operators.core_logical_operators import LogicalBinaryOperator
+from krrood.entity_query_language.operators.core_logical_operators import (
+    LogicalBinaryOperator,
+)
 
 
 @dataclass(eq=False, repr=False)
@@ -43,7 +45,7 @@ class ForAll(QuantifiedConditional):
     @cached_property
     def condition_unique_variable_ids(self) -> List[uuid.UUID]:
         return [
-            v._binding_id_
+            v._id_
             for v in self.condition._unique_variables_.difference(
                 self.left._unique_variables_
             )
@@ -110,7 +112,7 @@ class Exists(QuantifiedConditional):
     ) -> Iterable[OperationResult]:
         seen_var_values = []
         for val in self.condition._evaluate_(sources, parent=self):
-            var_val = val[self.variable._binding_id_]
+            var_val = val[self.variable._id_]
             if val.is_true and var_val not in seen_var_values:
                 seen_var_values.append(var_val)
                 yield OperationResult(val.bindings, False, self)

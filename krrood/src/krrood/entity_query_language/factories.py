@@ -8,10 +8,7 @@ import operator
 
 from typing_extensions import Union, Iterable
 
-from krrood.entity_query_language.core.base_expressions import (
-    SymbolicExpression,
-    TruthValueOperator,
-)
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression, TruthValueOperator
 from krrood.entity_query_language.core.mapped_variable import (
     FlatVariable,
     CanBehaveLikeAVariable,
@@ -22,13 +19,16 @@ from krrood.entity_query_language.core.variable import (
     ExternallySetVariable,
 )
 from krrood.entity_query_language.enums import DomainSource
-from krrood.entity_query_language.failures import UnsupportedExpressionTypeForDistinct
+from krrood.entity_query_language.exceptions import UnsupportedExpressionTypeForDistinct
 from krrood.entity_query_language.operators.aggregators import (
     Max,
     Min,
     Sum,
     Average,
     Count,
+    CountAll,
+    Mode,
+    MultiMode,
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.concatenation import Concatenation
@@ -105,7 +105,7 @@ def match(
 
 def match_variable(
     type_: Union[Type[T], Selectable[T]], domain: DomainType
-) -> Union[T, CanBehaveLikeAVariable[T], MatchVariable[T]]:
+) -> Union[T, Entity[T], MatchVariable[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.match` but with a domain to use for the variable created
      by the match.
@@ -432,6 +432,38 @@ def max(
     )
 
 
+def mode(
+    variable: Selectable[T],
+    default: Optional[T] = None,
+) -> Union[T, Mode[T]]:
+    """
+    Calculate and return the first mode from the variable values. The mode is the most common value in the iterable. It is found by
+    counting the occurrences of each value and returning the one with the highest count. If there are multiple values
+    with the same highest count, the first one encountered is returned. This is an aggregation function, thus the query
+    will be fully evaluated before the result is returned.
+
+    :param variable: The variable for which the mode value is to be found.
+    :param default: The value returned when the iterable is empty.
+    :return: A Max object that can be evaluated to find the mode value.
+    """
+    return Mode(variable, _default_value_=default)
+
+
+def multimode(
+    variable: Selectable[T],
+    default: Optional[T] = None,
+) -> Union[T, MultiMode[T]]:
+    """
+    Calculate and return all mode values from the variable values. Similar to :py:func:`krrood.entity_query_language.factories.mode`
+    but returns all values that have the same mode value (i.e., all values that have the same highest count).
+
+    :param variable: The variable for which the mode value is to be found.
+    :param default: The value returned when the iterable is empty.
+    :return: A Max object that can be evaluated to find the mode value.
+    """
+    return MultiMode(variable, _default_value_=default)
+
+
 def min(
     variable: Selectable[T],
     key: Optional[Callable] = None,
@@ -492,18 +524,25 @@ def average(
     )
 
 
-def count(
-    variable: Optional[Selectable[T]] = None, distinct: bool = False
-) -> Union[T, Count[T]]:
+def count(variable: Selectable[T], distinct: bool = False) -> Union[T, Count[T]]:
     """
     Count the number of values produced by the given variable.
 
-    :param variable: The variable for which the count is calculated, if not given, the count of all results (by group)
-     is returned.
+    :param variable: The variable for which the count is calculated.
     :param distinct: Whether to only consider distinct values.
     :return: A Count object that can be evaluated to count the number of values.
     """
     return Count(variable, _distinct_=distinct)
+
+
+def count_all(distinct: bool = False) -> Union[T, Count[T]]:
+    """
+    Count all results (by group).
+
+    :param distinct: Whether to only consider distinct values.
+    :return: A Count object that can be evaluated to count the number of values.
+    """
+    return CountAll(_distinct_=distinct)
 
 
 def distinct(

@@ -3,13 +3,16 @@ from collections import defaultdict
 import pytest
 
 import krrood.entity_query_language.factories as eql
-
-from krrood.entity_query_language import factories
+from krrood.entity_query_language.exceptions import (
+    NonAggregatedSelectedVariablesError,
+    AggregatorInWhereConditionsError,
+    NestedAggregationError,
+    UnsupportedAggregationOfAGroupedByVariable,
+)
 from krrood.entity_query_language.factories import (
     entity,
     set_of,
     variable,
-    variable_from,
     distinct,
     contains,
     an,
@@ -17,25 +20,17 @@ from krrood.entity_query_language.factories import (
     flat_variable,
 )
 from krrood.entity_query_language.predicate import length
-from ..dataset.example_classes import NamedNumbers
-from krrood.entity_query_language.failures import (
-    NonAggregatedSelectedVariablesError,
-    AggregatorInWhereConditionsError,
-    NestedAggregationError,
-    UnsupportedAggregationOfAGroupedByVariable,
-)
 from krrood.entity_query_language.query.operations import GroupedBy
 from ..dataset.department_and_employee import Department, Employee
+from ..dataset.example_classes import NamedNumbers
 from ..dataset.semantic_world_like_classes import Cabinet, Body, Container, Drawer
 
 
 def test_count(handles_and_containers_world):
     world = handles_and_containers_world
     body = variable(type_=Body, domain=world.bodies)
-    query = eql.count(
-        entity(body).where(
-            contains(body.name, "Handle"),
-        )
+    query = entity(eql.count(body)).where(
+        contains(body.name, "Handle"),
     )
     assert query.tolist()[0] == len([b for b in world.bodies if "Handle" in b.name])
 
@@ -270,7 +265,7 @@ def test_count_grouped_by(handles_and_containers_world):
 def test_count_all_or_without_a_specific_child(handles_and_containers_world):
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
-    query = a(set_of(count := eql.count(), cabinet).grouped_by(cabinet))
+    query = a(set_of(count := eql.count_all(), cabinet).grouped_by(cabinet))
     results = list(query.evaluate())
     expected = defaultdict(lambda: 0)
     for c in world.views:
@@ -331,7 +326,7 @@ def test_count_with_duplicates(handles_and_containers_world):
     cabinet = variable(Cabinet, domain=world.views)
     cabinet_drawer = flat_variable(cabinet.drawers)
     query = a(
-        set_of(count := eql.count(), cabinet, cabinet_drawer).grouped_by(
+        set_of(count := eql.count_all(), cabinet, cabinet_drawer).grouped_by(
             cabinet, cabinet_drawer
         )
     )
@@ -384,7 +379,7 @@ def test_max_count_grouped_by_wrong(handles_and_containers_world):
         query = eql.max(eql.count(cabinet_drawers))
 
 
-def test_max_min_no_variable():
+def test_max_min_on_entity():
     values = [2, 1, 3, 5, 4]
     value = variable(int, domain=values)
 
@@ -594,3 +589,100 @@ def test_where_with_aggregation_subquery_on_same_variable():
     var1 = variable(int, domain=[1, 2, 3])
     query = entity(var1).where(var1 == entity(eql.max(var1)))
     assert query.tolist() == [3]
+
+
+@pytest.fixture
+def number_variable_with_repeated_values():
+    domain = [1, 2, 3, 2, 2, 1, 3]
+    var = variable(int, domain=domain)
+    assert var.tolist() == domain
+    return var
+
+
+@pytest.fixture
+def set_of_query_of_number_variable_with_repeated_values(
+    number_variable_with_repeated_values,
+):
+    var = number_variable_with_repeated_values
+    var_count = set_of(var, c := eql.count_all()).grouped_by(var)
+    return var_count, var, c
+
+
+def test_count_all_with_set_of(set_of_query_of_number_variable_with_repeated_values):
+    var_count, var, c = set_of_query_of_number_variable_with_repeated_values
+    assert [(val[var], val[c]) for val in var_count.evaluate()] == [
+        (1, 2),
+        (2, 3),
+        (3, 2),
+    ]
+
+
+def test_reusing_set_of_query_by_selecting_the_count_from_the_selected_variables(
+    set_of_query_of_number_variable_with_repeated_values,
+):
+    var_count, var, c = set_of_query_of_number_variable_with_repeated_values
+    max_count_from_sub_query = eql.max(var_count[c])
+    assert max_count_from_sub_query.tolist() == [3]
+
+
+def test_max_count_all(number_variable_with_repeated_values):
+    var = number_variable_with_repeated_values
+    # one-line query without using a previous set_of query
+    max_count = eql.max(eql.count_all().grouped_by(var))
+    assert max_count.tolist() == [3]
+
+
+def test_reusing_set_of_query_by_selecting_the_count_from_the_selected_variables_as_key_for_max(
+    set_of_query_of_number_variable_with_repeated_values,
+):
+    var_count, var, c = set_of_query_of_number_variable_with_repeated_values
+    var_max_count = eql.max(
+        set_of(var, c := eql.count_all()).grouped_by(var), key=lambda x: x[c]
+    )
+    results = var_max_count.tolist()
+    assert len(results) == 1
+    assert results[0][var] == 2
+    assert results[0][c] == 3
+
+
+@pytest.fixture
+def number_variable_with_repeated_values_for_more_than_one_number():
+    domain = [1, 2, 3, 2, 2, 1, 3, 3]
+    var2 = variable(int, domain=domain)
+    assert var2.tolist() == domain
+    return var2
+
+
+def test_independent_subquery_that_calculates_the_max_on_var_with_one_mode(
+    number_variable_with_repeated_values,
+):
+    var = number_variable_with_repeated_values
+    query = independent_max_count_subquery(var)
+    assert query.tolist() == [2]
+
+
+def test_independent_subquery_that_calculates_the_max_on_var_with_multiple_mode(
+    number_variable_with_repeated_values_for_more_than_one_number,
+):
+    var = number_variable_with_repeated_values_for_more_than_one_number
+    query = independent_max_count_subquery(var)
+    assert query.tolist() == [2, 3]
+
+
+def independent_max_count_subquery(var):
+    max_count = entity(eql.max(eql.count(var).grouped_by(var)))
+    return entity(var).having(eql.count_all() == max_count).grouped_by(var)
+
+
+def test_mode_and_multi_mode(
+    number_variable_with_repeated_values,
+    number_variable_with_repeated_values_for_more_than_one_number,
+):
+    var = number_variable_with_repeated_values
+
+    assert eql.mode(var).tolist() == [2]
+    assert eql.multimode(var).tolist() == [2]
+
+    var2 = number_variable_with_repeated_values_for_more_than_one_number
+    assert eql.mode(var2).tolist() == [2]
+    assert eql.multimode(var2).tolist() == [2, 3]
