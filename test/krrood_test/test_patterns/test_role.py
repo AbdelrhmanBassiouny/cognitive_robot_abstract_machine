@@ -15,6 +15,7 @@ from ..dataset.university_ontology_like_classes_without_descriptors import (
     Company,
     ProfessorAsFirstRole,
     Course,
+    RepresentativeAsSecondRole,
 )
 
 
@@ -63,6 +64,17 @@ def test_accessing_attribute_of_role_from_role_taker_when_role_does_not_exist_an
     with pytest.raises(AttributeError):
         teacher_of = person.teacher_of
     assert hasattr(person, "teacher_of") is False
+
+
+def test_roles_are_equal_and_has_same_hash_as_each_other():
+    person = Person(name="Bass")
+    ceo = CEOAsFirstRole(person)
+    representative = RepresentativeAsSecondRole(ceo)
+    professor = ProfessorAsFirstRole(person)
+    assert hash(ceo) == hash(person)
+    assert ceo == person
+    assert ceo == representative
+    assert ceo == professor
 
 
 def test_role_taker_associations():
