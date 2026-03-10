@@ -40,7 +40,6 @@ from krrood.class_diagrams.attribute_introspector import (
     DataclassOnlyIntrospector,
 )
 from krrood.class_diagrams.utils import get_generic_type_param
-from krrood.patterns.role import Role
 from krrood.class_diagrams.wrapped_field import WrappedField
 
 from krrood.class_diagrams.failures import ClassIsUnMappedInClassDiagram
@@ -735,6 +734,8 @@ class ClassDiagram:
                     self.add_relation(relation)
 
     def _create_association_relations(self):
+        from krrood.patterns.role import Role
+
         """
         Creates association relations between wrapped classes and their fields.
 
