@@ -24,7 +24,7 @@ class Base(DeclarativeBase):
 {% for assoc_table in ormatic.association_objects %}
 class {{ assoc_table.name }}(Base, AssociationDataAccessObject):
 
-    __tablename__ = '{{ assoc_table.name }}'
+    __tablename__ = '{{ assoc_table.table_name }}'
 
     {{ assoc_table.primary_key_name }}: Mapped[int] = mapped_column(Integer, primary_key=True)
     {{ assoc_table.left_foreign_key }}: Mapped[int] = mapped_column(ForeignKey('{{ assoc_table.left_primary_key }}'))

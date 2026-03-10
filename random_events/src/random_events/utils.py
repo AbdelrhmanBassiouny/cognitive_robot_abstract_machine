@@ -18,7 +18,9 @@ def recursive_subclasses(cls):
     :param cls: The class.
     :return: A list of the classes subclasses.
     """
-    return cls.__subclasses__() + [g for s in cls.__subclasses__() for g in recursive_subclasses(s)]
+    return cls.__subclasses__() + [
+        g for s in cls.__subclasses__() for g in recursive_subclasses(s)
+    ]
 
 
 class SubclassJSONSerializer:

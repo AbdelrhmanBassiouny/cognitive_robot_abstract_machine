@@ -38,6 +38,10 @@ class Position(Symbol):
     y: float
     z: float
 
+    @classmethod
+    def from_abc(cls, a: float, b: float, c: float) -> Self:
+        return Position(a, b, c)
+
 
 # check that classes with optional values work
 @dataclass

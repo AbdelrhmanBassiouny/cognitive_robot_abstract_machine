@@ -299,5 +299,35 @@ class ConditioningTestCase(unittest.TestCase):
         model.conditional({s: SymbolEnum.A})
 
 
+def test_subset_of_continuous_variables_expectation():
+    circuit = ProbabilisticCircuit()
+    circuit_root = SumUnit(probabilistic_circuit=circuit)
+    subcircuit_root = ProductUnit(probabilistic_circuit=circuit)
+    circuit_root.add_subcircuit(subcircuit_root, 1.0)
+    x_var = Continuous("x")
+    x_dist = make_dirac(x_var, 0)
+
+    subcircuit_root.add_subcircuit(leaf(x_dist, circuit))
+    y_var = Continuous("y")
+    y_dist = make_dirac(y_var, 0)
+    subcircuit_root.add_subcircuit(leaf(y_dist, circuit))
+    expectation = circuit.expectation([x_var])
+    assert expectation[x_var] == 0
+
+
+def test_subset_of_integer_variables_expectation():
+    circuit = ProbabilisticCircuit()
+    circuit_root = SumUnit(probabilistic_circuit=circuit)
+    subcircuit_root = ProductUnit(probabilistic_circuit=circuit)
+    circuit_root.add_subcircuit(subcircuit_root, 1.0)
+    x_var = Integer("x")
+    x_dist = make_dirac(x_var, 0)
+    subcircuit_root.add_subcircuit(leaf(x_dist, circuit))
+    y_var = Integer("y")
+    y_dist = make_dirac(y_var, 0)
+    subcircuit_root.add_subcircuit(leaf(y_dist, circuit))
+    assert circuit.expectation([x_var])[x_var] == 0
+
+
 if __name__ == "__main__":
     unittest.main()

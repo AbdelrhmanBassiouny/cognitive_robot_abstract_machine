@@ -25,7 +25,7 @@ if TYPE_CHECKING:
         Selectable,
     )
     from krrood.entity_query_language.core.variable import Variable
-    from krrood.entity_query_language.query.match import Match
+    from krrood.entity_query_language.query.match import Match, AbstractMatchExpression
 
 
 @dataclass
@@ -608,7 +608,7 @@ class NoChildToReplace(DataclassException):
 
 
 @dataclass
-class GenerativeBackendQueryIsNotMatch(DataclassException):
+class GenerativeBackendQueryIsNotUnderspecifiedVariable(DataclassException):
     """
     Exception raised when a query is not a match inside a generative backend.
     """
@@ -619,6 +619,20 @@ class GenerativeBackendQueryIsNotMatch(DataclassException):
     """
 
     def __post_init__(self):
+        self.message = f"Query {self.expression} is not an underspecified variable inside a generative backend."
+
+
+@dataclass
+class CalledMatchMultipleTimes(DataclassException):
+    """
+    Exception raised when a match expression is called multiple times.
+    """
+
+    match: AbstractMatchExpression
+
+    def __post_init__(self):
         self.message = (
-            f"Query {self.expression} is not a match inside a generative backend."
+            f"Match expression '{self.match}' was called multiple times. "
+            f"Match acts like a constructor and hence should not be called multiple times. "
+            f"Invoking the `__call__` method multiple times has unexpected side effects."
         )

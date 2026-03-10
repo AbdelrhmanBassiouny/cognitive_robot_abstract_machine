@@ -15,7 +15,8 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.exceptions import NoKwargsInMatchVar
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.core.base_expressions import UnificationDict
-from krrood.entity_query_language.query_graph import QueryGraph
+from krrood.parametrization.random_events_translator import is_literal_comparator
+from ..dataset.example_classes import Positions, Position
 from ..dataset.semantic_world_like_classes import (
     FixedConnection,
     Container,
@@ -139,3 +140,24 @@ def test_empty_conditions_match_var(handles_and_containers_world):
     world = handles_and_containers_world
     with pytest.raises(NoKwargsInMatchVar):
         match_variable(FixedConnection, domain=world.connections)()
+
+
+def test_match_with_list():
+    domain = [
+        Positions([Position(1, 2, 3), Position(1, 2, 3)], ["a", "b"]),
+        Positions([Position(1, 2, 3)], ["a"]),
+    ]
+
+    q = match_variable(Positions, domain=domain)(
+        positions=[
+            match(Position)(
+                x=1,
+                y=2,
+            ),
+            Position(1, 2, 3),
+        ],
+        some_strings=["a", "b"],
+    )
+
+    r = q.tolist()
+    assert r == [domain[0]]

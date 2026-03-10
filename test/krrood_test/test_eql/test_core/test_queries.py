@@ -2,9 +2,8 @@ import itertools
 from dataclasses import dataclass
 from math import factorial
 
-import pytest
-
 import krrood.entity_query_language.factories as eql
+import pytest
 from krrood.entity_query_language.factories import (
     entity,
     set_of,
@@ -49,6 +48,8 @@ from krrood.entity_query_language.query.quantifiers import (
 from krrood.entity_query_language.utils import (
     cartesian_product_while_passing_the_bindings_around,
 )
+
+from ...dataset.example_classes import VectorsWithProperty
 from ...dataset.example_classes import VectorsWithProperty
 from ...dataset.semantic_world_like_classes import (
     Handle,

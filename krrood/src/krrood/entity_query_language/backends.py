@@ -6,19 +6,15 @@ from sqlalchemy.orm import sessionmaker
 
 from krrood.entity_query_language.exceptions import (
     NoSolutionFound,
-    GenerativeBackendQueryIsNotMatch,
+    GenerativeBackendQueryIsNotUnderspecifiedVariable,
 )
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Query
 from krrood.ormatic.eql_interface import eql_to_sql
-from krrood.probabilistic_knowledge.model_registries import ModelRegistry
-from krrood.probabilistic_knowledge.parameterizer import (
-    MatchParameterizer,
-    copy_partial_object,
-)
-from krrood.probabilistic_knowledge.probable_variable import (
-    MatchToInstanceTranslator,
-    QueryToRandomEventTranslator,
+from krrood.parametrization.model_registries import ModelRegistry
+from krrood.parametrization.parameterizer import (
+    MatchVariable,
+    UnderspecifiedParameters,
 )
 
 T = TypeVar("T")
@@ -53,20 +49,13 @@ class SelectiveBackend(QueryBackend, ABC):
 class GenerativeBackend(QueryBackend, ABC):
     """
     Generative backends are backends that generate new elements.
-    Generative backends have to take match expressions as input, since they need to construct new objects and currently
-    `Match` is the only way to do so.
+    Generative backends have to take match expressions as input, since they need to construct new objects, and currently
+    {py:class}`~krrood.entity_query_language.query.match.Match` is the only way to do so.
     """
-
-    def _generate_instance_from_match(self, expression: Match[T]) -> T:
-        """
-        :param expression: A match expression describing the structure of an instance.
-        :return: An instance described by the match expression.
-        """
-        return MatchToInstanceTranslator(expression).translate()
 
     def evaluate(self, expression: Query) -> Iterable[T]:
         if not isinstance(expression, Match):
-            raise GenerativeBackendQueryIsNotMatch(expression)
+            raise GenerativeBackendQueryIsNotUnderspecifiedVariable(expression)
         yield from self._evaluate(expression)
 
     @abstractmethod
@@ -118,15 +107,8 @@ class ProbabilisticBackend(GenerativeBackend):
 
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
 
-        example_instance = self._generate_instance_from_match(expression)
-
-        # translate where conditions to random event
-        random_events_translator = QueryToRandomEventTranslator(expression.expression)
-        truncation_event = random_events_translator.translate()
-
         # generate parameters from example instance values
-        instance_parameterizer = MatchParameterizer(example_instance)
-        parameters = instance_parameterizer.parameterize()
+        parameters = UnderspecifiedParameters(expression)
 
         # apply conditions from the parameters
         conditioned, _ = self.model_registry.get_model(expression).conditional(
@@ -137,23 +119,19 @@ class ProbabilisticBackend(GenerativeBackend):
             raise NoSolutionFound(expression.expression)
 
         # apply conditions from the where statements
-        truncated, _ = conditioned.truncated(truncation_event)
+        if parameters.truncation_event:
+            truncated, _ = conditioned.truncated(parameters.truncation_event)
 
-        if truncated is None:
-            raise NoSolutionFound(expression.expression)
+            if truncated is None:
+                raise NoSolutionFound(expression.expression)
+        else:
+            truncated = conditioned
 
         samples = truncated.sample(self.number_of_samples)
 
-        # create new objects and bind there values to the samples values
+        # create new objects with the values from the samples
         for sample in samples:
-
-            sample_dict = parameters.create_assignment_from_variables_and_sample(
+            instance = parameters.create_instance_from_variables_and_sample(
                 truncated.variables, sample
-            )
-
-            current_example_instance = copy_partial_object(example_instance)
-
-            instance = parameters.parameterize_object_with_sample(
-                current_example_instance, sample_dict
             )
             yield instance

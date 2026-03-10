@@ -1,9 +1,11 @@
 import inspect
 import sys
 from enum import Enum
+from typing import Any, Callable
 from uuid import UUID
 
-from typing_extensions import List, Type, Optional
+import typing_extensions
+from typing_extensions import List, Type, Generic, TYPE_CHECKING, Optional
 from typing_extensions import TypeVar, get_origin, get_args
 
 
@@ -54,3 +56,18 @@ def get_generic_type_param(cls, generic_base: Type[T]) -> Optional[List[Type[T]]
             args = get_args(base)
             return list(args) if args else None
     return None
+
+
+def get_type_hint_of_keyword_argument(callable_: Callable, name: str):
+    """
+    :param callable_: A callable to inspect
+    :param name: The name of the argument
+    :return: The type hint of the argument
+    """
+    hints = typing_extensions.get_type_hints(
+        callable_,
+        globalns=getattr(callable_, "__globals__", None),
+        localns=None,
+        include_extras=True,  # keeps Annotated[...] / other extras if you use them
+    )
+    return hints.get(name)

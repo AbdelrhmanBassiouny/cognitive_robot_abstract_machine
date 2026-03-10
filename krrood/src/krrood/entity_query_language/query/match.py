@@ -9,35 +9,47 @@ from __future__ import annotations
 
 import uuid
 from abc import ABC, abstractmethod
+from collections import deque
 from dataclasses import dataclass, field
 from functools import cached_property
+from typing import assert_never, Any
 
 import rustworkx as rx
+from inspect import ismethod, isclass
 from typing_extensions import (
     Optional,
     Type,
-    Dict,
-    Any,
     List,
     Union,
-    Self,
     Generic,
     TYPE_CHECKING,
+    Self,
+    Dict,
+    Generator,
+    Iterator,
 )
 
-from krrood.entity_query_language.query.quantifiers import An
-from krrood.entity_query_language.core.base_expressions import Selectable
+from krrood.adapters.json_serializer import list_like_classes
+from krrood.entity_query_language.core.base_expressions import (
+    Selectable,
+    SymbolicExpression,
+)
 from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
     FlatVariable,
     CanBehaveLikeAVariable,
+    MappedVariable,
+    Index,
 )
-from krrood.entity_query_language.core.variable import Literal, DomainType
+from krrood.entity_query_language.core.variable import Literal, DomainType, Variable
 from krrood.entity_query_language.exceptions import (
     NoKwargsInMatchVar,
+    CalledMatchMultipleTimes,
 )
 from krrood.entity_query_language.predicate import HasType
+from krrood.entity_query_language.query.quantifiers import An
 from krrood.entity_query_language.utils import T
+from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.rustworkx_utils import RWXNode
 
 if TYPE_CHECKING:
@@ -54,7 +66,7 @@ class AbstractMatchExpression(Generic[T], ABC):
     which are used to structural pattern matching in the form of nested match expressions with keyword arguments.
     """
 
-    type_: Optional[Type[T]] = field(default=None, kw_only=True)
+    type_: Optional[Type[T]] = field(default=None, init=False)
     """
     The type of the variable.
     """
@@ -91,14 +103,15 @@ class AbstractMatchExpression(Generic[T], ABC):
         """
         ...
 
-    def resolve(self, *args, **kwargs):
+    def resolve(self, *args, **kwargs) -> Self:
         """
         Resolve the match by creating the variable and conditions expressions.
         """
         if self.resolved:
-            return
+            return self
         self._resolve(*args, **kwargs)
         self.resolved = True
+        return self
 
     @abstractmethod
     def _resolve(self, *args, **kwargs):
@@ -143,9 +156,31 @@ class AbstractMatchExpression(Generic[T], ABC):
     def __hash__(self):
         return hash(self.id)
 
+    @property
+    def descendants(self) -> Iterator[AbstractMatchExpression]:
+        """
+        :return: All descendants of this expression in breadth first order
+        """
+        queue = deque(self.children)
+        while queue:
+            node = queue.popleft()
+            yield node
+            queue.extend(node.children)
+
+    @property
+    def matches_with_variables(self) -> Iterator[AttributeMatch]:
+        """
+        :return: All attribute matches where the assigned variable is a variable.
+        These matches are typically the leaves of a match expression.
+        """
+        self.resolve()
+        for expression in self.descendants:
+            if isinstance(expression.assigned_variable, Variable):
+                yield expression
+
 
 @dataclass(eq=False)
-class Match(AbstractMatchExpression[T]):
+class Match(AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     """
     Construct a query that looks for the pattern provided by the type and the keyword arguments.
     Example usage where we look for an object of type Drawer with body of type Body that has the name"drawer_1":
@@ -156,11 +191,13 @@ class Match(AbstractMatchExpression[T]):
         >>> class Drawer:
         >>>     body: Body
         >>> drawer = match_variable(Drawer, domain=None)(body=match(Body)(name="drawer_1")))
-    """
 
-    kwargs: Dict[str, Any] = field(init=False, default_factory=dict)
-    """
-    The keyword arguments to match against.
+    .. warning::
+        Match can take a factory as a mean to construct `T`. If the keyword argument names of the match are not
+        available in the class itself, the variables reffered to in the `where` conditions will not align with the
+        variables from the factory. It is strongly recommended to have the names of the factory available in the class,
+        either as field or as property.
+        Dataclass-generated `__init__` never have this problem unless `InitVar` is used.
     """
 
     _expression: Query = field(init=False, default=None)
@@ -169,14 +206,35 @@ class Match(AbstractMatchExpression[T]):
     This is needed to apply where conditions directly to the match instance. 
     """
 
-    def __call__(self, **kwargs) -> Union[Self, T, CanBehaveLikeAVariable[T]]:
+    _where_conditions_: List[ConditionType] = field(init=False, default_factory=list)
+    """
+    A list of all conditions that have been applied to this instance using the `where` method.
+    """
+
+    _has_been_called: bool = field(init=False, default=False)
+    """
+    Flag indicating whether the match instance has been called with keyword arguments.
+    """
+
+    def __post_init__(self):
+        if ismethod(self.factory):
+            self.type_ = self.factory.__class__
+        elif isclass(self.factory):
+            self.type_ = self.factory
+        else:
+            assert_never(self.factory)
+
+    def __call__(self, **kwargs) -> Union[T, Self, CanBehaveLikeAVariable[T]]:
         """
         Update the match with new keyword arguments to constrain the type we are matching with.
 
         :param kwargs: The keyword arguments to match against.
         :return: The current match instance after updating it with the new keyword arguments.
         """
+        if self._has_been_called:
+            raise CalledMatchMultipleTimes(self)
         self.kwargs = kwargs
+        self._has_been_called = True
         return self
 
     @property
@@ -200,26 +258,78 @@ class Match(AbstractMatchExpression[T]):
     def _resolve(
         self,
         variable: Optional[Selectable] = None,
-        parent: Optional[Match] = None,
+        parent: Optional[MatchVariable] = None,
     ):
         """
-        Resolve the match by creating the variable and conditions expressions.
+        Resolve the match by creating the variable and conditions expressions in-place.
 
         :param variable: An optional pre-existing variable to use for the match; if not provided, a new variable will
          be created.
         :param parent: The parent match if this is a nested match.
-        :return:
         """
+
+        parent = parent or self
         self.update_fields(variable, parent)
         for attr_name, attr_assigned_value in self.kwargs.items():
-            attr_match = AttributeMatch(
-                parent=parent or self,
+            if isinstance(attr_assigned_value, (list, tuple)) and any(
+                isinstance(element, AbstractMatchExpression)
+                for element in attr_assigned_value
+            ):
+                self._resolve_list_like_value(attr_name, attr_assigned_value, parent)
+                continue
+            self._create_attribute_match_and_resolve(
+                parent=parent,
                 attribute_name=attr_name,
                 assigned_value=attr_assigned_value,
             )
-            attr_match.resolve()
-            self.children.append(attr_match)
-            self.conditions.extend(attr_match.conditions)
+
+    def _create_attribute_match_and_resolve(
+        self,
+        parent: MatchVariable,
+        attribute_name: str,
+        assigned_value: Any,
+        index_access: Optional[Any] = None,
+    ) -> AttributeMatch:
+        """
+        Create an attribute match and resolve it recursively.
+
+        :param parent: The parent match instance.
+        :param attribute_name: The name of the attribute to create.
+        :param assigned_value: The value assigned to the attribute.
+        :param index_access: The index access to the attribute.
+        :return: The created instance after every child has been resolved.
+        """
+        attr_match = AttributeMatch(
+            parent=parent,
+            attribute_name=attribute_name,
+            index_access=index_access,
+            assigned_value=assigned_value,
+        )
+        attr_match.resolve()
+        self.children.append(attr_match)
+        self.conditions.extend(attr_match.conditions)
+        return attr_match
+
+    def _resolve_list_like_value(
+        self, key: str, value: Union[list, tuple], parent: MatchVariable
+    ):
+        """
+        Resolves list-like values by iterating over their elements and creating attribute
+        matches for the parent match variable.
+
+        :param key: The attribute name being processed.
+        :param value: The list or tuple containing elements to be resolved.
+        :param parent: The parent match variable associated with the provided key.
+        """
+
+        # handle list like classes by wrapping the index access
+        for index, element in enumerate(value):
+            self._create_attribute_match_and_resolve(
+                parent=parent,
+                attribute_name=key,
+                assigned_value=element,
+                index_access=index,
+            )
 
     def update_fields(
         self,
@@ -263,8 +373,31 @@ class Match(AbstractMatchExpression[T]):
         return self.name
 
     def where(self, *conditions: ConditionType) -> Match[T]:
+        _ = self.expression
+        self._where_conditions_.extend(conditions)
         self.expression.where(*conditions)
+        self.expression.build()
         return self
+
+    def _update_kwargs_from_literal_values(self):
+        """
+        Update the kwargs dictionary with values from this statements leaves.
+        """
+        for attribute_match in self.matches_with_variables:
+            attribute_match._update_kwargs_from(self)
+
+    def _get_mapped_variable_by_name(self, name: str) -> MappedVariable:
+        """
+        Get a mapped variable by its name in the path.
+        :param name: The name
+        :return: The mapped variable
+        """
+        [result] = [
+            attribute_match.assigned_variable
+            for attribute_match in self.matches_with_variables
+            if attribute_match.name_from_variable_access_path == name
+        ]
+        return result
 
 
 @dataclass(eq=False)
@@ -312,6 +445,13 @@ class AttributeMatch(AbstractMatchExpression[T]):
     """
     The name of the attribute to assign the value to.
     """
+
+    index_access: Optional[Any] = None
+    """
+    The index  that is accessed.
+    Is not None if the attribute is an indexable object.
+    """
+
     assigned_value: Optional[Union[Literal, Match]] = None
     """
     The value to assign to the attribute, which can be a Match instance or a Literal.
@@ -357,11 +497,16 @@ class AttributeMatch(AbstractMatchExpression[T]):
         """
         :return: The symbolic variable representing the assigned value.
         """
-        return (
-            self.assigned_value.variable
-            if isinstance(self.assigned_value, AbstractMatchExpression)
-            else self.assigned_value
-        )
+        if isinstance(self.assigned_value, AbstractMatchExpression):
+            return self.assigned_value.variable
+        elif not isinstance(self.assigned_value, SymbolicExpression):
+            return Literal(
+                _name__=self.variable._name_,
+                _type_=self.type,
+                _value_=self.assigned_value,
+            )
+        else:
+            return self.assigned_value
 
     @cached_property
     def attribute(self) -> Attribute:
@@ -371,7 +516,10 @@ class AttributeMatch(AbstractMatchExpression[T]):
         """
         if self.variable is not None:
             return self.variable
+
         attr: Attribute = getattr(self.parent.variable, self.attribute_name)
+        if self.index_access is not None:
+            attr = attr[self.index_access]
         self.variable = attr
         return attr
 
@@ -396,17 +544,39 @@ class AttributeMatch(AbstractMatchExpression[T]):
     def __str__(self):
         return self.name
 
+    def _update_kwargs_from(self, match: Match[T]):
+        """
+        Update the kwargs of the parent match with the values of the assigned variable.
+        Only works if this is a variable assignment.
+        """
+        current_value = match
+        for step in self.variable._access_path_[:-1]:
+            if isinstance(step, Attribute):
+                current_value = current_value.kwargs[step._attribute_name_]
+            elif isinstance(step, Index):
+                current_value = current_value[step._key_]
+            else:
+                assert_never(step)
 
-class ProbableVariable(MatchVariable):
-    """
-    A special type of MatchVariable that represents a variable with probabilistic constraints.
-    """
+        final_step = self.variable._access_path_[-1]
 
-    def __call__(self, **kwargs):
-        super().__call__(
-            **kwargs
-        )  # call super method but return self s. t. the next operations still act on this instead of the expression
-        return self
+        if isinstance(final_step, Attribute):
+            current_value.kwargs[final_step._attribute_name_] = (
+                self.assigned_variable._value_
+            )
+        else:
+
+            final_step._set_child_instance_value_(
+                current_value, self.assigned_variable._value_
+            )
+
+    @property
+    def name_from_variable_access_path(self):
+        """
+        :return: The last name from the variables access path. This is similar to `self.name` but without `Match`
+        specific wrappings.
+        """
+        return self.variable._access_path_[-1]._name_
 
 
 def construct_graph_and_get_root(
