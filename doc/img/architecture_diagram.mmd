@@ -1,4 +1,9 @@
 flowchart TD
+    subgraph RoboKudo ["RoboKudo"]
+        Pipeline[Perception Pipeline Trees]
+        Annotators[Annotators]
+    end
+
     subgraph PyCRAM ["PyCRAM"]
         Plans[Plans]
         Designators[Designators]
@@ -26,21 +31,19 @@ flowchart TD
         Parameterizer[Parameterizer]
     end
 
-    subgraph Simulators ["Simulators"]
-        MultiSim[Physics Simulator]
-        Mujoco[MuJoCo Connector]
+    subgraph Execution ["Execution"]
+        subgraph Simulators ["Simulators"]
+            MultiSim[Physics Simulator]
+            Mujoco[MuJoCo Connector]
+        end
+
+        subgraph RealWorld ["Real World"]
+            ROS[ROS]
+            Multiverse[Multiverse]
+            RealWorldNode[Real World]
+        end
     end
 
-    subgraph RealWorld ["Real World"]
-        ROS[ROS]
-        Multiverse[Multiverse]
-        RealWorldNode[Real World]
-    end
-
-    subgraph RoboKudo ["RoboKudo"]
-        Pipeline[Perception Pipeline Trees]
-        Annotators[Annotators]
-    end
 
     %% PyCRAM Relationships
     Plans -.->|uses| Designators
