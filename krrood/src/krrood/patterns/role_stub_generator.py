@@ -71,7 +71,6 @@ class FieldRepresentation:
         return cls(current_field)
 
     def __str__(self) -> str:
-
         return self.representation
 
     def __repr__(self) -> str:
@@ -80,7 +79,9 @@ class FieldRepresentation:
     @cached_property
     def representation(self) -> str:
         """
-        Provides the string representation of the field.
+        Provide the string representation of the field to be written in the stub file.
+
+        :return: The string representation of the field.
         """
         non_default_field_assignments = []
         default_field = field()
@@ -133,7 +134,7 @@ class DataclassArguments:
     @classmethod
     def from_wrapped_class(cls, wrapped_class: WrappedClass) -> DataclassArguments:
         """
-        Creates DataclassArguments from a WrappedClass.
+        Create DataclassArguments from a WrappedClass.
 
         :param wrapped_class: The wrapped class to extract arguments from.
         """
@@ -145,8 +146,12 @@ class DataclassArguments:
         )
 
     def __str__(self) -> str:
+        return self.representation
+
+    @cached_property
+    def representation(self) -> str:
         """
-        Returns the string representation of the dataclass arguments.
+        :return: The string representation of the dataclass arguments.
         """
         dataclass_params = inspect.signature(dataclass).parameters
         non_default_dataclass_params = []
@@ -157,7 +162,7 @@ class DataclassArguments:
         return ", ".join(map(str, non_default_dataclass_params))
 
 
-@dataclass
+@dataclass(frozen=True)
 class StubFieldInfo:
     """
     Contains information about a field for stub generation.
@@ -186,7 +191,7 @@ class StubFieldInfo:
         return cls(wf.name, wf.type_name, FieldRepresentation.from_wrapped_field(wf))
 
 
-@dataclass
+@dataclass(frozen=True)
 class StubClassInfo:
     """
     Contains information about a class for stub generation.
@@ -210,7 +215,7 @@ class StubClassInfo:
     """
 
 
-@dataclass
+@dataclass(frozen=True)
 class RoleTakerInfo:
     """
     Information about a role taker for stub generation.
@@ -260,7 +265,7 @@ class RoleTakerInfo:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class RoleInfo:
     """
     Information about a role for stub generation.
