@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from copy import copy
-from dataclasses import dataclass, Field, fields, MISSING
+from dataclasses import dataclass, Field, fields, MISSING, field
 from functools import lru_cache, cached_property
 
 from typing_extensions import Generic, Type
@@ -43,6 +43,7 @@ class Role(Generic[T], ABC):
     ..warning:: Always check if the attribute exists before accessing it if it is an attribute that is introduced by a
     Role, because if no Role instance exists, the attribute will not be accessible.
     """
+    _role_taker_field_set: bool = field(default=False, init=False)
 
     @classmethod
     @lru_cache(maxsize=None)
@@ -83,10 +84,14 @@ class Role(Generic[T], ABC):
         """
         :return: The root persistent entity in the role hierarchy.
         """
-        root = self
-        while isinstance(root, Role):
-            root = root.role_taker
-        return root
+        curr = self
+        while isinstance(curr, Role):
+            rt = getattr(curr, "_direct_role_taker", None)
+            if rt is not None:
+                curr = rt
+            else:
+                curr = curr.role_taker
+        return curr
 
     def __getattr__(self, item):
         """
@@ -95,7 +100,7 @@ class Role(Generic[T], ABC):
         :param item: The attribute name to retrieve.
         :return: The attribute value if found in the role taker, otherwise raises AttributeError.
         """
-        if hasattr(self.role_taker, item):
+        if self._role_taker_field_set and hasattr(self.role_taker, item):
             return getattr(self.role_taker, item)
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{item}'"
@@ -106,9 +111,13 @@ class Role(Generic[T], ABC):
         Set an attribute on the role taker instance if the role taker has this attribute,
          otherwise set on this instance directly.
         """
-        super().__setattr__(key, value)
-        if key != self.role_taker_field().name:
+        if key == self.role_taker_field().name:
+            self._role_taker_field_set = True
+            object.__setattr__(self, "_direct_role_taker", value)
+        if key != self.role_taker_field().name and self._role_taker_field_set:
             setattr(self.role_taker, key, value)
+        if key == self.role_taker_field().name or hasattr(self, key):
+            super().__setattr__(key, value)
 
     def __hash__(self):
         """

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, Field, fields
 from typing import Tuple
 
 import numpy as np
@@ -16,6 +16,7 @@ from typing_extensions import (
     Type,
 )
 
+from krrood.class_diagrams.utils import T
 from krrood.ormatic.utils import classproperty
 from probabilistic_model.distributions import GaussianDistribution
 from probabilistic_model.probabilistic_circuit.rx.helper import (
@@ -27,6 +28,8 @@ from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     SumUnit,
     leaf,
 )
+
+from krrood.patterns import Role
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.exceptions import (
@@ -83,7 +86,7 @@ class IsPerceivable:
 
 
 @dataclass(eq=False)
-class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
+class HasRootKinematicStructureEntity(SemanticAnnotation, Role[KinematicStructureEntity], ABC):
     """
     Base class for shared method for HasRootBody and HasRootRegion.
     """
@@ -92,6 +95,10 @@ class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
     """
     The root kinematic structure entity of the semantic annotation.
     """
+
+    @classmethod
+    def role_taker_field(cls) -> Field:
+        return next(f for f in fields(cls) if f.name == "root")
 
     @property
     def scale(self) -> Scale:

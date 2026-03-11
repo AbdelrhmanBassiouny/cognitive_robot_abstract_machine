@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import ModuleType
 
 """
 This module provides functionality to generate Python stub files (.pyi) for classes following the Role pattern.
@@ -18,7 +19,7 @@ from typing import Any, Type, List, Dict, Optional, Set
 import jinja2
 
 from krrood.class_diagrams import ClassDiagram
-from krrood.class_diagrams.class_diagram import WrappedClass
+from krrood.class_diagrams.class_diagram import WrappedClass, WrappedSpecializedGeneric
 from krrood.class_diagrams.utils import classes_of_module
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.patterns import Role
@@ -331,7 +332,7 @@ class RoleStubGenerator:
     Automates the generation of stub python files (.pyi) for classes following the Role pattern.
     """
 
-    def __init__(self, module: Any):
+    def __init__(self, module: ModuleType, class_diagram: Optional[ClassDiagram] = None):
         """
         Initializes the generator with a module.
 
@@ -343,7 +344,7 @@ class RoleStubGenerator:
             loader=loader, trim_blocks=True, lstrip_blocks=True
         )
         self.template = self.env.get_template("role_stub.pyi.jinja")
-        self.class_diagram = ClassDiagram(classes_of_module(module))
+        self.class_diagram = class_diagram if class_diagram else ClassDiagram(classes_of_module(module))
         self.module = module
         self.path = Path(self.module.__file__).parent / f"{self.module.__name__.split('.')[-1]}.pyi"
 
@@ -392,7 +393,7 @@ class RoleStubGenerator:
         return [
             self._build_stub_class(wc)
             for wc in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
-            if not issubclass(wc.clazz, Role) and wc.clazz in self._role_takers
+            if not isinstance(wc, WrappedSpecializedGeneric) and not issubclass(wc.clazz, Role) and wc.clazz in self._role_takers
         ]
 
     @cached_property
@@ -416,7 +417,7 @@ class RoleStubGenerator:
         """
         mapping = defaultdict(list)
         for wc in self.class_diagram.wrapped_classes:
-            if issubclass(wc.clazz, Role):
+            if not isinstance(wc, WrappedSpecializedGeneric) and issubclass(wc.clazz, Role):
                 mapping[wc.clazz.get_root_role_taker_type()].append(wc)
         return mapping
 
@@ -437,7 +438,11 @@ class RoleStubGenerator:
         :param clazz: The class to get base names for.
         :return: A list of base class names, excluding 'object'.
         """
-        return [base.__name__ for base in clazz.__bases__ if base is not object]
+        try:
+            return [base.__name__ for base in clazz.__bases__ if base is not object]
+        except AttributeError:
+            # no __bases__ attribute
+            return []
 
     def _build_stub_class(self, wrapped_class: WrappedClass, role_related_class: bool = True) -> StubClassInfo:
         """
@@ -454,11 +459,11 @@ class RoleStubGenerator:
         for role_wc in self._root_role_taker_to_roles_map.get(wrapped_class.clazz, []):
             taker_field_name = role_wc.clazz.role_taker_field().name
             for role_wf in role_wc.fields:
-                if any(taker_wf.name == role_wf.name for taker_wf in taker_fields):
-                    raise ValueError(
-                        f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
-                        f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
-                    )
+                # if any(taker_wf.name == role_wf.name for taker_wf in taker_fields):
+                #     raise ValueError(
+                #         f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
+                #         f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
+                #     )
                 if role_wf.name != taker_field_name:
                     taker_fields.append(
                         StubFieldInfo(
@@ -508,7 +513,7 @@ class RoleStubGenerator:
         return [
             wc
             for wc in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
-            if issubclass(wc.clazz, Role)
+            if not isinstance(wc, WrappedSpecializedGeneric) and issubclass(wc.clazz, Role)
         ]
 
     def _extract_imports(self) -> List[str]:
