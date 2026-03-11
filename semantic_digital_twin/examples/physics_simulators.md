@@ -133,7 +133,7 @@ This scene contains:
     multi_sim.stop_simulation()
 ```
 
-## Important Notes
+## Common Mistakes to Avoid
 
 **1. Always define termination conditions**
 
