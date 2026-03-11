@@ -238,7 +238,7 @@ class RoleStubGenerator:
         mapping = defaultdict(list)
         for wc in self.class_diagram.wrapped_classes:
             if issubclass(wc.clazz, Role):
-                mapping[wc.root_role_taker_type].append(wc)
+                mapping[wc.clazz.get_root_role_taker_type()].append(wc)
         return mapping
 
     def _build_stub_class(self, wrapped_class: WrappedClass) -> StubClassInfo:
@@ -249,7 +249,7 @@ class RoleStubGenerator:
         ]
 
         # Add role-introduced fields as init=False
-        for role_wc in self._role_taker_to_roles_map.get(wrapped_class.clazz, []):
+        for role_wc in self._root_role_taker_to_roles_map.get(wrapped_class.clazz, []):
             taker_field_name = role_wc.clazz.role_taker_field().name
             for role_wf in role_wc.fields:
                 if any(taker_wf.name == role_wf.name for taker_wf in taker_fields):
