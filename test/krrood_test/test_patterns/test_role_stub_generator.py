@@ -43,7 +43,12 @@ def test_full_stub_comparison():
     generator = RoleStubGenerator(university_ontology_like_classes_without_descriptors)
     generated_stub = generator.generate_stub()
 
-    expected_stub_path = "test/krrood_test/dataset/university_ontology_like_classes_without_descriptors.pyi"
+    expected_stub_path = os.path.join(
+        os.path.dirname(__file__),
+        "..",
+        "dataset",
+        "university_ontology_like_classes_without_descriptors.pyi",
+    )
     with open(expected_stub_path, "r") as f:
         expected_stub = f.read()
 

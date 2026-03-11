@@ -46,7 +46,7 @@ class RoleForPerson(Person):
 @dataclass(eq=False)
 class CEOAsFirstRole(RoleForPerson):
     # Original Owner of the head_of field
-    head_of: RecognizedGroup = field(kw_only=True, default=None)
+    head_of: RecognizedGroup = field(default=None, kw_only=True)
 
 @dataclass(eq=False)
 class ProfessorAsFirstRole(RoleForPerson):
@@ -61,7 +61,7 @@ class RoleForCEO(CEOAsFirstRole):
 @dataclass(eq=False)
 class RepresentativeAsSecondRole(RoleForCEO):
     # Original Owner of the representative_of field
-    representative_of: RecognizedGroup = field(kw_only=True, default=None)
+    representative_of: RecognizedGroup = field(default=None, kw_only=True)
 
 @dataclass
 class RoleForRepresentative(RepresentativeAsSecondRole):
@@ -71,4 +71,4 @@ class RoleForRepresentative(RepresentativeAsSecondRole):
 @dataclass(eq=False)
 class DelegateAsThirdRole(RoleForRepresentative):
     # Original Owner of the delegate_of field
-    delegate_of: RecognizedGroup = field(kw_only=True, default=None)
+    delegate_of: RecognizedGroup = field(default=None, kw_only=True)
