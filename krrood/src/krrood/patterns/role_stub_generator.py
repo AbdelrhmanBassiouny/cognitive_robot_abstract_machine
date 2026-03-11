@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+"""
+This module provides functionality to generate Python stub files (.pyi) for classes following the Role pattern.
+"""
+
 import __future__
 import dataclasses
 import inspect
-import os.path
 from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass, Field, field, fields
@@ -22,8 +25,19 @@ from krrood.utils import extract_imports
 
 @dataclass(frozen=True)
 class Assignment:
+    """
+    Represents a name-value pair used for assignments.
+    """
+
     name: str
+    """
+    The name of the variable or argument.
+    """
+
     value: Any
+    """
+    The value to be assigned.
+    """
 
     def __str__(self) -> str:
         return f"{self.name}={self.value}"
@@ -34,13 +48,22 @@ class Assignment:
 
 @dataclass(frozen=True)
 class FieldRepresentation:
-    """Represents a field in a .pyi file."""
+    """
+    Represents a dataclass field in a stub file.
+    """
 
     current_field: Field = field(default_factory=field)
+    """
+    The field being represented.
+    """
 
     @classmethod
     def from_wrapped_field(cls, wf: WrappedField) -> FieldRepresentation:
-        """Creates a FieldAssignment instance from a WrappedField."""
+        """
+        Creates a FieldRepresentation from a WrappedField.
+
+        :param wf: The wrapped field to convert.
+        """
         current_field = copy(wf.field)
         current_field.kw_only = wf.field.kw_only or (
             not wf.is_required and wf.field.init
@@ -48,6 +71,7 @@ class FieldRepresentation:
         return cls(current_field)
 
     def __str__(self) -> str:
+
         return self.representation
 
     def __repr__(self) -> str:
@@ -55,6 +79,9 @@ class FieldRepresentation:
 
     @cached_property
     def representation(self) -> str:
+        """
+        Provides the string representation of the field.
+        """
         non_default_field_assignments = []
         default_field = field()
         field_arguments = inspect.signature(field).parameters
@@ -86,15 +113,30 @@ class FieldRepresentation:
 
 @dataclass
 class DataclassArguments:
-    """Represents arguments for the @dataclass decorator."""
+    """
+    Represents arguments for the @dataclass decorator.
+    """
 
     eq: bool = True
+    """
+    Whether to generate an equality method.
+    """
     unsafe_hash: bool = False
+    """
+    Whether to generate an unsafe hash method.
+    """
     kw_only: bool = False
+    """
+    Whether to make all fields keyword-only.
+    """
 
     @classmethod
     def from_wrapped_class(cls, wrapped_class: WrappedClass) -> DataclassArguments:
-        """Creates a DataclassArguments instance from a WrappedClass."""
+        """
+        Creates DataclassArguments from a WrappedClass.
+
+        :param wrapped_class: The wrapped class to extract arguments from.
+        """
         params = getattr(wrapped_class.clazz, "__dataclass_params__", None)
         return cls(
             eq=params.eq if params else True,
@@ -103,6 +145,9 @@ class DataclassArguments:
         )
 
     def __str__(self) -> str:
+        """
+        Returns the string representation of the dataclass arguments.
+        """
         dataclass_params = inspect.signature(dataclass).parameters
         non_default_dataclass_params = []
         for field_ in fields(self):
@@ -114,42 +159,90 @@ class DataclassArguments:
 
 @dataclass
 class StubFieldInfo:
-    """Information about a field as it should appear in the stub."""
+    """
+    Contains information about a field for stub generation.
+    """
 
     name: str
+    """
+    The name of the field.
+    """
     type_name: str
-    assignment: FieldRepresentation
+    """
+    The name of the field's type.
+    """
+    field_representation: FieldRepresentation
+    """
+    The field's representation.
+    """
 
     @classmethod
     def from_wrapped_field(cls, wf: WrappedField) -> StubFieldInfo:
-        """Creates a StubFieldInfo instance from a WrappedField."""
+        """
+        Creates StubFieldInfo from a WrappedField.
+
+        :param wf: The wrapped field to convert.
+        """
         return cls(wf.name, wf.type_name, FieldRepresentation.from_wrapped_field(wf))
 
 
 @dataclass
 class StubClassInfo:
-    """Information about a class as it should appear in the stub."""
+    """
+    Contains information about a class for stub generation.
+    """
 
     name: str
+    """
+    The name of the class.
+    """
     bases: List[str]
+    """
+    The base classes of the class.
+    """
     fields: List[StubFieldInfo]
+    """
+    The fields of the class.
+    """
     dataclass_args: DataclassArguments
+    """
+    The dataclass decorator arguments.
+    """
 
 
 @dataclass
 class RoleTakerInfo:
-    """Information about a role taker for stub generation."""
+    """
+    Information about a role taker for stub generation.
+    """
 
     role_for_name: str
+    """
+    The name of the role-for class.
+    """
     taker_field_name: str
+    """
+    The name of the field holding the taker.
+    """
     inherited_fields: List[StubFieldInfo]
+    """
+    Fields inherited by the role-for class.
+    """
     roles: List[RoleInfo]
+    """
+    List of roles associated with the taker.
+    """
 
     @classmethod
     def from_taker_wrapped_class_and_roles(
         cls, taker_wc: WrappedClass, roles: List[WrappedClass[Role]]
     ):
-        """Creates a RoleTakerInfo instance from a role taker type."""
+        """
+        Creates RoleTakerInfo from a role taker and its roles.
+
+        :param taker_wc: The wrapped class of the role taker.
+        :param roles: The list of roles associated with the taker.
+        """
         role_infos = [RoleInfo.from_wrapped_class(role) for role in roles]
 
         # Inherited fields are all fields of the taker that are init=True
@@ -169,15 +262,30 @@ class RoleTakerInfo:
 
 @dataclass
 class RoleInfo:
-    """Information about a role for stub generation."""
+    """
+    Information about a role for stub generation.
+    """
 
     name: str
+    """
+    The name of the role class.
+    """
     dataclass_args: DataclassArguments
+    """
+    Dataclass arguments for the role class.
+    """
     introduced_field: Optional[StubFieldInfo] = None
+    """
+    The field introduced by this role.
+    """
 
     @classmethod
     def from_wrapped_class(cls, role: WrappedClass[Role]) -> RoleInfo:
-        """Creates a RoleInfo instance from a WrappedClass."""
+        """
+        Creates RoleInfo from a WrappedClass.
+
+        :param role: The wrapped class of the role.
+        """
         taker_field_name = role.clazz.role_taker_field().name
 
         intro_field_wc = next(
@@ -197,11 +305,15 @@ class RoleInfo:
 
 class RoleStubGenerator:
     """
-    Automates the generation of stub python files (.pyi) for classes that follow the Role Pattern.
+    Automates the generation of stub python files (.pyi) for classes following the Role pattern.
     """
 
     def __init__(self, module: Any):
-        """Initializes the generator with the Jinja template."""
+        """
+        Initializes the generator with a module.
+
+        :param module: The module to generate stubs for.
+        """
         this_file_package = inspect.getmodule(self).__package__
         loader = jinja2.PackageLoader(this_file_package, "templates")
         self.env = jinja2.Environment(
@@ -213,9 +325,9 @@ class RoleStubGenerator:
 
     def generate_stub(self) -> str:
         """
-        Generates a stub file for the given module.
+        Generate a stub file for the module.
 
-        :return: The generated stub file as a string.
+        :return: A string containing the generated stub file data.
         """
         return self.template.render(
             stub_classes=self._non_role_stub_classes,
@@ -225,7 +337,9 @@ class RoleStubGenerator:
 
     @cached_property
     def _non_role_stub_classes(self) -> List[StubClassInfo]:
-        """Stub Classes for non-role entities."""
+        """
+        :return: Stub information for non-role classes.
+        """
         return [
             self._build_stub_class(wc)
             for wc in self.class_diagram.wrapped_classes
@@ -234,7 +348,9 @@ class RoleStubGenerator:
 
     @cached_property
     def _root_role_taker_to_roles_map(self) -> Dict[Type, List[WrappedClass]]:
-        """Mapping from root role taker types to their roles."""
+        """
+        :return: mapping from root role taker types to their roles.
+        """
         mapping = defaultdict(list)
         for wc in self.class_diagram.wrapped_classes:
             if issubclass(wc.clazz, Role):
@@ -242,7 +358,10 @@ class RoleStubGenerator:
         return mapping
 
     def _build_stub_class(self, wrapped_class: WrappedClass) -> StubClassInfo:
-        """Builds stub information for a non-role class."""
+        """
+        :param wrapped_class: The wrapped class to build info for.
+        :return: Stub information for the non-role class.
+        """
         # Add original fields
         taker_fields = [
             StubFieldInfo.from_wrapped_field(wf) for wf in wrapped_class.fields
@@ -277,7 +396,9 @@ class RoleStubGenerator:
 
     @cached_property
     def _role_taker_to_info_map(self) -> Dict[Type, RoleTakerInfo]:
-        """Prepares role taker metadata for the template."""
+        """
+        :return: A mapping from role taker types to their information.
+        """
         return {
             taker_type: RoleTakerInfo.from_taker_wrapped_class_and_roles(
                 self.class_diagram.get_wrapped_class(taker_type), roles
@@ -287,7 +408,9 @@ class RoleStubGenerator:
 
     @cached_property
     def _role_taker_to_roles_map(self) -> Dict[Type, List[WrappedClass[Role]]]:
-        """Mapping from role taker types to their roles."""
+        """
+        :return: A mapping from role taker types to their roles.
+        """
         taker_to_roles = defaultdict(list)
         for role_wc in self._role_wrapped_classes:
             taker_type = role_wc.clazz.get_role_taker_type()
@@ -296,7 +419,9 @@ class RoleStubGenerator:
 
     @cached_property
     def _role_wrapped_classes(self) -> List[WrappedClass[Role]]:
-        """Returns a list of WrappedClass instances for role classes."""
+        """
+        :return: Wrapped class instances for role classes.
+        """
         return [
             wc
             for wc in self.class_diagram.wrapped_classes
@@ -304,7 +429,11 @@ class RoleStubGenerator:
         ]
 
     def _extract_imports(self) -> List[str]:
-        """Extracts imports from module source, excluding internal role/dataclass modules."""
+        """
+        Extract imports from the module source.
+
+        :return: A list of string import statements.
+        """
         return extract_imports(
             self.module,
             [

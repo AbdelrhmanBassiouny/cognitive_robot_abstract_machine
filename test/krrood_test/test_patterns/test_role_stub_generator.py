@@ -40,10 +40,8 @@ def test_role_taker_mapping():
 
 
 def test_full_stub_comparison():
-    generator = RoleStubGenerator()
-    generated_stub = generator.generate_stub(
-        university_ontology_like_classes_without_descriptors
-    )
+    generator = RoleStubGenerator(university_ontology_like_classes_without_descriptors)
+    generated_stub = generator.generate_stub()
 
     expected_stub_path = "test/krrood_test/dataset/university_ontology_like_classes_without_descriptors.pyi"
     with open(expected_stub_path, "r") as f:
@@ -62,5 +60,5 @@ def test_full_stub_comparison():
     # Check for specific field transformations
     assert "head_of: RecognizedGroup = field(init=False)" in generated_stub
     assert (
-        "head_of: RecognizedGroup = field(kw_only=True, default=None)" in generated_stub
+        "head_of: RecognizedGroup = field(default=None, kw_only=True)" in generated_stub
     )
