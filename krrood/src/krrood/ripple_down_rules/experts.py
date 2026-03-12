@@ -17,7 +17,7 @@ from krrood.ripple_down_rules.datastructures.case import show_current_and_corner
 from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
 from krrood.ripple_down_rules.datastructures.enums import PromptFor
 from krrood.ripple_down_rules.user_interface.template_file_creator import TemplateFileCreator
-from krrood.ripple_down_rules.utils import extract_imports, extract_function_or_class_file, get_imports_from_scope, get_class_file_path
+from krrood.ripple_down_rules.utils import get_scope_from_imports, extract_function_or_class_file, get_imports_from_scope, get_class_file_path
 
 try:
     from .user_interface.gui import RDRCaseViewer
@@ -198,7 +198,7 @@ class Expert(ABC):
             if 'def ' not in answer and 'pass' in answer:
                 self.all_expert_answers.append(({}, None))
                 continue
-            scope = extract_imports(tree=ast.parse(answer))
+            scope = get_scope_from_imports(tree=ast.parse(answer))
             func_name = all_function_sources[i].split('def ')[1].split('(')[0]
             function_source = all_function_sources[i].replace(func_name,
                                                               CallableExpression.encapsulating_function_name)
