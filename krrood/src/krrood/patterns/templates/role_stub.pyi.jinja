@@ -5,45 +5,37 @@ from dataclasses import dataclass, field
 {% endfor %}
 
 
-{% for mocked_class in mocked_classes %}
-@dataclass({{ mocked_class.dataclass_args }})
-class {{ mocked_class.name }}{% if mocked_class.bases %}({{ mocked_class.bases|join(', ') }}){% endif %}:
-    {% for wrapped_field in mocked_class.fields %}
+{% for item in items %}
+{% if item.__class__.__name__ == 'StubClassInfo' %}
+@dataclass({{ item.dataclass_args }})
+class {{ item.name }}{% if item.bases %}({{ item.bases|join(', ') }}){% endif %}:
+    {% for wrapped_field in item.fields %}
     {{ wrapped_field.name }}: {{ wrapped_field.type_name }}{{ wrapped_field.field_representation }}
     {% endfor %}
-    {% if not mocked_class.fields %}
+    {% if not item.fields %}
     ...
     {% endif %}
 
 
-{% endfor %}
-{% for wrapped_class in stub_classes %}
-@dataclass({{ wrapped_class.dataclass_args }})
-class {{ wrapped_class.name }}{% if wrapped_class.bases %}({{ wrapped_class.bases|join(', ') }}){% endif %}:
-    {% for wrapped_field in wrapped_class.fields %}
-    {{ wrapped_field.name }}: {{ wrapped_field.type_name }}{{ wrapped_field.field_representation }}
-    {% endfor %}
-    {% if not wrapped_class.fields %}
-    ...
-    {% endif %}
-
-
-{% endfor %}
-{% for taker_type, info in role_takers.items() %}
+{% elif item.__class__.__name__ == 'RoleForInfo' %}
 @dataclass
-class {{ info.role_for_name }}({{ taker_type.__name__ }}):
-    {{ info.taker_field_name }}: {{ taker_type.__name__ }}
-    {% for wrapped_field in info.inherited_fields %}
+class {{ item.name }}({{ item.taker_name }}):
+    {{ item.taker_field_name }}: {{ item.taker_name }}
+    {% for wrapped_field in item.inherited_fields %}
     {{ wrapped_field.name }}: {{ wrapped_field.type_name }} = field(init=False)
     {% endfor %}
 
 
-{% for role_info in info.roles %}
-@dataclass({{ role_info.dataclass_args }})
-class {{ role_info.name }}({{ info.role_for_name }}):
-    # Original Owner of the {{ role_info.introduced_field.name }} field
-    {{ role_info.introduced_field.name }}: {{ role_info.introduced_field.type_name }}{{ role_info.introduced_field.field_representation }}
+{% elif item.__class__.__name__ == 'RoleInfo' %}
+@dataclass({{ item.dataclass_args }})
+class {{ item.name }}({{ item.role_for_name }}):
+    {% if item.introduced_field %}
+    # Original Owner of the {{ item.introduced_field.name }} field
+    {{ item.introduced_field.name }}: {{ item.introduced_field.type_name }}{{ item.introduced_field.field_representation }}
+    {% else %}
+    ...
+    {% endif %}
 
 
-{% endfor %}
+{% endif %}
 {% endfor %}

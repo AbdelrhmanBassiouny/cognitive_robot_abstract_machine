@@ -5,26 +5,23 @@ from krrood.entity_query_language.predicate import HasType, HasTypes, Predicate,
 from typing_extensions import List, Set
 
 
+@dataclass
+class RoleForPersonAsRoleTakerInAnotherModule(PersonAsRoleTakerInAnotherModule):
+    person: PersonAsRoleTakerInAnotherModule
+    name: str = field(init=False)
+
+
+@dataclass(eq=False)
+class Student(RoleForPersonAsRoleTakerInAnotherModule):
+    # Original Owner of the takes_course field
+    takes_course: List[Course] = field(default_factory=list, kw_only=True)
+
+
 @dataclass(eq=False)
 class RecognizedGroup(Symbol):
     name: str
     members: Set[Person] = field(default_factory=set)
     sub_organization_of: List[RecognizedGroup] = field(default_factory=list)
-
-
-@dataclass(unsafe_hash=True)
-class Course(Symbol):
-    name: str
-
-
-@dataclass(eq=False)
-class Country(RecognizedGroup):
-    ...
-
-
-@dataclass(eq=False)
-class Company(RecognizedGroup):
-    ...
 
 
 @dataclass(eq=False)
@@ -53,16 +50,25 @@ class ProfessorAsFirstRole(RoleForPerson):
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
 
+@dataclass(unsafe_hash=True)
+class Course(Symbol):
+    name: str
+
+
+@dataclass(eq=False)
+class Country(RecognizedGroup):
+    ...
+
+
+@dataclass(eq=False)
+class Company(RecognizedGroup):
+    ...
+
+
 @dataclass(eq=False)
 class CEOAsFirstRole(RoleForPerson):
     # Original Owner of the head_of field
     head_of: RecognizedGroup = field(default=None, kw_only=True)
-
-
-@dataclass(eq=False)
-class AssociateProfessorAsSubClassOfARoleInSameModule(RoleForPerson):
-    # Original Owner of the teacher_of field
-    teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
 
 @dataclass
@@ -91,15 +97,8 @@ class DelegateAsThirdRole(RoleForRepresentativeAsSecondRole):
     delegate_of: RecognizedGroup = field(default=None, kw_only=True)
 
 
-@dataclass
-class RoleForPersonAsRoleTakerInAnotherModule(PersonAsRoleTakerInAnotherModule):
-    person: PersonAsRoleTakerInAnotherModule
-    name: str = field(init=False)
-
-
 @dataclass(eq=False)
-class Student(RoleForPersonAsRoleTakerInAnotherModule):
-    # Original Owner of the takes_course field
-    takes_course: List[Course] = field(default_factory=list, kw_only=True)
+class AssociateProfessorAsSubClassOfARoleInSameModule(ProfessorAsFirstRole):
+    ...
 
 

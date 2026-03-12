@@ -14,7 +14,7 @@ from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass, Field, field, fields
 from functools import cached_property
-from typing import Any, Type, List, Dict, Optional, Set
+from typing import Any, Type, List, Dict, Optional, Set, Union
 
 import jinja2
 
@@ -242,14 +242,18 @@ class StubClassInfo:
 
 
 @dataclass(frozen=True)
-class RoleTakerInfo:
+class RoleForInfo:
     """
-    Information about a role taker for stub generation.
+    Synthetic class that acts as a base for roles of a certain taker.
     """
 
-    role_for_name: str
+    name: str
     """
     The name of the role-for class.
+    """
+    taker_name: str
+    """
+    The name of the taker class.
     """
     taker_field_name: str
     """
@@ -259,23 +263,17 @@ class RoleTakerInfo:
     """
     Fields inherited by the role-for class.
     """
-    roles: List[RoleInfo]
-    """
-    List of roles associated with the taker.
-    """
 
     @classmethod
     def from_taker_wrapped_class_and_roles(
         cls, taker_wc: WrappedClass, roles: List[WrappedClass[Role]]
     ):
         """
-        Creates RoleTakerInfo from a role taker and its roles.
+        Creates RoleForInfo from a role taker and its roles.
 
         :param taker_wc: The wrapped class of the role taker.
         :param roles: The list of roles associated with the taker.
         """
-        role_infos = [RoleInfo.from_wrapped_class(role) for role in roles]
-
         # Inherited fields are all fields of the taker that are init=True
         inherited_fields = [
             StubFieldInfo(wf.name, wf.type_name, FieldRepresentation(field(init=False)))
@@ -284,10 +282,10 @@ class RoleTakerInfo:
         ]
 
         return cls(
-            role_for_name=f"RoleFor{taker_wc.name}",
+            name=f"RoleFor{taker_wc.name}",
+            taker_name=taker_wc.name,
             taker_field_name=roles[0].clazz.role_taker_field().name,
             inherited_fields=inherited_fields,
-            roles=role_infos,
         )
 
 
@@ -301,6 +299,10 @@ class RoleInfo:
     """
     The name of the role class.
     """
+    role_for_name: str
+    """
+    The name of the role-for class.
+    """
     dataclass_args: DataclassArguments
     """
     Dataclass arguments for the role class.
@@ -311,11 +313,14 @@ class RoleInfo:
     """
 
     @classmethod
-    def from_wrapped_class(cls, role: WrappedClass[Role]) -> RoleInfo:
+    def from_wrapped_class(
+        cls, role: WrappedClass[Role], role_for_name: str
+    ) -> RoleInfo:
         """
         Creates RoleInfo from a WrappedClass.
 
         :param role: The wrapped class of the role.
+        :param role_for_name: The name of the role-for class.
         """
         taker_field_name = role.clazz.role_taker_field().name
 
@@ -330,7 +335,10 @@ class RoleInfo:
             )
         dc_args = DataclassArguments.from_wrapped_class(role)
         return cls(
-            name=role.name, dataclass_args=dc_args, introduced_field=intro_field_stub
+            name=role.name,
+            role_for_name=role_for_name,
+            dataclass_args=dc_args,
+            introduced_field=intro_field_stub,
         )
 
 
@@ -368,30 +376,9 @@ class RoleStubGenerator:
 
         :return: A string representation of the generated stub file.
         """
-        # Sort role takers to ensure they are defined after their dependencies
-        role_takers = self._role_taker_to_info_map
-        sorted_taker_types = [
-            wc.clazz
-            for wc in reversed(
-                self.class_diagram.wrapped_classes_of_role_associations_subgraph_in_topological_order
-            )
-            if wc.clazz in role_takers
-        ]
-
-        # In case some taker types are not in the topological sort
-        for taker_type in role_takers:
-            if taker_type not in sorted_taker_types:
-                sorted_taker_types.append(taker_type)
-
-        sorted_role_takers = {
-            taker_type: role_takers[taker_type] for taker_type in sorted_taker_types
-        }
-
         data = self.template.render(
-            stub_classes=self._non_role_stub_classes,
-            role_takers=sorted_role_takers,
+            items=self._all_stub_elements,
             imports=self._extract_imports(),
-            mocked_classes=self._not_role_related_classes,
             module_name=self.module.__name__.split(".")[-1],
         )
         if write:
@@ -400,17 +387,110 @@ class RoleStubGenerator:
         return data
 
     @cached_property
-    def _non_role_stub_classes(self) -> List[StubClassInfo]:
+    def _all_stub_elements(self) -> List[Union[StubClassInfo, RoleForInfo, RoleInfo]]:
         """
-        :return: Stub information for non-role classes in topological order.
+        :return: All stub elements in topological order.
         """
-        return [
-            self._build_stub_class(wc)
-            for wc in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
-            if not isinstance(wc, WrappedSpecializedGeneric)
-            and not issubclass(wc.clazz, Role)
-            and wc.clazz in self._role_takers
-        ]
+        import rustworkx as rx
+
+        graph = self.class_diagram.inheritance_subgraph.copy()
+
+        # Add reversed role association edges: Taker -> Primary Role
+        # This ensures Taker is defined before its roles.
+        for taker_type, roles in self._role_taker_to_roles_map.items():
+            try:
+                taker_wc = self.class_diagram.get_wrapped_class(taker_type)
+            except Exception:
+                # Taker might be in another module
+                continue
+            for role_wc in roles:
+                graph.add_edge(taker_wc.index, role_wc.index, None)
+
+        topological_order = [graph[i] for i in rx.topological_sort(graph)]
+
+        rendered_items = []
+        rendered_role_for = set()
+
+        for wc in topological_order:
+            if wc.clazz in self._primary_roles:
+                taker_type = wc.clazz.get_role_taker_type()
+                role_for_info = self._role_taker_to_role_for_map[taker_type]
+                if taker_type not in rendered_role_for:
+                    rendered_items.append(role_for_info)
+                    rendered_role_for.add(taker_type)
+
+                rendered_items.append(
+                    RoleInfo.from_wrapped_class(wc, role_for_info.name)
+                )
+
+            elif wc.clazz in self._role_takers:
+                # Render the taker class itself
+                rendered_items.append(self._build_stub_class(wc))
+                # Then its RoleFor
+                if wc.clazz not in rendered_role_for:
+                    role_for_info = self._role_taker_to_role_for_map[wc.clazz]
+                    rendered_items.append(role_for_info)
+                    rendered_role_for.add(wc.clazz)
+
+            elif issubclass(wc.clazz, Role):
+                # Role subclass (not primary)
+                rendered_items.append(
+                    self._build_stub_class(wc, role_related_class=True)
+                )
+
+            else:
+                # Regular class (not role related)
+                is_related = wc.clazz in self._to_be_defined_classes
+                rendered_items.append(
+                    self._build_stub_class(wc, role_related_class=is_related)
+                )
+
+        # Handle roles whose takers are in other modules
+        for role_wc in self._role_wrapped_classes:
+            if role_wc.clazz in self._primary_roles:
+                taker_type = role_wc.clazz.get_role_taker_type()
+                if taker_type not in rendered_role_for:
+                    role_for_info = self._role_taker_to_role_for_map[taker_type]
+                    rendered_items.append(role_for_info)
+                    rendered_role_for.add(taker_type)
+                    rendered_items.append(
+                        RoleInfo.from_wrapped_class(role_wc, role_for_info.name)
+                    )
+
+        # Remove duplicates while preserving order
+        unique_items = []
+        seen_names = set()
+        for item in rendered_items:
+            # We use name as identifier for synthetic classes and real classes
+            if item.name not in seen_names:
+                unique_items.append(item)
+                seen_names.add(item.name)
+
+        return unique_items
+
+    @cached_property
+    def _primary_roles(self) -> Set[Type]:
+        """
+        :return: A set of primary role types.
+        """
+        from typing import get_origin
+
+        primary = set()
+        for role_wc in self._role_wrapped_classes:
+            is_primary = True
+            for base in role_wc.clazz.__bases__:
+                origin = get_origin(base)
+                if base is Role or origin is Role:
+                    continue
+                try:
+                    if issubclass(base, Role):
+                        is_primary = False
+                        break
+                except TypeError:
+                    continue
+            if is_primary:
+                primary.add(role_wc.clazz)
+        return primary
 
     @cached_property
     def _role_takers(self) -> Set[Type]:
@@ -438,18 +518,6 @@ class RoleStubGenerator:
             ):
                 mapping[wc.clazz.get_root_role_taker_type()].append(wc)
         return mapping
-
-    @cached_property
-    def _not_role_related_classes(self) -> List[StubClassInfo]:
-        """
-        :return: A list of stub information for classes in topological order that are not related roles but are needed
-        for completeness of the stub.
-        """
-        return [
-            self._build_stub_class(wc, role_related_class=False)
-            for wc in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
-            if wc.clazz not in self._to_be_defined_classes
-        ]
 
     def _get_base_names(self, clazz: Type) -> List[str]:
         """
@@ -505,12 +573,12 @@ class RoleStubGenerator:
         )
 
     @cached_property
-    def _role_taker_to_info_map(self) -> Dict[Type, RoleTakerInfo]:
+    def _role_taker_to_role_for_map(self) -> Dict[Type, RoleForInfo]:
         """
-        :return: A mapping from role taker types to their information.
+        :return: A mapping from role taker types to their RoleFor information.
         """
         return {
-            taker_type: RoleTakerInfo.from_taker_wrapped_class_and_roles(
+            taker_type: RoleForInfo.from_taker_wrapped_class_and_roles(
                 self.class_diagram.ensure_wrapped_class(taker_type), roles
             )
             for taker_type, roles in self._role_taker_to_roles_map.items()
@@ -522,9 +590,11 @@ class RoleStubGenerator:
         :return: A mapping from role taker types to their roles.
         """
         taker_to_roles = defaultdict(list)
+        primary_roles = self._primary_roles
         for role_wc in self._role_wrapped_classes:
-            taker_type = role_wc.clazz.get_role_taker_type()
-            taker_to_roles[taker_type].append(role_wc)
+            if role_wc.clazz in primary_roles:
+                taker_type = role_wc.clazz.get_role_taker_type()
+                taker_to_roles[taker_type].append(role_wc)
         return taker_to_roles
 
     @cached_property
