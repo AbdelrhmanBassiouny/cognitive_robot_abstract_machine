@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Set, List
 
+from dataset.role_and_ontology.role_taker_for_university_ontology import (
+    PersonAsRoleTakerInAnotherModule,
+)
 from krrood.entity_query_language.predicate import Symbol
 
 @dataclass(eq=False)
@@ -21,7 +24,6 @@ class Country(RecognizedGroup): ...
 @dataclass(unsafe_hash=True)
 class Course(Symbol):
     name: str
-
 
 @dataclass(eq=False)
 class Person(Symbol):
@@ -71,3 +73,13 @@ class RoleForRepresentativeAsSecondRole(RepresentativeAsSecondRole):
 class DelegateAsThirdRole(RoleForRepresentativeAsSecondRole):
     # Original Owner of the delegate_of field
     delegate_of: RecognizedGroup = field(default=None, kw_only=True)
+
+@dataclass
+class RoleForPersonAsRoleTakerInAnotherModule(PersonAsRoleTakerInAnotherModule):
+    person: PersonAsRoleTakerInAnotherModule
+    name: str = field(init=False)
+
+@dataclass(eq=False)
+class Student(RoleForPersonAsRoleTakerInAnotherModule):
+    # Original Owner of the takes_course field
+    takes_course: List[Course] = field(default_factory=list, kw_only=True)

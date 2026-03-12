@@ -6,8 +6,9 @@ import os
 import types
 from ast import Module
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, Field
 from functools import lru_cache
+from importlib.util import resolve_name
 from inspect import isclass
 from typing import Union, Type
 
@@ -98,44 +99,119 @@ def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
 
 
 def extract_imports(
-    module: types.ModuleType, exclude_libraries: Optional[List[str]] = None
+    module: types.ModuleType,
+    exclude_libraries: Optional[List[str]] = None,
+    convert_relative_to_absolute: bool = False,
+    strip_levels_by_dots: bool = False,
 ) -> List[str]:
-    """Extract imports from a module source, handling multiline imports, and merging duplicates."""
+
+    exclude_libraries = exclude_libraries or []
+
     source = inspect.getsource(module)
     tree = ast.parse(source)
 
     import_modules = set()
     from_imports = defaultdict(set)
 
+    current_module = module.__name__
+
     for node in ast.walk(tree):
 
-        # import x, y
+        # import x
         if isinstance(node, ast.Import):
+
             for alias in node.names:
-                if alias.name in exclude_libraries:
+                name = alias.name
+
+                if name in exclude_libraries:
                     continue
+
                 if alias.asname:
-                    import_modules.add(f"{alias.name} as {alias.asname}")
+                    import_modules.add(f"{name} as {alias.asname}")
                 else:
-                    import_modules.add(alias.name)
+                    import_modules.add(name)
 
         # from x import y
         elif isinstance(node, ast.ImportFrom):
-            if not node.module or node.module in exclude_libraries:
+
+            prefix = "." * node.level
+            module_name = node.module or ""
+            full_module = f"{prefix}{module_name}"
+
+            if convert_relative_to_absolute and node.level > 0:
+                full_module = resolve_name(full_module, current_module)
+
+                if strip_levels_by_dots:
+                    parts = full_module.split(".")
+                    full_module = ".".join(parts[node.level :])
+
+            if node.module and node.module in exclude_libraries:
                 continue
+
             for alias in node.names:
                 if alias.asname:
-                    from_imports[node.module].add(f"{alias.name} as {alias.asname}")
+                    from_imports[full_module].add(f"{alias.name} as {alias.asname}")
                 else:
-                    from_imports[node.module].add(alias.name)
+                    from_imports[full_module].add(alias.name)
 
     result = set()
 
-    for module in import_modules:
-        result.add(f"import {module}")
+    for mod in import_modules:
+        result.add(f"import {mod}")
 
-    for module, names in from_imports.items():
+    for mod, names in from_imports.items():
         joined = ", ".join(sorted(names))
-        result.add(f"from {module} import {joined}")
+        result.add(f"from {mod} import {joined}")
 
     return sorted(result)
+
+
+def generate_relative_import(
+    from_module: str, target_module: str, symbol: str | None = None
+) -> str:
+    """
+    Generate a relative import statement using Python's own resolver.
+
+    :param from_module: The module where the import is being made.
+    :param target_module: The module to import.
+    :param symbol: The symbol (e.g., a class, a method, ..., etc.) to import (optional).
+    """
+
+    # Compute absolute module name as Python would resolve it
+    absolute = resolve_name(target_module, from_module)
+
+    from_pkg = from_module.rsplit(".", 1)[0]
+    from_parts = from_pkg.split(".")
+    target_parts = absolute.split(".")
+
+    # find common prefix
+    i = 0
+    while (
+        i < min(len(from_parts), len(target_parts)) and from_parts[i] == target_parts[i]
+    ):
+        i += 1
+
+    up = len(from_parts) - i
+    prefix = "." * (up + 1)
+
+    remainder = ".".join(target_parts[i:])
+
+    if symbol:
+        if remainder:
+            return f"from {prefix}{remainder} import {symbol}"
+        return f"from {prefix} import {symbol}"
+    else:
+        return f"from {prefix} import {remainder}"
+
+
+@lru_cache
+def own_dataclass_fields(cls) -> List[Field]:
+    """
+    :return: The fields of the dataclass that are not inherited from a base class.
+    """
+    base_fields = set()
+    for base in cls.__mro__[1:]:
+        if hasattr(base, "__dataclass_fields__"):
+            base_fields.update(base.__dataclass_fields__.keys())
+
+    return [f for f in fields(cls) if f.name not in base_fields]

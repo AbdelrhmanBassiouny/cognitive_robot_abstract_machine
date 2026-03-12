@@ -13,7 +13,7 @@ from typing import get_args, get_origin, _GenericAlias, Any
 import rustworkx as rx
 
 from krrood import logger
-from krrood.utils import module_and_class_name
+from krrood.utils import module_and_class_name, own_dataclass_fields
 
 try:
     from krrood.rustworkx_utils import RWXNode
@@ -31,7 +31,8 @@ from typing_extensions import (
     TYPE_CHECKING,
     TypeVar,
     get_type_hints,
-    Iterator, Generic,
+    Iterator,
+    Generic,
 )
 
 
@@ -224,6 +225,7 @@ class ParseError(TypeError):
 
 T = TypeVar("T")
 
+
 @dataclass
 class WrappedClass(Generic[T]):
     """A node wrapper around a Python class used in the class diagram graph."""
@@ -265,6 +267,14 @@ class WrappedClass(Generic[T]):
                 )
             ]
         )
+
+    @cached_property
+    def own_fields(self) -> List[WrappedField]:
+        return [
+            wrapped_field
+            for wrapped_field in self.fields
+            if wrapped_field.field in own_dataclass_fields(self.clazz)
+        ]
 
     @cached_property
     def fields(self) -> List[WrappedField]:
@@ -658,6 +668,20 @@ class ClassDiagram:
             for edge in self._dependency_graph.edges()
             if isinstance(edge, Inheritance)
         ]
+
+    def ensure_wrapped_class(self, clazz: Type) -> WrappedClass:
+        """
+        Ensures that the provided class type has a corresponding WrappedClass instance.
+        If the class type is already a WrappedClass, it is returned as is. Otherwise, a new
+        WrappedClass instance is created and added to the internal mapping.
+
+        :param clazz: The class type to ensure has a WrappedClass instance.
+        :return: The associated WrappedClass instance.
+        """
+        try:
+            return self.get_wrapped_class(clazz)
+        except ClassIsUnMappedInClassDiagram:
+            return WrappedClass(clazz)
 
     def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
         """

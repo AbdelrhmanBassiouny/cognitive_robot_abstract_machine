@@ -11,7 +11,9 @@ class {{ mocked_class.name }}{% if mocked_class.bases %}({{ mocked_class.bases|j
     {% for wrapped_field in mocked_class.fields %}
     {{ wrapped_field.name }}: {{ wrapped_field.type_name }}{{ wrapped_field.field_representation }}
     {% endfor %}
-    {% if not mocked_class.fields %}...{% endif %}
+    {% if not mocked_class.fields %}
+    ...
+    {% endif %}
 
 
 {% endfor %}
@@ -21,7 +23,9 @@ class {{ wrapped_class.name }}{% if wrapped_class.bases %}({{ wrapped_class.base
     {% for wrapped_field in wrapped_class.fields %}
     {{ wrapped_field.name }}: {{ wrapped_field.type_name }}{{ wrapped_field.field_representation }}
     {% endfor %}
-    {% if not wrapped_class.fields %}...{% endif %}
+    {% if not wrapped_class.fields %}
+    ...
+    {% endif %}
 
 
 {% endfor %}

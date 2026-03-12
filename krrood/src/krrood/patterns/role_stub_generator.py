@@ -61,7 +61,9 @@ class FieldRepresentation:
     """
 
     @classmethod
-    def from_wrapped_field(cls, wrapped_field: WrappedField, role_related_class: bool = True) -> FieldRepresentation:
+    def from_wrapped_field(
+        cls, wrapped_field: WrappedField, role_related_class: bool = True
+    ) -> FieldRepresentation:
         """
         Creates a FieldRepresentation from a WrappedField.
 
@@ -71,7 +73,7 @@ class FieldRepresentation:
         current_field = copy(wrapped_field.field)
         if role_related_class:
             current_field.kw_only = wrapped_field.field.kw_only or (
-                    not wrapped_field.is_required and wrapped_field.field.init
+                not wrapped_field.is_required and wrapped_field.field.init
             )
         return cls(current_field)
 
@@ -99,9 +101,9 @@ class FieldRepresentation:
 
             # Avoid adding kw_only=False as it is the default behavior and MISSING in field signature
             if (
-                    parameter.name == "kw_only"
-                    and current_value is False
-                    and default_value is MISSING
+                parameter.name == "kw_only"
+                and current_value is False
+                and default_value is MISSING
             ):
                 continue
 
@@ -115,8 +117,8 @@ class FieldRepresentation:
 
         # Handle simple assignment (e.g., " = value")
         if (
-                len(non_default_field_assignments) == 1
-                and non_default_field_assignments[0].name == "default"
+            len(non_default_field_assignments) == 1
+            and non_default_field_assignments[0].name == "default"
         ):
             return f" = {non_default_field_assignments[0].value}"
 
@@ -199,15 +201,20 @@ class StubFieldInfo:
     """
 
     @classmethod
-    def from_wrapped_field(cls, wrapped_field: WrappedField, role_related_class: bool = True) -> StubFieldInfo:
+    def from_wrapped_field(
+        cls, wrapped_field: WrappedField, role_related_class: bool = True
+    ) -> StubFieldInfo:
         """
         Creates StubFieldInfo from a WrappedField.
 
         :param wrapped_field: The wrapped field to convert.
         :param role_related_class: Whether the field belongs to a role-related class.
         """
-        return cls(wrapped_field.name, wrapped_field.type_name,
-                   FieldRepresentation.from_wrapped_field(wrapped_field, role_related_class))
+        return cls(
+            wrapped_field.name,
+            wrapped_field.type_name,
+            FieldRepresentation.from_wrapped_field(wrapped_field, role_related_class),
+        )
 
 
 @dataclass(frozen=True)
@@ -259,7 +266,7 @@ class RoleTakerInfo:
 
     @classmethod
     def from_taker_wrapped_class_and_roles(
-            cls, taker_wc: WrappedClass, roles: List[WrappedClass[Role]]
+        cls, taker_wc: WrappedClass, roles: List[WrappedClass[Role]]
     ):
         """
         Creates RoleTakerInfo from a role taker and its roles.
@@ -332,7 +339,9 @@ class RoleStubGenerator:
     Automates the generation of stub python files (.pyi) for classes following the Role pattern.
     """
 
-    def __init__(self, module: ModuleType, class_diagram: Optional[ClassDiagram] = None):
+    def __init__(
+        self, module: ModuleType, class_diagram: Optional[ClassDiagram] = None
+    ):
         """
         Initializes the generator with a module.
 
@@ -344,9 +353,14 @@ class RoleStubGenerator:
             loader=loader, trim_blocks=True, lstrip_blocks=True
         )
         self.template = self.env.get_template("role_stub.pyi.jinja")
-        self.class_diagram = class_diagram if class_diagram else ClassDiagram(classes_of_module(module))
+        self.class_diagram = (
+            class_diagram if class_diagram else ClassDiagram(classes_of_module(module))
+        )
         self.module = module
-        self.path = Path(self.module.__file__).parent / f"{self.module.__name__.split('.')[-1]}.pyi"
+        self.path = (
+            Path(self.module.__file__).parent
+            / f"{self.module.__name__.split('.')[-1]}.pyi"
+        )
 
     def generate_stub(self, write: bool = False) -> str:
         """
@@ -393,7 +407,9 @@ class RoleStubGenerator:
         return [
             self._build_stub_class(wc)
             for wc in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
-            if not isinstance(wc, WrappedSpecializedGeneric) and not issubclass(wc.clazz, Role) and wc.clazz in self._role_takers
+            if not isinstance(wc, WrappedSpecializedGeneric)
+            and Role not in wc.clazz.__bases__
+            and wc.clazz in self._role_takers
         ]
 
     @cached_property
@@ -417,7 +433,10 @@ class RoleStubGenerator:
         """
         mapping = defaultdict(list)
         for wc in self.class_diagram.wrapped_classes:
-            if not isinstance(wc, WrappedSpecializedGeneric) and issubclass(wc.clazz, Role):
+            if (
+                not isinstance(wc, WrappedSpecializedGeneric)
+                and Role in wc.clazz.__bases__
+            ):
                 mapping[wc.clazz.get_root_role_taker_type()].append(wc)
         return mapping
 
@@ -444,7 +463,9 @@ class RoleStubGenerator:
             # no __bases__ attribute
             return []
 
-    def _build_stub_class(self, wrapped_class: WrappedClass, role_related_class: bool = True) -> StubClassInfo:
+    def _build_stub_class(
+        self, wrapped_class: WrappedClass, role_related_class: bool = True
+    ) -> StubClassInfo:
         """
         :param wrapped_class: The wrapped class to build info for.
         :param role_related_class: Whether the class is not related to a role.
@@ -452,18 +473,19 @@ class RoleStubGenerator:
         """
         # Add original fields
         taker_fields = [
-            StubFieldInfo.from_wrapped_field(wf, role_related_class) for wf in wrapped_class.fields
+            StubFieldInfo.from_wrapped_field(wf, role_related_class)
+            for wf in wrapped_class.own_fields
         ]
 
         # Add role-introduced fields as init=False
         for role_wc in self._root_role_taker_to_roles_map.get(wrapped_class.clazz, []):
             taker_field_name = role_wc.clazz.role_taker_field().name
             for role_wf in role_wc.fields:
-                # if any(taker_wf.name == role_wf.name for taker_wf in taker_fields):
-                #     raise ValueError(
-                #         f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
-                #         f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
-                #     )
+                if any(taker_wf.name == role_wf.name for taker_wf in taker_fields):
+                    raise ValueError(
+                        f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
+                        f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
+                    )
                 if role_wf.name != taker_field_name:
                     taker_fields.append(
                         StubFieldInfo(
@@ -489,7 +511,7 @@ class RoleStubGenerator:
         """
         return {
             taker_type: RoleTakerInfo.from_taker_wrapped_class_and_roles(
-                self.class_diagram.get_wrapped_class(taker_type), roles
+                self.class_diagram.ensure_wrapped_class(taker_type), roles
             )
             for taker_type, roles in self._role_taker_to_roles_map.items()
         }
@@ -513,7 +535,8 @@ class RoleStubGenerator:
         return [
             wc
             for wc in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
-            if not isinstance(wc, WrappedSpecializedGeneric) and issubclass(wc.clazz, Role)
+            if not isinstance(wc, WrappedSpecializedGeneric)
+            and Role in wc.clazz.__bases__
         ]
 
     def _extract_imports(self) -> List[str]:

@@ -6,38 +6,51 @@ from typing import Dict, Any, Type
 import pytest
 
 from krrood.patterns.role_stub_generator import RoleStubGenerator
-from test.krrood_test.dataset import (
+from ..dataset.role_and_ontology import (
     university_ontology_like_classes_without_descriptors,
 )
 
 
-def execute_stub(stub_content: str, name: str = "__stub__") -> Dict[str, Any]:
+def execute_stub(stub_content: str, name: str = "__stub__", package: str | None = None):
     """
     Executes the stub content and returns the namespace.
+    Supports relative imports by providing a proper module context.
     """
     import sys
     import types
+    import importlib.machinery
+    import unittest.mock
 
-    # Create a real module object and put it in sys.modules
-    # This is required for get_type_hints to work correctly with forward references.
+    # Create module
     module = types.ModuleType(name)
-    module.__dict__.update({"__name__": name})
+
+    module.__name__ = name
+    module.__package__ = package if package else name.rpartition(".")[0]
+    module.__file__ = f"<{name}>"
+
+    # Create minimal spec so Python treats this like a real module
+    module.__spec__ = importlib.machinery.ModuleSpec(
+        name=name,
+        loader=None,
+        is_package=False,
+    )
+
+    # Register module
     sys.modules[name] = module
+
     namespace = module.__dict__
 
-    # Use a fake Symbol class to prevent stub classes from being picked up by SymbolGraph
-    # and to avoid introspection issues during test cleanup/setup.
+    # Fake Symbol class
     class Symbol:
         pass
 
     namespace["Symbol"] = Symbol
 
-    # Mock the Symbol class in its original modules so the stub's imports use our fake one.
-    import unittest.mock
-
+    # Patch Symbol in source modules
     with unittest.mock.patch("krrood.entity_query_language.predicate.Symbol", Symbol):
         with unittest.mock.patch("krrood.symbol_graph.symbol_graph.Symbol", Symbol):
             exec(stub_content, namespace)
+
     return namespace
 
 
@@ -141,13 +154,18 @@ def stub_comparator():
         os.path.dirname(__file__),
         "..",
         "dataset",
-        "ground_truth_university_ontology_like_classes_without_descriptors.pyi",
+        "role_and_ontology",
+        "_ground_truth_university_ontology_like_classes_without_descriptors.pyi",
     )
     with open(expected_stub_path, "r") as f:
         expected_stub_content = f.read()
 
-    gen_namespace = execute_stub(generated_stub, "generated_stub")
-    exp_namespace = execute_stub(expected_stub_content, "expected_stub")
+    gen_namespace = execute_stub(
+        generated_stub, "generated_stub", package="dataset.role_and_ontology"
+    )
+    exp_namespace = execute_stub(
+        expected_stub_content, "expected_stub", package="dataset.role_and_ontology"
+    )
 
     yield StubComparator(gen_namespace, exp_namespace)
 
@@ -155,6 +173,7 @@ def stub_comparator():
 
     sys.modules.pop("generated_stub", None)
     sys.modules.pop("expected_stub", None)
+
 
 @pytest.mark.order("first")
 def test_stub_generation_smoke():
