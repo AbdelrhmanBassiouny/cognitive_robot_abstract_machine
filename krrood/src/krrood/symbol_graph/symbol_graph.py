@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass, field, InitVar
@@ -192,9 +193,14 @@ class SymbolGraph(metaclass=SingletonMeta):
 
     def __post_init__(self):
         if self._class_diagram is None:
-            # fetch all symbols and construct the graph
+            all_symbols = [
+                cls for cls in recursive_subclasses(Symbol)
+                if hasattr(cls, "__module__") and (cls.__module__ in sys.modules) and not (
+                        getattr(sys.modules[cls.__module__], "__file__", "").endswith(".pyi")
+                )
+            ]
             self._class_diagram = ClassDiagram(
-                list(recursive_subclasses(Symbol)),
+                all_symbols,
                 introspector=DescriptorAwareIntrospector(),
             )
 
@@ -306,9 +312,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         return self._instance_graph.nodes()
 
     def get_incoming_relations_with_type(
-        self,
-        wrapped_instance: WrappedInstance,
-        relation_type: Type[PredicateClassRelation],
+            self,
+            wrapped_instance: WrappedInstance,
+            relation_type: Type[PredicateClassRelation],
     ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations with the given type that are incoming to the given wrapped instance.
@@ -321,9 +327,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         )
 
     def get_incoming_relations_with_condition(
-        self,
-        wrapped_instance: WrappedInstance,
-        edge_condition: Callable[[PredicateClassRelation], bool],
+            self,
+            wrapped_instance: WrappedInstance,
+            edge_condition: Callable[[PredicateClassRelation], bool],
     ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations with the given condition that are incoming to the given wrapped instance.
@@ -334,8 +340,8 @@ class SymbolGraph(metaclass=SingletonMeta):
         yield from filter(edge_condition, self.get_incoming_relations(wrapped_instance))
 
     def get_incoming_relations(
-        self,
-        wrapped_instance: WrappedInstance,
+            self,
+            wrapped_instance: WrappedInstance,
     ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations incoming to the given wrapped instance.
@@ -350,9 +356,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         )
 
     def get_outgoing_relations_with_type(
-        self,
-        wrapped_instance: WrappedInstance,
-        relation_type: Type[PredicateClassRelation],
+            self,
+            wrapped_instance: WrappedInstance,
+            relation_type: Type[PredicateClassRelation],
     ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations with the given type that are outgoing from the given wrapped instance.
@@ -365,9 +371,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         )
 
     def get_outgoing_relations_with_condition(
-        self,
-        wrapped_instance: WrappedInstance,
-        edge_condition: Callable[[PredicateClassRelation], bool],
+            self,
+            wrapped_instance: WrappedInstance,
+            edge_condition: Callable[[PredicateClassRelation], bool],
     ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations with the given condition that are outgoing from the given wrapped instance.
@@ -378,8 +384,8 @@ class SymbolGraph(metaclass=SingletonMeta):
         yield from filter(edge_condition, self.get_outgoing_relations(wrapped_instance))
 
     def get_outgoing_relations(
-        self,
-        wrapped_instance: WrappedInstance,
+            self,
+            wrapped_instance: WrappedInstance,
     ) -> Iterable[PredicateClassRelation]:
         """
         Get all relations outgoing from the given wrapped instance.
@@ -395,11 +401,11 @@ class SymbolGraph(metaclass=SingletonMeta):
         )
 
     def to_dot(
-        self,
-        filepath: str,
-        format_="svg",
-        graph_type="instance",
-        without_inherited_associations: bool = True,
+            self,
+            filepath: str,
+            format_="svg",
+            graph_type="instance",
+            without_inherited_associations: bool = True,
     ) -> None:
         """
         Generate a dot file from the instance graph, requires graphviz and pydot libraries.

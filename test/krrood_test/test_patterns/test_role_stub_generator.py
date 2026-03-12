@@ -161,10 +161,10 @@ def stub_comparator():
         expected_stub_content = f.read()
 
     gen_namespace = execute_stub(
-        generated_stub, "generated_stub", package="dataset.role_and_ontology"
+        generated_stub, "generated_stub", package="test.krrood_test.dataset.role_and_ontology"
     )
     exp_namespace = execute_stub(
-        expected_stub_content, "expected_stub", package="dataset.role_and_ontology"
+        expected_stub_content, "expected_stub", package="test.krrood_test.dataset.role_and_ontology"
     )
 
     yield StubComparator(gen_namespace, exp_namespace)

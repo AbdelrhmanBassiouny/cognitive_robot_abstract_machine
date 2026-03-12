@@ -127,6 +127,7 @@ class WrappedField:
                 found_class = self._find_class_by_name(e.name)
                 local_namespace[e.name] = found_class
 
+
     def _build_initial_namespace(self) -> dict:
         """
         Build the initial namespace for type resolution from the class diagram.

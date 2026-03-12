@@ -4,10 +4,10 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Set, List
 
-from dataset.role_and_ontology.role_taker_for_university_ontology import (
+from .role_taker_for_university_ontology import (
     PersonAsRoleTakerInAnotherModule,
 )
-from krrood.entity_query_language.predicate import Symbol
+from krrood.symbol_graph.symbol_graph import Symbol
 
 @dataclass(eq=False)
 class HasName:
@@ -29,26 +29,28 @@ class Course(HasName, Symbol): ...
 
 @dataclass(eq=False)
 class Person(HasName, Symbol):
-    works_for: RecognizedGroup = field(kw_only=True, default=None)
-    member_of: List[RecognizedGroup] = field(kw_only=True, default_factory=list)
+    works_for: RecognizedGroup = field(default=None, kw_only=True)
+    member_of: List[RecognizedGroup] = field(default_factory=list, kw_only=True)
     head_of: RecognizedGroup = field(init=False)
-    representative_of: RecognizedGroup = field(init=False)
     delegate_of: RecognizedGroup = field(init=False)
+    members: Set[Person] = field(init=False)
+    sub_organization_of: List[RecognizedGroup] = field(init=False)
     teacher_of: List[Course] = field(init=False)
+    representative_of: RecognizedGroup = field(init=False)
 
 @dataclass
 class RoleForPerson(Person):
-    person: Person
+    person: Person = field(kw_only=True)
     name: str = field(init=False)
     works_for: RecognizedGroup = field(init=False)
     member_of: List[RecognizedGroup] = field(init=False)
 
 @dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson, HasName): ...
+class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson): ...
 
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
-    RecognizedGroup, RoleForPerson
+    RoleForPerson, RecognizedGroup,
 ): ...
 
 @dataclass(eq=False)
@@ -66,7 +68,7 @@ class AssociateProfessorAsSubClassOfARoleInSameModule(ProfessorAsFirstRole): ...
 
 @dataclass
 class RoleForCEOAsFirstRole(CEOAsFirstRole):
-    ceo: CEOAsFirstRole
+    ceo: CEOAsFirstRole = field(kw_only=True)
     person: Person = field(init=False)
     head_of: RecognizedGroup = field(init=False)
 
@@ -77,7 +79,7 @@ class RepresentativeAsSecondRole(RoleForCEOAsFirstRole):
 
 @dataclass
 class RoleForRepresentativeAsSecondRole(RepresentativeAsSecondRole):
-    representative: RepresentativeAsSecondRole
+    representative: RepresentativeAsSecondRole = field(kw_only=True)
     ceo: CEOAsFirstRole = field(init=False)
     representative_of: RecognizedGroup = field(init=False)
 
@@ -88,7 +90,7 @@ class DelegateAsThirdRole(RoleForRepresentativeAsSecondRole):
 
 @dataclass
 class RoleForPersonAsRoleTakerInAnotherModule(PersonAsRoleTakerInAnotherModule):
-    person: PersonAsRoleTakerInAnotherModule
+    person: PersonAsRoleTakerInAnotherModule = field(kw_only=True)
     name: str = field(init=False)
 
 @dataclass(eq=False)

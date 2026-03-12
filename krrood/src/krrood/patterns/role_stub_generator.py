@@ -259,6 +259,10 @@ class RoleForInfo:
     """
     The name of the field holding the taker.
     """
+    taker_field: StubFieldInfo
+    """
+    The field holding the taker.
+    """
     inherited_fields: List[StubFieldInfo]
     """
     Fields inherited by the role-for class.
@@ -280,11 +284,15 @@ class RoleForInfo:
             for wf in taker_wc.fields
             if wf.field.init
         ]
+        taker_field_name = roles[0].clazz.role_taker_field().name
+        wrapped_field = next(f for f in roles[0].own_fields if f.name == taker_field_name)
+        taker_field = StubFieldInfo(taker_field_name, taker_wc.name, FieldRepresentation.from_wrapped_field(wrapped_field))
 
         return cls(
             name=f"RoleFor{taker_wc.name}",
             taker_name=taker_wc.name,
-            taker_field_name=roles[0].clazz.role_taker_field().name,
+            taker_field=taker_field,
+            taker_field_name=taker_field_name,
             inherited_fields=inherited_fields,
         )
 
@@ -302,6 +310,10 @@ class RoleInfo:
     role_for_name: str
     """
     The name of the role-for class.
+    """
+    bases: List[str]
+    """
+    The base classes of the role class.
     """
     dataclass_args: DataclassArguments
     """
@@ -323,9 +335,10 @@ class RoleInfo:
         :param role_for_name: The name of the role-for class.
         """
         taker_field_name = role.clazz.role_taker_field().name
+        taker_field_names = [f.name for f in fields(role.clazz.get_role_taker_type())]
 
         intro_field_wc = next(
-            (wf for wf in role.fields if wf.name != taker_field_name), None
+            (wf for wf in role.own_fields if wf.name != taker_field_name and wf.name not in taker_field_names), None
         )
         intro_field_stub = None
         if intro_field_wc:
@@ -333,10 +346,32 @@ class RoleInfo:
             intro_field_stub = StubFieldInfo(
                 intro_field_wc.name, intro_field_wc.type_name, assignment
             )
+
+        # Logic to determine bases
+        taker_type = role.clazz.get_role_taker_type()
+
+        bases = []
+        for base in role.clazz.__bases__:
+            if base is object:
+                continue
+
+            # Check if this base is the one that makes it a Role (Role[T] or a subclass of Role)
+            if base is Role and role_for_name not in bases:
+                bases.insert(0, role_for_name)
+            else:
+                base_name = base.__name__
+                # A base is redundant if the taker class already inherits from it.
+                is_redundant = taker_type is not None and issubclass(taker_type, base)
+
+                # if not is_redundant or is_same_module:
+                if not is_redundant and base_name not in bases:
+                    bases.append(base_name)
+
         dc_args = DataclassArguments.from_wrapped_class(role)
         return cls(
             name=role.name,
             role_for_name=role_for_name,
+            bases=bases,
             dataclass_args=dc_args,
             introduced_field=intro_field_stub,
         )
@@ -541,37 +576,40 @@ class RoleStubGenerator:
         :return: Stub information for the non-role class.
         """
         # Add original fields
-        taker_fields = [
+        taker_fields = {wf.name:
             StubFieldInfo.from_wrapped_field(wf, role_related_class)
             for wf in wrapped_class.fields
-        ]
+                        }
+        taker_field_names = [wf.name for wf in wrapped_class.own_fields]
 
         # Add role-introduced fields as init=False
+        introduced_fields = {}
         for role_wc in self._root_role_taker_to_roles_map.get(wrapped_class.clazz, []):
             if Role not in role_wc.clazz.__bases__:
                 continue
             taker_field_name = role_wc.clazz.role_taker_field().name
             for role_wf in role_wc.fields:
-                if any(taker_wf.name == role_wf.name for taker_wf in taker_fields):
+                is_owned_field = role_wf in role_wc.own_fields
+                if is_owned_field and role_wf.name in taker_fields:
                     raise ValueError(
                         f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
                         f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
                     )
-                if role_wf.name != taker_field_name:
-                    taker_fields.append(
-                        StubFieldInfo(
+                if role_wf.name != taker_field_name and role_wf.name not in taker_fields:
+                    stub_field = StubFieldInfo(
                             role_wf.name,
                             role_wf.type_name,
                             FieldRepresentation(field(init=False)),
                         )
-                    )
+                    introduced_fields[role_wf.name] = stub_field
+                    taker_fields[role_wf.name] = stub_field
 
         dc_args = DataclassArguments.from_wrapped_class(wrapped_class)
 
         return StubClassInfo(
             wrapped_class.name,
             self._get_base_names(wrapped_class.clazz),
-            taker_fields,
+            [stub_field for name, stub_field in taker_fields.items() if name in taker_field_names] + list(introduced_fields.values()),
             dc_args,
         )
 

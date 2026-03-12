@@ -52,7 +52,7 @@ class Person(HasName, Symbol):
 
 @dataclass(eq=False)
 class CEOAsFirstRole(Role[Person], Symbol):
-    person: Person
+    person: Person = field(kw_only=True)
     head_of: RecognizedGroup = None
 
     @classmethod
@@ -62,7 +62,7 @@ class CEOAsFirstRole(Role[Person], Symbol):
 
 @dataclass(eq=False)
 class DirectDiamondShapedInheritanceWhereOneIsRole(Role[Person], HasName):
-    person: Person
+    person: Person = field(kw_only=True)
 
     @classmethod
     def role_taker_field(cls) -> Field:
@@ -80,7 +80,7 @@ class InDirectDiamondShapedInheritanceWhereOneIsRole(RecognizedGroup, Role[Perso
 
 @dataclass(eq=False)
 class ProfessorAsFirstRole(Role[Person], Symbol):
-    person: Person
+    person: Person = field(kw_only=True)
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
     @classmethod
@@ -94,7 +94,7 @@ class AssociateProfessorAsSubClassOfARoleInSameModule(ProfessorAsFirstRole): ...
 
 @dataclass(eq=False)
 class RepresentativeAsSecondRole(Role[CEOAsFirstRole], Symbol):
-    ceo: CEOAsFirstRole
+    ceo: CEOAsFirstRole = field(kw_only=True)
     representative_of: RecognizedGroup = field(default=None, kw_only=True)
 
     @classmethod
@@ -104,7 +104,7 @@ class RepresentativeAsSecondRole(Role[CEOAsFirstRole], Symbol):
 
 @dataclass(eq=False)
 class DelegateAsThirdRole(Role[RepresentativeAsSecondRole], Symbol):
-    representative: RepresentativeAsSecondRole
+    representative: RepresentativeAsSecondRole = field(kw_only=True)
 
     delegate_of: RecognizedGroup = field(kw_only=True, default=None)
 
@@ -115,7 +115,7 @@ class DelegateAsThirdRole(Role[RepresentativeAsSecondRole], Symbol):
 
 @dataclass(eq=False)
 class Student(Role[PersonAsRoleTakerInAnotherModule], Symbol):
-    person: PersonAsRoleTakerInAnotherModule
+    person: PersonAsRoleTakerInAnotherModule = field(kw_only=True)
     takes_course: List[Course] = field(default_factory=list, kw_only=True)
 
     @classmethod

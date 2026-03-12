@@ -7,7 +7,7 @@ from typing_extensions import List, Set
 
 @dataclass
 class RoleForPersonAsRoleTakerInAnotherModule(PersonAsRoleTakerInAnotherModule):
-    person: PersonAsRoleTakerInAnotherModule
+    person: PersonAsRoleTakerInAnotherModule = field(kw_only=True)
     name: str = field(init=False)
 
 
@@ -34,16 +34,23 @@ class Person(HasName, Symbol):
     member_of: List[RecognizedGroup] = field(default_factory=list, kw_only=True)
     head_of: RecognizedGroup = field(init=False)
     delegate_of: RecognizedGroup = field(init=False)
+    members: Set[Person] = field(init=False)
+    sub_organization_of: List[RecognizedGroup] = field(init=False)
     teacher_of: List[Course] = field(init=False)
     representative_of: RecognizedGroup = field(init=False)
 
 
 @dataclass
 class RoleForPerson(Person):
-    person: Person
+    person: Person = field(kw_only=True)
     name: str = field(init=False)
     works_for: RecognizedGroup = field(init=False)
     member_of: List[RecognizedGroup] = field(init=False)
+
+
+@dataclass(eq=False)
+class InDirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson, RecognizedGroup):
+    ...
 
 
 @dataclass(eq=False)
@@ -53,12 +60,7 @@ class ProfessorAsFirstRole(RoleForPerson):
 
 
 @dataclass(eq=False)
-class InDirectDiamondShapedInheritance(RecognizedGroup, Person):
-    ...
-
-
-@dataclass(eq=False)
-class DirectDiamondShapedInheritance(Person, HasName):
+class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson):
     ...
 
 
@@ -85,7 +87,7 @@ class CEOAsFirstRole(RoleForPerson):
 
 @dataclass
 class RoleForCEOAsFirstRole(CEOAsFirstRole):
-    ceo: CEOAsFirstRole
+    ceo: CEOAsFirstRole = field(kw_only=True)
     person: Person = field(init=False)
     head_of: RecognizedGroup = field(init=False)
 
@@ -98,7 +100,7 @@ class RepresentativeAsSecondRole(RoleForCEOAsFirstRole):
 
 @dataclass
 class RoleForRepresentativeAsSecondRole(RepresentativeAsSecondRole):
-    representative: RepresentativeAsSecondRole
+    representative: RepresentativeAsSecondRole = field(kw_only=True)
     ceo: CEOAsFirstRole = field(init=False)
     representative_of: RecognizedGroup = field(init=False)
 
