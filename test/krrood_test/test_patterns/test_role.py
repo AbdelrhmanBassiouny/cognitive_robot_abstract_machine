@@ -8,8 +8,8 @@ from krrood.class_diagrams.class_diagram import (
     AssociationThroughRoleTaker,
 )
 from krrood.class_diagrams.utils import classes_of_module
-from ..dataset import university_ontology_like_classes
-from ..dataset.university_ontology_like_classes_without_descriptors import (
+from ..dataset.role_and_ontology import university_ontology_like_classes
+from ..dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
     Person,
     CEOAsFirstRole,
     Company,
@@ -21,7 +21,7 @@ from ..dataset.university_ontology_like_classes_without_descriptors import (
 
 def test_getting_and_setting_attribute_for_role_and_role_taker():
     person = Person(name="Bass")
-    ceo = CEOAsFirstRole(person)
+    ceo = CEOAsFirstRole(person=person)
     ceo.head_of = Company(name="BassCo")
 
     assert ceo.person.name == person.name
@@ -36,9 +36,9 @@ def test_getting_and_setting_attribute_for_role_and_role_taker():
 
 def test_getting_and_setting_attribute_between_sibling_roles():
     person = Person(name="Bass")
-    ceo = CEOAsFirstRole(person)
+    ceo = CEOAsFirstRole(person=person)
     ceo.head_of = Company(name="BassCo")
-    professor = ProfessorAsFirstRole(person)
+    professor = ProfessorAsFirstRole(person=person)
     professor.teacher_of.append(Course(name="BassCourse"))
 
     assert professor.person is ceo.person
@@ -68,9 +68,9 @@ def test_accessing_attribute_of_role_from_role_taker_when_role_does_not_exist_an
 
 def test_roles_are_equal_and_has_same_hash_as_each_other():
     person = Person(name="Bass")
-    ceo = CEOAsFirstRole(person)
-    representative = RepresentativeAsSecondRole(ceo)
-    professor = ProfessorAsFirstRole(person)
+    ceo = CEOAsFirstRole(person=person)
+    representative = RepresentativeAsSecondRole(ceo=ceo)
+    professor = ProfessorAsFirstRole(person=person)
     assert hash(ceo) == hash(person)
     assert ceo == person
     assert ceo == representative

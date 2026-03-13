@@ -1,20 +1,10 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing_extensions import List, Set
-from test.krrood_test.dataset.role_and_ontology.role_taker_for_university_ontology import (
-    PersonAsRoleTakerInAnotherModule,
-)
+
+from dataclasses import dataclass, field, Field
+
+from typing_extensions import Set, List, TypeVar
+
 from krrood.symbol_graph.symbol_graph import Symbol
-
-@dataclass
-class RoleForPersonAsRoleTakerInAnotherModule(PersonAsRoleTakerInAnotherModule):
-    person: PersonAsRoleTakerInAnotherModule = field(kw_only=True)
-    name: str = field(init=False)
-
-@dataclass(eq=False)
-class Student(RoleForPersonAsRoleTakerInAnotherModule):
-    # Original Owner of the takes_course field
-    takes_course: List[Course] = field(default_factory=list, kw_only=True)
 
 @dataclass(eq=False)
 class HasName:
@@ -24,6 +14,15 @@ class HasName:
 class RecognizedGroup(HasName, Symbol):
     members: Set[Person] = field(default_factory=set)
     sub_organization_of: List[RecognizedGroup] = field(default_factory=list)
+
+@dataclass(eq=False)
+class Company(RecognizedGroup): ...
+
+@dataclass(eq=False)
+class Country(RecognizedGroup): ...
+
+@dataclass(unsafe_hash=True)
+class Course(HasName, Symbol): ...
 
 @dataclass(eq=False)
 class Person(HasName, Symbol):
@@ -36,6 +35,11 @@ class Person(HasName, Symbol):
     teacher_of: List[Course] = field(init=False)
     representative_of: RecognizedGroup = field(init=False)
 
+@dataclass(eq=False)
+class ManAsSubclassOfARoleTaker(Person): ...
+
+TPerson = TypeVar("TPerson", bound=Person)
+
 @dataclass
 class RoleForPerson(Person):
     person: Person = field(kw_only=True)
@@ -43,9 +47,33 @@ class RoleForPerson(Person):
     works_for: RecognizedGroup = field(init=False)
     member_of: List[RecognizedGroup] = field(init=False)
 
+    @classmethod
+    def role_taker_field(cls) -> Field: ...
+
+TManAsSubclassOfARoleTaker = TypeVar(
+    "TManAsSubclassOfARoleTaker", bound=ManAsSubclassOfARoleTaker
+)
+
+@dataclass
+class RoleForManAsSubclassOfARoleTaker(RoleForPerson[TManAsSubclassOfARoleTaker]): ...
+
+@dataclass(eq=False)
+class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson[TPerson]): ...
+
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
     RoleForPerson, RecognizedGroup
+): ...
+
+@dataclass(eq=False)
+class CEOAsFirstRole(RoleForPerson[TPerson]):
+    # Original Owner of the head_of field
+    head_of: RecognizedGroup = field(default=None, kw_only=True)
+
+@dataclass(eq=False)
+class SubclassOfRoleThatUpdatesRoleTakerType(
+    RoleForManAsSubclassOfARoleTaker,
+    CEOAsFirstRole[TManAsSubclassOfARoleTaker],
 ): ...
 
 @dataclass(eq=False)
@@ -54,21 +82,7 @@ class ProfessorAsFirstRole(RoleForPerson):
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
 @dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson): ...
-
-@dataclass(unsafe_hash=True)
-class Course(HasName, Symbol): ...
-
-@dataclass(eq=False)
-class Country(RecognizedGroup): ...
-
-@dataclass(eq=False)
-class Company(RecognizedGroup): ...
-
-@dataclass(eq=False)
-class CEOAsFirstRole(RoleForPerson):
-    # Original Owner of the head_of field
-    head_of: RecognizedGroup = field(default=None, kw_only=True)
+class AssociateProfessorAsSubClassOfARoleInSameModule(ProfessorAsFirstRole): ...
 
 @dataclass
 class RoleForCEOAsFirstRole(CEOAsFirstRole):
@@ -91,6 +105,3 @@ class RoleForRepresentativeAsSecondRole(RepresentativeAsSecondRole):
 class DelegateAsThirdRole(RoleForRepresentativeAsSecondRole):
     # Original Owner of the delegate_of field
     delegate_of: RecognizedGroup = field(default=None, kw_only=True)
-
-@dataclass(eq=False)
-class AssociateProfessorAsSubClassOfARoleInSameModule(ProfessorAsFirstRole): ...

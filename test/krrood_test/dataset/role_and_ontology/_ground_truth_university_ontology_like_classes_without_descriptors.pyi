@@ -4,9 +4,6 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Set, List
 
-from .role_taker_for_university_ontology import (
-    PersonAsRoleTakerInAnotherModule,
-)
 from krrood.symbol_graph.symbol_graph import Symbol
 
 @dataclass(eq=False)
@@ -38,12 +35,19 @@ class Person(HasName, Symbol):
     teacher_of: List[Course] = field(init=False)
     representative_of: RecognizedGroup = field(init=False)
 
+@dataclass(eq=False)
+class ManAsSubclassOfARoleTaker(Person): ...
+
 @dataclass
 class RoleForPerson(Person):
     person: Person = field(kw_only=True)
     name: str = field(init=False)
     works_for: RecognizedGroup = field(init=False)
     member_of: List[RecognizedGroup] = field(init=False)
+
+@dataclass
+class RoleForManAsSubclassOfARoleTaker(RoleForPerson):
+    person: ManAsSubclassOfARoleTaker = field(kw_only=True)
 
 @dataclass(eq=False)
 class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson): ...
@@ -57,6 +61,12 @@ class InDirectDiamondShapedInheritanceWhereOneIsRole(
 class CEOAsFirstRole(RoleForPerson):
     # Original Owner of the head_of field
     head_of: RecognizedGroup = field(default=None, kw_only=True)
+
+@dataclass(eq=False)
+class SubclassOfRoleThatUpdatesRoleTakerType(
+    RoleForManAsSubclassOfARoleTaker,
+    CEOAsFirstRole,
+): ...
 
 @dataclass(eq=False)
 class ProfessorAsFirstRole(RoleForPerson):
@@ -87,13 +97,3 @@ class RoleForRepresentativeAsSecondRole(RepresentativeAsSecondRole):
 class DelegateAsThirdRole(RoleForRepresentativeAsSecondRole):
     # Original Owner of the delegate_of field
     delegate_of: RecognizedGroup = field(default=None, kw_only=True)
-
-@dataclass
-class RoleForPersonAsRoleTakerInAnotherModule(PersonAsRoleTakerInAnotherModule):
-    person: PersonAsRoleTakerInAnotherModule = field(kw_only=True)
-    name: str = field(init=False)
-
-@dataclass(eq=False)
-class Student(RoleForPersonAsRoleTakerInAnotherModule):
-    # Original Owner of the takes_course field
-    takes_course: List[Course] = field(default_factory=list, kw_only=True)

@@ -2,10 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, Field, fields
 
-from typing_extensions import Set, List
+from typing_extensions import Set, List, TypeVar
 
-from .role_taker_for_university_ontology import PersonAsRoleTakerInAnotherModule
-from krrood.patterns.role import Role
 from krrood.entity_query_language.predicate import (
     Symbol,
     Predicate,  # type: ignore
@@ -13,6 +11,7 @@ from krrood.entity_query_language.predicate import (
     HasTypes,  # type: ignore
     length,  # type: ignore
 )
+from krrood.patterns.role import Role
 
 
 @dataclass(eq=False)
@@ -51,8 +50,15 @@ class Person(HasName, Symbol):
 
 
 @dataclass(eq=False)
-class CEOAsFirstRole(Role[Person], Symbol):
-    person: Person = field(kw_only=True)
+class ManAsSubclassOfARoleTaker(Person): ...
+
+
+TPerson = TypeVar("TPerson", bound=Person)
+
+
+@dataclass(eq=False)
+class CEOAsFirstRole(Role[TPerson], Symbol):
+    person: TPerson = field(kw_only=True)
     head_of: RecognizedGroup = None
 
     @classmethod
@@ -60,9 +66,20 @@ class CEOAsFirstRole(Role[Person], Symbol):
         return [f for f in fields(cls) if f.name == "person"][0]
 
 
+TManAsSubclassOfARoleTaker = TypeVar(
+    "TManAsSubclassOfARoleTaker", bound=ManAsSubclassOfARoleTaker
+)
+
+
 @dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(Role[Person], HasName):
-    person: Person = field(kw_only=True)
+class SubclassOfRoleThatUpdatesRoleTakerType(
+    CEOAsFirstRole[TManAsSubclassOfARoleTaker]
+): ...
+
+
+@dataclass(eq=False)
+class DirectDiamondShapedInheritanceWhereOneIsRole(Role[TPerson], HasName):
+    person: TPerson = field(kw_only=True)
 
     @classmethod
     def role_taker_field(cls) -> Field:
@@ -70,8 +87,8 @@ class DirectDiamondShapedInheritanceWhereOneIsRole(Role[Person], HasName):
 
 
 @dataclass(eq=False)
-class InDirectDiamondShapedInheritanceWhereOneIsRole(RecognizedGroup, Role[Person]):
-    person: Person = field(kw_only=True)
+class InDirectDiamondShapedInheritanceWhereOneIsRole(RecognizedGroup, Role[TPerson]):
+    person: TPerson = field(kw_only=True)
 
     @classmethod
     def role_taker_field(cls) -> Field:
@@ -79,8 +96,8 @@ class InDirectDiamondShapedInheritanceWhereOneIsRole(RecognizedGroup, Role[Perso
 
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(Role[Person], Symbol):
-    person: Person = field(kw_only=True)
+class ProfessorAsFirstRole(Role[TPerson], Symbol):
+    person: TPerson = field(kw_only=True)
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
     @classmethod
@@ -89,12 +106,17 @@ class ProfessorAsFirstRole(Role[Person], Symbol):
 
 
 @dataclass(eq=False)
-class AssociateProfessorAsSubClassOfARoleInSameModule(ProfessorAsFirstRole): ...
+class AssociateProfessorAsSubClassOfARoleInSameModule(
+    ProfessorAsFirstRole[TPerson]
+): ...
+
+
+TCEOAsFirstRole = TypeVar("TCEOAsFirstRole", bound=CEOAsFirstRole)
 
 
 @dataclass(eq=False)
-class RepresentativeAsSecondRole(Role[CEOAsFirstRole], Symbol):
-    ceo: CEOAsFirstRole = field(kw_only=True)
+class RepresentativeAsSecondRole(Role[TCEOAsFirstRole], Symbol):
+    ceo: TCEOAsFirstRole = field(kw_only=True)
     representative_of: RecognizedGroup = field(default=None, kw_only=True)
 
     @classmethod
@@ -102,22 +124,17 @@ class RepresentativeAsSecondRole(Role[CEOAsFirstRole], Symbol):
         return [f for f in fields(cls) if f.name == "ceo"][0]
 
 
+TRepresentativeAsSecondRole = TypeVar(
+    "TRepresentativeAsSecondRole", bound=RepresentativeAsSecondRole
+)
+
+
 @dataclass(eq=False)
-class DelegateAsThirdRole(Role[RepresentativeAsSecondRole], Symbol):
-    representative: RepresentativeAsSecondRole = field(kw_only=True)
+class DelegateAsThirdRole(Role[TRepresentativeAsSecondRole], Symbol):
+    representative: TRepresentativeAsSecondRole = field(kw_only=True)
 
     delegate_of: RecognizedGroup = field(kw_only=True, default=None)
 
     @classmethod
     def role_taker_field(cls) -> Field:
         return [f for f in fields(cls) if f.name == "representative"][0]
-
-
-@dataclass(eq=False)
-class Student(Role[PersonAsRoleTakerInAnotherModule], Symbol):
-    person: PersonAsRoleTakerInAnotherModule = field(kw_only=True)
-    takes_course: List[Course] = field(default_factory=list, kw_only=True)
-
-    @classmethod
-    def role_taker_field(cls) -> Field:
-        return next(f for f in fields(cls) if f.name == "person")
