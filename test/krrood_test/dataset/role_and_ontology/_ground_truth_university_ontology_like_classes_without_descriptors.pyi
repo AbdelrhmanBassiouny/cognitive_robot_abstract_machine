@@ -54,7 +54,8 @@ class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson): ...
 
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
-    RoleForPerson, RecognizedGroup,
+    RoleForPerson,
+    RecognizedGroup,
 ): ...
 
 @dataclass(eq=False)
