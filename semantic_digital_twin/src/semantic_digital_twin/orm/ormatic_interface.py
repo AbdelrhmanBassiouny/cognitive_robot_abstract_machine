@@ -3351,19 +3351,6 @@ class HasRootKinematicStructureEntityDAO(
         use_existing_column=True,
     )
 
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("KinematicStructureEntityDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    root: Mapped[KinematicStructureEntityDAO] = relationship(
-        "KinematicStructureEntityDAO",
-        uselist=False,
-        foreign_keys=[root_id],
-        post_update=True,
-    )
-
     __mapper_args__ = {
         "polymorphic_identity": "HasRootKinematicStructureEntityDAO",
         "inherit_condition": database_id == SemanticAnnotationDAO.database_id,
@@ -3759,11 +3746,6 @@ class SpoonDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     simulator_additional_properties: Mapped[
         builtins.list[SpoonDAO_simulator_additional_properties_association]
@@ -3775,9 +3757,6 @@ class SpoonDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -3890,11 +3869,6 @@ class CupDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     simulator_additional_properties: Mapped[
         builtins.list[CupDAO_simulator_additional_properties_association]
@@ -3906,9 +3880,6 @@ class CupDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -4023,11 +3994,6 @@ class CandyDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     simulator_additional_properties: Mapped[
         builtins.list[CandyDAO_simulator_additional_properties_association]
@@ -4039,9 +4005,6 @@ class CandyDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -4074,11 +4037,6 @@ class CerealDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     simulator_additional_properties: Mapped[
         builtins.list[CerealDAO_simulator_additional_properties_association]
@@ -4090,9 +4048,6 @@ class CerealDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -4163,11 +4118,6 @@ class MilkDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     simulator_additional_properties: Mapped[
         builtins.list[MilkDAO_simulator_additional_properties_association]
@@ -4179,9 +4129,6 @@ class MilkDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -4214,11 +4161,6 @@ class NoodlesDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     simulator_additional_properties: Mapped[
         builtins.list[NoodlesDAO_simulator_additional_properties_association]
@@ -4230,9 +4172,6 @@ class NoodlesDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
 
     __mapper_args__ = {
@@ -4647,11 +4586,6 @@ class BowlDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
     supporting_surface_id: Mapped[int] = mapped_column(
         ForeignKey("RegionDAO.database_id", use_alter=True),
         nullable=True,
@@ -4668,9 +4602,6 @@ class BowlDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
     supporting_surface: Mapped[RegionDAO] = relationship(
         "RegionDAO",
@@ -5205,11 +5136,6 @@ class SaltContainerDAO(
         nullable=True,
         use_existing_column=True,
     )
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("BodyDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     simulator_additional_properties: Mapped[
         builtins.list[SaltContainerDAO_simulator_additional_properties_association]
@@ -5221,9 +5147,6 @@ class SaltContainerDAO(
     )
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    root: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[root_id], post_update=True
     )
 
     __mapper_args__ = {

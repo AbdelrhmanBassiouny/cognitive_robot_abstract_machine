@@ -2,7 +2,8 @@ import sys
 
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedSpecializedGeneric
-from krrood.patterns import Role, RoleStubGenerator
+from krrood.patterns.role import Role
+from krrood.patterns.role_stub_generator import RoleStubGenerator
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
 from krrood.ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
@@ -32,7 +33,10 @@ def pytest_configure(config):
 
     modules_with_roles = set()
     for wrapped_class in class_diagram.wrapped_classes:
-        if not isinstance(wrapped_class, WrappedSpecializedGeneric) and Role in wrapped_class.clazz.__bases__:
+        if (
+            not isinstance(wrapped_class, WrappedSpecializedGeneric)
+            and Role in wrapped_class.clazz.__bases__
+        ):
             modules_with_roles.add(sys.modules[wrapped_class.clazz.__module__])
     for module in modules_with_roles:
         generator = RoleStubGenerator(module)

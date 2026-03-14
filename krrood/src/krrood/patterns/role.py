@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import lru_cache, cached_property
-from typing import List
+from typing import List, TypeVar
 
 from typing_extensions import Type
 
-from krrood.class_diagrams.utils import T
+from krrood.class_diagrams.utils import T, get_type_hints_of_object
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.utils import get_generic_type_param
@@ -76,13 +76,19 @@ class Role(SubClassSafeGeneric[T], ABC):
         """
         from ..symbol_graph.helpers import get_field_type_endpoint
 
-        return get_field_type_endpoint(cls, cls.role_taker_attribute_name())
+        type_ = get_field_type_endpoint(cls, cls.role_taker_attribute_name())
+        if isinstance(type_, TypeVar):
+            if type_.__bound__ is not None:
+                type_ = type_.__bound__
+            else:
+                raise ValueError(f"TypeVar {type_} has no bound")
+        return type_
 
     @classmethod
     @lru_cache
     def updates_role_taker_type(cls) -> bool:
         return any(
-            parent.get_role_taker_type() is not cls.get_role_taker_type()
+            parent.get_role_generic_type() is not cls.get_role_generic_type()
             for parent in cls.__bases__
             if issubclass(parent, Role)
         )

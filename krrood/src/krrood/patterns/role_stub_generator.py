@@ -28,7 +28,7 @@ from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedClass, WrappedSpecializedGeneric
 from krrood.class_diagrams.utils import classes_of_module
 from krrood.class_diagrams.wrapped_field import WrappedField
-from krrood.patterns import Role
+from krrood.patterns.role import Role
 from krrood.utils import (
     extract_imports_from,
     get_imports_from_types,

@@ -51,7 +51,7 @@ class SubClassSafeGeneric(Generic[T], ABC):
         Automatically updates the field types that use the generic type with the new specified type, before the class is
         initialized.
         """
-        old_generic_type = cls._get_old_generic_type()
+        old_generic_type = cls._get_old_generic_type_if_different()
         if not old_generic_type:
             return
         resolved_types, type_hints = (
@@ -64,7 +64,7 @@ class SubClassSafeGeneric(Generic[T], ABC):
                 cls.__annotations__[name] = resolved_type
 
     @classmethod
-    def _get_old_generic_type(cls) -> Optional[Type[T]]:
+    def _get_old_generic_type_if_different(cls) -> Optional[Type[T]]:
         """
         :return: The type of the generic type that was used in the parent class if it was changed in this class.
         """
