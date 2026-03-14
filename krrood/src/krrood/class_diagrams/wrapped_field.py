@@ -25,7 +25,7 @@ from typing_extensions import (
     Union,
 )
 
-from krrood.class_diagrams.failures import MissingContainedTypeOfContainer
+from krrood.class_diagrams.exceptions import MissingContainedTypeOfContainer
 from krrood.class_diagrams.utils import behaves_like_a_built_in_class
 from krrood.utils import module_and_class_name
 
@@ -126,7 +126,6 @@ class WrappedField:
             except NameError as e:
                 found_class = self._find_class_by_name(e.name)
                 local_namespace[e.name] = found_class
-
 
     def _build_initial_namespace(self) -> dict:
         """
@@ -241,19 +240,20 @@ class WrappedField:
         """
         from typing import get_origin
         import re
+
         if self.resolved_type is NoneType:
             return "None"
-        
+
         # For generic types like List[Person], str() often includes the full path of the generic arguments.
         # We use a regex to strip module paths and keep only the class names.
         if get_origin(self.resolved_type) is not None:
-             res = str(self.resolved_type)
-             # Strip prefixes like 'typing.', 'test.pkg.', etc.
-             return re.sub(r'(\w+\.)+(\w+)', r'\2', res)
-            
+            res = str(self.resolved_type)
+            # Strip prefixes like 'typing.', 'test.pkg.', etc.
+            return re.sub(r"(\w+\.)+(\w+)", r"\2", res)
+
         if hasattr(self.resolved_type, "__name__"):
             return self.resolved_type.__name__
-        return re.sub(r'(\w+\.)+(\w+)', r'\2', str(self.resolved_type))
+        return re.sub(r"(\w+\.)+(\w+)", r"\2", str(self.resolved_type))
 
     @property
     def is_required(self) -> bool:

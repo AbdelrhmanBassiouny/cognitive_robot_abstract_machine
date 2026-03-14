@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import inspect
 import os
 import subprocess
@@ -14,11 +15,21 @@ from importlib.util import resolve_name
 from inspect import isclass
 from os.path import dirname
 from pathlib import Path
-from typing import Union, Type, Optional, Callable, Tuple, List, Iterable
+from typing import Union, Type, Optional, Callable, Tuple, List, Iterable, Dict, Any
 
-from typing_extensions import TypeVar, Type, List, Optional, _SpecialForm, Iterable, Dict, get_origin, get_args
+from typing_extensions import (
+    TypeVar,
+    Type,
+    List,
+    Optional,
+    _SpecialForm,
+    Iterable,
+    Dict,
+    get_origin,
+    get_args,
+)
 
-from krrood.class_diagrams.utils import T
+from krrood import logger
 
 T = TypeVar("T")
 
@@ -104,22 +115,36 @@ def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
     return f"{t.__module__}.{t.__name__}"
 
 
-def extract_imports_from_module(
-    module: types.ModuleType,
+def extract_imports_from(
+    module: Optional[types.ModuleType] = None,
+    file_path: Optional[str] = None,
+    source: Optional[str] = None,
+    ast_tree: Optional[ast.AST] = None,
     exclude_libraries: Optional[List[str]] = None,
     convert_relative_to_absolute: bool = False,
 ) -> List[str]:
     """
-    Extract imports from a module and returns them as a list of strings.
+    Extract imports from a module or source code or a file path or an ast and returns them as a list of strings.
 
     :param module: The module to extract imports from.
+    :param file_path: The file path to extract imports from.
+    :param source: The source code to extract imports from.
+    :param ast_tree: The ast tree to extract imports from.
     :param exclude_libraries: A list of libraries to exclude from the imports.
     :param convert_relative_to_absolute: Whether to convert relative imports to absolute imports.
     """
     exclude_libraries = exclude_libraries or []
+    if module is None and source is None and file_path is None and ast_tree is None:
+        raise ValueError(
+            "Either module, source, file_path or ast_tree must be provided"
+        )
+    if module:
+        source = inspect.getsource(module)
+    elif file_path:
+        with open(file_path, "r") as f:
+            source = f.read()
 
-    source = inspect.getsource(module)
-    tree = ast.parse(source)
+    tree = ast_tree or ast.parse(source)
 
     import_modules = set()
     from_imports = defaultdict(set)
@@ -224,10 +249,11 @@ def own_dataclass_fields(cls) -> List[Field]:
     return [f for f in fields(cls) if f.name not in base_fields]
 
 
-def get_type_names_per_module_from_types(type_objects: Iterable[Type],
-                                         excluded_names: Optional[List[str]] = None,
-                                         excluded_modules: Optional[List[str]] = None,
-                                         ) -> Dict[str, List[str]]:
+def get_type_names_per_module_from_types(
+    type_objects: Iterable[Type],
+    excluded_names: Optional[List[str]] = None,
+    excluded_modules: Optional[List[str]] = None,
+) -> Dict[str, List[str]]:
     """
     Get a dictionary of type names grouped by module.
 
@@ -254,14 +280,14 @@ def get_type_names_per_module_from_types(type_objects: Iterable[Type],
             if name == "NoneType":
                 module = "types"
             if (
-                    module is None
-                    or module == "builtins"
-                    or module.startswith("_")
-                    or module in sys.builtin_module_names
-                    or module in excluded_modules
-                    or "<" in module
-                    or name in excluded_names
-                    or "site-packages" in module.split(".")
+                module is None
+                or module == "builtins"
+                or module.startswith("_")
+                or module in sys.builtin_module_names
+                or module in excluded_modules
+                or "<" in module
+                or name in excluded_names
+                or "site-packages" in module.split(".")
             ):
                 continue
             if module == "typing":
@@ -270,7 +296,6 @@ def get_type_names_per_module_from_types(type_objects: Iterable[Type],
         except AttributeError:
             continue
     return module_to_types
-
 
 
 def is_typing_type(type_object: Type):
@@ -476,7 +501,9 @@ def get_imports_from_types(
     :param excluded_modules: A list of modules to exclude from the imports.
     :return: A list of formatted import lines.
     """
-    module_to_types = get_type_names_per_module_from_types(type_objects, excluded_names, excluded_modules)
+    module_to_types = get_type_names_per_module_from_types(
+        type_objects, excluded_names, excluded_modules
+    )
 
     lines = []
     stem_imports = []
@@ -577,3 +604,80 @@ def get_type_checking_imports(file_path):
     module.visit(visitor)
 
     return visitor.imports
+
+
+def get_scope_from_imports(
+    file_path: Optional[str] = None,
+    tree: Optional[ast.AST] = None,
+    package_name: Optional[str] = None,
+    source: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Creates a scope dictionary from imports in a Python file or an AST tree.
+
+    :param file_path: The path to the Python file to extract imports from.
+    :param tree: An AST tree to extract imports from. If provided, file_path is ignored.
+    :param package_name: The name of the package to use for relative imports.
+    :param source: The source code to extract imports from. If provided, file_path and tree are ignored.
+    """
+    if tree is None and file_path is None and source is None:
+        raise ValueError("Either file_path, tree, or source must be provided")
+    if file_path and source is None:
+        with open(file_path, "r") as f:
+            source = f.read()
+    tree = tree or ast.parse(source, filename=file_path)
+
+    scope = {}
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                module_name = alias.name
+                asname = alias.asname or alias.name
+                try:
+                    scope[asname] = importlib.import_module(
+                        module_name, package=package_name
+                    )
+                except ImportError as e:
+                    logger.warning(f"Could not import {module_name}: {e}")
+        elif isinstance(node, ast.ImportFrom):
+            module_name = node.module
+            for alias in node.names:
+                name = alias.name
+                asname = alias.asname or name
+                try:
+                    if node.level > 0:  # Handle relative imports
+                        package_name = get_import_path_from_path(
+                            Path(
+                                os.path.join(file_path, *[".."] * node.level)
+                            ).resolve()
+                        )
+                    if (
+                        package_name is not None and node.level > 0
+                    ):  # Handle relative imports
+                        module_rel_path = Path(
+                            os.path.join(file_path, *[".."] * node.level, module_name)
+                        ).resolve()
+                        idx = str(module_rel_path).rfind(package_name)
+                        if idx != -1:
+                            module_name = str(module_rel_path)[idx:].replace(
+                                os.path.sep, "."
+                            )
+                    try:
+                        module = importlib.import_module(
+                            module_name, package=package_name
+                        )
+                    except ModuleNotFoundError:
+                        module = importlib.import_module(
+                            f"{package_name}.{module_name}"
+                        )
+                    if name == "*":
+                        scope.update(module.__dict__)
+                    else:
+                        scope[asname] = getattr(module, name)
+                except (ImportError, AttributeError) as e:
+                    logger.warning(
+                        f"Could not import {module_name}: {e} while extracting imports from {file_path}"
+                    )
+
+    return scope

@@ -6,11 +6,14 @@ from unittest import TestCase
 from typing_extensions import List, Dict, Union, Tuple
 
 from krrood.ripple_down_rules.utils import (
-    get_scope_from_imports,
     make_set,
     stringify_hint,
 )
-from krrood.utils import get_relative_import, get_imports_from_types
+from krrood.utils import (
+    get_relative_import,
+    get_imports_from_types,
+    get_scope_from_imports,
+)
 
 
 class UtilsTestCase(TestCase):

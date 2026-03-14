@@ -78,7 +78,6 @@ from krrood.ripple_down_rules.utils import (
     get_type_from_string,
     is_value_conflicting,
     extract_function_or_class_file,
-    get_scope_from_imports,
     get_full_class_name,
     is_iterable,
     str_to_snake_case,
@@ -92,7 +91,11 @@ from krrood.ripple_down_rules.utils import (
     update_case_in_case_query,
     copy_case,
 )
-from ..utils import get_import_path_from_path, get_imports_from_types
+from ..utils import (
+    get_import_path_from_path,
+    get_imports_from_types,
+    get_scope_from_imports,
+)
 
 
 class RippleDownRules(SubclassJSONSerializer, ABC):
@@ -1091,7 +1094,9 @@ class RDRWithCodeWriter(RippleDownRules, ABC):
         functions_source = extract_function_or_class_file(
             defs_module.__file__, all_func_names, include_signature=True
         )
-        scope = get_scope_from_imports(defs_module.__file__, package_name=parent_package_name)
+        scope = get_scope_from_imports(
+            defs_module.__file__, package_name=parent_package_name
+        )
 
         cases_source, cases_scope = None, None
         if cases_module:

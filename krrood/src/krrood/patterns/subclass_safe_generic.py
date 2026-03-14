@@ -1,14 +1,34 @@
 from __future__ import annotations
 
+import inspect
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import lru_cache
 
-from typing_extensions import Generic, TypeVar, Type, List, TYPE_CHECKING, get_type_hints, Optional
+from typing_extensions import (
+    Generic,
+    TypeVar,
+    Type,
+    List,
+    TYPE_CHECKING,
+    get_type_hints,
+    Optional,
+)
 
-from krrood.class_diagrams.class_diagram import resolve_type
-from krrood.utils import get_generic_type_param, T, get_type_checking_imports
+from krrood.class_diagrams.exceptions import CouldNotResolveType
+from krrood.class_diagrams.utils import (
+    get_type_hints_of_object,
+    get_and_resolve_generic_type_hints_of_object_using_substitutions,
+    resolve_type,
+)
+from krrood.utils import (
+    get_generic_type_param,
+    T,
+    get_type_checking_imports,
+    extract_imports_from,
+    get_scope_from_imports,
+)
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.mapped_variable import Attribute
@@ -41,26 +61,11 @@ class SubClassSafeGeneric(Generic[T], ABC):
         old_generic_type = cls._get_old_generic_type()
         if not old_generic_type:
             return
-        type_hints = {}
-        local_namespace = locals()
-        while True:
-            try:
-                type_hints = get_type_hints(cls, include_extras=True, localns=local_namespace)
-                break
-            except NameError as e:
-                if cls.__module__ in sys.modules:
-                    module = sys.modules[cls.__module__]
-                    if hasattr(module, e.name):
-                        local_namespace[e.name] = getattr(module, e.name)
-                        continue
-                break
-
-        substitution = {old_generic_type: cls.get_generic_type()}
-        name_substitution = {p.__name__: a for p, a in substitution.items()}
-        resolved_types = {}
-        for name, hint in type_hints.items():
-            resolved_types[name] = resolve_type(hint, substitution, name_substitution)
-        generic_type = cls.get_generic_type()
+        resolved_types = (
+            get_and_resolve_generic_type_hints_of_object_using_substitutions(
+                cls, {old_generic_type: cls.get_generic_type()}
+            )
+        )
         for name in cls.get_names_of_attributes_using_generic_type():
             cls.__annotations__[name] = resolved_types[name]
 
@@ -98,7 +103,10 @@ class SubClassSafeGeneric(Generic[T], ABC):
         """
         :return: The names of the attributes that use the generic type.
         """
-        return [attribute._attribute_name_ for attribute in cls.get_attributes_using_generic_type()]
+        return [
+            attribute._attribute_name_
+            for attribute in cls.get_attributes_using_generic_type()
+        ]
 
     @classmethod
     @abstractmethod

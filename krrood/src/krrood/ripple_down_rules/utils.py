@@ -29,8 +29,14 @@ import six
 from graphviz import Source
 from sqlalchemy.exc import NoInspectionAvailable
 from krrood.ripple_down_rules import logger
-from ..utils import is_builtin_type, get_import_path_from_path, get_method_name, get_method_class_name_if_exists, get_method_file_name, \
-    get_imports_from_types
+from ..utils import (
+    is_builtin_type,
+    get_import_path_from_path,
+    get_method_name,
+    get_method_class_name_if_exists,
+    get_method_file_name,
+    get_imports_from_types,
+)
 
 try:
     import matplotlib
@@ -296,80 +302,6 @@ def get_imports_from_scope(scope: Dict[str, Any]) -> List[str]:
     :return: The imports as a string.
     """
     return get_imports_from_types(list(scope.values()))
-
-
-def get_scope_from_imports(
-    file_path: Optional[str] = None,
-    tree: Optional[ast.AST] = None,
-    package_name: Optional[str] = None,
-) -> Dict[str, Any]:
-    """
-    Creates a scope dictionary from imports in a Python file or an AST tree.
-
-    :param file_path: The path to the Python file to extract imports from.
-    :param tree: An AST tree to extract imports from. If provided, file_path is ignored.
-    :param package_name: The name of the package to use for relative imports.
-    """
-    if tree is None:
-        if file_path is None:
-            raise ValueError("Either file_path or tree must be provided")
-        with open(file_path, "r") as f:
-            tree = ast.parse(f.read(), filename=file_path)
-
-    scope = {}
-
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                module_name = alias.name
-                asname = alias.asname or alias.name
-                try:
-                    scope[asname] = importlib.import_module(
-                        module_name, package=package_name
-                    )
-                except ImportError as e:
-                    logger.warning(f"Could not import {module_name}: {e}")
-        elif isinstance(node, ast.ImportFrom):
-            module_name = node.module
-            for alias in node.names:
-                name = alias.name
-                asname = alias.asname or name
-                try:
-                    if node.level > 0:  # Handle relative imports
-                        package_name = get_import_path_from_path(
-                            Path(
-                                os.path.join(file_path, *[".."] * node.level)
-                            ).resolve()
-                        )
-                    if (
-                        package_name is not None and node.level > 0
-                    ):  # Handle relative imports
-                        module_rel_path = Path(
-                            os.path.join(file_path, *[".."] * node.level, module_name)
-                        ).resolve()
-                        idx = str(module_rel_path).rfind(package_name)
-                        if idx != -1:
-                            module_name = str(module_rel_path)[idx:].replace(
-                                os.path.sep, "."
-                            )
-                    try:
-                        module = importlib.import_module(
-                            module_name, package=package_name
-                        )
-                    except ModuleNotFoundError:
-                        module = importlib.import_module(
-                            f"{package_name}.{module_name}"
-                        )
-                    if name == "*":
-                        scope.update(module.__dict__)
-                    else:
-                        scope[asname] = getattr(module, name)
-                except (ImportError, AttributeError) as e:
-                    logger.warning(
-                        f"Could not import {module_name}: {e} while extracting imports from {file_path}"
-                    )
-
-    return scope
 
 
 def extract_function_or_class_file(

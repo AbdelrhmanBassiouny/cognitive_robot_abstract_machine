@@ -5,7 +5,6 @@ from pathlib import Path
 from types import ModuleType
 
 from krrood.ripple_down_rules.utils import (
-    get_scope_from_imports,
     get_imports_from_scope,
 )
 
@@ -31,10 +30,11 @@ from krrood.class_diagrams.utils import classes_of_module
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.patterns import Role
 from krrood.utils import (
-    extract_imports_from_module,
+    extract_imports_from,
     get_imports_from_types,
     run_black_on_file,
     run_ruff_on_file,
+    get_scope_from_imports,
 )
 
 

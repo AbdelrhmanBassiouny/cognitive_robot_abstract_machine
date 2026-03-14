@@ -1,5 +1,6 @@
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import List
+from typing_extensions import List
 
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.entity_query_language.factories import variable
@@ -14,10 +15,33 @@ class FirstGeneric(SubClassSafeGeneric[T]):
 
     @classmethod
     def get_attributes_using_generic_type(cls) -> List[MappedVariable]:
-        return [variable(cls, None).attribute_using_generic,
-                variable(cls, None).generic_attribute_using_generic]
+        return [
+            variable(cls, None).attribute_using_generic,
+            variable(cls, None).generic_attribute_using_generic,
+        ]
 
 
 @dataclass
-class SubClassGenericThatUpdatesGenericType(FirstGeneric[int]):
-    ...
+class SubClassGenericThatUpdatesGenericTypeToBuiltInType(FirstGeneric[int]): ...
+
+
+@dataclass
+class SubClassGenericThatUpdatesGenericTypeToTypeDefinedInSameModule(
+    FirstGeneric[FirstGeneric]
+): ...
+
+
+@dataclass
+class SubClassGenericThatUpdatesGenericTypeToTypeDefinedInImportedModuleOfThisLibrary(
+    FirstGeneric[MappedVariable]
+): ...
+
+
+@dataclass
+class SubClassGenericThatUpdatesGenericTypeToAForwardReferencedClass(
+    FirstGeneric["ClassThatIsForwardReferenced"]
+): ...
+
+
+@dataclass
+class ClassThatIsForwardReferenced: ...
