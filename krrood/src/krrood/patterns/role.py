@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache, cached_property
 from typing import List, TypeVar
 
-from typing_extensions import Type
+from typing_extensions import Type, get_origin
 
 from krrood.class_diagrams.utils import T, get_type_hints_of_object
 from krrood.entity_query_language.core.mapped_variable import Attribute
@@ -66,7 +66,10 @@ class Role(SubClassSafeGeneric[T], ABC):
         """
         :return: The type of the role taker.
         """
-        return get_generic_type_param(cls, Role)[0]
+        if cls is Role:
+            return T
+        res = get_generic_type_param(cls, Role)
+        return res[0] if res else T
 
     @classmethod
     @lru_cache
@@ -87,11 +90,18 @@ class Role(SubClassSafeGeneric[T], ABC):
     @classmethod
     @lru_cache
     def updates_role_taker_type(cls) -> bool:
-        return any(
-            parent.get_role_generic_type() is not cls.get_role_generic_type()
-            for parent in cls.__bases__
-            if issubclass(parent, Role)
-        )
+        if Role in cls.__bases__:
+            return False
+        my_rt = cls.get_role_taker_type()
+        my_rt_name = getattr(my_rt, "__name__", str(my_rt))
+        for parent in cls.__bases__:
+            if issubclass(parent, Role) and parent is not Role:
+                p_origin = get_origin(parent) or parent
+                p_rt = p_origin.get_role_taker_type()
+                p_rt_name = getattr(p_rt, "__name__", str(p_rt))
+                if p_rt_name != my_rt_name:
+                    return True
+        return False
 
     @classmethod
     @abstractmethod

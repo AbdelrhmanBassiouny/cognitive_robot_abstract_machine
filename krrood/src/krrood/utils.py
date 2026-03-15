@@ -558,6 +558,10 @@ def get_generic_type_param(cls, generic_base: Type[T]) -> Optional[List[Type[T]]
     for base in getattr(cls, "__orig_bases__", []):
         base_origin = get_origin(base)
         if base_origin is None:
+            if isclass(base) and issubclass(base, generic_base):
+                res = get_generic_type_param(base, generic_base)
+                if res:
+                    return res
             continue
         if issubclass(base_origin, generic_base):
             args = get_args(base)
