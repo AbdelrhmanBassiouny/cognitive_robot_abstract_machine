@@ -54,14 +54,20 @@ class SubClassSafeGeneric(Generic[T], ABC):
         old_generic_type = cls._get_old_generic_type_if_different()
         if not old_generic_type:
             return
-        resolved_types, type_hints = (
+        resolution_results = (
             get_and_resolve_generic_type_hints_of_object_using_substitutions(
                 cls, {old_generic_type: cls.get_generic_type()}
             )
         )
-        for name, resolved_type in resolved_types.items():
-            if str(old_generic_type) in str(type_hints[name]):
-                cls.__annotations__[name] = resolved_type
+        for name, result in resolution_results.items():
+            if result.resolved:
+                # if str(old_generic_type) in str(type_hints[name]) and (
+                #     str(type_hints[name]).replace(
+                #         str(old_generic_type), str(cls.get_generic_type())
+                #     )
+                #     == str(resolved_type)
+                # ):
+                cls.__annotations__[name] = result.resolved_type
 
     @classmethod
     def _get_old_generic_type_if_different(cls) -> Optional[Type[T]]:

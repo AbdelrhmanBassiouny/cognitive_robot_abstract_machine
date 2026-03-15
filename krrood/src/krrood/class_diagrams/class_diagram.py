@@ -1104,7 +1104,7 @@ def make_specialized_dataclass(alias: _GenericAlias) -> Type:
     for f in dataclasses.fields(template_class):
         # Use the resolved hint if available, else fallback to the raw field type
         raw_type = resolved_hints.get(f.name, f.type)
-        new_type = resolve_type(raw_type, substitution)
+        type_resolution = resolve_type(raw_type, substitution)
         # Copy defaults and flags
         kwargs = dict(
             default=f.default,
@@ -1121,7 +1121,9 @@ def make_specialized_dataclass(alias: _GenericAlias) -> Type:
             kwargs.pop("default")
         if kwargs["default_factory"] is dataclasses.MISSING:
             kwargs.pop("default_factory")
-        new_fields.append((f.name, new_type, dataclass_field(**kwargs)))
+        new_fields.append(
+            (f.name, type_resolution.resolved_type, dataclass_field(**kwargs))
+        )
 
     # Name and namespace
     arg_names = [getattr(a, "__name__", repr(a)) for a in args]
