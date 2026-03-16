@@ -73,7 +73,8 @@ class Assignment:
     """
 
     def __str__(self) -> str:
-        return f"{self.name}={self.value!r}"
+        value = repr(self.value) if not isclass(self.value) else self.value.__name__
+        return f"{self.name}={value}"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -483,14 +484,27 @@ class RoleStubGenerator:
             loader=loader, trim_blocks=True, lstrip_blocks=True
         )
         self.template = self.env.get_template("role_stub.pyi.jinja")
-        self.class_diagram = (
-            class_diagram if class_diagram else ClassDiagram(classes_of_module(module))
-        )
+        if not class_diagram:
+            self._build_class_diagram(module)
+        else:
+            self.class_diagram = class_diagram
         self.module = module
         self.path = (
             Path(self.module.__file__).parent
             / f"{self.module.__name__.split('.')[-1]}.pyi"
         )
+
+    def _build_class_diagram(self, module: ModuleType):
+        """
+        Builds a class diagram for the given module, including all classes and their role-taker types.
+        """
+        classes = classes_of_module(module)
+        for clazz in classes:
+            if issubclass(clazz, Role):
+                role_taker_type = clazz.get_role_taker_type()
+                if role_taker_type not in classes:
+                    classes.append(role_taker_type)
+        self.class_diagram = ClassDiagram(classes)
 
     def generate_stub(self, write: bool = False) -> str:
         """
