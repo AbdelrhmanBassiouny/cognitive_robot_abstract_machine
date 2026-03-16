@@ -3357,46 +3357,6 @@ class HasRootKinematicStructureEntityDAO(
     }
 
 
-class HasDoorsDAO(
-    HasRootKinematicStructureEntityDAO,
-    DataAccessObject[semantic_digital_twin.semantic_annotations.mixins.HasDoors],
-):
-
-    __tablename__ = "HasDoorsDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(HasRootKinematicStructureEntityDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "HasDoorsDAO",
-        "inherit_condition": database_id
-        == HasRootKinematicStructureEntityDAO.database_id,
-    }
-
-
-class HasDrawersDAO(
-    HasRootKinematicStructureEntityDAO,
-    DataAccessObject[semantic_digital_twin.semantic_annotations.mixins.HasDrawers],
-):
-
-    __tablename__ = "HasDrawersDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(HasRootKinematicStructureEntityDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "HasDrawersDAO",
-        "inherit_condition": database_id
-        == HasRootKinematicStructureEntityDAO.database_id,
-    }
-
-
 class HasRootBodyDAO(
     HasRootKinematicStructureEntityDAO,
     DataAccessObject[semantic_digital_twin.semantic_annotations.mixins.HasRootBody],
@@ -4449,6 +4409,44 @@ class WallDAO(
     __mapper_args__ = {
         "polymorphic_identity": "WallDAO",
         "inherit_condition": database_id == HasAperturesDAO.database_id,
+    }
+
+
+class HasDoorsDAO(
+    HasRootBodyDAO,
+    DataAccessObject[semantic_digital_twin.semantic_annotations.mixins.HasDoors],
+):
+
+    __tablename__ = "HasDoorsDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(HasRootBodyDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HasDoorsDAO",
+        "inherit_condition": database_id == HasRootBodyDAO.database_id,
+    }
+
+
+class HasDrawersDAO(
+    HasRootBodyDAO,
+    DataAccessObject[semantic_digital_twin.semantic_annotations.mixins.HasDrawers],
+):
+
+    __tablename__ = "HasDrawersDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(HasRootBodyDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HasDrawersDAO",
+        "inherit_condition": database_id == HasRootBodyDAO.database_id,
     }
 
 

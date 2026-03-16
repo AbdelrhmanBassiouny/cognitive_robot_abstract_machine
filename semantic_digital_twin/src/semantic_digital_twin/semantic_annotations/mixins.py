@@ -315,11 +315,6 @@ class HasRootBody(HasRootKinematicStructureEntity[TBody], ABC):
     naturally more specific than their bases.
     """
 
-    # root: Body = field(kw_only=True)
-    """
-    The root body of the semantic annotation.
-    """
-
     @property
     def bodies(self) -> Iterable[Body]:
         """
@@ -381,11 +376,6 @@ TRegion = TypeVar("TRegion", bound=Region)
 class HasRootRegion(HasRootKinematicStructureEntity[TRegion], ABC):
     """
     A mixin class for semantic annotations that have a region.
-    """
-
-    # root: Region = field(kw_only=True)
-    """
-    The root region of the semantic annotation.
     """
 
     @property
@@ -532,7 +522,7 @@ class HasSlider(HasRootKinematicStructureEntity, ABC):
 
 
 @dataclass(eq=False)
-class HasDrawers(HasRootKinematicStructureEntity, ABC):
+class HasDrawers(HasRootBody, ABC):
     """
     A mixin class for semantic annotations that have drawers.
     """
@@ -558,7 +548,7 @@ class HasDrawers(HasRootKinematicStructureEntity, ABC):
 
 
 @dataclass(eq=False)
-class HasDoors(HasRootKinematicStructureEntity, ABC):
+class HasDoors(HasRootBody, ABC):
     """
     A mixin class for semantic annotations that have doors.
     """

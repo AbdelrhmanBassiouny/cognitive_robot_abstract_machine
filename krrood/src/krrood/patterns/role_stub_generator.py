@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 from types import ModuleType
 
@@ -43,17 +44,6 @@ from krrood.utils import (
     get_scope_from_imports,
     get_generic_type_param,
 )
-
-
-@dataclass(frozen=True)
-class TypeVarInfo:
-    """
-    Contains information about a TypeVar definition.
-    """
-
-    name: str
-    bound: Optional[str]
-    source: str
 
 
 @dataclass(frozen=True)
@@ -277,6 +267,29 @@ class AbstractStubClassInfo:
     """
     The dataclass decorator arguments.
     """
+    _original_name: Optional[str] = field(default=None, kw_only=True, repr=False)
+    """
+    The original name of the class before any modifications.
+    """
+
+    @property
+    def original_name(self) -> str:
+        if not self._original_name:
+            self._original_name = self.name
+        return self._original_name
+
+
+@dataclass
+class TypeVarInfo(AbstractStubClassInfo):
+    """
+    Contains information about a TypeVar definition.
+    """
+
+    bound: Optional[str]
+    source: str
+
+    def __post_init__(self):
+        self.bases = [self.bound] if self.bound else []
 
 
 @dataclass
@@ -982,6 +995,7 @@ class RoleStubGenerator:
 
         mixin_info = MixinInfo(
             name=mixin_name,
+            _original_name=wrapped_class.name,
             bases=self._get_base_names(wrapped_class.clazz),
             fields=[
                 stub_field
@@ -1193,6 +1207,7 @@ class RoleStubGenerator:
 
         return MixinInfo(
             name=mixin_name,
+            _original_name=wc.name,
             bases=bases,
             fields=resolved_fields,
             dataclass_args=DataclassArguments.from_wrapped_class(wc),
@@ -1339,18 +1354,21 @@ class RoleStubGenerator:
 
         name_space = get_scope_from_imports(self.module.__file__)
         name_space_from_types = get_scope_from_imports(
-            tree=ast.parse("\n".join(self._imports_from_field_types))
+            tree=ast.parse("\n".join(self._imports_from_types))
         )
 
         for name, value in name_space_from_types.items():
             if name in name_space:
                 continue
             name_space[name] = value
-
+        stub_names = [stub_class.name for stub_class in self._all_stub_elements]
+        name_space = {
+            name: value for name, value in name_space.items() if name not in stub_names
+        }
         return get_imports_from_scope(name_space)
 
     @cached_property
-    def _imports_from_field_types(self) -> List[str]:
+    def _imports_from_types(self) -> List[str]:
         """
         Extracts import statements for field types used in stub fields.
 
@@ -1361,18 +1379,40 @@ class RoleStubGenerator:
         """
         stub_fields = []
         classes = set()
+        class_types = set()
         for stub_class in self._all_stub_elements:
-            if hasattr(stub_class, "fields"):
-                stub_fields.extend(stub_class.fields)
-            if hasattr(stub_class, "name"):
-                classes.add(stub_class.name)
-
+            stub_fields.extend(stub_class.fields)
+            classes.add(stub_class.name)
+            base_types = self._get_types_of_bases(stub_class)
+            class_types.update(base_types)
         field_types = {field_.wrapped_field.type_endpoint for field_ in stub_fields}
-        # Remove types that are already defined in the module
-        field_types = {
-            field_type
-            for field_type in field_types
-            if field_type.__name__ not in classes
-        }
+        all_types = field_types | class_types
+        return get_imports_from_types(all_types)
 
-        return get_imports_from_types(field_types)
+    def _get_types_of_bases(self, stub_class: AbstractStubClassInfo) -> List[Type]:
+        """
+        :param stub_class: The stub class to get types of bases for.
+        :return: A list of types of bases for the stub class.
+        """
+        if isinstance(stub_class, RoleForInfo):
+            return []
+        class_types = []
+        all_stub_names = [sc.name for sc in self._all_stub_elements]
+        for base in stub_class.bases:
+            origin_name = base.split("[")[0]
+            try:
+                arg_names = base.split("[")[1].split("]")[0].split(",")
+            except IndexError:
+                arg_names = []
+            all_names = set([origin_name] + arg_names)
+            for name in all_names:
+                if name in all_stub_names:
+                    continue
+                type_ = eval(
+                    name,
+                    sys.modules[
+                        self.module.__dict__[stub_class.original_name].__module__
+                    ].__dict__,
+                )
+                class_types.append(type_)
+        return class_types
