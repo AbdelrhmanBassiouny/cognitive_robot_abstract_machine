@@ -258,6 +258,60 @@ class ProblemDataPart(ABC):
 
 
 @dataclass
+class EqualityDerivativeLinkModel:
+    r"""
+    The constraints produced by this class describe the discrete-time relationships between variables
+    in the prediction horizon :math:`N` using a semi-implicit euler integration method:
+
+    .. math::
+
+        v_k = v_{k-1} + a_{k} \, \Delta t
+
+        a_k = a_{k-1} + j_{k} \, \Delta t
+
+    Where v, a and j are velocity, acceleration and jerk, respectively, and k is the time step.
+    Acceleration variables are removed using substitution.
+    The first two row links the MPC to the current state:
+
+    .. math::
+
+        -v_{current} - a_{current} \, \Delta t = -v_0 + j_0 \, \Delta t^2
+
+        v_{current} = - v_1 + 2 v_0 + j_1 \, \Delta t^2
+
+    Row from 2 until k-2 have this form:
+
+    .. math::
+
+        0 = - v_k + 2 v_{k-1} - v_{k-2} + j_k \, \Delta t^2
+
+    The final two rows have this form:
+
+    .. math::
+
+        0 = 2 v_{k-1} - v_{k-2} + j_k \, \Delta t^2
+
+        0 = - v_{k-2} + j_k \, \Delta t^2
+
+    For a prediciton horizon of 5 with 1 degree of freedom, the matrix looks like this:
+
+    ::
+
+        |  equality_bounds |   |           equality constraint matrix          |   | v_0 |
+        |------------------|   |-----------------------------------------------|   | v_1 |
+        | - v_c - a_c * dt |   | -1  |     |     |dt**2|     |     |     |     |   | v_2 |
+        |       v_c        |   |  2  | -1  |     |     |dt**2|     |     |     |   | j_0 |
+        |        0         | = | -1  |  2  | -1  |     |     |dt**2|     |     | @ | j_1 |
+        |        0         |   |     | -1  |  2  |     |     |     |dt**2|     |   | j_2 |
+        |        0         |   |     |     | -1  |     |     |     |     |dt**2|   | j_3 |
+        |------------------|   |-----------------------------------------------|   | j_4 |
+    """
+
+    degrees_of_freedom: List[DegreeOfFreedom]
+    config: QPControllerConfig
+
+
+@dataclass
 class Weights(ProblemDataPart):
     """
     order:
@@ -926,61 +980,6 @@ class EqualityModel(ProblemDataPart):
         result = vel_columns
         result += jerk_columns
         return result
-
-    def derivative_link_model(self, max_derivative: Derivatives) -> sm.Matrix:
-        """
-        Layout for prediction horizon 5
-        Slots are matrices of |controlled variables| x |controlled variables|
-        | vt0 | vt1 | vt2 | at0 | at1 | at2 | at3 | jt0 | jt1 | jt2 | jt3 | jt4 |
-        |-----------------------------------------------------------------------|
-        |  1  |     |     | -dt |     |     |     |     |     |     |     |     | last_v =  vt0 - at0*cdt
-        | -1  |  1  |     |     | -dt |     |     |     |     |     |     |     |      0 = -vt0 + vt1 - at1 * mdt
-        |     | -1  |  1  |     |     | -dt |     |     |     |     |     |     |      0 = -vt1 + vt2 - at2 * mdt
-        |     |     | -1  |     |     |     | -dt |     |     |     |     |     |      0 = -vt2 - at3 * mdt
-        |=======================================================================|
-        |     |     |     |  1  |     |     |     | -dt |     |     |     |     | last_a =  at0 - jt0*cdt
-        |     |     |     | -1  |  1  |     |     |     | -dt |     |     |     |      0 = -at0 + at1 - jt1 * mdt
-        |     |     |     |     | -1  |  1  |     |     |     | -dt |     |     |      0 = -at1 + at2 - jt2 * mdt
-        |     |     |     |     |     | -1  |  1  |     |     |     | -dt |     |      0 = -at2 + at3 - jt3 * mdt
-        |     |     |     |     |     |     | -1  |     |     |     |     | -dt |      0 = -at3 - jt4 * mdt
-        |-----------------------------------------------------------------------|
-        """
-        num_rows = (
-            self.number_of_free_variables
-            * self.config.prediction_horizon
-            * (max_derivative - 1)
-        )
-        num_columns = (
-            self.number_of_free_variables
-            * self.config.prediction_horizon
-            * max_derivative
-        )
-        derivative_link_model = sm.Matrix.zeros(num_rows, num_columns)
-
-        x_n = sm.Matrix.eye(num_rows)
-        derivative_link_model[:, : x_n.shape[0]] += x_n
-
-        xd_n = -sm.Matrix.eye(num_rows) * self.config.mpc_dt
-        h_offset = self.number_of_free_variables * self.config.prediction_horizon
-        derivative_link_model[:, h_offset:] += xd_n
-
-        x_c_height = self.number_of_free_variables * (
-            self.config.prediction_horizon - 1
-        )
-        x_c = -sm.Matrix.eye(x_c_height)
-        offset_v = 0
-        offset_h = 0
-        for derivative in Derivatives.range(Derivatives.velocity, max_derivative - 1):
-            offset_v += self.number_of_free_variables
-            derivative_link_model[
-                offset_v : offset_v + x_c_height, offset_h : offset_h + x_c_height
-            ] += x_c
-            offset_v += x_c_height
-            offset_h += self.config.prediction_horizon * self.number_of_free_variables
-        derivative_link_model = self._remove_rows_columns_where_variables_are_zero(
-            derivative_link_model
-        )
-        return derivative_link_model
 
     def derivative_link_model_no_acc(self, max_derivative: Derivatives) -> sm.Matrix:
         """
