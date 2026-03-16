@@ -43,11 +43,11 @@ class RoleForPerson(Role[TPerson], PersonMixin):
     def role_taker_attribute(cls) -> Field: ...
 
 @dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson[TPerson]): ...
+class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson): ...
 
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
-    RoleForPerson[TPerson], RecognizedGroup
+    RoleForPerson, RecognizedGroup
 ): ...
 
 @dataclass(eq=False)
@@ -112,21 +112,19 @@ class RoleForRepresentativeAsSecondRole(
     def role_taker_attribute(cls) -> Field: ...
 
 @dataclass(eq=False)
-class DelegateAsThirdRole(
-    RoleForRepresentativeAsSecondRole[TRepresentativeAsSecondRole]
-):
+class DelegateAsThirdRole(RoleForRepresentativeAsSecondRole):
     # Original Owner of the delegate_of field
     delegate_of: RecognizedGroup = field(default=None, kw_only=True)
 
 @dataclass(eq=False)
-class CEOAsFirstRoleAsRoleForSubClassOfARoleTaker(
+class CEOAsFirstRoleAsRoleForSubclassOfARoleTaker(
     CEOAsFirstRole[TSubclassOfARoleTaker], SubclassOfARoleTakerMixin
 ):
     introduced_attribute: str = field(init=False)
 
 @dataclass(eq=False)
 class SubclassOfRoleThatUpdatesRoleTakerType(
-    CEOAsFirstRoleAsRoleForSubClassOfARoleTaker
+    CEOAsFirstRoleAsRoleForSubclassOfARoleTaker
 ): ...
 
 @dataclass(eq=False)

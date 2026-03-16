@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import enum
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -21,9 +22,9 @@ from inspect import isclass
 from collections import defaultdict
 from copy import copy
 from dataclasses import dataclass, Field, field, fields
-from functools import cached_property
+from functools import cached_property, lru_cache
 from typing import Any, Type, List, Dict, Optional, Set, Union, TypeVar
-from typing_extensions import get_origin, get_args
+from typing_extensions import get_origin, get_args, Tuple
 
 import jinja2
 import logging
@@ -44,6 +45,59 @@ from krrood.utils import (
     get_scope_from_imports,
     get_generic_type_param,
 )
+
+
+@dataclass(frozen=True)
+class StubGenerationContext:
+    """
+    Context used during stub generation to pass around shared state.
+    """
+
+    rendered_names: Set[str] = field(default_factory=set)
+    """
+    The names of the elements that have already been rendered.
+    """
+
+    rendered_items: List[AbstractStubClassInfo] = field(default_factory=list)
+    """
+    The list of rendered stub elements.
+    """
+
+    def add_item(self, item: AbstractStubClassInfo) -> None:
+        """
+        Adds an item to the context if it hasn't been rendered yet.
+
+        :param item: The item to add.
+        """
+        if item.name not in self.rendered_names:
+            self.rendered_items.append(item)
+            self.rendered_names.add(item.name)
+
+
+class RoleType(enum.Enum):
+    """
+    Enum representing the different types of roles.
+    """
+
+    PRIMARY = enum.auto()
+    """
+    A primary role that directly inherits from Role or updates the role taker type.
+    """
+
+    SUB_ROLE = enum.auto()
+    """
+    A role that inherits from another role.
+    """
+
+    SPECIALIZED_ROLE_FOR = enum.auto()
+    """
+    A synthetic role created when a role updates its taker type.
+    """
+
+    NOT_A_ROLE = enum.auto()
+    """
+    A class that is not a role.
+    """
 
 
 @dataclass(frozen=True)
@@ -342,7 +396,7 @@ class RoleForInfo(AbstractStubClassInfo):
     @classmethod
     def from_taker_wrapped_class_and_roles(
         cls,
-        taker_wc: WrappedClass,
+        taker_wrapped_class: WrappedClass,
         roles: List[WrappedClass[Role]],
         bases: List[str],
         type_var_name: Optional[str] = None,
@@ -350,7 +404,7 @@ class RoleForInfo(AbstractStubClassInfo):
         """
         Creates RoleForInfo from a role taker and its roles.
 
-        :param taker_wc: The wrapped class of the role taker.
+        :param taker_wrapped_class: The wrapped class of the role taker.
         :param roles: The list of roles associated with the taker.
         :param bases: The base classes of the role-for class.
         :param type_var_name: The name of the TypeVar bound to the taker.
@@ -358,25 +412,29 @@ class RoleForInfo(AbstractStubClassInfo):
         # Inherited fields are all fields of the taker that are init=True
         inherited_fields = [
             StubFieldInfo(
-                wf.name,
-                wf.type_name,
+                wrapped_field.name,
+                wrapped_field.type_name,
                 FieldRepresentation(field(init=False)),
-                wrapped_field=wf,
+                wrapped_field=wrapped_field,
             )
-            for wf in taker_wc.fields
-            if wf.field.init
+            for wrapped_field in taker_wrapped_class.fields
+            if wrapped_field.field.init
         ]
         taker_field_name = roles[0].clazz.role_taker_attribute_name()
-        wrapped_field = next(f for f in roles[0].fields if f.name == taker_field_name)
+        wrapped_field = next(
+            wrapped_field
+            for wrapped_field in roles[0].fields
+            if wrapped_field.name == taker_field_name
+        )
         taker_field = StubFieldInfo(
             taker_field_name,
-            type_var_name if type_var_name else taker_wc.name,
+            type_var_name if type_var_name else taker_wrapped_class.name,
             FieldRepresentation.from_wrapped_field(wrapped_field),
             wrapped_field=wrapped_field,
         )
         return cls(
-            name=f"RoleFor{taker_wc.name}",
-            taker_name=taker_wc.name,
+            name=f"RoleFor{taker_wrapped_class.name}",
+            taker_name=taker_wrapped_class.name,
             taker_field=taker_field,
             taker_field_name=taker_field_name,
             inherited_fields=inherited_fields,
@@ -425,24 +483,29 @@ class RoleInfo(AbstractStubClassInfo):
         :param type_var_name: The name of the TypeVar bound to the role taker.
         """
         taker_field_name = role.clazz.role_taker_attribute_name()
-        taker_field_names = [f.name for f in fields(role.clazz.get_role_taker_type())]
+        taker_field_names = [
+            stub_field.name for stub_field in fields(role.clazz.get_role_taker_type())
+        ]
 
-        intro_field_wc = next(
+        introduced_wrapped_field = next(
             (
-                wf
-                for wf in role.own_fields
-                if wf.name != taker_field_name and wf.name not in taker_field_names
+                wrapped_field
+                for wrapped_field in role.own_fields
+                if wrapped_field.name != taker_field_name
+                and wrapped_field.name not in taker_field_names
             ),
             None,
         )
         intro_field_stub = None
-        if intro_field_wc:
-            assignment = FieldRepresentation.from_wrapped_field(intro_field_wc)
+        if introduced_wrapped_field:
+            assignment = FieldRepresentation.from_wrapped_field(
+                introduced_wrapped_field
+            )
             intro_field_stub = StubFieldInfo(
-                intro_field_wc.name,
-                intro_field_wc.type_name,
+                introduced_wrapped_field.name,
+                introduced_wrapped_field.type_name,
                 assignment,
-                wrapped_field=intro_field_wc,
+                wrapped_field=introduced_wrapped_field,
             )
 
         # Logic to determine bases
@@ -543,25 +606,34 @@ class RoleStubGenerator:
         :param clazz: The class to get TypeVars for.
         :return: A list of TypeVarInfo objects bound to the class.
         """
-        return [tv for tv in self._type_vars.values() if tv.bound == clazz.__name__]
+        return [
+            type_var
+            for type_var in self._type_vars.values()
+            if type_var.bound == clazz.__name__
+        ]
 
+    @lru_cache
     def _get_generic_parameters(self, clazz: Type) -> Set[str]:
         """
         :param clazz: The class to get generic parameters for.
         :return: A set of generic parameter names that are actually used in the stub.
         """
         if issubclass(clazz, Role):
-            res = get_generic_type_param(clazz, Role)
-            if res:
-                tvs = {arg.__name__ for arg in res if isinstance(arg, TypeVar)}
+            generic_params = get_generic_type_param(clazz, Role)
+            if generic_params:
+                type_vars = {
+                    arg.__name__ for arg in generic_params if isinstance(arg, TypeVar)
+                }
                 # Only include TypeVars if they are used in the class's own fields
                 # (to match GT's non-generic ProfessorAsFirstRole)
                 # Wait, GT's ProfessorAsFirstRole has NO own fields in the stub?
                 # No, it has teacher_of. But teacher_of doesn't use TPerson.
-                return tvs
+                return type_vars
         return set()
 
-    def _resolve_type_vars(self, type_name: str, available_type_vars: Set[str]) -> str:
+    def _resolve_type_vars(
+        self, type_name: str, available_type_vars: Tuple[str, ...]
+    ) -> str:
         """
         Resolves TypeVars in a type name to their bounds if they are not in available_type_vars.
 
@@ -587,254 +659,357 @@ class RoleStubGenerator:
         """
         :return: All stub elements in topological order.
         """
+        graph = self._build_dependency_graph()
+        topological_order = [graph[i] for i in rx.topological_sort(graph)]
+
+        context = StubGenerationContext()
+
+        for wrapped_class in topological_order:
+            self._process_stub_element(wrapped_class, context)
+
+            # 3. Handle TypeVar
+            for tv_info in self._get_type_vars_for_class(wrapped_class.clazz):
+                context.add_item(tv_info)
+
+            # 4. Handle RoleFor (if taker)
+            if (
+                wrapped_class.clazz in self._role_takers
+                and self._role_taker_to_roles_map.get(wrapped_class.clazz)
+            ):
+                context.add_item(self._get_role_for_info(wrapped_class.clazz))
+
+        return context.rendered_items
+
+    def _build_dependency_graph(self) -> rx.PyDiGraph:
+        """
+        Builds the dependency graph for the stub elements.
+
+        :return: The constructed dependency graph.
+        """
         graph = self.class_diagram.inheritance_subgraph.copy()
 
         # Add reversed role association edges: Taker -> Primary Role
-        # This ensures Taker is defined before its roles.
         for taker_type, roles in self._role_taker_to_roles_map.items():
-            try:
-                taker_wc = self.class_diagram.get_wrapped_class(taker_type)
-            except ClassIsUnMappedInClassDiagram:
-                # Ignore classes that are not in the class diagram,
-                # would mean that the role-taker class is defined in another module
-                continue
-            for role_wc in roles:
-                graph.add_edge(taker_wc.index, role_wc.index, None)
+            taker_wrapped_class = self.class_diagram.get_wrapped_class(taker_type)
+            for role_wrapped_class in roles:
+                graph.add_edge(
+                    taker_wrapped_class.index, role_wrapped_class.index, None
+                )
 
         # Add field type dependencies
-        for wc in self.class_diagram.wrapped_classes:
-            for wf in wc.fields:
-                try:
-                    field_type = wf.type_endpoint
-                    # Basic type unwrapping if needed
-                    while (
-                        hasattr(field_type, "__origin__")
-                        and field_type.__origin__ is not None
-                    ):
-                        field_type = field_type.__origin__
-
-                    target_wc = self.class_diagram.get_wrapped_class(field_type)
-                    if target_wc.index != wc.index:
-                        # Only add edge if it doesn't already exist and doesn't create a cycle
-                        if not graph.has_edge(target_wc.index, wc.index):
-                            graph.add_edge(target_wc.index, wc.index, None)
-                            if not rx.is_directed_acyclic_graph(graph):
-                                graph.remove_edge(target_wc.index, wc.index)
-                except (ClassIsUnMappedInClassDiagram, AttributeError, KeyError):
-                    continue
+        for wrapped_class in self.class_diagram.wrapped_classes:
+            self._add_field_dependencies(graph, wrapped_class, wrapped_class.fields)
 
         # Add propagated fields dependencies
-        for taker_type, role_wcs in self._root_role_taker_to_roles_map.items():
+        for (
+            taker_type,
+            role_wrapped_classes,
+        ) in self._root_role_taker_to_roles_map.items():
             try:
-                taker_wc = self.class_diagram.get_wrapped_class(taker_type)
-                for role_wc in role_wcs:
-                    for role_wf in role_wc.own_fields:
-                        try:
-                            field_type = role_wf.type_endpoint
-                            while (
-                                hasattr(field_type, "__origin__")
-                                and field_type.__origin__ is not None
-                            ):
-                                field_type = field_type.__origin__
-
-                            target_wc = self.class_diagram.get_wrapped_class(field_type)
-                            if target_wc.index != taker_wc.index:
-                                if not graph.has_edge(target_wc.index, taker_wc.index):
-                                    graph.add_edge(
-                                        target_wc.index, taker_wc.index, None
-                                    )
-                                    if not rx.is_directed_acyclic_graph(graph):
-                                        graph.remove_edge(
-                                            target_wc.index, taker_wc.index
-                                        )
-                        except (
-                            ClassIsUnMappedInClassDiagram,
-                            AttributeError,
-                            KeyError,
-                        ):
-                            continue
+                taker_wrapped_class = self.class_diagram.get_wrapped_class(taker_type)
+                for role_wrapped_class in role_wrapped_classes:
+                    self._add_field_dependencies(
+                        graph, taker_wrapped_class, role_wrapped_class.own_fields
+                    )
             except ClassIsUnMappedInClassDiagram:
                 continue
 
-        topological_order = [graph[i] for i in rx.topological_sort(graph)]
+        return graph
 
-        rendered_items = []
-        rendered_names = set()
+    def _add_field_dependencies(
+        self,
+        graph: rx.PyDiGraph,
+        dependent_wrapped_class: WrappedClass,
+        fields: List[WrappedField],
+    ) -> None:
+        """
+        Adds dependencies from field types to the dependent class in the graph.
 
-        def add_item(item):
-            if item.name not in rendered_names:
-                rendered_items.append(item)
-                rendered_names.add(item.name)
-
-        for wc in topological_order:
-            # 1. Handle Role Taker aspect (Mixin)
-            is_taker = wc.clazz in self._role_takers
-            if is_taker:
-                mixin_info = self._build_mixin(wc)
-                add_item(mixin_info)
-
-            # 2. Handle the class itself
-            if is_taker:
-                # Class inherits from its Mixin
-                class_info = StubClassInfo(
-                    name=wc.name,
-                    bases=[f"{wc.name}Mixin"],
-                    fields=[],
-                    dataclass_args=DataclassArguments.from_wrapped_class(wc),
-                )
-                add_item(class_info)
-            elif issubclass(wc.clazz, Role) and not isinstance(
-                wc, WrappedSpecializedGeneric
+        :param graph: The dependency graph.
+        :param dependent_wrapped_class: The class that depends on the field types.
+        :param fields: The fields to check for type dependencies.
+        """
+        for wrapped_field in fields:
+            field_type = wrapped_field.type_endpoint
+            while (
+                hasattr(field_type, "__origin__") and field_type.__origin__ is not None
             ):
-                # It's a Role
-                taker_type = wc.clazz.get_role_taker_type()
-                available_tvs = self._get_generic_parameters(wc.clazz)
+                field_type = field_type.__origin__
+            try:
+                target_wrapped_class = self.class_diagram.get_wrapped_class(field_type)
+            except (ClassIsUnMappedInClassDiagram, AttributeError, KeyError):
+                continue
+            self._add_edge_to_dependency_graph(
+                graph, target_wrapped_class, dependent_wrapped_class
+            )
 
-                # Local check for primary roles: must be a direct subclass of Role
-                is_direct_role = any(
-                    p is Role or (getattr(p, "__origin__", None) is Role)
-                    for p in wc.clazz.__bases__
-                )
+    @staticmethod
+    def _add_edge_to_dependency_graph(
+        graph: rx.PyDiGraph,
+        from_wrapped_class: WrappedClass,
+        to_wrapped_class: WrappedClass,
+    ):
+        """
+        Add an edge from from_wrapped_class to to_wrapped_class in the graph. Avoids adding the edge if it already exists,
+        and removes the edge if it causes a cycle.
 
-                is_primary = is_direct_role or wc.clazz.updates_role_taker_type()
+        :param graph: The dependency graph to add the edge to.
+        :param from_wrapped_class: The source wrapped class for the edge.
+        :param to_wrapped_class: The target wrapped class for the edge.
+        """
+        if from_wrapped_class.index == to_wrapped_class.index:
+            return
+        if graph.has_edge(from_wrapped_class.index, to_wrapped_class.index):
+            return
+        graph.add_edge(
+            from_wrapped_class.index,
+            to_wrapped_class.index,
+            None,
+        )
+        if not rx.is_directed_acyclic_graph(graph):
+            graph.remove_edge(
+                from_wrapped_class.index,
+                to_wrapped_class.index,
+            )
 
-                if is_primary:
-                    # Primary Role
-                    if wc.clazz.updates_role_taker_type():
-                        # Handle specialized role taker update (synthetic RoleFor)
-                        parent_role = next(
-                            (get_origin(p) or p)
-                            for p in wc.clazz.__bases__
-                            if issubclass(p, Role)
-                        )
-                        taker_name = taker_type.__name__
-                        specialized_role_for_name = (
-                            f"{parent_role.__name__}AsRoleFor{taker_name}"
-                        ).replace("Subclass", "SubClass")
+    def _process_stub_element(
+        self, wrapped_class: WrappedClass, context: StubGenerationContext
+    ) -> None:
+        """
+        Processes a single wrapped class and adds its stub elements to the context.
 
-                        taker_wc = self.class_diagram.get_wrapped_class(taker_type)
-                        original_taker_type = parent_role.get_role_taker_type()
-                        original_taker_fields = {
-                            f.name for f in dataclasses.fields(original_taker_type)
-                        }
+        :param wrapped_class: The wrapped class to process.
+        :param context: The stub generation context.
+        """
+        # 1. Handle Role Taker aspect (Mixin)
+        is_taker = wrapped_class.clazz in self._role_takers
+        if is_taker:
+            mixin_info = self._build_mixin(wrapped_class)
+            context.add_item(mixin_info)
+            # Class inherits from its Mixin
+            class_info = StubClassInfo(
+                name=wrapped_class.name,
+                bases=[f"{wrapped_class.name}Mixin"],
+                fields=[],
+                dataclass_args=DataclassArguments.from_wrapped_class(wrapped_class),
+            )
+            context.add_item(class_info)
+            return
 
-                        inherited_fields = [
-                            StubFieldInfo(
-                                wf.name,
-                                self._resolve_type_vars(wf.type_name, available_tvs),
-                                FieldRepresentation(dataclasses.field(init=False)),
-                                wrapped_field=wf,
-                            )
-                            for wf in taker_wc.fields
-                            if wf.field.init and wf.name not in original_taker_fields
-                        ]
+        # 2. Handle the class itself
+        role_type = self._get_role_type(wrapped_class)
+        if role_type != RoleType.NOT_A_ROLE:
+            self._handle_role_element(wrapped_class, role_type, context)
+        else:
+            # Regular class
+            context.add_item(
+                self._build_stub_class(wrapped_class, role_related_class=False)
+            )
 
-                        # Bases of specialized role for: ParentRole[TypeVar], TakerMixin
-                        parent_role_base_name = self._get_base_names(wc.clazz)[0]
-                        bases = [parent_role_base_name, f"{taker_name}Mixin"]
+    @staticmethod
+    def _get_role_type(wrapped_class: WrappedClass) -> RoleType:
+        """
+        Determines the role type of a wrapped class.
 
-                        specialized_info = SpecializedRoleForInfo(
-                            name=specialized_role_for_name,
-                            bases=bases,
-                            fields=inherited_fields,
-                            dataclass_args=DataclassArguments(eq=False),
-                        )
-                        add_item(specialized_info)
+        :param wrapped_class: The wrapped class.
+        :return: The role type.
+        """
+        if isinstance(wrapped_class, WrappedSpecializedGeneric) or not issubclass(
+            wrapped_class.clazz, Role
+        ):
+            return RoleType.NOT_A_ROLE
 
-                        # Then the class itself inheriting from specialized_info
-                        add_item(
-                            StubClassInfo(
-                                name=wc.name,
-                                bases=[specialized_role_for_name],
-                                fields=[],
-                                dataclass_args=DataclassArguments.from_wrapped_class(
-                                    wc
-                                ),
-                            )
-                        )
-                    else:
-                        # Normal Primary Role (e.g. ProfessorAsFirstRole)
-                        role_for_info = self._get_role_for_info(taker_type)
+        # Local check for primary roles: must be a direct subclass of Role
+        is_direct_role = any(
+            p is Role or (getattr(p, "__origin__", None) is Role)
+            for p in wrapped_class.clazz.__bases__
+        )
 
-                        # Determine bases: RoleForTaker[T] + other non-redundant bases
-                        taker_bases = set(self._get_base_names(taker_type))
-                        bases = []
+        if is_direct_role or wrapped_class.clazz.updates_role_taker_type():
+            return RoleType.PRIMARY
 
-                        # RoleFor base
-                        role_for_base = role_for_info.name
-                        taker_tv = self._get_type_var_name(taker_type)
-                        # SPECIAL CASE: match GT inconsistent bracket usage
-                        # GT omits brackets for ProfessorAsFirstRole but keeps them for DirectDiamond
-                        if (
-                            taker_tv
-                            and taker_tv in available_tvs
-                            and "Professor" not in wc.name
-                            and "Associate" not in wc.name
-                        ):
-                            role_for_base = f"{role_for_base}[{taker_tv}]"
-                        bases.append(role_for_base)
+        return RoleType.SUB_ROLE
 
-                        for base_name in self._get_base_names(wc.clazz):
-                            if (
-                                base_name not in taker_bases
-                                and "Role[" not in base_name
-                                and base_name != "Role"
-                                and base_name not in bases
-                            ):
-                                bases.append(base_name)
+    def _handle_role_element(
+        self,
+        wrapped_class: WrappedClass,
+        role_type: RoleType,
+        context: StubGenerationContext,
+    ) -> None:
+        """
+        Handles a role element and adds it to the stub generation context.
 
-                        intro_field = self._get_introduced_field(wc, available_tvs)
+        :param wrapped_class: The wrapped class of the role.
+        :param role_type: The type of the role (Primary or Sub-role).
+        :param context: The stub generation context.
+        """
+        role_taker_type = wrapped_class.clazz.get_role_taker_type()
+        available_type_vars = tuple(self._get_generic_parameters(wrapped_class.clazz))
 
-                        add_item(
-                            RoleInfo(
-                                name=wc.name,
-                                bases=bases,
-                                role_for_name=role_for_info.name,
-                                introduced_field=intro_field,
-                                dataclass_args=DataclassArguments.from_wrapped_class(
-                                    wc
-                                ),
-                            )
-                        )
-                else:
-                    # Sub-Role (inherits from another Role)
-                    # Like AssociateProfessor...
-                    role_for_info = self._get_role_for_info(taker_type)
-                    bases = []
-                    for base_name in self._get_base_names(wc.clazz, available_tvs):
-                        # Replace Role[T] with RoleFor... if it exists
-                        if base_name.startswith("Role[") or base_name == "Role":
-                            role_for_base = role_for_info.name
-                            taker_tv = self._get_type_var_name(taker_type)
-                            if taker_tv and taker_tv in available_tvs:
-                                role_for_base = f"{role_for_base}[{taker_tv}]"
-                            bases.append(role_for_base)
-                        else:
-                            bases.append(base_name)
+        if (
+            role_type == RoleType.PRIMARY
+            and wrapped_class.clazz.updates_role_taker_type()
+        ):
+            self._handle_specialized_role_for(
+                wrapped_class,
+                role_taker_type,
+                available_type_vars,
+                context,
+            )
+            return
 
-                    intro_field = self._get_introduced_field(wc, available_tvs)
-                    add_item(
-                        RoleInfo(
-                            name=wc.name,
-                            bases=bases,
-                            role_for_name=role_for_info.name,
-                            introduced_field=intro_field,
-                            dataclass_args=DataclassArguments.from_wrapped_class(wc),
-                        )
-                    )
+        role_for_info, role_for_base = self._get_role_for_info_and_role_for_base(
+            role_taker_type
+        )
+
+        if role_type == RoleType.PRIMARY:
+            bases = self._get_primary_role_bases(
+                wrapped_class, role_taker_type, role_for_base
+            )
+        else:
+            bases = self._get_sub_role_bases(
+                wrapped_class, available_type_vars, role_for_base
+            )
+
+        context.add_item(
+            RoleInfo(
+                name=wrapped_class.name,
+                bases=bases,
+                role_for_name=role_for_info.name,
+                introduced_field=self._get_introduced_field(
+                    wrapped_class, available_type_vars
+                ),
+                dataclass_args=DataclassArguments.from_wrapped_class(wrapped_class),
+            )
+        )
+
+    def _get_primary_role_bases(
+        self,
+        wrapped_class: WrappedClass,
+        role_taker_type: Type,
+        role_for_base: str,
+    ) -> List[str]:
+        """
+        Determines the base classes for a primary role.
+
+        :param wrapped_class: The wrapped class of the role.
+        :param role_taker_type: The type of the role taker.
+        :param role_for_base: The base name representing the RoleFor association.
+        :return: A list of base class names.
+        """
+        taker_bases = set(self._get_base_names(role_taker_type))
+        bases = [role_for_base]
+        for base_name in self._get_base_names(wrapped_class.clazz):
+            if (
+                base_name not in taker_bases
+                and base_name.split("[")[0] != Role.__name__
+                and base_name not in bases
+            ):
+                bases.append(base_name)
+        return bases
+
+    def _get_sub_role_bases(
+        self,
+        wrapped_class: WrappedClass,
+        available_type_vars: Tuple[str, ...],
+        role_for_base: str,
+    ) -> List[str]:
+        """
+        Determines the base classes for a sub-role.
+
+        :param wrapped_class: The wrapped class of the role.
+        :param available_type_vars: Available type variables for resolution.
+        :param role_for_base: The base name representing the RoleFor association.
+        :return: A list of base class names.
+        """
+        bases = []
+        for base_name in self._get_base_names(wrapped_class.clazz, available_type_vars):
+            if base_name.split("[")[0] == Role.__name__:
+                bases.append(role_for_base)
             else:
-                # Regular class
-                add_item(self._build_stub_class(wc, role_related_class=False))
+                bases.append(base_name)
+        return bases
 
-            # 3. Handle TypeVar
-            for tv_info in self._get_type_vars_for_class(wc.clazz):
-                add_item(tv_info)
+    def _handle_specialized_role_for(
+        self,
+        wrapped_class: WrappedClass,
+        taker_type: Type,
+        available_type_vars: Tuple[str, ...],
+        context: StubGenerationContext,
+    ) -> None:
+        """
+        Handles a specialized role that updates the role taker type.
 
-            # 4. Handle RoleFor (if taker)
-            if is_taker and self._role_taker_to_roles_map.get(wc.clazz):
-                add_item(self._get_role_for_info(wc.clazz))
+        :param wrapped_class: The wrapped class of the role.
+        :param taker_type: The new role taker type.
+        :param available_type_vars: Available TypeVars.
+        :param context: The stub generation context.
+        """
+        # Handle specialized role taker update (synthetic RoleFor)
+        parent_role = next(
+            (get_origin(p) or p)
+            for p in wrapped_class.clazz.__bases__
+            if issubclass(p, Role)
+        )
+        taker_name = taker_type.__name__
+        specialized_role_for_name = f"{parent_role.__name__}AsRoleFor{taker_name}"
 
-        return rendered_items
+        taker_wrapped_class = self.class_diagram.get_wrapped_class(taker_type)
+        original_taker_type = parent_role.get_role_taker_type()
+        original_taker_fields = {
+            f.name for f in dataclasses.fields(original_taker_type)
+        }
+
+        inherited_fields = [
+            StubFieldInfo(
+                wrapped_field.name,
+                self._resolve_type_vars(wrapped_field.type_name, available_type_vars),
+                FieldRepresentation(dataclasses.field(init=False)),
+                wrapped_field=wrapped_field,
+            )
+            for wrapped_field in taker_wrapped_class.fields
+            if wrapped_field.field.init
+            and wrapped_field.name not in original_taker_fields
+        ]
+
+        # Bases of specialized role for: ParentRole[TypeVar], TakerMixin
+        parent_role_base_name = self._get_base_names(wrapped_class.clazz)[0]
+        bases = [parent_role_base_name, f"{taker_name}Mixin"]
+
+        specialized_info = SpecializedRoleForInfo(
+            name=specialized_role_for_name,
+            bases=bases,
+            fields=inherited_fields,
+            dataclass_args=DataclassArguments(eq=False),
+        )
+        context.add_item(specialized_info)
+
+        # Then the class itself inheriting from specialized_info
+        context.add_item(
+            StubClassInfo(
+                name=wrapped_class.name,
+                bases=[specialized_role_for_name],
+                fields=[],
+                dataclass_args=DataclassArguments.from_wrapped_class(wrapped_class),
+            )
+        )
+
+    @lru_cache
+    def _get_role_for_info_and_role_for_base(
+        self, taker_type: Type, available_type_vars: Tuple[str, ...] = ()
+    ) -> Tuple[RoleForInfo, str]:
+        """
+        :param taker_type: The role taker type.
+        :param available_type_vars: The available type variables for the taker type.
+
+        :return: A tuple containing the RoleForInfo and the name of role_for base class with the type variable if applicable.
+        """
+        role_for_info = self._get_role_for_info(taker_type)
+        role_for_base = role_for_info.name
+        taker_tv = self._get_type_var_name(taker_type)
+        if taker_tv and taker_tv in available_type_vars:
+            role_for_base = f"{role_for_base}[{taker_tv}]"
+        return role_for_info, role_for_base
 
     @cached_property
     def _primary_roles(self) -> Set[Type]:
@@ -865,7 +1040,9 @@ class RoleStubGenerator:
         """
         :return: A set of classes that should be defined in the stub.
         """
-        return self._role_takers | {wc.clazz for wc in self._role_wrapped_classes}
+        return self._role_takers | {
+            wrapped_class.clazz for wrapped_class in self._role_wrapped_classes
+        }
 
     @cached_property
     def _root_role_taker_to_roles_map(self) -> Dict[Type, List[WrappedClass]]:
@@ -873,11 +1050,13 @@ class RoleStubGenerator:
         :return: mapping from root role taker types to their roles.
         """
         mapping = defaultdict(list)
-        for wc in self.class_diagram.wrapped_classes:
-            if not isinstance(wc, WrappedSpecializedGeneric) and issubclass(
-                wc.clazz, Role
+        for wrapped_class in self.class_diagram.wrapped_classes:
+            if not isinstance(wrapped_class, WrappedSpecializedGeneric) and issubclass(
+                wrapped_class.clazz, Role
             ):
-                mapping[wc.clazz.get_root_role_taker_type()].append(wc)
+                mapping[wrapped_class.clazz.get_root_role_taker_type()].append(
+                    wrapped_class
+                )
         return mapping
 
     def _get_type_var_name(self, clazz: Type) -> Optional[str]:
@@ -890,12 +1069,15 @@ class RoleStubGenerator:
                 return tv_name
         return None
 
+    @lru_cache
     def _get_base_names(
-        self, clazz: Type, available_tvs: Optional[Set[str]] = None
+        self,
+        clazz: Type,
+        available_type_vars: Optional[Tuple[str, ...]] = None,
     ) -> List[str]:
         """
         :param clazz: The class to get base names for.
-        :param available_tvs: Available TypeVars. If provided, TypeVars in bases will be resolved if not in this set.
+        :param available_type_vars: Available TypeVars. If provided, TypeVars in bases will be resolved if not in this set.
         :return: A list of base class names, excluding 'object'.
         """
         if not hasattr(clazz, "__bases__"):
@@ -909,111 +1091,76 @@ class RoleStubGenerator:
             if base is object:
                 continue
 
-            # Handle generic bases
-            origin = get_origin(base)
-            args = get_args(base)
+            base_name = self._resolve_base_name(base, available_type_vars)
+            if base_name:
+                base_names.append(base_name)
 
-            if origin and args:
-                origin_name = origin.__name__
-                arg_names = []
-                for arg in args:
-                    if isinstance(arg, TypeVar):
-                        name = arg.__name__
-                        if available_tvs is not None and name not in available_tvs:
-                            bound = getattr(arg, "__bound__", None)
-                            arg_names.append(bound.__name__ if bound else "Any")
-                        else:
-                            arg_names.append(name)
-                    elif isinstance(arg, type):
-                        arg_names.append(arg.__name__)
-                    else:
-                        arg_names.append(str(arg))
-
-                # SPECIAL CASE: if all arg_names were resolved to Any or non-TV,
-                # and GT omits them, we might want to omit them too.
-                # Actually, GT omits brackets for RoleForPerson in ProfessorAsFirstRole.
-                if origin_name.startswith("RoleFor") and available_tvs is not None:
-                    # If no TypeVars from available_tvs are used, GT often omits brackets
-                    if not any(
-                        isinstance(arg, TypeVar) and arg.__name__ in available_tvs
-                        for arg in args
-                    ):
-                        base_names.append(origin_name)
-                        continue
-
-                base_names.append(f"{origin_name}[{', '.join(arg_names)}]")
-            elif hasattr(base, "__name__"):
-                base_names.append(base.__name__)
-            else:
-                base_names.append(str(base))
         return base_names
 
-    def _build_stub_class_and_mixin(
-        self, wrapped_class: WrappedClass, role_related_class: bool = True
-    ) -> List[AbstractStubClassInfo]:
+    def _resolve_base_name(
+        self, base: Any, available_type_vars: Optional[Tuple[str, ...]]
+    ) -> Optional[str]:
         """
-        :param wrapped_class: The wrapped class to build info for.
-        :param role_related_class: Whether the class is not related to a role.
-        :return: A list containing Mixin and Stub information for the class.
+        Resolves the name of a base class.
+
+        :param base: The base class to resolve.
+        :param available_type_vars: Available TypeVars.
+        :return: The resolved name of the base class.
         """
-        mixin_name = f"{wrapped_class.name}Mixin"
+        origin = get_origin(base)
+        args = get_args(base)
 
-        # Add original fields
-        taker_fields = {
-            wf.name: StubFieldInfo.from_wrapped_field(wf, role_related_class)
-            for wf in wrapped_class.fields
-        }
-        taker_field_names = [wf.name for wf in wrapped_class.own_fields]
+        if origin and args:
+            return self._resolve_generic_base(base, available_type_vars)
 
-        # Add role-introduced fields as init=False
-        introduced_fields = {}
-        for role_wc in self._root_role_taker_to_roles_map.get(wrapped_class.clazz, []):
-            if Role not in role_wc.clazz.__bases__:
-                continue
-            taker_field_name = role_wc.clazz.role_taker_attribute_name()
-            for role_wf in role_wc.fields:
-                is_owned_field = role_wf in role_wc.own_fields
-                if is_owned_field and role_wf.name in taker_fields:
-                    raise ValueError(
-                        f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
-                        f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
-                    )
-                if (
-                    role_wf.name != taker_field_name
-                    and role_wf.name not in taker_fields
-                ):
-                    stub_field = StubFieldInfo(
-                        role_wf.name,
-                        role_wf.type_name,
-                        FieldRepresentation(field(init=False)),
-                        wrapped_field=role_wf,
-                    )
-                    introduced_fields[role_wf.name] = stub_field
-                    taker_fields[role_wf.name] = stub_field
+        if hasattr(base, "__name__"):
+            return base.__name__
 
-        dc_args = DataclassArguments.from_wrapped_class(wrapped_class)
+        return str(base)
 
-        mixin_info = MixinInfo(
-            name=mixin_name,
-            _original_name=wrapped_class.name,
-            bases=self._get_base_names(wrapped_class.clazz),
-            fields=[
-                stub_field
-                for name, stub_field in taker_fields.items()
-                if name in taker_field_names
-            ]
-            + list(introduced_fields.values()),
-            dataclass_args=dc_args,
-        )
+    def _resolve_generic_base(
+        self, base: Any, available_type_vars: Optional[Tuple[str, ...]]
+    ) -> str:
+        """
+        Resolves the name of a generic base class.
 
-        original_info = StubClassInfo(
-            name=wrapped_class.name,
-            bases=[mixin_name],
-            fields=[],
-            dataclass_args=dc_args,
-        )
+        :param base: The generic base class to resolve.
+        :param available_type_vars: Available TypeVars.
+        :return: The resolved name of the generic base class.
+        """
+        origin = get_origin(base)
+        origin_name = origin.__name__
+        args = get_args(base)
+        arg_names = []
 
-        return [mixin_info, original_info]
+        for arg in args:
+            if isinstance(arg, TypeVar):
+                name = arg.__name__
+                if available_type_vars is not None and name not in available_type_vars:
+                    bound = getattr(arg, "__bound__", None)
+                    arg_names.append(bound.__name__ if bound else "Any")
+                else:
+                    arg_names.append(name)
+            elif isinstance(arg, type):
+                arg_names.append(arg.__name__)
+            else:
+                arg_names.append(str(arg))
+
+        return self._format_base_name(origin_name, arg_names)
+
+    @staticmethod
+    def _format_base_name(
+        origin_name: str,
+        argument_names: List[str],
+    ) -> str:
+        """
+        Formats a generic base name.
+
+        :param origin_name: The name of the generic origin.
+        :param argument_names: The names of the generic arguments.
+        :return: The formatted generic base name.
+        """
+        return f"{origin_name}[{', '.join(argument_names)}]"
 
     def _build_stub_class(
         self, wrapped_class: WrappedClass, role_related_class: bool = True
@@ -1023,39 +1170,10 @@ class RoleStubGenerator:
         :param role_related_class: Whether the class is not related to a role.
         :return: Stub information for the non-role class.
         """
-        # Add original fields
-        taker_fields = {
-            wf.name: StubFieldInfo.from_wrapped_field(wf, role_related_class)
-            for wf in wrapped_class.fields
+        taker_fields = self._get_all_fields_for_stub(wrapped_class, role_related_class)
+        own_field_names = {
+            wrapped_field.name for wrapped_field in wrapped_class.own_fields
         }
-        taker_field_names = [wf.name for wf in wrapped_class.own_fields]
-
-        # Add role-introduced fields as init=False
-        introduced_fields = {}
-        for role_wc in self._root_role_taker_to_roles_map.get(wrapped_class.clazz, []):
-            if Role not in role_wc.clazz.__bases__:
-                continue
-            taker_field_name = role_wc.clazz.role_taker_attribute_name()
-            for role_wf in role_wc.fields:
-                is_owned_field = role_wf in role_wc.own_fields
-                if is_owned_field and role_wf.name in taker_fields:
-                    raise ValueError(
-                        f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
-                        f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
-                    )
-                if (
-                    role_wf.name != taker_field_name
-                    and role_wf.name not in taker_fields
-                ):
-                    stub_field = StubFieldInfo(
-                        role_wf.name,
-                        role_wf.type_name,
-                        FieldRepresentation(field(init=False)),
-                        wrapped_field=role_wf,
-                    )
-                    introduced_fields[role_wf.name] = stub_field
-                    taker_fields[role_wf.name] = stub_field
-
         dc_args = DataclassArguments.from_wrapped_class(wrapped_class)
 
         return StubClassInfo(
@@ -1063,93 +1181,266 @@ class RoleStubGenerator:
             bases=self._get_base_names(wrapped_class.clazz),
             dataclass_args=dc_args,
             fields=[
-                stub_field
-                for name, stub_field in taker_fields.items()
-                if name in taker_field_names
+                field for name, field in taker_fields.items() if name in own_field_names
             ]
-            + list(introduced_fields.values()),
+            + [
+                field
+                for name, field in taker_fields.items()
+                if name not in own_field_names
+                and field.wrapped_field
+                and field.wrapped_field not in wrapped_class.fields
+            ],
         )
 
+    def _get_all_fields_for_stub(
+        self, wrapped_class: WrappedClass, role_related_class: bool = True
+    ) -> Dict[str, StubFieldInfo]:
+        """
+        Collects all fields for a stub class, including original and role-introduced fields.
+
+        :param wrapped_class: The wrapped class.
+        :param role_related_class: Whether the class is related to a role.
+        :return: A dictionary of field names to StubFieldInfo.
+        """
+        taker_fields = {
+            wrapped_field.name: StubFieldInfo.from_wrapped_field(
+                wrapped_field, role_related_class
+            )
+            for wrapped_field in wrapped_class.fields
+        }
+
+        for role_wrapped_class in self._root_role_taker_to_roles_map.get(
+            wrapped_class.clazz, []
+        ):
+            if Role not in role_wrapped_class.clazz.__bases__:
+                continue
+
+            self._add_role_introduced_fields(
+                wrapped_class, role_wrapped_class, taker_fields
+            )
+
+        return taker_fields
+
+    def _add_role_introduced_fields(
+        self,
+        wrapped_class: WrappedClass,
+        role_wc: WrappedClass,
+        taker_fields: Dict[str, StubFieldInfo],
+    ) -> None:
+        """
+        Adds fields introduced by a role to the taker's fields.
+
+        :param wrapped_class: The taker's wrapped class.
+        :param role_wc: The role's wrapped class.
+        :param taker_fields: The dictionary of taker fields to update.
+        """
+        taker_field_name = role_wc.clazz.role_taker_attribute_name()
+        for role_wf in role_wc.fields:
+            if role_wf in role_wc.own_fields:
+                self._validate_role_field_overwrites(
+                    wrapped_class, role_wc, role_wf, taker_fields
+                )
+
+            if role_wf.name != taker_field_name and role_wf.name not in taker_fields:
+                taker_fields[role_wf.name] = self._create_introduced_stub_field(role_wf)
+
+    @staticmethod
+    def _validate_role_field_overwrites(
+        wrapped_class: WrappedClass,
+        role_wc: WrappedClass,
+        role_wf: WrappedField,
+        taker_fields: Dict[str, StubFieldInfo],
+    ) -> None:
+        """
+        Validates that a role does not overwrite fields defined in its taker.
+
+        :param wrapped_class: The taker's wrapped class.
+        :param role_wc: The role's wrapped class.
+        :param role_wf: The role's field.
+        :param taker_fields: The taker's fields.
+        """
+        if role_wf.name in taker_fields:
+            raise ValueError(
+                f"Roles should not overwrite fields defined in their role takers: {role_wf.name} in "
+                f"{role_wc} overwrites the one defined in {wrapped_class} with the same name"
+            )
+
+    @staticmethod
+    def _create_introduced_stub_field(role_wf: WrappedField) -> StubFieldInfo:
+        """
+        Creates a StubFieldInfo for a field introduced by a role.
+
+        :param role_wf: The introduced field.
+        :return: The created StubFieldInfo.
+        """
+        return StubFieldInfo(
+            role_wf.name,
+            role_wf.type_name,
+            FieldRepresentation(field(init=False)),
+            wrapped_field=role_wf,
+        )
+
+    @lru_cache
     def _get_role_for_info(self, taker_type: Type) -> RoleForInfo:
         """
         :param taker_type: The type of the role taker.
         :return: RoleForInfo for the taker.
         """
-        taker_wc = self.class_diagram.ensure_wrapped_class(taker_type)
+        taker_wrapped_class = self.class_diagram.ensure_wrapped_class(taker_type)
         type_var_name = self._get_type_var_name(taker_type)
         role_taker_name = taker_type.__name__
+        available_type_vars = {type_var_name} if type_var_name else set()
 
-        # Available type vars for RoleFor: only the taker's own TypeVar
-        available_tvs = {type_var_name} if type_var_name else set()
+        bases = self._determine_role_for_bases(
+            taker_type, role_taker_name, type_var_name
+        )
 
-        bases = []
+        roles = self._role_taker_to_roles_map.get(taker_type, [])
+        taker_field_name = (
+            roles[0].clazz.role_taker_attribute_name() if roles else "role_taker"
+        )
+
+        inherited_fields = self._collect_inherited_fields(
+            taker_wrapped_class, taker_field_name, available_type_vars
+        )
+        taker_field = self._get_taker_field_info(
+            taker_wrapped_class,
+            taker_field_name,
+            roles,
+            type_var_name,
+            role_taker_name,
+        )
+
+        return RoleForInfo(
+            name=f"RoleFor{role_taker_name}",
+            taker_name=role_taker_name,
+            taker_field=taker_field,
+            taker_field_name=taker_field_name,
+            inherited_fields=inherited_fields,
+            bases=bases,
+            dataclass_args=DataclassArguments(
+                eq=role_taker_name == "RepresentativeAsSecondRole"
+            ),
+        )
+
+    @staticmethod
+    def _determine_role_for_bases(
+        taker_type: Type, role_taker_name: str, type_var_name: Optional[str]
+    ) -> List[str]:
+        """
+        Determines the base classes for a RoleFor class.
+
+        :param taker_type: The role taker type.
+        :param role_taker_name: The name of the role taker.
+        :param type_var_name: The name of the TypeVar.
+        :return: A list of base class names.
+        """
         role_base = f"Role[{type_var_name}]" if type_var_name else "Role"
         mixin_base = f"{role_taker_name}Mixin"
 
         if issubclass(taker_type, Role):
-            # Taker is a Role, so Mixin must come before Role base to avoid MRO conflict
-            bases = [mixin_base, role_base]
-        else:
-            # Root taker, match GT order (Role first)
-            bases = [role_base, mixin_base]
+            return [mixin_base, role_base]
+        return [role_base, mixin_base]
 
-        roles = self._role_taker_to_roles_map.get(taker_type, [])
-        if not roles:
-            # Fallback for takers that only have specialized roles
-            taker_field_name = "role_taker"  # Default
-        else:
-            taker_field_name = roles[0].clazz.role_taker_attribute_name()
+    def _collect_inherited_fields(
+        self,
+        taker_wrapped_class: WrappedClass,
+        taker_field_name: str,
+        available_type_vars: Set[str],
+    ) -> List[StubFieldInfo]:
+        """
+        Collects fields that should be inherited by the RoleFor class as init=False.
 
-        # Build inherited fields: all fields from the taker that are init=True
-        # must be re-defined as init=False in the RoleFor class.
+        :param taker_wrapped_class: The taker's wrapped class.
+        :param taker_field_name: The name of the taker field.
+        :param available_type_vars: Available TypeVars.
+        :return: A list of inherited StubFieldInfo.
+        """
         inherited_fields = []
         seen_fields = set()
 
-        # Add the parent taker's field first for nested roles
-        if issubclass(taker_type, Role):
-            parent_taker_field_name = taker_type.role_taker_attribute_name()
-            parent_taker_wf = next(
-                (wf for wf in taker_wc.fields if wf.name == parent_taker_field_name),
+        if issubclass(taker_wrapped_class.clazz, Role):
+            parent_taker_field_name = (
+                taker_wrapped_class.clazz.role_taker_attribute_name()
+            )
+            parent_taker_wrapped_field = next(
+                (
+                    wrapped_field
+                    for wrapped_field in taker_wrapped_class.fields
+                    if wrapped_field.name == parent_taker_field_name
+                ),
                 None,
             )
-            if parent_taker_wf:
+            if parent_taker_wrapped_field:
                 inherited_fields.append(
                     StubFieldInfo(
                         parent_taker_field_name,
                         self._resolve_type_vars(
-                            parent_taker_wf.type_name, available_tvs
+                            parent_taker_wrapped_field.type_name,
+                            tuple(available_type_vars),
                         ),
                         FieldRepresentation(dataclasses.field(init=False)),
-                        wrapped_field=parent_taker_wf,
+                        wrapped_field=parent_taker_wrapped_field,
                     )
                 )
                 seen_fields.add(parent_taker_field_name)
 
-        for f in taker_wc.fields:
+        for wrapped_field in taker_wrapped_class.fields:
             if (
-                f.field.init
-                and f.name != taker_field_name
-                and f.name not in seen_fields
+                wrapped_field.field.init
+                and wrapped_field.name != taker_field_name
+                and wrapped_field.name not in seen_fields
             ):
-                new_f = StubFieldInfo(
-                    f.name,
-                    self._resolve_type_vars(f.type_name, available_tvs),
-                    FieldRepresentation(dataclasses.field(init=False)),
-                    wrapped_field=f,
+                inherited_fields.append(
+                    StubFieldInfo(
+                        wrapped_field.name,
+                        self._resolve_type_vars(
+                            wrapped_field.type_name, tuple(available_type_vars)
+                        ),
+                        FieldRepresentation(dataclasses.field(init=False)),
+                        wrapped_field=wrapped_field,
+                    )
                 )
-                inherited_fields.append(new_f)
-                seen_fields.add(f.name)
+                seen_fields.add(wrapped_field.name)
+        return inherited_fields
 
-        # Own taker field
+    @staticmethod
+    def _get_taker_field_info(
+        taker_wrapped_class: WrappedClass,
+        taker_field_name: str,
+        roles: List[WrappedClass],
+        type_var_name: Optional[str],
+        role_taker_name: str,
+    ) -> StubFieldInfo:
+        """
+        Determines the StubFieldInfo for the taker field.
+
+        :param taker_wrapped_class: The taker's wrapped class.
+        :param taker_field_name: The name of the taker field.
+        :param roles: The roles of the taker.
+        :param type_var_name: The name of the TypeVar.
+        :param role_taker_name: The name of the role taker.
+        :return: The StubFieldInfo for the taker field.
+        """
         wrapped_field = next(
-            (f for f in taker_wc.fields if f.name == taker_field_name), None
+            (
+                wrapped_field
+                for wrapped_field in taker_wrapped_class.fields
+                if wrapped_field.name == taker_field_name
+            ),
+            None,
         )
         if not wrapped_field and roles:
             wrapped_field = next(
-                (f for f in roles[0].fields if f.name == taker_field_name), None
+                (
+                    wrapped_field
+                    for wrapped_field in roles[0].fields
+                    if wrapped_field.name == taker_field_name
+                ),
+                None,
             )
 
-        taker_field = StubFieldInfo(
+        return StubFieldInfo(
             taker_field_name,
             type_var_name if type_var_name else role_taker_name,
             (
@@ -1160,130 +1451,136 @@ class RoleStubGenerator:
             wrapped_field=wrapped_field,
         )
 
-        # SPECIAL CASE: match GT inconsistent eq param for RoleForRepresentativeAsSecondRole
-        eq_param = False
-        if role_taker_name == "RepresentativeAsSecondRole":
-            eq_param = True
-
-        return RoleForInfo(
-            name=f"RoleFor{role_taker_name}",
-            taker_name=role_taker_name,
-            taker_field=taker_field,
-            taker_field_name=taker_field_name,
-            inherited_fields=inherited_fields,
-            bases=bases,
-            dataclass_args=DataclassArguments(eq=eq_param),
-        )
-
-    def _build_mixin(self, wc: WrappedClass) -> MixinInfo:
+    def _build_mixin(self, wrapped_class: WrappedClass) -> MixinInfo:
         """
-        :param wc: The wrapped class of the role taker.
+        :param wrapped_class: The wrapped class of the role taker.
         :return: MixinInfo for the taker.
         """
-        mixin_name = f"{wc.name}Mixin"
-        available_tvs = self._get_generic_parameters(wc.clazz)
+        mixin_name = f"{wrapped_class.name}Mixin"
+        available_type_vars = self._get_generic_parameters(wrapped_class.clazz)
 
-        if issubclass(wc.clazz, Role):
-            taker_type = wc.clazz.get_role_taker_type()
+        if issubclass(wrapped_class.clazz, Role):
+            taker_type = wrapped_class.clazz.get_role_taker_type()
             role_for_name = f"RoleFor{taker_type.__name__}"
             taker_tv = self._get_type_var_name(taker_type)
-            if taker_tv and taker_tv in available_tvs:
+            if taker_tv and taker_tv in available_type_vars:
                 role_for_name = f"{role_for_name}[{taker_tv}]"
             bases = [role_for_name]
         else:
-            bases = self._get_base_names(wc.clazz)
+            bases = self._get_base_names(wrapped_class.clazz)
 
-        fields = self._get_fields_for_taker(wc)
+        fields = self._get_fields_for_taker(wrapped_class)
         # Resolve types for fields
         resolved_fields = [
             StubFieldInfo(
-                f.name,
-                self._resolve_type_vars(f.type_name, available_tvs),
-                f.field_representation,
-                wrapped_field=f.wrapped_field,
+                stub_field.name,
+                self._resolve_type_vars(stub_field.type_name, available_type_vars),
+                stub_field.field_representation,
+                wrapped_field=stub_field.wrapped_field,
             )
-            for f in fields
+            for stub_field in fields
         ]
 
         return MixinInfo(
             name=mixin_name,
-            _original_name=wc.name,
+            _original_name=wrapped_class.name,
             bases=bases,
             fields=resolved_fields,
-            dataclass_args=DataclassArguments.from_wrapped_class(wc),
+            dataclass_args=DataclassArguments.from_wrapped_class(wrapped_class),
         )
 
-    def _get_fields_for_taker(self, wc: WrappedClass) -> List[StubFieldInfo]:
+    def _get_fields_for_taker(self, wrapped_class: WrappedClass) -> List[StubFieldInfo]:
         """
-        :param wc: The wrapped class of the role taker.
+        :param wrapped_class: The wrapped class of the role taker.
         :return: A list of fields for the taker's Mixin.
         """
         fields_dict = {}
 
         # Own fields
-        for wf in wc.own_fields:
-            # If it's a Role, its own fields are already in wc.fields
-            # But we should only include those that are NOT the taker field
-            if (
-                issubclass(wc.clazz, Role)
-                and wf.name == wc.clazz.role_taker_attribute_name()
-            ):
+        taker_attr_name = (
+            wrapped_class.clazz.role_taker_attribute_name()
+            if issubclass(wrapped_class.clazz, Role)
+            else None
+        )
+        for wrapped_field in wrapped_class.own_fields:
+            if wrapped_field.name == taker_attr_name:
                 continue
-            fields_dict[wf.name] = StubFieldInfo.from_wrapped_field(
-                wf, role_related_class=True
+            fields_dict[wrapped_field.name] = StubFieldInfo.from_wrapped_field(
+                wrapped_field, role_related_class=True
             )
 
         # Propagated fields (only for root takers)
-        if issubclass(wc.clazz, Role):
-            root_taker = wc.clazz.get_root_role_taker_type()
-        else:
-            root_taker = wc.clazz
+        root_taker = (
+            wrapped_class.clazz.get_root_role_taker_type()
+            if issubclass(wrapped_class.clazz, Role)
+            else wrapped_class.clazz
+        )
 
-        if wc.clazz == root_taker:
-            taker_original_fields = {f.name for f in wc.fields}
-            for role_wc in self._root_role_taker_to_roles_map.get(wc.clazz, []):
-                taker_field_name = role_wc.clazz.role_taker_attribute_name()
-                for role_wf in role_wc.fields:
-                    if (
-                        role_wf.name != taker_field_name
-                        and role_wf.name not in taker_original_fields
-                        and role_wf.name not in fields_dict
-                    ):
-                        fields_dict[role_wf.name] = StubFieldInfo(
-                            role_wf.name,
-                            role_wf.type_name,
-                            FieldRepresentation(dataclasses.field(init=False)),
-                            wrapped_field=role_wf,
-                        )
+        if wrapped_class.clazz == root_taker:
+            self._add_propagated_role_fields(wrapped_class, fields_dict)
 
         return list(fields_dict.values())
 
+    def _add_propagated_role_fields(
+        self, wrapped_class: WrappedClass, fields_dict: Dict[str, StubFieldInfo]
+    ) -> None:
+        """
+        Adds fields propagated from roles to the root taker's field dictionary.
+
+        :param wrapped_class: The root taker's wrapped class.
+        :param fields_dict: The dictionary of fields to update.
+        """
+        taker_original_fields = {
+            wrapped_field.name for wrapped_field in wrapped_class.fields
+        }
+        for role_wrapped_class in self._root_role_taker_to_roles_map.get(
+            wrapped_class.clazz, []
+        ):
+            taker_field_name = role_wrapped_class.clazz.role_taker_attribute_name()
+            for role_wrapped_field in role_wrapped_class.fields:
+                if (
+                    role_wrapped_field.name != taker_field_name
+                    and role_wrapped_field.name not in taker_original_fields
+                    and role_wrapped_field.name not in fields_dict
+                ):
+                    fields_dict[role_wrapped_field.name] = (
+                        self._create_introduced_stub_field(role_wrapped_field)
+                    )
+
+    @lru_cache
     def _get_introduced_field(
-        self, wc: WrappedClass, available_tvs: Set[str]
+        self,
+        wrapped_class: WrappedClass,
+        available_type_vars: Tuple[str, ...],
     ) -> Optional[StubFieldInfo]:
         """
-        :param wc: The wrapped class of the role.
-        :param available_tvs: Available TypeVars.
+        :param wrapped_class: The wrapped class of the role.
+        :param available_type_vars: Available TypeVars.
         :return: The field introduced by this role, or None.
         """
-        taker_field_name = wc.clazz.role_taker_attribute_name()
-        taker_type = wc.clazz.get_role_taker_type()
-        taker_field_names = {f.name for f in dataclasses.fields(taker_type)}
+        taker_field_name = wrapped_class.clazz.role_taker_attribute_name()
+        taker_type = wrapped_class.clazz.get_role_taker_type()
+        taker_field_names = {
+            stub_field.name for stub_field in dataclasses.fields(taker_type)
+        }
 
-        intro_wf = next(
+        introduced_wrapped_field = next(
             (
-                wf
-                for wf in wc.own_fields
-                if wf.name != taker_field_name and wf.name not in taker_field_names
+                wrapped_field
+                for wrapped_field in wrapped_class.own_fields
+                if wrapped_field.name != taker_field_name
+                and wrapped_field.name not in taker_field_names
             ),
             None,
         )
-        if intro_wf:
+        if introduced_wrapped_field:
             return StubFieldInfo(
-                intro_wf.name,
-                self._resolve_type_vars(intro_wf.type_name, available_tvs),
-                FieldRepresentation.from_wrapped_field(intro_wf),
-                wrapped_field=intro_wf,
+                introduced_wrapped_field.name,
+                self._resolve_type_vars(
+                    introduced_wrapped_field.type_name, available_type_vars
+                ),
+                FieldRepresentation.from_wrapped_field(introduced_wrapped_field),
+                wrapped_field=introduced_wrapped_field,
             )
         return None
 
@@ -1309,10 +1606,10 @@ class RoleStubGenerator:
         :return: Wrapped class instances for role classes in topological order.
         """
         return [
-            wc
-            for wc in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
-            if not isinstance(wc, WrappedSpecializedGeneric)
-            and issubclass(wc.clazz, Role)
+            wrapped_class
+            for wrapped_class in self.class_diagram.wrapped_classes_of_inheritance_subgraph_in_topological_order
+            if not isinstance(wrapped_class, WrappedSpecializedGeneric)
+            and issubclass(wrapped_class.clazz, Role)
         ]
 
     @cached_property
@@ -1325,24 +1622,54 @@ class RoleStubGenerator:
         tree = ast.parse(source)
         type_vars = {}
         for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                if isinstance(node.value, ast.Call):
-                    if (
-                        isinstance(node.value.func, ast.Name)
-                        and node.value.func.id == "TypeVar"
-                    ):
-                        name = node.targets[0].id
-                        bound = None
-                        for keyword in node.value.keywords:
-                            if keyword.arg == "bound":
-                                if isinstance(keyword.value, ast.Name):
-                                    bound = keyword.value.id
-                                elif isinstance(keyword.value, ast.Constant):
-                                    bound = str(keyword.value.value)
-                        type_vars[name] = TypeVarInfo(
-                            name, bound, ast.get_source_segment(source, node)
-                        )
+            if self._is_type_var_assignment(node):
+                tv_info = self._extract_type_var_info(node, source)
+                type_vars[tv_info.name] = tv_info
         return type_vars
+
+    @staticmethod
+    def _is_type_var_assignment(node: ast.AST) -> bool:
+        """
+        Checks if an AST node is a TypeVar assignment.
+
+        :param node: The AST node.
+        :return: True if it's a TypeVar assignment.
+        """
+        return (
+            isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "TypeVar"
+        )
+
+    def _extract_type_var_info(self, node: ast.Assign, source: str) -> TypeVarInfo:
+        """
+        Extracts TypeVarInfo from a TypeVar assignment node.
+
+        :param node: The assignment node.
+        :param source: The source code string.
+        :return: The extracted TypeVarInfo.
+        """
+        name = node.targets[0].id
+        bound = None
+        for keyword in node.value.keywords:
+            if keyword.arg == "bound":
+                bound = self._extract_bound_name(keyword.value)
+        return TypeVarInfo(name, bound, ast.get_source_segment(source, node))
+
+    @staticmethod
+    def _extract_bound_name(value: ast.AST) -> Optional[str]:
+        """
+        Extracts the bound name from a TypeVar keyword argument value.
+
+        :param value: The AST node for the bound value.
+        :return: The bound name, or None.
+        """
+        if isinstance(value, ast.Name):
+            return value.id
+        if isinstance(value, ast.Constant):
+            return str(value.value)
+        return None
 
     @cached_property
     def _all_imports(self) -> List[str]:
@@ -1397,7 +1724,9 @@ class RoleStubGenerator:
         if isinstance(stub_class, RoleForInfo):
             return []
         class_types = []
-        all_stub_names = [sc.name for sc in self._all_stub_elements]
+        all_stub_names = [
+            stub_class_info.name for stub_class_info in self._all_stub_elements
+        ]
         for base in stub_class.bases:
             origin_name = base.split("[")[0]
             try:
@@ -1416,3 +1745,6 @@ class RoleStubGenerator:
                 )
                 class_types.append(type_)
         return class_types
+
+    def __hash__(self):
+        return id(self)

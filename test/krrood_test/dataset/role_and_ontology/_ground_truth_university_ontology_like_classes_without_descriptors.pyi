@@ -78,23 +78,25 @@ class CEOAsFirstRole(CEOAsFirstRoleMixin): ...
 TSubclassOfARoleTaker = TypeVar("TSubclassOfARoleTaker", bound=SubclassOfARoleTaker)
 
 @dataclass(eq=False)
-class CEOAsFirstRoleAsRoleForSubClassOfARoleTaker(
+class CEOAsFirstRoleAsRoleForSubclassOfARoleTaker(
     CEOAsFirstRole[TSubclassOfARoleTaker], SubclassOfARoleTakerMixin
 ):
     introduced_attribute: str = field(init=False)
 
 @dataclass(eq=False)
 class SubclassOfRoleThatUpdatesRoleTakerType(
-    CEOAsFirstRoleAsRoleForSubClassOfARoleTaker
+    CEOAsFirstRoleAsRoleForSubclassOfARoleTaker
 ): ...
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(RoleForPerson):
+class ProfessorAsFirstRole(RoleForPerson[TPerson]):
     # Original Owner of the teacher_of field
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
 @dataclass(eq=False)
-class AssociateProfessorAsSubClassOfARoleInSameModule(ProfessorAsFirstRole): ...
+class AssociateProfessorAsSubClassOfARoleInSameModule(
+    ProfessorAsFirstRole[TPerson]
+): ...
 
 TCEOAsFirstRole = TypeVar("TCEOAsFirstRole", bound=CEOAsFirstRole)
 
