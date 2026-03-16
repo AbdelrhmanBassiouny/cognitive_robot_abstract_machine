@@ -47,13 +47,14 @@ import base64
 from abc import ABC, abstractmethod
 import importlib
 
-
-#import typing as ty
+# import typing as ty
 import typing_extensions as ty
 
 type_swap_obj = ty.Union[object, ty.MutableSequence, ty.MutableMapping]
 type_set_func = ty.Callable[[type_swap_obj, ty.Any, "_PlaceholderObject"], None]
-type_placeholders = ty.Dict[ty.Any, ty.List[ty.Tuple[type_swap_obj, ty.Any, ty.Any, type_set_func]]]
+type_placeholders = ty.Dict[
+    ty.Any, ty.List[ty.Tuple[type_swap_obj, ty.Any, ty.Any, type_set_func]]
+]
 
 
 # special keys
@@ -71,8 +72,21 @@ STATE: str = "<state>"
 TUPLE: str = "<tuple>"
 TYPE: str = "<type>"
 
-FlattenKeys: ty.Set[str] = {BYTES, ID, JSON_KEY, MODULE, MODULE_FUNCTION, NEWARGS, NEWARGS_EX, OBJECT, REDUCE,
-                            SET, STATE, TUPLE, TYPE}
+FlattenKeys: ty.Set[str] = {
+    BYTES,
+    ID,
+    JSON_KEY,
+    MODULE,
+    MODULE_FUNCTION,
+    NEWARGS,
+    NEWARGS_EX,
+    OBJECT,
+    REDUCE,
+    SET,
+    STATE,
+    TUPLE,
+    TYPE,
+}
 
 
 # JSON backend to use for encoding/decoding
@@ -104,43 +118,125 @@ def get_json_backend() -> types.ModuleType:
                 # ignore
                 pass
         else:
-            raise ImportError("None of the JSON backends in list <{}> could be imported.".format(JSON_BACKEND_LIST))
+            raise ImportError(
+                "None of the JSON backends in list <{}> could be imported.".format(
+                    JSON_BACKEND_LIST
+                )
+            )
 
 
 # test functions to identify object
-def is_builtin_function(obj: ty.Any) -> bool: return obj.__class__ is types.BuiltinFunctionType
-def is_builtin_method(obj: ty.Any) -> bool: return obj.__class__ is types.BuiltinMethodType
-def is_bool(obj: ty.Any) -> bool: return obj.__class__ is bool
-def is_bytes(obj: ty.Any) -> bool: return obj.__class__ is bytes
-def is_dictionary(obj: ty.Any) -> bool: return obj.__class__ is dict
-def is_enum(obj: ty.Any) -> bool: return isinstance(obj, Enum)
-def is_function(obj: ty.Any) -> bool: return obj.__class__ is types.FunctionType
-def is_lambda_function(obj: ty.Any) -> bool: return obj.__class__ is types.LambdaType
-def is_list(obj: ty.Any) -> bool: return obj.__class__ is list
-def is_method(obj: ty.Any) -> bool: return obj.__class__ is types.MethodType
-def is_module(obj: ty.Any) -> bool: return obj.__class__ is types.ModuleType
-def is_number(obj: ty.Any) -> bool: return isinstance(obj, (int, float))
-def is_none(obj: ty.Any) -> bool: return obj is None
-def is_set(obj: ty.Any) -> bool: return obj.__class__ is set
-def is_string(obj: ty.Any) -> bool: return obj.__class__ is str
-def is_tuple(obj: ty.Any) -> bool: return obj.__class__ is tuple
-def is_type(obj: ty.Any) -> bool: return isinstance(obj, type)
+def is_builtin_function(obj: ty.Any) -> bool:
+    return obj.__class__ is types.BuiltinFunctionType
 
 
-def is_generic_function(obj: ty.Any) -> bool: return (is_function(obj) or is_method(obj) or is_builtin_function(obj)
-                                                      or is_builtin_method(obj) or is_lambda_function(obj))
-def is_object(obj: ty.Any) -> bool: return isinstance(obj, object) and not (is_type(obj) or is_generic_function(obj))
-def is_module_function(obj: ty.Any) -> bool: return ((is_function(obj) or is_method(obj) or is_builtin_function(obj) or is_builtin_method(obj))
-                                                     and hasattr(obj, '__module__') and hasattr(obj, '__name__') and obj.__name__ != '<lambda>')     # using 'is_lambda_function' does not always work
-def is_primitive(obj: ty.Any) -> bool: return is_bool(obj) or is_none(obj) or is_number(obj) or is_string(obj)
+def is_builtin_method(obj: ty.Any) -> bool:
+    return obj.__class__ is types.BuiltinMethodType
 
 
-def attr_in_dict(obj: object, attr: ty.Any, default: ty.Any = None): return attr in obj.__dict__ if hasattr(obj, "__dict__") else default
-def attr_in_slots(obj: object, attr: ty.Any, default: ty.Any = None): return attr in obj.__slots__ if hasattr(obj, "__slots__") else default
+def is_bool(obj: ty.Any) -> bool:
+    return obj.__class__ is bool
 
 
-def has_attr_with_class_filter(obj: object, attr: str,
-                               class_only: bool = False, exclude_list: ty.List[type] = None) -> bool:
+def is_bytes(obj: ty.Any) -> bool:
+    return obj.__class__ is bytes
+
+
+def is_dictionary(obj: ty.Any) -> bool:
+    return obj.__class__ is dict
+
+
+def is_enum(obj: ty.Any) -> bool:
+    return isinstance(obj, Enum)
+
+
+def is_function(obj: ty.Any) -> bool:
+    return obj.__class__ is types.FunctionType
+
+
+def is_lambda_function(obj: ty.Any) -> bool:
+    return obj.__class__ is types.LambdaType
+
+
+def is_list(obj: ty.Any) -> bool:
+    return obj.__class__ is list
+
+
+def is_method(obj: ty.Any) -> bool:
+    return obj.__class__ is types.MethodType
+
+
+def is_module(obj: ty.Any) -> bool:
+    return obj.__class__ is types.ModuleType
+
+
+def is_number(obj: ty.Any) -> bool:
+    return isinstance(obj, (int, float))
+
+
+def is_none(obj: ty.Any) -> bool:
+    return obj is None
+
+
+def is_set(obj: ty.Any) -> bool:
+    return obj.__class__ is set
+
+
+def is_string(obj: ty.Any) -> bool:
+    return obj.__class__ is str
+
+
+def is_tuple(obj: ty.Any) -> bool:
+    return obj.__class__ is tuple
+
+
+def is_type(obj: ty.Any) -> bool:
+    return isinstance(obj, type)
+
+
+def is_generic_function(obj: ty.Any) -> bool:
+    return (
+        is_function(obj)
+        or is_method(obj)
+        or is_builtin_function(obj)
+        or is_builtin_method(obj)
+        or is_lambda_function(obj)
+    )
+
+
+def is_object(obj: ty.Any) -> bool:
+    return isinstance(obj, object) and not (is_type(obj) or is_generic_function(obj))
+
+
+def is_module_function(obj: ty.Any) -> bool:
+    return (
+        (
+            is_function(obj)
+            or is_method(obj)
+            or is_builtin_function(obj)
+            or is_builtin_method(obj)
+        )
+        and hasattr(obj, "__module__")
+        and hasattr(obj, "__name__")
+        and obj.__name__ != "<lambda>"
+    )  # using 'is_lambda_function' does not always work
+
+
+def is_primitive(obj: ty.Any) -> bool:
+    return is_bool(obj) or is_none(obj) or is_number(obj) or is_string(obj)
+
+
+def attr_in_dict(obj: object, attr: ty.Any, default: ty.Any = None):
+    return attr in obj.__dict__ if hasattr(obj, "__dict__") else default
+
+
+def attr_in_slots(obj: object, attr: ty.Any, default: ty.Any = None):
+    return attr in obj.__slots__ if hasattr(obj, "__slots__") else default
+
+
+def has_attr_with_class_filter(
+    obj: object, attr: str, class_only: bool = False, exclude_list: ty.List[type] = None
+) -> bool:
     if exclude_list is None:
         exclude_list = []
 
@@ -180,8 +276,10 @@ def split_module_class_name(module_class_name: str) -> ty.List[str]:
     return module_class_name.split("><")
 
 
-def class_to_module_class_name(cls: type,
-                               replacement_names: ty.Optional[ty.Dict[str, str]] = None,) -> str:
+def class_to_module_class_name(
+    cls: type,
+    replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+) -> str:
     """Returns the combination of the module and fully qualified name of the class.
 
     :parameter cls: The class to get the name for
@@ -206,7 +304,9 @@ def class_to_module_class_name(cls: type,
 
     if not module_name and hasattr(cls, "__self__"):
         # search for module name in its class
-        module_name = getattr(cls.__self__, "__module__", cls.__self__.__class__.__module__)
+        module_name = getattr(
+            cls.__self__, "__module__", cls.__self__.__class__.__module__
+        )
 
     module_class_name = "{}><{}".format(module_name, class_name)
 
@@ -217,7 +317,9 @@ def class_to_module_class_name(cls: type,
     return module_class_name
 
 
-def locate_and_load_module(module_class_name: str, seperator: ty.Optional[str] = ".") -> type:
+def locate_and_load_module(
+    module_class_name: str, seperator: ty.Optional[str] = "."
+) -> type:
     """Load a module from its fully qualified name.
 
     :param module_class_name: Fully qualified module/class name
@@ -238,33 +340,43 @@ def locate_and_load_module(module_class_name: str, seperator: ty.Optional[str] =
         # try to load the first module
         cls = importlib.import_module(parts[0])
     except ModuleNotFoundError as exec_import:
-        raise ImportError("Could not load module <{}> from module/class path <{}>.".format(
-            parts[0]), module_class_name) from exec_import
+        raise ImportError(
+            "Could not load module <{}> from module/class path <{}>.".format(parts[0]),
+            module_class_name,
+        ) from exec_import
 
     for i in range(1, len(parts)):
         try:
             cls = getattr(cls, parts[i])
         except AttributeError as exec_attr:
             if is_module(cls):
-                sub_module_path = ".".join(parts[:i + 1])
+                sub_module_path = ".".join(parts[: i + 1])
                 try:
                     cls = importlib.import_module(sub_module_path)
                 except ModuleNotFoundError as exec_import:
-                    raise ImportError("Could not load module <{}> from module/class path <{}>.".format(
-                        sub_module_path, module_class_name)) from exec_import
+                    raise ImportError(
+                        "Could not load module <{}> from module/class path <{}>.".format(
+                            sub_module_path, module_class_name
+                        )
+                    ) from exec_import
                 continue
             else:
-                raise ImportError("The module <{}> from module/class path has no attribute <{}>.".format(
-                    module_class_name, ".".join(parts[:i]), parts[i])) from exec_attr
+                raise ImportError(
+                    "The module <{}> from module/class path has no attribute <{}>.".format(
+                        module_class_name, ".".join(parts[:i]), parts[i]
+                    )
+                ) from exec_attr
 
     return cls
 
 
-def module_class_name_to_class(module_class_name: str,
-                               replacement_names: ty.Optional[ty.Dict[str, str]] = None,
-                               cache: ty.Optional[ty.Dict[str, type]] = None,
-                               seperator: ty.Optional[str] = ".",
-                               module_class_seperator: ty.Optional[str] = "><") -> type:
+def module_class_name_to_class(
+    module_class_name: str,
+    replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+    cache: ty.Optional[ty.Dict[str, type]] = None,
+    seperator: ty.Optional[str] = ".",
+    module_class_seperator: ty.Optional[str] = "><",
+) -> type:
     """Returns the class described via the combined module and fully qualified class name.
 
     :param module_class_name: Fully qualified module/class name
@@ -286,8 +398,10 @@ def module_class_name_to_class(module_class_name: str,
         # check if a replacement value for 'module_class_name' is available, e.g. because of renaming/refactoring.
         module_class_name = replacement_names.get(module_class_name, module_class_name)
 
-    if (module_class_name == "builtins><NoneType"
-            or module_class_name == "builtins.NoneType"):
+    if (
+        module_class_name == "builtins><NoneType"
+        or module_class_name == "builtins.NoneType"
+    ):
         # special case, because 'NoneType' cannot be imported
         return type(None)
 
@@ -296,7 +410,11 @@ def module_class_name_to_class(module_class_name: str,
         return cache[module_class_name]
 
     # check if splitting in module name and class name is possible
-    parts = module_class_name.split(module_class_seperator) if module_class_seperator else [module_class_name, ""]
+    parts = (
+        module_class_name.split(module_class_seperator)
+        if module_class_seperator
+        else [module_class_name, ""]
+    )
     if len(parts) == 1:
         # need to try out all possible splits
         cls = locate_and_load_module(module_class_name, seperator=seperator)
@@ -315,8 +433,11 @@ def module_class_name_to_class(module_class_name: str,
             for sub_name in class_name.split(seperator):
                 cls = getattr(cls, sub_name)
     else:
-        raise ValueError("The module/class path <{}> should only contain one special seperator symbol <{}>.".format(
-            module_class_name, module_class_seperator))
+        raise ValueError(
+            "The module/class path <{}> should only contain one special seperator symbol <{}>.".format(
+                module_class_name, module_class_seperator
+            )
+        )
 
     if cache is not None:
         # update cache
@@ -326,7 +447,9 @@ def module_class_name_to_class(module_class_name: str,
 
 
 # helper functions for object id references and placeholder objects
-def make_object_reference(obj: ty.Any, obj_to_id: ty.Dict[ty.Any, int], id_to_obj: ty.List[ty.Any]) -> ty.Tuple[bool, int]:
+def make_object_reference(
+    obj: ty.Any, obj_to_id: ty.Dict[ty.Any, int], id_to_obj: ty.List[ty.Any]
+) -> ty.Tuple[bool, int]:
     obj_id: int = id(obj)
 
     if obj_id in obj_to_id:
@@ -341,8 +464,12 @@ def make_object_reference(obj: ty.Any, obj_to_id: ty.Dict[ty.Any, int], id_to_ob
         return True, new_id
 
 
-def swap_object_reference(old_obj: ty.Any, new_obj: ty.Any,
-                          obj_to_id: ty.Dict[ty.Any, int], id_to_obj: ty.List[ty.Any]) -> None:
+def swap_object_reference(
+    old_obj: ty.Any,
+    new_obj: ty.Any,
+    obj_to_id: ty.Dict[ty.Any, int],
+    id_to_obj: ty.List[ty.Any],
+) -> None:
     old_obj_id: int = id(old_obj)
     new_obj_id: int = id(new_obj)
 
@@ -358,31 +485,46 @@ class _PlaceholderObject(object):
         self.obj: ty.Any = None
 
 
-def _object_set_attr_with_placeholder(obj: object, attr: ty.Any, placeholder: _PlaceholderObject) -> None:
+def _object_set_attr_with_placeholder(
+    obj: object, attr: ty.Any, placeholder: _PlaceholderObject
+) -> None:
     setattr(obj, attr, placeholder.obj)
 
 
-def _object_set_value_with_placeholder(obj: ty.Union[ty.MutableSequence, ty.MutableMapping],
-                                       index: ty.Any, placeholder: _PlaceholderObject) -> None:
+def _object_set_value_with_placeholder(
+    obj: ty.Union[ty.MutableSequence, ty.MutableMapping],
+    index: ty.Any,
+    placeholder: _PlaceholderObject,
+) -> None:
     obj[index] = placeholder.obj
 
 
-def make_new_placeholder_reference(obj_to_id: ty.Dict[ty.Any, int],
-                                   id_to_obj: ty.List[ty.Any]) -> ty.Tuple[_PlaceholderObject, bool, int]:
+def make_new_placeholder_reference(
+    obj_to_id: ty.Dict[ty.Any, int], id_to_obj: ty.List[ty.Any]
+) -> ty.Tuple[_PlaceholderObject, bool, int]:
     place_holder: _PlaceholderObject = _PlaceholderObject()
-    return place_holder, *make_object_reference(place_holder, obj_to_id, id_to_obj)     # type: ignore
+    return place_holder, *make_object_reference(place_holder, obj_to_id, id_to_obj)  # type: ignore
 
 
-def try_add_value_placeholder_swap(obj: type_swap_obj, attr: ty.Any, value: ty.Any,
-                                   set_func: type_set_func, placeholders: type_placeholders) -> None:
+def try_add_value_placeholder_swap(
+    obj: type_swap_obj,
+    attr: ty.Any,
+    value: ty.Any,
+    set_func: type_set_func,
+    placeholders: type_placeholders,
+) -> None:
     if isinstance(value, _PlaceholderObject):
         # needs to be replaced later with the real object
         placeholders.setdefault(value, []).append((obj, attr, value, set_func))
 
 
-def set_and_swap_placeholder_with_object(placeholder: _PlaceholderObject, obj: ty.Any,
-                                         obj_to_id: ty.Dict[ty.Any, int], id_to_obj:  ty.List[ty.Any],
-                                         placeholders: type_placeholders) -> None:
+def set_and_swap_placeholder_with_object(
+    placeholder: _PlaceholderObject,
+    obj: ty.Any,
+    obj_to_id: ty.Dict[ty.Any, int],
+    id_to_obj: ty.List[ty.Any],
+    placeholders: type_placeholders,
+) -> None:
     placeholder.obj = obj
 
     swap_object_reference(placeholder, obj, obj_to_id, id_to_obj)
@@ -418,6 +560,7 @@ class HandlerRegistry(object):
     _secondary_base_handlers : dict
         Mapping of base types to secondary handlers
     """
+
     class HandlerBase(ABC):
         """Abstract base class for custom serialization handlers.
 
@@ -470,28 +613,43 @@ class HandlerRegistry(object):
 
     def __init__(self):
         # handlers to use only for the exact matching class
-        self._primary_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = {}     # used before normal object pickling
-        self._secondary_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = {}   # used after normal object pickling
+        self._primary_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = (
+            {}
+        )  # used before normal object pickling
+        self._secondary_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = (
+            {}
+        )  # used after normal object pickling
 
         # handlers for all subclasses, used only if no normal handler is available
-        self._primary_base_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = {}    # used before normal object pickling
-        self._secondary_base_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = {}  # used after normal object pickling
+        self._primary_base_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = (
+            {}
+        )  # used before normal object pickling
+        self._secondary_base_handlers: ty.Dict[type, HandlerRegistry.HandlerBase] = (
+            {}
+        )  # used after normal object pickling
 
-    def _get_handler_dicts(self, primary_handler: bool = True) \
-            -> ty.Tuple[ty.Dict[type, HandlerBase], ty.Dict[type, HandlerBase]]:
+    def _get_handler_dicts(
+        self, primary_handler: bool = True
+    ) -> ty.Tuple[ty.Dict[type, HandlerBase], ty.Dict[type, HandlerBase]]:
         if primary_handler:
             return self._primary_handlers, self._primary_base_handlers
         else:
             return self._secondary_handlers, self._secondary_base_handlers
 
-    def get(self, cls_or_name: ty.Union[str, type], primary_handler: bool = True,
-            default: ty.Optional[HandlerBase] = None) -> ty.Optional[HandlerBase]:
+    def get(
+        self,
+        cls_or_name: ty.Union[str, type],
+        primary_handler: bool = True,
+        default: ty.Optional[HandlerBase] = None,
+    ) -> ty.Optional[HandlerBase]:
         if is_string(cls_or_name):
             # get class/type
             cls_or_name = module_class_name_to_class(cls_or_name)
         if not is_type(cls_or_name):
-            raise TypeError("The parameter 'cls_or_name' with value <{}> is not a class"
-                            " or the module and fully qualified class name.".format(cls_or_name))
+            raise TypeError(
+                "The parameter 'cls_or_name' with value <{}> is not a class"
+                " or the module and fully qualified class name.".format(cls_or_name)
+            )
 
         # get normal handler and base handler dicts
         handlers, base_handlers = self._get_handler_dicts(primary_handler)
@@ -502,23 +660,35 @@ class HandlerRegistry(object):
         if handler is None or not handler.can_handle(cls_or_name):
             # search for a base class handler
             for base_cls, base_handler in base_handlers.items():
-                if issubclass(cls_or_name, base_cls) and base_handler.can_handle(cls_or_name):
+                if issubclass(cls_or_name, base_cls) and base_handler.can_handle(
+                    cls_or_name
+                ):
                     return base_handler
 
         return default if handler is None else handler
 
-    def register(self, cls_or_name: ty.Union[str, type],
-                 handler: ty.Optional[HandlerBase] = None,
-                 primary_handler: bool = True,
-                 as_normal: bool = True,
-                 as_base: bool = False) -> ty.Optional[ty.Callable[[HandlerBase], HandlerBase]]:
+    def register(
+        self,
+        cls_or_name: ty.Union[str, type],
+        handler: ty.Optional[HandlerBase] = None,
+        primary_handler: bool = True,
+        as_normal: bool = True,
+        as_base: bool = False,
+    ) -> ty.Optional[ty.Callable[[HandlerBase], HandlerBase]]:
         if handler is None:
             # use as decorator for 'HandlerBase' class
-            def wrapper(handler_cls: HandlerRegistry.HandlerBase) -> HandlerRegistry.HandlerBase:
+            def wrapper(
+                handler_cls: HandlerRegistry.HandlerBase,
+            ) -> HandlerRegistry.HandlerBase:
                 nonlocal cls_or_name, primary_handler, as_normal, as_base
 
-                self.register(cls_or_name, handler=handler_cls, primary_handler=primary_handler,
-                              as_normal=as_normal, as_base=as_base)
+                self.register(
+                    cls_or_name,
+                    handler=handler_cls,
+                    primary_handler=primary_handler,
+                    as_normal=as_normal,
+                    as_base=as_base,
+                )
 
                 return handler_cls  # otherwise the class is lost
 
@@ -528,8 +698,10 @@ class HandlerRegistry(object):
             # get class/type
             cls_or_name = module_class_name_to_class(cls_or_name)
         if not is_type(cls_or_name):
-            raise TypeError("The parameter 'cls_or_name' with value <{}> is not a class"
-                            " or the module and fully qualified class name.".format(cls_or_name))
+            raise TypeError(
+                "The parameter 'cls_or_name' with value <{}> is not a class"
+                " or the module and fully qualified class name.".format(cls_or_name)
+            )
 
         # get normal handler and base handler dicts
         handlers, base_handlers = self._get_handler_dicts(primary_handler)
@@ -542,13 +714,17 @@ class HandlerRegistry(object):
             # use as handler for all subclasses
             base_handlers[cls_or_name] = handler
 
-    def unregister(self, cls_or_name: ty.Union[str, type], primary_handler: bool = True):
+    def unregister(
+        self, cls_or_name: ty.Union[str, type], primary_handler: bool = True
+    ):
         if is_string(cls_or_name):
             # get class/type
             cls_or_name = module_class_name_to_class(cls_or_name)
         if not is_type(cls_or_name):
-            raise TypeError("The parameter 'cls_or_name' with value <{}> is not a class"
-                            " or the module and fully qualified class name.".format(cls_or_name))
+            raise TypeError(
+                "The parameter 'cls_or_name' with value <{}> is not a class"
+                " or the module and fully qualified class name.".format(cls_or_name)
+            )
 
         # get normal handler and base handler dicts
         handlers, base_handlers = self._get_handler_dicts(primary_handler)
@@ -598,18 +774,21 @@ class Flatten(object):
     replacement_names : dict, optional
         Mapping of old to new module/class names, by default None
     """
-    def __init__(self,
-                 max_depth: ty.Optional[int] = None,
-                 json_backend: ty.Optional[types.ModuleType] = None,
-                 bytes_to_base64: bool = True,
-                 use_bytes_references: bool = True,
-                 use_module_references: bool = True,
-                 use_module_function_references: bool = True,
-                 use_set_references: bool = True,
-                 use_string_references: bool = True,
-                 use_tuple_references: bool = True,
-                 use_type_references: bool = True,
-                 replacement_names: ty.Optional[ty.Dict[str, str]] = None):
+
+    def __init__(
+        self,
+        max_depth: ty.Optional[int] = None,
+        json_backend: ty.Optional[types.ModuleType] = None,
+        bytes_to_base64: bool = True,
+        use_bytes_references: bool = True,
+        use_module_references: bool = True,
+        use_module_function_references: bool = True,
+        use_set_references: bool = True,
+        use_string_references: bool = True,
+        use_tuple_references: bool = True,
+        use_type_references: bool = True,
+        replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+    ):
         # current recursive depth
         self._depth: int = 0
 
@@ -624,13 +803,15 @@ class Flatten(object):
         self.bytes_to_base64: bool = bytes_to_base64
 
         # remove duplicates of these objects/types using reference ids
-        self.use_bytes_references: bool = use_bytes_references                        # bytes
-        self.use_module_references: bool = use_module_references                      # module
-        self.use_module_function_references: bool = use_module_function_references    # module function
-        self.use_set_references: bool = use_set_references                            # set
-        self.use_string_references: bool = use_string_references                      # string
-        self.use_tuple_references: bool = use_tuple_references                        # tuple
-        self.use_type_references: bool = use_type_references                          # class/type
+        self.use_bytes_references: bool = use_bytes_references  # bytes
+        self.use_module_references: bool = use_module_references  # module
+        self.use_module_function_references: bool = (
+            use_module_function_references  # module function
+        )
+        self.use_set_references: bool = use_set_references  # set
+        self.use_string_references: bool = use_string_references  # string
+        self.use_tuple_references: bool = use_tuple_references  # tuple
+        self.use_type_references: bool = use_type_references  # class/type
 
         # replace the determined module/class name with this one
         # Note: Useful to hide the actual module structure or to handle later expected renaming/refactoring
@@ -666,8 +847,10 @@ class Flatten(object):
     def _flatten_dict_object(self, obj: ty.Dict, data: ty.Dict) -> ty.Dict:
         for k, v in obj.items():
             if k in FlattenKeys:
-                raise ValueError("The object <{}> has the key <{}>,"
-                                 " which is a reserved key word for the flattening.".format(obj, k))
+                raise ValueError(
+                    "The object <{}> has the key <{}>,"
+                    " which is a reserved key word for the flattening.".format(obj, k)
+                )
 
             if not isinstance(k, str) and self.json_backend:
                 # transform to json string
@@ -727,7 +910,9 @@ class Flatten(object):
         # find primary handler
         obj_cls: type = obj.__class__
         module_class_name: str = self._class_to_module_class_name(obj_cls)
-        handler: ty.Optional[HandlerRegistry.HandlerBase] = handler_registry.get(obj_cls, primary_handler=True)
+        handler: ty.Optional[HandlerRegistry.HandlerBase] = handler_registry.get(
+            obj_cls, primary_handler=True
+        )
 
         if handler:
             # use handler
@@ -741,9 +926,13 @@ class Flatten(object):
         # pickle methods
         has_getnewargs: bool = hasattr(obj, "__getnewargs__")
         has_getnewargs_ex: bool = hasattr(obj, "__getnewargs__")
-        has_getstate: bool = has_attr_with_class_filter(obj, "__getstate__", True, [object])
+        has_getstate: bool = has_attr_with_class_filter(
+            obj, "__getstate__", True, [object]
+        )
         has_reduce: bool = has_attr_with_class_filter(obj, "__reduce__", True, [object])
-        has_reduce_ex: bool = has_attr_with_class_filter(obj, "__reduce_ex__",  True, [object])
+        has_reduce_ex: bool = has_attr_with_class_filter(
+            obj, "__reduce_ex__", True, [object]
+        )
 
         # if '__reduce__' or '__reduce_ex__' exist use it to flatten object
         reduce_val: ty.Optional[ty.Union[ty.Tuple, str]] = None
@@ -765,16 +954,21 @@ class Flatten(object):
         if reduce_val:
             if is_string(reduce_val):
                 # special case: string value describing the name of a global variable
-                #return self._flatten(locate_and_load_module(reduce_val))
+                # return self._flatten(locate_and_load_module(reduce_val))
                 raise NotImplementedError(
-                    "The function '__reduce__' or '__reduce_ex__' returned <{}>, which is an unsupported case.".format(reduce_val))
+                    "The function '__reduce__' or '__reduce_ex__' returned <{}>, which is an unsupported case.".format(
+                        reduce_val
+                    )
+                )
             else:
                 # max 6 values as tuple
                 rv_len: int = len(reduce_val)
                 list_reduce_val: ty.List = [None] * 6
                 list_reduce_val[0:rv_len] = reduce_val
 
-                init_func, args, state, list_items, dict_items, setstate_func = list_reduce_val
+                init_func, args, state, list_items, dict_items, setstate_func = (
+                    list_reduce_val
+                )
 
                 if not (state and has_getstate):
                     if list_items:
@@ -845,7 +1039,11 @@ class Flatten(object):
         # easy cases
         if is_primitive(obj):
             # bool, None, int, float, str
-            return self._flatten_primitive, (isinstance(obj, str) and self.use_string_references), False
+            return (
+                self._flatten_primitive,
+                (isinstance(obj, str) and self.use_string_references),
+                False,
+            )
         elif is_bytes(obj):
             # bytes
             return self._flatten_bytes, self.use_bytes_references, False
@@ -867,7 +1065,11 @@ class Flatten(object):
             return self._flatten_module, self.use_module_references, False
         elif is_module_function(obj):
             # module functions
-            return self._flatten_module_function, self.use_module_function_references, False
+            return (
+                self._flatten_module_function,
+                self.use_module_function_references,
+                False,
+            )
         elif is_object(obj):
             # 'normal' object
             return self._flatten_object, True, False
@@ -883,14 +1085,22 @@ class Flatten(object):
         self._depth += 1
 
         if self.max_depth and self._depth > self.max_depth:
-            raise ValueError("Reached max depth of <{}>, but the object is even deeper.".format(self.max_depth))
+            raise ValueError(
+                "Reached max depth of <{}>, but the object is even deeper.".format(
+                    self.max_depth
+                )
+            )
 
         # get flattener function
-        _flatten_impl, use_reference, can_only_have_duplicates = self._get_flattener(obj)
+        _flatten_impl, use_reference, can_only_have_duplicates = self._get_flattener(
+            obj
+        )
 
         if use_reference:
             # check if the object is already known
-            is_new, ref_id = make_object_reference(obj, self._obj_to_id, self._id_to_obj)
+            is_new, ref_id = make_object_reference(
+                obj, self._obj_to_id, self._id_to_obj
+            )
 
             if is_new or (can_only_have_duplicates and ref_id in self._id_stack):
                 # new object or special to ignore cycle reference
@@ -914,8 +1124,13 @@ class Flatten(object):
 
         return result
 
-    def flatten(self, obj: ty.Any,
-                pre_reset: bool = True, post_reset: bool = True, post_restore: bool = False) -> ty.Any:
+    def flatten(
+        self,
+        obj: ty.Any,
+        pre_reset: bool = True,
+        post_reset: bool = True,
+        post_restore: bool = False,
+    ) -> ty.Any:
         if post_restore:
             old_depth: int = self._depth
             old_max_depth: int = self.max_depth
@@ -940,50 +1155,56 @@ class Flatten(object):
         return data
 
 
-def flatten(obj: ty.Any,
-            max_depth: ty.Optional[int] = None,
-            json_backend: ty.Optional[types.ModuleType] = None,
-            bytes_to_base64: bool = True,
-            use_bytes_references: bool = True,
-            use_module_references: bool = True,
-            use_module_function_references: bool = True,
-            use_set_references: bool = True,
-            use_string_references: bool = True,
-            use_tuple_references: bool = True,
-            use_type_references: bool = True,
-            replacement_names: ty.Optional[ty.Dict[str, str]] = None) -> ty.Any:
+def flatten(
+    obj: ty.Any,
+    max_depth: ty.Optional[int] = None,
+    json_backend: ty.Optional[types.ModuleType] = None,
+    bytes_to_base64: bool = True,
+    use_bytes_references: bool = True,
+    use_module_references: bool = True,
+    use_module_function_references: bool = True,
+    use_set_references: bool = True,
+    use_string_references: bool = True,
+    use_tuple_references: bool = True,
+    use_type_references: bool = True,
+    replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+) -> ty.Any:
 
-    context: Flatten = Flatten(max_depth=max_depth,
-                               json_backend=json_backend,
-                               bytes_to_base64=bytes_to_base64,
-                               use_bytes_references=use_bytes_references,
-                               use_module_references=use_module_references,
-                               use_module_function_references=use_module_function_references,
-                               use_set_references=use_set_references,
-                               use_string_references=use_string_references,
-                               use_tuple_references=use_tuple_references,
-                               use_type_references=use_type_references,
-                               replacement_names=replacement_names)
+    context: Flatten = Flatten(
+        max_depth=max_depth,
+        json_backend=json_backend,
+        bytes_to_base64=bytes_to_base64,
+        use_bytes_references=use_bytes_references,
+        use_module_references=use_module_references,
+        use_module_function_references=use_module_function_references,
+        use_set_references=use_set_references,
+        use_string_references=use_string_references,
+        use_tuple_references=use_tuple_references,
+        use_type_references=use_type_references,
+        replacement_names=replacement_names,
+    )
 
-    return context.flatten(obj=obj,
-                           pre_reset=True,
-                           post_reset=False,
-                           post_restore=False)
+    return context.flatten(
+        obj=obj, pre_reset=True, post_reset=False, post_restore=False
+    )
 
 
-def encode(obj: ty.Any,
-           max_depth: ty.Optional[int] = None,
-           json_backend: ty.Optional[types.ModuleType] = None,
-           bytes_to_base64: bool = True,
-           use_bytes_references: bool = True,
-           use_module_references: bool = True,
-           use_module_function_references: bool = True,
-           use_set_references: bool = True,
-           use_string_references: bool = True,
-           use_tuple_references: bool = True,
-           use_type_references: bool = True,
-           replacement_names: ty.Optional[ty.Dict[str, str]] = None,
-           *args, **kwargs) -> str:
+def encode(
+    obj: ty.Any,
+    max_depth: ty.Optional[int] = None,
+    json_backend: ty.Optional[types.ModuleType] = None,
+    bytes_to_base64: bool = True,
+    use_bytes_references: bool = True,
+    use_module_references: bool = True,
+    use_module_function_references: bool = True,
+    use_set_references: bool = True,
+    use_string_references: bool = True,
+    use_tuple_references: bool = True,
+    use_type_references: bool = True,
+    replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+    *args,
+    **kwargs,
+) -> str:
     """Encode a Python object to a JSON string.
 
     This is a convenience function that combines flattening an object and
@@ -1026,19 +1247,24 @@ def encode(obj: ty.Any,
     if json_backend is None:
         json_backend: types.ModuleType = get_json_backend()
 
-    return json_backend.dumps(flatten(obj=obj,
-                                      max_depth=max_depth,
-                                      json_backend=json_backend,
-                                      bytes_to_base64=bytes_to_base64,
-                                      use_bytes_references=use_bytes_references,
-                                      use_module_references=use_module_references,
-                                      use_module_function_references=use_module_function_references,
-                                      use_set_references=use_set_references,
-                                      use_string_references=use_string_references,
-                                      use_tuple_references=use_tuple_references,
-                                      use_type_references=use_type_references,
-                                      replacement_names=replacement_names),
-                              *args, **kwargs)
+    return json_backend.dumps(
+        flatten(
+            obj=obj,
+            max_depth=max_depth,
+            json_backend=json_backend,
+            bytes_to_base64=bytes_to_base64,
+            use_bytes_references=use_bytes_references,
+            use_module_references=use_module_references,
+            use_module_function_references=use_module_function_references,
+            use_set_references=use_set_references,
+            use_string_references=use_string_references,
+            use_tuple_references=use_tuple_references,
+            use_type_references=use_type_references,
+            replacement_names=replacement_names,
+        ),
+        *args,
+        **kwargs,
+    )
 
 
 # unflatten and decoding functions
@@ -1071,18 +1297,21 @@ class Unflatten(object):
     :param use_name_to_class_cache: Whether to cache loaded classes
     :type use_name_to_class_cache: bool, optional
     """
-    def __init__(self,
-                 json_backend: ty.Optional[types.ModuleType] = None,
-                 bytes_to_base64: bool = True,
-                 use_bytes_references: bool = True,
-                 use_module_references: bool = True,
-                 use_module_function_references: bool = True,
-                 use_set_references: bool = True,
-                 use_string_references: bool = True,
-                 use_tuple_references: bool = True,
-                 use_type_references: bool = True,
-                 replacement_names: ty.Optional[ty.Dict[str, str]] = None,
-                 use_name_to_class_cache: bool = True):
+
+    def __init__(
+        self,
+        json_backend: ty.Optional[types.ModuleType] = None,
+        bytes_to_base64: bool = True,
+        use_bytes_references: bool = True,
+        use_module_references: bool = True,
+        use_module_function_references: bool = True,
+        use_set_references: bool = True,
+        use_string_references: bool = True,
+        use_tuple_references: bool = True,
+        use_type_references: bool = True,
+        replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+        use_name_to_class_cache: bool = True,
+    ):
         # used to encode non-string dictionary keys
         self.json_backend: ty.Optional[types.ModuleType] = json_backend
 
@@ -1090,20 +1319,24 @@ class Unflatten(object):
         self.bytes_to_base64: bool = bytes_to_base64
 
         # remove duplicates of these objects/types using reference ids
-        self.use_bytes_references: bool = use_bytes_references                        # bytes
-        self.use_module_references: bool = use_module_references                      # module
-        self.use_module_function_references: bool = use_module_function_references    # module function
-        self.use_set_references: bool = use_set_references                            # set
-        self.use_string_references: bool = use_string_references                      # string
-        self.use_tuple_references: bool = use_tuple_references                        # tuple
-        self.use_type_references: bool = use_type_references                          # class/type
+        self.use_bytes_references: bool = use_bytes_references  # bytes
+        self.use_module_references: bool = use_module_references  # module
+        self.use_module_function_references: bool = (
+            use_module_function_references  # module function
+        )
+        self.use_set_references: bool = use_set_references  # set
+        self.use_string_references: bool = use_string_references  # string
+        self.use_tuple_references: bool = use_tuple_references  # tuple
+        self.use_type_references: bool = use_type_references  # class/type
 
         # replace the determined module/class name with this one
         # Note: Useful to hide the actual module structure or to handle later expected renaming/refactoring
         self.replacement_names: ty.Optional[ty.Dict[str, str]] = replacement_names
 
         # cache of already loaded in class/modules
-        self._name_to_class: ty.Optional[ty.Dict[str, str]] = {} if use_name_to_class_cache else None
+        self._name_to_class: ty.Optional[ty.Dict[str, str]] = (
+            {} if use_name_to_class_cache else None
+        )
 
         # bijective mapping between object id (memory address) and for the flattening used reference id
         self._obj_to_id: ty.Dict[ty.Any, int] = {}
@@ -1113,30 +1346,47 @@ class Unflatten(object):
         self._placeholders: type_placeholders = {}
 
     def _reset(self):
-        self._name_to_class: ty.Optional[ty.Dict[str, str]] = None if self._name_to_class is None else {}
+        self._name_to_class: ty.Optional[ty.Dict[str, str]] = (
+            None if self._name_to_class is None else {}
+        )
         self._obj_to_id: ty.Dict[ty.Any, int] = {}
         self._id_to_obj: ty.List[ty.Any] = []
         self._placeholders: type_placeholders = {}
 
-    def _module_class_name_to_class(self, module_class_name: str, is_module_only: bool = False) -> type:
+    def _module_class_name_to_class(
+        self, module_class_name: str, is_module_only: bool = False
+    ) -> type:
         if is_module_only:
             # only a module import, so it's pointless to try to split the path in module and non module part
-            return module_class_name_to_class(module_class_name, self.replacement_names, self._name_to_class,
-                                              module_class_seperator=None)
+            return module_class_name_to_class(
+                module_class_name,
+                self.replacement_names,
+                self._name_to_class,
+                module_class_seperator=None,
+            )
         else:
-            return module_class_name_to_class(module_class_name, self.replacement_names, self._name_to_class)
+            return module_class_name_to_class(
+                module_class_name, self.replacement_names, self._name_to_class
+            )
 
     def _make_object_reference(self, obj: ty.Any) -> ty.Tuple[bool, int]:
         return make_object_reference(obj, self._obj_to_id, self._id_to_obj)
 
-    def _make_new_placeholder_reference(self) -> ty.Tuple[_PlaceholderObject, bool, int]:
+    def _make_new_placeholder_reference(
+        self,
+    ) -> ty.Tuple[_PlaceholderObject, bool, int]:
         return make_new_placeholder_reference(self._obj_to_id, self._id_to_obj)
 
-    def _set_and_swap_placeholder_with_object(self, placeholder: _PlaceholderObject, obj: ty.Any) -> None:
-        set_and_swap_placeholder_with_object(placeholder, obj, self._obj_to_id, self._id_to_obj, self._placeholders)
+    def _set_and_swap_placeholder_with_object(
+        self, placeholder: _PlaceholderObject, obj: ty.Any
+    ) -> None:
+        set_and_swap_placeholder_with_object(
+            placeholder, obj, self._obj_to_id, self._id_to_obj, self._placeholders
+        )
 
-    def _try_add_value_placeholder_swap(self, obj: type_swap_obj, attr: ty.Any, value: ty.Any,
-                                        set_func: type_set_func) -> None:
+    def _try_add_value_placeholder_swap(
+        self, obj: type_swap_obj, attr: ty.Any, value: ty.Any, set_func: type_set_func
+    ) -> None:
         try_add_value_placeholder_swap(obj, attr, value, set_func, self._placeholders)
 
     def _unflatten_bytes(self, data: ty.Dict) -> bytes:
@@ -1151,7 +1401,9 @@ class Unflatten(object):
 
         return obj
 
-    def _unflatten_dict_object(self, data: ty.Dict, obj: object, use_setattr: bool) -> object:
+    def _unflatten_dict_object(
+        self, data: ty.Dict, obj: object, use_setattr: bool
+    ) -> object:
         # unflatten 'normal' attributes
         for k, v in data.items():
             if k in FlattenKeys:
@@ -1161,7 +1413,7 @@ class Unflatten(object):
             # unflatten key
             if k is not None and k.startswith(JSON_KEY):
                 # contains JSON string
-                key_data = self.json_backend.loads(k[len(JSON_KEY):])
+                key_data = self.json_backend.loads(k[len(JSON_KEY) :])
                 k = self._unflatten(key_data)
 
             # unflatten value
@@ -1175,12 +1427,16 @@ class Unflatten(object):
                 setattr(obj, k, value)
 
                 # 'value' could be a placeholder object
-                self._try_add_value_placeholder_swap(obj, k, value, _object_set_attr_with_placeholder)
+                self._try_add_value_placeholder_swap(
+                    obj, k, value, _object_set_attr_with_placeholder
+                )
             else:
                 obj[k] = value
 
                 # 'value' could be a placeholder object
-                self._try_add_value_placeholder_swap(obj, k, value, _object_set_value_with_placeholder)
+                self._try_add_value_placeholder_swap(
+                    obj, k, value, _object_set_value_with_placeholder
+                )
 
         return obj
 
@@ -1205,7 +1461,9 @@ class Unflatten(object):
 
         # some values could be placeholder objects
         for i, e in enumerate(obj):
-            self._try_add_value_placeholder_swap(obj, i, e, _object_set_value_with_placeholder)
+            self._try_add_value_placeholder_swap(
+                obj, i, e, _object_set_value_with_placeholder
+            )
 
         return obj
 
@@ -1216,7 +1474,9 @@ class Unflatten(object):
         return self._unflatten_list_object(data, obj)
 
     def _unflatten_module(self, data: ty.Dict) -> types.ModuleType:
-        obj: types.ModuleType = self._module_class_name_to_class(data[MODULE], is_module_only=True)
+        obj: types.ModuleType = self._module_class_name_to_class(
+            data[MODULE], is_module_only=True
+        )
 
         if self.use_module_references:
             self._make_object_reference(obj)
@@ -1239,7 +1499,9 @@ class Unflatten(object):
         placeholder, _, _ = self._make_new_placeholder_reference()
 
         # find primary handler
-        handler: ty.Optional[HandlerRegistry.HandlerBase] = handler_registry.get(obj_cls, primary_handler=True)
+        handler: ty.Optional[HandlerRegistry.HandlerBase] = handler_registry.get(
+            obj_cls, primary_handler=True
+        )
 
         if handler:
             # use handler
@@ -1408,8 +1670,13 @@ class Unflatten(object):
         else:
             raise TypeError("Data like <{}> are currently not supported.".format(data))
 
-    def unflatten(self, data: ty.Any,
-                  pre_reset: bool = True,  post_reset: bool = True, post_restore: bool = False) -> ty.Any:
+    def unflatten(
+        self,
+        data: ty.Any,
+        pre_reset: bool = True,
+        post_reset: bool = True,
+        post_restore: bool = False,
+    ) -> ty.Any:
         if post_restore:
             old_name_to_class: ty.Optional[ty.Dict[str, str]] = self._name_to_class
             old_obj_to_id: ty.Dict[ty.Any, int] = self._obj_to_id
@@ -1432,50 +1699,56 @@ class Unflatten(object):
         return obj
 
 
-def unflatten(data: ty.Any,
-              json_backend: ty.Optional[types.ModuleType] = None,
-              bytes_to_base64: bool = True,
-              use_bytes_references: bool = True,
-              use_module_references: bool = True,
-              use_module_function_references: bool = True,
-              use_set_references: bool = True,
-              use_string_references: bool = True,
-              use_tuple_references: bool = True,
-              use_type_references: bool = True,
-              replacement_names: ty.Optional[ty.Dict[str, str]] = None,
-              use_name_to_class_cache: bool = True) -> ty.Any:
+def unflatten(
+    data: ty.Any,
+    json_backend: ty.Optional[types.ModuleType] = None,
+    bytes_to_base64: bool = True,
+    use_bytes_references: bool = True,
+    use_module_references: bool = True,
+    use_module_function_references: bool = True,
+    use_set_references: bool = True,
+    use_string_references: bool = True,
+    use_tuple_references: bool = True,
+    use_type_references: bool = True,
+    replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+    use_name_to_class_cache: bool = True,
+) -> ty.Any:
 
-    context: Unflatten = Unflatten(json_backend=json_backend,
-                                   bytes_to_base64=bytes_to_base64,
-                                   use_bytes_references=use_bytes_references,
-                                   use_module_references=use_module_references,
-                                   use_module_function_references=use_module_function_references,
-                                   use_set_references=use_set_references,
-                                   use_string_references=use_string_references,
-                                   use_tuple_references=use_tuple_references,
-                                   use_type_references=use_type_references,
-                                   replacement_names=replacement_names,
-                                   use_name_to_class_cache=use_name_to_class_cache)
+    context: Unflatten = Unflatten(
+        json_backend=json_backend,
+        bytes_to_base64=bytes_to_base64,
+        use_bytes_references=use_bytes_references,
+        use_module_references=use_module_references,
+        use_module_function_references=use_module_function_references,
+        use_set_references=use_set_references,
+        use_string_references=use_string_references,
+        use_tuple_references=use_tuple_references,
+        use_type_references=use_type_references,
+        replacement_names=replacement_names,
+        use_name_to_class_cache=use_name_to_class_cache,
+    )
 
-    return context.unflatten(data=data,
-                             pre_reset=True,
-                             post_reset=False,
-                             post_restore=False)
+    return context.unflatten(
+        data=data, pre_reset=True, post_reset=False, post_restore=False
+    )
 
 
-def decode(data: str,
-           json_backend: ty.Optional[types.ModuleType] = None,
-           bytes_to_base64: bool = True,
-           use_bytes_references: bool = True,
-           use_module_references: bool = True,
-           use_module_function_references: bool = True,
-           use_set_references: bool = True,
-           use_string_references: bool = True,
-           use_tuple_references: bool = True,
-           use_type_references: bool = True,
-           replacement_names: ty.Optional[ty.Dict[str, str]] = None,
-           use_name_to_class_cache: bool = True,
-           *args, **kwargs) -> ty.Any:
+def decode(
+    data: str,
+    json_backend: ty.Optional[types.ModuleType] = None,
+    bytes_to_base64: bool = True,
+    use_bytes_references: bool = True,
+    use_module_references: bool = True,
+    use_module_function_references: bool = True,
+    use_set_references: bool = True,
+    use_string_references: bool = True,
+    use_tuple_references: bool = True,
+    use_type_references: bool = True,
+    replacement_names: ty.Optional[ty.Dict[str, str]] = None,
+    use_name_to_class_cache: bool = True,
+    *args,
+    **kwargs,
+) -> ty.Any:
     """Decode a JSON string back to a Python object.
 
     This is a convenience function that combines parsing a JSON string and
@@ -1518,62 +1791,73 @@ def decode(data: str,
     if json_backend is None:
         json_backend: types.ModuleType = get_json_backend()
 
-    return unflatten(data=json_backend.loads(data, *args, **kwargs),
-                     json_backend=json_backend,
-                     bytes_to_base64=bytes_to_base64,
-                     use_bytes_references=use_bytes_references,
-                     use_module_references=use_module_references,
-                     use_module_function_references=use_module_function_references,
-                     use_set_references=use_set_references,
-                     use_string_references=use_string_references,
-                     use_tuple_references=use_tuple_references,
-                     use_type_references=use_type_references,
-                     replacement_names=replacement_names,
-                     use_name_to_class_cache=use_name_to_class_cache)
+    return unflatten(
+        data=json_backend.loads(data, *args, **kwargs),
+        json_backend=json_backend,
+        bytes_to_base64=bytes_to_base64,
+        use_bytes_references=use_bytes_references,
+        use_module_references=use_module_references,
+        use_module_function_references=use_module_function_references,
+        use_set_references=use_set_references,
+        use_string_references=use_string_references,
+        use_tuple_references=use_tuple_references,
+        use_type_references=use_type_references,
+        replacement_names=replacement_names,
+        use_name_to_class_cache=use_name_to_class_cache,
+    )
 
 
-def deepcopy(obj: ty.Any,
-             max_depth: ty.Optional[int] = None,
-             json_backend: ty.Optional[types.ModuleType] = None,
-             bytes_to_base64: bool = True,
-             use_bytes_references: bool = True,
-             use_module_references: bool = True,
-             use_module_function_references: bool = True,
-             use_set_references: bool = True,
-             use_string_references: bool = True,
-             use_tuple_references: bool = True,
-             use_type_references: bool = True,
-             use_name_to_class_cache: bool = True,
-             *args, **kwargs) -> ty.Any:
+def deepcopy(
+    obj: ty.Any,
+    max_depth: ty.Optional[int] = None,
+    json_backend: ty.Optional[types.ModuleType] = None,
+    bytes_to_base64: bool = True,
+    use_bytes_references: bool = True,
+    use_module_references: bool = True,
+    use_module_function_references: bool = True,
+    use_set_references: bool = True,
+    use_string_references: bool = True,
+    use_tuple_references: bool = True,
+    use_type_references: bool = True,
+    use_name_to_class_cache: bool = True,
+    *args,
+    **kwargs,
+) -> ty.Any:
     if json_backend is None:
         json_backend = get_json_backend()
 
-    data: str = encode(obj,
-                       max_depth=max_depth,
-                       json_backend=json_backend,
-                       bytes_to_base64=bytes_to_base64,
-                       use_bytes_references=use_bytes_references,
-                       use_module_references=use_module_references,
-                       use_module_function_references=use_module_function_references,
-                       use_set_references=use_set_references,
-                       use_string_references=use_string_references,
-                       use_tuple_references=use_tuple_references,
-                       use_type_references=use_type_references,
-                       replacement_names=None,
-                       *args, **kwargs)
-    return decode(data,
-                  json_backend=json_backend,
-                  bytes_to_base64=bytes_to_base64,
-                  use_bytes_references=use_bytes_references,
-                  use_module_references=use_module_references,
-                  use_module_function_references=use_module_function_references,
-                  use_set_references=use_set_references,
-                  use_string_references=use_string_references,
-                  use_tuple_references=use_tuple_references,
-                  use_type_references=use_type_references,
-                  replacement_names=None,
-                  use_name_to_class_cache=use_name_to_class_cache,
-                  *args, **kwargs)
+    data: str = encode(
+        obj,
+        max_depth=max_depth,
+        json_backend=json_backend,
+        bytes_to_base64=bytes_to_base64,
+        use_bytes_references=use_bytes_references,
+        use_module_references=use_module_references,
+        use_module_function_references=use_module_function_references,
+        use_set_references=use_set_references,
+        use_string_references=use_string_references,
+        use_tuple_references=use_tuple_references,
+        use_type_references=use_type_references,
+        replacement_names=None,
+        *args,
+        **kwargs,
+    )
+    return decode(
+        data,
+        json_backend=json_backend,
+        bytes_to_base64=bytes_to_base64,
+        use_bytes_references=use_bytes_references,
+        use_module_references=use_module_references,
+        use_module_function_references=use_module_function_references,
+        use_set_references=use_set_references,
+        use_string_references=use_string_references,
+        use_tuple_references=use_tuple_references,
+        use_type_references=use_type_references,
+        replacement_names=None,
+        use_name_to_class_cache=use_name_to_class_cache,
+        *args,
+        **kwargs,
+    )
 
 
 # some predefined handlers
@@ -1595,6 +1879,7 @@ class IteratorHandler(HandlerRegistry.HandlerBase):
 
     class DummyIterator(object):
         """Dummy class used as placeholder for iterator serialization."""
+
         pass
 
     # maximum number of elements that are flatten from an iterable/iterator object,
@@ -1613,10 +1898,14 @@ class IteratorHandler(HandlerRegistry.HandlerBase):
         :rtype: dict
         """
         # overwrite '<object>' value with dummy class, because 'types.GeneratorType' objects cannot be created directly
-        data[OBJECT] = self.context._class_to_module_class_name(IteratorHandler.DummyIterator)
+        data[OBJECT] = self.context._class_to_module_class_name(
+            IteratorHandler.DummyIterator
+        )
 
         # store iterator elements as list
-        data["data"] = self.context._flatten(list(islice(iter(obj), IteratorHandler.max_num_iter)))
+        data["data"] = self.context._flatten(
+            list(islice(iter(obj), IteratorHandler.max_num_iter))
+        )
         return data
 
     def unflatten(self, data: ty.Dict, obj: ty.Optional) -> Iterator:
@@ -1632,10 +1921,20 @@ class IteratorHandler(HandlerRegistry.HandlerBase):
         return self.context._unflatten_list(data["data"])
 
 
-handler_registry.register(cls_or_name=Iterator, handler=IteratorHandler,
-                          primary_handler=False, as_normal=False, as_base=True)
-handler_registry.register(cls_or_name=IteratorHandler.DummyIterator, handler=IteratorHandler,
-                          primary_handler=True, as_normal=True, as_base=False)
+handler_registry.register(
+    cls_or_name=Iterator,
+    handler=IteratorHandler,
+    primary_handler=False,
+    as_normal=False,
+    as_base=True,
+)
+handler_registry.register(
+    cls_or_name=IteratorHandler.DummyIterator,
+    handler=IteratorHandler,
+    primary_handler=True,
+    as_normal=True,
+    as_base=False,
+)
 
 
 # handler for subclasses of 'dict'
@@ -1692,8 +1991,13 @@ class DictSubClassHandler(HandlerRegistry.HandlerBase):
         return obj
 
 
-handler_registry.register(cls_or_name=dict, handler=DictSubClassHandler,
-                          primary_handler=False, as_normal=False, as_base=True)
+handler_registry.register(
+    cls_or_name=dict,
+    handler=DictSubClassHandler,
+    primary_handler=False,
+    as_normal=False,
+    as_base=True,
+)
 
 
 # handler for subclasses of 'list'
@@ -1748,8 +2052,13 @@ class ListSubClassHandler(HandlerRegistry.HandlerBase):
         return obj
 
 
-handler_registry.register(cls_or_name=list, handler=ListSubClassHandler,
-                          primary_handler=False, as_normal=False, as_base=True)
+handler_registry.register(
+    cls_or_name=list,
+    handler=ListSubClassHandler,
+    primary_handler=False,
+    as_normal=False,
+    as_base=True,
+)
 
 
 # handler for numpy.ndarray
@@ -1763,7 +2072,9 @@ try:
         save/load functionality.
         """
 
-        def flatten(self, obj: ty.Union[np.ndarray, np.generic], data: ty.Dict) -> ty.Dict:
+        def flatten(
+            self, obj: ty.Union[np.ndarray, np.generic], data: ty.Dict
+        ) -> ty.Dict:
             """Flatten a NumPy array/scalar to a dictionary format.
 
             :param obj: NumPy array or scalar to flatten
@@ -1785,8 +2096,9 @@ try:
 
             return data
 
-        def unflatten(self, data: ty.Dict,
-                      obj: ty.Optional) -> ty.Union[np.ndarray, np.generic]:
+        def unflatten(
+            self, data: ty.Dict, obj: ty.Optional
+        ) -> ty.Union[np.ndarray, np.generic]:
             """Unflatten a dictionary back into a NumPy array/scalar.
 
             :param data: Dictionary containing flattened data
@@ -1800,7 +2112,11 @@ try:
             data_bytes: ty.Optional[bytes] = data.get("data", None)
 
             if data_bytes is None:
-                raise ValueError("Could not find key 'data' or its value is 'None' in object <{}>.".format(data))
+                raise ValueError(
+                    "Could not find key 'data' or its value is 'None' in object <{}>.".format(
+                        data
+                    )
+                )
 
             if self.context.bytes_to_base64:
                 # decode string to bytes
@@ -1818,11 +2134,20 @@ try:
 
             return obj
 
-
-    handler_registry.register(cls_or_name=np.ndarray, handler=NumpyHandler,
-                              primary_handler=True, as_normal=True, as_base=True)
-    handler_registry.register(cls_or_name=np.generic, handler=NumpyHandler,
-                              primary_handler=True, as_normal=True, as_base=True)
+    handler_registry.register(
+        cls_or_name=np.ndarray,
+        handler=NumpyHandler,
+        primary_handler=True,
+        as_normal=True,
+        as_base=True,
+    )
+    handler_registry.register(
+        cls_or_name=np.generic,
+        handler=NumpyHandler,
+        primary_handler=True,
+        as_normal=True,
+        as_base=True,
+    )
 except ImportError:
     pass
 
@@ -1879,7 +2204,11 @@ try:
             data_bytes: ty.Optional[str] = data.get("data", None)
 
             if data_bytes is None:
-                raise ValueError("Could not find key 'data' or its value is 'None' in object <{}>.".format(data))
+                raise ValueError(
+                    "Could not find key 'data' or its value is 'None' in object <{}>.".format(
+                        data
+                    )
+                )
 
             if self.context.bytes_to_base64:
                 # decode string to bytes
@@ -1896,8 +2225,12 @@ try:
 
             return obj
 
-
-    handler_registry.register(cls_or_name=o3d.geometry.PointCloud, handler=Open3DPointCloudHandler,
-                              primary_handler=True, as_normal=True, as_base=True)
+    handler_registry.register(
+        cls_or_name=o3d.geometry.PointCloud,
+        handler=Open3DPointCloudHandler,
+        primary_handler=True,
+        as_normal=True,
+        as_base=True,
+    )
 except ImportError:
     pass

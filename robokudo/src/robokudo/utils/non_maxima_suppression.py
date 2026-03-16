@@ -15,7 +15,6 @@ This module provides NMS implementations for filtering overlapping bounding boxe
 
 from typing_extensions import Tuple, List
 
-
 # pylint: disable=invalid-name
 
 

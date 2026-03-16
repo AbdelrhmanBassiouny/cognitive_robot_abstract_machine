@@ -115,7 +115,7 @@ class ClusterColorAnnotator(robokudo.annotators.core.BaseAnnotator):
         self,
         name: str = "ClusterColorAnnotator",
         descriptor: "ClusterColorAnnotator.Descriptor" = Descriptor(),
-    ):
+    ) -> None:
         """Default construction. Minimal one-time init!
 
         :param name: Name of the annotator instance, defaults to "ClusterColorAnnotator"
@@ -204,15 +204,15 @@ class ClusterColorAnnotator(robokudo.annotators.core.BaseAnnotator):
         to the defined color ranges. Requires the numba library and passes the required parameters to avoid
         class access and object-mode from numba.
 
-        :param hsv_image: Image in HSV color space
-        :param mask: Binary mask indicating pixels to analyze
-        :param total_amount_of_colors: Total number of color categories
-        :param min_saturation_color: Minimum saturation for chromatic colors
-        :param min_value_color: Minimum value for chromatic colors
-        :param max_value_black: Maximum value for black classification
-        :param min_value_white: Minimum value for white classification
-        :param number_of_colors: Number of hue divisions
-        :param color_range: Size of each hue division
+        :param hsv_image: Image in HSV color space.
+        :param mask: Binary mask indicating pixels to analyze.
+        :param total_amount_of_colors: Total number of color categories.
+        :param min_saturation_color: Minimum saturation for chromatic colors.
+        :param min_value_color: Minimum value for chromatic colors.
+        :param max_value_black: Maximum value for black classification.
+        :param min_value_white: Minimum value for white classification.
+        :param number_of_colors: Number of hue divisions.
+        :param color_range: Size of each hue division.
         :return: A tuple with the number of analyzed pixels (given by the mask) as well as a numpy array with the counted
                 colors. The id refers the indices of the Color enum from this module.
         """

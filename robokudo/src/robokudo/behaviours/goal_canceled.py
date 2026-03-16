@@ -11,6 +11,7 @@ error states on the behavior tree's blackboard. It is used to:
 The behavior integrates with RoboKudo's error handling system to detect
 conditions that should trigger goal cancellation.
 """
+
 import py_trees
 import robokudo.utils.error_handling
 
@@ -27,16 +28,15 @@ class GoalCanceled(py_trees.Behaviour):
     conditions and provide clean goal cancellation.
     """
 
-    def __init__(self, name="GoalCanceled"):
+    def __init__(self, name: str = "GoalCanceled") -> None:
         """
         Initialize the GoalCanceled behavior.
 
         :param name: Name of the behavior node, defaults to "GoalCanceled"
-        :type name: str, optional
         """
         super().__init__(name=name)
 
-    def initialise(self):
+    def initialise(self) -> None:
         """
         Initialize the behavior.
 
@@ -56,7 +56,6 @@ class GoalCanceled(py_trees.Behaviour):
         * Returns FAILURE if no errors are present (goal can continue)
 
         :return: SUCCESS if goal should be canceled, FAILURE otherwise
-        :rtype: py_trees.common.Status
         """
         # self.rk_logger.debug("%s.update()" % (self.__class__.__name__))
         if robokudo.utils.error_handling.get_blackboard_exception() is not None:

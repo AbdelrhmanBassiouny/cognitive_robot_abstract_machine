@@ -2,6 +2,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+from robokudo.object_knowledge_base import (
+    BaseObjectKnowledgeBase,
+    ObjectKnowledge,
+    PredefinedObject,
+)
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from robokudo.object_knowledge_base import BaseObjectKnowledgeBase, ObjectSpec
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.geometry import Color, Scale
@@ -10,7 +16,7 @@ from semantic_digital_twin.world_description.geometry import Color, Scale
 
 @dataclass
 class ObjectKnowledgeBase(BaseObjectKnowledgeBase):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         root = self.world.root
 

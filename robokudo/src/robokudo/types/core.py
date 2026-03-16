@@ -10,6 +10,7 @@ The module defines:
 * Common type mixins (Identifiable, Nameable)
 * Query and Annotation types
 """
+
 from dataclasses import dataclass
 
 
@@ -20,6 +21,7 @@ class Type:
     This is the root of the type hierarchy, comparable to uima.cas.TOP in uimacpp.
     All other types in the system should inherit from this class.
     """
+
     ...
 
 
@@ -82,4 +84,5 @@ class IdentifiableAnnotation(Annotation, Identifiable):
     Combines annotation capabilities with unique identification.
     Inherits source from Annotation and id from Identifiable.
     """
+
     ...

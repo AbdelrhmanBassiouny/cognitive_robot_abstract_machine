@@ -11,6 +11,7 @@ and analysis in computer vision applications. It includes:
 
 The types support both 2D and 3D representations where applicable.
 """
+
 from dataclasses import dataclass, field
 
 from typing_extensions import Any, List
@@ -33,6 +34,7 @@ class FaceAnnotation(cv.ImageROI, cv.Points3D, tf.Pose):
        Does not contain identity information. Use Classification annotations
        on the parent HumanAnnotation for identity.
     """
+
     ...
 
 

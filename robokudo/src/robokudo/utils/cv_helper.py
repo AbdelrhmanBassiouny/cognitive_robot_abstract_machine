@@ -39,8 +39,8 @@ def crop_image(image: npt.NDArray, xy: tuple, wh: tuple) -> npt.NDArray:
     :param wh: Width and height of crop region (w,h)
     :return: Cropped image region
     """
-    (x, y) = xy
-    (w, h) = wh
+    x, y = xy
+    w, h = wh
 
     x0, y0 = max(xy[0], 0), max(xy[1], 0)
     x1, y1 = min(x + w, image.shape[1]), min(y + h, image.shape[0])

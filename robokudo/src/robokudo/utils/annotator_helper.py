@@ -89,7 +89,7 @@ def transform_pose_from_world_to_cam(cas: CAS, pose: PoseAnnotation) -> PoseAnno
 
 
 def transform_cloud_from_cam_to_world(
-        cas: CAS, cloud: o3d.geometry.PointCloud, transform_inplace: bool = False
+    cas: CAS, cloud: o3d.geometry.PointCloud, transform_inplace: bool = False
 ) -> o3d.geometry.PointCloud:
     """Transform point cloud from camera to world coordinates.
 
@@ -109,7 +109,7 @@ def transform_cloud_from_cam_to_world(
 
 
 def transform_cloud_from_world_to_cam(
-        cas: CAS, cloud: o3d.geometry.PointCloud, transform_inplace: bool = False
+    cas: CAS, cloud: o3d.geometry.PointCloud, transform_inplace: bool = False
 ) -> o3d.geometry.PointCloud:
     """Transform point cloud from world to camera coordinates.
 
@@ -138,9 +138,11 @@ def get_cam_to_world_transform_matrix(cas: CAS) -> npt.NDArray:
     :raises KeyError: If camera-to-world transform not in CAS
     """
     if cas.cam_to_world_transform is None:
-        raise KeyError("Camera-to-world transform not found in CAS. "
-                       "Is lookup_viewpoint in camera config set to True? "
-                       "Or if reading from a database: Has the data been recorded with lookup_viewpoint set to true?")
+        raise KeyError(
+            "Camera-to-world transform not found in CAS. "
+            "Is lookup_viewpoint in camera config set to True? "
+            "Or if reading from a database: Has the data been recorded with lookup_viewpoint set to true?"
+        )
     return cas.cam_to_world_transform.to_np()
 
 
@@ -157,9 +159,9 @@ def get_world_to_cam_transform_matrix(cas: CAS) -> npt.NDArray:
 
 
 def draw_bounding_boxes_from_object_hypotheses(
-        img: npt.NDArray,
-        object_hypotheses: List[ObjectHypothesis],
-        text_function: Callable[[ObjectHypothesis], str],
+    img: npt.NDArray,
+    object_hypotheses: List[ObjectHypothesis],
+    text_function: Callable[[ObjectHypothesis], str],
 ) -> None:
     """Draw bounding boxes for object hypotheses on the image.
 

@@ -38,7 +38,7 @@ class SemanticMap(BaseSemanticMap):
         and may need adjustment for other environments.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the IAI kitchen semantic map.
 
         Creates region definitions for:
@@ -50,12 +50,22 @@ class SemanticMap(BaseSemanticMap):
 
         # SEMANTIC MAP ENTRIES BEGIN
         semantic_map_entries = [
-            SemanticMapEntry(name="kitchen_island", frame_id="map", type="CounterTop",
-                             position_x=2.30, position_y=2.72, position_z=1.40,
-                             orientation_x=0, orientation_y=0, orientation_z=0, orientation_w=1,
-                             x_size=1.0, y_size=3.18, z_size=0.85),
+            SemanticMapEntry(
+                name="kitchen_island",
+                frame_id="map",
+                type="CounterTop",
+                position_x=2.30,
+                position_y=2.72,
+                position_z=1.40,
+                orientation_x=0,
+                orientation_y=0,
+                orientation_z=0,
+                orientation_w=1,
+                x_size=1.0,
+                y_size=3.18,
+                z_size=0.85,
+            ),
         ]
         # SEMANTIC MAP ENTRIES END
 
         self.add_entries(semantic_map_entries)
-

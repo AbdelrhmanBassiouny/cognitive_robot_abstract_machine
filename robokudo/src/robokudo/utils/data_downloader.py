@@ -2,16 +2,18 @@ from pathlib import Path
 import pooch
 
 # ---- Configuration ----
-DATA_PACKAGE_NAME = "robokudo_test_data"
-DATA_VERSION = "b991b2f15cd734672f449349a9e566fb67aad81e"
-KNOWN_HASH = "sha256:b9150798870b7e7d067387dc295e661a55e2360c8c9cd944b6815d0ec59047e5"
+DATA_PACKAGE_NAME: str = "robokudo_test_data"
+DATA_VERSION: str = "b991b2f15cd734672f449349a9e566fb67aad81e"
+KNOWN_HASH: str = (
+    "sha256:b9150798870b7e7d067387dc295e661a55e2360c8c9cd944b6815d0ec59047e5"
+)
 
-URL = (
+URL: str = (
     "https://gitlab.informatik.uni-bremen.de/robokudo/robokudo_test_data/-/jobs/artifacts/"
     f"{DATA_VERSION}/raw/robokudo_test_data-{DATA_VERSION}.zip?job=package_zip"
 )
 
-FILENAME = f"{DATA_PACKAGE_NAME}.zip"
+FILENAME: str = f"{DATA_PACKAGE_NAME}.zip"
 
 
 def test_data_path() -> Path:
@@ -19,7 +21,6 @@ def test_data_path() -> Path:
     Retrieve Robokudo test data, downloading and unpacking if needed.
 
     :return: Path to the root extracted dataset directory in the local cache.
-    :rtype: pathlib.Path
 
     .. warning::
        This function performs network I/O on first use.

@@ -18,6 +18,10 @@ from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.geometry import Box, FileMesh, Scale, Color
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, SemanticAnnotation
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    SemanticAnnotation,
+)
 from . import defs
 
 @dataclass
@@ -78,7 +82,7 @@ class BaseObjectKnowledgeBase:
     and can be accessed by its name.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize an empty object knowledge base."""
 
         """Dictionary mapping object names to their knowledge"""
@@ -160,8 +164,15 @@ class BaseObjectKnowledgeBase:
 
     def get_predefined_object_bodies(self) -> List[Body]:
         """Get list of pre-defined objects."""
-        predefined_object_annotations = self.world.get_semantic_annotations_by_type(PredefinedObject)
-        return list([predefined_object.body for predefined_object in predefined_object_annotations])
+        predefined_object_annotations = self.world.get_semantic_annotations_by_type(
+            PredefinedObject
+        )
+        return list(
+            [
+                predefined_object.body
+                for predefined_object in predefined_object_annotations
+            ]
+        )
 
     def add_entry(self, entry: ObjectKnowledge) -> None:
         """Add a single object knowledge entry.
@@ -189,4 +200,6 @@ class BaseObjectKnowledgeBase:
         :param object_knowledge: The object knowledge to check
         :return: True if the object has components or features
         """
-        return len(object_knowledge.features) > 0 or len(object_knowledge.components) > 0
+        return (
+            len(object_knowledge.features) > 0 or len(object_knowledge.components) > 0
+        )

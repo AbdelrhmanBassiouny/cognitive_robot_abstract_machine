@@ -11,6 +11,7 @@ tree's blackboard. It is typically used:
 The behavior integrates with RoboKudo's error handling system to manage
 error states across the behavior tree.
 """
+
 import py_trees
 from py_trees.behaviour import Behaviour
 
@@ -31,16 +32,15 @@ class ClearErrors(Behaviour):
     The behavior always returns SUCCESS after clearing errors.
     """
 
-    def __init__(self, name="ClearErrors"):
+    def __init__(self, name: str = "ClearErrors") -> None:
         """
         Initialize the ClearErrors behavior.
 
         :param name: Name of the behavior node, defaults to "ClearErrors"
-        :type name: str, optional
         """
         super().__init__(name=name)
 
-    def initialise(self):
+    def initialise(self) -> None:
         """
         Initialize the behavior.
 

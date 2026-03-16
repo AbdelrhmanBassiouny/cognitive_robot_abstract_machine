@@ -21,7 +21,7 @@ import typing
 from py_trees.blackboard import Blackboard
 from py_trees.common import Status
 from py_trees.composites import Sequence
-from typing_extensions import TYPE_CHECKING, Optional, List
+from typing_extensions import TYPE_CHECKING, Optional, List, Any
 
 import robokudo.annotators.core
 import robokudo.utils.tree
@@ -47,9 +47,9 @@ class Pipeline(Sequence):
         self,
         name: str = "Sequence",
         children: Optional[List[Behaviour]] = None,
-        *args,
-        **kwargs,
-    ):
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(name, memory=True, children=children)
         """Initialize the pipeline.
 
@@ -57,10 +57,10 @@ class Pipeline(Sequence):
         :param children: List of child behaviors, defaults to None
         """
 
-        self.cas: Optional[cas.CAS] = None
+        self.cas: cas.CAS = None
         """The Common Analysis Structure for this pipeline."""
 
-        self.cas_start_timer: Optional[timeit.default_timer] = None
+        self.cas_start_timer: timeit.default_timer = None
         """Timer for measuring pipeline execution time."""
 
         self.rk_logger = logging.getLogger(defs.PACKAGE_NAME)
@@ -75,7 +75,7 @@ class Pipeline(Sequence):
         self.cas = cas.CAS()
         self.cas_start_timer = timeit.default_timer()
 
-    def setup(self, **kwargs: typing.Any) -> bool:
+    def setup(self, **kwargs: Any) -> bool:
         """Set up the pipeline and its annotator outputs.
 
         Creates output structures for all annotators in the pipeline and

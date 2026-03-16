@@ -10,6 +10,7 @@ The module includes:
 * Camera-related message types
 * Region of interest definitions
 """
+
 from dataclasses import dataclass, field
 
 from typing_extensions import List

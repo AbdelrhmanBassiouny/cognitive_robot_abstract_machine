@@ -178,7 +178,7 @@ def generate_pydot_graph(
     graph.set_graph_defaults(fontname="times-roman")
     graph.set_node_defaults(fontname="times-roman")
     graph.set_edge_defaults(fontname="times-roman")
-    (node_shape, node_colour, node_font_colour) = get_node_attributes(
+    node_shape, node_colour, node_font_colour = get_node_attributes(
         root, visibility_level
     )
     node_root = Node(
@@ -199,7 +199,7 @@ def generate_pydot_graph(
         visibility_level: VisibilityLevel,
         collapse_decorators: bool,
         timing_info_dict: Optional[Dict],
-    ):
+    ) -> None:
         """
         Add edges to the dot graph recursively.
 
@@ -219,7 +219,7 @@ def generate_pydot_graph(
             return
         if visibility_level < root.blackbox_level:
             for c in root.children:
-                (node_shape, node_colour, node_font_colour) = get_node_attributes(
+                node_shape, node_colour, node_font_colour = get_node_attributes(
                     c, visibility_level
                 )
                 proposed_dot_name = c.name
@@ -349,7 +349,7 @@ def render_dot_tree(
 
 
 def write_timing_info_to_csv(
-    filename_wo_extension: str, timing_info_dict: Dict
+    filename_wo_extension: str, timing_info_dict: Dict[str, float]
 ) -> None:
     """
     Write timing information for annotators to a CSV file.

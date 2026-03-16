@@ -22,7 +22,9 @@ from robokudo.annotators.camera_viewpoint_visualizer import CameraViewpointVisua
 
 from robokudo.annotators.collection_reader import CollectionReaderAnnotator
 from robokudo.annotators.image_preprocessor import ImagePreprocessorAnnotator
-from robokudo.annotators.outlier_removal_objecthypothesis import OutlierRemovalOnObjectHypothesisAnnotator
+from robokudo.annotators.outlier_removal_objecthypothesis import (
+    OutlierRemovalOnObjectHypothesisAnnotator,
+)
 from robokudo.annotators.plane import PlaneAnnotator
 from robokudo.annotators.pointcloud_cluster_extractor import PointCloudClusterExtractor
 from robokudo.annotators.pointcloud_crop import PointcloudCropAnnotator
@@ -73,10 +75,15 @@ class AnalysisEngine(robokudo.analysis_engine.AnalysisEngineInterface):
         :return: The configured pipeline for tabletop segmentation
         :rtype: robokudo.pipeline.Pipeline
         """
-        cr_storage_camera_config = robokudo.descriptors.camera_configs.config_mongodb_playback.CameraConfig()
+        cr_storage_camera_config = (
+            robokudo.descriptors.camera_configs.config_mongodb_playback.CameraConfig()
+        )
         cr_storage_config = CollectionReaderAnnotator.Descriptor(
             camera_config=cr_storage_camera_config,
-            camera_interface=robokudo.io.storage_reader_interface.StorageReaderInterface(cr_storage_camera_config))
+            camera_interface=robokudo.io.storage_reader_interface.StorageReaderInterface(
+                cr_storage_camera_config
+            ),
+        )
 
         seq = robokudo.pipeline.Pipeline("StoragePipeline")
         seq.add_children(
@@ -89,5 +96,6 @@ class AnalysisEngine(robokudo.analysis_engine.AnalysisEngineInterface):
                 PointCloudClusterExtractor(),
                 OutlierRemovalOnObjectHypothesisAnnotator(),
                 # SlowAnnotator("SlowAnnotator",sleep_in_s=0),
-            ])
+            ]
+        )
         return seq

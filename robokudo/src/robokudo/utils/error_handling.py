@@ -23,7 +23,6 @@ from typing_extensions import Callable, Union, Any, Optional
 
 from ..identifier import BBIdentifier
 
-
 # rk_logger = logging.getLogger(robokudo.defs.PACKAGE_NAME)
 
 

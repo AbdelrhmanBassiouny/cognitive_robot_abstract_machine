@@ -7,6 +7,7 @@ class BlockingCondition(py_trees.decorators.Condition):
     As "Condition" in the BT literature is usually defined as a leaf node and not as a decorator
     which can implement loop-like Behaviour, the name can cause confusion.
     """
+
     pass
 
 
@@ -16,4 +17,5 @@ class LoopingDecorator(py_trees.decorators.Condition):
     As "Condition" in the BT literature is usually defined as a leaf node and not as a decorator
     which can implement loop-like Behaviour, the name can cause confusion.
     """
+
     pass

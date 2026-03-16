@@ -11,6 +11,7 @@ The module supports:
 * Timestamped variants
 * Parent-child frame relationships
 """
+
 from dataclasses import dataclass, field
 
 from typing_extensions import List
@@ -53,8 +54,7 @@ class Position(core.Type):
 
 @dataclass
 class StampedPose(Pose):
-    """Timestamped 6-DOF pose with reference frame.
-    """
+    """Timestamped 6-DOF pose with reference frame."""
 
     frame: str = str("")
     """
@@ -66,8 +66,7 @@ class StampedPose(Pose):
 
 @dataclass
 class StampedPosition(Position):
-    """Timestamped 3-DOF position with reference frame.
-    """
+    """Timestamped 3-DOF position with reference frame."""
 
     frame: str = str("")
     """

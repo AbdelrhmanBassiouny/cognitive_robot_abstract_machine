@@ -12,6 +12,7 @@ because:
 The module maintains a single global instance that can be accessed by all
 components needing transform information.
 """
+
 import sys
 
 import rclpy
@@ -23,7 +24,7 @@ this.tf_buffer = None
 this.tf_listener = None
 
 
-def instance(node):
+def instance(node: rclpy.node.Node) -> Buffer:
     """
     A singleton-like TransformListener instance.
 
@@ -31,9 +32,7 @@ def instance(node):
     handling of the tf_static topic. Use this instance to access the tf_buffer.
 
     :param node: The ROS 2 node that will own the TransformListener.
-    :type node: rclpy.node.Node
     :return: The tf_buffer associated with the TransformListener.
-    :rtype: tf2_ros.Buffer
     """
     if this.tf_listener is None:
         print("Initializing TF Listener")

@@ -94,7 +94,7 @@ def ros_cam_info_from_dict(dict_cam_info: Dict) -> CameraInfo:
 
 
 def get_geometry_msgs_pose_from_position_annotation(
-        position_annotation: PositionAnnotation,
+    position_annotation: PositionAnnotation,
 ) -> Pose:
     """Convert position annotation to ROS Pose message.
 
@@ -115,7 +115,7 @@ def get_geometry_msgs_pose_from_position_annotation(
 
 
 def get_geometry_msgs_pose_from_pose_annotation(
-        pose_annotation: PoseAnnotation,
+    pose_annotation: PoseAnnotation,
 ) -> Pose:
     """Convert pose annotation to ROS Pose message.
 
@@ -134,8 +134,8 @@ def get_geometry_msgs_pose_from_pose_annotation(
 
 
 def get_geometry_msgs_pose_stamped_from_pose_annotation(
-        pose_annotation: PoseAnnotation,
-        header: Header,
+    pose_annotation: PoseAnnotation,
+    header: Header,
 ) -> PoseStamped:
     """Convert pose annotation to ROS PoseStamped message.
 
@@ -154,8 +154,8 @@ def get_geometry_msgs_pose_stamped_from_pose_annotation(
 
 
 def get_geometry_msgs_pose_stamped_from_position_annotation(
-        position_annotation: PositionAnnotation,
-        header: Header,
+    position_annotation: PositionAnnotation,
+    header: Header,
 ) -> PoseStamped:
     """Convert position annotation to ROS PoseStamped message.
 
@@ -176,7 +176,7 @@ def get_geometry_msgs_pose_stamped_from_position_annotation(
 
 
 def get_transform_matrix_from_pose_annotation(
-        pose_annotation: PoseAnnotation,
+    pose_annotation: PoseAnnotation,
 ) -> npt.NDArray:
     """Convert pose annotation to 4x4 transform matrix.
 
@@ -206,7 +206,7 @@ def get_transform_matrix_from_pose_annotation(
 
 
 def get_o3d_obb_from_bounding_box_annotation(
-        bounding_box_annotation: BoundingBox3DAnnotation,
+    bounding_box_annotation: BoundingBox3DAnnotation,
 ) -> o3d.geometry.OrientedBoundingBox:
     """Convert a bounding box annotation to an open3d oriented bounding box.
 
@@ -227,7 +227,7 @@ def get_o3d_obb_from_bounding_box_annotation(
 
 
 def o3d_cam_intrinsics_from_ros_cam_info(
-        cam_info: CameraInfo,
+    cam_info: CameraInfo,
 ) -> o3d.camera.PinholeCameraIntrinsic:
     """Convert ROS CameraInfo to Open3D camera intrinsics.
 

@@ -94,8 +94,6 @@ class AnnotationPublisherWriter(core.BaseAnnotator):
 
     This annotator publishes the current CAS annotations as JSON-encoded
     strings over a ROS topic.
-
-    :type pub: rospy.Publisher
     """
 
     class Descriptor(core.BaseAnnotator.Descriptor):
