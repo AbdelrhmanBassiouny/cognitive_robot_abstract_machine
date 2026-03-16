@@ -46,7 +46,7 @@ class CartesianTask(Task, ABC):
     """
     Base class for all cartesian tasks.
     Offers goal binding policy functionality to subclasses.
-    .. note:: make sure to call super().build(context) in subclasses, if you override it.
+    .. note:: make sure to call `super().build(context)` in subclasses, if you override it.
     """
 
     root_link: KinematicStructureEntity = field(kw_only=True)
@@ -158,8 +158,6 @@ class CartesianPositionTrajectory(CartesianTask):
     Move a tip link to a goal position along a trajectory.
     .. warning:: the trajectory is assumed to be dense and smooth.
     """
-
-    default_reference_velocity: ClassVar[float] = 0.2
 
     goal_points: list[Point3] = field(kw_only=True)
     """Target 3D point to reach."""
