@@ -142,7 +142,7 @@ class CartesianPosition(CartesianTask):
             frame_P_goal=root_P_goal,
             frame_P_current=root_P_current,
             reference_velocity=self.reference_velocity,
-            weight=self.weight,
+            quadratic_weight=self.weight,
         )
 
         # Success condition: distance below threshold
@@ -451,7 +451,7 @@ class CartesianPositionStraight(CartesianTask):
                 name=name,
                 reference_velocity=self.reference_velocity,
                 equality_bound=bound,
-                weight=DefaultWeights.WEIGHT_ABOVE_CA * weight_mult,
+                quadratic_weight=DefaultWeights.WEIGHT_ABOVE_CA * weight_mult,
                 task_expression=expr_p[i],
             )
 
@@ -509,7 +509,7 @@ class CartesianOrientation(CartesianTask):
             frame_R_current=root_R_current,
             frame_R_goal=root_R_goal,
             reference_velocity=self.reference_velocity,
-            weight=self.weight,
+            quadratic_weight=self.weight,
         )
 
         # Success condition: rotation error below threshold
@@ -575,7 +575,7 @@ class CartesianPose(CartesianTask):
             frame_P_goal=root_P_goal,
             frame_P_current=root_P_current,
             reference_velocity=self.reference_linear_velocity,
-            weight=self.weight,
+            quadratic_weight=self.weight,
         )
 
         distance_to_goal = root_P_goal.euclidean_distance(root_P_current)
@@ -589,7 +589,7 @@ class CartesianPose(CartesianTask):
             frame_R_current=root_R_current,
             frame_R_goal=root_R_goal,
             reference_velocity=self.reference_angular_velocity,
-            weight=self.weight,
+            quadratic_weight=self.weight,
         )
 
         rotation_error = root_R_current.rotational_error(root_R_goal)
@@ -649,7 +649,7 @@ class CartesianPositionVelocityLimit(Task):
         artifacts.constraints.add_translational_velocity_limit(
             frame_P_current=root_P_tip,
             max_velocity=self.max_linear_velocity,
-            weight=self.weight,
+            quadratic_weight=self.weight,
         )
 
         position_variables: List[PositionVariable] = root_P_tip.free_variables()
@@ -686,7 +686,7 @@ class CartesianRotationVelocityLimit(Task):
     """Root link of the kinematic chain. Defines the reference frame from which the tip's motion is measured."""
     tip_link: KinematicStructureEntity = field(kw_only=True)
     """Tip link of the kinematic chain. The translational velocity of this link (expressed in the root link frame) is constrained."""
-    max_angular_velocity: float = field(default=0.5, kw_only=True)
+    max_angular_velocity: float = field(default=0.4, kw_only=True)
     """Maximum allowed angular speed. Interpreted in radians per second (rad/s).
     The enforcement ensures the magnitude of the instantaneous
     rotation rate does not exceed this threshold."""
@@ -705,7 +705,7 @@ class CartesianRotationVelocityLimit(Task):
         artifacts.constraints.add_rotational_velocity_limit(
             frame_R_current=root_R_tip,
             max_velocity=self.max_angular_velocity,
-            weight=self.weight,
+            quadratic_weight=self.weight,
         )
 
         _, angle = root_R_tip.to_axis_angle()
@@ -742,7 +742,7 @@ class CartesianVelocityLimit(Parallel):
     """Maximum allowed linear speed of the tip in meters per second (m/s).
     Default: 0.1 m/s. The enforcement ensures the Euclidean norm of the
     tip-frame translational velocity does not exceed this value."""
-    max_angular_velocity: float = field(default=0.5, kw_only=True)
+    max_angular_velocity: float = field(default=0.4, kw_only=True)
     """Maximum allowed angular speed. Interpreted in radians per second (rad/s).
     Default: 0.5 rad/s. The enforcement ensures the magnitude of the instantaneous
     rotation rate does not exceed this threshold."""
