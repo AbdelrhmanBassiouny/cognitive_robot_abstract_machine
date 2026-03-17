@@ -5,7 +5,6 @@ from enum import IntEnum
 
 import numpy as np
 import qpSWIFT_sparse_bindings as qpSWIFT
-from line_profiler.explicit_profiler import profile
 
 from giskardpy.qp.exceptions import QPSolverException
 from giskardpy.qp.qp_data import QPDataExplicit
@@ -38,7 +37,6 @@ class QPSolverQPSwift(QPSolver[QPDataExplicit]):
         "VERBOSE": 0,  # 0 = no print; 1 = print
     }
 
-    @profile
     def solver_call_explicit_interface(self, qp_data: QPDataExplicit) -> np.ndarray:
         result = qpSWIFT.solve_sparse_H_diag(
             H=qp_data.quadratic_weights,

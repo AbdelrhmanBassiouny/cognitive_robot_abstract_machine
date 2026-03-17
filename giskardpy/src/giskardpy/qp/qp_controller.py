@@ -9,7 +9,6 @@ from typing import List, Optional, TYPE_CHECKING
 import numpy as np
 import pandas
 import pandas as pd
-from line_profiler import profile
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.qp.adapters.qp_adapter import QPDataSymbolic
@@ -438,7 +437,6 @@ class QPController:
     def has_not_free_variables(self) -> bool:
         return len(self.active_dofs) == 0
 
-    @profile
     def compute_command(
         self,
         world_state: np.ndarray,
@@ -458,7 +456,7 @@ class QPController:
     def xdot_to_control_commands(self, xdot: np.ndarray) -> np.ndarray:
         offset = len(self.active_dofs) * (self.config.prediction_horizon - 2)
         offset_end = offset + len(self.active_dofs)
-        control_cmds = xdot[offset:offset_end]
+        control_cmds = xdot[offset:offset_end] / self.config.mpc_dt**2
         # divide by 4 because the world state has pos/vel/acc/jerk variables
         full_control_cmds = np.zeros(len(self.world_state_symbols) // 4)
         full_control_cmds[self.dof_filter] = control_cmds

@@ -344,8 +344,10 @@ class ExternalCollisionAvoidance(Goal):
             if context.collision_manager.get_max_avoided_bodies(body):
                 self.external_collision_manager.register_group_of_body(body)
 
+        robot_bodies = self.robot.bodies
+
         for group in self.external_collision_manager.registered_groups:
-            if group.root not in self.robot.bodies:
+            if group.root not in robot_bodies:
                 continue
             max_avoided_bodies = group.get_max_avoided_bodies(context.collision_manager)
             for index in range(max_avoided_bodies):
@@ -583,12 +585,14 @@ class SelfCollisionAvoidance(Goal):
         self.self_collision_manager = context.self_collision_manager
         collision_matrix = self.create_self_collision_matrix(context)
 
+        kinematic_structure_entities = self.robot.kinematic_structure_entities
+
         for group_a, group_b in combinations(
             self.self_collision_manager.collision_groups, 2
         ):
             if (
-                group_a.root not in self.robot.kinematic_structure_entities
-                or group_b.root not in self.robot.kinematic_structure_entities
+                group_a.root not in kinematic_structure_entities
+                or group_b.root not in kinematic_structure_entities
             ):
                 # this is no self collision
                 continue
