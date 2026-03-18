@@ -14,6 +14,7 @@ from black.handle_ipynb_magics import lru_cache
 
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedClass
+from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.patterns.role.meta_data import RoleType
@@ -88,7 +89,10 @@ class StubTransformer(ast.NodeTransformer):
         that does not update its taker type.
         """
         roles = self._role_taker_to_roles_map.get(taker_type, [])
-        return any(RoleType.get_role_type(role_wrapped) == RoleType.PRIMARY for role_wrapped in roles)
+        return any(
+            RoleType.get_role_type(role_wrapped) == RoleType.PRIMARY
+            for role_wrapped in roles
+        )
 
     @lru_cache
     def _get_primary_roles(self, taker_type: Type) -> List[WrappedClass[Role]]:
@@ -96,16 +100,20 @@ class StubTransformer(ast.NodeTransformer):
         :return: A list of all primary roles targeting this taker.
         """
         roles = self._role_taker_to_roles_map.get(taker_type, [])
-        return [role_wrapped for role_wrapped in roles if RoleType.get_role_type(role_wrapped) == RoleType.PRIMARY]
+        return [
+            role_wrapped
+            for role_wrapped in roles
+            if RoleType.get_role_type(role_wrapped) == RoleType.PRIMARY
+        ]
 
     def visit_Assign(self, node: ast.Assign) -> Union[ast.Assign, List[ast.stmt]]:
         """
         Detects TypeVar definitions and inserts RoleFor classes after them if they are for a taker.
         """
         if (
-                isinstance(node.value, ast.Call)
-                and isinstance(node.value.func, ast.Name)
-                and node.value.func.id == TypeVar.__name__
+            isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == TypeVar.__name__
         ):
             bound_name = None
             for kw in node.value.keywords:
@@ -131,7 +139,7 @@ class StubTransformer(ast.NodeTransformer):
         clazz = self.module.__dict__[node.name]
         try:
             wrapped_class = self.diagram.get_wrapped_class(clazz)
-        except Exception:
+        except ClassIsUnMappedInClassDiagram:
             return node
 
         # Prune methods and non-essential nodes
@@ -150,7 +158,7 @@ class StubTransformer(ast.NodeTransformer):
 
         result_nodes = [node]
 
-        if role_type == RoleType.PRIMARY and wrapped_class.clazz.updates_role_taker_type():
+        if role_type == RoleType.SPECIALIZED_ROLE_FOR:
             # transform_specialized_role returns [specialized_class, node]
             result_nodes = self._transform_specialized_role(node, wrapped_class)
         elif role_type != RoleType.NOT_A_ROLE:
@@ -176,7 +184,7 @@ class StubTransformer(ast.NodeTransformer):
         return self._get_type_var_name(taker_type) is not None
 
     def _transform_specialized_role(
-            self, node: ast.ClassDef, wrapped_class: WrappedClass
+        self, node: ast.ClassDef, wrapped_class: WrappedClass
     ) -> List[ast.stmt]:
         """
         Handles a primary role that updates its taker type by synthesizing a specialized RoleFor base.
@@ -234,7 +242,7 @@ class StubTransformer(ast.NodeTransformer):
 
     @staticmethod
     def _transform_decorators(
-            node: ast.ClassDef, wrapped_class: WrappedClass
+        node: ast.ClassDef, wrapped_class: WrappedClass
     ) -> List[ast.expr]:
         """
         Ensures @dataclass decorator is present with correct arguments.
@@ -268,7 +276,7 @@ class StubTransformer(ast.NodeTransformer):
         return [dec_node] + other_decorators
 
     def _transform_role_taker(
-            self, node: ast.ClassDef, wrapped_class: WrappedClass
+        self, node: ast.ClassDef, wrapped_class: WrappedClass
     ) -> List[ast.stmt]:
         """
         Transforms a role taker class into a Mixin and a re-entry class.
@@ -317,7 +325,7 @@ class StubTransformer(ast.NodeTransformer):
         return False
 
     def _transform_role(
-            self, node: ast.ClassDef, wrapped_class: WrappedClass, role_type: RoleType
+        self, node: ast.ClassDef, wrapped_class: WrappedClass, role_type: RoleType
     ) -> ast.ClassDef:
         """
         Transforms a role class by adjusting its bases and filtering fields.
@@ -399,8 +407,8 @@ class StubTransformer(ast.NodeTransformer):
             taker_attr_name = role_wrapped.clazz.role_taker_attribute_name()
             for role_field in role_wrapped.fields:
                 if (
-                        role_field.name != taker_attr_name
-                        and role_field.name not in seen_field_names
+                    role_field.name != taker_attr_name
+                    and role_field.name not in seen_field_names
                 ):
                     fields_to_inject.append(
                         self._create_field_node(role_field, init=False)
@@ -447,11 +455,11 @@ class StubTransformer(ast.NodeTransformer):
         return re.sub(r"(?<!\.)\b\w+\b(?!\.)", replace_tv, type_name)
 
     def _create_field_node(
-            self,
-            wrapped_field: WrappedField,
-            init: bool = True,
-            kw_only: Optional[bool] = None,
-            available_type_vars: Optional[Set[str]] = None,
+        self,
+        wrapped_field: WrappedField,
+        init: bool = True,
+        kw_only: Optional[bool] = None,
+        available_type_vars: Optional[Set[str]] = None,
     ) -> ast.AnnAssign:
         """
         Creates an AST AnnAssign node for a field.
@@ -466,7 +474,7 @@ class StubTransformer(ast.NodeTransformer):
         else:
             # Match FieldRepresentation logic for role-related classes
             f_copy.kw_only = f_copy.kw_only or (
-                    not wrapped_field.is_required and f_copy.init
+                not wrapped_field.is_required and f_copy.init
             )
 
         if kw_only is not None:
@@ -488,12 +496,11 @@ class StubTransformer(ast.NodeTransformer):
         if available_type_vars is not None:
             type_str = self._resolve_type_vars(type_str, available_type_vars)
 
-        if "typing." in type_str:
-            type_str = type_str.replace("typing.", "")
+        type_str = type_str.replace("typing.", "").replace("typing_extensions.", "")
 
         return ast.AnnAssign(
             target=ast.Name(id=wrapped_field.name, ctx=ast.Store()),
-            annotation=ast.parse(type_str).body[0].value,
+            annotation=self.to_ast_name(type_str),
             value=value_ast,
             simple=1,
         )
@@ -563,52 +570,68 @@ class StubTransformer(ast.NodeTransformer):
             )
 
         # 3. Add @classmethod role_taker_attribute
-        method_node = ast.FunctionDef(
-            name=Role.role_taker_attribute_name.__name__,
-            args=self.make_ast_args("cls"),
-            body=[self.make_ellipsis_expression()],
-            decorator_list=[self.to_ast_name(classmethod)],
-            returns=self.to_ast_name(taker_type),
-            type_comment=None,
-            type_params=[],
+        method_node = self.make_class_method(
+            Role.role_taker_attribute_name.__name__, returns=taker_type
         )
         body.append(method_node)
 
+        return self.make_dataclass(f"RoleFor{taker_name}", bases, body)
+
+    @classmethod
+    def make_dataclass(
+        cls,
+        name: str,
+        bases: Optional[List[Type | str]] = None,
+        body: Optional[List[ast.stmt]] = None,
+    ) -> ast.ClassDef:
+        """
+        :param name: Name of the dataclass.
+        :param bases: Base classes of the dataclass.
+        :param body: Body of the dataclass.
+        :return: AST ClassDef object for the given dataclass.
+        """
         return ast.ClassDef(
-            name=f"RoleFor{taker_name}",
-            bases=list(map(self.to_ast_name, bases)),
+            name=name,
+            bases=list(map(cls.to_ast_name, bases)),
             keywords=[],
-            body=body if body else [self.make_ellipsis_expression()],
-            decorator_list=[self._dataclass_decorator],
+            body=body if body else [cls.make_ellipsis_expression()],
+            decorator_list=[cls.make_dataclass_decorator()],
+            type_params=[],
         )
 
-    @staticmethod
-    def make_class_method(name: str, args: Optional[List[str]] = None,
-                          returns: Type | Callable | str = None) -> ast.FunctionDef:
+    @classmethod
+    def make_class_method(
+        cls,
+        name: str,
+        args: Optional[List[str]] = None,
+        returns: Type | Callable | str = None,
+    ) -> ast.FunctionDef:
         """
         :return: AST FunctionDef object for the given class method.
         """
         args = ["cls"] + (args or [])
         return ast.FunctionDef(
             name=name,
-            args=StubTransformer.make_ast_args(*args),
-            body=[StubTransformer.make_ellipsis_expression()],
-            decorator_list=[StubTransformer.to_ast_name(classmethod)],
-            returns=StubTransformer.to_ast_name(returns),
+            args=cls.make_ast_args(*args),
+            body=[cls.make_ellipsis_expression()],
+            decorator_list=[cls.to_ast_name(classmethod)],
+            returns=cls.to_ast_name(returns),
             type_comment=None,
             type_params=[],
+            lineno=1,
         )
 
-    @staticmethod
-    def to_ast_name(has_name: Type | Callable | str) -> ast.Name:
+    @classmethod
+    def to_ast_name(cls, has_name: Type | Callable | str) -> ast.Name:
         """
+        :param has_name: An object that has a `__name__` attribute, one of class, method, or function.
         :return: AST Name object for the given name.
         """
         name = has_name if isinstance(has_name, str) else has_name.__name__
         return ast.Name(id=name, ctx=ast.Load())
 
-    @staticmethod
-    def make_ast_args(*names) -> ast.arguments:
+    @classmethod
+    def make_ast_args(cls, *names) -> ast.arguments:
         """
         :return: AST arguments object for the given names.
         """
@@ -617,19 +640,19 @@ class StubTransformer(ast.NodeTransformer):
             args=[ast.arg(arg=n) for n in names],
             kwonlyargs=[],
             kw_defaults=[],
-            defaults=[]
+            defaults=[],
         )
 
-    @cached_property
-    def _dataclass_decorator(self) -> ast.expr:
+    @classmethod
+    def make_dataclass_decorator(cls) -> ast.expr:
         return ast.Call(
             func=ast.Name(id="dataclass", ctx=ast.Load()),
             args=[],
-            keywords=[ast.keyword(arg="eq", value=False)]
+            keywords=[ast.keyword(arg="eq", value=ast.Constant(value=False))],
         )
 
-    @staticmethod
-    def make_ellipsis_expression() -> ast.Expr:
+    @classmethod
+    def make_ellipsis_expression(cls) -> ast.Expr:
         return ast.Expr(value=ast.Constant(value=Ellipsis))
 
     @cached_property

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field, Field
 
 from typing_extensions import Set, List, TypeVar
 
-from krrood.patterns.role import Role
+from krrood.patterns.role.role import Role
 from krrood.symbol_graph.symbol_graph import Symbol
 
 @dataclass(eq=False)
@@ -118,7 +118,7 @@ TRepresentativeAsSecondRole = TypeVar(
     "TRepresentativeAsSecondRole", bound=RepresentativeAsSecondRole
 )
 
-@dataclass
+@dataclass(eq=False)
 class RoleForRepresentativeAsSecondRole(
     RepresentativeAsSecondRoleMixin, Role[TRepresentativeAsSecondRole]
 ):

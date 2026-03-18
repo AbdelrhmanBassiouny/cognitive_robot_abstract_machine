@@ -1,8 +1,8 @@
 from __future__ import annotations
-from dataclasses import dataclass, field, Field
+from dataclasses import dataclass, field
 from typing_extensions import Set, List, TypeVar
 from krrood.entity_query_language.predicate import Symbol
-from krrood.patterns.role import Role
+from krrood.patterns.role.role import Role
 
 @dataclass(eq=False)
 class HasName:
@@ -54,7 +54,7 @@ class RoleForPerson(Role[TPerson], PersonMixin):
     member_of: List[RecognizedGroup] = field(init=False)
 
     @classmethod
-    def role_taker_attribute(cls) -> Field: ...
+    def role_taker_attribute_name(cls) -> Person: ...
 
 @dataclass(eq=False)
 class CEOAsFirstRoleMixin(RoleForPerson[TPerson]):
@@ -108,7 +108,7 @@ class RoleForCEOAsFirstRole(CEOAsFirstRoleMixin, Role[TCEOAsFirstRole]):
     head_of: RecognizedGroup = field(init=False)
 
     @classmethod
-    def role_taker_attribute(cls) -> Field: ...
+    def role_taker_attribute_name(cls) -> CEOAsFirstRole: ...
 
 @dataclass(eq=False)
 class RepresentativeAsSecondRoleMixin(RoleForCEOAsFirstRole[TCEOAsFirstRole]):
@@ -121,7 +121,7 @@ TRepresentativeAsSecondRole = TypeVar(
     "TRepresentativeAsSecondRole", bound=RepresentativeAsSecondRole
 )
 
-@dataclass()
+@dataclass(eq=False)
 class RoleForRepresentativeAsSecondRole(
     RepresentativeAsSecondRoleMixin, Role[TRepresentativeAsSecondRole]
 ):
@@ -130,7 +130,7 @@ class RoleForRepresentativeAsSecondRole(
     representative_of: RecognizedGroup = field(init=False)
 
     @classmethod
-    def role_taker_attribute(cls) -> Field: ...
+    def role_taker_attribute_name(cls) -> RepresentativeAsSecondRole: ...
 
 @dataclass(eq=False)
 class DelegateAsThirdRole(

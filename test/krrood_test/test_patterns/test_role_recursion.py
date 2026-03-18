@@ -4,7 +4,7 @@ import pytest
 
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.entity_query_language.factories import variable_from
-from krrood.patterns.role import Role
+from krrood.patterns.role.role import Role
 
 
 @dataclass
