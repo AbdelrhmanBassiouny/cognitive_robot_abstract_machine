@@ -9,8 +9,6 @@ from functools import partial
 from threading import Thread
 from typing import Optional, List, Any, Callable, Union, ClassVar
 
-import numpy
-
 
 class SimulatorState(Enum):
     """Simulator State Enum"""
@@ -38,6 +36,7 @@ class SimulatorConstraints:
     max_number_of_steps: int = None
 
 
+@dataclass
 class SimulatorRenderer:
     """Base class for Renderer"""
 
@@ -107,6 +106,7 @@ class SimulatorCallbackResult:
         return self
 
 
+@dataclass
 class SimulatorCallback:
     """Base class for Simulator Callback"""
 
@@ -264,14 +264,18 @@ class BaseSimulator:
                 if self.stop_reason is not None:
                     self._state = SimulatorState.STOPPED
                     break
-                if self.state == SimulatorState.RUNNING:
-                    if self.current_simulation_time == 0.0:
-                        self.reset()
-                    self.step()
-                else:
-                    if self.state == SimulatorState.PAUSED:
+                match self.state:
+                    case SimulatorState.RUNNING:
+                        if self.current_simulation_time == 0.0:
+                            self.reset()
+                        self.step()
+
+                    case SimulatorState.PAUSED:
                         self.pause_callback()
-                    time.sleep(self.step_size) # Sleep for a while to avoid busy waiting in PAUSED state
+                        time.sleep(self.step_size)  # avoid busy waiting
+
+                    case _:
+                        time.sleep(self.step_size)
                 if (
                     self.render_thread is None
                     and self.current_real_time - self._current_render_time > 1.0 / 60.0
@@ -285,37 +289,11 @@ class BaseSimulator:
         Step the simulator. It reads the data from the viewer and writes the data to the simulator,
         then it reads the data from the simulator and writes the data to the viewer.
         It also increments the current simulation time and the current number of steps.
-        If the current simulation time is not consistent with the current number of steps and step size, it resets the simulator.
         """
         self.pre_step_callback()
-        last_simulation_time = (
-            self.current_simulation_time
-            if self.state == SimulatorState.RUNNING
-            else None
-        )
         self.write_data_to_simulator()
         self.step_callback()
         self.read_data_from_simulator()
-        if self.state == SimulatorState.RUNNING and not numpy.isclose(
-            self.current_simulation_time - last_simulation_time, self.step_size
-        ):
-            self.log_warning(
-                f"Simulation time {self.current_simulation_time:.4f} is inconsistent with "
-                f"number of steps {self.current_number_of_steps} and step size {self.step_size}, resetting the simulator"
-            )
-            self.reset()
-        if not numpy.isclose(
-            self.current_number_of_steps * self.step_size, self.current_simulation_time
-        ):
-            if numpy.isclose(
-                self.current_simulation_time, self.step_size, self.step_size
-            ):
-                self._current_number_of_steps = 1
-            else:
-                self.log_error(
-                    f"Simulation time {self.current_simulation_time:.4f} is inconsistent with "
-                    f"number of steps {self.current_number_of_steps} and step size {self.step_size}"
-                )
 
     def write_data_to_simulator(self):
         """

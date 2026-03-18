@@ -17,6 +17,7 @@ from physics_simulators.base_simulator import (
 )
 
 
+@dataclass
 class MujocoRenderer(SimulatorRenderer):
     """MuJoCo Renderer class"""
 
@@ -34,15 +35,26 @@ class MujocoRenderer(SimulatorRenderer):
     def mj_viewer(self) -> mujoco.viewer:
         return self._mj_viewer
 
+
 @dataclass(unsafe_hash=True)
 class MujocoSimulator(BaseSimulator):
     """Mujoco Simulator class"""
 
     _name: str = field(init=False, repr=False)
+    """
+    Name of the scene
+    """
 
     _file_path: str = field(init=False, repr=False)
+    """
+    Path to the XML file of the scene
+    """
 
     file_path: InitVar[str] = ""
+    """
+    Path to the XML file of the scene (for initialization)
+    """
+
 
     def __post_init__(self, file_path: str = ""):
         super().__post_init__()

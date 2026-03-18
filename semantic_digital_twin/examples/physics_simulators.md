@@ -47,10 +47,8 @@ The world can either:
 
 Using predefined scenes is preferred because they are typically validated against the physics engine.
 
-**Important**: Always validate your MJCF scene directly in MuJoCo before running it in MultiSim:
-
-```bash
-python -m mujoco.viewer --mjcf=path/to/your/scene.xml
+```{note}
+Always validate your MJCF scene directly in MuJoCo before running it in MultiSim:
 ```
 
 Only a physically stable and functional scene can be expected to behave correctly inside MultiSim.
@@ -133,7 +131,7 @@ This scene contains:
     multi_sim.stop_simulation()
 ```
 
-## Common Mistakes to Avoid
+### Common Mistakes to Avoid
 
 **1. Always define termination conditions**
 
@@ -147,7 +145,7 @@ Do not implement [busy waiting](https://en.wikipedia.org/wiki/Busy_waiting) insi
 Busy waiting can cause excessive CPU usage and degrade overall system responsiveness.
 If CPU usage becomes high, the simulation may run significantly slower than expected.
 
-## Performance Considerations
+### Performance Considerations
 
 In this example, the scene completes **10,000 simulation steps in under 1.0 second**.
 
@@ -343,7 +341,7 @@ if __name__ == "__main__":
 
 As reflected in the output, the new bodies and connections are created in under **0.5 seconds**, while the simulation continues uninterrupted. The physical state remains continuous, and the world is modified dynamically at runtime without resetting or restarting the engine.
 
-## Common Mistakes to Avoid
+### Common Mistakes to Avoid
 
 **1. Do not rely on catching an exact step number inside the simulation loop**
 (e.g., `if multi_sim.simulator.current_number_of_steps == 100`)
