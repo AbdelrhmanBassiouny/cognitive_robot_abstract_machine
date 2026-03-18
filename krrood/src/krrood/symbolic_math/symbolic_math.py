@@ -56,6 +56,8 @@ from krrood.symbolic_math.exceptions import (
     NotScalerError,
     UnsupportedOperationError,
     WrongDimensionsError,
+    CannotConvertToStringError,
+    NoArgsAllowedError,
 )
 
 EPS: float = sys.float_info.epsilon * 4.0
@@ -981,6 +983,12 @@ class FloatVariable(Scalar):
     .. warning:: Does not ensure that two FloatVariable instances are identical.
     """
 
+    resolve: Callable[[], float] | None = field(default=None, init=False)
+    """
+    This is called by SymbolicType.evaluate().
+    Subclasses should set it to return the current float value for this variable.
+    """
+
     def __init__(self, name: str):
         self.name = name
         casadi_sx = ca.SX.sym(self.name)
@@ -1007,14 +1015,6 @@ class FloatVariable(Scalar):
 
     def __hash__(self):
         return hash(self.casadi_sx)
-
-    def resolve(self) -> float:
-        """
-        This method is called by SymbolicType.evaluate().
-        Subclasses should override this method to return the current float value for this variable.
-        :return: This variables' current value.
-        """
-        return np.nan
 
 
 @dataclass(eq=False, repr=False)
@@ -2066,7 +2066,7 @@ def trinary_logic_to_str(expression: Scalar) -> str:
             right = trinary_logic_to_str(cas_expr.dep(1))
             return f"({left} or {right})"
         case _:
-            raise SymbolicMathError(message=f"cannot convert {expression} to a string")
+            raise CannotConvertToStringError(expression=expression)
 
 
 # %% ifs
@@ -2242,11 +2242,14 @@ def if_eq_cases(
         return else_result
     """
     a_sx = to_sx(a)
-    result_sx = to_sx(else_result)
-    for b, b_result in b_result_cases:
+    result_sx_list = []
+    ind = to_sx(-1)
+    for i, (b, b_result) in enumerate(b_result_cases):
         b_sx = to_sx(b)
-        b_result_sx = to_sx(b_result)
-        result_sx = ca.if_else(ca.eq(a_sx, b_sx), b_result_sx, result_sx)
+        ind = ca.if_else(ca.eq(a_sx, b_sx), i, ind)
+        result_sx_list.append(to_sx(b_result))
+
+    result_sx = ca.conditional(ind, result_sx_list, to_sx(else_result))
     return _create_return_type(else_result).from_casadi_sx(result_sx)
 
 
@@ -2263,11 +2266,14 @@ def if_cases(
     else:
         return else_result
     """
-    result_sx = to_sx(else_result)
+    result_sx_list = []
+    ind = to_sx(len(cases))
     for i in reversed(range(len(cases))):
         case = to_sx(cases[i][0])
-        case_result = to_sx(cases[i][1])
-        result_sx = ca.if_else(case, case_result, result_sx)
+        ind = ca.if_else(case, i, ind)
+        result_sx_list.insert(0, to_sx(cases[i][1]))
+
+    result_sx = ca.conditional(ind, result_sx_list, to_sx(else_result))
     return _create_return_type(else_result).from_casadi_sx(result_sx)
 
 
@@ -2287,11 +2293,14 @@ def if_less_eq_cases(
         return else_result
     """
     a_sx = to_sx(a)
-    result_sx = to_sx(else_result)
+    result_sx_list = []
+    ind = to_sx(len(b_result_cases))
     for i in reversed(range(len(b_result_cases))):
         b_sx = to_sx(b_result_cases[i][0])
-        b_result_sx = to_sx(b_result_cases[i][1])
-        result_sx = ca.if_else(ca.le(a_sx, b_sx), b_result_sx, result_sx)
+        ind = ca.if_else(ca.le(a_sx, b_sx), i, ind)
+        result_sx_list.insert(0, to_sx(b_result_cases[i][1]))
+
+    result_sx = ca.conditional(ind, result_sx_list, to_sx(else_result))
     return _create_return_type(else_result).from_casadi_sx(result_sx)
 
 
@@ -2308,9 +2317,7 @@ def substitution_cache(method):
 
     def wrapper(*args, **kwargs):
         if len(kwargs) > 0:
-            raise SymbolicMathError(
-                message="substitution_cache does not support kwargs"
-            )
+            raise NoArgsAllowedError()
         global _substitution_cache
         cache_key = method.__name__
         if not cache_key in _substitution_cache:
