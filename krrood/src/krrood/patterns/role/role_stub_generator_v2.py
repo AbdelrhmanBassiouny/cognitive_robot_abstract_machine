@@ -13,11 +13,8 @@ from typing import (
     Optional,
     Set,
     Type,
-    Union,
     TypeVar,
     Callable,
-    Sequence,
-    assert_never,
 )
 
 import libcst
@@ -70,7 +67,7 @@ class StubTransformer(libcst.CSTTransformer):
         return set(self._role_taker_to_roles_map.keys())
 
     def leave_FunctionDef(
-        self, original_node: libcst.FunctionDef, updated_node: libcst.FunctionDef
+            self, original_node: libcst.FunctionDef, updated_node: libcst.FunctionDef
     ) -> libcst.FunctionDef:
         """
         Prunes function bodies, replacing them with '...'.
@@ -104,11 +101,11 @@ class StubTransformer(libcst.CSTTransformer):
         ]
 
     def leave_SimpleStatementLine(
-        self,
-        original_node: libcst.SimpleStatementLine,
-        updated_node: libcst.SimpleStatementLine,
+            self,
+            original_node: libcst.SimpleStatementLine,
+            updated_node: libcst.SimpleStatementLine,
     ) -> (
-        libcst.SimpleStatementLine | libcst.FlattenSentinel[libcst.SimpleStatementLine]
+            libcst.SimpleStatementLine | libcst.FlattenSentinel[libcst.SimpleStatementLine]
     ):
         """
         Detects TypeVar definitions and inserts RoleFor classes after them if they are for a taker.
@@ -117,10 +114,10 @@ class StubTransformer(libcst.CSTTransformer):
             return updated_node
         node = updated_node.body[0]
         if not (
-            isinstance(node, libcst.Assign)
-            and isinstance(node.value, libcst.Call)
-            and isinstance(node.value.func, libcst.Name)
-            and node.value.func.value == TypeVar.__name__
+                isinstance(node, libcst.Assign)
+                and isinstance(node.value, libcst.Call)
+                and isinstance(node.value.func, libcst.Name)
+                and node.value.func.value == TypeVar.__name__
         ):
             return updated_node
 
@@ -148,7 +145,7 @@ class StubTransformer(libcst.CSTTransformer):
 
     @classmethod
     def get_keyword_value_from_call(
-        cls, call: libcst.Call, keyword: str
+            cls, call: libcst.Call, keyword: str
     ) -> Optional[libcst.BaseExpression]:
         for kw in call.args:
             if kw.keyword and kw.keyword.value == keyword:
@@ -156,7 +153,7 @@ class StubTransformer(libcst.CSTTransformer):
         return None
 
     def leave_ClassDef(
-        self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
+            self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
     ) -> libcst.ClassDef | libcst.FlattenSentinel[libcst.BaseCompoundStatement]:
         """
         Transforms class definitions: prunes methods, renames takers, and adjusts roles.
@@ -214,20 +211,16 @@ class StubTransformer(libcst.CSTTransformer):
         return self._get_type_var_name(taker_type) is not None
 
     def _transform_specialized_role(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+            self, node: libcst.ClassDef, wrapped_class: WrappedClass[Role]
     ) -> List[libcst.ClassDef]:
         """
         Handles a primary role that updates its taker type by synthesizing a specialized RoleFor base.
         """
         taker_type = wrapped_class.clazz.get_role_taker_type()
+        base_role = next(clazz for clazz in wrapped_class.clazz.__bases__ if issubclass(clazz, Role))
         specialized_name = (
-            f"{wrapped_class.clazz.__bases__[0].__name__}AsRoleFor{taker_type.__name__}"
+            f"{base_role.__name__}AsRoleFor{taker_type.__name__}"
         )
-
-        # Base role class (e.g. CEOAsFirstRole[TSubclassOfARoleTaker])
-        # Find which base role we are inheriting from
-        base_role = wrapped_class.clazz.__bases__[0]
-        base_role_name = base_role.__name__
 
         # TSubclassOfARoleTaker
         type_var_name = self._get_type_var_name(taker_type) or f"T{taker_type.__name__}"
@@ -235,7 +228,7 @@ class StubTransformer(libcst.CSTTransformer):
 
         # Specialized base: CEOAsFirstRoleAsRoleForSubclassOfARoleTaker(CEOAsFirstRole[TSubclassOfARoleTaker], SubclassOfARoleTakerMixin)
         specialized_bases = [
-            f"{base_role_name}[{type_var_name}]",
+            f"{base_role.__name__}[{type_var_name}]",
             f"{taker_type.__name__}Mixin",
         ]
 
@@ -249,20 +242,10 @@ class StubTransformer(libcst.CSTTransformer):
                 )
             )
 
-        specialized_class = libcst.ClassDef(
-            name=libcst.Name(specialized_name),
-            bases=[
-                libcst.Arg(value=libcst.parse_expression(b.strip()))
-                for b in specialized_bases
-            ],
-            body=libcst.IndentedBlock(
-                body=body if body else [self.make_ellipsis_expression()]
-            ),
-            decorators=[
-                libcst.Decorator(
-                    decorator=libcst.parse_expression("dataclass(eq=False)")
-                )
-            ],
+        specialized_class = self.make_dataclass(
+            name=specialized_name,
+            bases=specialized_bases,
+            body=body,
         )
 
         # Current class inherits from specialized base
@@ -275,7 +258,7 @@ class StubTransformer(libcst.CSTTransformer):
 
     @staticmethod
     def _transform_decorators(
-        node: libcst.ClassDef, wrapped_class: WrappedClass
+            node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> List[libcst.Decorator]:
         """
         Ensures @dataclass decorator is present with correct arguments.
@@ -287,7 +270,7 @@ class StubTransformer(libcst.CSTTransformer):
             if isinstance(dec.decorator, libcst.Name):
                 name = dec.decorator.value
             elif isinstance(dec.decorator, libcst.Call) and isinstance(
-                dec.decorator.func, libcst.Name
+                    dec.decorator.func, libcst.Name
             ):
                 name = dec.decorator.func.value
 
@@ -309,13 +292,14 @@ class StubTransformer(libcst.CSTTransformer):
         return [dec_node] + other_decorators
 
     def _transform_role_taker(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+            self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> List[libcst.ClassDef]:
         """
         Transforms a role taker class into a Mixin and a re-entry class.
         """
         original_name = node.name.value
-        node = node.with_changes(name=libcst.Name(f"{original_name}Mixin"))
+        mixin_name = f"{original_name}Mixin"
+        node = node.with_changes(name=libcst.Name(mixin_name))
 
         # Reconstruct body: own fields (kw_only=True) + propagated fields (init=False)
         new_body = []
@@ -330,12 +314,20 @@ class StubTransformer(libcst.CSTTransformer):
         # Create the original class inheriting from Mixin
         reentry_class = libcst.ClassDef(
             name=libcst.Name(original_name),
-            bases=[libcst.Arg(value=libcst.Name(node.name.value))],
-            body=libcst.IndentedBlock(body=[self.make_ellipsis_expression()]),
+            bases=[self.make_argument(mixin_name)],
+            body=self.make_ellipsis_body(),
             decorators=node.decorators,
         )
 
         return [node, reentry_class]
+
+    @classmethod
+    def make_argument(cls, value: str) -> libcst.Arg:
+        """
+        :param value: The value of the argument.
+        :return: libcst Arg object with the given value.
+        """
+        return libcst.Arg(value=libcst.parse_expression(value))
 
     def _is_role_base(self, base_node: libcst.BaseExpression) -> bool:
         """
@@ -349,7 +341,7 @@ class StubTransformer(libcst.CSTTransformer):
         return False
 
     def _transform_role(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass, role_type: RoleType
+            self, node: libcst.ClassDef, wrapped_class: WrappedClass, role_type: RoleType
     ) -> libcst.ClassDef:
         """
         Transforms a role class by adjusting its bases and filtering fields.
@@ -383,15 +375,15 @@ class StubTransformer(libcst.CSTTransformer):
 
                 # If it's a simple name and in taker's MRO, it's covered by RoleFor<Taker>
                 if (
-                    isinstance(base.value, libcst.Name)
-                    and base.value.value in taker_mro_names
+                        isinstance(base.value, libcst.Name)
+                        and base.value.value in taker_mro_names
                 ):
                     continue
 
                 new_bases.append(base)
 
             new_bases.insert(
-                0, libcst.Arg(value=libcst.parse_expression(role_for_name))
+                0, self.make_argument(role_for_name)
             )
             node = node.with_changes(bases=new_bases)
 
@@ -401,17 +393,17 @@ class StubTransformer(libcst.CSTTransformer):
         new_body = []
         for item in node.body.body:
             if (
-                isinstance(item, libcst.SimpleStatementLine)
-                and len(item.body) == 1
-                and isinstance(item.body[0], libcst.AnnAssign)
+                    isinstance(item, libcst.SimpleStatementLine)
+                    and len(item.body) == 1
+                    and isinstance(item.body[0], libcst.AnnAssign)
             ):
                 ann_assign = item.body[0]
                 if isinstance(ann_assign.target, libcst.Name):
                     if ann_assign.target.value == taker_attr_name:
                         new_body.append(item)
                     elif any(
-                        f.name == ann_assign.target.value
-                        for f in wrapped_class.own_fields
+                            f.name == ann_assign.target.value
+                            for f in wrapped_class.own_fields
                     ):
                         new_body.append(item)
                 else:
@@ -423,7 +415,7 @@ class StubTransformer(libcst.CSTTransformer):
         return node
 
     def _get_propagated_fields(
-        self, wrapped_class: WrappedClass
+            self, wrapped_class: WrappedClass
     ) -> List[libcst.BaseStatement]:
         """
         Gets libcst nodes for fields propagated from roles to the taker.
@@ -446,8 +438,8 @@ class StubTransformer(libcst.CSTTransformer):
             taker_attr_name = role_wrapped.clazz.role_taker_attribute_name()
             for role_field in role_wrapped.fields:
                 if (
-                    role_field.name != taker_attr_name
-                    and role_field.name not in seen_field_names
+                        role_field.name != taker_attr_name
+                        and role_field.name not in seen_field_names
                 ):
                     fields_to_inject.append(
                         self._create_field_node(role_field, init=False)
@@ -494,11 +486,11 @@ class StubTransformer(libcst.CSTTransformer):
         return re.sub(r"(?<!\.)\b\w+\b(?!\.)", replace_tv, type_name)
 
     def _create_field_node(
-        self,
-        wrapped_field: WrappedField,
-        init: bool = True,
-        kw_only: Optional[bool] = None,
-        available_type_vars: Optional[Set[str]] = None,
+            self,
+            wrapped_field: WrappedField,
+            init: bool = True,
+            kw_only: Optional[bool] = None,
+            available_type_vars: Optional[Set[str]] = None,
     ) -> libcst.SimpleStatementLine:
         """
         Creates a libcst SimpleStatementLine node for a field.
@@ -513,7 +505,7 @@ class StubTransformer(libcst.CSTTransformer):
         else:
             # Match FieldRepresentation logic for role-related classes
             f_copy.kw_only = f_copy.kw_only or (
-                not wrapped_field.is_required and f_copy.init
+                    not wrapped_field.is_required and f_copy.init
             )
 
         if kw_only is not None:
@@ -606,10 +598,10 @@ class StubTransformer(libcst.CSTTransformer):
 
     @classmethod
     def make_dataclass(
-        cls,
-        name: str,
-        bases: Optional[List[Type | str]] = None,
-        body: Optional[List[libcst.BaseStatement]] = None,
+            cls,
+            name: str,
+            bases: Optional[List[Type | str]] = None,
+            body: Optional[List[libcst.BaseStatement]] = None,
     ) -> libcst.ClassDef:
         """
         :param name: Name of the dataclass.
@@ -623,15 +615,15 @@ class StubTransformer(libcst.CSTTransformer):
             body=libcst.IndentedBlock(
                 body=body if body else [cls.make_ellipsis_expression()]
             ),
-            decorators=[libcst.Decorator(decorator=cls.make_dataclass_decorator())],
+            decorators=[cls.make_dataclass_decorator()],
         )
 
     @classmethod
     def make_class_method(
-        cls,
-        name: str,
-        args: Optional[List[str]] = None,
-        returns: Type | Callable | str = None,
+            cls,
+            name: str,
+            args: Optional[List[str]] = None,
+            returns: Type | Callable | str = None,
     ) -> libcst.FunctionDef:
         """
         :return: libcst FunctionDef object for the given class method.
@@ -640,7 +632,7 @@ class StubTransformer(libcst.CSTTransformer):
         return libcst.FunctionDef(
             name=libcst.Name(name),
             params=cls.make_cst_args(*params),
-            body=libcst.IndentedBlock(body=[cls.make_ellipsis_expression()]),
+            body=cls.make_ellipsis_body(),
             decorators=[libcst.Decorator(decorator=libcst.Name("classmethod"))],
             returns=(
                 libcst.Annotation(annotation=cls.to_cst_expression(returns))
@@ -650,8 +642,15 @@ class StubTransformer(libcst.CSTTransformer):
         )
 
     @classmethod
+    def make_ellipsis_body(cls) -> libcst.IndentedBlock:
+        """
+        :return: libcst IndentedBlock object with a single ellipsis expression.
+        """
+        return libcst.IndentedBlock(body=[cls.make_ellipsis_expression()])
+
+    @classmethod
     def to_cst_expression(
-        cls, has_name: Type | Callable | str
+            cls, has_name: Type | Callable | str
     ) -> libcst.BaseExpression:
         """
         :param has_name: An object that has a `__name__` attribute, one of class, method, or function.
@@ -675,8 +674,8 @@ class StubTransformer(libcst.CSTTransformer):
         )
 
     @classmethod
-    def make_dataclass_decorator(cls) -> libcst.BaseExpression:
-        return libcst.parse_expression("dataclass(eq=False)")
+    def make_dataclass_decorator(cls) -> libcst.Decorator:
+        return libcst.Decorator(decorator=libcst.parse_expression("dataclass(eq=False)"))
 
     @classmethod
     def make_ellipsis_expression(cls) -> libcst.SimpleStatementLine:
