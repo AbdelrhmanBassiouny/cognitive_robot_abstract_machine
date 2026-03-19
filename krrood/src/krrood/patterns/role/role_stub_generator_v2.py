@@ -49,25 +49,9 @@ class StubTransformer(libcst.CSTTransformer):
         self.diagram = diagram
         self.module = module
         self.needed_role_for_classes: Set[Type] = set()
-        self._role_taker_to_roles_map = self._build_role_taker_to_roles_map()
-
-    def _build_role_taker_to_roles_map(self) -> Dict[Type, List[WrappedClass]]:
-        mapping = defaultdict(list)
-        for wrapped_class in self.diagram.wrapped_classes:
-            if issubclass(wrapped_class.clazz, Role):
-                taker = wrapped_class.clazz.get_role_taker_type()
-                mapping[taker].append(wrapped_class)
-        return dict(mapping)
-
-    @property
-    def role_takers(self) -> Set[Type]:
-        """
-        :return: A set of all classes that act as role takers.
-        """
-        return set(self._role_taker_to_roles_map.keys())
 
     def leave_FunctionDef(
-            self, original_node: libcst.FunctionDef, updated_node: libcst.FunctionDef
+        self, original_node: libcst.FunctionDef, updated_node: libcst.FunctionDef
     ) -> libcst.FunctionDef:
         """
         Prunes function bodies, replacing them with '...'.
@@ -82,30 +66,18 @@ class StubTransformer(libcst.CSTTransformer):
         Checks if there is at least one primary role targeting this taker
         that does not update its taker type.
         """
-        roles = self._role_taker_to_roles_map.get(taker_type, [])
+        roles = self.diagram.get_roles_of_class(taker_type)
         return any(
             RoleType.get_role_type(role_wrapped) == RoleType.PRIMARY
             for role_wrapped in roles
         )
 
-    @lru_cache
-    def _get_primary_roles(self, taker_type: Type) -> List[WrappedClass[Role]]:
-        """
-        :return: A list of all primary roles targeting this taker.
-        """
-        roles = self._role_taker_to_roles_map.get(taker_type, [])
-        return [
-            role_wrapped
-            for role_wrapped in roles
-            if RoleType.get_role_type(role_wrapped) == RoleType.PRIMARY
-        ]
-
     def leave_SimpleStatementLine(
-            self,
-            original_node: libcst.SimpleStatementLine,
-            updated_node: libcst.SimpleStatementLine,
+        self,
+        original_node: libcst.SimpleStatementLine,
+        updated_node: libcst.SimpleStatementLine,
     ) -> (
-            libcst.SimpleStatementLine | libcst.FlattenSentinel[libcst.SimpleStatementLine]
+        libcst.SimpleStatementLine | libcst.FlattenSentinel[libcst.SimpleStatementLine]
     ):
         """
         Detects TypeVar definitions and inserts RoleFor classes after them if they are for a taker.
@@ -114,10 +86,10 @@ class StubTransformer(libcst.CSTTransformer):
             return updated_node
         node = updated_node.body[0]
         if not (
-                isinstance(node, libcst.Assign)
-                and isinstance(node.value, libcst.Call)
-                and isinstance(node.value.func, libcst.Name)
-                and node.value.func.value == TypeVar.__name__
+            isinstance(node, libcst.Assign)
+            and isinstance(node.value, libcst.Call)
+            and isinstance(node.value.func, libcst.Name)
+            and node.value.func.value == TypeVar.__name__
         ):
             return updated_node
 
@@ -126,7 +98,7 @@ class StubTransformer(libcst.CSTTransformer):
 
         if bound_name and bound_name in self.module.__dict__:
             clazz = self.module.__dict__[bound_name]
-            if clazz in self.role_takers and self._has_primary_role(clazz):
+            if clazz in self.diagram.role_takers and self._has_primary_role(clazz):
                 role_for_class = self._synthesize_role_for(clazz)
                 return libcst.FlattenSentinel([updated_node, role_for_class])
         return updated_node
@@ -145,7 +117,7 @@ class StubTransformer(libcst.CSTTransformer):
 
     @classmethod
     def get_keyword_value_from_call(
-            cls, call: libcst.Call, keyword: str
+        cls, call: libcst.Call, keyword: str
     ) -> Optional[libcst.BaseExpression]:
         for kw in call.args:
             if kw.keyword and kw.keyword.value == keyword:
@@ -153,7 +125,7 @@ class StubTransformer(libcst.CSTTransformer):
         return None
 
     def leave_ClassDef(
-            self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
+        self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
     ) -> libcst.ClassDef | libcst.FlattenSentinel[libcst.BaseCompoundStatement]:
         """
         Transforms class definitions: prunes methods, renames takers, and adjusts roles.
@@ -172,22 +144,23 @@ class StubTransformer(libcst.CSTTransformer):
             body=updated_node.body.with_changes(body=new_body_list)
         )
 
-        # Update decorators for dataclass preservation
-        updated_node = updated_node.with_changes(
-            decorators=self._transform_decorators(updated_node, wrapped_class)
-        )
-
-        is_taker = wrapped_class.clazz in self.role_takers
+        is_taker = wrapped_class.clazz in self.diagram.role_takers
         role_type = RoleType.get_role_type(wrapped_class)
 
         result_nodes = [updated_node]
-
-        if role_type == RoleType.SPECIALIZED_ROLE_FOR:
-            # transform_specialized_role returns [specialized_class, node]
-            result_nodes = self._transform_specialized_role(updated_node, wrapped_class)
-        elif role_type != RoleType.NOT_A_ROLE:
-            updated_node = self._transform_role(updated_node, wrapped_class, role_type)
-            result_nodes = [updated_node]
+        match role_type:
+            case RoleType.NOT_A_ROLE:
+                ...
+            case RoleType.SPECIALIZED_ROLE_FOR:
+                # transform_specialized_role returns [specialized_class, node]
+                result_nodes = self._transform_specialized_role(
+                    updated_node, wrapped_class
+                )
+            case _:
+                updated_node = self._transform_role(
+                    updated_node, wrapped_class, role_type
+                )
+                result_nodes = [updated_node]
 
         if is_taker:
             # transform_role_taker returns [Mixin, original_class]
@@ -211,16 +184,20 @@ class StubTransformer(libcst.CSTTransformer):
         return self._get_type_var_name(taker_type) is not None
 
     def _transform_specialized_role(
-            self, node: libcst.ClassDef, wrapped_class: WrappedClass[Role]
+        self, node: libcst.ClassDef, wrapped_class: WrappedClass[Role]
     ) -> List[libcst.ClassDef]:
         """
-        Handles a primary role that updates its taker type by synthesizing a specialized RoleFor base.
+        Handles a role that updates its taker type by synthesizing a specialized (due to role taker type update)
+         RoleFor base.
+
+        :param node: The original class node.
+        :param wrapped_class: The wrapped class for the role.
         """
         taker_type = wrapped_class.clazz.get_role_taker_type()
-        base_role = next(clazz for clazz in wrapped_class.clazz.__bases__ if issubclass(clazz, Role))
-        specialized_name = (
-            f"{base_role.__name__}AsRoleFor{taker_type.__name__}"
+        base_role = next(
+            clazz for clazz in wrapped_class.clazz.__bases__ if issubclass(clazz, Role)
         )
+        specialized_name = f"{base_role.__name__}AsRoleFor{taker_type.__name__}"
 
         # TSubclassOfARoleTaker
         type_var_name = self._get_type_var_name(taker_type) or f"T{taker_type.__name__}"
@@ -233,14 +210,14 @@ class StubTransformer(libcst.CSTTransformer):
         ]
 
         # Add fields from taker as init=False
-        body = []
         wrapped_taker = self.diagram.get_wrapped_class(taker_type)
-        for field_ in wrapped_taker.fields:
-            body.append(
-                self._create_field_node(
-                    field_, init=False, available_type_vars=available_type_vars
-                )
+        body = [
+            self._create_field_node(
+                field_, init=False, available_type_vars=available_type_vars
             )
+            for field_ in wrapped_taker.fields
+            if field_.field.init or field_.field.kw_only
+        ]
 
         specialized_class = self.make_dataclass(
             name=specialized_name,
@@ -250,56 +227,21 @@ class StubTransformer(libcst.CSTTransformer):
 
         # Current class inherits from specialized base
         node = node.with_changes(
-            bases=[libcst.Arg(value=libcst.Name(specialized_name))],
-            body=libcst.IndentedBlock(body=[self.make_ellipsis_expression()]),
+            bases=[self.make_argument(specialized_name)],
+            body=self.make_ellipsis_body(),
         )
 
         return [specialized_class, node]
 
-    @staticmethod
-    def _transform_decorators(
-            node: libcst.ClassDef, wrapped_class: WrappedClass
-    ) -> List[libcst.Decorator]:
-        """
-        Ensures @dataclass decorator is present with correct arguments.
-        """
-        # Find if @dataclass is already there
-        other_decorators = []
-        for dec in node.decorators:
-            name = ""
-            if isinstance(dec.decorator, libcst.Name):
-                name = dec.decorator.value
-            elif isinstance(dec.decorator, libcst.Call) and isinstance(
-                    dec.decorator.func, libcst.Name
-            ):
-                name = dec.decorator.func.value
-
-            if name != "dataclass":
-                other_decorators.append(dec)
-
-        # Get semantic dataclass args
-        args = DataclassArguments.from_wrapped_class(wrapped_class)
-        arg_str = str(args)
-
-        # Build new decorator
-        if arg_str:
-            dec_node = libcst.Decorator(
-                decorator=libcst.parse_expression(f"dataclass({arg_str})")
-            )
-        else:
-            dec_node = libcst.Decorator(decorator=libcst.Name("dataclass"))
-
-        return [dec_node] + other_decorators
-
     def _transform_role_taker(
-            self, node: libcst.ClassDef, wrapped_class: WrappedClass
+        self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> List[libcst.ClassDef]:
         """
         Transforms a role taker class into a Mixin and a re-entry class.
         """
         original_name = node.name.value
         mixin_name = f"{original_name}Mixin"
-        node = node.with_changes(name=libcst.Name(mixin_name))
+        node = self.get_renamed_node(node, mixin_name)
 
         # Reconstruct body: own fields (kw_only=True) + propagated fields (init=False)
         new_body = []
@@ -309,7 +251,7 @@ class StubTransformer(libcst.CSTTransformer):
         propagated_fields = self._get_propagated_fields(wrapped_class)
         new_body.extend(propagated_fields)
 
-        node = node.with_changes(body=node.body.with_changes(body=new_body))
+        node = self.get_node_with_new_body(node, new_body)
 
         # Create the original class inheriting from Mixin
         reentry_class = libcst.ClassDef(
@@ -322,6 +264,26 @@ class StubTransformer(libcst.CSTTransformer):
         return [node, reentry_class]
 
     @classmethod
+    def get_node_with_new_body(
+        cls, node: libcst.ClassDef, new_body: List[libcst.BaseStatement]
+    ) -> libcst.ClassDef:
+        """
+        :param node: The node to update.
+        :param new_body: The new body for the node.
+        :return: A new node that is a copy of the original node but with the new body.
+        """
+        return node.with_changes(body=node.body.with_changes(body=new_body))
+
+    @classmethod
+    def get_renamed_node(cls, node, new_name):
+        """
+        :param node: The node to rename.
+        :param new_name: The new name for the node.
+        :return: A new node that is a copy of the original node but with the new name.
+        """
+        return node.with_changes(name=libcst.Name(new_name))
+
+    @classmethod
     def make_argument(cls, value: str) -> libcst.Arg:
         """
         :param value: The value of the argument.
@@ -329,9 +291,13 @@ class StubTransformer(libcst.CSTTransformer):
         """
         return libcst.Arg(value=libcst.parse_expression(value))
 
-    def _is_role_base(self, base_node: libcst.BaseExpression) -> bool:
+    @classmethod
+    def _is_role_base(cls, base_node: libcst.BaseExpression) -> bool:
         """
         Checks if a base node is the 'Role' class or 'Role[T]'.
+
+        :param base_node: The base node to check.
+        :return: True if the base node is 'Role' or 'Role[T]', False otherwise.
         """
         if isinstance(base_node, libcst.Name):
             return base_node.value == "Role"
@@ -341,119 +307,155 @@ class StubTransformer(libcst.CSTTransformer):
         return False
 
     def _transform_role(
-            self, node: libcst.ClassDef, wrapped_class: WrappedClass, role_type: RoleType
+        self, node: libcst.ClassDef, wrapped_class: WrappedClass, role_type: RoleType
     ) -> libcst.ClassDef:
         """
         Transforms a role class by adjusting its bases and filtering fields.
         """
-        taker_type = wrapped_class.clazz.get_role_taker_type()
 
         if role_type == RoleType.PRIMARY:
-            # Adjust bases to RoleFor<Taker>
-            role_for_name = f"RoleFor{taker_type.__name__}"
-
-            # Handle generics
-            generic_params = get_generic_type_param(wrapped_class.clazz, Role)
-            if generic_params:
-                type_vars = [
-                    arg.__name__ for arg in generic_params if isinstance(arg, TypeVar)
-                ]
-                if type_vars:
-                    role_for_name = f"{role_for_name}[{type_vars[0]}]"
-
-            # Filter out original Role bases and redundant bases
-            new_bases = []
-
-            # Reconstruct RoleFor class name (without generics) for MRO check
-            # role_for_origin = f"RoleFor{taker_type.__name__}"
-
-            taker_mro_names = {c.__name__ for c in taker_type.mro()}
-
-            for base in node.bases:
-                if self._is_role_base(base.value):
-                    continue
-
-                # If it's a simple name and in taker's MRO, it's covered by RoleFor<Taker>
-                if (
-                        isinstance(base.value, libcst.Name)
-                        and base.value.value in taker_mro_names
-                ):
-                    continue
-
-                new_bases.append(base)
-
-            new_bases.insert(
-                0, self.make_argument(role_for_name)
-            )
-            node = node.with_changes(bases=new_bases)
+            node = self._transform_primary_role(node, wrapped_class)
 
         # Filter fields: keep only introduced fields
-        taker_attr_name = wrapped_class.clazz.role_taker_attribute_name()
-
         new_body = []
+        taker_attr_name = wrapped_class.clazz.role_taker_attribute_name()
+        kept_field_names = [f.name for f in wrapped_class.own_fields] + [
+            taker_attr_name
+        ]
         for item in node.body.body:
-            if (
-                    isinstance(item, libcst.SimpleStatementLine)
-                    and len(item.body) == 1
-                    and isinstance(item.body[0], libcst.AnnAssign)
-            ):
-                ann_assign = item.body[0]
-                if isinstance(ann_assign.target, libcst.Name):
-                    if ann_assign.target.value == taker_attr_name:
-                        new_body.append(item)
-                    elif any(
-                            f.name == ann_assign.target.value
-                            for f in wrapped_class.own_fields
-                    ):
-                        new_body.append(item)
-                else:
-                    new_body.append(item)
-            else:
-                new_body.append(item)
-        node = node.with_changes(body=node.body.with_changes(body=new_body))
+            field_name = self._get_field_name_if_statement_is_field_definition(item)
+            if field_name and field_name not in kept_field_names:
+                continue
+            new_body.append(item)
 
-        return node
+        updated_node = node.with_changes(body=node.body.with_changes(body=new_body))
+
+        return updated_node
+
+    @classmethod
+    def _get_field_name_if_statement_is_field_definition(
+        cls, item: libcst.BaseStatement
+    ) -> Optional[str]:
+        """
+        :param item: The statement to check.
+        :return: The field name if the statement is a field definition, otherwise None.
+        """
+        if (
+            isinstance(item, libcst.SimpleStatementLine)
+            and len(item.body) == 1
+            and isinstance(ann_assign := item.body[0], libcst.AnnAssign)
+            and isinstance(field_name := ann_assign.target, libcst.Name)
+        ):
+            return field_name.value
+        return None
+
+    def _transform_primary_role(
+        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+    ) -> libcst.ClassDef:
+        """
+        Transforms a primary role class by adjusting its bases and filtering fields.
+
+        :param node: The original class node.
+        :param wrapped_class: The wrapped class information.
+        """
+        taker_type = wrapped_class.clazz.get_role_taker_type()
+
+        # Adjust bases to RoleFor<Taker>
+        role_for_name = self._get_role_for_name(taker_type, wrapped_class)
+
+        # Filter out original Role bases and redundant bases
+        new_bases = []
+
+        taker_mro_names = {c.__name__ for c in taker_type.mro()}
+
+        for base in node.bases:
+            if self._is_role_base(base.value):
+                continue
+
+            # If it's a simple name and in taker's MRO, it's covered by RoleFor<Taker>
+            if (
+                isinstance(base.value, libcst.Name)
+                and base.value.value in taker_mro_names
+            ):
+                continue
+
+            new_bases.append(base)
+
+        new_bases.insert(0, self.make_argument(role_for_name))
+        return node.with_changes(bases=new_bases)
+
+    @classmethod
+    def _get_role_for_name(
+        cls, taker_type: Type, wrapped_class: WrappedClass[Role]
+    ) -> str:
+        """
+        Generates a name for the RoleFor class with the given taker type and wrapped class.
+
+        :param taker_type: The type of the taker.
+        :param wrapped_class: The wrapped class of the original role class.
+        """
+        role_for_name = f"RoleFor{taker_type.__name__}"
+
+        # Handle generics
+        generic_params = get_generic_type_param(wrapped_class.clazz, Role)
+        if generic_params:
+            type_vars = [
+                arg.__name__ for arg in generic_params if isinstance(arg, TypeVar)
+            ]
+            if type_vars:
+                role_for_name = f"{role_for_name}[{type_vars[0]}]"
+        return role_for_name
 
     def _get_propagated_fields(
-            self, wrapped_class: WrappedClass
+        self, wrapped_class: WrappedClass
     ) -> List[libcst.BaseStatement]:
         """
-        Gets libcst nodes for fields propagated from roles to the taker.
+        Get libcst nodes for fields propagated from roles to the root role taker.
+
+        :param wrapped_class: The wrapped class for the role.
+        :return: A list of libcst nodes representing the fields to be propagated.
         """
         # Only propagate to root takers
         root_taker = wrapped_class.clazz
-        if issubclass(wrapped_class.clazz, Role):
-            root_taker = wrapped_class.clazz.get_root_role_taker_type()
+        if issubclass(root_taker, Role):
+            root_taker = root_taker.get_root_role_taker_type()
 
         if wrapped_class.clazz != root_taker:
             return []
 
-        fields_to_inject = []
-        seen_field_names = {f.name for f in wrapped_class.fields}
-
         # Find all roles (recursive) for this taker
         roles = self._get_all_roles_for_taker(root_taker)
 
+        # Exclude taker fields from roles
+        possible_fields_to_propagate = []
         for role_wrapped in roles:
             taker_attr_name = role_wrapped.clazz.role_taker_attribute_name()
-            for role_field in role_wrapped.fields:
-                if (
-                        role_field.name != taker_attr_name
-                        and role_field.name not in seen_field_names
-                ):
-                    fields_to_inject.append(
-                        self._create_field_node(role_field, init=False)
-                    )
-                    seen_field_names.add(role_field.name)
+            possible_fields_to_propagate.extend(
+                [
+                    role_field
+                    for role_field in role_wrapped.fields
+                    if role_field.name != taker_attr_name
+                ]
+            )
 
-        return fields_to_inject
+        # Add unseen fields from roles to the root taker
+        fields_to_propagate = []
+        seen_field_names = {f.name for f in wrapped_class.fields}
+        for role_field in possible_fields_to_propagate:
+            if role_field.name not in seen_field_names:
+                fields_to_propagate.append(
+                    self._create_field_node(role_field, init=False)
+                )
+                seen_field_names.add(role_field.name)
+
+        return fields_to_propagate
 
     def _get_all_roles_for_taker(self, taker_type: Type) -> List[WrappedClass]:
         """
         Recursively finds all roles for a taker.
         """
         roles = []
-        direct_roles = self._role_taker_to_roles_map.get(taker_type, [])
+        direct_roles = self.diagram.get_roles_of_class(taker_type)
         for role_wrapped in direct_roles:
             roles.append(role_wrapped)
             # A role can also be a taker
@@ -486,11 +488,11 @@ class StubTransformer(libcst.CSTTransformer):
         return re.sub(r"(?<!\.)\b\w+\b(?!\.)", replace_tv, type_name)
 
     def _create_field_node(
-            self,
-            wrapped_field: WrappedField,
-            init: bool = True,
-            kw_only: Optional[bool] = None,
-            available_type_vars: Optional[Set[str]] = None,
+        self,
+        wrapped_field: WrappedField,
+        init: bool = True,
+        kw_only: Optional[bool] = None,
+        available_type_vars: Optional[Set[str]] = None,
     ) -> libcst.SimpleStatementLine:
         """
         Creates a libcst SimpleStatementLine node for a field.
@@ -505,7 +507,7 @@ class StubTransformer(libcst.CSTTransformer):
         else:
             # Match FieldRepresentation logic for role-related classes
             f_copy.kw_only = f_copy.kw_only or (
-                    not wrapped_field.is_required and f_copy.init
+                not wrapped_field.is_required and f_copy.init
             )
 
         if kw_only is not None:
@@ -573,7 +575,7 @@ class StubTransformer(libcst.CSTTransformer):
         # 1. Add fields from Taker as init=False
         # Only exclude fields from roles targeting THIS taker
         roles_targeting_taker_fields = set()
-        roles = self._role_taker_to_roles_map.get(taker_type, [])
+        roles = self.diagram.get_roles_of_class(taker_type)
         for role_wrapped in roles:
             for f in role_wrapped.own_fields:
                 roles_targeting_taker_fields.add(f.name)
@@ -598,10 +600,10 @@ class StubTransformer(libcst.CSTTransformer):
 
     @classmethod
     def make_dataclass(
-            cls,
-            name: str,
-            bases: Optional[List[Type | str]] = None,
-            body: Optional[List[libcst.BaseStatement]] = None,
+        cls,
+        name: str,
+        bases: Optional[List[Type | str]] = None,
+        body: Optional[List[libcst.BaseStatement]] = None,
     ) -> libcst.ClassDef:
         """
         :param name: Name of the dataclass.
@@ -620,10 +622,10 @@ class StubTransformer(libcst.CSTTransformer):
 
     @classmethod
     def make_class_method(
-            cls,
-            name: str,
-            args: Optional[List[str]] = None,
-            returns: Type | Callable | str = None,
+        cls,
+        name: str,
+        args: Optional[List[str]] = None,
+        returns: Type | Callable | str = None,
     ) -> libcst.FunctionDef:
         """
         :return: libcst FunctionDef object for the given class method.
@@ -650,7 +652,7 @@ class StubTransformer(libcst.CSTTransformer):
 
     @classmethod
     def to_cst_expression(
-            cls, has_name: Type | Callable | str
+        cls, has_name: Type | Callable | str
     ) -> libcst.BaseExpression:
         """
         :param has_name: An object that has a `__name__` attribute, one of class, method, or function.
@@ -675,7 +677,9 @@ class StubTransformer(libcst.CSTTransformer):
 
     @classmethod
     def make_dataclass_decorator(cls) -> libcst.Decorator:
-        return libcst.Decorator(decorator=libcst.parse_expression("dataclass(eq=False)"))
+        return libcst.Decorator(
+            decorator=libcst.parse_expression("dataclass(eq=False)")
+        )
 
     @classmethod
     def make_ellipsis_expression(cls) -> libcst.SimpleStatementLine:

@@ -50,7 +50,7 @@ from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 
 if TYPE_CHECKING:
-    from krrood.entity_query_language.predicate import PropertyDescriptor
+    from krrood.patterns.role.role import Role
 
 
 @dataclass
@@ -364,17 +364,30 @@ class ClassDiagram:
         self._create_nodes_for_specialized_generic_type_hints()
         self._create_all_relations()
 
-    def get_roles_of_class(self, cls: Type) -> List[Type]:
+    def get_roles_of_class(self, cls: Type) -> Tuple[WrappedClass[Role], ...]:
         """
         Get all roles that are subclasses of the given class.
 
         :param cls: The class for which to retrieve roles.
-        :return: A list of role classes that are subclasses of the given class.
+        :return: A tuple of role classes that are roles for the given class (the role taker).
         """
-        return [
-            t.clazz
-            for t in self.get_incoming_neighbors_with_relation_type(cls, HasRoleTaker)
-        ]
+        return self.get_incoming_neighbors_with_relation_type(cls, HasRoleTaker)
+
+    @cached_property
+    def role_takers(self) -> Tuple[Type, ...]:
+        """
+        :return: all classes that are role takers.
+        """
+        from krrood.patterns.role.role import Role
+
+        all_takers = []
+        for wrapped_class in self.wrapped_classes:
+            if (
+                issubclass(wrapped_class.clazz, Role)
+                and wrapped_class.clazz.get_role_taker_type() not in all_takers
+            ):
+                all_takers.append(wrapped_class.clazz.get_role_taker_type())
+        return tuple(all_takers)
 
     def get_outgoing_associations_with_condition(
         self,
@@ -509,7 +522,7 @@ class ClassDiagram:
         find_successors_by_edge = self._dependency_graph.find_successors_by_edge
         return tuple(find_successors_by_edge(wrapped_cls.index, edge_filter_func))
 
-    @lru_cache(maxsize=None)
+    @lru_cache
     def get_incoming_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
@@ -780,8 +793,11 @@ class ClassDiagram:
         for clazz in self.wrapped_classes:
             for wrapped_field in clazz.fields:
                 target_type = wrapped_field.type_endpoint
-
                 try:
+                    if isinstance(target_type, TypeVar):
+                        target_type = target_type.__bound__
+                    if target_type is None:
+                        continue
                     wrapped_target_class = self.get_wrapped_class(target_type)
                 except ClassIsUnMappedInClassDiagram:
                     continue
@@ -801,7 +817,7 @@ class ClassDiagram:
                     is_role_subclass = False
 
                 if wrapped_field.is_role_taker and is_role_subclass:
-                    role_taker_type = get_generic_type_param(actual_cls, Role)[0]
+                    role_taker_type = actual_cls.get_role_taker_type()
                     if role_taker_type is target_type:
                         association_type = HasRoleTaker
 

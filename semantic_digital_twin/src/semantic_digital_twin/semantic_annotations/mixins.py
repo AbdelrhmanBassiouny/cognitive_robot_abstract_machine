@@ -108,7 +108,7 @@ class HasRootKinematicStructureEntity(
 
     @classmethod
     def role_taker_attribute(cls) -> TKinematicStructureEntity:
-        return variable(cls, None).root
+        return variable_from(cls).root
 
     @property
     def scale(self) -> Scale:

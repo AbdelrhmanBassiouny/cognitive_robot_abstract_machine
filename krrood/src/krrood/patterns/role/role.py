@@ -1,3 +1,4 @@
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields
 from functools import lru_cache, cached_property
@@ -78,9 +79,11 @@ class Role(SubClassSafeGeneric[T], ABC):
         """
         :return: The type of the role taker.
         """
-        from krrood.symbol_graph.helpers import get_field_type_endpoint
-
-        type_ = get_field_type_endpoint(cls, cls.role_taker_attribute_name())
+        type_ = next(
+            f.type for f in fields(cls) if f.name == cls.role_taker_attribute_name()
+        )
+        if isinstance(type_, str):
+            type_ = sys.modules[cls.__module__].__dict__[type_]
         if isinstance(type_, TypeVar):
             if type_.__bound__ is not None:
                 type_ = type_.__bound__
@@ -191,7 +194,6 @@ class Role(SubClassSafeGeneric[T], ABC):
             super().__setattr__(key, value)
             if key not in ["_to_set_in_role_taker"]:
                 self._to_set_in_role_taker[key] = value
-
 
     def __hash__(self):
         """
