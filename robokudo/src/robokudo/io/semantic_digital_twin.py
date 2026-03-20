@@ -120,8 +120,12 @@ class AddCollisionCommand(WorldModelModification):
         :param body: Body to add or remove the collision to or from.
         :param new_collision: Collision to add or remove to or from the body.
         """
+
         self.body = body
+        """The body to add the collision to."""
+
         self.new_collision = new_collision
+        """The collision to add to the body."""
 
     @classmethod
     def from_kwargs(cls, kwargs: Dict[str, Any]) -> Self:
@@ -144,9 +148,15 @@ class UpdateCollisionCommand(WorldModelModification):
         :param old_collision: Collision to update from.
         :param new_collision: Collision to update to.
         """
+
         self.collision = old_collision
+        """The collision to update."""
+
         self.old_collision = copy.deepcopy(old_collision)
+        """A deep copy of the old collision for undo."""
+
         self.new_collision = new_collision
+        """The new collision to update to."""
 
         if type(self.old_collision) != type(self.new_collision):
             raise ValueError("cannot update collision to different shape type")
@@ -184,8 +194,12 @@ class RemoveCollisionCommand(WorldModelModification):
         :param body: Body to remove the collision from.
         :param old_collision: Collision to remove from the body.
         """
+
         self.body = body
+        """The body to remove the collision from."""
+
         self.old_collision = old_collision
+        """The collision to remove from the body."""
 
     @classmethod
     def from_kwargs(cls, kwargs: Dict[str, Any]) -> Self:
@@ -221,10 +235,16 @@ class AddObjectDiff:
         :param new_object: The new object to add to the world.
         """
         self.adapter = adapter
+        """SemDT adapter instance that is used to store the diff."""
+
         self.new_object = new_object
+        """The newly created object data."""
+
         self.tracked_object = self.adapter.object_to_tracked_object(new_object)
+        """A tracked object created from the newly created object data."""
 
         self.commands: List[WorldModelModification] = list()
+        """The commands to apply with this diff."""
 
         self.commands.append(
             AddKinematicStructureEntityModification(
@@ -291,8 +311,9 @@ class UpdateObjectDiff:
         :param old_object: The old object to update.
         :param new_object: The new object to update the old object to.
         """
+
         self.adapter = adapter
-        """SemDT adapter instance."""
+        """SemDT adapter instance used to store the diff."""
 
         self.old_tracked_object = old_object
         """The tracked object instance that will be updated."""
@@ -366,10 +387,15 @@ class RemoveObjectDiff:
         :param adapter: The SemanticDigitalTwinAdapter instance that is used to store the diff.
         :param old_object: The object to remove from the world.
         """
+
         self.adapter = adapter
+        """The SemDT adapter instance used to store the diff."""
+
         self.old_object = old_object
+        """The object to remove."""
 
         self.commands: List[WorldModelModification] = list()
+        """The commands to be executed by this diff."""
 
         self.commands.append(RemoveBodyModification(body_id=old_object.body.id))
 
@@ -442,6 +468,7 @@ class SemanticDigitalTwinAdapter:
             self.world.add_kinematic_structure_entity(self.root)
 
         self.rk_logger = logging.getLogger(PACKAGE_NAME)
+        """Logger instance for this adapter."""
 
         self.cas_fn = cas_fn
         """Callable that returns a cas instance when called."""

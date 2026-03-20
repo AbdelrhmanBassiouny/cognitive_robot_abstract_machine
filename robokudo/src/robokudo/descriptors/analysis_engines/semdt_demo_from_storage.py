@@ -1,5 +1,3 @@
-import os
-
 from robokudo.analysis_engine import AnalysisEngineInterface
 from robokudo.annotators.collection_reader import CollectionReaderAnnotator
 from robokudo.annotators.image_preprocessor import ImagePreprocessorAnnotator
@@ -12,11 +10,7 @@ from robokudo.annotators.pointcloud_crop import PointcloudCropAnnotator
 from robokudo.annotators.semantic_world_connector import SemanticDigitalTwinConnector
 from robokudo.descriptors import CrDescriptorFactory
 from robokudo.idioms import pipeline_init
-from robokudo.io.ros import get_node
 from robokudo.pipeline import Pipeline
-from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
-    VizMarkerPublisher,
-)
 
 
 class AnalysisEngine(AnalysisEngineInterface):
