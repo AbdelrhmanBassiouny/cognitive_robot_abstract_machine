@@ -9,7 +9,7 @@ from pycram.ros import get_node_names
 from typing_extensions import List, Callable, Optional
 
 from pycram.datastructures.pose import PoseStamped
-from pycram.designator import ObjectDesignatorDescription
+
 
 logger = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ def query_all_objects() -> dict:
 
 
 @init_robokudo_interface
-def query_object(obj_desc: ObjectDesignatorDescription) -> dict:
+def query_object(obj_desc: Any) -> dict:
     """Query RoboKudo for an object that fits the description."""
     goal = QueryGoal()
     goal.obj.type = str(obj_desc.types[0])

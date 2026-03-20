@@ -39,118 +39,6 @@ class PyCRAMQuaternionMapping(AlternativeMapping[PyCramQuaternion]):
         return PyCramQuaternion(self.x, self.y, self.z, self.w)
 
 
-# @dataclass
-# class PlanNodeMapping(AlternativeMapping[PlanNode]):
-#     status: TaskStatus = TaskStatus.CREATED
-#     start_time: Optional[datetime] = None
-#     end_time: Optional[datetime] = None
-#     reason: Optional[PlanFailure] = None
-#
-#     @classmethod
-#     def from_domain_object(cls, obj: PlanNode):
-#         """
-#         Convert a PlanNode to a PlanNodeDAO.
-#         """
-#         return cls(
-#             status=obj.status,
-#             start_time=obj.start_time,
-#             end_time=obj.end_time,
-#             reason=obj.reason,
-#         )
-#
-#     def to_domain_object(self) -> T:
-#         raise NotImplementedError()
-#
-#
-# @dataclass
-# class DesignatorNodeMapping(PlanNodeMapping, AlternativeMapping[DesignatorNode]):
-#     designator_ref: DesignatorDescription = None
-#     designator_type: Type[DesignatorDescription] = None
-#
-#     @classmethod
-#     def from_domain_object(cls, obj: DesignatorNode):
-#         """
-#         Convert a DesignatorNode to a DesignatorNodeDAO.
-#         """
-#         return cls(
-#             status=obj.status,
-#             start_time=obj.start_time,
-#             designator_type=obj.designator_type,
-#             designator_ref=obj.designator_ref,
-#             end_time=obj.end_time,
-#             reason=obj.reason,
-#         )
-#
-#     def to_domain_object(self) -> T:
-#         raise NotImplementedError()
-#
-#
-# @dataclass
-# class ActionDescriptionNodeMapping(
-#     DesignatorNodeMapping, AlternativeMapping[ActionDescriptionNode]
-# ):
-#
-#     @classmethod
-#     def from_domain_object(cls, obj: ActionDescriptionNode):
-#         """
-#         Convert an ActionNode to an ActionNodeDAO.
-#         """
-#         return cls(
-#             status=obj.status,
-#             designator_type=obj.designator_type,
-#             start_time=obj.start_time,
-#             end_time=obj.end_time,
-#             reason=obj.reason,
-#         )
-#
-#     def to_domain_object(self) -> T:
-#         raise NotImplementedError()
-#
-#
-# @dataclass
-# class MotionNodeMapping(DesignatorNodeMapping, AlternativeMapping[MotionNode]):
-#
-#     # @classmethod
-#     # def create_instance(cls, obj: MotionNode):
-#     #     """
-#     #     Convert a MotionNode to a MotionNodeDAO.
-#     #     """
-#     #     return cls(
-#     #         status=obj.status,
-#     #         action=obj.action,
-#     #         start_time=obj.start_time,
-#     #         end_time=obj.end_time,
-#     #         reason=obj.reason,
-#     #     )
-#
-#     def to_domain_object(self) -> T:
-#         raise NotImplementedError()
-#
-#
-# @dataclass
-# class ActionNodeMapping(DesignatorNodeMapping, AlternativeMapping[ActionNode]):
-#     designator_ref: ActionDescription = None
-#     execution_data: ExecutionData = None
-#
-#     @classmethod
-#     def from_domain_object(cls, obj: ActionNode):
-#         """
-#         Convert a ResolvedActionNode to a ResolvedActionNodeDAO.
-#         """
-#         return cls(
-#             status=obj.status,
-#             start_time=obj.start_time,
-#             designator_ref=obj.designator_ref,
-#             designator_type=obj.designator_type,
-#             end_time=obj.end_time,
-#             reason=obj.reason,
-#             execution_data=obj.execution_data,
-#         )
-#
-#     def to_domain_object(self) -> T:
-#         raise NotImplementedError()
-
-
 @dataclass
 class PlanEdge:
     parent: PlanNode
@@ -176,7 +64,7 @@ class PlanMapping(AlternativeMapping[Plan]):
         )
 
     def to_domain_object(self) -> T:
-        result = Plan(root=self.root, context=self.context)
+        result = Plan(context=self.context)
         for node in self.nodes:
             result.add_node(node)
 

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from pycram.validation.goal_validator import MultiJointPositionGoalValidator
     from pycram.language import LanguageNode
     from semantic_digital_twin.datastructures.definitions import StaticJointState
+    from pycram.robot_plans.actions.composite.searching import SearchAction
 
 
 @dataclass
@@ -34,6 +35,16 @@ class AllChildrenFailed(PlanFailure):
 
     def __post_init__(self):
         self.message = f"All children of {self.language_node} failed"
+
+
+@dataclass
+class PerceptionObjectNotFound(PlanFailure):
+    search_action: SearchAction
+
+    def __post_init__(self):
+        self.message = (
+            f"Perception object not found in search action {self.search_action}"
+        )
 
 
 @dataclass
