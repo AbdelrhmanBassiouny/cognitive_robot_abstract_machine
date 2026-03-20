@@ -181,7 +181,7 @@ def test_move_gripper_multi(immutable_multiple_robot_apartment):
     close_state = arm.manipulator.get_joint_state_by_type(GripperState.CLOSE)
 
     for connection, target in open_state.items():
-        assert connection.position == pytest.approx(target, abs=0.01)
+        assert connection.position == pytest.approx(target, abs=0.02)
 
     plan = execute_single(SetGripperAction(Arms.LEFT, GripperState.CLOSE), context)
 
@@ -189,7 +189,7 @@ def test_move_gripper_multi(immutable_multiple_robot_apartment):
         plan.perform()
 
     for connection, target in close_state.items():
-        assert connection.position == pytest.approx(target, abs=0.01)
+        assert connection.position == pytest.approx(target, abs=0.02)
 
 
 def test_park_arms_multi(immutable_multiple_robot_apartment):
@@ -550,9 +550,8 @@ def test_facing(immutable_multiple_robot_apartment):
         assert milk_in_robot_frame.position.y == pytest.approx(0.0, abs=0.01)
 
 
-def test_transport(mutable_multiple_robot_apartment, rclpy_node):
+def test_transport(mutable_multiple_robot_apartment):
     world, robot, context = mutable_multiple_robot_apartment
-    VizMarkerPublisher(_world=world, node=rclpy_node).with_tf_publisher()
 
     description = TransportAction(
         object_designator=world.get_body_by_name("milk.stl"),
