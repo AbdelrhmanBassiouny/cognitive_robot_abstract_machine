@@ -97,7 +97,7 @@ class SubclassOfRoleThatUpdatesRoleTakerType(
 ): ...
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(PersonMixin, Role[TPerson]):
+class ProfessorAsFirstRole(PersonMixin, Role[TPerson], Symbol):
     person: TPerson = field(kw_only=True)
     # Original Owner of the teacher_of field
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
@@ -113,7 +113,9 @@ class AssociateProfessorAsSubClassOfARoleInSameModule(
 TCEOAsFirstRole = TypeVar("TCEOAsFirstRole", bound=CEOAsFirstRole)
 
 @dataclass(eq=False)
-class RepresentativeAsSecondRoleMixin(CEOAsFirstRoleMixin, Role[TCEOAsFirstRole]):
+class RepresentativeAsSecondRoleMixin(
+    CEOAsFirstRoleMixin, Role[TCEOAsFirstRole], Symbol
+):
     ceo: TCEOAsFirstRole = field(init=False)
     # Original Owner of the representative_of field
     representative_of: RecognizedGroup = field(init=False)
@@ -133,7 +135,7 @@ TRepresentativeAsSecondRole = TypeVar(
 
 @dataclass(eq=False)
 class DelegateAsThirdRole(
-    RepresentativeAsSecondRoleMixin, Role[TRepresentativeAsSecondRole]
+    RepresentativeAsSecondRoleMixin, Role[TRepresentativeAsSecondRole], Symbol
 ):
     representative: TRepresentativeAsSecondRole = field(kw_only=True)
     # Original Owner of the delegate_of field

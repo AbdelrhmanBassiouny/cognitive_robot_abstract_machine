@@ -4,17 +4,12 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Set, List, TypeVar
 
-from krrood.entity_query_language.predicate import (
-    Symbol,  # type: ignore
-)
 from krrood.patterns.role.role import Role
+from krrood.symbol_graph.symbol_graph import Symbol
 
 @dataclass(eq=False)
 class HasName:
     name: str
-
-    def __hash__(self): ...
-    def __eq__(self, other): ...
 
 @dataclass(eq=False)
 class RecognizedGroup(HasName, Symbol):
@@ -32,62 +27,34 @@ class Course(HasName, Symbol): ...
 
 @dataclass(eq=False)
 class PersonMixin(HasName, Symbol):
-    works_for: RecognizedGroup = field(default=None, kw_only=True)
-    member_of: List[RecognizedGroup] = field(default_factory=list, kw_only=True)
-    teacher_of: List[Course] = field(init=False)
+    name: str = field(init=False)
+    works_for: RecognizedGroup = field(init=False)
+    member_of: List[RecognizedGroup] = field(init=False)
+    head_of: RecognizedGroup = field(init=False)
+    delegate_of: RecognizedGroup = field(init=False)
     members: Set[Person] = field(init=False)
     sub_organization_of: List[RecognizedGroup] = field(init=False)
-    head_of: RecognizedGroup = field(init=False)
+    teacher_of: List[Course] = field(init=False)
     representative_of: RecognizedGroup = field(init=False)
-    delegate_of: RecognizedGroup = field(init=False)
 
 @dataclass(eq=False)
-class Person(PersonMixin): ...
+class Person(PersonMixin):
+    name: str
+    works_for: RecognizedGroup = field(default=None, kw_only=True)
+    member_of: List[RecognizedGroup] = field(default_factory=list, kw_only=True)
 
 @dataclass(eq=False)
 class SubclassOfARoleTakerMixin(Person):
-    introduced_attribute: str = field(default="", kw_only=True)
-    head_of: RecognizedGroup = field(init=False)
+    introduced_attribute: str = field(init=False)
 
 @dataclass(eq=False)
-class SubclassOfARoleTaker(SubclassOfARoleTakerMixin): ...
+class SubclassOfARoleTaker(SubclassOfARoleTakerMixin):
+    introduced_attribute: str = field(default="", kw_only=True)
 
 TPerson = TypeVar("TPerson", bound=Person)
 
 @dataclass(eq=False)
-class RoleForPerson(Role[TPerson], PersonMixin):
-    name: str = field(init=False)
-    works_for: RecognizedGroup = field(init=False)
-    member_of: List[RecognizedGroup] = field(init=False)
-    @classmethod
-    def role_taker_attribute(cls) -> Person: ...
-
-@dataclass(eq=False)
-class CEOAsFirstRoleMixin(RoleForPerson[TPerson]):
-    person: TPerson = field(kw_only=True)
-    head_of: RecognizedGroup = field(default=None, kw_only=True)
-
-@dataclass(eq=False)
-class CEOAsFirstRole(CEOAsFirstRoleMixin): ...
-
-TSubclassOfARoleTaker = TypeVar("TSubclassOfARoleTaker", bound=SubclassOfARoleTaker)
-
-@dataclass(eq=False)
-class CEOAsFirstRoleAsRoleForSubclassOfARoleTaker(
-    CEOAsFirstRole[TSubclassOfARoleTaker], SubclassOfARoleTakerMixin
-):
-    name: str = field(init=False)
-    works_for: RecognizedGroup = field(init=False)
-    member_of: List[RecognizedGroup] = field(init=False)
-    introduced_attribute: str = field(init=False)
-
-@dataclass(eq=False)
-class SubclassOfRoleThatUpdatesRoleTakerType(
-    CEOAsFirstRoleAsRoleForSubclassOfARoleTaker
-): ...
-
-@dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson[TPerson]):
+class DirectDiamondShapedInheritanceWhereOneIsRole(Role[TPerson], PersonMixin):
     person: TPerson = field(kw_only=True)
 
     @classmethod
@@ -95,7 +62,8 @@ class DirectDiamondShapedInheritanceWhereOneIsRole(RoleForPerson[TPerson]):
 
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
-    RoleForPerson[TPerson],
+    Role[TPerson],
+    PersonMixin,
     RecognizedGroup,
 ):
     person: TPerson = field(kw_only=True)
@@ -104,8 +72,35 @@ class InDirectDiamondShapedInheritanceWhereOneIsRole(
     def role_taker_attribute(cls) -> TPerson: ...
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(RoleForPerson[TPerson]):
+class CEOAsFirstRoleMixin(Role[TPerson], PersonMixin):
+    person: TPerson = field(init=False)
+    head_of: RecognizedGroup = field(init=False)
+
+    @classmethod
+    def role_taker_attribute(cls) -> TPerson: ...
+
+@dataclass(eq=False)
+class CEOAsFirstRole(CEOAsFirstRoleMixin[TPerson]):
     person: TPerson = field(kw_only=True)
+    # Original Owner of the head_of field
+    head_of: RecognizedGroup = field(default=None, kw_only=True)
+
+TSubclassOfARoleTaker = TypeVar("TSubclassOfARoleTaker", bound=SubclassOfARoleTaker)
+
+@dataclass(eq=False)
+class CEOAsFirstRoleAsRoleForSubclassOfARoleTaker(
+    CEOAsFirstRole[TSubclassOfARoleTaker], SubclassOfARoleTakerMixin
+): ...
+
+@dataclass(eq=False)
+class SubclassOfRoleThatUpdatesRoleTakerType(
+    CEOAsFirstRoleAsRoleForSubclassOfARoleTaker
+): ...
+
+@dataclass(eq=False)
+class ProfessorAsFirstRole(PersonMixin, Role[TPerson], Symbol):
+    person: TPerson = field(kw_only=True)
+    # Original Owner of the teacher_of field
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
     @classmethod
@@ -119,40 +114,33 @@ class AssociateProfessorAsSubClassOfARoleInSameModule(
 TCEOAsFirstRole = TypeVar("TCEOAsFirstRole", bound=CEOAsFirstRole)
 
 @dataclass(eq=False)
-class RoleForCEOAsFirstRole(CEOAsFirstRoleMixin, Role[TCEOAsFirstRole]):
-    person: Person = field(init=False)
-    head_of: RecognizedGroup = field(init=False)
+class RepresentativeAsSecondRoleMixin(
+    CEOAsFirstRoleMixin, Role[TCEOAsFirstRole], Symbol
+):
+    ceo: TCEOAsFirstRole = field(init=False)
+    # Original Owner of the representative_of field
+    representative_of: RecognizedGroup = field(init=False)
+
     @classmethod
-    def role_taker_attribute(cls) -> CEOAsFirstRole: ...
+    def role_taker_attribute(cls) -> TCEOAsFirstRole: ...
 
 @dataclass(eq=False)
-class RepresentativeAsSecondRoleMixin(RoleForCEOAsFirstRole[TCEOAsFirstRole]):
+class RepresentativeAsSecondRole(RepresentativeAsSecondRoleMixin[TCEOAsFirstRole]):
     ceo: TCEOAsFirstRole = field(kw_only=True)
+    # Original Owner of the representative_of field
     representative_of: RecognizedGroup = field(default=None, kw_only=True)
-
-@dataclass(eq=False)
-class RepresentativeAsSecondRole(RepresentativeAsSecondRoleMixin): ...
 
 TRepresentativeAsSecondRole = TypeVar(
     "TRepresentativeAsSecondRole", bound=RepresentativeAsSecondRole
 )
 
 @dataclass(eq=False)
-class RoleForRepresentativeAsSecondRole(
-    RepresentativeAsSecondRoleMixin, Role[TRepresentativeAsSecondRole]
-):
-    ceo: CEOAsFirstRole = field(init=False)
-    representative_of: RecognizedGroup = field(init=False)
-    @classmethod
-    def role_taker_attribute(cls) -> RepresentativeAsSecondRole: ...
-
-@dataclass(eq=False)
 class DelegateAsThirdRole(
-    RoleForRepresentativeAsSecondRole[TRepresentativeAsSecondRole]
+    RepresentativeAsSecondRoleMixin, Role[TRepresentativeAsSecondRole], Symbol
 ):
     representative: TRepresentativeAsSecondRole = field(kw_only=True)
-
-    delegate_of: RecognizedGroup = field(kw_only=True, default=None)
+    # Original Owner of the delegate_of field
+    delegate_of: RecognizedGroup = field(default=None, kw_only=True)
 
     @classmethod
     def role_taker_attribute(cls) -> TRepresentativeAsSecondRole: ...
