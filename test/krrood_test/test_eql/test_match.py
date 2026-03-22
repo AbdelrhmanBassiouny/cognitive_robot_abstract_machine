@@ -15,7 +15,6 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.exceptions import NoKwargsInMatchVar
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.core.base_expressions import UnificationDict
-from krrood.parametrization.random_events_translator import is_literal_comparator
 from ..dataset.example_classes import Positions, Position
 from ..dataset.semantic_world_like_classes import (
     FixedConnection,
@@ -97,6 +96,13 @@ def test_select(handles_and_containers_world):
     assert isinstance(answers, UnificationDict)
     assert answers[container].name == "Container1"
     assert answers[handle].name == "Handle1"
+
+
+def test_debugger_issue():
+    # a normal query using a property
+    var = variable(int, [1, 2, 3])
+    with pytest.raises(TypeError):
+        assert list(var)
 
 
 def test_select_where(handles_and_containers_world):

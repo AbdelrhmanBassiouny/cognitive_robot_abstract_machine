@@ -3,7 +3,8 @@ import os
 import giskardpy_bullet_bindings as pb
 import pytest
 import trimesh
-from pkg_resources import resource_filename
+from importlib.resources import files
+from pathlib import Path
 
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.collision_checking.pybullet_collision_detector import (
@@ -29,7 +30,7 @@ def clean_cache(cache_dir):
 @pytest.fixture
 def non_convex_mesh():
     stl_path = os.path.join(
-        resource_filename("semantic_digital_twin", "../../"),
+        Path(files("semantic_digital_twin")).parent.parent,
         "resources",
         "stl",
         "jeroen_cup.stl",

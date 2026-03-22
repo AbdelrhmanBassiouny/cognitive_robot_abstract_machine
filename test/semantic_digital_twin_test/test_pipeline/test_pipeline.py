@@ -4,7 +4,8 @@ import unittest
 from dataclasses import dataclass
 
 import numpy as np
-from pkg_resources import resource_filename
+from importlib.resources import files
+from pathlib import Path
 
 from semantic_digital_twin.adapters.fbx import FBXParser
 from semantic_digital_twin.adapters.procthor.procthor_pipelines import (
@@ -43,7 +44,7 @@ class PipelineTestCase(unittest.TestCase):
             cls.dummy_world.add_connection(c1)
 
         cls.fbx_path = os.path.join(
-            resource_filename("semantic_digital_twin", "../../"),
+            Path(files("semantic_digital_twin")).parent.parent,
             "resources",
             "fbx",
             "test_dressers.fbx",

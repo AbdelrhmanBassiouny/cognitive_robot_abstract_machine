@@ -4,7 +4,8 @@ import unittest
 from dataclasses import asdict
 
 import numpy as np
-from pkg_resources import resource_filename
+from importlib.resources import files
+from pathlib import Path
 from sqlalchemy.orm import Session
 
 from krrood.ormatic.utils import create_engine
@@ -39,7 +40,7 @@ class ProcTHORTestCase(unittest.TestCase):
     def setUpClass(cls):
         super().setUpClass()
         json_dir = os.path.join(
-            resource_filename("semantic_digital_twin", "../../"),
+            Path(files("semantic_digital_twin")).parent.parent,
             "resources",
             "procthor_json",
         )
@@ -361,7 +362,7 @@ class ProcTHORTestCase(unittest.TestCase):
     def test_parse_full_world(self):
         world = ProcTHORParser.from_file(
             os.path.join(
-                resource_filename("semantic_digital_twin", "../../"),
+                Path(files("semantic_digital_twin")).parent.parent,
                 "resources",
                 "procthor_json",
                 "house_0.json",

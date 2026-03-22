@@ -3,7 +3,8 @@ from collections import defaultdict
 
 import numpy as np
 import pytest
-from pkg_resources import resource_filename
+from importlib.resources import files
+from pathlib import Path
 from typing_extensions import List
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName

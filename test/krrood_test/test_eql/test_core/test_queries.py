@@ -68,6 +68,14 @@ from ...dataset.semantic_world_like_classes import (
 )
 
 
+def test_variable_from_type_setting(handles_and_containers_world):
+    world = handles_and_containers_world
+    B = variable_from(world.bodies)
+    assert (
+        B._type_ is None
+    ), "The type of the variable should be None when created only from a domain."
+
+
 def test_empty_conditions(handles_and_containers_world, doors_and_drawers_world):
     world = handles_and_containers_world
     world2 = doors_and_drawers_world

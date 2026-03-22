@@ -1,7 +1,8 @@
 import os
 
 import pytest
-from pkg_resources import resource_filename
+from importlib.resources import files
+from pathlib import Path
 from typing_extensions import Tuple
 
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -17,8 +18,17 @@ from semantic_digital_twin.world_description.connections import (
     FixedConnection,
     OmniDrive,
 )
-from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom, DegreeOfFreedomLimits
-from semantic_digital_twin.world_description.geometry import Box, Scale, Sphere, Cylinder, FileMesh
+from semantic_digital_twin.world_description.degree_of_freedom import (
+    DegreeOfFreedom,
+    DegreeOfFreedomLimits,
+)
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Scale,
+    Sphere,
+    Cylinder,
+    FileMesh,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -114,7 +124,7 @@ def world_setup_simple():
                 FileMesh(
                     origin=HomogeneousTransformationMatrix.from_xyz_rpy(),
                     filename=os.path.join(
-                        resource_filename("semantic_digital_twin", "../../"),
+                        Path(files("semantic_digital_twin")).parent.parent,
                         "resources",
                         "stl",
                         "jeroen_cup.stl",

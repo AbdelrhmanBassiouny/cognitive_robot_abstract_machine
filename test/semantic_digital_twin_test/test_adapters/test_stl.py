@@ -1,7 +1,8 @@
 import os
 import unittest
 
-from pkg_resources import resource_filename
+from importlib.resources import files
+from pathlib import Path
 
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.world_description.geometry import FileMesh
@@ -12,13 +13,13 @@ class STLAdapterTestCase(unittest.TestCase):
     def setUp(self):
         # Set up any necessary resources or state before each krrood_test
         self.milk_path = os.path.join(
-            resource_filename("semantic_digital_twin", "../../"),
+            Path(files("semantic_digital_twin")).parent.parent,
             "resources",
             "stl",
             "milk.stl",
         )
         self.cup = os.path.join(
-            resource_filename("semantic_digital_twin", "../../"),
+            Path(files("semantic_digital_twin")).parent.parent,
             "resources",
             "stl",
             "jeroen_cup.stl",

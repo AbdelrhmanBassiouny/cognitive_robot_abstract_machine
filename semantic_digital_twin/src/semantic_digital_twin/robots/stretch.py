@@ -3,7 +3,8 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Self
 
-from pkg_resources import resource_filename
+from importlib.resources import files
+from pathlib import Path
 
 from semantic_digital_twin.robots.abstract_robot import (
     AbstractRobot,
@@ -20,7 +21,11 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     SelfCollisionMatrixRule,
     AvoidExternalCollisions,
 )
-from semantic_digital_twin.datastructures.definitions import StaticJointState, GripperState, TorsoState
+from semantic_digital_twin.datastructures.definitions import (
+    StaticJointState,
+    GripperState,
+    TorsoState,
+)
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import Quaternion
@@ -153,7 +158,7 @@ class Stretch(AbstractRobot, HasArms, HasNeck):
 
     def _setup_collision_rules(self):
         srdf_path = os.path.join(
-            resource_filename("semantic_digital_twin", "../../"),
+            Path(files("semantic_digital_twin")).parent.parent,
             "resources",
             "collision_configs",
             "stretch.srdf",
