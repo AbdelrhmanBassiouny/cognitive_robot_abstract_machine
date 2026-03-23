@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QScrollArea,
+    QGridLayout,
 )
 
 from giskardpy.middleware.ros2 import rospy
@@ -105,6 +106,7 @@ class BodyButton(QPushButton):
     def __post_init__(self):
         super().__init__(self.body.name.name)
         self.clicked.connect(self.on_click)
+        self.setMinimumHeight(40)
 
     def on_click(self):
         """
@@ -165,7 +167,10 @@ class Application(QMainWindow):
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.body_buttons_widget = QWidget()
-        self.body_buttons_layout = QVBoxLayout(self.body_buttons_widget)
+        self.body_buttons_layout = QGridLayout(self.body_buttons_widget)
+        self.body_buttons_layout.setSpacing(0)
+        self.body_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        self.body_buttons_layout.setAlignment(Qt.AlignTop)
         self.scroll_area.setWidget(self.body_buttons_widget)
 
         layout = QVBoxLayout()
@@ -213,7 +218,7 @@ class Application(QMainWindow):
 
     def refresh_body_buttons(self):
         """
-        Refreshes the list of body buttons.
+        Refreshes the list of body buttons in a grid layout.
         """
         while self.body_buttons_layout.count():
             item = self.body_buttons_layout.takeAt(0)
@@ -221,10 +226,12 @@ class Application(QMainWindow):
             if widget is not None:
                 widget.deleteLater()
 
-        for body in self.interface.bodies:
+        columns = 5
+        for index, body in enumerate(self.interface.bodies):
             button = BodyButton(body=body, interface=self.interface)
-            self.body_buttons_layout.addWidget(button)
-        self.body_buttons_layout.addStretch()
+            row = index // columns
+            column = index % columns
+            self.body_buttons_layout.addWidget(button, row, column)
 
 
 def handle_sigint(sig, frame):
