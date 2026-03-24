@@ -175,6 +175,16 @@ class Role(SubClassSafeGeneric[T], ABC):
         """
         role_taker_attr = self.role_taker_attribute_name()
 
+        # Bootstrap both internal fields before any other logic runs
+        for bootstrap_attr, default in [
+            ("_to_set_in_role_taker", {}),
+            ("_role_taker_field_set", False),
+        ]:
+            try:
+                object.__getattribute__(self, bootstrap_attr)
+            except AttributeError:
+                object.__setattr__(self, bootstrap_attr, default)
+
         if key == role_taker_attr:
             object.__setattr__(self, "_role_taker_field_set", True)
             # Also set the actual attribute defined in the dataclass
