@@ -20,6 +20,7 @@ from black.handle_ipynb_magics import lru_cache
 from libcst.codemod import ContextAwareTransformer, CodemodContext, transform_module
 from libcst.codemod.visitors import AddImportsVisitor
 from typing_extensions import Dict
+import rustworkx as rx
 
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedClass
@@ -44,7 +45,13 @@ class StubTransformer(ContextAwareTransformer):
     and applying the Role pattern transformations.
     """
 
-    def __init__(self, context, class_diagram, module, taker_modules):
+    def __init__(
+        self,
+        context: CodemodContext,
+        class_diagram: ClassDiagram,
+        module: ModuleType,
+        taker_modules: List[ModuleType],
+    ):
         super().__init__(context)
         self.class_diagram = class_diagram
         self.module_ = module
@@ -533,6 +540,15 @@ class StubTransformer(ContextAwareTransformer):
         direct_roles = self.class_diagram.get_roles_of_class(taker_type)
         for role_wrapped in direct_roles:
             roles.append(role_wrapped)
+            subclasses_of_role = rx.descendants(
+                self.class_diagram.inheritance_subgraph, role_wrapped.index
+            )
+            roles.extend(
+                [
+                    self.class_diagram.inheritance_subgraph[idx]
+                    for idx in subclasses_of_role
+                ]
+            )
             # A role can also be a taker
             roles.extend(self._get_all_roles_for_taker(role_wrapped.clazz))
         return roles
@@ -846,8 +862,11 @@ class RoleStubGeneratorV2:
                 path = self.get_generated_file_path(module)
                 with open(path, "w") as f:
                     f.write(stub_content)
-                run_ruff_on_file(str(path))
-                run_black_on_file(str(path))
+                try:
+                    run_ruff_on_file(str(path))
+                    run_black_on_file(str(path))
+                except RuntimeError as e:
+                    print(f"Error generating stub for {module}: {e}")
 
         return all_stub_contents
 
