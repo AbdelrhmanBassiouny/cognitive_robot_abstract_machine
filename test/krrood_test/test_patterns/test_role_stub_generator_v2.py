@@ -1,10 +1,8 @@
-import inspect
-from dataclasses import dataclass, fields, is_dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Any, Type, Optional, Sequence
+from typing import Dict, Optional, Sequence
 
 import libcst as cst
-import libcst.metadata as metadata
 import pytest
 
 from krrood.patterns.role.role_stub_generator_v2 import RoleStubGeneratorV2

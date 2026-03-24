@@ -6,6 +6,7 @@ from typing_extensions import Set, List, TypeVar
 
 from .role_takers_in_another_module import (
     RoleTakerInAnotherModule,
+    RoleTakerInAnotherModuleMixin,
 )
 from krrood.patterns.role.role import Role
 from krrood.symbol_graph.symbol_graph import Symbol
@@ -147,7 +148,7 @@ class DelegateAsThirdRole(
 
 @dataclass(eq=False)
 class RoleForTakerInAnotherModule(
-    RoleTakerInAnotherModule, Role[RoleTakerInAnotherModule]
+    RoleTakerInAnotherModuleMixin, Role[RoleTakerInAnotherModule]
 ):
     taker: RoleTakerInAnotherModule = field(kw_only=True)
     introduced_attribute: str = field(default="", kw_only=True)

@@ -470,10 +470,11 @@ class StubTransformer(ContextAwareTransformer):
         :param wrapped_class: The wrapped class of the original role class.
         :param add_generic: Whether to include generic type parameters in the mixin name.
         """
+        mixin_name = f"{taker_type.__name__}Mixin"
         if sys.modules[taker_type.__module__] != self.module_:
-            mixin_name = taker_type.__name__
-        else:
-            mixin_name = f"{taker_type.__name__}Mixin"
+            self.require_import(taker_type.__module__, [mixin_name])
+        #     mixin_name = taker_type.__name__
+        # else:
 
         if not issubclass(taker_type, Role) or not add_generic:
             return mixin_name
@@ -867,6 +868,7 @@ class RoleStubGeneratorV2:
                     run_black_on_file(str(path))
                 except RuntimeError as e:
                     print(f"Error generating stub for {module}: {e}")
+                    raise
 
         return all_stub_contents
 
