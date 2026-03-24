@@ -1198,41 +1198,6 @@ class World(HasSimulatorProperties):
 
             self.collision_manager.merge_collision_manager(other.collision_manager)
 
-    def _merge_dofs_with_state_of_world(self, other: World):
-        old_state = deepcopy(other.state)
-        for dof in other.degrees_of_freedom.copy():
-            other.remove_degree_of_freedom(dof)
-            self.add_degree_of_freedom(dof)
-        for dof_id in old_state.keys():
-            self.state[dof_id] = old_state[dof_id]
-
-    def _merge_connections_of_world(self, other: World):
-        other_root = other.root
-        other_connections = other.connections
-        for connection in other_connections:
-            other.remove_connection(connection)
-            other.remove_kinematic_structure_entity(connection.parent)
-            other.remove_kinematic_structure_entity(connection.child)
-            self.add_connection(connection)
-        other.remove_kinematic_structure_entity(other_root)
-        self.add_kinematic_structure_entity(other_root)
-
-    @staticmethod
-    def _remove_kinematic_structure_entities_of_world(other: World):
-        other_kse_with_world = [
-            kse for kse in other.kinematic_structure_entities if kse._world is not None
-        ]
-        for kinematic_structure_entity in other_kse_with_world:
-            other.remove_kinematic_structure_entity(kinematic_structure_entity)
-
-    def _merge_semantic_annotations_of_world(self, other: World):
-        other_semantic_annotations = [
-            semantic_annotation for semantic_annotation in other.semantic_annotations
-        ]
-        for semantic_annotation in other_semantic_annotations:
-            other.remove_semantic_annotation(semantic_annotation)
-            self.add_semantic_annotation(semantic_annotation)
-
     # %% Subgraph Targeting
 
     def move_branch_with_fixed_connection(
