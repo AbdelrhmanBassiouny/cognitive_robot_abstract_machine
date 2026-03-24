@@ -7,6 +7,7 @@ from krrood.entity_query_language.factories import (
     variable,
     match_variable,
 )
+from krrood.entity_query_language.predicate import HasRole
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Wardrobe,
     Door,
@@ -55,14 +56,19 @@ def conditions_331345798360792447350644865254855982739(case) -> bool:
 def conclusion_331345798360792447350644865254855982739(case) -> List[Drawer]:
     def get_drawers(case: World) -> List[Drawer]:
         """Get possible value(s) for World.semantic_annotations of types list/set of Drawer"""
-        handle = variable(Handle, case.semantic_annotations)
         prismatic_connection = variable(PrismaticConnection, case.connections)
         fixed_connection = match_variable(FixedConnection, case.connections)(
-            parent=prismatic_connection.child, child=handle
+            parent=prismatic_connection.child
         )
-        return inference(Drawer)(
-            root=fixed_connection.parent, handle=fixed_connection.child
-        ).tolist()
+        return (
+            entity(
+                inference(Drawer)(
+                    root=prismatic_connection.child, handle=fixed_connection.child
+                )
+            )
+            .where(HasRole(fixed_connection.child, Handle))
+            .tolist()
+        )
 
     return get_drawers(case)
 

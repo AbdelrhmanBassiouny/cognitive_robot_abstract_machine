@@ -192,10 +192,12 @@ class SymbolGraph(metaclass=SingletonMeta):
     )
 
     def __post_init__(self):
+        from krrood.patterns.role.role import Role
+
         if self._class_diagram is None:
             all_symbols = [
                 cls
-                for cls in recursive_subclasses(Symbol)
+                for cls in recursive_subclasses(Symbol) + recursive_subclasses(Role)
                 if hasattr(cls, "__module__")
                 and (cls.__module__ in sys.modules)
                 and not (
