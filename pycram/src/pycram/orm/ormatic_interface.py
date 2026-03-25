@@ -171,7 +171,10 @@ import typing_extensions
 import uuid
 
 
-from krrood.ormatic.dao import DataAccessObject, AssociationDataAccessObject
+from krrood.ormatic.data_access_objects.dao import (
+    DataAccessObject,
+    AssociationDataAccessObject,
+)
 from krrood.ormatic.custom_types import TypeType
 
 

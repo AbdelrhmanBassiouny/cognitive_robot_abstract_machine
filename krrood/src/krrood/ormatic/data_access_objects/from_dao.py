@@ -10,6 +10,7 @@ import rustworkx
 from krrood.ormatic.data_access_objects.base import (
     DataAccessObjectWorkItem,
     DataAccessObjectState,
+    InstanceDict,
 )
 
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from krrood.ormatic.data_access_objects.dao import (
         DataAccessObject,
     )
+
 
 @dataclass
 class FromDataAccessObjectWorkItem(DataAccessObjectWorkItem):

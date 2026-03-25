@@ -10,7 +10,7 @@ from sqlalchemy import TypeDecorator, types
 from typing_extensions import List, Optional, Type
 
 
-from krrood.ormatic.dao import AlternativeMapping
+from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
 
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.spatial_types import (

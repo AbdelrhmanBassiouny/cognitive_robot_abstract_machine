@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import fields
 from typing import _GenericAlias
 
+import rustworkx
 import sqlalchemy.inspection
 import sqlalchemy.orm
 from sqlalchemy import Column
@@ -17,6 +19,7 @@ from typing_extensions import (
     List,
     Iterable,
     Tuple,
+    Dict,
 )
 
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
@@ -87,21 +90,21 @@ class DataAccessObject(HasGeneric[T]):
        Converts a DAO back into a domain object using a Four-Phase Iterative Approach:
 
        - Phase 1: Allocation & Discovery (DFS):
-         Traverses the DAO graph (its referenced objects) to identify all reachable DAOs. For each DAO, it
-         allocates an uninitialized domain object (using ``__new__``) and records
+         Traverses the DAO relationships to identify all reachable DAOs. For each DAO, it
+         allocates an uninitialized domain object (or alternative mapping) (using ``__new__``) and records
          the discovery order.
        - Phase 2: Population & Alternative Mapping Resolution (Bottom-Up):
          Populates every field of the domain objects using ``setattr``. This avoids
          the complexities of constructor matching and ensures that circular
          references are handled correctly by using the already allocated identities.
-         If an object is an ``AlternativeMapping``, it is converted to its final
+       - Phase 3: For every field, if the value is an ``AlternativeMapping``, it is converted to its final
          domain object representation.
          During this phase, collections are represented as lists.
        - Phase 3: Container Finalization:
-         Converts temporary lists back to sets where required by type hints.
+         Convert containers that are currently lists but should be something else (e. g. sets) to the container from
+         the type hint.
        - Phase 4: Post-Initialization:
-         Calls ``__post_init__`` on all fully populated and
-         finalized domain objects.
+         Calls ``__post_init__`` on all fully populated and finalized domain objects but not on the alternative mappings.
 
 
     Alternative Mappings
@@ -114,6 +117,7 @@ class DataAccessObject(HasGeneric[T]):
 
     """
 
+    # %% conversion to dao routines
     @classmethod
     def to_dao(
         cls,
@@ -450,6 +454,8 @@ class DataAccessObject(HasGeneric[T]):
 
         return result
 
+    # %% conversion from dao routines
+
     def from_dao(
         self,
         state: Optional[FromDataAccessObjectState] = None,
@@ -485,18 +491,58 @@ class DataAccessObject(HasGeneric[T]):
 
         self._discover_dependencies(state, discovery_order)
 
-        # reorder discovery order to respect the states dependency graph
-        discovery_order = state._order_work_items_by_dependency_graph(
-            list((discovery_order))
-        )
+        # # reorder discovery order to respect the states dependency graph
+        # discovery_order = state._order_work_items_by_dependency_graph(
+        #     list(discovery_order)
+        # )
 
         self._fill_domain_objects(state, discovery_order)
+        self._convert_alternative_mappings_to_domain_objects(state, discovery_order)
         self._finalize_containers(state, discovery_order)
         self._call_post_inits(state, discovery_order)
 
         state.is_processing = False
 
         return state.get(self)
+
+    def _convert_alternative_mappings_to_domain_objects(
+        self,
+        state: FromDataAccessObjectState,
+        discovery_order: List[FromDataAccessObjectWorkItem],
+    ):
+        """
+        Convert all alternative mapping instances to their corresponding domain objects.
+        """
+
+        alternative_mapping_work_items = [
+            work_item
+            for work_item in discovery_order
+            if isinstance(work_item.domain_object, AlternativeMapping)
+        ]
+
+        alternative_mapping_work_items = state._order_work_items_by_dependency_graph(
+            alternative_mapping_work_items
+        )
+
+        for alternative_mapping_work_item in alternative_mapping_work_items:
+            old_id = id(alternative_mapping_work_item.domain_object)
+            final_domain_object = (
+                alternative_mapping_work_item.domain_object.to_domain_object()
+            )
+            discovery_order.remove(alternative_mapping_work_item)
+
+            for work_item in discovery_order:
+                for field in fields(work_item.domain_object):
+                    field_value = getattr(work_item.domain_object, field.name)
+                    if isinstance(field_value, list):
+                        for index, item in enumerate(field_value):
+                            if id(item) == old_id:
+                                field_value[index] = final_domain_object
+                    else:
+                        if id(field_value) == old_id:
+                            setattr(
+                                work_item.domain_object, field.name, final_domain_object
+                            )
 
     def _discover_dependencies(
         self,
@@ -540,7 +586,7 @@ class DataAccessObject(HasGeneric[T]):
         self._populate_relationships_and_scalars(state, discovery_order)
 
         state.resolution_mode = True
-        self._finalize_resolution(state, discovery_order)
+        # self._finalize_resolution(state, discovery_order)
 
     def _populate_relationships_and_scalars(
         self,

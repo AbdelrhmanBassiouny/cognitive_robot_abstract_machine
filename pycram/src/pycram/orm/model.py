@@ -2,7 +2,10 @@ from dataclasses import dataclass
 from typing import List
 
 import numpy as np
-from krrood.ormatic.dao import AlternativeMapping, T
+from krrood.ormatic.data_access_objects.alternative_mappings import (
+    AlternativeMapping,
+    T,
+)
 from sqlalchemy import TypeDecorator, types
 from typing_extensions import Optional
 

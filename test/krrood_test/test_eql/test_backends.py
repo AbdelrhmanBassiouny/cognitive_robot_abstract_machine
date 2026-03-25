@@ -15,7 +15,7 @@ from krrood.entity_query_language.factories import (
     variable_from,
 )
 from krrood.entity_query_language.query_graph import QueryGraph
-from krrood.ormatic.dao import to_dao
+from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.parametrization.model_registries import DictRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized

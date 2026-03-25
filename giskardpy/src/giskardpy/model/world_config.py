@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from sqlalchemy import select
 
-from krrood.ormatic.dao import get_dao_class
+from krrood.ormatic.data_access_objects.helper import get_dao_class
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.orm.utils import semantic_digital_twin_sessionmaker
