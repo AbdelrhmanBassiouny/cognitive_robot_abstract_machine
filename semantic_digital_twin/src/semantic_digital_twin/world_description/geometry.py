@@ -354,9 +354,11 @@ class Mesh(Shape):
         return BoundingBox.from_mesh(self.mesh, self.origin)
 
     def to_json(self) -> Dict[str, Any]:
+        # Serialize the raw (unscaled, unprocessed) mesh geometry and the scale separately
+        base_mesh = trimesh.load_mesh(self.filename, process=False)
         return {
             **super().to_json(),
-            "mesh": self.mesh.to_dict(),
+            "mesh": base_mesh.to_dict(),
             "scale": to_json(self.scale),
         }
 
@@ -445,7 +447,7 @@ class Mesh(Shape):
         uv: Optional[np.ndarray] = None,
         texture_file_path: Optional[str] = None,
         dirname: str = "/tmp",
-        file_type: str = "obj",
+        file_type: str = "stl",
     ) -> "Mesh":
         if origin is None:
             origin = HomogeneousTransformationMatrix()
