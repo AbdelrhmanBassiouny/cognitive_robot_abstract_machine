@@ -1061,11 +1061,20 @@ class ClassDiagram:
             if not is_dataclass(get_origin(next_type)):
                 continue
 
+            origin = get_origin(next_type)
+            if origin:
+                if not next_type.__parameters__ or all(
+                        isinstance(p, TypeVar) and p.__bound__ is not None for p in next_type.__parameters__):
+                    bindings = [p.__bound__ for p in next_type.__parameters__]
+                    if bindings:
+                        next_type = next_type[*bindings]
+                else:
+                    continue
+
             node = WrappedSpecializedGeneric(next_type)
             self.add_node(node)
 
             # Add explicit inheritance from the origin class
-            origin = get_origin(next_type)
             if origin:
                 try:
                     source_node = self.get_wrapped_class(origin)

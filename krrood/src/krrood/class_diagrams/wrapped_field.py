@@ -275,7 +275,7 @@ class WrappedField:
             return False
         if not isclass(origin) or not issubclass(origin, Generic):
             return False
-        return len(get_args(self.type_endpoint)) > 0
+        return len(get_args(self.type_endpoint)) > 0 and len(self.type_endpoint.__parameters__) == 0
 
     @cached_property
     def is_underspecified_generic(self) -> bool:

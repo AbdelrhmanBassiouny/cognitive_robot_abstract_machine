@@ -4,14 +4,16 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Set, List, TypeVar
 
-from dataset.role_and_ontology.role_takers_in_another_module import (
-    RoleTakerInAnotherModuleMixin,
+from .role_takers_in_another_module import (
     RoleTakerInAnotherModule,
 )
 from krrood.entity_query_language.predicate import (
     Symbol,  # type: ignore
 )
 from krrood.patterns.role.role import Role
+from test.krrood_test.dataset.role_and_ontology.role_takers_in_another_module import (
+    RoleTakerInAnotherModuleMixin,
+)
 
 @dataclass(eq=False)
 class HasName:
@@ -22,7 +24,7 @@ class HasName:
 
 @dataclass(eq=False)
 class RecognizedGroup(HasName, Symbol):
-    members: Set[Person] = field(default_factory=set)
+    members: Set[PersonInRoleAndOntology] = field(default_factory=set)
     sub_organization_of: List[RecognizedGroup] = field(default_factory=list)
 
 @dataclass(eq=False)
@@ -35,42 +37,44 @@ class Country(RecognizedGroup): ...
 class Course(HasName, Symbol): ...
 
 @dataclass(eq=False)
-class PersonRoleAttributes:
+class PersonInRoleAndOntologyRoleAttributes:
     teacher_of: List[Course] = field(init=False)
-    members: Set[Person] = field(init=False)
+    members: Set[PersonInRoleAndOntology] = field(init=False)
     sub_organization_of: List[RecognizedGroup] = field(init=False)
     head_of: RecognizedGroup = field(init=False)
     representative_of: RecognizedGroup = field(init=False)
     delegate_of: RecognizedGroup = field(init=False)
 
 @dataclass(eq=False)
-class PersonMixin(PersonRoleAttributes, HasName, Symbol):
+class PersonInRoleAndOntologyMixin(
+    PersonInRoleAndOntologyRoleAttributes, HasName, Symbol
+):
     name: str = field(init=False)
     works_for: RecognizedGroup = field(init=False)
     member_of: List[RecognizedGroup] = field(init=False)
 
 @dataclass(eq=False)
-class Person(PersonRoleAttributes, HasName, Symbol):
+class PersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, HasName, Symbol):
     works_for: RecognizedGroup = None
     member_of: List[RecognizedGroup] = field(default_factory=list)
 
 @dataclass(eq=False)
-class SubclassOfARoleTakerMixin(PersonMixin):
+class SubclassOfARoleTakerMixin(PersonInRoleAndOntologyMixin):
     introduced_attribute: str = field(init=False)
 
 @dataclass(eq=False)
-class SubclassOfARoleTaker(Person):
+class SubclassOfARoleTaker(PersonInRoleAndOntology):
     introduced_attribute: str = field(default="", kw_only=True)
 
-TPerson = TypeVar("TPerson", bound=Person)
+TPerson = TypeVar("TPerson", bound=PersonInRoleAndOntology)
 
 @dataclass(eq=False)
-class CEOAsFirstRoleMixin(PersonMixin, Role[TPerson], Symbol):
+class CEOAsFirstRoleMixin(PersonInRoleAndOntologyMixin, Role[TPerson], Symbol):
     person: TPerson = field(init=False)
     head_of: RecognizedGroup = field(init=False)
 
 @dataclass(eq=False)
-class CEOAsFirstRole(PersonMixin, Role[TPerson], Symbol):
+class CEOAsFirstRole(PersonInRoleAndOntologyMixin, Role[TPerson], Symbol):
     person: TPerson = field(kw_only=True)
     head_of: RecognizedGroup = None
 
@@ -86,7 +90,7 @@ class SubclassOfRoleThatUpdatesRoleTakerType(
 
 @dataclass(eq=False)
 class DirectDiamondShapedInheritanceWhereOneIsRole(
-    PersonMixin,
+    PersonInRoleAndOntologyMixin,
     Role[TPerson],
 ):
     person: TPerson = field(kw_only=True)
@@ -96,7 +100,7 @@ class DirectDiamondShapedInheritanceWhereOneIsRole(
 
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
-    RecognizedGroup, PersonMixin, Role[TPerson]
+    RecognizedGroup, PersonInRoleAndOntologyMixin, Role[TPerson]
 ):
     person: TPerson = field(kw_only=True)
 
@@ -105,7 +109,7 @@ class InDirectDiamondShapedInheritanceWhereOneIsRole(
 
 @dataclass(eq=False)
 class ProfessorAsFirstRole(
-    PersonMixin,
+    PersonInRoleAndOntologyMixin,
     Role[TPerson],
 ):
     person: TPerson = field(kw_only=True)

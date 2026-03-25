@@ -142,12 +142,7 @@ class HasRole(Predicate, Generic[T]):
     role: Type[Role[T]]
 
     def __call__(self) -> bool:
-        return any(
-            issubclass(self.role, wrapped_class.clazz)
-            for wrapped_class in SymbolGraph().class_diagram.get_roles_of_class(
-                self.entity.__class__
-            )
-        )
+        return Role.has_role(self.entity, self.role)
 
 
 @symbolic_function

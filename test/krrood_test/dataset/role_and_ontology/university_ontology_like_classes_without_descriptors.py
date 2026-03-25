@@ -31,7 +31,7 @@ class HasName:
 
 @dataclass(eq=False)
 class RecognizedGroup(HasName, Symbol):
-    members: Set[Person] = field(default_factory=set)
+    members: Set[PersonInRoleAndOntology] = field(default_factory=set)
     sub_organization_of: List[RecognizedGroup] = field(default_factory=list)
 
 
@@ -48,17 +48,17 @@ class Course(HasName, Symbol): ...
 
 
 @dataclass(eq=False)
-class Person(HasName, Symbol):
+class PersonInRoleAndOntology(HasName, Symbol):
     works_for: RecognizedGroup = None
     member_of: List[RecognizedGroup] = field(default_factory=list)
 
 
 @dataclass(eq=False)
-class SubclassOfARoleTaker(Person):
+class SubclassOfARoleTaker(PersonInRoleAndOntology):
     introduced_attribute: str = field(default="", kw_only=True)
 
 
-TPerson = TypeVar("TPerson", bound=Person)
+TPerson = TypeVar("TPerson", bound=PersonInRoleAndOntology)
 
 
 @dataclass(eq=False)

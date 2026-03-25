@@ -13,6 +13,7 @@ from krrood.entity_query_language.predicate import (
     HasTypes,
     HasType,
 )
+from krrood.patterns.role.role import Role
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
 from krrood.ormatic.alternative_mappings import *  # type: ignore
 from krrood.ormatic.ormatic import ORMatic
@@ -28,6 +29,7 @@ from .dataset.example_classes import (
     ConceptType,
     JSONSerializableClass,
 )
+from .dataset.role_and_ontology import university_ontology_like_classes_without_descriptors, role_takers_in_another_module
 from .dataset.semantic_world_like_classes import *
 from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
@@ -45,7 +47,8 @@ def generate_sqlalchemy_interface():
     """
 
     # build the symbol graph
-    symbol_graph = SymbolGraph()
+    SymbolGraph.clear()
+    symbol_graph = SymbolGraph(packages=["krrood", "test.krrood"])
 
     # collect all classes that need persistence
     all_classes = {c.clazz for c in symbol_graph._class_diagram.wrapped_classes}
@@ -56,7 +59,9 @@ def generate_sqlalchemy_interface():
     all_classes |= set(classes_of_module(krrood.symbol_graph.symbol_graph))
     all_classes |= set(classes_of_module(example_classes))
     all_classes |= set(classes_of_module(semantic_world_like_classes))
-    all_classes |= {Symbol}
+    all_classes |= set(classes_of_module(university_ontology_like_classes_without_descriptors))
+    all_classes |= set(classes_of_module(role_takers_in_another_module))
+    all_classes |= {Symbol, Role}
 
     # remove classes that don't need persistence
     all_classes -= {HasType, HasTypes, ContainsType}
@@ -72,6 +77,7 @@ def generate_sqlalchemy_interface():
     all_classes |= {FunctionType}
     logging.basicConfig(level=logging.DEBUG)
     logging.getLogger("krrood").setLevel(logging.DEBUG)
+
     class_diagram = ClassDiagram(
         list(sorted(all_classes, key=lambda c: c.__name__, reverse=True))
     )
@@ -111,18 +117,8 @@ def pytest_configure(config):
 # This must happen here (not in a pytest hook) because hooks run after the
 # conftest module is fully imported, which means the import on the next line
 # would fail if the generated file is stale or missing.
-try:
-    generate_sqlalchemy_interface()
-except Exception as e:
-    traceback.print_exc()
-    import warnings
+generate_sqlalchemy_interface()
 
-    warnings.warn(
-        f"Failed to generate ormatic_interface.py. "
-        "Tests may fail or behave inconsistently if the file was not generated correctly. "
-        f"Error: {e}",
-        RuntimeWarning,
-    )
 
 try:
     from .dataset.ormatic_interface import *

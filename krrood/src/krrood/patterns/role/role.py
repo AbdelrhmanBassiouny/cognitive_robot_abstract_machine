@@ -2,36 +2,21 @@ from __future__ import annotations
 
 import sys
 from abc import ABC, abstractmethod
-from collections import defaultdict
 from dataclasses import dataclass, field, fields
 from functools import lru_cache, cached_property
-from typing import List, TypeVar, ClassVar
 
-from typing_extensions import Type, get_origin, Any, Dict, Set
+from typing_extensions import Type, get_origin, Any, Dict, List, TypeVar, Iterator
 
 from krrood.class_diagrams.utils import T
+from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.symbol_graph.symbol_graph import Symbol, PredicateClassRelation, SymbolGraph
 from krrood.utils import get_generic_type_param
 
 
 @dataclass
-class EntityAndType(SubClassSafeGeneric[T]):
-    entity: T
-    type: Type[T] = field(init=False)
-
-    def __post_init__(self):
-        self.type = type(self.entity)
-
-    def __hash__(self):
-        return hash((self.entity, self.type))
-
-    def __eq__(self, other):
-        return hash(self) == hash(other)
-
-
-@dataclass
-class Role(SubClassSafeGeneric[T], ABC):
+class Role(SubClassSafeGeneric[T], Symbol, ABC):
     """
     Represents a role with generic typing. This is used in Role Design Pattern in OOP.
 
@@ -65,28 +50,58 @@ class Role(SubClassSafeGeneric[T], ABC):
     ..warning:: Always check if the attribute exists before accessing it if it is an attribute that is introduced by a
     Role, because if no Role instance exists, the attribute will not be accessible.
     """
-
     _role_taker_field_set: bool = field(default=False, init=False)
     _to_set_in_role_taker: Dict[str, Any] = field(default_factory=dict, init=False)
-    _role_taker_roles: ClassVar[Dict[Any, List[Role]]] = defaultdict(list)
-    _role_role_takers: ClassVar[Dict[EntityAndType, Set[EntityAndType]]] = defaultdict(set)
+
+    @classmethod
+    def has_role(cls, role_taker: T, role_type: Type[Role]) -> bool:
+        """
+        :return: Whether the role taker has the given role type.
+        """
+        return any(cls.yield_taker_roles_of_type(role_taker, role_type))
 
     @property
     def role_taker_roles(self) -> List[Role]:
         """
         :return: All roles of the role taker instance.
         """
-        return self._role_taker_roles[self.role_taker]
+        return self.get_taker_roles_of_type(self.role_taker, Role)
+
+    @classmethod
+    def get_taker_roles_of_type(cls, role_taker: T, role_type: Type[Role[T]]) -> List[Role[T]]:
+        """
+        :return: All roles of the given type for the role taker instance.
+        """
+        return list(cls.yield_taker_roles_of_type(role_taker, role_type))
+
+    @classmethod
+    def yield_taker_roles_of_type(cls, role_taker: T, role_type: Type[Role[T]]) -> Iterator[Role[T]]:
+        """
+        :return: All roles of the given type for the role taker instance.
+        """
+        wrapped_taker = SymbolGraph().get_wrapped_instance(role_taker)
+        yield from (relation.source.instance for relation in
+                    SymbolGraph().get_incoming_relations_with_type(wrapped_taker, HasRoleTaker) if
+                    isinstance(relation.source.instance, role_type))
 
     @property
-    def all_role_takers(self) -> Set[Any]:
+    def all_role_takers(self) -> List[Any]:
         """
         :return: All role takers of the role instance.
         """
-        return self._role_role_takers[EntityAndType(self)]
+        return list(self.yield_takers_of_role(self))
 
     @classmethod
-    @lru_cache(maxsize=None)
+    def yield_takers_of_role(cls, role: Role) -> Iterator[Any]:
+        """
+        :return: All role takers of the given role.
+        """
+        wrapped_role = SymbolGraph().get_wrapped_instance(role)
+        yield from (relation.target.instance for relation in
+                    SymbolGraph().get_outgoing_relations_with_type(wrapped_role, HasRoleTaker))
+
+    @classmethod
+    @lru_cache
     def get_root_role_taker_type(cls) -> Type[T]:
         """
         :return: The type of the role taker.
@@ -247,10 +262,22 @@ class Role(SubClassSafeGeneric[T], ABC):
 
         :param role_taker: The role taker instance to update the mapping for.
         """
-        Role._role_taker_roles[role_taker].append(self)
-        Role._role_role_takers[EntityAndType(self)].add(EntityAndType(role_taker))
+        wrapped_self = SymbolGraph().get_wrapped_instance(self)
+        wrapped_role_taker = SymbolGraph().get_wrapped_instance(role_taker)
+        SymbolGraph().add_relation(
+            HasRoleTaker(wrapped_self, wrapped_role_taker,
+                         self.role_taker_wrapped_field))
         if isinstance(role_taker, Role):
-            Role._role_role_takers[EntityAndType(self)].update(Role._role_role_takers[EntityAndType(role_taker)])
+            for relation in SymbolGraph().get_outgoing_relations_with_type(wrapped_role_taker, HasRoleTaker):
+                SymbolGraph().add_relation(HasRoleTaker(wrapped_self, relation.target, relation.wrapped_field))
+
+    @cached_property
+    def role_taker_wrapped_field(self) -> WrappedField:
+        """
+        :return: The wrapped field of this class that is pointing to the role taker.
+        """
+        return next(wf for wf in SymbolGraph().class_diagram.get_wrapped_class(self.__class__).fields if
+                    wf.name == self.role_taker_attribute_name())
 
     def _bootstrap_inner_attributes(self):
         """
@@ -276,9 +303,5 @@ class Role(SubClassSafeGeneric[T], ABC):
         return hash(self) == hash(other)
 
 
-@dataclass(eq=False)
-class RoleTaker(ABC):
-    roles: ClassVar[Dict[Type[Role], List[Role]]] = {}
-
-    def as_role(self, role_type: Type[T]) -> List[Role[T]]:
-        return self.roles.get(role_type, [])
+class HasRoleTaker(PredicateClassRelation[Role]):
+    ...

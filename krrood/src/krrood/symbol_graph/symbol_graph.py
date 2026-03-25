@@ -16,7 +16,7 @@ from typing_extensions import (
     Dict,
     DefaultDict,
     Callable,
-    ClassVar,
+    ClassVar, TypeVar,
 )
 
 from krrood import logger
@@ -25,19 +25,41 @@ from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.singleton import SingletonMeta
 from krrood.utils import recursive_subclasses
 
 
-@dataclass(unsafe_hash=True)
-class PredicateClassRelation:
+@dataclass(eq=False)
+class Symbol:
+    """Base class for things that can be cached in the symbol graph."""
+
+    _cache_instances_: ClassVar[bool] = True
+    """
+    Whether instances of this class should be cached or not in the symbol graph.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        """
+        Updates the cache with the given instance of a symbolic type.
+        """
+        instance = super().__new__(cls)
+        if cls._cache_instances_:
+            SymbolGraph().add_node(WrappedInstance(instance))
+        return instance
+
+
+TSymbol = TypeVar("TSymbol", bound=Symbol)
+
+@dataclass
+class PredicateClassRelation(SubClassSafeGeneric[TSymbol]):
     """
     Edge data representing a predicate-based relation between two wrapped instances.
 
     The relation carries a flag indicating whether it was inferred or added directly.
     """
 
-    source: WrappedInstance
+    source: WrappedInstance[TSymbol]
     """
     The source of the predicate
     """
@@ -74,19 +96,25 @@ class PredicateClassRelation:
     def color(self) -> str:
         return "red" if self.inferred else "black"
 
+    def __hash__(self):
+        return hash((self.__class__, self.source.index, self.wrapped_field, self.target.index))
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
 
 @dataclass
-class WrappedInstance:
+class WrappedInstance(SubClassSafeGeneric[TSymbol]):
     """
     A node wrapper around a concrete Symbol instance used in the instance graph.
     """
 
-    instance: InitVar[Symbol]
+    instance: InitVar[TSymbol]
     """
     The instance to wrap. Only passed as initialization variable.
     """
 
-    instance_reference: weakref.ReferenceType[Symbol] = field(init=False, default=None)
+    instance_reference: weakref.ReferenceType[TSymbol] = field(init=False, default=None)
     """
     A weak reference to the symbol instance this wraps.
     """
@@ -114,12 +142,12 @@ class WrappedInstance:
     This is needed to clean it up from the cache after the instance reference died.
     """
 
-    def __post_init__(self, instance: Symbol):
+    def __post_init__(self, instance: TSymbol):
         self.instance_reference = weakref.ref(instance)
         self.instance_type = type(instance)
 
     @property
-    def instance(self) -> Optional[Symbol]:
+    def instance(self) -> Optional[TSymbol]:
         """
         :return: The symbol that is referenced to. Can return None if this symbol is garbage collected already.
         """
@@ -168,7 +196,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         default_factory=PyDiGraph, init=False
     )
     """
-    A directed graph that stores all instances of `Symbol` and how they relate to each other.
+    A directed graph that stores all instances of included classes and how they relate to each other.
     """
 
     _instance_index: Dict[int, WrappedInstance] = field(
@@ -191,15 +219,19 @@ class SymbolGraph(metaclass=SingletonMeta):
         default_factory=dict, init=False, repr=False
     )
 
-    def __post_init__(self):
-        from krrood.patterns.role.role import Role
+    packages: list[str] = field(default_factory=list, kw_only=True)
+    """
+    List of packages to include in the symbol graph.
+    """
 
+    def __post_init__(self):
         if self._class_diagram is None:
             all_symbols = [
                 cls
-                for cls in recursive_subclasses(Symbol) + recursive_subclasses(Role)
+                for cls in recursive_subclasses(Symbol)
                 if hasattr(cls, "__module__")
                 and (cls.__module__ in sys.modules)
+                and not self.packages or any(cls.__module__.startswith(pkg_name) for pkg_name in self.packages)
                 and not (
                     getattr(sys.modules[cls.__module__], "__file__", "").endswith(
                         ".pyi"
@@ -245,7 +277,7 @@ class SymbolGraph(metaclass=SingletonMeta):
             if node.instance is None:
                 self.remove_node(node)
 
-    def get_instances_of_type(self, type_: Type[Symbol]) -> Iterable[Symbol]:
+    def get_instances_of_type(self, type_: Type) -> Iterable:
         """
         Get all wrapped instances of the given type and all its subclasses.
 
@@ -323,8 +355,8 @@ class SymbolGraph(metaclass=SingletonMeta):
     def get_incoming_relations_with_type(
         self,
         wrapped_instance: WrappedInstance,
-        relation_type: Type[PredicateClassRelation],
-    ) -> Iterable[PredicateClassRelation]:
+        relation_type: Type[PredicateClassRelation[TSymbol]],
+    ) -> Iterable[PredicateClassRelation[TSymbol]]:
         """
         Get all relations with the given type that are incoming to the given wrapped instance.
 
@@ -459,21 +491,3 @@ class SymbolGraph(metaclass=SingletonMeta):
             except Exception as e:
                 logger.error(e)
 
-
-@dataclass(eq=False)
-class Symbol:
-    """Base class for things that can be cached in the symbol graph."""
-
-    _cache_instances_: ClassVar[bool] = True
-    """
-    Whether instances of this class should be cached or not in the symbol graph.
-    """
-
-    def __new__(cls, *args, **kwargs):
-        """
-        Updates the cache with the given instance of a symbolic type.
-        """
-        instance = super().__new__(cls)
-        if cls._cache_instances_:
-            SymbolGraph().add_node(WrappedInstance(instance))
-        return instance

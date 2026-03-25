@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .university_ontology_like_classes_without_descriptors import Person
+    from .university_ontology_like_classes_without_descriptors import PersonInRoleAndOntology
 
 
 @dataclass(eq=False)
 class RoleTakerInAnotherModule:
     original_attribute: str
-    attribute_with_annotation_from_role_module: Person
+    attribute_with_annotation_from_role_module: PersonInRoleAndOntology
