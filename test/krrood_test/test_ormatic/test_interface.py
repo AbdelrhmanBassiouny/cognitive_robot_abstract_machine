@@ -139,7 +139,7 @@ def test_entity_and_derived(session, database):
     session.commit()
 
     # test the content of the database
-    queried_entity = session.scalars(select(CustomEntityDAO)).first()
+    queried_entity = session.scalars(select(EntityMappingDAO)).first()
     queried_derived = session.scalars(select(DerivedEntityDAO)).first()
 
     assert entity.name == queried_entity.overwritten_name
@@ -148,6 +148,9 @@ def test_entity_and_derived(session, database):
 
     entity_reconstructed = queried_entity.from_dao()
     derived_reconstructed = queried_derived.from_dao()
+
+    assert isinstance(entity_reconstructed, Entity)
+    assert isinstance(derived_reconstructed, DerivedEntity)
 
     assert entity.name == entity_reconstructed.name
     assert derived.name == derived_reconstructed.name

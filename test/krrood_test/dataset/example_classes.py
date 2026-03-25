@@ -211,7 +211,7 @@ class EntityAssociation(Symbol):
 
 
 @dataclass
-class CustomEntity(AlternativeMapping[Entity]):
+class EntityMapping(AlternativeMapping[Entity]):
     overwritten_name: str
 
     @classmethod

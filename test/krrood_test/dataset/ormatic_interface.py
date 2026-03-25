@@ -94,12 +94,12 @@ class ParentAlternativelyMappedMappingDAO_entities_association(
     source_parentalternativelymappedmappingdao_id: Mapped[int] = mapped_column(
         ForeignKey("ParentAlternativelyMappedMappingDAO.database_id")
     )
-    target_customentitydao_id: Mapped[int] = mapped_column(
-        ForeignKey("CustomEntityDAO.database_id")
+    target_entitymappingdao_id: Mapped[int] = mapped_column(
+        ForeignKey("EntityMappingDAO.database_id")
     )
 
-    target: Mapped[CustomEntityDAO] = relationship(
-        "CustomEntityDAO", foreign_keys=[target_customentitydao_id]
+    target: Mapped[EntityMappingDAO] = relationship(
+        "EntityMappingDAO", foreign_keys=[target_entitymappingdao_id]
     )
 
 
@@ -130,12 +130,12 @@ class AlternativeMappingAggregatorDAO_entities1_association(
     source_alternativemappingaggregatordao_id: Mapped[int] = mapped_column(
         ForeignKey("AlternativeMappingAggregatorDAO.database_id")
     )
-    target_customentitydao_id: Mapped[int] = mapped_column(
-        ForeignKey("CustomEntityDAO.database_id")
+    target_entitymappingdao_id: Mapped[int] = mapped_column(
+        ForeignKey("EntityMappingDAO.database_id")
     )
 
-    target: Mapped[CustomEntityDAO] = relationship(
-        "CustomEntityDAO", foreign_keys=[target_customentitydao_id]
+    target: Mapped[EntityMappingDAO] = relationship(
+        "EntityMappingDAO", foreign_keys=[target_entitymappingdao_id]
     )
 
 
@@ -149,12 +149,12 @@ class AlternativeMappingAggregatorDAO_entities2_association(
     source_alternativemappingaggregatordao_id: Mapped[int] = mapped_column(
         ForeignKey("AlternativeMappingAggregatorDAO.database_id")
     )
-    target_customentitydao_id: Mapped[int] = mapped_column(
-        ForeignKey("CustomEntityDAO.database_id")
+    target_entitymappingdao_id: Mapped[int] = mapped_column(
+        ForeignKey("EntityMappingDAO.database_id")
     )
 
-    target: Mapped[CustomEntityDAO] = relationship(
-        "CustomEntityDAO", foreign_keys=[target_customentitydao_id]
+    target: Mapped[EntityMappingDAO] = relationship(
+        "EntityMappingDAO", foreign_keys=[target_entitymappingdao_id]
     )
 
 
@@ -553,6 +553,34 @@ class GenericClassDAO(
     }
 
 
+class GenericClass_floatDAO(
+    GenericClassDAO,
+    DataAccessObject[test.krrood_test.dataset.example_classes.GenericClass[float]],
+):
+
+    __tablename__ = "GenericClass_floatDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(GenericClassDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    value: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    optional_value: Mapped[typing.Optional[builtins.float]] = mapped_column(
+        use_existing_column=True
+    )
+
+    container: Mapped[typing.List[builtins.float]] = mapped_column(
+        JSON, nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "GenericClass_floatDAO",
+        "inherit_condition": database_id == GenericClassDAO.database_id,
+    }
+
+
 class GenericClass_PositionDAO(
     GenericClassDAO,
     DataAccessObject[
@@ -598,34 +626,6 @@ class GenericClass_PositionDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "GenericClass_PositionDAO",
-        "inherit_condition": database_id == GenericClassDAO.database_id,
-    }
-
-
-class GenericClass_floatDAO(
-    GenericClassDAO,
-    DataAccessObject[test.krrood_test.dataset.example_classes.GenericClass[float]],
-):
-
-    __tablename__ = "GenericClass_floatDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(GenericClassDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    value: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-    optional_value: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-
-    container: Mapped[typing.List[builtins.float]] = mapped_column(
-        JSON, nullable=False, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "GenericClass_floatDAO",
         "inherit_condition": database_id == GenericClassDAO.database_id,
     }
 
@@ -1191,11 +1191,11 @@ class DoublePositionAggregatorDAO(
     }
 
 
-class CustomEntityDAO(
-    SymbolDAO, DataAccessObject[test.krrood_test.dataset.example_classes.CustomEntity]
+class EntityMappingDAO(
+    SymbolDAO, DataAccessObject[test.krrood_test.dataset.example_classes.EntityMapping]
 ):
 
-    __tablename__ = "CustomEntityDAO"
+    __tablename__ = "EntityMappingDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
@@ -1206,20 +1206,20 @@ class CustomEntityDAO(
     )
 
     __mapper_args__ = {
-        "polymorphic_identity": "CustomEntityDAO",
+        "polymorphic_identity": "EntityMappingDAO",
         "inherit_condition": database_id == SymbolDAO.database_id,
     }
 
 
 class DerivedEntityDAO(
-    CustomEntityDAO,
+    EntityMappingDAO,
     DataAccessObject[test.krrood_test.dataset.example_classes.DerivedEntity],
 ):
 
     __tablename__ = "DerivedEntityDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(CustomEntityDAO.database_id),
+        ForeignKey(EntityMappingDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
@@ -1230,7 +1230,7 @@ class DerivedEntityDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "DerivedEntityDAO",
-        "inherit_condition": database_id == CustomEntityDAO.database_id,
+        "inherit_condition": database_id == EntityMappingDAO.database_id,
     }
 
 
@@ -1250,13 +1250,13 @@ class EntityAssociationDAO(
     )
 
     entity_id: Mapped[int] = mapped_column(
-        ForeignKey("CustomEntityDAO.database_id", use_alter=True),
+        ForeignKey("EntityMappingDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    entity: Mapped[CustomEntityDAO] = relationship(
-        "CustomEntityDAO", uselist=False, foreign_keys=[entity_id], post_update=True
+    entity: Mapped[EntityMappingDAO] = relationship(
+        "EntityMappingDAO", uselist=False, foreign_keys=[entity_id], post_update=True
     )
 
     __mapper_args__ = {

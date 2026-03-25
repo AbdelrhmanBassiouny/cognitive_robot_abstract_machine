@@ -7,6 +7,7 @@ import threading
 import time
 from dataclasses import dataclass, field, is_dataclass, fields, MISSING
 from functools import lru_cache
+from inspect import isclass
 from typing import _GenericAlias
 
 import rustworkx
@@ -260,6 +261,9 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
     ] = field(default_factory=dict)
     """
     Cache for synthetic parent DAOs to maintain identity across discovery and filling phases.
+    Synthentic DAOs are used when the parent of a DAO uses and AlternativeMapping.
+    In this case the, the parent has to be converted using its specialized routine. After that, the child can copy
+    its inherited fields from the parent.
     """
 
     _class_dependencies: rustworkx.PyDiGraph = field(
@@ -337,7 +341,9 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
             alternative_mapping = dao_type.original_class()
 
             # if it's an alternative mapping, build its dependencies
-            if issubclass(alternative_mapping, AlternativeMapping):
+            if inspect.isclass(alternative_mapping) and issubclass(
+                alternative_mapping, AlternativeMapping
+            ):
                 self._build_dependencies_of_alternative_mapping(
                     alternative_mapping, dao_types, types_to_index
                 )
@@ -369,6 +375,10 @@ class FromDataAccessObjectState(DataAccessObjectState[FromDataAccessObjectWorkIt
 
                 # get the concrete domain type of the dao current dao type
                 concrete_domain_type = concrete_dao_type.original_class()
+
+                if not isclass(concrete_domain_type):  # skip non classes for now
+                    continue
+
                 if issubclass(concrete_domain_type, AlternativeMapping):
                     concrete_domain_type = concrete_domain_type.original_class()
 
@@ -605,7 +615,7 @@ class DataAccessObject(HasGeneric[T]):
     @classmethod
     def uses_alternative_mapping(cls, class_to_check: Type) -> bool:
         """
-        Check if a class uses an alternative mapping.
+        Check if a class uses an alternative mapping, i. e. its original class inherits from AlternativeMapping.
 
         :param class_to_check: The class to check.
         :return: True if alternative mapping is used.
