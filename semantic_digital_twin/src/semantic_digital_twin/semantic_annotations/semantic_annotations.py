@@ -131,6 +131,12 @@ class Handle(HasRootBody):
             }
         )
 
+@dataclass(eq=False)
+class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
+    """
+    A dishwasher is a kitchen appliance used for cleaning dishes, utensils, and cookware. It typically has a front door that opens to reveal racks for loading dirty items and a control panel for selecting wash cycles.
+    """
+
 
 @dataclass(eq=False)
 class Aperture(HasRootRegion):
@@ -359,9 +365,23 @@ class Drawer(Furniture, HasCaseAsRootBody, HasHandle, HasSlider, HasStorageSpace
 
 
 @dataclass(eq=False)
+class ShelfLayer(HasSupportingSurface):
+    """
+    A horizontal surface used for storing objects, typically found inside cabinets or on walls.
+    """
+
+
+@dataclass(eq=False)
 class Table(Furniture, HasSupportingSurface):
     """
     A semantic annotation that represents a table.
+    """
+
+
+@dataclass(eq=False)
+class Counter_Top(Furniture, HasSupportingSurface):
+    """
+    A semantic annotation that represents a counter top.
     """
 
 
@@ -739,39 +759,70 @@ class Produce(Food):
 
 
 @dataclass(eq=False)
-class Tomato(Produce):
+class Fruit(Produce):
+    """
+    Fruit.
+    """
+
+    ...
+
+
+@dataclass(eq=False)
+class Vegetable(Produce):
+    """
+    Vegetable.
+    """
+
+    ...
+
+
+@dataclass(eq=False)
+class Tomato(Vegetable):
     """
     A tomato.
     """
 
 
 @dataclass(eq=False)
-class Lettuce(Produce):
+class Lettuce(Vegetable):
     """
     Lettuce.
     """
 
 
 @dataclass(eq=False)
-class Apple(Produce):
+class Carrot(Vegetable):
+    """
+    A carrot.
+    """
+
+
+@dataclass(eq=False)
+class Apple(Fruit):
     """
     An apple.
     """
 
 
 @dataclass(eq=False)
-class Banana(Produce):
+class Banana(Fruit):
     """
     A banana.
     """
 
 
 @dataclass(eq=False)
-class Orange(Produce):
+class Orange(Fruit, IsPerceivable):
     """
     An orange.
     """
 
+
+@dataclass(eq=False)
+class Salt(Food, IsPerceivable):
+    """
+    A pack or container of salt (e.g., salt shaker or salt can).
+    """
 
 @dataclass(eq=False)
 class CoffeeTable(Table):
@@ -823,6 +874,13 @@ class Armchair(Chair):
 
 
 @dataclass(eq=False)
+class TrashCan(HasRootBody, Furniture):
+    """
+    Abstract class for Trash Can.
+    """
+
+
+@dataclass(eq=False)
 class ShelvingUnit(Furniture):
     """
     A shelving unit.
@@ -837,7 +895,7 @@ class Bed(Furniture):
 
 
 @dataclass(eq=False)
-class Sofa(Furniture):
+class Sofa(Furniture, HasSupportingSurface):
     """
     A sofa.
     """
