@@ -33,14 +33,7 @@ def setup_world() -> World:
     logger.setLevel(logging.DEBUG)
 
     pr2_sem_world = URDFParser.from_file(
-        os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "resources",
-            "robots",
-            "pr2_calibrated_with_ft.urdf",
-        )
+        "package://iai_pr2_description/robots/pr2_with_ft2_cableguide.xacro"
     ).parse()
     apartment_world = URDFParser.from_file(
         os.path.join(

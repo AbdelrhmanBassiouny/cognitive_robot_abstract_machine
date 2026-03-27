@@ -79,10 +79,19 @@ class TransportAction(ActionDescription):
         ).to_list()
         if len(drawer_annotation) == 0:
             return
+        handle = drawer_annotation[0].handle.root
 
         self.add_subplan(
-            execute_single(
-                OpenAction(drawer_annotation[0].handle.body, self.arm),
+            sequential(
+                [NavigateAction(
+                        next(iter(CostmapLocation(
+                            handle.global_pose,
+                            reachable_arm=self.arm,
+                            reachable=True,
+                            context=self.context
+                        ))),
+                        True,
+                    ),OpenAction(drawer_annotation[0].handle.body, self.arm)]
             )
         ).perform()
 

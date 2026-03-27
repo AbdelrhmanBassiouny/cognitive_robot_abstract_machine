@@ -1,4 +1,4 @@
----
+from pycram.motion_executor import simulated_robotfrom pycram.robot_plans import NavigateActionDescription---
 jupyter:
   jupytext:
     text_representation:
@@ -81,10 +81,11 @@ Since a robot is needed we will use the PR2 and use a milk as a target point for
 PR2 will be set to 0.2 since otherwise the arms of the robot will be too low to reach on the countertop.
 
 ```python
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 from pycram.language import SequentialPlan
 from pycram.robot_plans.actions import ParkArmsActionDescription, MoveTorsoActionDescription
-from pycram.datastructures.enums import Arms, TorsoState
+from pycram.datastructures.enums import Arms
+from semantic_digital_twin.datastructures.definitions import TorsoState
 
 with simulated_robot:
     SequentialPlan(context, 
@@ -95,14 +96,16 @@ with simulated_robot:
 
 ```python
 from pycram.designators.location_designator import CostmapLocation
-from pycram.designators.object_designator import BelieveObject
 from pycram.language import SequentialPlan
+from pycram.robot_plans.actions.core.navigation import NavigateActionDescription
+from pycram.motion_executor import simulated_robot
 
 location_description = CostmapLocation(target=world.get_body_by_name("milk.stl"), reachable_for=pr2_view)
 
-SequentialPlan(context, location_description)
+plan = SequentialPlan(context, NavigateActionDescription(location_description))
 
-print(location_description.resolve())
+with simulated_robot:
+    plan.perform()
 ```
 
 As you can see we get a pose near the countertop where the robot can be placed without colliding with it. Furthermore,
@@ -119,7 +122,6 @@ designator you can spawn them with the following cell.
 
 ```python
 from pycram.designators.location_designator import CostmapLocation
-from pycram.designators.object_designator import BelieveObject
 from pycram.language import SequentialPlan
 
 location_description = CostmapLocation(target=world.get_body_by_name("milk.stl"), visible_for=pr2_view)
@@ -144,7 +146,7 @@ need to execute the following cell.
 
 ```python
 from pycram.designators.location_designator import SemanticCostmapLocation
-from pycram.designators.object_designator import BelieveObject
+from pycram.language import SequentialPlan
 
 location_description = SemanticCostmapLocation(world.get_body_by_name("island_countertop"),
                                                for_object=world.get_body_by_name("milk.stl"))
@@ -161,6 +163,7 @@ of link names instead of a single link name, which allows us to sample from mult
 
 ```python
 from pycram.designators.location_designator import ProbabilisticSemanticLocation
+from pycram.language import SequentialPlan
 
 location_description = ProbabilisticSemanticLocation(world.get_body_by_name("island_countertop"),
                                                     for_object=world.get_body_by_name("milk.stl"))
@@ -180,7 +183,6 @@ already have a milk spawned in you world you can ignore the following cell.
 
 ```python
 from pycram.designators.location_designator import CostmapLocation
-from pycram.designators.object_designator import BelieveObject
 from pycram.language import SequentialPlan
 
 location_description = CostmapLocation(target=world.get_body_by_name("milk.stl"), visible_for=pr2_view)
@@ -199,7 +201,6 @@ same interface as the CostmapLocation.
 
 ```python
 from pycram.designators.location_designator import ProbabilisticCostmapLocation
-from pycram.designators.object_designator import BelieveObject
 from pycram.language import SequentialPlan
 
 location_description = ProbabilisticCostmapLocation(target=world.get_body_by_name("milk.stl"), visible_for=pr2_view)
@@ -213,14 +214,13 @@ for i, pose in enumerate(location_description):
 
 ## Accessing Locations
 
-Accessing describes a location from which the robot can open a drawer. The drawer is specified by a ObjetcPart
-designator which describes the handle of the drawer.
+Accessing describes a location from which the robot can open a drawer. The drawer is specified by the handle that is 
+used to open it.
 
 At the moment this location designator only works in the apartment environment, so please remove the kitchen if you
 spawned it in a previous example. Furthermore, we need a robot, so we also spawn the PR2 if it isn't spawned already.
 
 ```python
-from pycram.designators.object_designator import *
 from pycram.designators.location_designator import *
 from pycram.language import SequentialPlan
 

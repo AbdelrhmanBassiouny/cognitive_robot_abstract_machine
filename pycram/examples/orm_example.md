@@ -40,9 +40,8 @@ Next, we will write a simple plan where the robot parks its arms, moves somewher
 ```python
 from pycram.robot_plans import *
 from pycram.designators.location_designator import *
-from pycram.process_module import simulated_robot
-from pycram.datastructures.enums import Arms, ObjectType, Grasp, WorldMode, TorsoState
-from pycram.designators.object_designator import *
+from pycram.motion_executor import simulated_robot
+from pycram.datastructures.enums import Arms, Grasp
 from pycram.datastructures.pose import PoseStamped
 from pycram.language import SequentialPlan
 from pycram.testing import setup_world
@@ -55,11 +54,11 @@ context = Context(world, pr2_view)
 
 with simulated_robot:
     sp = SequentialPlan(context,
-        NavigateActionDescription(PoseStamped.from_list([0.6, 0.4, 0], [0, 0, 0, 1]), True),
+        NavigateActionDescription(PoseStamped.from_list([1.5, 1.6, 0.0], [0.0, 0.0, 0.0, 1], frame=world.root), True),
         ParkArmsActionDescription(Arms.BOTH),
-        PickUpActionDescription(world.get_body_by_name("milk.stl"), Arms.LEFT, GraspDescription(ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False)),
-        NavigateActionDescription(PoseStamped.from_list([1.3, 1, 0.], [0, 0, 0, 1], world.root), True),
-        PlaceActionDescription(world.get_body_by_name("milk.stl"), PoseStamped.from_list([2.0, 1.6, 0.9], [0, 0, 0, 1], world.root),
+        PickUpActionDescription(world.get_body_by_name("milk.stl"), Arms.LEFT, GraspDescription(ApproachDirection.FRONT, VerticalAlignment.NoAlignment, pr2_view.left_arm.manipulator)),
+        NavigateActionDescription(PoseStamped.from_list([1.6, 1, 0.], [0, 0, 0, 1], world.root), True),
+        PlaceActionDescription(world.get_body_by_name("milk.stl"), PoseStamped.from_list([2.3, 1.6, 1.03], [0, 0, 0, 1], world.root),
                                Arms.LEFT))
     sp.perform()
 ```
@@ -109,11 +108,12 @@ In practice, the join would look like this:
 ```python
 from pycram.datastructures.pose import PyCramVector3, PyCramPose, PoseStamped
 from pycram.robot_plans import PickUpAction
+from pycram.orm.ormatic_interface import Vector3MappingDAO, ActionNodeMappingDAO, PoseStampedDAO, PoseMappingDAO
 
-object_actions = (session.scalars(select(Vector3DAO)
-                                  .join(ResolvedActionNodeMappingDAO.execution_data)
+object_actions = (session.scalars(select(Vector3MappingDAO)
+                                  .join(ActionNodeMappingDAO.execution_data)
                                   .join(PoseStampedDAO.pose)
-                                  .join(PoseDAO.position)).all())
+                                  .join(PoseMappingDAO.position)).all())
 print(*object_actions, sep="\n")
 ```
 
@@ -158,7 +158,7 @@ The new class has to follow this pattern:
 
 ```python
 from dataclasses import dataclass
-from ormatic.dao import AlternativeMapping
+from krrood.ormatic.dao import AlternativeMapping
 from pycram.datastructures.enums import Arms
 from pycram.datastructures.grasp import GraspDescription
 from pycram.robot_plans import PickUpAction as PickUpActionDesignator, ActionDescription

@@ -1,17 +1,23 @@
 import os
 
 from pycram.datastructures.dataclasses import Context
-from pycram.datastructures.enums import TorsoState, Arms
+from pycram.datastructures.enums import Arms
 from pycram.datastructures.pose import PoseStamped
 from pycram.language import SequentialPlan
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 from pycram.robot_plans import MoveTorsoActionDescription, TransportActionDescription
 from pycram.robot_plans import ParkArmsActionDescription
 from pycram.testing import setup_world
 from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.reasoning.world_reasoner import WorldReasoner
 from semantic_digital_twin.robots.pr2 import PR2
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl, Spoon
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Bowl,
+    Spoon,
+    Drawer,
+    Handle,
+)
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
 )
@@ -40,20 +46,9 @@ with world.modify_world():
     connection = FixedConnection(
         parent=world.get_body_by_name("cabinet10_drawer_top"), child=spoon.root
     )
-try:
-    import rclpy
-
-    rclpy.init()
-    from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
-        VizMarkerPublisher,
-    )
-
-    v = VizMarkerPublisher(world, rclpy.create_node("viz_marker"))
-except ImportError:
-    pass
-
     world.merge_world(spoon, connection)
 
+
 try:
     import rclpy
 
@@ -62,7 +57,7 @@ try:
         VizMarkerPublisher,
     )
 
-    v = VizMarkerPublisher(world, rclpy.create_node("viz_marker"))
+    v = VizMarkerPublisher(_world=world, node=rclpy.create_node("viz_marker"))
 except ImportError:
     pass
 
@@ -74,9 +69,15 @@ with world.modify_world():
     world_reasoner.reason()
     world.add_semantic_annotations(
         [
-            Bowl(body=world.get_body_by_name("bowl.stl")),
-            Spoon(body=world.get_body_by_name("spoon.stl")),
+            Bowl(root=world.get_body_by_name("bowl.stl")),
+            Spoon(root=world.get_body_by_name("spoon.stl")),
         ]
+    )
+    world.add_semantic_annotation(
+        Drawer(
+            root=world.get_body_by_name("cabinet10_drawer_top"),
+            handle=Handle(root=world.get_body_by_name("handle_cab10_t")),
+        )
     )
 
 plan = SequentialPlan(
@@ -89,13 +90,13 @@ plan = SequentialPlan(
         Arms.LEFT,
     ),
     TransportActionDescription(
-        world.get_body_by_name("spoon.stl"),
-        PoseStamped.from_list([5.1, 3.3, 0.75], [0, 0, 1, 1], frame=world.root),
+        world.get_body_by_name("bowl.stl"),
+        PoseStamped.from_list([5, 3.3, 0.75], frame=world.root),
         Arms.LEFT,
     ),
     TransportActionDescription(
-        world.get_body_by_name("bowl.stl"),
-        PoseStamped.from_list([5, 3.3, 0.75], frame=world.root),
+        world.get_body_by_name("spoon.stl"),
+        PoseStamped.from_list([5.1, 3.3, 0.75], [0, 0, 1, 1], frame=world.root),
         Arms.LEFT,
     ),
 )

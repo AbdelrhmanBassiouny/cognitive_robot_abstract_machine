@@ -77,7 +77,7 @@ from pycram.robot_plans import NavigateActionDescription
 from pycram.datastructures.pose import PoseStamped
 from pycram.language import SequentialPlan
 
-pose = PoseStamped.from_list([1.3, 2, 0], [0, 0, 0, 1])
+pose = PoseStamped.from_list([1.3, 2, 0], [0, 0, 0, 1], frame=world.root)
 
 # This is the Designator Description
 navigate_description = NavigateActionDescription(target_location=[pose])
@@ -93,7 +93,7 @@ description.
 To execute the created plan just call perform on it. 
 
 ```python
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 
 with simulated_robot:
     plan.perform()
@@ -115,8 +115,8 @@ a {meth}`~pycram.process_module.simulated_robot` environment.
 
 ```python
 from pycram.robot_plans import MoveTorsoActionDescription
-from pycram.process_module import simulated_robot
-from pycram.datastructures.enums import TorsoState
+from pycram.motion_executor import simulated_robot
+from semantic_digital_twin.datastructures.definitions import TorsoState
 from pycram.language import SequentialPlan
 
 torso_pose = TorsoState.HIGH
@@ -137,8 +137,9 @@ The procedure is similar to the last time, but this time we will shorten it a bi
 
 ```python
 from pycram.robot_plans import SetGripperActionDescription
-from pycram.process_module import simulated_robot
-from pycram.datastructures.enums import GripperState, Arms
+from pycram.motion_executor import simulated_robot
+from pycram.datastructures.enums import Arms
+from semantic_digital_twin.datastructures.definitions import GripperState
 from pycram.language import SequentialPlan
 
 gripper = Arms.RIGHT
@@ -154,7 +155,7 @@ Park arms is used to move one or both arms into the default parking position.
 
 ```python
 from pycram.robot_plans import ParkArmsActionDescription
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 from pycram.datastructures.enums import Arms
 from pycram.language import SequentialPlan
 
@@ -174,8 +175,9 @@ To start we need an environment in which we can pick up and place things as well
 
 ```python
 from pycram.robot_plans import PickUpActionDescription, PlaceActionDescription, ParkArmsActionDescription, MoveTorsoActionDescription, NavigateActionDescription
-from pycram.process_module import simulated_robot
-from pycram.datastructures.enums import Arms, ApproachDirection, TorsoState, VerticalAlignment
+from pycram.motion_executor import simulated_robot
+from pycram.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
+from semantic_digital_twin.datastructures.definitions import TorsoState
 from pycram.datastructures.pose import PoseStamped
 from pycram.datastructures.grasp import GraspDescription
 from pycram.language import SequentialPlan
@@ -183,22 +185,30 @@ from pycram.language import SequentialPlan
 arm = Arms.RIGHT
 
 with simulated_robot:
-    SequentialPlan(context,
+    SequentialPlan(
+        context,
         ParkArmsActionDescription(Arms.BOTH),
-    
         MoveTorsoActionDescription([TorsoState.HIGH]),
-    
-        NavigateActionDescription([PoseStamped.from_list([1.8, 2.2, 0.0],
-                                                         [0.0, 0.0, 0., 1])]),
-    
-        PickUpActionDescription(object_designator=world.get_body_by_name("milk.stl"),
-                                arm=[arm],
-                                grasp_description= GraspDescription(ApproachDirection.FRONT, VerticalAlignment.NoAlignment, False)),
-    
-        PlaceActionDescription(object_designator=world.get_body_by_name("milk.stl"),
-                               target_location=[PoseStamped.from_list([2.4, 1.8, 1],
-                                                                      [0, 0, 0, 1], world.root)],
-                               arm=arm)).perform()
+        NavigateActionDescription(
+            [PoseStamped.from_list([1.8, 2.4, 0.0], [0.0, 0.0, 0.0, 1], frame=world.root)]
+        ),
+        PickUpActionDescription(
+            object_designator=world.get_body_by_name("milk.stl"),
+            arm=[arm],
+            grasp_description=GraspDescription(
+                ApproachDirection.FRONT,
+                VerticalAlignment.NoAlignment,
+                context.robot.right_arm.manipulator,
+            ),
+        ),
+        PlaceActionDescription(
+            object_designator=world.get_body_by_name("milk.stl"),
+            target_location=[
+                PoseStamped.from_list([2.4, 2.1, 1], [0, 0, 0, 1], world.root)
+            ],
+            arm=arm,
+        ),
+    ).perform()
 ```
 
 ## Look At
@@ -208,8 +218,9 @@ Look at lets the robot look at a specific point, for example if it should look a
 
 ```python
 from pycram.robot_plans import LookAtActionDescription
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 from pycram.datastructures.pose import PoseStamped
+from pycram.language import SequentialPlan
 
 target_location = PoseStamped.from_list([3, 2, 1], [0, 0, 0, 1], world.root)
 with simulated_robot:
@@ -256,10 +267,10 @@ don't need to do this if you already have spawned it in a previous example.
 ```python
 from pycram.robot_plans import *
 from pycram.designators.object_designator import *
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 from pycram.datastructures.pose import PoseStamped
-from pycram.datastructures.enums import Arms, TorsoState
-
+from pycram.datastructures.enums import Arms
+from semantic_digital_twin.datastructures.definitions import TorsoState
 
 description = TransportActionDescription(world.get_body_by_name("milk.stl"),
                                          [PoseStamped.from_list([3, 2.2, 0.95],
@@ -282,9 +293,10 @@ apartment.
 ```python
 from pycram.robot_plans import *
 from pycram.designators.object_designator import *
-from pycram.datastructures.enums import Arms, TorsoState
-from pycram.process_module import simulated_robot
+from pycram.datastructures.enums import Arms
+from pycram.motion_executor import simulated_robot
 from pycram.datastructures.pose import PoseStamped
+from semantic_digital_twin.datastructures.definitions import TorsoState
 
 
 with simulated_robot:
@@ -292,7 +304,7 @@ with simulated_robot:
         MoveTorsoActionDescription([TorsoState.HIGH]),
         ParkArmsActionDescription([Arms.BOTH]),
         NavigateActionDescription([PoseStamped.from_list([1.7474915981292725, 2.6873629093170166, 0.0],
-                                               [-0.0, 0.0, 0.5253598267689507, -0.850880163370435])]),
+                                               [-0.0, 0.0, 0.5253598267689507, -0.850880163370435], frame=world.root)]),
         OpenActionDescription(world.get_body_by_name("handle_cab10_t"), [Arms.RIGHT])).perform()
 ```
 
@@ -308,7 +320,7 @@ the apartment. Additionally, we open the drawer such that we can close it with t
 from pycram.robot_plans import *
 from pycram.designators.object_designator import *
 from pycram.datastructures.enums import Arms
-from pycram.process_module import simulated_robot
+from pycram.motion_executor import simulated_robot
 from pycram.datastructures.pose import PoseStamped
 
 with simulated_robot:
@@ -316,6 +328,6 @@ with simulated_robot:
         MoveTorsoActionDescription([TorsoState.HIGH]),
         ParkArmsActionDescription([Arms.BOTH]),
         NavigateActionDescription([PoseStamped.from_list([1.7474915981292725, 2.6873629093170166, 0.0],
-                                               [-0.0, 0.0, 0.5253598267689507, -0.850880163370435])]),
+                                               [-0.0, 0.0, 0.5253598267689507, -0.850880163370435], frame=world.root)]),
         CloseActionDescription(world.get_body_by_name("handle_cab10_t"), [Arms.RIGHT])).perform()
 ```
