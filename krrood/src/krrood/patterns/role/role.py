@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import sys
 from abc import ABC, abstractmethod
-from copy import copy
-from dataclasses import dataclass, field, fields, Field, is_dataclass
+from dataclasses import dataclass, field, fields, is_dataclass
 from functools import lru_cache, cached_property
 
 from typing_extensions import Type, get_origin, Any, Dict, List, TypeVar, Iterator
@@ -59,14 +58,28 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
         # redefine fields of role taker to be init=False, these are fields that are inherited
         # from bases that the role taker also inherits from
         for base in cls.__bases__:
-            if not issubclass(cls.get_role_taker_type(), base):
-                continue
             if not is_dataclass(base):
                 continue
-            for field_ in fields(base):
-                if issubclass(base, Role) and field_.name in ["_role_taker_field_set", "_to_set_in_role_taker", "_conflicting_fields_with_role_taker"]:
+            if base is Role:
+                continue
+            conflicting_fields = [base_field for base_field in fields(base) for cls_field in fields(cls) if
+                                  base_field == cls_field]
+            for field_ in conflicting_fields:
+                if not field_.init:
                     continue
-                cls._update_field_kwargs(field_.name, {"init": False}, type_=field_.type)
+                if field_.name == cls.role_taker_attribute_name():
+                    continue
+                if issubclass(base, Role) and field_.name in Role.__annotations__:
+                    continue
+                if hasattr(base, field_.name) and isinstance(getattr(base, field_.name), property):
+                    continue
+                type_ = field_.type
+                if isinstance(field_.type, str):
+                    try:
+                        type_ = eval(field_.type, sys.modules[base.__module__].__dict__)
+                    except NameError:
+                        pass
+                cls._update_field_kwargs(field_.name, {"init": False}, type_=type_)
                 setattr(cls, field_.name, delegate_property(field_.name, cls.role_taker_attribute_name()))
 
     @classmethod
@@ -256,7 +269,7 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
                 super().__setattr__(key, value)
         else:
             super().__setattr__(key, value)
-            if key not in Role.__dict__:
+            if key not in Role.__annotations__ and not isinstance(value, property):
                 self._to_set_in_role_taker[key] = value
 
     def _set_role_taker(self, value: T):
@@ -330,16 +343,15 @@ def delegate_property(name, role_taker):
     """
     Creates a property that delegates to another attribute's attribute.
     """
+
     def getter(self):
         target = getattr(self, role_taker)
         return getattr(target, name)
 
     def setter(self, value):
-        try:
-            target = getattr(self, role_taker)
-        except AttributeError as e:
-            # the role taker is not set yet
+        if not self._role_taker_field_set:
             return
+        target = getattr(self, role_taker)
         setattr(target, name, value)
 
     return property(getter, setter)

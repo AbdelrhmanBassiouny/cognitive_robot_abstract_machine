@@ -5,7 +5,7 @@ from krrood.entity_query_language.factories import (
     entity,
     inference,
     variable,
-    match_variable,
+    match_variable, not_,
 )
 from krrood.patterns.role.predicates import HasRole
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -66,7 +66,8 @@ def conclusion_331345798360792447350644865254855982739(case) -> List[Drawer]:
                     root=prismatic_connection.child, handle=fixed_connection.child
                 )
             )
-            .where(HasRole(fixed_connection.child, Handle))
+            .where(HasRole(fixed_connection.child, Handle),
+                   not_(contains(prismatic_connection.child.name.name.lower(), "door")))
             .tolist()
         )
 

@@ -85,7 +85,10 @@ class SubClassSafeGeneric(Generic[T], ABC):
                 for key, value in kwargs.items():
                     setattr(attribute_value, key, value)
             else:
-                setattr(cls, name, field(**kwargs))
+                non_type_kwargs = copy(kwargs)
+                non_type_kwargs.pop('type', None)
+                if non_type_kwargs:
+                    setattr(cls, name, field(**non_type_kwargs))
         else:
             # If not, check if there's an existing field that needs to be updated
             field_ = copy(next((f for f in fields(cls) if f.name == name), None))

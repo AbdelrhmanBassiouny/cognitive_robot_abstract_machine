@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import inspect
 import sys
+from copy import copy
 from dataclasses import dataclass
 from enum import Enum
+from functools import lru_cache
 from typing import Callable, Any, Dict, get_args, get_origin, Union
 from uuid import UUID
 
 import typing_extensions
-from typing_extensions import List, Type, Any, Dict, TypeVar, Tuple
+from typing_extensions import List, Type, Any, Dict, TypeVar, Tuple, Iterable
 from typing_extensions import TypeVar
 
 from krrood.class_diagrams.exceptions import CouldNotResolveType
@@ -163,3 +165,57 @@ def resolve_type(
         )
 
     return TypeHintResolutionResult(type_to_resolve, False, type_to_resolve)
+
+
+def get_most_specific_types(types: Iterable[type]) -> List[type]:
+    ts = list(dict.fromkeys(types))  # stable unique
+    keep = []
+    for t in ts:
+        # drop t if there exists u that is a strict subtype of t
+        if not any(u is not t and issubclass_or_role(u, t) for u in ts):
+            keep.append(t)
+    return keep
+
+
+@lru_cache
+def issubclass_or_role(child: Type, parent: Type | Tuple[Type, ...]) -> bool:
+    """
+    Check if `child` is a subclass of `parent` or if `child` is a Role whose role taker is a subclass of `parent`.
+
+    :param child: The child class.
+    :param parent: The parent class.
+    :return: True if `child` is a subclass of `parent` or if `child` is a Role for `parent`, False otherwise.
+    """
+    from krrood.patterns.role.role import Role
+
+    if issubclass(child, parent):
+        return True
+    if issubclass(child, Role) and child is not Role:
+        role_taker_type = child.get_role_taker_type()
+        if issubclass_or_role(role_taker_type, parent):
+            return True
+    return False
+
+
+@lru_cache
+def role_aware_nearest_common_ancestor(classes):
+    if not classes:
+        return None
+
+    from krrood.patterns.role.role import Role
+
+    # Get MROs as lists
+    mros = {cls: copy(cls.mro()) for cls in classes}
+    for cls, mro in mros.items():
+        if Role not in mro:
+            continue
+        rol_idx = mro.index(Role)
+        mro[rol_idx] = cls.get_role_taker_type()
+
+    # Iterate in MRO order of the first class
+    mros_values = list(mros.values())
+    for candidate in mros_values[0]:
+        if all(candidate in mro for mro in mros_values[1:]):
+            return candidate
+
+    return None

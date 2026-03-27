@@ -156,10 +156,10 @@ def test_handle_semantic_annotation_eql(apartment_world_setup):
 @pytest.mark.parametrize(
     "semantic_annotation_type, update_existing_semantic_annotations, scenario, expected_number",
     [
-        (Handle, False, None, 10),
-        (Drawer, False, None, 25),
+        (Handle, False, None, 29),
+        (Drawer, False, None, 23),
         (Wardrobe, False, None, 10),
-        (Door, False, None, 10),
+        (Door, False, None, 8), # Should be 11 as there are prismatically connected doors.
     ],
 )
 def test_infer_apartment_semantic_annotation(
@@ -221,9 +221,9 @@ def fit_rules_and_assert_semantic_annotations(
     )
 
     found_semantic_annotations = world_reasoner.infer_semantic_annotations()
-    assert any([
-        isinstance(v, semantic_annotation_type) for v in found_semantic_annotations
-    ])# == expected_number
+    assert len([
+        v for v in found_semantic_annotations if isinstance(v, semantic_annotation_type)
+    ]) == expected_number
 
 
 def test_semantic_annotation_serialization_deserialization_once(apartment_world_setup):
