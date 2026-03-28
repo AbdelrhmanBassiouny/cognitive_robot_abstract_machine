@@ -14,7 +14,7 @@ from giskardpy.motion_statechart.graph_node import Task
 from krrood.entity_query_language.query.match import Match
 
 from pycram.datastructures.enums import TaskStatus
-from pycram.failures import PlanFailure
+from pycram.plans.failures import PlanFailure
 from pycram.motion_executor import MotionExecutor
 from pycram.plans.designator import Designator
 
@@ -246,7 +246,7 @@ class PlanNode(PlanEntity):
         for parent in self.path:
             if parent.status == TaskStatus.INTERRUPTED:
                 self.status = TaskStatus.INTERRUPTED
-                return None
+                return
 
         self.status = TaskStatus.RUNNING
         try:
@@ -258,7 +258,6 @@ class PlanNode(PlanEntity):
         finally:
             self.end_time = datetime.now()
         self.status = TaskStatus.SUCCEEDED
-        return self.result
 
     def mount_subplan(self, root: PlanNode):
         """
@@ -293,20 +292,29 @@ class UnderspecifiedNode(PlanNode):
     """
 
     underspecified_action: Match = field(kw_only=True)
+    """
+    The underspecified statement that can be used to generate actions.
+    """
 
-    action_iterator: Iterator[ActionDescription] = field(default=None, kw_only=True)
+    _action_iterator: Optional[Iterator[ActionDescription]] = field(
+        default=None, kw_only=True
+    )
+    """
+    The iterator that is used to generate the actions.
+    Only available after the first call to _perform.
+    """
 
     @property
     def designator_type(self) -> Type:
         return self.underspecified_action.type
 
     def _perform(self):
-        if self.action_iterator is None:
-            self.action_iterator = self.plan.context.query_backend.evaluate(
+        if self._action_iterator is None:
+            self._action_iterator = self.plan.context.query_backend.evaluate(
                 self.underspecified_action
             )
 
-        for grounded_action in self.action_iterator:
+        for grounded_action in self._action_iterator:
             new_child = ActionNode(designator=grounded_action)
             self.add_child(new_child)
             try:
@@ -368,13 +376,11 @@ class ActionNode(DesignatorNode):
         Collects all child motions of this action. A motion is considered if it is a direct child of this action node,
         i.e. there is no other action node between this action node and the motion.
         """
-        motion_desigs = list(
-            filter(
-                lambda x: x.is_leaf and x.parent_action_node == self,
-                self.descendants,
-            )
-        )
-        return [m.motion.motion_chart for m in motion_desigs]
+        return [
+            motion_node.motion.motion_chart
+            for motion_node in self.children
+            if isinstance(motion_node, MotionNode)
+        ]
 
     def construct_motion_state_chart(self):
         """
@@ -453,11 +459,14 @@ class MotionNode(DesignatorNode):
         return self.motion.perform()
 
     @property
-    def parent_action_node(self):
+    def parent_action_node(self) -> Optional[ActionNode]:
         """
         Returns the next resolved action node in the plan above this motion node.
         """
-        return list(filter(lambda x: isinstance(x, ActionNode), self.path))[0]
+        for node in reversed(self.path):
+            if isinstance(node, ActionNode):
+                return node
+        return None
 
 
 ActionLike = Union[Match, Designator, PlanNode]

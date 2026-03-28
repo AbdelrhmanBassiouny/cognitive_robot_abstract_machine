@@ -4,10 +4,10 @@ import abc
 import logging
 from dataclasses import dataclass
 
-from typing_extensions import Any, Optional, TYPE_CHECKING
+from typing_extensions import Any, Optional
 
 from pycram.exceptions import ContextIsUnavailable
-from pycram.failures import PlanFailure
+from pycram.plans.failures import PlanFailure
 from semantic_digital_twin.world import World
 
 from pycram.plans.plan_node import PlanNode

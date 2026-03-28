@@ -10,7 +10,6 @@ from krrood.entity_query_language.factories import (
     an,
     entity,
     variable,
-    the,
     underspecified,
 )
 from pycram.locations.locations import CostmapLocation
@@ -26,14 +25,13 @@ from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Union, Optional, Type, Any, Iterable
-
+from typing_extensions import Optional, Any
 
 from pycram.config.action_conf import ActionConfig
-from pycram.datastructures.enums import Arms, Grasp, VerticalAlignment
+from pycram.datastructures.enums import Arms
 from pycram.datastructures.grasp import GraspDescription, GraspPose
 
-from pycram.failures import ConfigurationNotReached, BodyUnfetchable
+from pycram.plans.failures import ConfigurationNotReached, BodyUnfetchable
 from pycram.robot_plans.actions.base import ActionDescription
 
 
@@ -83,15 +81,22 @@ class TransportAction(ActionDescription):
 
         self.add_subplan(
             sequential(
-                [NavigateAction(
-                        next(iter(CostmapLocation(
-                            handle.global_pose,
-                            reachable_arm=self.arm,
-                            reachable=True,
-                            context=self.context
-                        ))),
+                [
+                    NavigateAction(
+                        next(
+                            iter(
+                                CostmapLocation(
+                                    handle.global_pose,
+                                    reachable_arm=self.arm,
+                                    reachable=True,
+                                    context=self.context,
+                                )
+                            )
+                        ),
                         True,
-                    ),OpenAction(drawer_annotation[0].handle.body, self.arm)]
+                    ),
+                    OpenAction(drawer_annotation[0].handle.body, self.arm),
+                ]
             )
         ).perform()
 

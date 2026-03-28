@@ -2,16 +2,10 @@
 
 from __future__ import annotations
 from sqlalchemy import (
-    Column,
     ForeignKey,
     Integer,
     String,
-    Float,
-    Boolean,
-    DateTime,
-    Enum,
     JSON,
-    Table,
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
@@ -78,7 +72,7 @@ import pycram.datastructures.execution_data
 import pycram.datastructures.grasp
 import pycram.datastructures.trajectory
 import pycram.exceptions
-import pycram.failures
+import pycram.plans.failures
 import pycram.language
 import pycram.locations.locations
 import pycram.motion_executor
@@ -166,7 +160,6 @@ import semantic_digital_twin.world_description.world_state_trajectory_plotter
 import sqlalchemy.sql.sqltypes
 import trimesh.base
 import typing
-import typing_extensions
 import uuid
 
 
@@ -7318,7 +7311,7 @@ class ContextDAO(
     }
 
 
-class PlanFailureDAO(Base, DataAccessObject[pycram.failures.PlanFailure]):
+class PlanFailureDAO(Base, DataAccessObject[pycram.plans.failures.PlanFailure]):
 
     __tablename__ = "PlanFailureDAO"
 
@@ -7339,7 +7332,7 @@ class PlanFailureDAO(Base, DataAccessObject[pycram.failures.PlanFailure]):
 
 
 class AllChildrenFailedDAO(
-    PlanFailureDAO, DataAccessObject[pycram.failures.AllChildrenFailed]
+    PlanFailureDAO, DataAccessObject[pycram.plans.failures.AllChildrenFailed]
 ):
 
     __tablename__ = "AllChildrenFailedDAO"
@@ -7370,7 +7363,7 @@ class AllChildrenFailedDAO(
 
 
 class BodyUnfetchableDAO(
-    PlanFailureDAO, DataAccessObject[pycram.failures.BodyUnfetchable]
+    PlanFailureDAO, DataAccessObject[pycram.plans.failures.BodyUnfetchable]
 ):
 
     __tablename__ = "BodyUnfetchableDAO"
@@ -7404,7 +7397,7 @@ class BodyUnfetchableDAO(
 
 
 class ConfigurationNotReachedDAO(
-    PlanFailureDAO, DataAccessObject[pycram.failures.ConfigurationNotReached]
+    PlanFailureDAO, DataAccessObject[pycram.plans.failures.ConfigurationNotReached]
 ):
 
     __tablename__ = "ConfigurationNotReachedDAO"
@@ -7430,7 +7423,7 @@ class ConfigurationNotReachedDAO(
 
 
 class NavigationGoalNotReachedErrorDAO(
-    PlanFailureDAO, DataAccessObject[pycram.failures.NavigationGoalNotReachedError]
+    PlanFailureDAO, DataAccessObject[pycram.plans.failures.NavigationGoalNotReachedError]
 ):
 
     __tablename__ = "NavigationGoalNotReachedErrorDAO"
@@ -7448,7 +7441,7 @@ class NavigationGoalNotReachedErrorDAO(
 
 
 class PerceptionObjectNotFoundDAO(
-    PlanFailureDAO, DataAccessObject[pycram.failures.PerceptionObjectNotFound]
+    PlanFailureDAO, DataAccessObject[pycram.plans.failures.PerceptionObjectNotFound]
 ):
 
     __tablename__ = "PerceptionObjectNotFoundDAO"
@@ -8902,7 +8895,7 @@ class RepeatNodeDAO(
 
 
 class RobotInCollisionDAO(
-    PlanFailureDAO, DataAccessObject[pycram.failures.RobotInCollision]
+    PlanFailureDAO, DataAccessObject[pycram.plans.failures.RobotInCollision]
 ):
 
     __tablename__ = "RobotInCollisionDAO"

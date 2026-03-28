@@ -21,6 +21,9 @@ from typing_extensions import (
 )
 
 from krrood.entity_query_language.backends import QueryBackend
+from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
+    PlotAlignment,
+)
 from pycram.plans.designator import Designator
 from pycram.plans.plan_entity import PlanEntity
 from semantic_digital_twin.robots.abstract_robot import AbstractRobot
@@ -38,11 +41,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-class PlotAlignment(IntEnum):
-    HORIZONTAL = 0
-    VERTICAL = 1
 
 
 T = TypeVar("T")
@@ -313,7 +311,7 @@ class Plan:
         self, scale: float = 1.0, align: PlotAlignment = PlotAlignment.VERTICAL
     ) -> Dict[int, np.array]:
         """
-        Generate a bfs layout for this circuit.
+        Generate a bfs layout for this plan.
 
         :return: A dict mapping the node indices to 2d coordinates.
         """

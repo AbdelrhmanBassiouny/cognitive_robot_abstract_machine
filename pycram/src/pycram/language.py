@@ -18,7 +18,7 @@ from typing_extensions import (
 )
 
 from pycram.datastructures.enums import TaskStatus, MonitorBehavior
-from pycram.failures import PlanFailure, AllChildrenFailed
+from pycram.plans.failures import PlanFailure, AllChildrenFailed
 from pycram.fluent import Fluent
 from pycram.plans.plan_node import (
     PlanNode,

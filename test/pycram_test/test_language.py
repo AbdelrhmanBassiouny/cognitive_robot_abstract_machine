@@ -6,7 +6,7 @@ import pytest
 
 from pycram.datastructures.enums import TaskStatus, MonitorBehavior, DetectionTechnique
 
-from pycram.failures import PlanFailure
+from pycram.plans.failures import PlanFailure
 from pycram.fluent import Fluent
 from pycram.language import (
     MonitorNode,
