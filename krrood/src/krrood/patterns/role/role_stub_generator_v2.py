@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import sys
 from copy import copy
-from functools import cached_property
 from pathlib import Path
 from types import ModuleType
 from typing import (
@@ -16,11 +15,11 @@ from typing import (
 )
 
 import libcst
+import rustworkx as rx
 from black.handle_ipynb_magics import lru_cache
 from libcst.codemod import ContextAwareTransformer, CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 from typing_extensions import Dict
-import rustworkx as rx
 
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedClass
