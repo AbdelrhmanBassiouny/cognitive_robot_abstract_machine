@@ -1,3 +1,4 @@
+from robokudo.annotators.tsdf_annotator import TSDFAnnotator
 import os
 
 from robokudo.analysis_engine import AnalysisEngineInterface
@@ -51,7 +52,7 @@ class AnalysisEngine(AnalysisEngineInterface):
             world=sw_connector.semdt_adapter.world, node=get_node()
         )
 
-        cr_storage_config = CrDescriptorFactory.create_descriptor("mongo")
+        cr_storage_config = CrDescriptorFactory.create_descriptor("mongo", loop=False)
 
         seq = Pipeline("RWPipeline")
         seq.add_children(
@@ -65,6 +66,7 @@ class AnalysisEngine(AnalysisEngineInterface):
                 ClusterColorAnnotator(),
                 ClusterColorHistogramAnnotator(),
                 ClusterPoseBBAnnotator(),
+                TSDFAnnotator(),
                 SimpleYoloAnnotator(),
                 sw_connector,
                 # Additional annotators (e.g., QueryAnnotator, ActionServerCheck) can be added if needed.

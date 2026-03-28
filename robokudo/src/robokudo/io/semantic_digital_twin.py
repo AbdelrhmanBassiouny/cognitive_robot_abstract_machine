@@ -1,3 +1,7 @@
+from trimesh import Trimesh
+
+from robokudo.types.cv import TSDFAnnotation
+from semantic_digital_twin.world_description.geometry import TriangleMesh, BoundingBox
 from robokudo.defs import PACKAGE_NAME
 import copy
 import dataclasses
@@ -6,6 +10,7 @@ import logging
 import uuid
 from collections.abc import Iterable
 from typing import Self
+import open3d as o3d
 
 import numpy as np
 from typing_extensions import Callable, List, Protocol, Dict, Any, Optional, Set
@@ -603,6 +608,42 @@ class SemanticDigitalTwinAdapter:
             scale = Scale(x=bb.x_length, y=bb.y_length, z=bb.z_length)
 
             body.visual.append(Box(color=color, origin=origin, scale=scale))
+
+        if "tsdf" in obj.data:
+            volume_an: TSDFAnnotation = obj.data["tsdf"]
+            mesh: o3d.geometry.TriangleMesh = volume_an.volume.extract_triangle_mesh()
+
+            pose_mat = volume_an.transform
+            cam_to_world_transform = get_cam_to_world_transform_matrix(self.cas_fn())
+            pose_in_world_mat = np.matmul(cam_to_world_transform, pose_mat)
+
+            rotation = list(get_quaternion_from_transform_matrix(pose_in_world_mat))
+            translation = list(get_translation_from_transform_matrix(pose_in_world_mat))
+
+            origin = HomogeneousTransformationMatrix.from_xyz_quaternion(
+                pos_x=translation[0],
+                pos_y=translation[1],
+                pos_z=translation[2],
+                quat_x=rotation[0],
+                quat_y=rotation[1],
+                quat_z=rotation[2],
+                quat_w=rotation[3],
+                reference_frame=self.root,
+                child_frame=body,
+            )
+
+            obj_trimesh = TriangleMesh(
+                origin=origin,
+                scale=Scale(1.0, 1.0, 1.0),
+                mesh=Trimesh(
+                    vertices=mesh.vertices,
+                    vertex_colors=mesh.vertex_colors,
+                    faces=mesh.triangles,
+                    face_normals=mesh.triangle_normals,
+                ),
+            )
+
+            body.visual.append(obj_trimesh)
 
         if "class" in obj.data:
             semantic_annotation = self.class_to_semantic_annotation(

@@ -14,10 +14,13 @@ The types support integration with:
 
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing_extensions import TYPE_CHECKING
+
+import numpy as np
+from numpy import typing as npt
+from typing_extensions import TYPE_CHECKING, Tuple
 import open3d as o3d
 
-from robokudo.types.core import Type
+from robokudo.types.core import Type, Annotation
 from robokudo.types.tf import Pose
 
 if TYPE_CHECKING:
@@ -77,6 +80,14 @@ class Rect(Type):
     Rectangle height in pixels
     """
 
+    def xyxy(self) -> Tuple[int, int, int, int]:
+        """Get the rectangle as a tuple of (x1, y1, x2, y2)."""
+        return self.pos.x, self.pos.y, self.pos.x + self.width, self.pos.y + self.height
+
+    def xywh(self) -> Tuple[int, int, int, int]:
+        """Get the rectangle as a tuple of (x, y, w, h)."""
+        return self.pos.x, self.pos.y, self.width, self.height
+
 
 @dataclass
 class ImageROI(Type):
@@ -126,3 +137,37 @@ class BoundingBox3D(Type):
     """
     Box pose in 3D space
     """
+
+
+class TSDFAnnotation(Annotation):
+    """A TSDF Volume annotation."""
+
+    volume: o3d.pipelines.integration.ScalableTSDFVolume
+    """The Open3D TSDF Volume object."""
+
+    transform: npt.NDArray[np.float64]
+    """The transform from the reference frame to the object frame."""
+
+    def get_coordinate_frame(self) -> o3d.geometry.TriangleMesh:
+        """Get the coordinate frame of the TSDF volume."""
+        frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.25)
+        frame.transform(self.transform)
+        return frame
+
+    def get_mesh(self) -> o3d.geometry.TriangleMesh:
+        """Get the mesh representation of the TSDF volume."""
+        mesh = self.volume.extract_triangle_mesh()
+        mesh.transform(self.transform)
+        return mesh
+
+    def get_point_cloud(self) -> o3d.geometry.PointCloud:
+        """Get the point cloud representation of the TSDF volume."""
+        pcd = self.volume.extract_point_cloud()
+        pcd.transform(self.transform)
+        return pcd
+
+    def get_voxel_point_cloud(self) -> o3d.geometry.PointCloud:
+        """Get the voxel point cloud representation of the TSDF volume."""
+        pcd = self.volume.extract_voxel_point_cloud()
+        pcd.transform(self.transform)
+        return pcd

@@ -1,3 +1,4 @@
+from robokudo.types.cv import TSDFAnnotation
 from timeit import default_timer
 import numpy as np
 from py_trees.common import Status
@@ -82,6 +83,10 @@ class SemanticDigitalTwinConnector(BaseAnnotator):
         color_histograms = cas.filter_by_type(ColorHistogram, oh.annotations)
         if len(color_histograms) > 0:
             data["color_histogram"] = color_histograms[0]
+
+        tsdfs = cas.filter_by_type(TSDFAnnotation, oh.annotations)
+        if len(tsdfs) > 0:
+            data["tsdf"] = tsdfs[0]
 
         return data
 
