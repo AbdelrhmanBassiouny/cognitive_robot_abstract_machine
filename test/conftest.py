@@ -379,7 +379,7 @@ def pr2_world_setup():
 @pytest.fixture(scope="function")
 def pr2_world_copy(pr2_world_setup):
     result = deepcopy(pr2_world_setup)
-    PR2.copy_for_world(result)
+    PR2.from_world(result)
     return result
 
 
