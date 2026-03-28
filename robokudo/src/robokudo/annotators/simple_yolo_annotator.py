@@ -5,7 +5,7 @@ import copy
 import cv2
 import torch
 from py_trees.common import Status
-from typing_extensions import TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING, List
 from ultralytics import YOLO
 
 from robokudo.annotators.core import BaseAnnotator
@@ -43,7 +43,7 @@ class SimpleYoloAnnotator(BaseAnnotator):
         """
         visualization_img = copy.deepcopy(self.get_cas().get(CASViews.COLOR_IMAGE))
 
-        ohs: list[ObjectHypothesis] = self.get_cas().filter_annotations_by_type(
+        ohs: List[ObjectHypothesis] = self.get_cas().filter_annotations_by_type(
             ObjectHypothesis
         )
 

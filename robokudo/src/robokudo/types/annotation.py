@@ -7,6 +7,7 @@ All annotation types inherit from the base Annotation class.
 
 from __future__ import annotations
 from dataclasses import dataclass, field
+
 from typing_extensions import TYPE_CHECKING, Optional, Any, List
 
 import numpy as np

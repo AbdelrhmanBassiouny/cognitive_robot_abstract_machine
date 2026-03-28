@@ -15,6 +15,7 @@ import logging
 import open3d as o3d  # this import creates a SIGINT during unit test execution....
 from typing_extensions import Any, List, Dict, Union, Optional, TYPE_CHECKING
 
+from robokudo.annotators.core import BaseAnnotator
 from robokudo.defs import PACKAGE_NAME
 from robokudo.vis.visualizer import Visualizer
 
@@ -73,9 +74,9 @@ class O3DVisualizer(Visualizer, Visualizer.Observer):
 
         annotator_outputs = self.get_visualized_annotator_outputs_for_pipeline()
 
-        active_annotator_instance = (
+        active_annotator_instance: BaseAnnotator = (
             self.shared_visualizer_state.active_annotator
-        )  # type: BaseAnnotator
+        )
 
         self.update_output_flag_for_new_data()
 
