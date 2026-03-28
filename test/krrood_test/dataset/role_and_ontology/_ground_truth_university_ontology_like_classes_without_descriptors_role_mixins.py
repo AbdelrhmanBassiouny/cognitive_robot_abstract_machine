@@ -1,0 +1,120 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
+from typing_extensions import Set, List, TYPE_CHECKING
+
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+
+if TYPE_CHECKING:
+    from dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
+        RecognizedGroup,
+        Course,
+        PersonInRoleAndOntology,
+        TPerson,
+        TSubclassOfARoleTaker,
+        TCEOAsFirstRole,
+    )
+
+
+@dataclass(eq=False)
+class PersonInRoleAndOntologyRoleAttributes:
+    head_of: RecognizedGroup = field(init=False)
+    delegate_of: RecognizedGroup = field(init=False)
+    members: Set[PersonInRoleAndOntology] = field(init=False)
+    sub_organization_of: List[RecognizedGroup] = field(init=False)
+    teacher_of: List[Course] = field(init=False)
+    representative_of: RecognizedGroup = field(init=False)
+
+
+@dataclass(eq=False)
+class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, ABC):
+
+    @abstractmethod
+    @property
+    def role_taker(self) -> TPerson: ...
+
+    @property
+    def name(self) -> str:
+        return self.role_taker.name
+
+    @name.setter
+    def name(self, value: str):
+        self.role_taker.name = value
+
+    @property
+    def default_name(self) -> str:
+        return self.role_taker.default_name
+
+    @default_name.setter
+    def default_name(self, value: str):
+        self.role_taker.default_name = value
+
+    @property
+    def works_for(self) -> RecognizedGroup:
+        return self.role_taker.works_for
+
+    @works_for.setter
+    def works_for(self, value: RecognizedGroup):
+        self.role_taker.works_for = value
+
+    @property
+    def member_of(self) -> List[RecognizedGroup]:
+        return self.role_taker.member_of
+
+    @member_of.setter
+    def member_of(self, value: List[RecognizedGroup]):
+        self.role_taker.member_of = value
+
+    def method_in_person(self) -> RecognizedGroup:
+        return self.role_taker.method_in_person()
+
+    def method_2_in_person(self) -> List[RecognizedGroup]:
+        return self.role_taker.method_2_in_person()
+
+    def __hash__(self):
+        return hash(self.role_taker)
+
+    def __eq__(self, other):
+        return hash(self) == hash(other)
+
+
+@dataclass(eq=False)
+class RoleForSubclassOfARoleTaker(RoleForPersonInRoleAndOntology, ABC):
+
+    @abstractmethod
+    @property
+    def role_taker(self) -> TSubclassOfARoleTaker: ...
+
+    @property
+    def introduced_attribute(self) -> str:
+        return self.role_taker.introduced_attribute
+
+    @introduced_attribute.setter
+    def introduced_attribute(self, value: str):
+        self.role_taker.introduced_attribute = value
+
+
+@dataclass(eq=False)
+class RoleForCEOAsFirstRole(RoleForPersonInRoleAndOntology, ABC):
+
+    @abstractmethod
+    @property
+    def role_taker(self) -> TCEOAsFirstRole: ...
+
+    @property
+    def person(self) -> PersonInRoleAndOntology:
+        return self.role_taker.person
+
+    @person.setter
+    def person(self, value: PersonInRoleAndOntology):
+        self.role_taker.person = value
+
+    @property
+    def head_of(self) -> RecognizedGroup:
+        return self.role_taker.head_of
+
+    @head_of.setter
+    def head_of(self, value: RecognizedGroup):
+        self.role_taker.head_of = value

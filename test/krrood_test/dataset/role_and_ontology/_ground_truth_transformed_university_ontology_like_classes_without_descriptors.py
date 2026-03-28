@@ -4,6 +4,12 @@ from dataclasses import dataclass, field, Field, fields
 
 from typing_extensions import Set, List, TypeVar
 
+from ._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
+    PersonInRoleAndOntologyRoleAttributes,
+    RoleForPersonInRoleAndOntology,
+    RoleForSubclassOfARoleTaker,
+    RoleForCEOAsFirstRole,
+)
 from .role_takers_in_another_module import (
     RoleTakerInAnotherModule,
 )
@@ -49,7 +55,7 @@ class Course(HasName, Symbol): ...
 
 
 @dataclass(eq=False)
-class PersonInRoleAndOntology(HasName, Symbol):
+class PersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, HasName, Symbol):
     works_for: RecognizedGroup = None
     member_of: List[RecognizedGroup] = field(default_factory=list)
 
@@ -67,16 +73,20 @@ class SubclassOfARoleTaker(PersonInRoleAndOntology):
     introduced_attribute: str = field(default="", kw_only=True)
 
 
-TPerson = TypeVar("TPerson", bound=PersonInRoleAndOntology)
+TPersonInRoleAndOntology = TypeVar(
+    "TPersonInRoleAndOntology", bound=PersonInRoleAndOntology
+)
 
 
 @dataclass(eq=False)
-class CEOAsFirstRole(Role[TPerson], Symbol):
-    person: TPerson = field(kw_only=True)
+class CEOAsFirstRole(
+    Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology, Symbol
+):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
     head_of: RecognizedGroup = None
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
@@ -84,40 +94,48 @@ TSubclassOfARoleTaker = TypeVar("TSubclassOfARoleTaker", bound=SubclassOfARoleTa
 
 
 @dataclass(eq=False)
-class SubclassOfRoleThatUpdatesRoleTakerType(CEOAsFirstRole[TSubclassOfARoleTaker]): ...
+class SubclassOfRoleThatUpdatesRoleTakerType(
+    CEOAsFirstRole[TSubclassOfARoleTaker], RoleForSubclassOfARoleTaker
+): ...
 
 
 @dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(Role[TPerson], HasName):
-    person: TPerson = field(kw_only=True)
+class DirectDiamondShapedInheritanceWhereOneIsRole(
+    Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology, HasName
+):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
 @dataclass(eq=False)
-class InDirectDiamondShapedInheritanceWhereOneIsRole(RecognizedGroup, Role[TPerson]):
-    person: TPerson = field(kw_only=True)
+class InDirectDiamondShapedInheritanceWhereOneIsRole(
+    RecognizedGroup, Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology
+):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(Role[TPerson], Symbol):
-    person: TPerson = field(kw_only=True)
+class ProfessorAsFirstRole(
+    Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology, Symbol
+):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
 @dataclass(eq=False)
 class AssociateProfessorAsSubClassOfARoleInSameModule(
-    ProfessorAsFirstRole[TPerson]
+    ProfessorAsFirstRole[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology
 ): ...
 
 
@@ -125,7 +143,7 @@ TCEOAsFirstRole = TypeVar("TCEOAsFirstRole", bound=CEOAsFirstRole)
 
 
 @dataclass(eq=False)
-class RepresentativeAsSecondRole(Role[TCEOAsFirstRole], Symbol):
+class RepresentativeAsSecondRole(Role[TCEOAsFirstRole], RoleForCEOAsFirstRole, Symbol):
     ceo: TCEOAsFirstRole = field(kw_only=True)
     representative_of: RecognizedGroup = field(default=None, kw_only=True)
 
