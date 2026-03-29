@@ -37,7 +37,7 @@ from krrood.utils import (
 
 
 @dataclasses.dataclass
-class RoleClassesTransformer:
+class RoleTransformer:
     """
     Transform classes related to roles to inherit from the generated mixins that add the gained attributes and to adjust
      their fields. Also generates these mixin classes for role takers.
@@ -126,9 +126,7 @@ class RoleClassesTransformer:
         :return: Path to the generated stub file.
         """
         # add role mixins folder if it does not exist, and add a __init__.py file to it
-        parent_directory = Path(
-            RoleClassesTransformer.get_module_file_path(module)
-        ).parent
+        parent_directory = Path(RoleTransformer.get_module_file_path(module)).parent
         postfix = "role_mixins"
         role_mixins_folder = parent_directory / postfix
         role_mixins_folder.mkdir(exist_ok=True)
