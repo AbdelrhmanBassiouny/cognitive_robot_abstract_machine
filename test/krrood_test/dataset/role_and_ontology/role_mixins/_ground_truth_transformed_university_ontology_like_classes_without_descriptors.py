@@ -13,7 +13,7 @@ from ._ground_truth_university_ontology_like_classes_without_descriptors_role_mi
     RoleForSubclassOfARoleTaker,
     RoleForCEOAsFirstRole,
 )
-from .role_takers_in_another_module import (
+from dataset.role_and_ontology.role_takers_in_another_module import (
     RoleTakerInAnotherModule,
 )
 from krrood.entity_query_language.factories import variable_from

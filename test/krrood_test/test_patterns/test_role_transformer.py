@@ -13,7 +13,10 @@ from ..dataset.role_and_ontology import (
 
 @pytest.fixture
 def module_transformer():
-    return RoleTransformer(university_ontology_like_classes_without_descriptors)
+    return RoleTransformer(
+        university_ontology_like_classes_without_descriptors,
+        file_name_prefix="transformed",
+    )
 
 
 @pytest.fixture
