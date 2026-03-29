@@ -4,6 +4,9 @@ from dataclasses import dataclass, field, Field, fields
 
 from typing_extensions import Set, List, TypeVar
 
+from ._ground_truth_role_takers_in_another_module_role_mixins import (
+    RoleForRoleTakerInAnotherModule,
+)
 from ._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
     PersonInRoleAndOntologyRoleAttributes,
     RoleForPersonInRoleAndOntology,
@@ -169,7 +172,9 @@ class DelegateAsThirdRole(Role[TRepresentativeAsSecondRole], Symbol):
 
 
 @dataclass(eq=False)
-class RoleForTakerInAnotherModule(Role[RoleTakerInAnotherModule]):
+class RoleForTakerInAnotherModule(
+    Role[RoleTakerInAnotherModule], RoleForRoleTakerInAnotherModule
+):
     taker: RoleTakerInAnotherModule = field(kw_only=True)
     introduced_attribute: str = field(default="", kw_only=True)
     same_module_annotated_introduced_attribute: DelegateAsThirdRole = field(

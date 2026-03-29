@@ -5,16 +5,15 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Set, List, TYPE_CHECKING
 
-from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-
 if TYPE_CHECKING:
-    from dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
+    from .university_ontology_like_classes_without_descriptors import (
         RecognizedGroup,
         Course,
         PersonInRoleAndOntology,
         TPerson,
         TSubclassOfARoleTaker,
         TCEOAsFirstRole,
+        TRepresentativeAsSecondRole,
     )
 
 
@@ -118,3 +117,27 @@ class RoleForCEOAsFirstRole(RoleForPersonInRoleAndOntology, ABC):
     @head_of.setter
     def head_of(self, value: RecognizedGroup):
         self.role_taker.head_of = value
+
+
+@dataclass(eq=False)
+class RoleForRepresentativeAsSecondRole(RoleForCEOAsFirstRole, ABC):
+
+    @abstractmethod
+    @property
+    def role_taker(self) -> TRepresentativeAsSecondRole: ...
+
+    @property
+    def ceo(self) -> TCEOAsFirstRole:
+        return self.role_taker.ceo
+
+    @ceo.setter
+    def ceo(self, value: TCEOAsFirstRole):
+        self.role_taker.ceo = value
+
+    @property
+    def representative_of(self) -> RecognizedGroup:
+        return self.role_taker.representative_of
+
+    @representative_of.setter
+    def representative_of(self, value: RecognizedGroup):
+        self.role_taker.representative_of = value
