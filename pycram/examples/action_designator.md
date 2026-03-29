@@ -197,9 +197,7 @@ with simulated_robot:
         ),
         PlaceAction(
             object_designator=world.get_body_by_name("milk.stl"),
-            target_location=[
-                Pose.from_xyz_rpy(1.4, 2.1, 1, reference_frame=world.root)
-            ],
+            target_location=Pose.from_xyz_rpy(1.4, 2.1, 1, reference_frame=world.root),
             arm=arm,
         )],
         context=context,
@@ -286,7 +284,7 @@ from pycram.robot_plans import *
 from pycram.datastructures.enums import Arms
 from pycram.motion_executor import simulated_robot
 from semantic_digital_twin.datastructures.definitions import TorsoState
-
+from pycram.robot_plans.actions.core.container import OpenAction
 
 with simulated_robot:
     sequential([

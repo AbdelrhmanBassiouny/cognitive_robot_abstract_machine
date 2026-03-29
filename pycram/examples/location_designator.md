@@ -98,7 +98,7 @@ from pycram.locations.locations import CostmapLocation
 from pycram.robot_plans.actions.core.navigation import NavigateAction
 from pycram.motion_executor import simulated_robot
 
-location_description = CostmapLocation(target=world.get_body_by_name("milk.stl"), reachable=True, context=context)
+location_description = CostmapLocation(target=world.get_body_by_name("milk.stl").global_pose, reachable=True, context=context)
 
 plan = execute_single(NavigateAction(next(iter(location_description))), context=context)
 
@@ -119,7 +119,7 @@ For this example we need the milk as well as the PR2, so if you did not spawn th
 designator you can spawn them with the following cell.
 
 ```python
-location_description = CostmapLocation(target=world.get_body_by_name("milk.stl"), visible=True, context=context)
+location_description = CostmapLocation(target=world.get_body_by_name("milk.stl").global_pose, visible=True, context=context)
 
 plan = execute_single(NavigateAction(next(iter(location_description)), context=context)
 
@@ -138,7 +138,7 @@ already have a milk spawned in you world you can ignore the following cell.
 
 ```python
 
-location_description = CostmapLocation(target=world.get_body_by_name("milk.stl"), visible=True, context=context)
+location_description = CostmapLocation(target=world.get_body_by_name("milk.stl").global_pose, visible=True, context=context)
 
 for i, pose in enumerate(location_description):
     print(pose)
@@ -158,6 +158,6 @@ spawned it in a previous example. Furthermore, we need a robot, so we also spawn
 ```python
 from pycram.locations.locations import AccessingLocation
 
-access_location = AccessingLocation(world.get_body_by_name("handle_cab10_t"), context=context)
+access_location = AccessingLocation(world.get_body_by_name("handle_cab10_t").global_pose, context=context)
 print(access_location.resolve())
 ```
