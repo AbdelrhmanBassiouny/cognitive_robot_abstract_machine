@@ -647,8 +647,12 @@ class StubTransformer(ContextAwareTransformer):
             try:
                 return libcst.parse_expression(has_name)
             except Exception:
-                return libcst.Name(has_name)
-        name = has_name.__name__
+                name = has_name
+        elif hasattr(has_name, "__name__"):
+            name = has_name.__name__
+        else:
+            name = str(has_name)
+        name.replace("typing.", "").replace("typing_extensions.", "")
         return libcst.Name(name)
 
     @classmethod

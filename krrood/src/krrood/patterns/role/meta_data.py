@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+from functools import lru_cache
 
 from krrood.class_diagrams.class_diagram import WrappedClass, WrappedSpecializedGeneric
 from krrood.patterns.role.role import Role
@@ -32,6 +33,7 @@ class RoleType(enum.Enum):
     """
 
     @staticmethod
+    @lru_cache
     def get_role_type(wrapped_class: WrappedClass) -> RoleType:
         """
         Determines the role type of a wrapped class.
@@ -40,7 +42,7 @@ class RoleType(enum.Enum):
         :return: The role type.
         """
         if isinstance(wrapped_class, WrappedSpecializedGeneric) or not issubclass(
-                wrapped_class.clazz, Role
+            wrapped_class.clazz, Role
         ):
             return RoleType.NOT_A_ROLE
 

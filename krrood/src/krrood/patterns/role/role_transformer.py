@@ -3,36 +3,31 @@ from __future__ import annotations
 import dataclasses
 import sys
 from copy import copy
-from functools import cached_property
 from pathlib import Path
 from types import ModuleType
 from typing import (
     List,
     Optional,
-    Set,
     Type,
-    TypeVar,
-    Callable,
 )
 
 import libcst
+import rustworkx as rx
 from black.handle_ipynb_magics import lru_cache
 from libcst.codemod import ContextAwareTransformer, CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
-from typing_extensions import Dict
-import rustworkx as rx
+from typing_extensions import Dict, Tuple, Callable
 
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
-from krrood.class_diagrams.wrapped_field import WrappedField, FieldRepresentation
+from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.patterns.role.meta_data import RoleType
 from krrood.patterns.role.role import Role
 from krrood.utils import (
     run_black_on_file,
     run_ruff_on_file,
-    get_generic_type_param,
 )
 
 
@@ -82,7 +77,7 @@ class RoleTransformer:
 
             context = CodemodContext()
 
-            transformer = TransformerForModulesWithRoles(
+            transformer = RoleModuleTransformer(
                 context=context,
                 class_diagram=self.class_diagram,
                 module=module,
@@ -140,7 +135,7 @@ class RoleTransformer:
         return mixin_file_path
 
 
-class TransformerForModulesWithRoles(ContextAwareTransformer):
+class RoleModuleTransformer(ContextAwareTransformer):
     """
     Transforms a Python module AST into a mixin classes file AST by pruning methods
     and applying the Role pattern transformations.
@@ -226,9 +221,7 @@ class TransformerForModulesWithRoles(ContextAwareTransformer):
             case RoleType.NOT_A_ROLE:
                 ...
             case _:
-                updated_node = self._transform_role(
-                    updated_node, wrapped_class, role_type
-                )
+                updated_node = self._transform_role(updated_node, wrapped_class)
                 old_node = next(
                     (rn for rn in result_nodes if rn.name == updated_node.name), None
                 )
@@ -307,7 +300,7 @@ class TransformerForModulesWithRoles(ContextAwareTransformer):
         Transforms a role taker class into a Mixin and a re-entry class.
         """
         original_name = node.name.value
-        mixin_name = f"{original_name}Mixin"
+        role_for_name = self.get_role_for_name(wrapped_class.clazz)
         role_attributes_name = f"{original_name}RoleAttributes"
         bases_that_are_takers = {
             b.__name__: b
@@ -318,62 +311,265 @@ class TransformerForModulesWithRoles(ContextAwareTransformer):
             any(self._is_role_base(base.value) for base in node.bases)
             or bases_that_are_takers
         )
-        mixin_node = self.get_renamed_node(node, mixin_name)
+        role_for_node = self.get_renamed_node(node, role_for_name)
 
-        # Reconstruct body: own fields + propagated fields (init=False)
-        mixin_body = []
         all_taker_fields = []
         for base_name, taker_type in bases_that_are_takers.items():
             wrapped_taker = self.class_diagram.get_wrapped_class(taker_type)
             all_taker_fields.extend([f.name for f in wrapped_taker.fields])
-        for field_ in wrapped_class.fields:
-            if field_.name in all_taker_fields:
-                continue
-            if field_.field.kw_only or field_.field.init:
-                mixin_body.append(self._create_field_node(field_, init=False))
 
-        propagated_fields = self._get_propagated_fields(wrapped_class)
-        role_attributes_node = None
+        role_for_body = self.make_role_for_properties(wrapped_class, all_taker_fields)
+
+        role_for_node = self.get_node_with_new_body(role_for_node, role_for_body)
+        role_for_bases = self.make_role_for_bases(
+            node,
+            wrapped_class,
+            bases_that_are_takers,
+            make_role_attributes,
+            role_attributes_name,
+        )
+        role_for_node = role_for_node.with_changes(bases=role_for_bases)
+
+        reentry_node_bases = list(node.bases)
         if make_role_attributes:
+            reentry_node_bases.insert(0, self.make_argument(role_attributes_name))
+        reentry_class = node.with_changes(bases=reentry_node_bases)
+
+        if make_role_attributes:
+            propagated_fields = self._get_propagated_fields(wrapped_class)
             role_attributes_node = self.make_dataclass(
                 role_attributes_name, body=propagated_fields
             )
+            return [role_attributes_node, role_for_node, reentry_class]
+        else:
+            return [role_for_node, reentry_class]
 
-        mixin_node = self.get_node_with_new_body(mixin_node, mixin_body)
-        mixin_bases = []
-        reentry_node_bases = []
+    def make_role_for_bases(
+        self,
+        node: libcst.ClassDef,
+        wrapped_class: WrappedClass,
+        bases_that_are_takers: Dict[str, Type],
+        make_role_attributes: bool,
+        role_attributes_name: str,
+    ) -> List[libcst.Arg]:
+        """
+        Generate arguments for the base classes of a role class, considering role takers and role attributes.
+
+        :param node: The original taker class node.
+        :param wrapped_class: The taker wrapped class.
+        :param bases_that_are_takers: Dictionary mapping base class names to their corresponding role taker types.
+        :param make_role_attributes: Flag indicating whether to include role attributes in the generated arguments.
+        :param role_attributes_name: Name for the role attributes dataclass.
+        """
+        role_for_bases = []
         for base in node.bases:
             base_name = self.get_name_from_base_node(base.value)
             if base_name in bases_that_are_takers:
-                reentry_node_bases.append(base)
-                mixin_bases.append(
-                    self.make_argument(
-                        self._get_mixin_name(
-                            bases_that_are_takers[base_name], wrapped_class
-                        )
+                taker_role_for = self.make_argument(
+                    self.get_role_for_name(bases_that_are_takers[base_name])
+                )
+                role_for_bases.append(taker_role_for)
+            elif self._is_role_base(base.value) and issubclass(
+                wrapped_class.clazz, Role
+            ):
+                taker_type = wrapped_class.clazz.get_role_taker_type()
+                taker_role_for = self.make_argument(self.get_role_for_name(taker_type))
+                role_for_bases.append(taker_role_for)
+
+        if make_role_attributes:
+            role_for_bases.insert(0, self.make_argument(role_attributes_name))
+
+        return role_for_bases
+
+    def make_role_for_properties(
+        self, taker_wrapped_class: WrappedClass, all_taker_fields: List[str]
+    ) -> List[libcst.FunctionDef]:
+        """
+        Generate property getter and setter methods for role attributes based on role taker wrapped class fields.
+
+        :param taker_wrapped_class: Wrapped class of the role taker.
+        :param all_taker_fields: List of all fields of the role taker.
+        :return: List of FunctionDef nodes representing property getter and setter methods.
+        """
+        role_for_properties = [
+            self.make_property_getter_node(
+                "role_taker", taker_wrapped_class.clazz.__name__, "..."
+            )
+        ]
+        for field_ in taker_wrapped_class.fields:
+            if field_.name in all_taker_fields:
+                continue
+            if field_.field.kw_only or field_.field.init:
+                role_for_properties.extend(
+                    self.make_property_getter_and_setter_nodes(
+                        field_.name,
+                        str(field_.field.type),
+                        f"self.role_taker.{field_.name}",
+                        f"self.role_taker.{field_.name} = value",
                     )
                 )
-                continue
-            if self._is_role_base(base.value) and issubclass(wrapped_class.clazz, Role):
-                taker_type = wrapped_class.clazz.get_role_taker_type()
-                taker_mixin = self.make_argument(
-                    self._get_mixin_name(taker_type, wrapped_class, False)
-                )
-                mixin_bases.append(taker_mixin)
-                reentry_node_bases.append(taker_mixin)
-            mixin_bases.append(base)
-            reentry_node_bases.append(base)
-        if make_role_attributes:
-            mixin_bases.insert(0, self.make_argument(role_attributes_name))
-            reentry_node_bases.insert(0, self.make_argument(role_attributes_name))
-        mixin_node = mixin_node.with_changes(bases=mixin_bases)
+        return role_for_properties
 
-        # Create the original class inheriting from Mixin
-        reentry_class = node.with_changes(bases=reentry_node_bases)
-        if make_role_attributes:
-            return [role_attributes_node, mixin_node, reentry_class]
+    @classmethod
+    def make_dataclass(
+        cls,
+        name: str,
+        bases: Optional[List[Type | str]] = None,
+        body: Optional[List[libcst.BaseStatement]] = None,
+    ) -> libcst.ClassDef:
+        """
+        :param name: Name of the dataclass.
+        :param bases: Base classes of the dataclass.
+        :param body: Body of the dataclass.
+        :return: libcst ClassDef object for the given dataclass.
+        """
+        return libcst.ClassDef(
+            name=libcst.Name(name),
+            bases=[libcst.Arg(value=cls.to_cst_expression(b)) for b in (bases or [])],
+            body=libcst.IndentedBlock(
+                body=body if body else [libcst.parse_statement("...")]
+            ),
+            decorators=[cls.make_dataclass_decorator()],
+        )
+
+    @classmethod
+    def to_cst_expression(
+        cls, has_name: Type | Callable | str
+    ) -> libcst.BaseExpression:
+        """
+        :param has_name: An object that has a `__name__` attribute, one of class, method, or function.
+        :return: libcst Expression object for the given name.
+        """
+        if isinstance(has_name, str):
+            try:
+                return libcst.parse_expression(has_name)
+            except Exception:
+                name = has_name
+        elif hasattr(has_name, "__name__"):
+            name = has_name.__name__
         else:
-            return [mixin_node, reentry_class]
+            name = str(has_name)
+        name.replace("typing.", "").replace("typing_extensions.", "")
+        return libcst.Name(name)
+
+    @classmethod
+    def make_dataclass_decorator(cls) -> libcst.Decorator:
+        return libcst.Decorator(
+            decorator=libcst.parse_expression("dataclass(eq=False)")
+        )
+
+    def make_property_getter_and_setter_nodes(
+        self, name: str, type_: str, getter_return_statement: str, setter_statement: str
+    ) -> List[libcst.FunctionDef]:
+        """
+        :param name: The name of the field for which to create getter and setter nodes.
+        :param type_: The type annotation for the field.
+        :param getter_return_statement: The value to be returned by the getter.
+        :param setter_statement: The statement to be executed in the setter body.
+        :return: A list containing the getter and setter FunctionDef nodes for the property.
+         The getter returns the value of the field from the role taker, and the setter sets the value of the field on
+          the role taker.
+        """
+        getter_node = self.make_property_getter_node(
+            name, type_, getter_return_statement
+        )
+        setter_node = self.make_property_setter_node(name, type_, setter_statement)
+        return [getter_node, setter_node]
+
+    @classmethod
+    def make_property_getter_node(
+        cls, name: str, type_: str, return_statement: str
+    ) -> libcst.FunctionDef:
+        """
+        :param name: The name of the field for which to create a getter node.
+        :param type_: The type annotation for the field.
+        :param return_statement: The value to be returned by the getter.
+        :return: A libcst FunctionDef node representing the property getter.
+        """
+        return libcst.FunctionDef(
+            decorators=[cls.make_decorator("property")],
+            name=libcst.Name(name),
+            params=cls.make_function_parameters({"self": None}),
+            returns=cls.make_annotation(type_),
+            body=libcst.IndentedBlock(
+                [libcst.parse_statement(f"return {return_statement}")]
+            ),
+        )
+
+    @classmethod
+    def make_property_setter_node(
+        cls, name: str, type_: str, statement: str
+    ) -> libcst.FunctionDef:
+        """
+        :param name: The name of the field for which to create a setter node.
+        :param type_: The type of the field.
+        :param statement: The statement to be executed in the setter body.
+        :return: A libcst FunctionDef node representing the property setter.
+        """
+        return libcst.FunctionDef(
+            decorators=[cls.make_decorator(f"{name}.setter")],
+            name=libcst.Name(name),
+            params=cls.make_function_parameters({"self": None, "value": type_}),
+            body=libcst.IndentedBlock(
+                [libcst.parse_statement(f"self.role_taker.{name} = value")]
+            ),
+        )
+
+    @classmethod
+    def make_decorator(cls, decorator_name: str) -> libcst.Decorator:
+        """
+        Creates a libcst Decorator node with the given decorator name.
+
+        :param decorator_name: The name of the decorator.
+        :return: A libcst Decorator node.
+        """
+        return libcst.Decorator(decorator=libcst.Name(decorator_name))
+
+    @classmethod
+    def make_function_parameters(
+        cls, parameters: Dict[str, Optional[str]]
+    ) -> libcst.Parameters:
+        """
+        Creates a libcst Parameters object from a dictionary of parameter names and type annotations.
+
+        :param parameters: A dictionary mapping parameter names to their type annotations.
+        :return: A libcst Parameters object containing the parameters with annotations.
+        """
+        parameters = parameters or {}
+        return libcst.Parameters(
+            params=[
+                libcst.Param(
+                    name=libcst.Name(param),
+                    annotation=(
+                        cls.make_annotation(annotation)
+                        if annotation is not None
+                        else None
+                    ),
+                )
+                for param, annotation in parameters.items()
+            ]
+        )
+
+    @classmethod
+    def make_annotation(cls, value: str) -> libcst.Annotation:
+        """
+        :param value: The type annotation as a string.
+        :return: A libcst Annotation node representing the given type annotation.
+        """
+        return libcst.Annotation(libcst.parse_expression(value))
+
+    @classmethod
+    def make_return_statement_body(cls, statement: str) -> libcst.IndentedBlock:
+        """
+        Creates an IndentedBlock with a return statement that returns the parsed expression.
+        """
+        return libcst.IndentedBlock(
+            body=[
+                libcst.SimpleStatementLine(
+                    body=[libcst.Return(value=libcst.parse_expression(statement))]
+                )
+            ]
+        )
 
     @classmethod
     def get_node_with_new_body(
@@ -429,32 +625,6 @@ class TransformerForModulesWithRoles(ContextAwareTransformer):
                 return base_node.value.value
         raise ValueError(f"Unexpected base node type: {base_node}")
 
-    def _transform_role(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass, role_type: RoleType
-    ) -> libcst.ClassDef:
-        """
-        Transforms a role class by adjusting its bases and filtering fields.
-        """
-
-        if role_type in [RoleType.PRIMARY, RoleType.SPECIALIZED_ROLE_FOR]:
-            node = self._transform_primary_role(node, wrapped_class)
-
-        # Filter fields: keep only introduced fields
-        new_body = []
-        taker_attr_name = wrapped_class.clazz.role_taker_attribute_name()
-        kept_field_names = [f.name for f in wrapped_class.own_fields] + [
-            taker_attr_name
-        ]
-        for item in node.body.body:
-            field_name = self._get_field_name_if_statement_is_field_definition(item)
-            if field_name and field_name not in kept_field_names:
-                continue
-            new_body.append(item)
-
-        updated_node = node.with_changes(body=node.body.with_changes(body=new_body))
-
-        return updated_node
-
     @classmethod
     def _get_field_name_if_statement_is_field_definition(
         cls, item: libcst.BaseStatement
@@ -472,7 +642,7 @@ class TransformerForModulesWithRoles(ContextAwareTransformer):
             return field_name.value
         return None
 
-    def _transform_primary_role(
+    def _transform_role(
         self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> libcst.ClassDef:
         """
@@ -481,70 +651,30 @@ class TransformerForModulesWithRoles(ContextAwareTransformer):
         :param node: The original class node.
         :param wrapped_class: The wrapped class information.
         """
+        role_type = RoleType.get_role_type(wrapped_class)
+        if role_type not in [RoleType.PRIMARY, RoleType.SPECIALIZED_ROLE_FOR]:
+            return node
         taker_type = wrapped_class.clazz.get_role_taker_type()
 
         # Filter out original Role bases and redundant bases
         new_bases = []
 
-        taker_mro_names = {c.__name__: c for c in taker_type.mro()}
         role_bases = {
             base.__name__: base
             for base in wrapped_class.clazz.__bases__
-            if issubclass(base, Role)
+            if base is Role
+            or (issubclass(base, Role) and base.updates_role_taker_type())
         }
         for base in node.bases:
-
-            # If it's a simple name and in taker's MRO, it's covered by RoleFor<Taker>
-            if (
-                isinstance(base.value, libcst.Name)
-                and base.value.value in taker_mro_names
-            ):
-                continue
-
-            if (
-                self._is_role_base(base.value)
-                or self.get_name_from_base_node(base.value) in role_bases
-            ):
-                new_bases.append(
-                    self.make_argument(
-                        self._get_mixin_name(taker_type, wrapped_class, False)
-                    )
-                )
+            if self.get_name_from_base_node(base.value) in role_bases:
+                new_bases.append(self.make_argument(self.get_role_for_name(taker_type)))
             new_bases.append(base)
 
         return node.with_changes(bases=new_bases)
 
-    def _get_mixin_name(
-        self,
-        taker_type: Type,
-        wrapped_class: WrappedClass[Role],
-        add_generic: bool = True,
-    ) -> str:
-        """
-        Generates a name for the mixin class with the given taker type and wrapped class.
-
-        :param taker_type: The type of the taker.
-        :param wrapped_class: The wrapped class of the original role class.
-        :param add_generic: Whether to include generic type parameters in the mixin name.
-        """
-        mixin_name = f"{taker_type.__name__}Mixin"
-        if sys.modules[taker_type.__module__] != self.module_:
-            self.require_import(taker_type.__module__, [mixin_name])
-        #     mixin_name = taker_type.__name__
-        # else:
-
-        if not issubclass(taker_type, Role) or not add_generic:
-            return mixin_name
-
-        # Handle generics
-        generic_params = get_generic_type_param(wrapped_class.clazz, Role)
-        if generic_params:
-            type_vars = [
-                arg.__name__ for arg in generic_params if isinstance(arg, TypeVar)
-            ]
-            if type_vars:
-                mixin_name = f"{mixin_name}[{type_vars[0]}]"
-        return mixin_name
+    @classmethod
+    def get_role_for_name(cls, taker_class: Type) -> str:
+        return f"RoleFor{taker_class.__name__}"
 
     def _get_propagated_fields(
         self, wrapped_class: WrappedClass
@@ -610,261 +740,6 @@ class TransformerForModulesWithRoles(ContextAwareTransformer):
             # A role can also be a taker
             roles.extend(self._get_all_roles_for_taker(role_wrapped.clazz))
         return roles
-
-    def _resolve_type_vars(self, type_name: str, available_type_vars: Set[str]) -> str:
-        """
-        Resolves TypeVars in a type name to their bounds if they are not in available_type_vars.
-        """
-        import re
-
-        def replace_tv(match):
-            tv_name = match.group(0)
-            if tv_name not in available_type_vars:
-                # Find TypeVar in module
-                if tv_name in self.module_.__dict__:
-                    tv = self.module_.__dict__[tv_name]
-                    if isinstance(tv, TypeVar):
-                        bound = getattr(tv, "__bound__", None)
-                        if bound:
-                            return (
-                                bound.__name__
-                                if hasattr(bound, "__name__")
-                                else str(bound)
-                            )
-                        return "Any"
-            return tv_name
-
-        return re.sub(r"(?<!\.)\b\w+\b(?!\.)", replace_tv, type_name)
-
-    def _create_field_node(
-        self,
-        wrapped_field: WrappedField,
-        init: bool = True,
-        kw_only: Optional[bool] = None,
-        available_type_vars: Optional[Set[str]] = None,
-    ) -> libcst.SimpleStatementLine:
-        """
-        Creates a libcst SimpleStatementLine node for a field.
-        """
-        self.require_import(
-            wrapped_field.type_endpoint.__module__,
-            [wrapped_field.type_endpoint.__name__],
-        )
-        if wrapped_field.is_container:
-            self.require_import(
-                wrapped_field.container_type.__module__,
-                [wrapped_field.container_type.__name__],
-            )
-
-        f_copy = copy(wrapped_field.field)
-        if not init:
-            f_copy.init = False
-            # Clear defaults to match GT for init=False
-            f_copy.default = dataclasses.MISSING
-            f_copy.default_factory = dataclasses.MISSING
-            f_copy.kw_only = False
-        else:
-            # Match FieldRepresentation logic for role-related classes
-            f_copy.kw_only = f_copy.kw_only or (
-                not wrapped_field.is_required and f_copy.init
-            )
-
-        if kw_only is not None:
-            f_copy.kw_only = kw_only
-
-        rep_obj = FieldRepresentation(f_copy)
-        rep_str = rep_obj.representation.strip()
-
-        if rep_str.startswith("="):
-            val_str = rep_str[1:].strip()
-            try:
-                value_cst = libcst.parse_expression(val_str)
-            except Exception:
-                value_cst = libcst.Name("None")
-        else:
-            value_cst = None
-
-        type_str = wrapped_field.type_name
-        if available_type_vars is not None:
-            type_str = self._resolve_type_vars(type_str, available_type_vars)
-
-        type_str = type_str.replace("typing.", "").replace("typing_extensions.", "")
-
-        return libcst.SimpleStatementLine(
-            body=[
-                libcst.AnnAssign(
-                    target=libcst.Name(wrapped_field.name),
-                    annotation=libcst.Annotation(
-                        annotation=self.to_cst_expression(type_str)
-                    ),
-                    value=value_cst,
-                )
-            ]
-        )
-
-    def _synthesize_role_for(self, taker_type: Type) -> libcst.ClassDef:
-        """
-        Synthesizes a RoleFor<Taker> class.
-        """
-        taker_name = taker_type.__name__
-
-        # Find the TypeVar for the taker if it's a Role
-        type_var_name = self._get_type_var_name(taker_type)
-        if not type_var_name:
-            # Fallback to T<TakerName>
-            type_var_name = f"T{taker_name}"
-
-        # Base classes: TakerMixin, Role[T]
-        available_type_vars = {type_var_name}
-        wrapped_taker = self.class_diagram.get_wrapped_class(taker_type)
-        mixin_base_class_name = f"{taker_name}Mixin"
-        role_base_class_name = f"{Role.__name__}[{type_var_name}]"
-        bases = [mixin_base_class_name, role_base_class_name]
-
-        body = []
-        # 1. Add fields from Taker as init=False
-        # Only exclude fields from roles targeting THIS taker
-        roles_targeting_taker_fields = set()
-        roles = self.class_diagram.get_roles_of_class(taker_type)
-        for role_wrapped in roles:
-            for f in role_wrapped.own_fields:
-                roles_targeting_taker_fields.add(f.name)
-        for field_ in wrapped_taker.fields:
-            if field_.name in roles_targeting_taker_fields:
-                continue
-            if field_.name in self._base_role_class_field_names:
-                continue
-            body.append(
-                self._create_field_node(
-                    field_, init=False, available_type_vars=available_type_vars
-                )
-            )
-
-        # 2. Add @classmethod role_taker_attribute
-        method_node = self.make_class_method(
-            Role.role_taker_attribute.__name__, returns=taker_type
-        )
-        body.append(method_node)
-
-        return self.make_dataclass(f"RoleFor{taker_name}", bases, body)
-
-    @classmethod
-    def make_dataclass(
-        cls,
-        name: str,
-        bases: Optional[List[Type | str]] = None,
-        body: Optional[List[libcst.BaseStatement]] = None,
-    ) -> libcst.ClassDef:
-        """
-        :param name: Name of the dataclass.
-        :param bases: Base classes of the dataclass.
-        :param body: Body of the dataclass.
-        :return: libcst ClassDef object for the given dataclass.
-        """
-        return libcst.ClassDef(
-            name=libcst.Name(name),
-            bases=[libcst.Arg(value=cls.to_cst_expression(b)) for b in (bases or [])],
-            body=libcst.IndentedBlock(
-                body=body if body else [cls.make_ellipsis_expression()]
-            ),
-            decorators=[cls.make_dataclass_decorator()],
-        )
-
-    @classmethod
-    def make_class_method(
-        cls,
-        name: str,
-        args: Optional[List[str]] = None,
-        returns: Type | Callable | str = None,
-    ) -> libcst.FunctionDef:
-        """
-        :return: libcst FunctionDef object for the given class method.
-        """
-        params = ["cls"] + (args or [])
-        return libcst.FunctionDef(
-            name=libcst.Name(name),
-            params=cls.make_cst_args(*params),
-            body=cls.make_ellipsis_body(),
-            decorators=[libcst.Decorator(decorator=libcst.Name("classmethod"))],
-            returns=(
-                libcst.Annotation(annotation=cls.to_cst_expression(returns))
-                if returns
-                else None
-            ),
-        )
-
-    @classmethod
-    def make_ellipsis_body(cls) -> libcst.IndentedBlock:
-        """
-        :return: libcst IndentedBlock object with a single ellipsis expression.
-        """
-        return libcst.IndentedBlock(body=[cls.make_ellipsis_expression()])
-
-    @classmethod
-    def to_cst_expression(
-        cls, has_name: Type | Callable | str
-    ) -> libcst.BaseExpression:
-        """
-        :param has_name: An object that has a `__name__` attribute, one of class, method, or function.
-        :return: libcst Expression object for the given name.
-        """
-        if isinstance(has_name, str):
-            try:
-                return libcst.parse_expression(has_name)
-            except Exception:
-                return libcst.Name(has_name)
-        name = has_name.__name__
-        return libcst.Name(name)
-
-    @classmethod
-    def make_cst_args(cls, *names) -> libcst.Parameters:
-        """
-        :return: libcst Parameters object for the given names.
-        """
-        return libcst.Parameters(
-            params=[libcst.Param(name=libcst.Name(n)) for n in names]
-        )
-
-    @classmethod
-    def make_dataclass_decorator(cls) -> libcst.Decorator:
-        return libcst.Decorator(
-            decorator=libcst.parse_expression("dataclass(eq=False)")
-        )
-
-    @classmethod
-    def make_ellipsis_expression(cls) -> libcst.SimpleStatementLine:
-        return libcst.SimpleStatementLine(body=[libcst.Expr(value=libcst.Ellipsis())])
-
-    @cached_property
-    def _base_role_class_field_names(self):
-        """
-        :return: List of field names for the base Role class.
-        """
-        return [f.name for f in dataclasses.fields(Role)]
-
-    @lru_cache
-    def _get_type_var_name(self, clazz: Type) -> Optional[str]:
-        """
-        Finds a TypeVar bound to the given class.
-        """
-        for name, value in self.module_.__dict__.items():
-            if isinstance(value, TypeVar):
-                if getattr(value, "__bound__", None) == clazz:
-                    return name
-        return None
-
-    def require_import(self, module: str, names: List[str]):
-        """
-        Add an import statement to the module context.
-        """
-        if module in ["builtins", self.module_.__name__]:
-            return
-        for name in names:
-            AddImportsVisitor.add_needed_import(
-                self.context,
-                module=module,
-                obj=name,
-            )
 
     def __hash__(self):
         return hash((self.__class__, self.module_))
