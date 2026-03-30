@@ -1,5 +1,6 @@
 from copy import deepcopy
 from dataclasses import dataclass
+from uuid import UUID
 
 import numpy as np
 import pytest
@@ -14,7 +15,7 @@ from semantic_digital_twin.exceptions import (
     WrongWorldModelVersion,
     NonMonotonicTimeError,
 )
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Handle, Milk
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
 
@@ -34,6 +35,8 @@ from semantic_digital_twin.world_description.connections import (
     OmniDrive,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     Body,
@@ -225,10 +228,10 @@ def test_compute_fk(world_setup):
 
     connection: PrismaticConnection = world.get_connection(r1, r2)
 
-    state_memory_id = id(world.state.data)
+    state_memory_id = id(world.state._data)
     world.state[connection.dof.id].position = 1.0
     world.notify_state_change()
-    assert state_memory_id == id(world.state.data)
+    assert state_memory_id == id(world.state._data)
     fk = world.compute_forward_kinematics_np(l2, r2)
     assert np.allclose(
         fk,
@@ -275,7 +278,7 @@ def test_compute_fk_expression(world_setup):
 
 def test_apply_control_commands(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
-    state_memory_id = id(world.state.data)
+    state_memory_id = id(world.state._data)
     connection: PrismaticConnection = world.get_connection(r1, r2)
     cmd = np.array([100.0, 0, 0, 0, 0, 0, 0, 0])
     dt = 0.1
@@ -285,7 +288,7 @@ def test_apply_control_commands(world_setup):
     assert world.state[connection.dof.id].velocity == 100.0 * dt * dt
     assert world.state[connection.dof.id].position == 100.0 * dt * dt * dt
     # the state should reuse the same memory
-    assert state_memory_id == id(world.state.data)
+    assert state_memory_id == id(world.state._data)
 
 
 def test_compute_relative_pose(world_setup):
@@ -634,6 +637,14 @@ def test_copy_world(world_setup):
         == 0.0
     )
     assert float(bf.global_transform.to_np()[0, 3]) == 1.5
+    assert all(
+        hash(d) in world_copy._world_entity_hash_table.keys()
+        for d in world.degrees_of_freedom
+    )
+    assert all(
+        hash(k) in world_copy._world_entity_hash_table.keys()
+        for k in world.kinematic_structure_entities
+    )
 
 
 def test_copy_world_state(world_setup):
@@ -1075,7 +1086,7 @@ def test_world_state_trajectory(world_setup, tmp_path):
     # The first DOF should have changed due to jerk command
     assert not np.allclose(traj.data[0, :, 0], traj.data[-1, :, 0])  # First DOF changed
     assert np.allclose(
-        traj.data[0, :, 1:], initial_state.data[:, 1:]
+        traj.data[0, :, 1:], initial_state._data[:, 1:]
     )  # Other DOFs unchanged initially
 
     plotter = WorldStateTrajectoryPlotter()
@@ -1086,7 +1097,7 @@ def test_world_state_trajectory(world_setup, tmp_path):
     assert traj._world_version == world.get_world_model_manager().version
 
     # Verify that trajectory data matches current world state
-    np.testing.assert_allclose(traj.data[-1, :, :], world.state.data)
+    np.testing.assert_allclose(traj.data[-1, :, :], world.state._data)
 
     # verify that the state increased on each step
     previous = initial_state[dof_uuid]
@@ -1133,11 +1144,40 @@ def test_reattach_child_to_new_parent(world_setup):
 
 
 def test_reset_state_context(pr2_world_state_reset):
-    state_copy = pr2_world_state_reset.state.data.copy()
+    state_copy = pr2_world_state_reset.state._data.copy()
     with pr2_world_state_reset.reset_state_context():
         pr2_world_state_reset.get_body_by_name(
             "base_footprint"
         ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
             10, 10, 0
         )
-    assert np.allclose(state_copy, pr2_world_state_reset.state.data)
+    assert np.allclose(state_copy, pr2_world_state_reset.state._data)
+
+
+def test_copy_for_world():
+
+    w1 = World()
+    w2 = World()
+    b1_uuid = UUID(int=1)
+    b1_w1 = Body(
+        name=PrefixedName("b1"),
+        collision=ShapeCollection([Box(scale=Scale())]),
+        id=b1_uuid,
+    )
+
+    milk = Milk(root=b1_w1)
+    with w1.modify_world():
+        w1.add_body(b1_w1)
+        w1.add_semantic_annotation(milk)
+
+    b1_w2 = b1_w1.copy_for_world(w2)
+
+    assert b1_w2.id == b1_w1.id
+    assert b1_w2.name == b1_w1.name
+    assert b1_w2.collision == b1_w1.collision
+
+    with w2.modify_world():
+        w2.add_body(b1_w2)
+    copied_milk = milk.copy_for_world(w2)
+
+    assert copied_milk.root == b1_w2

@@ -12,7 +12,7 @@ from ..world import World
 from ..world_description.world_entity import Body
 from ..world_description.connections import FixedConnection
 from ..world_description.shape_collection import ShapeCollection
-from ..world_description.geometry import TriangleMesh, Scale
+from ..world_description.geometry import Mesh, Scale
 from ..spatial_types import HomogeneousTransformationMatrix
 from ..datastructures.prefixed_name import PrefixedName
 
@@ -83,7 +83,7 @@ class GLTFLoader(Step):
     def _trimesh_to_body(self, mesh: trimesh.Trimesh, name: str) -> Body:
         """Create a Body representation from a trimesh object."""
         # Create TriangleMesh geometry from trimesh
-        triangle_mesh = TriangleMesh(
+        triangle_mesh = Mesh.from_trimesh(
             mesh=mesh,
             origin=HomogeneousTransformationMatrix.from_xyz_rpy(),  # Identity transform
             scale=Scale(1.0, 1.0, 1.0),  # No scaling

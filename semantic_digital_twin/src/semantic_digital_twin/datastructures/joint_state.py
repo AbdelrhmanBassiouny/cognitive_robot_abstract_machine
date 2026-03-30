@@ -16,11 +16,11 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.definitions import JointStateType
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 
 if TYPE_CHECKING:
     from semantic_digital_twin.robots.abstract_robot import AbstractRobot
     from semantic_digital_twin.world import World
+    from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 
 
 @dataclass
@@ -126,6 +126,18 @@ class JointState(SubclassJSONSerializer):
         state_type = from_json(data["joint_state_type"])
         name = from_json(data["name"])
         return cls(connections, target_values, state_type=state_type, name=name)
+
+    def copy_for_world(self, world: World):
+        """
+        Creates a copy of this JointState for the given world. This is necessary when copying a robot to another world,
+        as the connections in the new world will be different objects.
+        """
+        return JointState(
+            connections=[c.copy_for_world(world) for c in self.connections],
+            target_values=self.target_values.copy(),
+            state_type=self.state_type,
+            name=self.name,
+        )
 
 
 GripperState = JointState

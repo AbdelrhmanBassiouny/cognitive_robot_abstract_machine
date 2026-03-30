@@ -36,18 +36,18 @@ def mutable_model_world(pr2_apartment_world):
 def immutable_model_world(pr2_apartment_world):
     world = pr2_apartment_world
     pr2 = pr2_apartment_world.get_semantic_annotations_by_type(PR2)[0]
-    state = deepcopy(world.state.data)
+    state = deepcopy(world.state._data)
     yield world, pr2, Context(world, pr2)
-    world.state.data[:] = state
+    world.state._data[:] = state
     world.notify_state_change()
 
 
 @pytest.fixture
 def immutable_simple_pr2_world(simple_pr2_world_setup):
     world, robot_view, context = simple_pr2_world_setup
-    state = deepcopy(world.state.data)
+    state = deepcopy(world.state._data)
     yield world, robot_view, context
-    world.state.data[:] = state
+    world.state._data[:] = state
     world.notify_state_change()
 
 

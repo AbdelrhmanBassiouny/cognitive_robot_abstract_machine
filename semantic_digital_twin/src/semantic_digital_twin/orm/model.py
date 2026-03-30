@@ -92,13 +92,13 @@ class WorldStateMapping(AlternativeMapping[WorldState]):
     @classmethod
     def from_domain_object(cls, obj: WorldState):
         return cls(
-            data=obj.data.ravel().tolist(),
+            data=obj._data.ravel().tolist(),
             ids=obj._ids,
         )
 
     def to_domain_object(self) -> WorldState:
         return WorldState(
-            data=np.array(self.data, dtype=np.float64).reshape((4, len(self.ids))),
+            _data=np.array(self.data, dtype=np.float64).reshape((4, len(self.ids))),
             _ids=self.ids,
             _index={name: idx for idx, name in enumerate(self.ids)},
         )

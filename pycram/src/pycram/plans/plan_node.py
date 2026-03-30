@@ -406,7 +406,7 @@ class ActionNode(DesignatorNode):
         Create the ExecutionData and logs additional information about the execution of this node.
         """
         robot_pose = self.plan.robot.root.global_pose
-        exec_data = ExecutionData(robot_pose, self.plan.world.state.data)
+        exec_data = ExecutionData(robot_pose, self.plan.world.state._data)
         self.execution_data = exec_data
         self._last_world_modification_block_pre_perform_index = len(
             self.plan.world._model_manager.model_modification_blocks
@@ -418,7 +418,7 @@ class ActionNode(DesignatorNode):
         """
         self.execution_data.execution_end_pose = self.plan.robot.root.global_pose
 
-        self.execution_data.execution_end_world_state = self.plan.world.state.data
+        self.execution_data.execution_end_world_state = self.plan.world.state._data
         self.execution_data.added_world_modifications = (
             self.plan.world._model_manager.model_modification_blocks[
                 self._last_world_modification_block_pre_perform_index :

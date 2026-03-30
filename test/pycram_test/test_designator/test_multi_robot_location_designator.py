@@ -88,9 +88,9 @@ def immutable_multiple_robot_simple_apartment(
     setup_multi_robot_simple_apartment,
 ) -> Generator[Tuple[World, AbstractRobot, Context]]:
     world, view = setup_multi_robot_simple_apartment
-    state = deepcopy(world.state.data)
+    state = deepcopy(world.state._data)
     yield world, view, Context(world, view)
-    world.state.data[:] = state
+    world.state._data[:] = state
     world.notify_state_change()
 
 
