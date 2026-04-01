@@ -11,7 +11,6 @@ except ImportError:
     pass
 import py_trees
 from action_msgs.msg import GoalStatus
-from py_trees_ros.actions import ActionClient
 
 from giskardpy.tree.behaviors.plugin import GiskardBehavior
 from giskardpy.tree.blackboard_utils import (
@@ -22,7 +21,7 @@ from giskardpy.tree.blackboard_utils import (
 from giskardpy.utils.decorators import record_time
 
 
-class SendFollowJointTrajectory(ActionClient, GiskardBehavior):
+class SendFollowJointTrajectory(GiskardBehavior):
     # error_code_to_str = {value: name for name, value in vars(FollowJointTrajectoryResult).items() if
     #                      isinstance(value, int)}
     #
