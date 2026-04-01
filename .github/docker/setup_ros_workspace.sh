@@ -10,6 +10,7 @@ apt install -y \
     ros-jazzy-xacro \
     ros-jazzy-navigation2 \
     python3-vcstool \
+    ros-jazzy-py-trees-ros \
     git \
     ros-dev-tools \
     default-jre \
