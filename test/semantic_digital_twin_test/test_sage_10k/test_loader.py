@@ -62,7 +62,7 @@ def test_different_decomposition_methods(
     for room in scene.rooms:
         new_objects = []
         for obj in room.objects:
-            if obj.type == "bookshelf":
+            if obj.type in ["bookshelf", "sideboard", "table"]:
                 new_objects.append(obj)
         room.objects = new_objects
 
@@ -71,10 +71,10 @@ def test_different_decomposition_methods(
 
     world = scene.create_world()
     decomposer = COACDMeshDecomposer(
-        threshold=0.05, preprocess_mode=PreprocessingMode.ON
+        threshold=0.05, preprocess_mode=PreprocessingMode.ON, pca=True, seed=69
     )
     pipeline = Pipeline([decomposer])
-    world = pipeline.apply(world)
+    pipeline.apply(world)
 
     pub = VizMarkerPublisher(
         _world=world,
