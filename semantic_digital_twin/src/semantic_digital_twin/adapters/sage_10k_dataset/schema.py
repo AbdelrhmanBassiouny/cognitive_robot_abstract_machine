@@ -22,6 +22,7 @@ from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix,
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
+    FixedConnection,
 )
 from semantic_digital_twin.world_description.geometry import Mesh, Scale, Box
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -359,7 +360,7 @@ class Sage10kObject(Sage10kWithID):
 
     position: Sage10kPosition
     """
-    The position of the object (relative to the room?)
+    The global position of the object
     """
 
     rotation: Sage10kRotation
@@ -409,8 +410,13 @@ class Sage10kObject(Sage10kWithID):
         body.visual = visual
         body.collision = collision
 
+        if self.place_id in ["floor", "wall"]:
+            connection_type = FixedConnection
+        else:
+            connection_type = Connection6DoF
+
         with world.modify_world():
-            root_C_body = Connection6DoF.create_with_dofs(
+            root_C_body = connection_type.create_with_dofs(
                 world=world,
                 parent=parent,
                 child=body,
