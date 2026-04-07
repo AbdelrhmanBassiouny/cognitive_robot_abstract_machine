@@ -9,6 +9,8 @@ from tabulate import tabulate
 
 from anytree import NodeMixin, PreOrderIter, findall
 from scipy.special import logsumexp
+
+from krrood.utils import DataclassException
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
 from random_events.variable import Variable
@@ -152,13 +154,13 @@ class MarginalDeterminismTreeNode(NodeMixin):
 
 
 @dataclass
-class SupportDeterminismViolation:
+class SupportDeterminismViolation(DataclassException):
     """
     Base class for all violations produced by verify_support_determinism().
 
-    Subclass to implement a specific check violation. Each subclass carries
-    the structured data relevant to its check and overrides __str__ to produce
-    a readable description.
+    Inherits from DataclassException so each violation is also a raiseable
+    exception. Subclasses set self.message in __post_init__ before calling
+    super().__post_init__().
     """
 
 
@@ -176,13 +178,17 @@ class MissingQueryVariableViolation(SupportDeterminismViolation):
     available_variables: List[Variable]
     """All Variables currently registered in the circuit."""
 
-    def __str__(self) -> str:
+    def __post_init__(self) -> None:
         missing = [v.name for v in self.missing_variables]
         available = [v.name for v in self.available_variables]
-        return (
+        self.message = (
             f"Query-set Variables {missing} not found in circuit. "
             f"Available: {available}"
         )
+        super().__post_init__()
+
+    def __str__(self) -> str:
+        return self.message
 
 
 @dataclass
@@ -200,12 +206,16 @@ class UnnormalizedSumUnitViolation(SupportDeterminismViolation):
     actual_log_weight_sum: float
     """The actual sum of log-weights, which should be 0.0."""
 
-    def __str__(self) -> str:
-        return (
+    def __post_init__(self) -> None:
+        self.message = (
             f"SumUnit (index={self.sum_unit_index}) log-weights sum to "
             f"{self.actual_log_weight_sum:.6f}, expected 0.0. "
             f"Unnormalized circuits produce incorrect backdoor probabilities."
         )
+        super().__post_init__()
+
+    def __str__(self) -> str:
+        return self.message
 
 
 @dataclass
@@ -225,16 +235,20 @@ class OverlappingChildSupportsViolation(SupportDeterminismViolation):
     query_variable: Variable
     """The declared query Variable on which the overlap was detected."""
 
-    def __str__(self) -> str:
-        return (
+    def __post_init__(self) -> None:
+        self.message = (
             f"SumUnit (index={self.sum_unit_index}) has overlapping children supports "
             f"on declared query Variable '{self.query_variable.name}': children are not "
             f"support-deterministic for this Variable."
         )
+        super().__post_init__()
+
+    def __str__(self) -> str:
+        return self.message
 
 
 @dataclass
-class SupportDeterminismVerificationResult(Exception):
+class SupportDeterminismVerificationResult(DataclassException):
     """
     Result of verifying support determinism of a circuit against its
     Marginal Determinism Variable Tree.
@@ -260,6 +274,10 @@ class SupportDeterminismVerificationResult(Exception):
 
     circuit_variables: List[Variable]
     """All Variables present in the circuit at verification time."""
+
+    def __post_init__(self) -> None:
+        self.message = str(self)
+        super().__post_init__()
 
     def __str__(self) -> str:
         status = "PASS" if self.passed else "FAIL"
