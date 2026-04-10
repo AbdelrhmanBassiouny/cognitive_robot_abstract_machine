@@ -25,7 +25,7 @@ from typing_extensions import (
 )
 
 from krrood.class_diagrams.exceptions import MissingContainedTypeOfContainer
-from krrood.class_diagrams.utils import behaves_like_a_built_in_class, get_type_hints_of_object
+from krrood.class_diagrams.utils import behaves_like_a_built_in_type, get_type_hints_of_object
 from krrood.utils import module_and_class_name, is_builtin_type
 
 if TYPE_CHECKING:
@@ -157,7 +157,7 @@ class WrappedField:
     @cached_property
     def is_collection_of_builtins(self):
         return self.is_container and all(
-            behaves_like_a_built_in_class(field_type)
+            behaves_like_a_built_in_type(field_type)
             for field_type in get_args(self.resolved_type)
         )
 
