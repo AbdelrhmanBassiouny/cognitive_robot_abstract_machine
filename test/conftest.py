@@ -18,7 +18,11 @@ from krrood.ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
 )
 from krrood.utils import recursive_subclasses
-from pycram.datastructures.dataclasses import Context  # type: ignore
+try:
+    from pycram.datastructures.dataclasses import Context  # type: ignore
+except ImportError as e:
+    # Adds ROS dependency
+    pass
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -35,7 +39,7 @@ from semantic_digital_twin.utils import rclpy_installed, tracy_installed
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     OmniDrive,
-    DiffDrive,
+    DifferentialDrive,
     FixedConnection,
     Connection6DoF,
     RevoluteConnection,
@@ -317,7 +321,7 @@ def cylinder_bot_diff_world():
         )
         world.add_connection(env_connection)
 
-        connection = DiffDrive.create_with_dofs(
+        connection = DifferentialDrive.create_with_dofs(
             world=world, parent=body, child=robot_world.root
         )
         world.merge_world(robot_world, connection)
@@ -329,9 +333,10 @@ def cylinder_bot_diff_world():
 def world_with_urdf_factory(
     urdf_path: str,
     robot_semantic_annotation: Type[AbstractRobot] | None,
-    drive_connection_type: Type[OmniDrive | DiffDrive],
+    drive_connection_type: Type[OmniDrive | DifferentialDrive],
     robot_starting_pose: HomogeneousTransformationMatrix | None = None,
     urdf_path_resolver: PathResolver | None = None,
+    robot_localization_pose: HomogeneousTransformationMatrix | None = None,
 ):
     """
     Builds this tree:
@@ -360,8 +365,11 @@ def world_with_urdf_factory(
         )
         world_with_urdf.add_connection(c_root_bf)
         c_root_bf.has_hardware_interface = True
-        if robot_starting_pose is not None:
-            c_root_bf.origin = robot_starting_pose
+    if robot_localization_pose is not None:
+        map_C_localization.origin = robot_localization_pose
+
+    if robot_starting_pose is not None:
+        c_root_bf.origin = robot_starting_pose
 
     return world_with_urdf
 
@@ -420,13 +428,13 @@ def stretch_world():
         "robots",
     )
     stretch = os.path.join(urdf_dir, "stretch_description.urdf")
-    return world_with_urdf_factory(stretch, Stretch, DiffDrive)
+    return world_with_urdf_factory(stretch, Stretch, DifferentialDrive)
 
 
 @pytest.fixture(scope="session")
 def tiago_world():
     tiago = "package://iai_tiago_description/urdf/tiago_from_our_robot.urdf"
-    return world_with_urdf_factory(tiago, Tiago, DiffDrive)
+    return world_with_urdf_factory(tiago, Tiago, DifferentialDrive)
 
 
 @pytest.fixture(scope="session")
@@ -615,7 +623,6 @@ def pr2_apartment_world(pr2_world_setup, apartment_world_setup):
     """
     pr2_copy = deepcopy(pr2_world_setup)
     PR2.from_world(pr2_copy)  # semantic annotations are lost on copy
-
     apartment_copy = deepcopy(apartment_world_setup)
 
     pr2_copy.merge_world(apartment_copy)
@@ -629,9 +636,8 @@ def pr2_apartment_world(pr2_world_setup, apartment_world_setup):
 def simple_pr2_world_setup(pr2_world_setup, simple_apartment_setup):
     apartment_world = deepcopy(simple_apartment_setup)
     pr2_copy = deepcopy(pr2_world_setup)
-    robot_view = PR2.from_world(pr2_copy)
     pr2_copy.merge_world(apartment_world)
-
+    robot_view = PR2.from_world(pr2_copy)  # semantic annotations are lost on copy
     return pr2_copy, robot_view, Context(pr2_copy, robot_view)
 
 
@@ -677,10 +683,10 @@ def tiago_apartment_world(tiago_world, apartment_world_setup):
 @pytest.fixture
 def pr2_world_state_reset(pr2_world_setup):
     world = deepcopy(pr2_world_setup)
-    PR2.from_world(world)
-    state = world.state.data.copy()
+    PR2.from_world(world)  # semantic annotations are lost on copy
+    state = world.state._data.copy()
     yield world
-    world.state.data[:] = state
+    world.state._data[:] = state
 
 
 ###############################

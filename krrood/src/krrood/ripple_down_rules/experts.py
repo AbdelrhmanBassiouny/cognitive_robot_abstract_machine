@@ -26,16 +26,16 @@ from krrood.ripple_down_rules.utils import (
     get_imports_from_scope,
     get_class_file_path,
 )
-from ..utils import get_scope_from_imports
+from krrood.utils import get_scope_from_imports
 
 try:
-    from .user_interface.gui import RDRCaseViewer
+    from krrood.ripple_down_rules.user_interface.gui import RDRCaseViewer
 except ImportError as e:
     RDRCaseViewer = None
 from krrood.ripple_down_rules.user_interface.prompt import UserPrompt
 
 if TYPE_CHECKING:
-    from .rdr import Rule
+    from krrood.ripple_down_rules.rdr import Rule
 
 
 class Expert(ABC):

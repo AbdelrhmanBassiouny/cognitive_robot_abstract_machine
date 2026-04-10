@@ -7,7 +7,7 @@ from typing import Tuple
 import numpy as np
 import trimesh
 from polytope import bounding_box
-from probabilistic_model.distributions.helper import make_dirac
+from probabilistic_model.distributions.gaussian import GaussianDistribution
 from random_events.product_algebra import Event
 from random_events.set import Set
 from random_events.variable import Symbolic
@@ -25,7 +25,6 @@ from krrood.class_diagrams.utils import T
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.factories import variable, variable_from
 from krrood.ormatic.utils import classproperty
-from probabilistic_model.distributions import GaussianDistribution
 from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.probabilistic_circuit.rx.helper import (
     uniform_measure_of_event,
@@ -301,6 +300,10 @@ class HasRootKinematicStructureEntity(
             parent_entity = parent_entity.parent_kinematic_structure_entity
         return future_root_T_self
 
+    @property
+    def global_transform(self) -> HomogeneousTransformationMatrix:
+        return self.root.global_transform
+
     def __hash__(self):
         return Role.__hash__(self)
 
@@ -456,6 +459,7 @@ class HasApertures(HasRootBody, ABC):
 
         :param aperture: The aperture whose geometry should be removed.
         """
+
         world = self._world
         world.update_forward_kinematics()
         hole_event = aperture.root.area.as_bounding_box_collection_in_frame(
@@ -468,6 +472,7 @@ class HasApertures(HasRootBody, ABC):
         new_bounding_box_collection = BoundingBoxCollection.from_event(
             self.root, new_wall_event
         ).as_shapes()
+
         self.root.collision = new_bounding_box_collection
         self.root.visual = new_bounding_box_collection
 
@@ -899,12 +904,12 @@ class HasSupportingSurface(HasStorageSpace, ABC):
         surface_circuit_root = SumUnit(probabilistic_circuit=surface_circuit)
 
         objects_of_interest_variable = Symbolic(
-            "objects_of_interest", Set.from_iterable(objects_of_interest)
+            name="objects_of_interest", domain=Set.from_iterable(objects_of_interest)
         )
 
         for object_of_interest in objects_of_interest:
             surface_P_obj = self._world.transform(
-                object_of_interest.root.global_pose, self.supporting_surface
+                object_of_interest.root.global_transform, self.supporting_surface
             )
 
             p_object_root = ProductUnit(probabilistic_circuit=surface_circuit)
@@ -915,14 +920,14 @@ class HasSupportingSurface(HasStorageSpace, ABC):
             )
 
             x_p = GaussianDistribution(
-                SpatialVariables.x.value,
-                float(surface_P_obj.x),
-                variance,
+                variable=SpatialVariables.x.value,
+                location=float(surface_P_obj.x),
+                scale=variance,
             )
             y_p = GaussianDistribution(
-                SpatialVariables.y.value,
-                float(surface_P_obj.y),
-                variance,
+                variable=SpatialVariables.y.value,
+                location=float(surface_P_obj.y),
+                scale=variance,
             )
 
             p_object_root.add_subcircuit(leaf(object_of_interest_p, surface_circuit))

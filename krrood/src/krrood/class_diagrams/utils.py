@@ -6,11 +6,11 @@ from copy import copy
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
-from typing import Callable, Any, Dict, get_args, get_origin, Union
 from uuid import UUID
 
 import typing_extensions
-from typing_extensions import List, Type, Any, Dict, TypeVar, Tuple, Iterable, Iterator
+from typing_extensions import Callable, get_args, get_origin, Iterable, Iterator
+from typing_extensions import List, Type, Any, Dict, Tuple, Generic
 from typing_extensions import TypeVar
 
 from krrood.class_diagrams.exceptions import CouldNotResolveType
@@ -33,12 +33,12 @@ def classes_of_module(module) -> List[Type]:
 
 
 def behaves_like_a_built_in_class(
-    clazz: Type,
+        clazz: Type,
 ) -> bool:
     return (
-        is_builtin_class(clazz)
-        or clazz == UUID
-        or (inspect.isclass(clazz) and issubclass(clazz, Enum))
+            is_builtin_class(clazz)
+            or clazz == UUID
+            or (inspect.isclass(clazz) and issubclass(clazz, Enum))
     )
 
 
@@ -85,7 +85,7 @@ class TypeHintResolutionResult:
 
 
 def get_and_resolve_generic_type_hints_of_object_using_substitutions(
-    object_: Any, substitution: Dict[TypeVar, Type]
+        object_: Any, substitution: Dict[TypeVar, Type]
 ) -> Dict[str, TypeHintResolutionResult]:
     """
     Resolve generic type hints of an object using a substitution dictionary.
@@ -98,16 +98,22 @@ def get_and_resolve_generic_type_hints_of_object_using_substitutions(
     return {name: resolve_type(hint, substitution) for name, hint in type_hints.items()}
 
 
-def get_type_hints_of_object(object_: Any) -> Dict[str, Any]:
+@lru_cache
+def get_type_hints_of_object(object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()) -> Dict[str, Any]:
     """
     Get the type hints of an object. This is a workaround for the fact that get_type_hints() does not work with objects
      that are not defined in the same module or are imported through TYPE_CHECKING.
 
     :param object_: The object to get the type hints of.
+    :param namespace: A starting namespace to use for resolving type hints.
     :return: The type hints of the object as a dictionary.
+    :raises CouldNotResolveType: If a type hint cannot be resolved.
     """
     type_hints = {}
-    local_namespace = locals()
+    if namespace:
+        local_namespace = dict(namespace)
+    else:
+        local_namespace = {}
     while True:
         try:
             type_hints = typing_extensions.get_type_hints(
@@ -119,20 +125,19 @@ def get_type_hints_of_object(object_: Any) -> Dict[str, Any]:
             if module is not None and hasattr(module, e.name):
                 local_namespace[e.name] = getattr(module, e.name)
                 continue
-            try:
-                source = inspect.getsource(object_)
-                scope = get_scope_from_imports(source=source)
-                if e.name in scope:
-                    local_namespace[e.name] = scope[e.name]
-                    continue
-            except OSError as os_error:
-                raise CouldNotResolveType(e.name, os_error)
+            source_path = inspect.getsourcefile(object_)
+            if source_path is None:
+                raise CouldNotResolveType(e.name)
+            scope = get_scope_from_imports(file_path=source_path)
+            if e.name in scope:
+                local_namespace[e.name] = scope[e.name]
+                continue
     return type_hints
 
 
 def resolve_type(
-    type_to_resolve: Any,
-    substitution: Dict[TypeVar, Any],
+        type_to_resolve: Any,
+        substitution: Dict[TypeVar, Any],
 ) -> TypeHintResolutionResult:
     """
     Resolve type variables in a type.

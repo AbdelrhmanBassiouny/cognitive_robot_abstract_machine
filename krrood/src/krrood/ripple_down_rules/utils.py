@@ -29,7 +29,7 @@ import six
 from graphviz import Source
 from sqlalchemy.exc import NoInspectionAvailable
 from krrood.ripple_down_rules import logger
-from ..utils import (
+from krrood.utils import (
     is_builtin_type,
     get_import_path_from_path,
     get_method_name,

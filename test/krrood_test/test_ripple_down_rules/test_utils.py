@@ -8,12 +8,9 @@ from typing_extensions import List, Dict, Union, Tuple
 from krrood.ripple_down_rules.utils import (
     make_set,
     stringify_hint,
-)
-from krrood.utils import (
-    get_relative_import,
     get_imports_from_types,
-    get_scope_from_imports,
 )
+from krrood.utils import get_scope_from_imports, get_relative_import
 
 
 class UtilsTestCase(TestCase):

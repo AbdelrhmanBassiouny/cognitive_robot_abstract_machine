@@ -14,7 +14,8 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.exceptions import NoKwargsInMatchVar
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.core.base_expressions import UnificationDict
-from ..dataset.example_classes import Positions, Position
+from krrood.parametrization.random_events_translator import is_literal_comparator
+from ..dataset.example_classes import KRROODPositions, KRROODPosition
 from ..dataset.semantic_world_like_classes import (
     FixedConnection,
     Container,
@@ -142,17 +143,17 @@ def test_empty_conditions_match_var(handles_and_containers_world):
 
 def test_match_with_list():
     domain = [
-        Positions([Position(1, 2, 3), Position(1, 2, 3)], ["a", "b"]),
-        Positions([Position(1, 2, 3)], ["a"]),
+        KRROODPositions([KRROODPosition(1, 2, 3), KRROODPosition(1, 2, 3)], ["a", "b"]),
+        KRROODPositions([KRROODPosition(1, 2, 3)], ["a"]),
     ]
 
-    q = match_variable(Positions, domain=domain)(
+    q = match_variable(KRROODPositions, domain=domain)(
         positions=[
-            match(Position)(
+            match(KRROODPosition)(
                 x=1,
                 y=2,
             ),
-            Position(1, 2, 3),
+            KRROODPosition(1, 2, 3),
         ],
         some_strings=["a", "b"],
     )
