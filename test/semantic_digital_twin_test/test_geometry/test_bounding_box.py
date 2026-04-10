@@ -112,14 +112,14 @@ def test_bounding_box_transform_rotated():
 
 
 def test_event_casting(pr2_apartment_state_reset):
-    simple_event = SimpleEvent(
+    simple_event = SimpleEvent.from_data(
         {
             SpatialVariables.x.value: closed(0, 2),
             SpatialVariables.y.value: closed(0, 2),
             SpatialVariables.z.value: closed(0, 2),
         }
     )
-    event = Event(simple_event)
+    event = Event.from_simple_sets(simple_event)
 
     bbc = BoundingBoxCollection.from_event(pr2_apartment_state_reset.root, event)
     bb = bbc.bounding_boxes[0]

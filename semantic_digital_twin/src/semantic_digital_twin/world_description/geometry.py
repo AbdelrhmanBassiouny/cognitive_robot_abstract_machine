@@ -10,7 +10,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 
-import PlyData
+from plyfile import PlyData
 import numpy as np
 import trimesh
 import trimesh.exchange.stl
