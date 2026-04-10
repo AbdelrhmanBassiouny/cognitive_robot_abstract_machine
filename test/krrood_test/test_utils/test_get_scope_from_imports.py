@@ -5,7 +5,8 @@ from pathlib import Path
 from collections import defaultdict
 from typing import Any, Dict
 import pytest
-from krrood.utils import get_scope_from_imports
+from krrood.utils import get_scope_from_imports, SourceDataNotProvided
+
 
 def test_get_scope_from_imports_basic():
     source = "import os\nimport math as m"
@@ -40,7 +41,7 @@ def test_get_scope_from_imports_tree():
     assert scope["os"] == os
 
 def test_get_scope_from_imports_no_input():
-    with pytest.raises(ValueError):
+    with pytest.raises(SourceDataNotProvided):
         get_scope_from_imports()
 
 def test_get_scope_from_imports_relative(tmp_path):
