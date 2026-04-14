@@ -1,9 +1,9 @@
 import math
 from typing import List, Union, Optional
 from krrood.entity_query_language.factories import variable_from, entity, flat_variable, in_, the, contains, variable, \
-    an
+    an, or_, and_, distinct
 from krrood.entity_query_language.query.query import Entity
-from krrood.entity_query_language.predicate import symbolic_function
+from krrood.entity_query_language.predicate import symbolic_function, length
 from krrood.utils import inheritance_path_length, recursive_subclasses
 
 from semantic_digital_twin.reasoning.predicates import (
@@ -127,7 +127,7 @@ def query_goal_surface_of_object(
         if is_supported_by(most_similar.bodies[0], supporting_surface.bodies[0]):
             return supporting_surface
 
-def query_annotations_by_color(color: Color, objects: list[SemanticAnnotation]) -> List[SemanticAnnotation]:
+def query_annotations_by_color(color: Color, objects: list[SemanticAnnotation]) -> Entity[SemanticAnnotation]:
     """
     Queries and retrieves a list of annotations from another one that match
     the specified color based on their visual properties.
@@ -138,25 +138,26 @@ def query_annotations_by_color(color: Color, objects: list[SemanticAnnotation]) 
     :return: List[SemanticAnnotation]: A list of annotations from the world whose primary shape's
     visual color matches the specified color.
     """
-    all_bodies = []
-    for obj in objects:
-        all_bodies.append(obj.bodies[0])
+    if len(objects) == 0:
+        return entity(variable_from(objects))
+    world = objects[0]._world
+    object_var = variable_from(objects)
+    body = object_var.bodies[0]
 
-    filtered_bodies = []
-
-    for body in all_bodies:
-        if body.visual and body.collision is None:
-            continue
-        shapes = body.visual.shapes or body.collision.shapes
-        if shapes[0].color == color:
-            filtered_bodies.append(body)
-    filtered_annotations = []
-    for body in filtered_bodies:
-        world = body._world
-        filtered_annotations.extend(an(entity(
-            semantic_annotation := variable(HasRootBody, domain=world.semantic_annotations)
-        ).where(semantic_annotation.root == body)).tolist())
-    return filtered_annotations
+    matching_body = entity(body).where(
+        or_(
+            and_(
+                body.visual != None,
+                length(body.visual.shapes) > 0,
+                body.visual.shapes[0].color == color,
+            ),
+            and_(body.collision != None,
+            length(body.collision.shapes) > 0,
+            body.collision.shapes[0].color == color,
+        )
+    ))
+    semantic_annotation = variable(HasRootBody, world.semantic_annotations)
+    return entity(semantic_annotation).where(semantic_annotation.root == matching_body)
 
 
 def query_class_by_label(label: str) -> Optional[type]:

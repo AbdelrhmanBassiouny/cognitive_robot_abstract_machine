@@ -120,10 +120,11 @@ def test_query_body_by_color(kitchen_environment_fixture):
     orange = kitchen_environment_fixture.get_semantic_annotation_by_name("orange")
     carrot = kitchen_environment_fixture.get_semantic_annotation_by_name("carrot")
 
-    assert query_annotations_by_color(Color.RED(), [apple, orange]) == [apple]
-    assert query_annotations_by_color(Color.ORANGE(), [apple, orange]) == [orange]
-    assert query_annotations_by_color(Color.BLUE(), [apple, orange,carrot]) == []
-    assert query_annotations_by_color(Color.ORANGE(), (query_semantic_annotations_on_surfaces([table1, table2], kitchen_environment_fixture))) == [orange, carrot]
+    assert query_annotations_by_color(Color.RED(), [apple, orange]).tolist() == [apple]
+    assert query_annotations_by_color(Color.ORANGE(), [apple, orange]).tolist() == [orange]
+    assert query_annotations_by_color(Color.BLUE(), [apple, orange,carrot]).tolist() == []
+    assert query_annotations_by_color(Color.ORANGE(), (query_semantic_annotations_on_surfaces([table1, table2], kitchen_environment_fixture))).tolist() == [orange, carrot]
+    assert query_annotations_by_color(Color.YELLOW(), []).tolist() == []
 
 def test_query_class_by_label():
     """
