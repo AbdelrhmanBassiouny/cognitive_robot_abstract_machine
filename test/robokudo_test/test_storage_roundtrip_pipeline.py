@@ -70,8 +70,12 @@ class TestStorageRoundtripPipeline:
     def test_store_and_replay_sensor_data_roundtrip(self):
         db_name = f"ONLY_UNITTESTS_roundtrip_{uuid.uuid4().hex}"
         storage = Storage(db_name)
-        writer_node = Node(f"{robokudo.defs.TEST_ROS_NODE_NAME}_writer_{uuid.uuid4().hex}")
-        reader_node = Node(f"{robokudo.defs.TEST_ROS_NODE_NAME}_reader_{uuid.uuid4().hex}")
+        writer_node = Node(
+            f"{robokudo.defs.TEST_ROS_NODE_NAME}_writer_{uuid.uuid4().hex}"
+        )
+        reader_node = Node(
+            f"{robokudo.defs.TEST_ROS_NODE_NAME}_reader_{uuid.uuid4().hex}"
+        )
         try:
             writer_pipeline = _build_writer_pipeline(db_name)
             writer_status = robokudo.utils.tree_execution.run_tree_once(

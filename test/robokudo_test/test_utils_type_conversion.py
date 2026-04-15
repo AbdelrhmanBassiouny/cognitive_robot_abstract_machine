@@ -6,10 +6,16 @@ import std_msgs.msg
 import open3d as o3d
 
 from robokudo.types.annotation import PoseAnnotation, PositionAnnotation
-from robokudo.utils.type_conversion import ros_cam_info_to_dict, ros_cam_info_from_dict, \
-    get_geometry_msgs_pose_from_pose_annotation, get_geometry_msgs_pose_from_position_annotation, \
-    get_geometry_msgs_pose_stamped_from_pose_annotation, get_geometry_msgs_pose_stamped_from_position_annotation, \
-    get_transform_matrix_from_pose_annotation, o3d_cam_intrinsics_from_ros_cam_info
+from robokudo.utils.type_conversion import (
+    ros_cam_info_to_dict,
+    ros_cam_info_from_dict,
+    get_geometry_msgs_pose_from_pose_annotation,
+    get_geometry_msgs_pose_from_position_annotation,
+    get_geometry_msgs_pose_stamped_from_pose_annotation,
+    get_geometry_msgs_pose_stamped_from_position_annotation,
+    get_transform_matrix_from_pose_annotation,
+    o3d_cam_intrinsics_from_ros_cam_info,
+)
 
 
 class TestUtilsTypeConversion(object):
@@ -26,20 +32,36 @@ class TestUtilsTypeConversion(object):
 
         assert cam_info_dict["width"] == 1024
         assert cam_info_dict["height"] == 1280
-        assert cam_info_dict["k"] == [1050.0, 0.0, 1050.0, 0.0, 639.5, 479.5, 0.0, 0.0, 0.0]
+        assert cam_info_dict["k"] == [
+            1050.0,
+            0.0,
+            1050.0,
+            0.0,
+            639.5,
+            479.5,
+            0.0,
+            0.0,
+            0.0,
+        ]
 
     def test_ros_cam_info_from_dict(self):
         cam_info_dict = {
             "header": {"frame_id": "camera_link", "stamp": {"secs": 100, "nsecs": 100}},
-            "width": 1024, "height": 1280,
+            "width": 1024,
+            "height": 1280,
             "K": [1050.0, 0.0, 1050.0, 0.0, 639.5, 479.5, 0.0, 0.0, 0.0],
             "D": np.random.rand(5),
             "P": np.random.rand(12),
             "R": np.random.rand(9),
-            "binning_x": 2.0, "binning_y": 2.0,
+            "binning_x": 2.0,
+            "binning_y": 2.0,
             "roi": {
-                "x_offset": 5, "y_offset": 10, "height": 15, "width": 20, "do_rectify": True
-            }
+                "x_offset": 5,
+                "y_offset": 10,
+                "height": 15,
+                "width": 20,
+                "do_rectify": True,
+            },
         }
 
         kinect_cam_info = ros_cam_info_from_dict(cam_info_dict)
@@ -88,7 +110,7 @@ class TestUtilsTypeConversion(object):
         cam_info_dict = {
             "header": {"invalid_key": "invalid_value"},
             "invalid_key": "invalid_value",
-            "roi": {"invalid_key": "invalid_value"}
+            "roi": {"invalid_key": "invalid_value"},
         }
         kinect_cam_info = ros_cam_info_from_dict(cam_info_dict)
         assert isinstance(kinect_cam_info, sensor_msgs.msg.CameraInfo)
@@ -158,7 +180,9 @@ class TestUtilsTypeConversion(object):
         header.stamp.sec = np.random.randint(sys.maxsize)
         header.stamp.nanosec = np.random.randint(sys.maxsize)
 
-        pose_msg = get_geometry_msgs_pose_stamped_from_position_annotation(position_ann, header)
+        pose_msg = get_geometry_msgs_pose_stamped_from_position_annotation(
+            position_ann, header
+        )
 
         assert pose_msg.header.frame_id == header.frame_id
         assert pose_msg.header.stamp.sec == header.stamp.sec
@@ -180,11 +204,10 @@ class TestUtilsTypeConversion(object):
 
         transform_matrix = get_transform_matrix_from_pose_annotation(pose_ann)
 
-        assert np.allclose(transform_matrix[:3, :3], np.array([
-            [0.0, 0.0, 1.0],
-            [0.0, -1.0, 0.0],
-            [1.0, 0.0, 0.0]
-        ]))
+        assert np.allclose(
+            transform_matrix[:3, :3],
+            np.array([[0.0, 0.0, 1.0], [0.0, -1.0, 0.0], [1.0, 0.0, 0.0]]),
+        )
         assert np.allclose(transform_matrix[:3, 3], pose_ann.translation)
 
     def test_o3d_cam_intrinsics_from_ros_cam_info(self):

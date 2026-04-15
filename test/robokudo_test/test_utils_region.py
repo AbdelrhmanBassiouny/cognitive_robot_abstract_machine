@@ -42,20 +42,18 @@ class TestUtilsRegion:
 
         assert np.allclose(np.asarray(obb.extent).reshape(-1)[:3], [1.0, 2.0, 3.0])
         assert np.allclose(np.asarray(obb.center).reshape(-1)[:3], [3.0, 2.0, 1.0])
-        assert np.allclose(obb.R, [
-            [0.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0]
-        ])
+        assert np.allclose(obb.R, [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
 
     def test_region_obb_in_cam_coordinates(self, world_and_region):
         world, region = world_and_region
-        world_to_cam = np.array([
-            [0.0, 0.0, 1.0, 1.0],
-            [-1.0, 0.0, 0.0, 2.0],
-            [0.0, -1.0, 0.0, 3.0],
-            [0.0, 0.0, 0.0, 1.0]
-        ])
+        world_to_cam = np.array(
+            [
+                [0.0, 0.0, 1.0, 1.0],
+                [-1.0, 0.0, 0.0, 2.0],
+                [0.0, -1.0, 0.0, 3.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
 
         obb = region_obb_in_cam_coordinates(
             world=world, region=region, world_T_cam=world_to_cam
@@ -63,11 +61,7 @@ class TestUtilsRegion:
 
         assert np.allclose(np.asarray(obb.extent).reshape(-1)[:3], [1.0, 2.0, 3.0])
         assert np.allclose(np.asarray(obb.center).reshape(-1)[:3], [2.0, -1.0, 1.0])
-        assert np.allclose(obb.R, [
-            [0.0, 1.0, 0.0],
-            [0.0, 0.0, -1.0],
-            [-1.0, 0.0, 0.0]
-        ])
+        assert np.allclose(obb.R, [[0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [-1.0, 0.0, 0.0]])
 
     def test_region_pose_annotation(self, world_and_region):
         _, region = world_and_region

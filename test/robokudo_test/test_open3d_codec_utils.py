@@ -19,7 +19,8 @@ def _create_point_cloud():
 
 
 @pytest.mark.skipif(
-    open3d_codec_utils.o3d is None, reason="Open3D is not available in this environment."
+    open3d_codec_utils.o3d is None,
+    reason="Open3D is not available in this environment.",
 )
 def test_open3d_point_cloud_base64_pcd_roundtrip():
     point_cloud = _create_point_cloud()
@@ -33,7 +34,8 @@ def test_open3d_point_cloud_base64_pcd_roundtrip():
 
 
 @pytest.mark.skipif(
-    open3d_codec_utils.o3d is None, reason="Open3D is not available in this environment."
+    open3d_codec_utils.o3d is None,
+    reason="Open3D is not available in this environment.",
 )
 def test_decode_open3d_point_cloud_invalid_base64_results_in_empty_cloud():
     restored = open3d_codec_utils.decode_open3d_point_cloud_from_base64_pcd("%%%")
@@ -41,7 +43,8 @@ def test_decode_open3d_point_cloud_invalid_base64_results_in_empty_cloud():
 
 
 @pytest.mark.skipif(
-    open3d_codec_utils.o3d is None, reason="Open3D is not available in this environment."
+    open3d_codec_utils.o3d is None,
+    reason="Open3D is not available in this environment.",
 )
 def test_is_open3d_point_cloud_detects_type():
     point_cloud = _create_point_cloud()

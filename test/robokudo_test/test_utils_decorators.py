@@ -70,8 +70,8 @@ class TestUtilsDecorators(object):
         timer(self=dummy)
 
         dummy.rk_logger.info.assert_called_once()
-        assert "Function '<class 'test.test_utils_decorators.DummyTimerClass'>.timer' took" in \
-               dummy.rk_logger.info.call_args[0][0]
+        expected_prefix = f"Function '{DummyTimerClass}.timer' took"
+        assert expected_prefix in dummy.rk_logger.info.call_args[0][0]
 
     def test_timer_decorator_class_method_with_logger(self):
         dummy = DummyTimerClass()
@@ -79,8 +79,8 @@ class TestUtilsDecorators(object):
 
         dummy.timer()
         dummy.rk_logger.info.assert_called_once()
-        assert "Function '<class 'test.test_utils_decorators.DummyTimerClass'>.timer' took" in \
-               dummy.rk_logger.info.call_args[0][0]
+        expected_prefix = f"Function '{DummyTimerClass}.timer' took"
+        assert expected_prefix in dummy.rk_logger.info.call_args[0][0]
 
     def test_record_time(self):
         duration = 0.1
@@ -89,11 +89,15 @@ class TestUtilsDecorators(object):
         dummy.compute(duration)
 
         assert hasattr(dummy, "_times")
-        assert dummy._times["compute"] == pytest.approx(duration, abs=0.001), "Timing was not updated"
+        assert dummy._times["compute"] == pytest.approx(
+            duration, abs=0.001
+        ), "Timing was not updated"
 
         dummy.compute(duration * 2)
         assert hasattr(dummy, "_times")
-        assert dummy._times["compute"] == pytest.approx(duration * 2, abs=0.001), "Timing was not updated"
+        assert dummy._times["compute"] == pytest.approx(
+            duration * 2, abs=0.001
+        ), "Timing was not updated"
 
     def test_publish_variables(self):
         dummy = DummyAnnotator()

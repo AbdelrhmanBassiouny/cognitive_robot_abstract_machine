@@ -9,7 +9,10 @@ from robokudo.cas import CASViews
 from robokudo.identifier import BBIdentifier
 from robokudo.pipeline import Pipeline
 from robokudo.tree_components.query_based_task_scheduler import QueryBasedScheduler
-from robokudo.tree_components.task_scheduler import TaskSchedulerBase, IterativeTaskScheduler
+from robokudo.tree_components.task_scheduler import (
+    TaskSchedulerBase,
+    IterativeTaskScheduler,
+)
 from robokudo_msgs.action import Query
 
 
@@ -24,18 +27,25 @@ class DummyBehaviour(py_trees.behaviour.Behaviour):
     def update(self):
         return py_trees.common.Status.SUCCESS
 
+
 class TestTreeComponents:
     def test_iterative_task_scheduler(self):
         leaf_behaviour1 = DummyBehaviour("Behaviour1")
-        par1 = py_trees.composites.Parallel("Par1", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+        par1 = py_trees.composites.Parallel(
+            "Par1", policy=py_trees.common.ParallelPolicy.SuccessOnAll()
+        )
         par1.add_child(leaf_behaviour1)
 
         leaf_behaviour2 = DummyBehaviour("Behaviour2")
-        par2 = py_trees.composites.Parallel("Par2", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+        par2 = py_trees.composites.Parallel(
+            "Par2", policy=py_trees.common.ParallelPolicy.SuccessOnAll()
+        )
         par2.add_child(leaf_behaviour2)
 
         leaf_behaviour3 = DummyBehaviour("Behaviour3")
-        par3 = py_trees.composites.Parallel("Par3", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+        par3 = py_trees.composites.Parallel(
+            "Par3", policy=py_trees.common.ParallelPolicy.SuccessOnAll()
+        )
         par3.add_child(leaf_behaviour3)
 
         scheduler = IterativeTaskScheduler(tree_list=[par1, par2, par3])
@@ -44,7 +54,9 @@ class TestTreeComponents:
         scheduler.initialise()
 
         scheduler.setup(timeout=1.0)
-        assert all([leaf_behaviour1._setup, leaf_behaviour2._setup, leaf_behaviour3._setup])
+        assert all(
+            [leaf_behaviour1._setup, leaf_behaviour2._setup, leaf_behaviour3._setup]
+        )
 
         for job in [par1, par2, par3, par1]:
             status = scheduler.update()
@@ -54,11 +66,15 @@ class TestTreeComponents:
 
     def test_query_based_scheduler(self):
         leaf_behaviour1 = DummyBehaviour("Behaviour1")
-        par1 = py_trees.composites.Parallel("Par1", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+        par1 = py_trees.composites.Parallel(
+            "Par1", policy=py_trees.common.ParallelPolicy.SuccessOnAll()
+        )
         par1.add_child(leaf_behaviour1)
 
         leaf_behaviour2 = DummyBehaviour("Behaviour2")
-        par2 = py_trees.composites.Parallel("Par2", policy=py_trees.common.ParallelPolicy.SuccessOnAll())
+        par2 = py_trees.composites.Parallel(
+            "Par2", policy=py_trees.common.ParallelPolicy.SuccessOnAll()
+        )
         par2.add_child(leaf_behaviour2)
 
         scheduler = QueryBasedScheduler(
@@ -66,7 +82,7 @@ class TestTreeComponents:
                 "detect": par1,
                 "track": par2,
             },
-            filter_fn=lambda query: query["query"]
+            filter_fn=lambda query: query["query"],
         )
         pipe = Pipeline("Seq", memory=True, children=[scheduler])
 
@@ -83,7 +99,6 @@ class TestTreeComponents:
         task = scheduler.parent.children[1]
         assert task.children[0].name == par1.name
 
-
         query_goal = {"query": "track"}
         scheduler.get_cas().set(CASViews.QUERY, query_goal)
 
@@ -98,4 +113,3 @@ class TestTreeComponents:
         status = scheduler.update()
         assert status == py_trees.common.Status.FAILURE
         assert Blackboard().get(BBIdentifier.BLACKBOARD_EXCEPTION_NAME)
-

@@ -46,13 +46,13 @@ def cas_data():
 
 def store_cas_in_storage(storage_instance, cas_data):
     flat_cas = storage_instance.generate_dict_from_real_cas(cas_data)
-    flat_cas['view_ids'] = {}
+    flat_cas["view_ids"] = {}
 
     # step 1: persist each view
     storage_instance.store_views_in_mongo(flat_cas)
 
     # step 2: persist cas and pointers to each view
-    del flat_cas['views']
+    del flat_cas["views"]
     return storage_instance.store_cas_dict(flat_cas)
 
 
@@ -61,12 +61,10 @@ def create_point_cloud():
     Create an Open3D point cloud with some sample data.
     """
     # Create a numpy array of points
-    points = np.array([
-        [0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0]
-    ], dtype=np.float64)
+    points = np.array(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dtype=np.float64,
+    )
 
     # Create the point cloud
     point_cloud = o3d.geometry.PointCloud()
@@ -101,27 +99,27 @@ class TestStorage:
         result = store_cas_in_storage(storage_instance, cas_data)
         # Generate a dict from the CAS and store it
         flat_cas = storage_instance.generate_dict_from_real_cas(cas_data)
-        flat_cas['view_ids'] = {}
+        flat_cas["view_ids"] = {}
 
         # step 1: persist each view
         storage_instance.store_views_in_mongo(flat_cas)
 
         # step 2: persist cas and pointers to each view
-        del flat_cas['views']
+        del flat_cas["views"]
         result = storage_instance.store_cas_dict(flat_cas)
 
         assert result.acknowledged
 
         # Retrieve the stored CAS
-        retrieved_cas = storage_instance.db.cas.find_one({'_id': result.inserted_id})
+        retrieved_cas = storage_instance.db.cas.find_one({"_id": result.inserted_id})
         assert retrieved_cas is not None
-        assert retrieved_cas['timestamp'] == cas_data.timestamp
-        assert retrieved_cas['timestamp_readable'] == cas_data.timestamp_readable
+        assert retrieved_cas["timestamp"] == cas_data.timestamp
+        assert retrieved_cas["timestamp_readable"] == cas_data.timestamp_readable
 
     def test_store_and_retrieve_cas_with_single_oh(self, storage_instance, cas_data):
         # Generate a dict from the CAS and store it
         oh = ObjectHypothesis()
-        oh.source = 'test_storage'
+        oh.source = "test_storage"
         oh.id = 1
         oh.roi = ImageROI()
         oh.roi.roi.pos.x = 1
@@ -135,36 +133,44 @@ class TestStorage:
         result = store_cas_in_storage(storage_instance, cas_data)
 
         flat_cas = storage_instance.generate_dict_from_real_cas(cas_data)
-        flat_cas['view_ids'] = {}
+        flat_cas["view_ids"] = {}
 
         # step 1: persist each view
         storage_instance.store_views_in_mongo(flat_cas)
 
         # step 2: persist cas and pointers to each view
-        del flat_cas['views']
+        del flat_cas["views"]
         result = storage_instance.store_cas_dict(flat_cas)
 
         assert result.acknowledged
 
         # Retrieve the stored CAS
-        retrieved_cas_record = storage_instance.db.cas.find_one({'_id': result.inserted_id})
+        retrieved_cas_record = storage_instance.db.cas.find_one(
+            {"_id": result.inserted_id}
+        )
         assert retrieved_cas_record is not None
-        assert retrieved_cas_record['timestamp'] == cas_data.timestamp
-        assert retrieved_cas_record['timestamp_readable'] == cas_data.timestamp_readable
+        assert retrieved_cas_record["timestamp"] == cas_data.timestamp
+        assert retrieved_cas_record["timestamp_readable"] == cas_data.timestamp_readable
 
         retrieved_cas = robokudo.cas.CAS()
-        retrieved_cas_record['views'] = {}
+        retrieved_cas_record["views"] = {}
         storage_instance.load_views_from_mongo_in_cas(retrieved_cas_record)
 
         # Bring flat CAS representation into the proper CAS class
-        for view_name, view_content in retrieved_cas_record['views'].items():
+        for view_name, view_content in retrieved_cas_record["views"].items():
             retrieved_cas.set(view_name, view_content)
 
-        storage_instance.load_annotations_from_mongo_in_cas(retrieved_cas_record, retrieved_cas)
+        storage_instance.load_annotations_from_mongo_in_cas(
+            retrieved_cas_record, retrieved_cas
+        )
 
         # Compare the most important views: COLOR and DEPTH Image
-        assert np.array_equal(cas_data.get(CASViews.COLOR_IMAGE), retrieved_cas.get(CASViews.COLOR_IMAGE))
-        assert np.array_equal(cas_data.get(CASViews.DEPTH_IMAGE), retrieved_cas.get(CASViews.DEPTH_IMAGE))
+        assert np.array_equal(
+            cas_data.get(CASViews.COLOR_IMAGE), retrieved_cas.get(CASViews.COLOR_IMAGE)
+        )
+        assert np.array_equal(
+            cas_data.get(CASViews.DEPTH_IMAGE), retrieved_cas.get(CASViews.DEPTH_IMAGE)
+        )
 
         assert len(retrieved_cas.annotations) == 1
         retrieved_oh = retrieved_cas.annotations[0]
@@ -180,20 +186,21 @@ class TestStorage:
         test_pcd = create_point_cloud()
 
         np.testing.assert_array_equal(
-            np.asarray(test_pcd.points),
-            np.asarray(retrieved_oh.points.points)
+            np.asarray(test_pcd.points), np.asarray(retrieved_oh.points.points)
         )
 
     def test_annotations_are_serialized_with_krrood(self, storage_instance, cas_data):
         oh = ObjectHypothesis()
-        oh.source = 'test_storage'
+        oh.source = "test_storage"
         oh.id = 1
         cas_data.annotations.append(oh)
 
         result = store_cas_in_storage(storage_instance, cas_data)
         assert result.acknowledged
 
-        retrieved_cas_record = storage_instance.db.cas.find_one({'_id': result.inserted_id})
+        retrieved_cas_record = storage_instance.db.cas.find_one(
+            {"_id": result.inserted_id}
+        )
         assert retrieved_cas_record is not None
         assert retrieved_cas_record["annotations_format"] == "krrood_v1"
         assert isinstance(retrieved_cas_record["annotations"], list)
@@ -209,7 +216,9 @@ class TestStorage:
         result = store_cas_in_storage(storage_instance, cas_data)
         assert result.acknowledged
 
-        retrieved_cas_record = storage_instance.db.cas.find_one({"_id": result.inserted_id})
+        retrieved_cas_record = storage_instance.db.cas.find_one(
+            {"_id": result.inserted_id}
+        )
         assert retrieved_cas_record is not None
         assert "extra_views" not in retrieved_cas_record
         assert "view_ids" in retrieved_cas_record
@@ -240,13 +249,19 @@ class TestStorage:
             np.asarray(expected_intrinsic.intrinsic_matrix),
         )
 
-    def test_extra_views_krrood_fallback_for_dataclass(self, storage_instance, cas_data):
-        cas_data.set("custom_dataclass", CustomDataclassView(label="cup", confidence=0.9))
+    def test_extra_views_krrood_fallback_for_dataclass(
+        self, storage_instance, cas_data
+    ):
+        cas_data.set(
+            "custom_dataclass", CustomDataclassView(label="cup", confidence=0.9)
+        )
 
         result = store_cas_in_storage(storage_instance, cas_data)
         assert result.acknowledged
 
-        retrieved_cas_record = storage_instance.db.cas.find_one({"_id": result.inserted_id})
+        retrieved_cas_record = storage_instance.db.cas.find_one(
+            {"_id": result.inserted_id}
+        )
         assert retrieved_cas_record is not None
 
         retrieved_cas_record["views"] = {}
@@ -306,7 +321,9 @@ class TestStorage:
 
         retrieved_cas_record["views"] = {}
         storage_instance.load_views_from_mongo_in_cas(retrieved_cas_record)
-        restored_transform = retrieved_cas_record["views"][CASViews.CAM_TO_WORLD_TRANSFORM]
+        restored_transform = retrieved_cas_record["views"][
+            CASViews.CAM_TO_WORLD_TRANSFORM
+        ]
 
         assert isinstance(restored_transform, HomogeneousTransformationMatrix)
         np.testing.assert_allclose(restored_transform.to_np(), transform.to_np())
