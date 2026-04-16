@@ -96,6 +96,12 @@ class PartNetMobilityDatasetLoader:
     def _apply_semantics_to_world(self, world: World, model_id: int):
         """
         Apply the semantics of a model to the world by creating semantic annotations.
+
+        ..note::
+            The PartNet model ids are distributed without any structure.
+            Use the browser of PartNet (https://sapien.ucsd.edu/browse) to find the model id of the model you want to
+            load. Or download the entire dataset and figure it out with `available_model_ids`.
+
         :param world: The world to apply the semantics to.
         :param model_id: The id of the model to apply the semantics from.
         """

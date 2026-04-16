@@ -32,4 +32,3 @@ psycopg
 plyfile
 huggingface-hub
 vhacdx
-sapien

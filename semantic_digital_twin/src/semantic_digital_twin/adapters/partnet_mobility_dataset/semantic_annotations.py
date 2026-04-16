@@ -2,13 +2,11 @@ from dataclasses import dataclass
 
 from typing_extensions import ClassVar, Set
 
-from semantic_digital_twin.world_description.world_entity import (
-    RootedSemanticAnnotation,
-)
+from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 
 
 @dataclass(eq=False)
-class PartNetLabel(RootedSemanticAnnotation):
+class PartNetLabel(HasRootBody):
     """
     Represents a label in the Partnet Mobility dataset semantic annotation hierarchy.
     """
