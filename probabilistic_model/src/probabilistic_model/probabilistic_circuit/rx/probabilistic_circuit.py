@@ -683,7 +683,6 @@ class SumUnit(InnerUnit):
             return True
         return abs(float(logsumexp(log_weights))) < tolerance
 
-
     def is_deterministic(self) -> bool:
         """
         :return: If this unit is deterministic or not.
@@ -819,9 +818,9 @@ class ProductUnit(InnerUnit):
                 subcircuit.result_of_current_query.append([start_index, amount])
 
     def attach_marginal_circuit(
-            self,
-            marginal_circuit: "ProbabilisticCircuit",
-            target_circuit: "ProbabilisticCircuit",
+        self,
+        marginal_circuit: "ProbabilisticCircuit",
+        target_circuit: "ProbabilisticCircuit",
     ) -> None:
         """
         Attach the root of marginal_circuit as a child of this ProductUnit,
@@ -845,9 +844,7 @@ class ProductUnit(InnerUnit):
                 )
             self.add_subcircuit(new_sum_unit)
         else:
-            self.add_subcircuit(
-                leaf(copy.deepcopy(root.distribution), target_circuit)
-            )
+            self.add_subcircuit(leaf(copy.deepcopy(root.distribution), target_circuit))
 
 
 @dataclass
@@ -1124,6 +1121,10 @@ class ProbabilisticCircuit(ProbabilisticModel, SubclassJSONSerializer):
                     )
                 elif isinstance(unit, ProductUnit):
                     unit.log_forward()
+                elif isinstance(unit, SumUnit):
+                    unit.log_forward_conditioning()
+                else:
+                    raise IntractableError(f"Unit of type {type(unit)} not supported.")
 
         root = self.root
         [

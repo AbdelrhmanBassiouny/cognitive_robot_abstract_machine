@@ -5,6 +5,7 @@ from krrood.adapters.json_serializer import to_json, from_json
 
 from probabilistic_model.distributions.distributions import *
 from probabilistic_model.utils import MissingDict
+from random_events.interval import open_closed, open
 
 
 class TestEnum(IntEnum):
@@ -52,7 +53,7 @@ class IntegerDistributionTestCase(unittest.TestCase):
         self.assertAlmostEqual(conditional.probabilities[4], 11 / 15)
 
     def test_conditional_impossible(self):
-        event = SimpleEvent.from_data({self.x: (0, 1)}).as_composite_set()
+        event = SimpleEvent.from_data({self.x: open(0, 1)}).as_composite_set()
 
         conditional, probability = self.model.truncated(event)
         self.assertIsNone(conditional)
