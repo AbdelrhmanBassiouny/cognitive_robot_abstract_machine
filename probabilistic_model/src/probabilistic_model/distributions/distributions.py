@@ -510,7 +510,7 @@ class SymbolicDistribution(DiscreteDistribution):
         return self
 
 
-@dataclass(eq=False)
+@dataclass
 class IntegerDistribution(ContinuousDistribution, DiscreteDistribution):
     """
     Abstract base class for integer distributions. Integer distributions also implement the methods of continuous
