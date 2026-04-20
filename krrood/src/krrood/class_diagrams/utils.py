@@ -128,7 +128,9 @@ def get_and_resolve_generic_type_hints_of_object_using_substitutions(
 
 
 @lru_cache
-def get_type_hints_of_object(object_: Any) -> Dict[str, Any]:
+def get_type_hints_of_object(
+    object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
+) -> Dict[str, Any]:
     """
     Get the type hints of an object. This is a workaround for the fact that get_type_hints() does not work with objects
      that are not defined in the same module or are imported through TYPE_CHECKING.
@@ -138,7 +140,6 @@ def get_type_hints_of_object(object_: Any) -> Dict[str, Any]:
     :return: The type hints of the object as a dictionary.
     :raises CouldNotResolveType: If a type hint cannot be resolved.
     """
-    type_hints = {}
     if namespace:
         local_namespace = dict(namespace)
     else:
@@ -150,18 +151,41 @@ def get_type_hints_of_object(object_: Any) -> Dict[str, Any]:
             )
             break
         except NameError as e:
-            module = inspect.getmodule(object_)
-            if module is not None and hasattr(module, e.name):
-                local_namespace[e.name] = getattr(module, e.name)
-                continue
-            source_path = inspect.getsourcefile(object_)
-            if source_path is None:
-                raise CouldNotResolveType(e.name)
-            scope = get_scope_from_imports(file_path=source_path)
-            if e.name in scope:
-                local_namespace[e.name] = scope[e.name]
-                continue
+            object_from_name = get_object_by_name_from_another_object_in_same_module(
+                e.name, object_
+            )
+            local_namespace[e.name] = object_from_name
     return type_hints
+
+
+def get_object_by_name_from_another_object_in_same_module(
+    name: str, object_: Any
+) -> Any:
+    """
+    Get the object with the given name from another object in the same module.
+
+    :param name: The name of the type to get.
+    :param object_: The object to get the type from.
+    :return: The object with the given name.
+    :raises CouldNotResolveType: If the type cannot be resolved.
+    """
+    module = inspect.getmodule(object_)
+    if module is not None and hasattr(module, name):
+        return getattr(module, name)
+    source_path = inspect.getsourcefile(object_)
+    if source_path is None:
+        raise CouldNotResolveType(
+            name, extra_information=f"Could not find source file for {object_}"
+        )
+    scope = get_scope_from_imports(file_path=source_path)
+    if name in scope:
+        return scope[name]
+    else:
+        raise CouldNotResolveType(
+            name,
+            extra_information=f"Could not find {name} in {source_path}, could be a deprecated import statement or "
+            f"a type defined in a module that is not imported in the source file.",
+        )
 
 
 def resolve_type(
