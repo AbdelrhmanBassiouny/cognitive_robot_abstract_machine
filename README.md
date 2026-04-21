@@ -29,3 +29,9 @@ then install packages:
 ```bash
 uv sync --active
 ```
+
+### Install KRROOD
+
+```bash
+pip install -e krrood/
+```
