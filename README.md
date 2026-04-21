@@ -2,6 +2,12 @@
 
 Monorepo for the CRAM cognitive architecture. 
 
+### Using Lightning Ai
+
+1. go to https://lightning.ai/
+2. create an account
+3. create a studio and wait till it is ready
+
 ## Installation
 
 ### Install missing linux libraries
