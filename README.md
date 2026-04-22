@@ -40,3 +40,12 @@ uv sync --active
 ```bash
 pip install -e krrood/
 ```
+
+### Open Exercises
+
+The exercises are in the `Exercises` folder in the root of the repository.
+Exercise 1 (Algebra using EQL):
+https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/blob/knowledge_acquisition_course/Exercises/ex_01_algebra_eql.ipynb
+
+Exercise 2 (Uncertainty):
+https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/blob/knowledge_acquisition_course/Exercises/ex_02_uncertainty.ipynb
