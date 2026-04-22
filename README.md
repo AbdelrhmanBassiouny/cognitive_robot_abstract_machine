@@ -5,7 +5,7 @@ Monorepo for the CRAM cognitive architecture.
 ### Using Lightning Ai
 
 1. go to https://lightning.ai/
-2. create an account
+2. create an account (USE free plan (CPU), you have to verify identity using phone number)
 3. create a studio and wait till it is ready
 
 ## Installation
@@ -26,7 +26,6 @@ cd cognitive_robot_abstract_machine
 To install the whole repo we use uv (https://github.com/astral-sh/uv), first to install uv:
 
 ```bash 
-# On macOS and Linux.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
