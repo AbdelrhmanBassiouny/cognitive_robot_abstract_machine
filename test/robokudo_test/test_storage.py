@@ -23,8 +23,9 @@ class CustomDataclassView:
     confidence: float
 
 
-pytestmark = pytest.mark.skip(
-    reason="module temporarily disabled until storage functionality is migrated to ormatic"
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="module temporarily disabled until storage functionality is migrated to ormatic",
 )
 
 

@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from robokudo.descriptors.camera_configs.config_mongodb_playback import (
     MongoCameraConfig,
@@ -8,8 +10,9 @@ from robokudo.descriptors import CrDescriptorFactory
 
 class TestCrDescriptorFactory(object):
 
-    @pytest.mark.skip(
-        reason="temporarily disabled until storage functionality is migrated to ormatic"
+    @pytest.mark.skipif(
+        os.getenv("CI") == "true",
+        reason="module temporarily disabled until storage functionality is migrated to ormatic",
     )
     def test_cr_descriptor_factory_valid_interface_name(self) -> None:
         """Test the creation of a valid cr descriptor config."""
@@ -23,8 +26,9 @@ class TestCrDescriptorFactory(object):
         with pytest.raises(ValueError):
             CrDescriptorFactory.create_descriptor("invalid_interface_name")
 
-    @pytest.mark.skip(
-        reason="temporarily disabled until storage functionality is migrated to ormatic"
+    @pytest.mark.skipif(
+        os.getenv("CI") == "true",
+        reason="module temporarily disabled until storage functionality is migrated to ormatic",
     )
     def test_cr_descriptor_factory_valid_additional_config(self) -> None:
         """Test passing of valid additional config parameters to the camera config through descriptor factory."""

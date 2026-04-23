@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import json
 import uuid
@@ -23,8 +24,9 @@ from robokudo.pipeline import Pipeline
 from semantic_digital_twin.adapters.ros.messages import WorldModelSnapshot
 
 
-pytestmark = pytest.mark.skip(
-    reason="module temporarily disabled until storage functionality is migrated to ormatic"
+pytestmark = pytest.mark.skipif(
+    os.getenv("CI") == "true",
+    reason="module temporarily disabled until storage functionality is migrated to ormatic",
 )
 
 
