@@ -10,18 +10,18 @@ Monorepo for the CRAM cognitive architecture.
 
 ## Installation
 
-### Install missing linux libraries
+### 1. Install missing linux libraries
 ```bash
 sudo apt install graphviz-dev
 ```
 
-### Clone the repo
+### 2. Clone the repo
 ```bash
 git clone https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine.git -b knowledge_acquisition_course
 cd cognitive_robot_abstract_machine
 ```
 
-### Install using UV 
+### 3. Install using UV 
 
 To install the whole repo we use uv (https://github.com/astral-sh/uv), first to install uv:
 
@@ -35,13 +35,13 @@ then install packages:
 uv sync --active
 ```
 
-### Install KRROOD
+### 4. Install KRROOD
 
 ```bash
 pip install -e krrood/
 ```
 
-### Open Exercises
+### 5. Open Exercises
 
 The exercises are in the `Exercises` folder in the root of the repository.
 Exercise 1 (Algebra using EQL):
