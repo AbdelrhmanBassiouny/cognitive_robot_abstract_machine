@@ -20,7 +20,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 
-def list_semantic_annotations_on_surfaces(
+def semantic_annotations_on_surfaces(
     supporting_surfaces: List[HasSupportingSurface], world: World
 ) -> List[HasRootBody]:
     """
@@ -56,7 +56,7 @@ def get_next_object_using_planar_distance(
     """
     # if supporting_surface is None:
     #     return []
-    supported_semantic_annotations = variable_from(list_semantic_annotations_on_surfaces(
+    supported_semantic_annotations = variable_from(semantic_annotations_on_surfaces(
         [supporting_surface], main_body._world
     ))
     return entity(supported_semantic_annotations).ordered_by(
@@ -97,7 +97,7 @@ def goal_surface_of_object(
             break
 
     # Query annotations on the surfaces of the tables
-    objects = list_semantic_annotations_on_surfaces(
+    objects = semantic_annotations_on_surfaces(
         supporting_surfaces, object_of_interest._world
     )
 
