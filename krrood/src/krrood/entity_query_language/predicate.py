@@ -20,6 +20,7 @@ from typing_extensions import (
     ClassVar,
     Sized,
     Dict,
+    Union,
 )
 
 from krrood.patterns.role.role import Role
@@ -31,7 +32,7 @@ from krrood.symbol_graph.symbol_graph import Symbol
 
 def symbolic_function(
     function: Callable[..., T],
-) -> Callable[..., Variable[T]]:
+) -> Union[Callable[..., Variable[T]], T]:
     """
     Function decorator that constructs a symbolic expression representing the function call
      when inside a symbolic_rule context.

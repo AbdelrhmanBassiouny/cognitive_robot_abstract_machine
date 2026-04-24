@@ -57,17 +57,7 @@ class SubClassSafeGeneric(Generic[T], ABC):
         for name, result in resolution_results.items():
             if not result.resolved:
                 continue
-            cls._update_generic_field_with_resolved_type(name, result.resolved_type)
-
-    @classmethod
-    def _update_generic_field_with_resolved_type(cls, name: str, resolved_type: Type | TypeVar):
-        """
-        Update the field type with the resolved type.
-
-        :param name: The name of the field.
-        :param resolved_type: The resolved type that replaces the generic type.
-        """
-        cls._update_field_kwargs(name, {'type': resolved_type})
+            cls._update_field_kwargs(name, {'type': result.resolved_type})
 
     @classmethod
     def _update_field_kwargs(cls, name: str, kwargs: Dict[str, Any], type_: Optional[Type] = None):

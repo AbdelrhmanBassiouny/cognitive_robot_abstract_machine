@@ -17,6 +17,7 @@ from collections.abc import Iterator
 from copy import deepcopy, copy
 from dataclasses import is_dataclass, fields
 from enum import Enum
+from krrood.utils import memoize
 from os.path import dirname
 from pathlib import Path
 from subprocess import check_call
@@ -101,7 +102,6 @@ class IDGenerator:
     The counter of the unique IDs.
     """
 
-    # @lru_cache(maxsize=None)
     def __call__(self, obj: Any) -> int:
         """
         Creates a unique ID and caches it for every object this is called on.

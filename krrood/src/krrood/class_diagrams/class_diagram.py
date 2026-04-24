@@ -5,14 +5,13 @@ import logging
 import os
 from abc import ABC
 from copy import copy
-from dataclasses import dataclass, make_dataclass, is_dataclass
+from dataclasses import dataclass, is_dataclass
 from dataclasses import field as dataclass_field, InitVar
-from functools import cached_property, lru_cache
+from functools import cached_property
 from typing import _GenericAlias
 
-from typing_extensions import get_args, get_origin, Any
-
 import rustworkx as rx
+from typing_extensions import get_args, get_origin
 
 from krrood import logger
 from krrood.class_diagrams.utils import resolve_type
@@ -20,6 +19,7 @@ from krrood.utils import (
     module_and_class_name,
     own_dataclass_fields,
     get_generic_type_param,
+    memoize
 )
 
 try:
@@ -345,23 +345,36 @@ class WrappedSpecializedGeneric(WrappedClass):
 class ClassDiagram:
     """A graph of classes and their relations discovered via attribute introspection."""
 
-    classes: InitVar[List[Type]]
+    classes: List[Type]
+    """
+    A list of classes to be represented in the diagram.
+    """
 
     introspector: AttributeIntrospector = dataclass_field(
         default_factory=DataclassOnlyIntrospector, init=True, repr=False
     )
+    """
+    The attribute introspector used to discover class attributes.
+    """
 
     _dependency_graph: rx.PyDiGraph[WrappedClass, ClassRelation] = dataclass_field(
         default_factory=rx.PyDiGraph, init=False
     )
+    """
+    A directed graph representing class relationships.
+    """
+
     _cls_wrapped_cls_map: Dict[Type, WrappedClass] = dataclass_field(
         default_factory=dict, init=False, repr=False
     )
+    """
+    A mapping of class types to their corresponding wrapped class instances.
+    """
 
-    def __post_init__(self, classes: List[Type]):
+    def __post_init__(self):
         """Initialize the diagram with the provided classes and build relations."""
         self._dependency_graph = rx.PyDiGraph()
-        for clazz in classes:
+        for clazz in self.classes:
             self.add_node(WrappedClass(clazz=clazz))
         self._create_nodes_for_specialized_generic_type_hints()
         self._create_all_relations()
@@ -445,7 +458,7 @@ class ClassDiagram:
         wrapped_cls = self.get_wrapped_class(clazz)
         yield from self.get_in_edges(wrapped_cls)
 
-    @lru_cache(maxsize=None)
+    @memoize
     def get_common_role_taker_associations(
         self, cls1: Union[Type, WrappedClass], cls2: Union[Type, WrappedClass]
     ) -> Tuple[Optional[HasRoleTaker], Optional[HasRoleTaker]]:
@@ -469,7 +482,7 @@ class ClassDiagram:
                 return assoc1, assoc2
         return None, None
 
-    @lru_cache(maxsize=None)
+    @memoize
     def get_role_taker_associations_of_cls(
         self, cls: Union[Type, WrappedClass]
     ) -> Optional[HasRoleTaker]:
@@ -483,7 +496,7 @@ class ClassDiagram:
                 return assoc
         return None
 
-    @lru_cache(maxsize=None)
+    @memoize
     def get_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
@@ -504,7 +517,7 @@ class ClassDiagram:
         ]
         return tuple(filtered_neighbors)
 
-    @lru_cache(maxsize=None)
+    @memoize
     def get_outgoing_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
@@ -524,7 +537,7 @@ class ClassDiagram:
         find_successors_by_edge = self._dependency_graph.find_successors_by_edge
         return tuple(find_successors_by_edge(wrapped_cls.index, edge_filter_func))
 
-    @lru_cache
+    @memoize
     def get_incoming_neighbors_with_relation_type(
         self,
         cls: Union[Type, WrappedClass],
@@ -535,6 +548,7 @@ class ClassDiagram:
         find_predecessors_by_edge = self._dependency_graph.find_predecessors_by_edge
         return tuple(find_predecessors_by_edge(wrapped_cls.index, edge_filter_func))
 
+    @memoize
     def get_out_edges(
         self, cls: Union[Type, WrappedClass]
     ) -> Tuple[ClassRelation, ...]:
@@ -1076,10 +1090,15 @@ class ClassDiagram:
             origin = get_origin(next_type)
             if origin:
                 if not next_type.__parameters__ or all(
-                        isinstance(p, TypeVar) and p.__bound__ is not None for p in next_type.__parameters__):
+                    isinstance(p, TypeVar) and p.__bound__ is not None
+                    for p in next_type.__parameters__
+                ):
                     bindings = [p.__bound__ for p in next_type.__parameters__]
                     if bindings:
-                        next_type = next_type[*bindings]
+                        subscript_param = (
+                            bindings[0] if len(bindings) == 1 else tuple(bindings)
+                        )
+                        next_type = next_type[subscript_param]
                 else:
                     continue
 
@@ -1103,7 +1122,7 @@ class ClassDiagram:
                         to_process.add(wrapped_field.type_endpoint)
 
 
-@lru_cache
+@memoize
 def make_specialized_dataclass(alias: _GenericAlias) -> Type:
     """
     Build a concrete dataclass for a fully specialized generic alias, e.g., GenericClass[float].
