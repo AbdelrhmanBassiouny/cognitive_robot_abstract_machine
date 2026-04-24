@@ -239,10 +239,11 @@ def get_ground_truth_module_source(
     module_name = path.stem
     if is_mixin:
         ground_truth_name = f"_ground_truth_{module_name}_role_mixins.py"
+        ground_truth_path = path.parent / "role_mixins" / ground_truth_name
     else:
         ground_truth_name = f"_ground_truth_transformed_{module_name}.py"
+        ground_truth_path = path.parent / ground_truth_name
 
-    ground_truth_path = path.parent / "role_mixins" / ground_truth_name
     with open(ground_truth_path, "r") as f:
         return f.read()
 

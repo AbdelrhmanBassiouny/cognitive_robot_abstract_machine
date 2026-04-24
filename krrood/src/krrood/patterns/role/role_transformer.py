@@ -152,25 +152,24 @@ class RoleTransformer:
         """
         :return: Path to the generated stub file.
         """
-        # add role mixins folder if it does not exist, and add a __init__.py file to it
         parent_directory = Path(RoleTransformer.get_module_file_path(module)).parent
-        postfix = "role_mixins"
-        role_mixins_folder = parent_directory / postfix
-        role_mixins_folder.mkdir(exist_ok=True)
-        init_file_path = role_mixins_folder / "__init__.py"
-        if not init_file_path.exists():
-            init_file_path.touch()
-        # Generate a new file containing the mixin classes in the role_mixins folder
         module_name = module.__name__.split(".")[-1]
         if is_mixin:
+            # add role mixins folder if it does not exist, and add a __init__.py file to it
+            postfix = "role_mixins"
+            role_mixins_folder = parent_directory / postfix
+            role_mixins_folder.mkdir(exist_ok=True)
+            init_file_path = role_mixins_folder / "__init__.py"
+            if not init_file_path.exists():
+                init_file_path.touch()
             filename = f"{module_name}_role_mixins.py"
+            return role_mixins_folder / filename
         else:
             prefix = copy(self.file_name_prefix)
             if prefix and not prefix.endswith("_"):
                 prefix = f"{prefix}_"
             filename = f"{prefix}{module_name}.py"
-
-        return role_mixins_folder / filename
+            return parent_directory / filename
 
 
 class RoleModuleTransformer(ContextAwareTransformer):
@@ -279,7 +278,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
             return updated_node
 
         module_name = self._get_module_name_str(updated_node.module)
-        is_target_transformed = False
         new_module_node = updated_node.module
 
         if module_name:
@@ -290,7 +288,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
             }
 
             if last_part in all_target_module_names:
-                is_target_transformed = True
                 prefix = self.file_name_prefix
                 if prefix and not prefix.endswith("_"):
                     prefix = f"{prefix}_"
@@ -301,16 +298,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                     updated_node.module, new_last_part
                 )
 
-        # If it's a relative import from the same directory and the target is transformed,
-        # it stays in the same directory (role_mixins).
-        if is_target_transformed and len(updated_node.relative) == 1:
-            return updated_node.with_changes(
-                module=new_module_node, relative=updated_node.relative
-            )
-
-        # Otherwise, we moved one level deeper into 'role_mixins' folder
-        new_relative = [libcst.Dot()] + list(updated_node.relative)
-        return updated_node.with_changes(module=new_module_node, relative=new_relative)
+        return updated_node.with_changes(module=new_module_node)
 
     def _get_module_name_str(
         self, node: Optional[libcst.BaseExpression]
@@ -497,7 +485,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
             role_taker_class_bases.insert(0, self.make_argument(role_attributes_name))
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
 
-            mixin_module_name = f".{self.module_.__name__.split('.')[-1]}_role_mixins"
+            mixin_module_name = (
+                f".role_mixins.{self.module_.__name__.split('.')[-1]}_role_mixins"
+            )
             self.require_original_import(mixin_module_name, [role_attributes_name])
 
         return [role_taker_node]
@@ -1101,7 +1091,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
 
                 taker_module = sys.modules[taker_type.__module__]
                 mixin_module_name = (
-                    f".{taker_module.__name__.split('.')[-1]}_role_mixins"
+                    f".role_mixins.{taker_module.__name__.split('.')[-1]}_role_mixins"
                 )
                 self.require_original_import(mixin_module_name, [role_for_name])
 

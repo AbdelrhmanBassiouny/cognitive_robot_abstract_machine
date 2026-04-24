@@ -4,10 +4,10 @@ from dataclasses import dataclass, field, Field, fields
 
 from typing_extensions import Set, List, TypeVar
 
-from ._ground_truth_role_takers_in_another_module_role_mixins import (
+from .role_mixins._ground_truth_role_takers_in_another_module_role_mixins import (
     RoleForRoleTakerInAnotherModule,
 )
-from ._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
+from .role_mixins._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
     PersonInRoleAndOntologyRoleAttributes,
     RoleForPersonInRoleAndOntology,
     RoleForSubclassOfARoleTaker,
