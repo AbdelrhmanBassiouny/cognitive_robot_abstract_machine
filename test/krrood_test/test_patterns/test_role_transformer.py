@@ -65,3 +65,15 @@ def test_field_order(module_comparators):
     """Tests that fields appear in the same order between modules."""
     for comparator in module_comparators:
         comparator.compare_field_order()
+
+
+def test_method_details(module_comparators):
+    """Tests that all methods, properties, their parameters, and return types match between modules."""
+    for comparator in module_comparators:
+        comparator.compare_method_details()
+
+
+def test_imports(module_comparators):
+    """Tests that all import statements match between modules."""
+    for comparator in module_comparators:
+        comparator.compare_imports()

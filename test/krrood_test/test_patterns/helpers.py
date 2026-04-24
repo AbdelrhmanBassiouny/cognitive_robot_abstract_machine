@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, Sequence, Optional, Tuple
+from typing import Dict, Sequence, Optional, Tuple, Any, Set
 
 import libcst as cst
 
@@ -132,6 +132,85 @@ class ModuleComparator:
             assert (
                 gen_order == exp_order
             ), f"Field order of {name} mismatch: got {gen_order!r}, expected {exp_order!r}"
+
+    def compare_method_details(self):
+        """Tests that all methods, properties, their parameters, and return types match."""
+        for name, gen_cls in self._gen_classes().items():
+            if name in self._exp_classes():
+                exp_cls = self._exp_classes()[name]
+                self._compare_methods(name, gen_cls, exp_cls)
+
+    def _compare_methods(
+        self, cls_name: str, gen_cls: cst.ClassDef, exp_cls: cst.ClassDef
+    ):
+        gen_methods = {
+            func.name.value: _method_info(func) for func in _get_method_stmts(gen_cls)
+        }
+        exp_methods = {
+            func.name.value: _method_info(func) for func in _get_method_stmts(exp_cls)
+        }
+
+        missing = set(exp_methods.keys()) - set(gen_methods.keys())
+        extra = set(gen_methods.keys()) - set(exp_methods.keys())
+
+        assert not missing, f"Class {cls_name} is missing methods: {missing}"
+        assert not extra, f"Class {cls_name} has extra methods: {extra}"
+
+        for name in exp_methods:
+            assert gen_methods[name] == exp_methods[name], (
+                f"Method {cls_name}.{name} details mismatch.\n"
+                f"Expected: {exp_methods[name]}\n"
+                f"Got: {gen_methods[name]}"
+            )
+
+    def compare_imports(self):
+        """Verifies that all imports match between modules."""
+        import pprint
+        gen_imports = self._get_imports(self.generated_tree)
+        exp_imports = self._get_imports(self.expected_tree)
+        assert gen_imports == exp_imports, (
+            f"Imports mismatch:\n"
+            f"got: {pprint.pformat(gen_imports)}\n"
+            f"expected: {pprint.pformat(exp_imports)}"
+        )
+
+    def _get_imports(self, tree: cst.Module) -> Dict[str, Set[str]]:
+        from collections import defaultdict
+
+        def normalize(text: str) -> str:
+            return (
+                text.replace("_ground_truth_", "")
+                .replace("transformed_", "")
+                .replace("typing_extensions", "typing")
+            )
+
+        class ImportCollector(cst.CSTVisitor):
+            def __init__(self):
+                self.imports = defaultdict(set)
+
+            def visit_Import(self, node: cst.Import) -> None:
+                for name in node.names:
+                    mod_name = normalize(_code(name.name))
+                    if name.asname:
+                        mod_name += f" as {name.asname.name.value}"
+                    self.imports["import"].add(mod_name)
+
+            def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+                dots = "." * len(node.relative)
+                mod_name = normalize(_code(node.module)) if node.module else ""
+                key = f"from {dots}{mod_name}"
+                for name in node.names:
+                    if isinstance(name.name, cst.ImportStar):
+                        self.imports[key].add("*")
+                    else:
+                        name_str = normalize(_code(name.name))
+                        if name.asname:
+                            name_str += f" as {name.asname.name.value}"
+                        self.imports[key].add(name_str)
+
+        collector = ImportCollector()
+        tree.visit(collector)
+        return dict(collector.imports)
 
 
 def get_module_comparators(
@@ -296,3 +375,35 @@ def _field_info(ann_assign: cst.AnnAssign) -> Dict[str, str]:
     raw_default = _code(ann_assign.value) if ann_assign.value is not None else None
     default = _normalize_call_kwargs(raw_default)
     return {"name": name, "annotation": annotation, "default": default}
+
+
+def _get_method_stmts(cls: cst.ClassDef) -> list[cst.FunctionDef]:
+    """Return function definition nodes that represent methods."""
+    methods = []
+    for item in cls.body.body:
+        if isinstance(item, cst.FunctionDef):
+            methods.append(item)
+    return methods
+
+
+def _method_info(func: cst.FunctionDef) -> Dict[str, Any]:
+    """Extract decorators, parameters, and return type from a FunctionDef."""
+    decorators = []
+    for decorator in func.decorators:
+        decorators.append(_code(decorator.decorator))
+
+    params = []
+    for param in func.params.params:
+        param_name = param.name.value
+        param_type = (
+            _code(param.annotation.annotation) if param.annotation else None
+        )
+        params.append((param_name, param_type))
+
+    return_type = _code(func.returns.annotation) if func.returns else None
+
+    return {
+        "decorators": sorted(decorators),
+        "params": params,
+        "return_type": return_type,
+    }

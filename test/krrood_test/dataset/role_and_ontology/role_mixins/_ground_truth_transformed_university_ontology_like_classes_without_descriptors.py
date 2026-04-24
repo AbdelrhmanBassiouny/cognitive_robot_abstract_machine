@@ -14,7 +14,7 @@ from ._ground_truth_university_ontology_like_classes_without_descriptors_role_mi
     RoleForCEOAsFirstRole,
     RoleForRepresentativeAsSecondRole,
 )
-from ..role_takers_in_another_module import (
+from ._ground_truth_transformed_role_takers_in_another_module import (
     RoleTakerInAnotherModule,
 )
 from krrood.entity_query_language.factories import variable_from
