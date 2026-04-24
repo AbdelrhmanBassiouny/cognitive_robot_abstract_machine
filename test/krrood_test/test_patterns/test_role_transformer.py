@@ -1,6 +1,6 @@
 import pytest
 
-from krrood.patterns.role.role_transformer import RoleTransformer
+from krrood.patterns.role.role_transformer import RoleTransformer, TRANSFORMED
 from .helpers import get_module_comparators
 from ..dataset.role_and_ontology import (
     university_ontology_like_classes_without_descriptors,
@@ -15,7 +15,7 @@ from ..dataset.role_and_ontology import (
 def module_transformer():
     return RoleTransformer(
         university_ontology_like_classes_without_descriptors,
-        file_name_prefix="transformed",
+        file_name_prefix=TRANSFORMED,
     )
 
 

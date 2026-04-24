@@ -35,6 +35,9 @@ from krrood.utils import (
     run_ruff_on_file,
 )
 
+GROUND_TRUTH = "_ground_truth_"
+TRANSFORMED = "transformed_"
+
 
 @dataclasses.dataclass
 class RoleTransformer:

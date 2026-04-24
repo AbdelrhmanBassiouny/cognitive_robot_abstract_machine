@@ -3,6 +3,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Dict, Sequence, Optional, Tuple, Any, Set
 
+from krrood.patterns.role.role_transformer import GROUND_TRUTH, TRANSFORMED
+
 import libcst as cst
 
 # ---------------------------------------------------------------------------
@@ -179,8 +181,8 @@ class ModuleComparator:
 
         def normalize(text: str) -> str:
             return (
-                text.replace("_ground_truth_", "")
-                .replace("transformed_", "")
+                text.replace(GROUND_TRUTH, "")
+                .replace(TRANSFORMED, "")
                 .replace("typing_extensions", "typing")
             )
 
@@ -238,10 +240,10 @@ def get_ground_truth_module_source(
     path = Path(generated_module.__file__)
     module_name = path.stem
     if is_mixin:
-        ground_truth_name = f"_ground_truth_{module_name}_role_mixins.py"
+        ground_truth_name = f"{GROUND_TRUTH}{module_name}_role_mixins.py"
         ground_truth_path = path.parent / "role_mixins" / ground_truth_name
     else:
-        ground_truth_name = f"_ground_truth_transformed_{module_name}.py"
+        ground_truth_name = f"{GROUND_TRUTH}{TRANSFORMED}{module_name}.py"
         ground_truth_path = path.parent / ground_truth_name
 
     with open(ground_truth_path, "r") as f:

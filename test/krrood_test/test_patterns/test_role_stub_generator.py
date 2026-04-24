@@ -5,6 +5,7 @@ from typing import Dict, Any, Type
 
 import pytest
 
+from krrood.patterns.role.role_transformer import GROUND_TRUTH
 from krrood.patterns.role.role_stub_generator import RoleStubGenerator
 from ..dataset.role_and_ontology import (
     university_ontology_like_classes_without_descriptors,
@@ -155,7 +156,7 @@ def stub_comparator():
         "..",
         "dataset",
         "role_and_ontology",
-        "_ground_truth_university_ontology_like_classes_without_descriptors.pyi",
+        f"{GROUND_TRUTH}university_ontology_like_classes_without_descriptors.pyi",
     )
     with open(expected_stub_path, "r") as f:
         expected_stub_content = f.read()
