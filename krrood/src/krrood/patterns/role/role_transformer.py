@@ -15,7 +15,7 @@ from typing import (
 
 import libcst
 import rustworkx as rx
-from black.handle_ipynb_magics import lru_cache
+from functools import lru_cache
 from libcst.codemod import ContextAwareTransformer, CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 from typing_extensions import Dict, Tuple, Callable
@@ -25,6 +25,7 @@ from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
 from krrood.class_diagrams.wrapped_field import WrappedField, FieldRepresentation
+from krrood.exceptions import SubprocessExecutionError
 from krrood.patterns.role.meta_data import RoleType
 from krrood.patterns.role.role import Role
 from krrood.utils import (
@@ -63,16 +64,23 @@ class RoleTransformer:
                     self.taker_modules.append(role_taker_module)
         self.class_diagram = ClassDiagram(classes)
 
-    def transform(self, write: bool = False) -> Dict[ModuleType, str]:
+    def transform(self, write: bool = False) -> Dict[ModuleType, Tuple[str, str]]:
         """
         Transforms the module and its taker modules, generating mixins for each role taker. If write is True,
          writes the generated edits to the file system and runs ruff and black on the generated files.
 
-        :return: A dictionary mapping each transformed module to its mixin module content.
+        :return: A dictionary mapping each transformed module to a tuple of its transformed module content and its mixin module content.
         """
+        import importlib
+
         all_modules = list(self.taker_modules)
         if self.module not in all_modules:
             all_modules.append(self.module)
+
+        for m in all_modules:
+            importlib.reload(m)
+        self._build_diagram()
+
         all_modules_sources = {}
         for module in all_modules:
             with open(self.get_module_file_path(module), "r") as f:
@@ -88,24 +96,35 @@ class RoleTransformer:
             )
             tree = libcst.parse_module(source)
 
-            result = transformer.transform_module(tree)
-            # Run AddImportsVisitor as a second pass
-            result = AddImportsVisitor(context).transform_module(result)
+            mixin_result = transformer.transform_module(tree)
+            # Run AddImportsVisitor on the mixin module
+            mixin_result = AddImportsVisitor(context).transform_module(mixin_result)
 
-            module_source = result.code
+            # Run AddImportsVisitor on the transformed original module
+            transformed_original = transformer.transformed_module
+            transformed_original = AddImportsVisitor(
+                transformer.original_context
+            ).transform_module(transformed_original)
 
-            all_modules_sources[module] = module_source
+            module_source = transformed_original.code
+            mixin_source = mixin_result.code
+
+            all_modules_sources[module] = (module_source, mixin_source)
 
             if write:
-                path = self.get_generated_file_path(module)
-                with open(path, "w") as f:
-                    f.write(module_source)
-                try:
-                    run_ruff_on_file(str(path))
-                    run_black_on_file(str(path))
-                except RuntimeError as e:
-                    print(f"Error generating stub for {module}: {e}")
-                    # raise
+                original_path = self.get_generated_file_path(module, is_mixin=False)
+                mixin_path = self.get_generated_file_path(module, is_mixin=True)
+                for path, content in [
+                    (original_path, module_source),
+                    (mixin_path, mixin_source),
+                ]:
+                    with open(path, "w") as f:
+                        f.write(content)
+                    try:
+                        run_ruff_on_file(str(path))
+                        run_black_on_file(str(path))
+                    except (RuntimeError, SubprocessExecutionError) as e:
+                        print(f"Error formatting generated file {path}: {e}")
 
         return all_modules_sources
 
@@ -124,7 +143,7 @@ class RoleTransformer:
         return Path(sys.modules[module.__name__].__file__)
 
     @lru_cache
-    def get_generated_file_path(self, module: ModuleType) -> Path:
+    def get_generated_file_path(self, module: ModuleType, is_mixin: bool = False) -> Path:
         """
         :return: Path to the generated stub file.
         """
@@ -137,14 +156,16 @@ class RoleTransformer:
         if not init_file_path.exists():
             init_file_path.touch()
         # Generate a new file containing the mixin classes in the role_mixins folder
-        prefix = copy(self.file_name_prefix)
-        if prefix and not prefix.endswith("_"):
-            prefix = f"{prefix}_"
-        mixin_file_path = (
-            role_mixins_folder
-            / f"{prefix}{module.__name__.split('.')[-1]}.py"  # _{postfix}.py"
-        )
-        return mixin_file_path
+        module_name = module.__name__.split(".")[-1]
+        if is_mixin:
+            filename = f"{module_name}_role_mixins.py"
+        else:
+            prefix = copy(self.file_name_prefix)
+            if prefix and not prefix.endswith("_"):
+                prefix = f"{prefix}_"
+            filename = f"{prefix}{module_name}.py"
+
+        return role_mixins_folder / filename
 
 
 class RoleModuleTransformer(ContextAwareTransformer):
@@ -166,6 +187,22 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self.taker_modules = taker_modules
         self.role_attributes: Dict[WrappedClass, libcst.ClassDef] = {}
         self.role_for: Dict[WrappedClass, libcst.ClassDef] = {}
+        self.transformed_module: Optional[libcst.Module] = None
+        self.original_context = CodemodContext()
+
+    def require_original_import(
+        self, module: str, obj: str | List[str] | None = None
+    ) -> None:
+        """
+        Requires an import in the original (transformed) module.
+        """
+        if obj is None:
+            AddImportsVisitor.add_needed_import(self.original_context, module)
+        elif isinstance(obj, str):
+            AddImportsVisitor.add_needed_import(self.original_context, module, obj)
+        else:
+            for o in obj:
+                AddImportsVisitor.add_needed_import(self.original_context, module, o)
 
     def leave_ClassDef(
         self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
@@ -173,44 +210,161 @@ class RoleModuleTransformer(ContextAwareTransformer):
         """
         Transforms class definitions: prunes methods, renames takers, and adjusts roles.
         """
-        if updated_node.name.value not in self.module_.__dict__:
-            return updated_node
-        clazz = self.module_.__dict__[updated_node.name.value]
-        try:
-            wrapped_class = self.class_diagram.get_wrapped_class(clazz)
-        except ClassIsUnMappedInClassDiagram:
+        print(f"DEBUG: Visiting class {updated_node.name.value}")
+        wrapped_class = None
+        for wc in self.class_diagram.wrapped_classes:
+            if wc.clazz.__name__ == updated_node.name.value:
+                wrapped_class = wc
+                break
+
+        if wrapped_class is None:
+            print(f"DEBUG:   Class {updated_node.name.value} not found in ClassDiagram")
             return updated_node
 
         is_taker = wrapped_class.clazz in self.class_diagram.role_takers
 
+        result_nodes = [updated_node]
         if is_taker:
-            # transform_role_taker returns [Mixin, original_class]
+            # transform_role_taker returns [original_class]
             result_nodes = self._transform_role_taker(updated_node, wrapped_class)
-            return libcst.FlattenSentinel(result_nodes)
-        else:
-            result_nodes = [updated_node]
+            updated_node = result_nodes[0]
 
         role_type = RoleType.get_role_type(wrapped_class)
+        print(f"DEBUG:   role_type for {updated_node.name.value}: {role_type}")
 
-        match role_type:
-            case RoleType.NOT_A_ROLE:
-                ...
-            case _:
-                updated_node = self._transform_role(updated_node, wrapped_class)
-                old_node = next(
-                    (rn for rn in result_nodes if rn.name == updated_node.name), None
-                )
-                if old_node is not None:
-                    result_nodes.remove(old_node)
-                result_nodes.append(updated_node)
+        if role_type != RoleType.NOT_A_ROLE:
+            updated_node = self._transform_role(updated_node, wrapped_class)
+            result_nodes[0] = updated_node
 
         if len(result_nodes) > 1:
             return libcst.FlattenSentinel(result_nodes)
         return result_nodes[0]
 
-    def leave_Module(self, original_node, updated_node):
+    def leave_Module(
+        self, original_node: libcst.Module, updated_node: libcst.Module
+    ) -> libcst.Module:
+        self.transformed_module = updated_node
+        self._add_required_mixin_imports()
+
+        mixin_body = []
+        all_mixin_classes = list(self.role_attributes.values()) + list(
+            self.role_for.values()
+        )
+
+        used_names = self._collect_used_names_in_mixins(all_mixin_classes)
+        self._add_typing_imports(used_names)
+
+        type_checking_block = self._create_type_checking_block(used_names, all_mixin_classes)
+        if type_checking_block:
+            mixin_body.append(type_checking_block)
+
+        mixin_body.extend(all_mixin_classes)
+
+        return libcst.Module(
+            body=mixin_body, header=updated_node.header, footer=updated_node.footer
+        )
+
+    def _add_required_mixin_imports(self) -> None:
         self.require_import("dataclasses", ["dataclass", "field"])
-        return updated_node
+        self.require_import("abc", ["ABC", "abstractmethod"])
+        self.require_import("typing_extensions", ["TYPE_CHECKING"])
+
+    def _collect_used_names_in_mixins(self, mixin_classes: List[libcst.ClassDef]) -> set[str]:
+        used_names = set()
+
+        class NameCollector(libcst.CSTVisitor):
+            def __init__(self):
+                self.names = set()
+
+            def visit_Name(self, node: libcst.Name) -> None:
+                self.names.add(node.value)
+
+        for class_def in mixin_classes:
+            collector = NameCollector()
+            class_def.visit(collector)
+            used_names.update(collector.names)
+        return used_names
+
+    def _add_typing_imports(self, used_names: set[str]) -> None:
+        typing_names = {
+            "List", "Set", "Optional", "Union", "Tuple", "Type", "TypeVar", "Any", "Callable"
+        }
+        for name in used_names:
+            if name in typing_names:
+                self.require_import("typing", name)
+
+    def _create_type_checking_block(
+        self, used_names: set[str], mixin_classes: List[libcst.ClassDef]
+    ) -> Optional[libcst.If]:
+        import_map = self._build_mixin_import_map(used_names, mixin_classes)
+        if not import_map:
+            return None
+
+        type_checking_body = []
+        for module_name, names in sorted(import_map.items()):
+            type_checking_body.append(self._create_import_from_node(module_name, names))
+
+        return libcst.If(
+            test=libcst.Name("TYPE_CHECKING"),
+            body=libcst.IndentedBlock(body=type_checking_body),
+        )
+
+    def _build_mixin_import_map(
+        self, used_names: set[str], mixin_classes: List[libcst.ClassDef]
+    ) -> Dict[str, set[str]]:
+        typing_names = {"List", "Set", "Optional", "Union", "Tuple", "Type", "TypeVar", "Any", "Callable"}
+        common_names = {"dataclass", "field", "ABC", "abstractmethod", "TYPE_CHECKING", "Role", "Symbol"}
+        common_names.update(typing_names)
+        mixin_defined_names = {cd.name.value for cd in mixin_classes}
+
+        import_map = {}
+        for name in used_names:
+            if name in common_names or name in mixin_defined_names:
+                continue
+
+            module_name = self._resolve_name_to_module(name)
+            if module_name:
+                import_map.setdefault(module_name, set()).add(name)
+        return import_map
+
+    def _resolve_name_to_module(self, name: str) -> Optional[str]:
+        # 1. Check if it's in original module globals
+        if name in self.module_.__dict__:
+            obj = self.module_.__dict__[name]
+            if hasattr(obj, "__module__"):
+                return obj.__module__
+            return self.module_.__name__
+
+        # 2. Check ClassDiagram
+        for wrapped in self.class_diagram.wrapped_classes:
+            if wrapped.clazz.__name__ == name:
+                return wrapped.clazz.__module__
+
+        # 3. Heuristic for TypeVars
+        if name.startswith("T"):
+            return self.module_.__name__
+        return None
+
+    def _create_import_from_node(self, module_name: str, names: set[str]) -> libcst.SimpleStatementLine:
+        curr_pkg = ".".join(self.module_.__name__.split(".")[:-1])
+        target_pkg = ".".join(module_name.split(".")[:-1])
+
+        if curr_pkg == target_pkg:
+            rel_module = module_name.split(".")[-1]
+            dots = 2
+        else:
+            rel_module = module_name
+            dots = 0
+
+        return libcst.SimpleStatementLine(
+            body=[
+                libcst.ImportFrom(
+                    module=libcst.Name(rel_module) if rel_module else None,
+                    names=[libcst.ImportAlias(name=libcst.Name(n)) for n in sorted(names)],
+                    relative=[libcst.Dot()] * dots if dots else [],
+                )
+            ]
+        )
 
     def _transform_role_taker(
         self, role_taker_node: libcst.ClassDef, wrapped_class: WrappedClass
@@ -223,11 +377,13 @@ class RoleModuleTransformer(ContextAwareTransformer):
 
         if self.should_make_role_attributes_for_node(role_taker_node, wrapped_class):
             self.make_role_attributes_node(wrapped_class)
+            role_attributes_name = self.get_role_attributes_name(wrapped_class)
             role_taker_class_bases = list(role_taker_node.bases)
-            role_taker_class_bases.insert(
-                0, self.make_argument(self.get_role_attributes_name(wrapped_class))
-            )
+            role_taker_class_bases.insert(0, self.make_argument(role_attributes_name))
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
+
+            mixin_module_name = f".{self.module_.__name__.split('.')[-1]}_role_mixins"
+            self.require_original_import(mixin_module_name, [role_attributes_name])
 
         return [role_taker_node]
 
@@ -422,6 +578,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if self.should_make_role_attributes_for_node(node, wrapped_class):
             role_for_bases.insert(0, self.make_argument(role_attributes_name))
 
+        role_for_bases.append(self.make_argument("ABC"))
+
         return role_for_bases
 
     def make_role_for_properties(
@@ -558,14 +716,19 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param return_statement: The value to be returned by the getter.
         :return: A libcst FunctionDef node representing the property getter.
         """
+        decorators = [cls.make_decorator("property")]
+        if return_statement == "...":
+            decorators.insert(0, cls.make_decorator("abstractmethod"))
+            body = [libcst.SimpleStatementLine([libcst.Expr(libcst.Ellipsis())])]
+        else:
+            body = [libcst.parse_statement(f"return {return_statement}")]
+
         return libcst.FunctionDef(
-            decorators=[cls.make_decorator("property")],
+            decorators=decorators,
             name=libcst.Name(name),
             params=cls.make_function_parameters({"self": None}),
             returns=cls.make_annotation(type_) if type_ else None,
-            body=libcst.IndentedBlock(
-                [libcst.parse_statement(f"return {return_statement}")]
-            ),
+            body=libcst.IndentedBlock(body),
         )
 
     @classmethod
@@ -724,7 +887,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param wrapped_class: The wrapped class information.
         """
         role_type = RoleType.get_role_type(wrapped_class)
-        if role_type not in [RoleType.PRIMARY, RoleType.SPECIALIZED_ROLE_FOR]:
+        print(f"DEBUG: Transforming role {wrapped_class.clazz.__name__}, type: {role_type}")
+        if role_type == RoleType.NOT_A_ROLE:
             return node
         taker_type = wrapped_class.clazz.get_role_taker_type()
 
@@ -737,10 +901,35 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if base is Role
             or (issubclass(base, Role) and base.updates_role_taker_type())
         }
+        print(f"DEBUG:   role_bases keys: {list(role_bases.keys())}")
         for base in node.bases:
-            if self.get_name_from_base_node(base.value) in role_bases:
-                new_bases.append(self.make_argument(self.get_role_for_name(taker_type)))
             new_bases.append(base)
+            base_name = self.get_name_from_base_node(base.value)
+            print(f"DEBUG:   Checking base {base_name}")
+
+            # Check if this base is a Role class in our diagram
+            is_role_base = False
+            if base_name == "Role":
+                is_role_base = True
+            else:
+                for wrapped in self.class_diagram.wrapped_classes:
+                    if (
+                        wrapped.clazz.__name__ == base_name
+                        and issubclass(wrapped.clazz, Role)
+                    ):
+                        is_role_base = True
+                        break
+
+            if is_role_base:
+                role_for_name = self.get_role_for_name(taker_type)
+                print(f"DEBUG:   Adding {role_for_name}")
+                new_bases.append(self.make_argument(role_for_name))
+
+                taker_module = sys.modules[taker_type.__module__]
+                mixin_module_name = (
+                    f".{taker_module.__name__.split('.')[-1]}_role_mixins"
+                )
+                self.require_original_import(mixin_module_name, [role_for_name])
 
         return node.with_changes(bases=new_bases)
 

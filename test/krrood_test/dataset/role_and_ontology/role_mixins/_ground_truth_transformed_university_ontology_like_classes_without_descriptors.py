@@ -12,8 +12,9 @@ from ._ground_truth_university_ontology_like_classes_without_descriptors_role_mi
     RoleForPersonInRoleAndOntology,
     RoleForSubclassOfARoleTaker,
     RoleForCEOAsFirstRole,
+    RoleForRepresentativeAsSecondRole,
 )
-from dataset.role_and_ontology.role_takers_in_another_module import (
+from ..role_takers_in_another_module import (
     RoleTakerInAnotherModule,
 )
 from krrood.entity_query_language.factories import variable_from
@@ -161,7 +162,9 @@ TRepresentativeAsSecondRole = TypeVar(
 
 
 @dataclass(eq=False)
-class DelegateAsThirdRole(Role[TRepresentativeAsSecondRole], Symbol):
+class DelegateAsThirdRole(
+    Role[TRepresentativeAsSecondRole], RoleForRepresentativeAsSecondRole, Symbol
+):
     representative: TRepresentativeAsSecondRole = field(kw_only=True)
 
     delegate_of: RecognizedGroup = field(kw_only=True, default=None)

@@ -67,16 +67,16 @@ class SubclassOfARoleTaker(PersonInRoleAndOntology):
     introduced_attribute: str = field(default="", kw_only=True)
 
 
-TPerson = TypeVar("TPerson", bound=PersonInRoleAndOntology)
+TPersonInRoleAndOntology = TypeVar("TPersonInRoleAndOntology", bound=PersonInRoleAndOntology)
 
 
 @dataclass(eq=False)
-class CEOAsFirstRole(Role[TPerson], Symbol):
-    person: TPerson = field(kw_only=True)
+class CEOAsFirstRole(Role[TPersonInRoleAndOntology], Symbol):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
     head_of: RecognizedGroup = None
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
@@ -88,36 +88,36 @@ class SubclassOfRoleThatUpdatesRoleTakerType(CEOAsFirstRole[TSubclassOfARoleTake
 
 
 @dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(Role[TPerson], HasName):
-    person: TPerson = field(kw_only=True)
+class DirectDiamondShapedInheritanceWhereOneIsRole(Role[TPersonInRoleAndOntology], HasName):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
 @dataclass(eq=False)
-class InDirectDiamondShapedInheritanceWhereOneIsRole(RecognizedGroup, Role[TPerson]):
-    person: TPerson = field(kw_only=True)
+class InDirectDiamondShapedInheritanceWhereOneIsRole(RecognizedGroup, Role[TPersonInRoleAndOntology]):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(Role[TPerson], Symbol):
-    person: TPerson = field(kw_only=True)
+class ProfessorAsFirstRole(Role[TPersonInRoleAndOntology], Symbol):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson:
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology:
         return variable_from(cls).person
 
 
 @dataclass(eq=False)
 class AssociateProfessorAsSubClassOfARoleInSameModule(
-    ProfessorAsFirstRole[TPerson]
+    ProfessorAsFirstRole[TPersonInRoleAndOntology]
 ): ...
 
 

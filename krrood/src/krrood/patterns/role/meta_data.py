@@ -33,7 +33,6 @@ class RoleType(enum.Enum):
     """
 
     @staticmethod
-    @lru_cache
     def get_role_type(wrapped_class: WrappedClass) -> RoleType:
         """
         Determines the role type of a wrapped class.

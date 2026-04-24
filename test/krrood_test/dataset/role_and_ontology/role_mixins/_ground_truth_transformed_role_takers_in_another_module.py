@@ -9,7 +9,7 @@ from ._ground_truth_role_takers_in_another_module_role_mixins import (
 )
 
 if TYPE_CHECKING:
-    from dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
+    from ..university_ontology_like_classes_without_descriptors import (
         PersonInRoleAndOntology,
     )
 

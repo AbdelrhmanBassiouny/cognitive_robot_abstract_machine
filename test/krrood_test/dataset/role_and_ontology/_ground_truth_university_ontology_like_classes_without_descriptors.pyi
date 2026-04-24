@@ -60,39 +60,39 @@ class SubclassOfARoleTakerMixin(PersonInRoleAndOntologyMixin):
 class SubclassOfARoleTaker(PersonInRoleAndOntology):
     introduced_attribute: str = field(default="", kw_only=True)
 
-TPerson = TypeVar("TPerson", bound=PersonInRoleAndOntology)
+TPersonInRoleAndOntology = TypeVar("TPersonInRoleAndOntology", bound=PersonInRoleAndOntology)
 
 @dataclass(eq=False)
-class DirectDiamondShapedInheritanceWhereOneIsRole(PersonInRoleAndOntologyMixin, Role[TPerson]):
-    person: TPerson = field(kw_only=True)
+class DirectDiamondShapedInheritanceWhereOneIsRole(PersonInRoleAndOntologyMixin, Role[TPersonInRoleAndOntology]):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson: ...
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology: ...
 
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
     RecognizedGroup,
     PersonInRoleAndOntologyMixin,
-    Role[TPerson],
+    Role[TPersonInRoleAndOntology],
 ):
-    person: TPerson = field(kw_only=True)
+    person: TPersonInRoleAndOntology = field(kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson: ...
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology: ...
 
 @dataclass(eq=False)
-class CEOAsFirstRoleMixin(PersonInRoleAndOntologyMixin, Role[TPerson], Symbol):
-    person: TPerson = field(init=False)
+class CEOAsFirstRoleMixin(PersonInRoleAndOntologyMixin, Role[TPersonInRoleAndOntology], Symbol):
+    person: TPersonInRoleAndOntology = field(init=False)
     head_of: RecognizedGroup = field(init=False)
 
 @dataclass(eq=False)
-class CEOAsFirstRole(PersonInRoleAndOntologyMixin, Role[TPerson], Symbol):
-    person: TPerson = field(kw_only=True)
+class CEOAsFirstRole(PersonInRoleAndOntologyMixin, Role[TPersonInRoleAndOntology], Symbol):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
     # Original Owner of the head_of field
     head_of: RecognizedGroup = None
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson: ...
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology: ...
 
 TSubclassOfARoleTaker = TypeVar("TSubclassOfARoleTaker", bound=SubclassOfARoleTaker)
 
@@ -102,17 +102,17 @@ class SubclassOfRoleThatUpdatesRoleTakerType(
 ): ...
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(PersonInRoleAndOntologyMixin, Role[TPerson]):
-    person: TPerson = field(kw_only=True)
+class ProfessorAsFirstRole(PersonInRoleAndOntologyMixin, Role[TPersonInRoleAndOntology]):
+    person: TPersonInRoleAndOntology = field(kw_only=True)
     # Original Owner of the teacher_of field
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
     @classmethod
-    def role_taker_attribute(cls) -> TPerson: ...
+    def role_taker_attribute(cls) -> TPersonInRoleAndOntology: ...
 
 @dataclass(eq=False)
 class AssociateProfessorAsSubClassOfARoleInSameModule(
-    ProfessorAsFirstRole[TPerson]
+    ProfessorAsFirstRole[TPersonInRoleAndOntology]
 ): ...
 
 TCEOAsFirstRole = TypeVar("TCEOAsFirstRole", bound=CEOAsFirstRole)

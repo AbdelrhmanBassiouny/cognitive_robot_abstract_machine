@@ -7,7 +7,7 @@ from abc import ABC
 from copy import copy
 from dataclasses import dataclass, is_dataclass
 from dataclasses import field as dataclass_field, InitVar
-from functools import cached_property
+from functools import cached_property, lru_cache
 from typing import _GenericAlias
 
 import rustworkx as rx

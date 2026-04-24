@@ -495,7 +495,7 @@ class RoleStubGenerator:
                 # Only include TypeVars if they are used in the class's own fields
                 # (to match GT's non-generic ProfessorAsFirstRole)
                 # Wait, GT's ProfessorAsFirstRole has NO own fields in the stub?
-                # No, it has teacher_of. But teacher_of doesn't use TPerson.
+                # No, it has teacher_of. But teacher_of doesn't use TPersonInRoleAndOntology.
                 return type_vars
         return set()
 

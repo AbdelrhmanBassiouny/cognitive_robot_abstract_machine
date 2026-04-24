@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 from typing_extensions import Set, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
+    from ..university_ontology_like_classes_without_descriptors import (
         RecognizedGroup,
         Course,
         PersonInRoleAndOntology,
-        TPerson,
+        TPersonInRoleAndOntology,
         TSubclassOfARoleTaker,
         TCEOAsFirstRole,
         TRepresentativeAsSecondRole,
@@ -32,7 +32,7 @@ class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, ABC)
 
     @abstractmethod
     @property
-    def role_taker(self) -> TPerson: ...
+    def role_taker(self) -> TPersonInRoleAndOntology: ...
 
     @property
     def name(self) -> str:

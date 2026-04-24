@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
-from typing import Dict, Sequence, Optional
+from typing import Dict, Sequence, Optional, Tuple
 
 import libcst as cst
 
@@ -135,29 +135,36 @@ class ModuleComparator:
 
 
 def get_module_comparators(
-    generated_modules: Dict[ModuleType, str], stubs: bool = False
+    generated_modules: Dict[ModuleType, Tuple[str, str]], stubs: bool = False
 ):
     comparators = []
 
-    for module in generated_modules:
-        expected_module_content = get_ground_truth_module_source(module, stubs=stubs)
+    for module, (transformed_code, mixin_code) in generated_modules.items():
+        # Transformed module
+        expected_transformed = get_ground_truth_module_source(module, is_mixin=False)
         comparators.append(
-            get_comparator_for_modules(
-                generated_modules[module], expected_module_content
-            )
+            get_comparator_for_modules(transformed_code, expected_transformed)
         )
+
+        # Mixin module
+        expected_mixin = get_ground_truth_module_source(module, is_mixin=True)
+        comparators.append(get_comparator_for_modules(mixin_code, expected_mixin))
 
     return comparators  # no cleanup needed — no sys.modules pollution
 
 
 def get_ground_truth_module_source(
-    generated_module: ModuleType, stubs: bool = False
+    generated_module: ModuleType, is_mixin: bool = False
 ) -> str:
     path = Path(generated_module.__file__)
-    ground_truth_module_path = path.with_name(f"_ground_truth_{path.name}")
-    if stubs:
-        ground_truth_module_path = ground_truth_module_path.with_suffix(".pyi")
-    with open(ground_truth_module_path, "r") as f:
+    module_name = path.stem
+    if is_mixin:
+        ground_truth_name = f"_ground_truth_{module_name}_role_mixins.py"
+    else:
+        ground_truth_name = f"_ground_truth_transformed_{module_name}.py"
+
+    ground_truth_path = path.parent / "role_mixins" / ground_truth_name
+    with open(ground_truth_path, "r") as f:
         return f.read()
 
 
