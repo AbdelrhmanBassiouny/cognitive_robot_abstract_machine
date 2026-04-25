@@ -606,14 +606,20 @@ class HasHandle(HasRootBody, ABC):
         self.handle = handle
 
 
+THasRootBody = TypeVar("THasRootBody", bound=HasRootBody)
+"""
+A type variable for HasRootBody.
+"""
+
+
 @dataclass(eq=False)
-class HasStorageSpace(HasRootBody, ABC):
+class HasStorageSpace(HasRootBody, SubClassSafeGeneric[THasRootBody], ABC):
     """
     A mixin class for semantic annotations that represent storage spaces. Used to afterthefact add object for example
     to a table, and have those objects move with the table when it is moved.
     """
 
-    objects: List[HasRootBody] = field(default_factory=list, hash=False, kw_only=True)
+    objects: List[THasRootBody] = field(default_factory=list, hash=False, kw_only=True)
     """
     The objects stored in the semantic annotation.
     """

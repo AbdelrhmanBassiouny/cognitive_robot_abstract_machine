@@ -4,12 +4,25 @@ from abc import ABC
 from dataclasses import dataclass, field
 from typing import Iterable, Optional, Self, Tuple
 
+from typing_extensions import List, Type, TypeVar
+
+from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.factories import (
+    variable_from,
+)
+from krrood.ormatic.utils import classproperty
+from krrood.patterns.role.role import Role
+from krrood.symbolic_math import symbolic_math
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
-from typing_extensions import List, Type
-
-from krrood.ormatic.utils import classproperty
-from krrood.symbolic_math import symbolic_math
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.datastructures.variables import SpatialVariables
+from semantic_digital_twin.exceptions import (
+    InvalidPlaneDimensions,
+    InvalidHingeActiveAxis,
+    MissingSemanticAnnotationError,
+)
+from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasSupportingSurface,
     HasRootRegion,
@@ -24,14 +37,6 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
     HasStorageSpace,
 )
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.datastructures.variables import SpatialVariables
-from semantic_digital_twin.exceptions import (
-    InvalidPlaneDimensions,
-    InvalidHingeActiveAxis,
-    MissingSemanticAnnotationError,
-)
-from semantic_digital_twin.reasoning.predicates import InsideOf
 from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
@@ -131,11 +136,15 @@ class Handle(HasRootBody):
             }
         )
 
+
 @dataclass(eq=False)
 class Dishwasher(HasCaseAsRootBody, HasDoors, HasDrawers):
     """
     A dishwasher is a kitchen appliance used for cleaning dishes, utensils, and cookware. It typically has a front door that opens to reveal racks for loading dirty items and a control panel for selecting wash cycles.
     """
+
+    def hole_direction(self) -> Vector3:
+        return Vector3.NEGATIVE_X()
 
 
 @dataclass(eq=False)
@@ -396,8 +405,14 @@ class Cabinet(Furniture, HasCaseAsRootBody):
 @dataclass(eq=False)
 class Fridge(Cabinet, HasDoors, HasDrawers): ...
 
+
 @dataclass(eq=False)
-class Oven(HasRootBody): ...
+class Oven(HasCaseAsRootBody):
+
+    @classproperty
+    def hole_direction(self) -> Vector3:
+        return Vector3.NEGATIVE_X()
+
 
 @dataclass(eq=False)
 class Dresser(Cabinet, HasDrawers, HasDoors): ...
@@ -554,10 +569,68 @@ class Wall(HasApertures):
 
 
 @dataclass(eq=False)
-class Bottle(HasRootBody):
+class Liquid(HasRootBody):
+    """
+    A physical substance that has a definite volume but no fixed shape.
+    .. warning:: I do not believe that Liquids have a root body, but I am not sure how to represent them without a root
+     body. This is something that should be investigated further and potentially refactored in the future.
+    """
+
+    ...
+
+
+@dataclass(eq=False)
+class Wine(Liquid):
+    """
+    An alcoholic beverage made from fermented grapes or other fruits.
+    """
+
+    ...
+
+
+@dataclass(eq=False)
+class Mustard(Liquid):
+    """
+    A condiment made from ground mustard seeds, vinegar, and other ingredients.
+    """
+
+    ...
+
+
+@dataclass(eq=False)
+class Soap(SemanticAnnotation, ABC):
+    """
+    A soap is a substance used for cleaning that typically comes in the form of a solid bar or a liquid.
+     It is designed to remove dirt, oils, and impurities from surfaces, including skin, by breaking down and emulsifying
+      them for easy rinsing with water.
+    """
+
+    ...
+
+
+@dataclass(eq=False)
+class LiquidSoap(Liquid, Soap):
+    """
+    A liquid soap is a soap in liquid form.
+    """
+
+    ...
+
+
+TLiquid = TypeVar("TLiquid", bound=Liquid)
+"""
+A type variable for Liquid types.
+"""
+
+
+@dataclass(eq=False)
+class Bottle(HasCaseAsRootBody, HasStorageSpace[TLiquid]):
     """
     Abstract class for bottles.
     """
+
+    def hole_direction(self) -> Vector3:
+        return Vector3.Z()
 
 
 @dataclass(eq=False)
@@ -565,28 +638,46 @@ class Statue(HasRootBody): ...
 
 
 @dataclass(eq=False)
-class SoapBottle(Bottle):
+class SoapBottle(Role[Bottle[LiquidSoap]]):
     """
     A soap bottle.
     """
 
+    bottle: Bottle[LiquidSoap]
+
+    @classmethod
+    def role_taker_attribute(cls) -> Attribute[Bottle[LiquidSoap]]:
+        return variable_from(cls).bottle
+
 
 @dataclass(eq=False)
-class WineBottle(Bottle):
+class WineBottle(Role[Bottle[Wine]]):
     """
     A wine bottle.
     """
 
+    bottle: Bottle[Wine]
+
+    @classmethod
+    def role_taker_attribute(cls) -> Attribute[Bottle[Wine]]:
+        return variable_from(cls).bottle
+
 
 @dataclass(eq=False)
-class MustardBottle(Bottle):
+class MustardBottle(Role[Bottle[Mustard]]):
     """
     A mustard bottle.
     """
 
+    bottle: Bottle[Mustard]
+
+    @classmethod
+    def role_taker_attribute(cls) -> Attribute[Bottle[Mustard]]:
+        return variable_from(cls).bottle
+
 
 @dataclass(eq=False)
-class DrinkingContainer(HasRootBody): ...
+class DrinkingContainer(HasStorageSpace[TLiquid]): ...
 
 
 @dataclass(eq=False)
@@ -603,8 +694,22 @@ class Mug(DrinkingContainer):
     """
 
 
+# Food Items
 @dataclass(eq=False)
-class CookingContainer(HasRootBody): ...
+class Food(HasRootBody):
+    """
+    A Group class for Food.
+    """
+
+
+TFood = TypeVar("TFood", bound=Food)
+"""
+A type variable for Food subclasses.
+"""
+
+
+@dataclass(eq=False)
+class CookingContainer(HasStorageSpace[TFood]): ...
 
 
 @dataclass(eq=False)
@@ -640,32 +745,57 @@ class PotLid(Lid):
 
 
 @dataclass(eq=False)
-class Plate(HasSupportingSurface):
+class Plate(HasStorageSpace):
     """
     A plate.
     """
 
 
 @dataclass(eq=False)
-class Bowl(HasSupportingSurface, IsPerceivable):
+class Bowl(HasStorageSpace, IsPerceivable):
     """
     A bowl.
     """
 
 
-# Food Items
 @dataclass(eq=False)
-class Food(HasRootBody):
+class Fish(HasRootBody, Food):
     """
-    A Group class for Food.
+    A fish.
     """
 
 
 @dataclass(eq=False)
-class TunaCan(Food):
+class Tuna(Fish):
+    """
+    A tuna fish.
+    """
+
+
+THasRootBody = TypeVar("THasRootBody", bound=HasRootBody)
+"""
+A type variable for classes that have a root body.
+"""
+
+
+@dataclass(eq=False)
+class TinCan(HasStorageSpace[THasRootBody]):
+    """
+    A tin can.
+    """
+
+
+@dataclass(eq=False)
+class TunaCan(Role[TinCan[Tuna]]):
     """
     A tuna can.
     """
+
+    can: TinCan[Tuna]
+
+    @classmethod
+    def role_taker_attribute(cls) -> Attribute[TinCan[Tuna]]:
+        return variable_from(cls).can
 
 
 @dataclass(eq=False)
@@ -748,15 +878,6 @@ class Milk(Food, IsPerceivable):
 
 
 @dataclass(eq=False)
-class SaltContainer(HasRootBody, IsPerceivable):
-    """
-    A container of salt.
-    """
-
-    ...
-
-
-@dataclass(eq=False)
 class Produce(Food):
     """
     In American English, produce generally refers to fresh fruits and vegetables intended to be eaten by humans.
@@ -826,6 +947,23 @@ class Salt(Food):
     """
     A pack or container of salt (e.g., salt shaker or salt can).
     """
+
+
+@dataclass(eq=False)
+class SaltContainer(HasStorageSpace[Salt], IsPerceivable):
+    """
+    A container of salt.
+    """
+
+    ...
+
+
+@dataclass(eq=False)
+class Pepper(Food):
+    """
+    A powder like plant-based substance that is used as a spice.
+    """
+
 
 @dataclass(eq=False)
 class CoffeeTable(Table):
@@ -998,7 +1136,7 @@ class BookFront(HasRootBody): ...
 
 
 @dataclass(eq=False)
-class SaltPepperShaker(HasRootBody):
+class SaltPepperShaker(HasStorageSpace[Salt | Pepper]):
     """
     A salt and pepper shaker.
     """
