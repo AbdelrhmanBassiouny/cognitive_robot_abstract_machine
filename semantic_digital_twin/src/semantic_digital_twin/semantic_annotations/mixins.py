@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field, Field, fields
+from dataclasses import dataclass, field
 from typing import Tuple
 
 import numpy as np
 import trimesh
 from krrood.entity_query_language.factories import variable_from, entity, variable, an
 from polytope import bounding_box
+
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from probabilistic_model.distributions.gaussian import GaussianDistribution
 from random_events.product_algebra import Event
 from random_events.set import Set
@@ -101,7 +103,7 @@ TKinematicStructureEntity = TypeVar(
 
 @dataclass(eq=False)
 class HasRootKinematicStructureEntity(
-    SemanticAnnotation, Role[TKinematicStructureEntity], ABC
+    SemanticAnnotation, SubClassSafeGeneric[TKinematicStructureEntity], ABC
 ):
     """
     Base class for shared method for HasRootBody and HasRootRegion.
@@ -112,18 +114,16 @@ class HasRootKinematicStructureEntity(
     The root kinematic structure entity of the semantic annotation.
     """
 
-    @classmethod
-    def role_taker_attribute(cls) -> TKinematicStructureEntity:
-        return variable_from(cls).root
-
     @property
     def scale(self) -> Scale:
-        return Scale(*(self.combined_mesh.bounds[1] - self.combined_mesh.bounds[0]))
+        return Scale(
+            *(self.root.combined_mesh.bounds[1] - self.root.combined_mesh.bounds[0])
+        )
 
     @property
     def min_max_points(self) -> Tuple[Point3, Point3]:
-        min = Point3.from_iterable(self.combined_mesh.bounds[0])
-        max = Point3.from_iterable(self.combined_mesh.bounds[1])
+        min = Point3.from_iterable(self.root.combined_mesh.bounds[0])
+        max = Point3.from_iterable(self.root.combined_mesh.bounds[1])
         return min, max
 
     @classproperty
@@ -306,18 +306,12 @@ class HasRootKinematicStructureEntity(
     def global_transform(self) -> HomogeneousTransformationMatrix:
         return self.root.global_transform
 
-    def __hash__(self):
-        return Role.__hash__(self)
-
-    def __eq__(self, other):
-        return Role.__eq__(self, other)
-
 
 TBody = TypeVar("TBody", bound=Body)
 
 
 @dataclass(eq=False)
-class HasRootBody(HasRootKinematicStructureEntity[TBody], ABC):
+class HasRootBody(HasRootKinematicStructureEntity, ABC):
     """
     Abstract base class for all household objects. Each semantic annotation refers to a single Body.
     Each subclass automatically derives a MatchRule from its own class name and
@@ -766,9 +760,13 @@ class HasSupportingSurface(HasStorageSpace, ABC):
                 supporting_body=self.root,
             )
         )
-        objects = an(entity(
-            semantic_annotation := variable(HasRootBody, domain=self._world.semantic_annotations)
-        ).where(semantic_annotation.root == body)).evaluate()
+        objects = an(
+            entity(
+                semantic_annotation := variable(
+                    HasRootBody, domain=self._world.semantic_annotations
+                )
+            ).where(semantic_annotation.root == body)
+        ).evaluate()
         for obj in objects:
             if obj in self.objects:
                 continue

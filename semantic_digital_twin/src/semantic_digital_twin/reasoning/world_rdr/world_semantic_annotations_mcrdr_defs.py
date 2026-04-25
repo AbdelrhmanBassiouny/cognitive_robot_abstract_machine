@@ -5,9 +5,9 @@ from krrood.entity_query_language.factories import (
     entity,
     inference,
     variable,
-    match_variable, not_,
+    match_variable,
+    not_,
 )
-from krrood.patterns.role.predicates import HasRole
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Wardrobe,
     Door,
@@ -56,20 +56,14 @@ def conditions_331345798360792447350644865254855982739(case) -> bool:
 def conclusion_331345798360792447350644865254855982739(case) -> List[Drawer]:
     def get_drawers(case: World) -> List[Drawer]:
         """Get possible value(s) for World.semantic_annotations of types list/set of Drawer"""
+        handle = variable(Handle, case.semantic_annotations)
         prismatic_connection = variable(PrismaticConnection, case.connections)
         fixed_connection = match_variable(FixedConnection, case.connections)(
-            parent=prismatic_connection.child
+            parent=prismatic_connection.child, child=handle.root
         )
-        return (
-            entity(
-                inference(Drawer)(
-                    root=prismatic_connection.child, handle=fixed_connection.child
-                )
-            )
-            .where(HasRole(fixed_connection.child, Handle),
-                   not_(contains(prismatic_connection.child.name.name.lower(), "door")))
-            .tolist()
-        )
+        return inference(Drawer)(
+            root=fixed_connection.parent, handle=fixed_connection.child
+        ).tolist()
 
     return get_drawers(case)
 
@@ -85,15 +79,16 @@ def conditions_35528769484583703815352905256802298589(case) -> bool:
 def conclusion_35528769484583703815352905256802298589(case) -> List[Wardrobe]:
     def get_wardrobes(case: World) -> List[Wardrobe]:
         """Get possible value(s) for World.semantic_annotations of types list/set of Wardrobe"""
+        drawer = variable(Drawer, case.semantic_annotations)
         prismatic_connection = variable(PrismaticConnection, case.connections)
         return (
             entity(
                 inference(Wardrobe)(
                     root=prismatic_connection.parent,
-                    drawers=prismatic_connection.child,
+                    drawers=drawer,
                 )
             )
-            .where(HasRole(prismatic_connection.child, Drawer))
+            .where(prismatic_connection.child == drawer.root)
             .grouped_by(prismatic_connection.parent)
             .tolist()
         )
@@ -112,19 +107,14 @@ def conditions_59112619694893607910753808758642808601(case) -> bool:
 def conclusion_59112619694893607910753808758642808601(case) -> List[Door]:
     def get_doors(case: World) -> List[Door]:
         """Get possible value(s) for World.semantic_annotations  of type Door."""
+        handle = variable(Handle, case.semantic_annotations)
         revolute_connection = variable(RevoluteConnection, case.connections)
         fixed_connection = match_variable(FixedConnection, case.connections)(
-            parent=revolute_connection.child
+            parent=revolute_connection.child, child=handle.root
         )
-        return (
-            entity(
-                inference(Door)(
-                    root=fixed_connection.parent, handle=fixed_connection.child
-                )
-            )
-            .where(HasRole(fixed_connection.child, Handle))
-            .tolist()
-        )
+        return inference(Door)(
+            root=fixed_connection.parent, handle=fixed_connection.child
+        ).tolist()
 
     return get_doors(case)
 
@@ -140,16 +130,13 @@ def conditions_10840634078579061471470540436169882059(case) -> bool:
 def conclusion_10840634078579061471470540436169882059(case) -> List[Fridge]:
     def get_fridges(case: World) -> List[Fridge]:
         """Get possible value(s) for World.semantic_annotations of type Fridge."""
+        door = variable(Door, case.semantic_annotations)
         revolute_connection = variable(RevoluteConnection, case.connections)
         return (
-            entity(
-                inference(Fridge)(
-                    root=revolute_connection.parent, doors=revolute_connection.child
-                )
-            )
+            entity(inference(Fridge)(root=revolute_connection.parent, doors=door))
             .where(
-                HasRole(revolute_connection.child, Door),
-                contains(revolute_connection.child.name.name.lower(), "fridge"),
+                revolute_connection.child == door.root,
+                contains(door.root.name.name.lower(), "fridge"),
             )
             .grouped_by(revolute_connection.parent)
             .tolist()
