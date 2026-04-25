@@ -11,15 +11,15 @@ from functools import cached_property, lru_cache
 from typing import _GenericAlias
 
 import rustworkx as rx
-from typing_extensions import get_args, get_origin
+from typing_extensions import get_args, get_origin, Any
 
 from krrood import logger
-from krrood.class_diagrams.utils import resolve_type
+from krrood.class_diagrams.utils import resolve_type, get_type_hints_of_object
 from krrood.utils import (
     module_and_class_name,
     own_dataclass_fields,
     get_generic_type_param,
-    memoize
+    memoize,
 )
 
 try:
@@ -1080,7 +1080,9 @@ class ClassDiagram:
             origin = get_origin(next_type)
             if origin:
                 if not next_type.__parameters__ or all(
-                        isinstance(p, TypeVar) and p.__bound__ is not None for p in next_type.__parameters__):
+                    isinstance(p, TypeVar) and p.__bound__ is not None
+                    for p in next_type.__parameters__
+                ):
                     bindings = [p.__bound__ for p in next_type.__parameters__]
                     if bindings:
                         next_type = next_type[*bindings]
@@ -1153,7 +1155,7 @@ def make_specialized_dataclass(alias: _GenericAlias) -> Type:
     # Use get_type_hints to resolve any postponed annotations (strings)
     # This is important for GenericClass[T] where fields might be strings.
     try:
-        resolved_hints = get_type_hints(template_class, include_extras=True)
+        resolved_hints = get_type_hints_of_object(template_class)
     except Exception:
         resolved_hints = {f.name: f.type for f in dataclasses.fields(template_class)}
 
@@ -1203,6 +1205,7 @@ def make_specialized_dataclass(alias: _GenericAlias) -> Type:
         unsafe_hash=params_obj.unsafe_hash,
         kw_only=params_obj.kw_only if hasattr(params_obj, "kw_only") else False,
         slots=getattr(template_class, "__slots__", None) is not None,
+        module=getattr(template_class, "__module__", None),
     )
 
     return specialized_class

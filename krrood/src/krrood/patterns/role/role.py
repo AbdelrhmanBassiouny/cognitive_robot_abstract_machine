@@ -7,8 +7,12 @@ from functools import lru_cache, cached_property
 
 from typing_extensions import Type, get_origin, Any, Dict, List, TypeVar, Iterator
 
-from krrood.class_diagrams.utils import T, role_aware_nearest_common_ancestor, role_aware_all_nearest_common_ancestors, \
-    all_nearest_common_ancestors
+from krrood.class_diagrams.utils import (
+    T,
+    role_aware_nearest_common_ancestor,
+    role_aware_all_nearest_common_ancestors,
+    all_nearest_common_ancestors,
+)
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
@@ -51,6 +55,7 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
     ..warning:: Always check if the attribute exists before accessing it if it is an attribute that is introduced by a
     Role, because if no Role instance exists, the attribute will not be accessible.
     """
+
     _role_taker_field_set: bool = field(default=False, init=False)
     _to_set_in_role_taker: Dict[str, Any] = field(default_factory=dict, init=False)
 
@@ -58,7 +63,9 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
         super().__init_subclass__(**kwargs)
         # redefine fields of role taker to be init=False, these are fields that are inherited
         # from bases that the role taker also inherits from
-        for common_base in all_nearest_common_ancestors((cls.get_role_taker_type(), cls)):
+        for common_base in all_nearest_common_ancestors(
+            (cls.get_role_taker_type(), cls)
+        ):
             if common_base in [ABC, object, Role]:
                 continue
             if not is_dataclass(common_base):
@@ -68,19 +75,30 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
                     continue
                 if field_.name == cls.role_taker_attribute_name():
                     continue
-                if issubclass(common_base, Role) and field_.name in Role.__annotations__:
+                if (
+                    issubclass(common_base, Role)
+                    and field_.name in Role.__annotations__
+                ):
                     continue
-                if hasattr(common_base, field_.name) and isinstance(getattr(common_base, field_.name), property):
+                if hasattr(common_base, field_.name) and isinstance(
+                    getattr(common_base, field_.name), property
+                ):
                     # That means this field was already seen before and was assigned a property.
                     continue
                 type_ = field_.type
                 if isinstance(field_.type, str):
                     try:
-                        type_ = eval(field_.type, sys.modules[common_base.__module__].__dict__)
+                        type_ = eval(
+                            field_.type, sys.modules[common_base.__module__].__dict__
+                        )
                     except NameError:
                         pass
                 cls._update_field_kwargs(field_.name, {"init": False}, type_=type_)
-                setattr(cls, field_.name, delegate_property(field_.name, cls.role_taker_attribute_name()))
+                setattr(
+                    cls,
+                    field_.name,
+                    delegate_property(field_.name, cls.role_taker_attribute_name()),
+                )
 
     @classmethod
     def has_role(cls, role_taker: T, role_type: Type[Role]) -> bool:
@@ -97,21 +115,29 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
         return self.get_taker_roles_of_type(self.role_taker, Role)
 
     @classmethod
-    def get_taker_roles_of_type(cls, role_taker: T, role_type: Type[Role[T]]) -> List[Role[T]]:
+    def get_taker_roles_of_type(
+        cls, role_taker: T, role_type: Type[Role[T]]
+    ) -> List[Role[T]]:
         """
         :return: All roles of the given type for the role taker instance.
         """
         return list(cls.yield_taker_roles_of_type(role_taker, role_type))
 
     @classmethod
-    def yield_taker_roles_of_type(cls, role_taker: T, role_type: Type[Role[T]]) -> Iterator[Role[T]]:
+    def yield_taker_roles_of_type(
+        cls, role_taker: T, role_type: Type[Role[T]]
+    ) -> Iterator[Role[T]]:
         """
         :return: All roles of the given type for the role taker instance.
         """
         wrapped_taker = SymbolGraph().get_wrapped_instance(role_taker)
-        yield from (relation.source.instance for relation in
-                    SymbolGraph().get_incoming_relations_with_type(wrapped_taker, HasRoleTaker) if
-                    isinstance(relation.source.instance, role_type))
+        yield from (
+            relation.source.instance
+            for relation in SymbolGraph().get_incoming_relations_with_type(
+                wrapped_taker, HasRoleTaker
+            )
+            if isinstance(relation.source.instance, role_type)
+        )
 
     @property
     def all_role_takers(self) -> List[Any]:
@@ -126,8 +152,12 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
         :return: All role takers of the given role.
         """
         wrapped_role = SymbolGraph().get_wrapped_instance(role)
-        yield from (relation.target.instance for relation in
-                    SymbolGraph().get_outgoing_relations_with_type(wrapped_role, HasRoleTaker))
+        yield from (
+            relation.target.instance
+            for relation in SymbolGraph().get_outgoing_relations_with_type(
+                wrapped_role, HasRoleTaker
+            )
+        )
 
     @classmethod
     @lru_cache
@@ -164,7 +194,10 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
             # get it by extracting the generic parameter
             type_ = get_generic_type_param(cls, Role)[0]
         if isinstance(type_, str):
-            type_ = sys.modules[cls.__module__].__dict__[type_]
+            try:
+                type_ = sys.modules[cls.__module__].__dict__[type_]
+            except KeyError:
+                type_ = eval(type_, sys.modules[cls.__module__].__dict__)
         if isinstance(type_, TypeVar):
             if type_.__bound__ is not None:
                 type_ = type_.__bound__
@@ -297,19 +330,30 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
         wrapped_self = SymbolGraph().get_wrapped_instance(self)
         wrapped_role_taker = SymbolGraph().ensure_wrapped_instance(role_taker)
         SymbolGraph().add_relation(
-            HasRoleTaker(wrapped_self, wrapped_role_taker,
-                         self.role_taker_wrapped_field))
+            HasRoleTaker(
+                wrapped_self, wrapped_role_taker, self.role_taker_wrapped_field
+            )
+        )
         if isinstance(role_taker, Role):
-            for relation in SymbolGraph().get_outgoing_relations_with_type(wrapped_role_taker, HasRoleTaker):
-                SymbolGraph().add_relation(HasRoleTaker(wrapped_self, relation.target, relation.wrapped_field))
+            for relation in SymbolGraph().get_outgoing_relations_with_type(
+                wrapped_role_taker, HasRoleTaker
+            ):
+                SymbolGraph().add_relation(
+                    HasRoleTaker(wrapped_self, relation.target, relation.wrapped_field)
+                )
 
     @cached_property
     def role_taker_wrapped_field(self) -> WrappedField:
         """
         :return: The wrapped field of this class that is pointing to the role taker.
         """
-        return next(wf for wf in SymbolGraph().class_diagram.get_wrapped_class(self.__class__).fields if
-                    wf.name == self.role_taker_attribute_name())
+        return next(
+            wf
+            for wf in SymbolGraph()
+            .class_diagram.get_wrapped_class(self.__class__)
+            .fields
+            if wf.name == self.role_taker_attribute_name()
+        )
 
     def _bootstrap_inner_attributes(self):
         """
@@ -335,8 +379,7 @@ class Role(SubClassSafeGeneric[T], Symbol, ABC):
         return hash(self) == hash(other)
 
 
-class HasRoleTaker(PredicateClassRelation[Role]):
-    ...
+class HasRoleTaker(PredicateClassRelation[Role]): ...
 
 
 def delegate_property(name, role_taker):

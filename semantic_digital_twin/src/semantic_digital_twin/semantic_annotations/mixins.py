@@ -12,7 +12,7 @@ from polytope import bounding_box
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from probabilistic_model.distributions.gaussian import GaussianDistribution
 from random_events.product_algebra import Event
-from random_events.set import Set
+from random_events.set import Set as RandomEventsSets
 from random_events.variable import Symbolic
 from semantic_digital_twin.reasoning.predicates import is_supported_by
 from typing_extensions import (
@@ -933,7 +933,8 @@ class HasSupportingSurface(HasStorageSpace, ABC):
         surface_circuit_root = SumUnit(probabilistic_circuit=surface_circuit)
 
         objects_of_interest_variable = Symbolic(
-            name="objects_of_interest", domain=Set.from_iterable(objects_of_interest)
+            name="objects_of_interest",
+            domain=RandomEventsSets.from_iterable(objects_of_interest),
         )
 
         for object_of_interest in objects_of_interest:

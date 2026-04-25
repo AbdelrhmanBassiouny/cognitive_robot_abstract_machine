@@ -759,7 +759,7 @@ class Bowl(HasStorageSpace, IsPerceivable):
 
 
 @dataclass(eq=False)
-class Fish(HasRootBody, Food):
+class Fish(Food):
     """
     A fish.
     """

@@ -10,8 +10,19 @@ from typing import get_args, get_origin
 from uuid import UUID
 
 import typing_extensions
-from typing_extensions import Iterable, Iterator, List, Type, Any, Dict, Tuple, TypeVar, Callable
+from typing_extensions import (
+    Iterable,
+    Iterator,
+    List,
+    Type,
+    Any,
+    Dict,
+    Tuple,
+    TypeVar,
+    Callable,
+)
 
+from krrood import logger
 from krrood.class_diagrams.exceptions import CouldNotResolveType
 from krrood.utils import get_scope_from_imports, is_builtin_type
 
@@ -32,12 +43,12 @@ def classes_of_module(module) -> List[Type]:
 
 
 def behaves_like_a_built_in_type(
-        clazz: Type,
+    clazz: Type,
 ) -> bool:
     return (
-            is_builtin_type(clazz)
-            or clazz == UUID
-            or (inspect.isclass(clazz) and issubclass(clazz, Enum))
+        is_builtin_type(clazz)
+        or clazz == UUID
+        or (inspect.isclass(clazz) and issubclass(clazz, Enum))
     )
 
 
@@ -104,6 +115,7 @@ def resolve_name_in_hierarchy(name: str, start_object: Any) -> Any:
         extra_information=f"Could not find {name} in the hierarchy of {start_object} (starting from {source_path}).",
     )
 
+
 T = TypeVar("T")
 
 
@@ -163,7 +175,7 @@ class TypeHintResolutionResult:
 
 
 def get_and_resolve_generic_type_hints_of_object_using_substitutions(
-        object_: Any, substitution: Dict[TypeVar, Type]
+    object_: Any, substitution: Dict[TypeVar, Type]
 ) -> Dict[str, TypeHintResolutionResult]:
     """
     Resolve generic type hints of an object using a substitution dictionary.
@@ -177,8 +189,8 @@ def get_and_resolve_generic_type_hints_of_object_using_substitutions(
 
 
 def resolve_type(
-        type_to_resolve: Any,
-        substitution: Dict[TypeVar, Any],
+    type_to_resolve: Any,
+    substitution: Dict[TypeVar, Any],
 ) -> TypeHintResolutionResult:
     """
     Resolve type variables in a type.
@@ -208,7 +220,8 @@ def resolve_type(
                 new_params.append(param)
         subscript_param = new_params[0] if len(new_params) == 1 else tuple(new_params)
         return TypeHintResolutionResult(
-            type_to_resolve[subscript_param], resolved, type_to_resolve)
+            type_to_resolve[subscript_param], resolved, type_to_resolve
+        )
 
     return TypeHintResolutionResult(type_to_resolve, False, type_to_resolve)
 
@@ -252,7 +265,9 @@ def all_nearest_common_ancestors(classes) -> Iterator[Type]:
     if not classes:
         return
     method_resolution_orders = {cls: copy(cls.mro()) for cls in classes}
-    yield from _all_nearest_common_ancestors_from_classes_method_resolution_order(method_resolution_orders)
+    yield from _all_nearest_common_ancestors_from_classes_method_resolution_order(
+        method_resolution_orders
+    )
 
 
 @lru_cache
@@ -274,16 +289,21 @@ def role_aware_all_nearest_common_ancestors(classes) -> Iterator[Type]:
         rol_idx = method_resolution_order.index(Role)
         method_resolution_order[rol_idx] = cls.get_role_taker_type()
 
-    yield from _all_nearest_common_ancestors_from_classes_method_resolution_order(method_resolution_orders)
+    yield from _all_nearest_common_ancestors_from_classes_method_resolution_order(
+        method_resolution_orders
+    )
 
 
 def _all_nearest_common_ancestors_from_classes_method_resolution_order(
-        method_resolution_orders: Dict[Type, List[Type]]) -> Iterator[Type]:
+    method_resolution_orders: Dict[Type, List[Type]],
+) -> Iterator[Type]:
     # Iterate in MRO order of the first class
     method_resolution_orders_values = list(method_resolution_orders.values())
     seen_candidates = set()
     for candidate in method_resolution_orders_values[0]:
-        if any(issubclass(seen_candidate, candidate) for seen_candidate in seen_candidates):
+        if any(
+            issubclass(seen_candidate, candidate) for seen_candidate in seen_candidates
+        ):
             continue
         if all(candidate in mro for mro in method_resolution_orders_values[1:]):
             seen_candidates.add(candidate)
@@ -292,7 +312,7 @@ def _all_nearest_common_ancestors_from_classes_method_resolution_order(
 
 @lru_cache
 def get_type_hints_of_object(
-        object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
+    object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
 ) -> Dict[str, Any]:
     """
     Get the type hints of an object. This is a workaround for the fact that get_type_hints() does not work with objects
@@ -313,14 +333,20 @@ def get_type_hints_of_object(
                 object_, include_extras=True, localns=local_namespace
             )
             break
-        except NameError as e:
-            object_from_name = resolve_name_in_hierarchy(e.name, object_)
-            local_namespace[e.name] = object_from_name
+        except NameError as name_error:
+            object_from_name = resolve_name_in_hierarchy(name_error.name, object_)
+            local_namespace[name_error.name] = object_from_name
+        except TypeError as type_error:
+            logger.warning(
+                f"Could not get type hints for {object_} due to TypeError: {type_error}. This may be caused by a type"
+                f" hint that cannot be resolved. Returning empty type hints."
+            )
+            raise
     return type_hints
 
 
 def get_object_by_name_from_another_object_in_same_module(
-        name: str, object_: Any
+    name: str, object_: Any
 ) -> Any:
     """
     Get the object with the given name from another object in the same module.
@@ -345,5 +371,5 @@ def get_object_by_name_from_another_object_in_same_module(
         raise CouldNotResolveType(
             name,
             extra_information=f"Could not find {name} in {source_path}, could be a deprecated import statement or "
-                              f"a type defined in a module that is not imported in the source file.",
+            f"a type defined in a module that is not imported in the source file.",
         )
