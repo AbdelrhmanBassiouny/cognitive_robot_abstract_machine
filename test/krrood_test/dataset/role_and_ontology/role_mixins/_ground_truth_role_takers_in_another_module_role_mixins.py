@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..university_ontology_like_classes_without_descriptors import (
+    from test.krrood_test.dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
         PersonInRoleAndOntology,
         DelegateAsThirdRole,
     )
-    from ..role_takers_in_another_module import RoleTakerInAnotherModule
+    from test.krrood_test.dataset.role_and_ontology.role_takers_in_another_module import RoleTakerInAnotherModule
 
 
 @dataclass(eq=False)

@@ -4,7 +4,12 @@ from krrood.patterns.role.role_transformer import RoleTransformer, TRANSFORMED
 from .helpers import get_module_comparators
 from ..dataset.role_and_ontology import (
     university_ontology_like_classes_without_descriptors,
+    reproduction_module,
 )
+
+import libcst as cst
+from krrood.patterns.role.role_transformer import RoleModuleTransformer
+from libcst.codemod import CodemodContext
 
 # ---------------------------------------------------------------------------
 # Fixture
@@ -77,3 +82,54 @@ def test_imports(module_comparators):
     """Tests that all import statements match between modules."""
     for comparator in module_comparators:
         comparator.compare_imports()
+
+
+def test_missing_imports_in_mixins():
+    """
+    Tests that missing imports in role mixins are resolved.
+    In reproduction_module, Taker inherits from BaseTaker.
+    BaseTaker.get_external() returns ExternalType.
+    TakerRoleAttributes should include get_external() and import ExternalType.
+    """
+    transformer = RoleTransformer(reproduction_module, file_name_prefix=TRANSFORMED)
+    results = transformer.transform()
+
+    # reproduction_module should be in results
+    assert reproduction_module in results
+    transformed_source, mixin_source = results[reproduction_module]
+
+    # Check mixin_source for ExternalType import
+    assert (
+        "from test.krrood_test.dataset.role_and_ontology.external_types import ExternalType"
+        in mixin_source
+        or "import ExternalType" in mixin_source
+    )
+
+
+def test_transformation_idempotency():
+    """
+    Tests that rerunning the transformation does not duplicate base classes.
+    """
+    transformer = RoleTransformer(reproduction_module, file_name_prefix=TRANSFORMED)
+    results = transformer.transform()
+    transformed_source, _ = results[reproduction_module]
+
+    # Now simulate rerunning on the transformed source
+    tree = cst.parse_module(transformed_source)
+    context = CodemodContext()
+    mod_transformer = RoleModuleTransformer(
+        context=context,
+        class_diagram=transformer.class_diagram,
+        module=reproduction_module,
+        taker_modules=transformer.taker_modules,
+        file_name_prefix=TRANSFORMED,
+    )
+
+    # We need to make sure mod_transformer uses the same logic as transform()
+    mod_transformer.transform_module(tree)
+    retransformed_source = mod_transformer.transformed_module.code
+
+    # Check for duplicates in retransformed_source
+    # Taker should have TakerRoleAttributes exactly once in the base list
+    # and once in the import.
+    assert retransformed_source.count("TakerRoleAttributes") == 2

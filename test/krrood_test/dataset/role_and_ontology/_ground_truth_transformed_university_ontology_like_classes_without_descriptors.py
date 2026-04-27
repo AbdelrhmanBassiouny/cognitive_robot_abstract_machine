@@ -4,17 +4,17 @@ from dataclasses import dataclass, field, Field, fields
 
 from typing_extensions import Set, List, TypeVar
 
-from .role_mixins._ground_truth_role_takers_in_another_module_role_mixins import (
+from test.krrood_test.dataset.role_and_ontology.role_mixins._ground_truth_role_takers_in_another_module_role_mixins import (
     RoleForRoleTakerInAnotherModule,
 )
-from .role_mixins._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
+from test.krrood_test.dataset.role_and_ontology.role_mixins._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
     PersonInRoleAndOntologyRoleAttributes,
     RoleForPersonInRoleAndOntology,
     RoleForSubclassOfARoleTaker,
     RoleForCEOAsFirstRole,
     RoleForRepresentativeAsSecondRole,
 )
-from ._ground_truth_transformed_role_takers_in_another_module import (
+from test.krrood_test.dataset.role_and_ontology._ground_truth_transformed_role_takers_in_another_module import (
     RoleTakerInAnotherModule,
 )
 from krrood.entity_query_language.factories import variable_from
