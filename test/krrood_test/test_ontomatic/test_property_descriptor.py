@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from krrood.symbol_graph.symbol_graph import SymbolGraph
-from ..dataset.university_ontology_like_classes import (
+from ..dataset.role_and_ontology.university_ontology_like_classes import (
     Company,
     Person,
     CEOAsFirstRole,

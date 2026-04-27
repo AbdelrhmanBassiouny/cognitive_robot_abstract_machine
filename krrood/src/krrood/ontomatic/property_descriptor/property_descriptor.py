@@ -295,7 +295,7 @@ class PropertyDescriptor(Symbol):
 
     @classmethod
     @memoize
-    def get_associated_field_of_domain_type(
+    def get_association_of_source_type(
         cls,
         domain_type: Union[Type[Symbol], WrappedClass],
     ) -> Optional[Union[Association, AssociationThroughRoleTaker]]:
@@ -318,7 +318,7 @@ class PropertyDescriptor(Symbol):
 
     @classmethod
     @memoize
-    def get_fields_of_superproperties_in_role_taker_of_class(
+    def get_superproperties_associations(
         cls,
         domain_type: Union[SymbolType, WrappedClass],
     ) -> Tuple[Association, ...]:
