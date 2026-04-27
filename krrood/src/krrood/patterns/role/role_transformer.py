@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+import re
 import sys
 from copy import copy
 from pathlib import Path
@@ -282,6 +283,13 @@ class RoleModuleTransformer(ContextAwareTransformer):
             return
         origin = get_origin(type_obj)
         if origin is not None:
+            # Register the typing alias name (e.g. 'Dict' for Dict[str, Any]).
+            # get_origin() erases it to the builtin ('dict'), so we must capture
+            # it here before following the origin chain.
+            alias_name = getattr(type_obj, "_name", None)
+            alias_module = getattr(type_obj, "__module__", None)
+            if alias_name and alias_module and alias_module != "builtins":
+                self.name_to_module_map.setdefault(alias_name, alias_module)
             self._populate_map_from_type(origin)
             for arg in get_args(type_obj):
                 self._populate_map_from_type(arg)
@@ -853,6 +861,33 @@ class RoleModuleTransformer(ContextAwareTransformer):
             return_annotation = inspect.signature(method).return_annotation
             if return_annotation is not inspect.Signature.empty:
                 self._get_consistent_type_name(return_annotation)
+        # Supplement: look up every identifier in the raw annotation strings against
+        # the method's own globals.  This catches typing aliases (Dict, List, …) whose
+        # runtime origin (dict, list, …) get_origin() erases to builtins, so they are
+        # never registered by _get_consistent_type_name.
+        self._populate_map_from_callable_globals(method)
+
+    def _populate_map_from_callable_globals(self, method: Callable) -> None:
+        """Register name->module for each identifier in the method's raw annotation
+        strings by looking it up in the method's own __globals__.
+
+        This is the authoritative fix for typing aliases such as Dict, List, Set, etc.
+        that are imported in the *defining* module but not in the role module under
+        transformation.  get_origin(Dict[str, Any]) returns the builtin dict, which
+        _handle_generic_type registers as 'dict -> builtins', silently losing the
+        uppercase alias name.  Here we parse the raw annotation strings and resolve
+        each identifier directly from the method's globals namespace.
+        """
+        annotations = getattr(method, "__annotations__", {})
+        globals_ = getattr(method, "__globals__", {})
+        for annotation in annotations.values():
+            if not isinstance(annotation, str):
+                continue
+            for name in re.findall(r"\b[A-Za-z_]\w*\b", annotation):
+                if name not in self.name_to_module_map and name in globals_:
+                    obj = globals_[name]
+                    if hasattr(obj, "__module__") and obj.__module__:
+                        self.name_to_module_map[name] = obj.__module__
 
     def _handle_decorators(
         self, method_node: libcst.FunctionDef, method: Callable

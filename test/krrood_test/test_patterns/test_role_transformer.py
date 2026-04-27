@@ -143,6 +143,30 @@ def test_transformation_idempotency():
     assert retransformed_source.count("TakerRoleAttributes") == 2
 
 
+def test_typing_alias_imported_from_base_method():
+    """
+    Regression: a typing alias (e.g. Dict) used only in a base taker's method
+    return type must still be imported in the generated mixin.
+
+    Root cause: get_origin(Dict[str, str]) returns the builtin 'dict', which
+    _handle_generic_type registers as 'dict -> builtins'.  The uppercase alias
+    name 'Dict' is never added to name_to_module_map, so _add_typing_imports
+    silently skips it and the generated mixin is missing the import.
+
+    Reproduction: BaseTaker.to_dict() -> Dict[str, str] (Dict imported in
+    base_taker.py only).  reproduction_module.py does NOT import Dict.
+    """
+    transformer = RoleTransformer(reproduction_module, file_name_prefix=TRANSFORMED)
+    _, mixin_source = transformer.transform()[reproduction_module]
+
+    # The delegation method must appear in the mixin
+    assert "def to_dict" in mixin_source, "to_dict delegation missing from mixin"
+    # Dict must be imported at the top level (it is a typing alias → top-level import)
+    assert (
+        "import Dict" in mixin_source
+    ), f"'Dict' not imported in mixin.\nMixin source:\n{mixin_source}"
+
+
 def test_no_init_or_post_init_in_role_for():
     """
     Tests that __init__ and __post_init__ are NOT present in the generated RoleFor class.
