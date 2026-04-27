@@ -62,6 +62,12 @@ from semantic_digital_twin.world_description.world_entity import (
     Region,
     Connection,
 )
+from semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins import (
+    BottleRoleAttributes,
+    RoleForBottle,
+    RoleForTinCan,
+    TinCanRoleAttributes,
+)
 
 
 @dataclass(eq=False)
@@ -624,7 +630,7 @@ A type variable for Liquid types.
 
 
 @dataclass(eq=False)
-class Bottle(HasCaseAsRootBody, HasStorageSpace[TLiquid]):
+class Bottle(BottleRoleAttributes, HasCaseAsRootBody, HasStorageSpace[TLiquid]):
     """
     Abstract class for bottles.
     """
@@ -638,7 +644,7 @@ class Statue(HasRootBody): ...
 
 
 @dataclass(eq=False)
-class SoapBottle(Role[Bottle[LiquidSoap]]):
+class SoapBottle(Role[Bottle[LiquidSoap]], RoleForBottle):
     """
     A soap bottle.
     """
@@ -651,7 +657,7 @@ class SoapBottle(Role[Bottle[LiquidSoap]]):
 
 
 @dataclass(eq=False)
-class WineBottle(Role[Bottle[Wine]]):
+class WineBottle(Role[Bottle[Wine]], RoleForBottle):
     """
     A wine bottle.
     """
@@ -664,7 +670,7 @@ class WineBottle(Role[Bottle[Wine]]):
 
 
 @dataclass(eq=False)
-class MustardBottle(Role[Bottle[Mustard]]):
+class MustardBottle(Role[Bottle[Mustard]], RoleForBottle):
     """
     A mustard bottle.
     """
@@ -779,14 +785,14 @@ A type variable for classes that have a root body.
 
 
 @dataclass(eq=False)
-class TinCan(HasStorageSpace[THasRootBody]):
+class TinCan(TinCanRoleAttributes, HasStorageSpace[THasRootBody]):
     """
     A tin can.
     """
 
 
 @dataclass(eq=False)
-class TunaCan(Role[TinCan[Tuna]]):
+class TunaCan(Role[TinCan[Tuna]], RoleForTinCan):
     """
     A tuna can.
     """

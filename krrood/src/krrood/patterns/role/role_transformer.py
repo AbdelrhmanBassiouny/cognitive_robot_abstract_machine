@@ -1020,19 +1020,21 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return type_str
 
     def _handle_generic_type(self, type_obj: Any, origin: Any) -> str:
-        self._get_consistent_type_name(origin)
-        for arg in get_args(type_obj):
-            self._get_consistent_type_name(arg)
+        origin_name = self._get_consistent_type_name(origin)
+        args = get_args(type_obj)
 
-        # Record module for origin if it's a class
-        if isinstance(origin, type):
-            self.name_to_module_map[origin.__name__] = origin.__module__
-        elif hasattr(origin, "__name__") and hasattr(origin, "__module__"):
-            self.name_to_module_map[origin.__name__] = origin.__module__
+        if args:
+            arg_names = [self._get_consistent_type_name(arg) for arg in args]
+            res = f"{origin_name}[{', '.join(arg_names)}]"
+        else:
+            res = origin_name
 
-        return str(type_obj).replace("typing.", "").replace("typing_extensions.", "")
+        return res.replace("typing.", "").replace("typing_extensions.", "")
 
     def _handle_type_var(self, type_var: TypeVar) -> str:
+        if hasattr(type_var, "__module__"):
+            self.name_to_module_map[type_var.__name__] = type_var.__module__
+
         if type_var.__bound__ is not None:
             # Recursively handle bound to record its module
             self._get_consistent_type_name(type_var.__bound__)
@@ -1042,6 +1044,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return type_var.__name__
 
     def _handle_class_type(self, clazz: type) -> str:
+        if clazz is type(None):
+            return "None"
+
         self.name_to_module_map[clazz.__name__] = clazz.__module__
         if issubclass(clazz, Role):
             return self._get_type_name(clazz)

@@ -102,8 +102,16 @@ def test_missing_imports_in_mixins():
     assert (
         "from test.krrood_test.dataset.role_and_ontology.external_types import ExternalType"
         in mixin_source
-        or "import ExternalType" in mixin_source
     )
+
+    # Check for generic type handling: List[ExternalType] should NOT have full path
+    # and ExternalType should be imported (covered above)
+    print(f"DEBUG: mixin_source:\n{mixin_source}")
+    assert (
+        "List[test.krrood_test.dataset.role_and_ontology.external_types.ExternalType]"
+        not in mixin_source
+    )
+    assert "list[ExternalType]" in mixin_source or "List[ExternalType]" in mixin_source
 
 
 def test_transformation_idempotency():
