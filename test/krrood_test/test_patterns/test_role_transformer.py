@@ -141,3 +141,52 @@ def test_transformation_idempotency():
     # Taker should have TakerRoleAttributes exactly once in the base list
     # and once in the import.
     assert retransformed_source.count("TakerRoleAttributes") == 2
+
+
+def test_no_init_or_post_init_in_role_for():
+    """
+    Tests that __init__ and __post_init__ are NOT present in the generated RoleFor class.
+    """
+    # We add them to Taker for this test
+    from test.krrood_test.dataset.role_and_ontology.reproduction_module import Taker
+
+    # Save original methods if any
+    orig_init = getattr(Taker, "__init__", None)
+    orig_post_init = getattr(Taker, "__post_init__", None)
+
+    try:
+
+        def mock_init(self, some_arg):
+            pass
+
+        def mock_post_init(self):
+            pass
+
+        Taker.__init__ = mock_init
+        Taker.__post_init__ = mock_post_init
+
+        transformer = RoleTransformer(reproduction_module, file_name_prefix=TRANSFORMED)
+        results = transformer.transform()
+
+        assert reproduction_module in results
+        _, mixin_source = results[reproduction_module]
+
+        # RoleForTaker should be generated for Taker
+        assert "class RoleForTaker" in mixin_source
+
+        # Ensure __init__ and __post_init__ are not present as methods in RoleForTaker
+        assert "def __init__" not in mixin_source
+        assert "def __post_init__" not in mixin_source
+    finally:
+        # Restore (or remove if they didn't exist)
+        if orig_init:
+            Taker.__init__ = orig_init
+        else:
+            if hasattr(Taker, "__init__"):
+                del Taker.__init__
+
+        if orig_post_init:
+            Taker.__post_init__ = orig_post_init
+        else:
+            if hasattr(Taker, "__post_init__"):
+                del Taker.__post_init__

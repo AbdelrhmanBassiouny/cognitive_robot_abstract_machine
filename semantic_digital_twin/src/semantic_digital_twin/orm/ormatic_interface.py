@@ -7913,27 +7913,6 @@ class BottleDAO(
     }
 
 
-class Bottle_MustardDAO(
-    BottleDAO,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
-            semantic_digital_twin.semantic_annotations.semantic_annotations.Mustard
-        ]
-    ],
-):
-
-    __tablename__ = "Bottle_MustardDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "Bottle_MustardDAO",
-        "inherit_condition": database_id == BottleDAO.database_id,
-    }
-
-
 class Bottle_WineDAO(
     BottleDAO,
     DataAccessObject[
@@ -7972,6 +7951,27 @@ class Bottle_LiquidSoapDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "Bottle_LiquidSoapDAO",
+        "inherit_condition": database_id == BottleDAO.database_id,
+    }
+
+
+class Bottle_MustardDAO(
+    BottleDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
+            semantic_digital_twin.semantic_annotations.semantic_annotations.Mustard
+        ]
+    ],
+):
+
+    __tablename__ = "Bottle_MustardDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "Bottle_MustardDAO",
         "inherit_condition": database_id == BottleDAO.database_id,
     }
 

@@ -190,6 +190,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
     """
 
     ROLE_PATTERN_BLACKLIST = {
+        "__init__",
+        "__post_init__",
         "__new__",
         "_bootstrap_inner_attributes",
         "_set_role_taker",
