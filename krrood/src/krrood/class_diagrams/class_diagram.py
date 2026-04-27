@@ -397,11 +397,15 @@ class ClassDiagram:
 
         all_takers = []
         for wrapped_class in self.wrapped_classes:
-            if (
-                issubclass(wrapped_class.clazz, Role)
-                and wrapped_class.clazz.get_role_taker_type() not in all_takers
+            if isinstance(wrapped_class.clazz, type) and issubclass(
+                wrapped_class.clazz, Role
             ):
-                all_takers.append(wrapped_class.clazz.get_role_taker_type())
+                taker_type = wrapped_class.clazz.get_role_taker_type()
+                origin = get_origin(taker_type)
+                if origin:
+                    taker_type = origin
+                if taker_type not in all_takers:
+                    all_takers.append(taker_type)
         return tuple(all_takers)
 
     def get_outgoing_associations_with_condition(
@@ -1086,21 +1090,6 @@ class ClassDiagram:
                     bindings = [p.__bound__ for p in next_type.__parameters__]
                     if bindings:
                         next_type = next_type[*bindings]
-                else:
-                    continue
-
-            origin = get_origin(next_type)
-            if origin:
-                if not next_type.__parameters__ or all(
-                    isinstance(p, TypeVar) and p.__bound__ is not None
-                    for p in next_type.__parameters__
-                ):
-                    bindings = [p.__bound__ for p in next_type.__parameters__]
-                    if bindings:
-                        subscript_param = (
-                            bindings[0] if len(bindings) == 1 else tuple(bindings)
-                        )
-                        next_type = next_type[subscript_param]
                 else:
                     continue
 

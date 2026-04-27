@@ -25,12 +25,17 @@ from typing_extensions import (
 )
 
 from krrood.class_diagrams.exceptions import MissingContainedTypeOfContainer
-from krrood.class_diagrams.utils import behaves_like_a_built_in_type, get_type_hints_of_object
+from krrood.class_diagrams.utils import (
+    behaves_like_a_built_in_type,
+    get_type_hints_of_object,
+)
 from krrood.utils import module_and_class_name, is_builtin_type
 
 if TYPE_CHECKING:
     from krrood.class_diagrams.class_diagram import WrappedClass
-    from krrood.ontomatic.property_descriptor.property_descriptor import PropertyDescriptor
+    from krrood.ontomatic.property_descriptor.property_descriptor import (
+        PropertyDescriptor,
+    )
 
 
 @dataclass
@@ -110,12 +115,7 @@ class WrappedField:
         local_namespace = self._build_initial_namespace()
 
         # If it's a specialized generic, use its origin for get_type_hints
-        clazz = self.clazz.clazz
-        # If the class itself is a specialized generic (typing.GenericAlias),
-        # get_type_hints will fail. We use the origin class instead.
-        origin = get_origin(clazz)
-        if origin is not None and not isinstance(clazz, type):
-            clazz = origin
+        clazz = self.clazz.class_to_introspect
 
         return get_type_hints_of_object(
             clazz, namespace=tuple(local_namespace.items())
@@ -128,7 +128,14 @@ class WrappedField:
         class_diagram = self.clazz._class_diagram
         if class_diagram is None:
             return {}
-        return {cls.clazz.__name__: cls.clazz for cls in class_diagram.wrapped_classes}
+        namespace = {}
+        for cls in class_diagram.wrapped_classes:
+            # Only add to namespace if it's a real type.
+            # Specialized generics (which have _GenericAlias as clazz) are skipped
+            # to avoid shadowing the origin classes.
+            if isinstance(cls.clazz, type):
+                namespace[cls.name] = cls.clazz
+        return namespace
 
     def _find_class_by_name(self, class_name: str) -> Type:
         """
@@ -144,7 +151,7 @@ class WrappedField:
     @cached_property
     def is_builtin_type(self) -> bool:
         return is_builtin_type(self.type_endpoint) or (
-                self.type_endpoint in [datetime, NoneType]
+            self.type_endpoint in [datetime, NoneType]
         )
 
     @cached_property
