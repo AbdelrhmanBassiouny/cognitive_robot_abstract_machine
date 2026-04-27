@@ -233,6 +233,61 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self.original_context = CodemodContext()
         self.name_to_module_map: Dict[str, str] = {}
         self.current_class: Optional[Type] = None
+        self._init_name_to_module_map()
+
+    def _init_name_to_module_map(self) -> None:
+        """
+        Pre-populate name_to_module_map from the runtime __dict__ of all relevant modules
+        and from the type hints of all classes in the diagram. This gives us a ground-truth
+        mapping of name -> source module without relying on hardcoded name sets.
+        """
+        # 1. Scan runtime dicts of the source module and all taker modules.
+        #    This captures every imported name (typing, typing_extensions, user-defined, etc.)
+        #    with its actual origin module — the exact module the original file imported from.
+        for module in [self.module_] + list(self.taker_modules):
+            for name, obj in module.__dict__.items():
+                if name.startswith("_"):
+                    continue
+                if hasattr(obj, "__module__") and obj.__module__:
+                    self.name_to_module_map.setdefault(name, obj.__module__)
+
+        # 2. Walk type hints of all classes in the diagram to capture names that are only
+        #    available under TYPE_CHECKING (not in the runtime dict).
+        for wrapped in self.class_diagram.wrapped_classes:
+            try:
+                hints = get_type_hints_of_object(wrapped.clazz)
+                for hint_type in hints.values():
+                    self._populate_map_from_type(hint_type)
+            except Exception:
+                pass
+
+        # 3. Ensure every class in the diagram maps to its own module.
+        for wrapped in self.class_diagram.wrapped_classes:
+            self.name_to_module_map.setdefault(
+                wrapped.clazz.__name__, wrapped.clazz.__module__
+            )
+
+    def _populate_map_from_type(self, type_obj: Any) -> None:
+        """
+        Recursively register name -> module for a type object and all its components
+        (generic args, TypeVar bounds, etc.).
+        """
+        if type_obj is None or isinstance(type_obj, str):
+            return
+        if isinstance(type_obj, TypeVar):
+            if hasattr(type_obj, "__module__") and type_obj.__module__:
+                self.name_to_module_map.setdefault(type_obj.__name__, type_obj.__module__)
+            if type_obj.__bound__ is not None:
+                self._populate_map_from_type(type_obj.__bound__)
+            return
+        origin = get_origin(type_obj)
+        if origin is not None:
+            self._populate_map_from_type(origin)
+            for arg in get_args(type_obj):
+                self._populate_map_from_type(arg)
+            return
+        if isinstance(type_obj, type) and hasattr(type_obj, "__module__"):
+            self.name_to_module_map.setdefault(type_obj.__name__, type_obj.__module__)
 
     def require_original_import(
         self, module: str, obj: str | List[str] | None = None
@@ -482,34 +537,17 @@ class RoleModuleTransformer(ContextAwareTransformer):
             used_names.update(collector.names)
         return used_names
 
+    _TYPING_MODULES = {"typing", "typing_extensions"}
+    _NON_IMPORTABLE_MODULES = {"typing", "typing_extensions", "builtins"}
+
     def _add_typing_imports(self, used_names: set[str]) -> None:
-        typing_names = {
-            "List",
-            "Set",
-            "Optional",
-            "Union",
-            "Tuple",
-            "Type",
-            "TypeVar",
-            "Any",
-            "Callable",
-            "Dict",
-            "Iterable",
-            "Sequence",
-            "Mapping",
-            "Generic",
-            "Protocol",
-            "runtime_checkable",
-            "overload",
-            "cast",
-            "TypeAlias",
-        }
-        typing_extensions_names = {"Self", "TYPE_CHECKING", "Annotated", "Literal"}
+        """Add top-level imports for names whose source module is typing or typing_extensions.
+        The source is determined from name_to_module_map (populated from the actual module
+        imports), not from a hardcoded name set."""
         for name in used_names:
-            if name in typing_names:
-                self.require_import("typing", name)
-            elif name in typing_extensions_names:
-                self.require_import("typing_extensions", name)
+            module = self._resolve_name_to_module(name)
+            if module in self._TYPING_MODULES:
+                self.require_import(module, name)
 
     def _create_type_checking_block(
         self, used_names: set[str], mixin_classes: List[libcst.ClassDef]
@@ -530,47 +568,17 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def _build_mixin_import_map(
         self, used_names: set[str], mixin_classes: List[libcst.ClassDef]
     ) -> Dict[str, set[str]]:
-        typing_names = {
-            "List",
-            "Set",
-            "Optional",
-            "Union",
-            "Tuple",
-            "Type",
-            "TypeVar",
-            "Any",
-            "Callable",
-            "Dict",
-            "Iterable",
-            "Sequence",
-            "Mapping",
-            "Generic",
-            "Protocol",
-            "runtime_checkable",
-            "overload",
-            "cast",
-            "TypeAlias",
-            "Self",
-            "Annotated",
-            "Literal",
-        }
-        common_names = {
-            "dataclass",
-            "field",
-            "ABC",
-            "abstractmethod",
-            "TYPE_CHECKING",
-        }
-        common_names.update(typing_names)
+        # Names already handled by _add_required_mixin_imports or _add_typing_imports
+        # (typing/typing_extensions go to top-level, not the TYPE_CHECKING block)
+        excluded_names = {"dataclass", "field", "ABC", "abstractmethod", "TYPE_CHECKING"}
         mixin_defined_names = {cd.name.value for cd in mixin_classes}
 
         import_map = {}
         for name in used_names:
-            if name in common_names or name in mixin_defined_names:
+            if name in excluded_names or name in mixin_defined_names:
                 continue
-
             module_name = self._resolve_name_to_module(name)
-            if module_name:
+            if module_name and module_name not in self._NON_IMPORTABLE_MODULES:
                 import_map.setdefault(module_name, set()).add(name)
         return import_map
 
@@ -602,9 +610,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if wrapped.clazz.__name__ == name:
                 return wrapped.clazz.__module__
 
-        # 4. Heuristic for TypeVars
-        if name.startswith("T"):
-            return self.module_.__name__
         return None
 
     def _create_import_from_node(
