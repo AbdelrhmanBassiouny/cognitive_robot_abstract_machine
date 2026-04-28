@@ -43,6 +43,23 @@ from krrood.patterns.role.type_name_normaliser import TypeNameNormaliser
 GROUND_TRUTH = "_ground_truth_"
 TRANSFORMED = "transformed_"
 
+# Dataclass/object lifecycle hooks that should never be delegated regardless of origin.
+# __new__ is defined on Symbol (a Role base) as a staticmethod; inspect.getmembers
+# unwraps it to a plain function, so it must be excluded explicitly here.
+_ALWAYS_EXCLUDED_METHODS: frozenset[str] = frozenset({"__init__", "__post_init__", "__new__"})
+
+
+def _is_from_role_class(name: str, clazz: type) -> bool:
+    """Return True if *name* is inherited from the Role hierarchy without being overridden.
+
+    Walks the MRO of *clazz* and returns True iff the first class that defines *name*
+    is itself a Role subclass, meaning the taker has not provided its own version.
+    """
+    for klass in clazz.__mro__:
+        if name in vars(klass):
+            return issubclass(klass, Role)
+    return False
+
 
 def build_role_diagram(
     module: ModuleType,
@@ -211,34 +228,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
     Transforms a Python module AST into a mixin classes file AST by pruning methods
     and applying the Role pattern transformations.
     """
-
-    EXCLUDED_ROLE_METHODS = {
-        "__init__",
-        "__post_init__",
-        "__new__",
-        "_bootstrap_inner_attributes",
-        "_set_role_taker",
-        "_update_mapping_between_roles_and_role_takers",
-        "__getattr__",
-        "__setattr__",
-        "root_persistent_entity",
-        "all_role_takers",
-        "role_taker_roles",
-        "role_taker_attribute",
-        "role_taker_attribute_name",
-        "get_root_role_taker_type",
-        "get_role_generic_type",
-        "get_role_taker_type",
-        "updates_role_taker_type",
-        "has_role",
-        "get_taker_roles_of_type",
-        "yield_taker_roles_of_type",
-        "yield_takers_of_role",
-        "role_taker_wrapped_field",
-    }
-
-    # Keep backward-compatible alias
-    ROLE_PATTERN_BLACKLIST = EXCLUDED_ROLE_METHODS
 
     def __init__(
         self,
@@ -623,7 +612,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
         for method_name, method_object in inspect.getmembers(
             wrapped_class.clazz, predicate=inspect.isfunction
         ):
-            if method_name in self.EXCLUDED_ROLE_METHODS:
+            if method_name in _ALWAYS_EXCLUDED_METHODS:
+                continue
+            if _is_from_role_class(method_name, wrapped_class.clazz):
                 continue
 
             # Skip if already delegated in a base taker mixin
@@ -836,7 +827,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         ):
             if not isinstance(property_value, property):
                 continue
-            if property_name in self.EXCLUDED_ROLE_METHODS:
+            if _is_from_role_class(property_name, taker_wrapped_class.clazz):
                 continue
             return_annotation = (
                 property_value.fget.__annotations__["return"]
