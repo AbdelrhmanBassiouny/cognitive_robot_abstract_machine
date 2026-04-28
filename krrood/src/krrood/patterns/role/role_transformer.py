@@ -49,6 +49,13 @@ TRANSFORMED = "transformed_"
 _ALWAYS_EXCLUDED_METHODS: frozenset[str] = frozenset({"__init__", "__post_init__", "__new__"})
 
 
+def _same_package(module_a: str, module_b: str) -> bool:
+    """Return True when both modules share the same immediate parent package."""
+    if '.' not in module_a or '.' not in module_b:
+        return False
+    return module_a.rsplit('.', 1)[0] == module_b.rsplit('.', 1)[0]
+
+
 def _is_from_role_class(name: str, clazz: type) -> bool:
     """Return True if *name* is inherited from the Role hierarchy without being overridden.
 
@@ -65,10 +72,10 @@ def _get_defining_non_role_class(
     name: str, clazz: type, module_name: str, role_takers: set[type]
 ) -> type | None:
     """Return the first class in clazz's MRO (excluding clazz itself, Role subclasses,
-    role takers, and external-module classes) that defines *name*, or None.
+    role takers, and classes outside the source module's package) that defines *name*, or None.
 
     None means the name belongs to the taker's own RoleFor class (defined directly on
-    the taker, in a role taker base, in the Role hierarchy, or in an external module).
+    the taker, in a role taker base, in the Role hierarchy, or in an external package).
     """
     for klass in clazz.__mro__[1:]:
         if klass is object:
@@ -78,7 +85,7 @@ def _get_defining_non_role_class(
                 return None
             if klass in role_takers:
                 return None
-            if klass.__module__ == module_name:
+            if klass.__module__ == module_name or _same_package(klass.__module__, module_name):
                 return klass
             return None
     return None
@@ -96,7 +103,7 @@ def _get_defining_class_for_field(
                 return None
             if klass in role_takers:
                 return None
-            if klass.__module__ == module_name:
+            if klass.__module__ == module_name or _same_package(klass.__module__, module_name):
                 return klass
             return None
     return None
