@@ -7,6 +7,7 @@ from typing_extensions import Set, List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from test.krrood_test.dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
+        HasName,
         RecognizedGroup,
         Course,
         PersonInRoleAndOntology,
@@ -18,21 +19,11 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class PersonInRoleAndOntologyRoleAttributes:
-    head_of: RecognizedGroup = field(init=False)
-    delegate_of: RecognizedGroup = field(init=False)
-    members: Set[PersonInRoleAndOntology] = field(init=False)
-    sub_organization_of: List[RecognizedGroup] = field(init=False)
-    teacher_of: List[Course] = field(init=False)
-    representative_of: RecognizedGroup = field(init=False)
+class RoleForHasName(ABC):
 
-
-@dataclass(eq=False)
-class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, ABC):
-
-    @abstractmethod
     @property
-    def role_taker(self) -> TPersonInRoleAndOntology: ...
+    @abstractmethod
+    def role_taker(self) -> HasName: ...
 
     @property
     def name(self) -> str:
@@ -49,6 +40,30 @@ class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, ABC)
     @default_name.setter
     def default_name(self, value: str):
         self.role_taker.default_name = value
+
+    def __eq__(self, other):
+        return self.role_taker.__eq__(other)
+
+    def __hash__(self):
+        return self.role_taker.__hash__()
+
+
+@dataclass(eq=False)
+class PersonInRoleAndOntologyRoleAttributes:
+    head_of: RecognizedGroup = field(init=False)
+    delegate_of: RecognizedGroup = field(init=False)
+    members: Set[PersonInRoleAndOntology] = field(init=False)
+    sub_organization_of: List[RecognizedGroup] = field(init=False)
+    teacher_of: List[Course] = field(init=False)
+    representative_of: RecognizedGroup = field(init=False)
+
+
+@dataclass(eq=False)
+class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, RoleForHasName, ABC):
+
+    @abstractmethod
+    @property
+    def role_taker(self) -> TPersonInRoleAndOntology: ...
 
     @property
     def works_for(self) -> RecognizedGroup:
@@ -71,12 +86,6 @@ class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, ABC)
 
     def method_2_in_person(self) -> List[RecognizedGroup]:
         return self.role_taker.method_2_in_person()
-
-    def __hash__(self):
-        return hash(self.role_taker)
-
-    def __eq__(self, other):
-        return hash(self) == hash(other)
 
 
 @dataclass(eq=False)

@@ -61,6 +61,47 @@ def _is_from_role_class(name: str, clazz: type) -> bool:
     return False
 
 
+def _get_defining_non_role_class(
+    name: str, clazz: type, module_name: str, role_takers: set[type]
+) -> type | None:
+    """Return the first class in clazz's MRO (excluding clazz itself, Role subclasses,
+    role takers, and external-module classes) that defines *name*, or None.
+
+    None means the name belongs to the taker's own RoleFor class (defined directly on
+    the taker, in a role taker base, in the Role hierarchy, or in an external module).
+    """
+    for klass in clazz.__mro__[1:]:
+        if klass is object:
+            return None
+        if name in vars(klass):
+            if issubclass(klass, Role):
+                return None
+            if klass in role_takers:
+                return None
+            if klass.__module__ == module_name:
+                return klass
+            return None
+    return None
+
+
+def _get_defining_class_for_field(
+    field_name: str, clazz: type, module_name: str, role_takers: set[type]
+) -> type | None:
+    """Same as _get_defining_non_role_class but looks up __dataclass_fields__ instead of vars."""
+    for klass in clazz.__mro__[1:]:
+        if klass is object:
+            return None
+        if field_name in getattr(klass, "__dataclass_fields__", {}):
+            if issubclass(klass, Role):
+                return None
+            if klass in role_takers:
+                return None
+            if klass.__module__ == module_name:
+                return klass
+            return None
+    return None
+
+
 def build_role_diagram(
     module: ModuleType,
     taker_modules: list[ModuleType],
@@ -253,6 +294,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self.file_name_prefix = file_name_prefix
         self.role_attributes: dict[WrappedClass, libcst.ClassDef] = {}
         self.role_for: dict[WrappedClass, libcst.ClassDef] = {}
+        self._base_class_role_for_nodes: dict[type, libcst.ClassDef] = {}
         self.transformed_module: libcst.Module | None = None
         self.original_context = CodemodContext()
         self.current_class: type | None = None
@@ -450,8 +492,14 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param updated_node: The module node after all class transformations.
         :return: A new Module node containing only the mixin classes and their imports.
         """
-        all_mixin_classes = list(self.role_attributes.values()) + list(
-            self.role_for.values()
+        sorted_base_types = self._topological_sort_base_classes(
+            list(self._base_class_role_for_nodes.keys())
+        )
+        base_class_nodes = [self._base_class_role_for_nodes[k] for k in sorted_base_types]
+        all_mixin_classes = (
+            base_class_nodes
+            + list(self.role_attributes.values())
+            + list(self.role_for.values())
         )
         return self._import_orchestrator.build_mixin_module(
             updated_node, all_mixin_classes, self._factory
@@ -561,14 +609,26 @@ class RoleModuleTransformer(ContextAwareTransformer):
         role_for_node = RoleNodeFactory.get_renamed_node(node, role_for_name)
         role_attributes_name = self.get_role_attributes_name(wrapped_class)
 
+        all_taker_fields = self._collect_base_taker_field_names(wrapped_class)
+
+        # Group body items by the class that defines them (None = taker-direct).
+        body_by_class = self._group_all_body_items(wrapped_class, all_taker_fields)
+
+        # Ensure RoleFor<Base> nodes exist for each non-taker base class group.
+        segregated_base_types = self._populate_base_rolefor_nodes(body_by_class)
+
         role_for_bases = self.make_role_for_bases(
-            role_for_node, wrapped_class, role_attributes_name
+            role_for_node, wrapped_class, role_attributes_name, segregated_base_types
         )
         role_for_node = role_for_node.with_changes(bases=role_for_bases)
 
-        all_taker_fields = self._collect_base_taker_field_names(wrapped_class)
-        role_for_body = self.make_role_for_properties(wrapped_class, all_taker_fields)
-        role_for_body.update(self.make_role_for_methods(wrapped_class))
+        taker_type_name = self._normaliser.get_type_name(wrapped_class.clazz)
+        role_for_body: dict[str, list] = {
+            "role_taker": [
+                RoleNodeFactory.make_property_getter_node("role_taker", taker_type_name, "...")
+            ]
+        }
+        role_for_body.update(body_by_class.get(None, {}))
 
         flattened_body = [
             method_node
@@ -591,24 +651,85 @@ class RoleModuleTransformer(ContextAwareTransformer):
             all_taker_fields.extend([f.name for f in wrapped_taker.fields])
         return all_taker_fields
 
-    def make_role_for_methods(
-        self, wrapped_class: WrappedClass
-    ) -> dict[str, list[libcst.FunctionDef]]:
+    def _group_all_body_items(
+        self,
+        wrapped_class: WrappedClass,
+        all_taker_fields: list[str],
+    ) -> dict[type | None, dict[str, list[libcst.FunctionDef]]]:
         """
-        Add delegation methods to the RoleFor class for each method of the role taker.
+        Collect all property and method delegation nodes for the given taker, grouped by
+        the class in the MRO that defines each item.
+
+        Key ``None`` means the item is defined directly on the taker class (or covered by
+        an existing base-taker RoleFor chain) and should stay in the taker's own RoleFor.
+        Any other key is a same-module, non-Role, non-taker base class whose members will
+        be hoisted into a shared ``RoleFor<Base>`` mixin.
 
         :param wrapped_class: Wrapped class of the role taker.
-        :return: Dictionary mapping method names to their corresponding FunctionDef nodes.
+        :param all_taker_fields: Field names already covered by base-taker RoleFor nodes.
+        :return: Nested dict mapping defining class (or None) → name → list of nodes.
         """
-        # Identify base takers to avoid redundant delegation
-        base_takers = []
-        for base in wrapped_class.clazz.__mro__[1:]:
-            if base in self.class_diagram.role_takers:
-                base_takers.append(base)
+        role_takers: set[type] = set(self.class_diagram.role_takers)
+        module_name = self.source_module.__name__
+        groups: dict[type | None, dict[str, list]] = {}
+
+        # --- Field properties ------------------------------------------------
+        for field_ in wrapped_class.fields:
+            if field_.name in all_taker_fields:
+                continue
+            if not (field_.field.kw_only or field_.field.init):
+                continue
+            field_type_name = self._get_consistent_type_name(field_.field.type)
+            prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
+                field_.name,
+                field_type_name,
+                f"self.role_taker.{field_.name}",
+                f"self.role_taker.{field_.name} = value",
+            )
+            defining_base = _get_defining_class_for_field(
+                field_.name, wrapped_class.clazz, module_name, role_takers
+            )
+            groups.setdefault(defining_base, {})[field_.name] = prop_nodes
+
+        # --- Data descriptor properties --------------------------------------
+        for property_name, property_value in inspect.getmembers(
+            wrapped_class.clazz, inspect.isdatadescriptor
+        ):
+            if not isinstance(property_value, property):
+                continue
+            if _is_from_role_class(property_name, wrapped_class.clazz):
+                continue
+            return_annotation = property_value.fget.__annotations__.get("return")
+            if return_annotation:
+                return_annotation = self._get_consistent_type_name(return_annotation)
+            if property_value.fset is not None:
+                prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
+                    property_name,
+                    return_annotation,
+                    f"self.role_taker.{property_name}",
+                    f"self.role_taker.{property_name} = value",
+                )
+            else:
+                prop_nodes = [
+                    RoleNodeFactory.make_property_getter_node(
+                        property_name,
+                        return_annotation,
+                        f"self.role_taker.{property_name}",
+                    )
+                ]
+            defining_base = _get_defining_non_role_class(
+                property_name, wrapped_class.clazz, module_name, role_takers
+            )
+            groups.setdefault(defining_base, {})[property_name] = prop_nodes
+
+        # --- Methods ---------------------------------------------------------
+        base_takers = [
+            base for base in wrapped_class.clazz.__mro__[1:]
+            if base in role_takers
+        ]
         if issubclass(wrapped_class.clazz, Role):
             base_takers.append(wrapped_class.clazz.get_role_taker_type())
 
-        role_for_body = {}
         for method_name, method_object in inspect.getmembers(
             wrapped_class.clazz, predicate=inspect.isfunction
         ):
@@ -616,15 +737,84 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 continue
             if _is_from_role_class(method_name, wrapped_class.clazz):
                 continue
-
-            # Skip if already delegated in a base taker mixin
             if any(method_name in dir(base_taker) for base_taker in base_takers):
                 continue
-
             method_node = self.make_method_node(method_name, method_object)
             if method_node is not None:
-                role_for_body[method_name] = [method_node]
-        return role_for_body
+                defining_base = _get_defining_non_role_class(
+                    method_name, wrapped_class.clazz, module_name, role_takers
+                )
+                groups.setdefault(defining_base, {})[method_name] = [method_node]
+
+        return groups
+
+    def _populate_base_rolefor_nodes(
+        self,
+        body_by_class: dict[type | None, dict[str, list]],
+    ) -> list[type]:
+        """
+        Ensure a ``RoleFor<Base>`` node exists in ``_base_class_role_for_nodes`` for every
+        non-``None`` key in *body_by_class*.
+
+        :param body_by_class: Grouped body items produced by ``_group_all_body_items``.
+        :return: The segregated base class types in topological order (ancestors first).
+        """
+        base_classes = [k for k in body_by_class if k is not None]
+        if not base_classes:
+            return []
+        sorted_bases = self._topological_sort_base_classes(base_classes)
+        for base_class in sorted_bases:
+            if base_class not in self._base_class_role_for_nodes:
+                self._base_class_role_for_nodes[base_class] = self._make_base_rolefor_node(
+                    base_class, body_by_class[base_class]
+                )
+        return sorted_bases
+
+    def _make_base_rolefor_node(
+        self,
+        base_class: type,
+        body_items: dict[str, list[libcst.FunctionDef]],
+    ) -> libcst.ClassDef:
+        """
+        Generate a ``@dataclass(eq=False) class RoleFor<Base>(ABC)`` node with an abstract
+        ``role_taker`` property and delegation members for *body_items*.
+
+        :param base_class: The base class to generate a RoleFor node for.
+        :param body_items: Mapping of member name → list of FunctionDef nodes.
+        :return: The generated ClassDef node.
+        """
+        self._resolver.name_to_module_map[base_class.__name__] = base_class.__module__
+        role_taker_node = RoleNodeFactory.make_property_getter_node(
+            "role_taker", base_class.__name__, "..."
+        )
+        body_nodes: list[libcst.FunctionDef] = [role_taker_node]
+        for nodes in body_items.values():
+            body_nodes.extend(nodes)
+        return RoleNodeFactory.make_dataclass(
+            f"RoleFor{base_class.__name__}", bases=["ABC"], body=body_nodes
+        )
+
+    def _topological_sort_base_classes(self, base_classes: list[type]) -> list[type]:
+        """
+        Return *base_classes* sorted so that ancestors come before their descendants.
+
+        :param base_classes: Unordered list of base class types.
+        :return: Topologically ordered list (most ancestral first).
+        """
+        result: list[type] = []
+        remaining = list(base_classes)
+        while remaining:
+            for cls in remaining:
+                if not any(
+                    issubclass(cls, other) and other is not cls for other in remaining
+                ):
+                    result.append(cls)
+                    remaining.remove(cls)
+                    break
+            else:
+                result.extend(remaining)
+                break
+        return result
 
     def make_method_node(
         self, name: str, method: Callable
@@ -744,6 +934,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         node: libcst.ClassDef,
         wrapped_class: WrappedClass,
         role_attributes_name: str,
+        segregated_base_types: list[type] | None = None,
     ) -> list[libcst.Arg]:
         """
         Generate the base class arguments for a RoleFor class.
@@ -751,6 +942,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param node: The original taker class node.
         :param wrapped_class: The taker wrapped class.
         :param role_attributes_name: Name for the role attributes dataclass.
+        :param segregated_base_types: Same-module base classes that received their own
+            RoleFor mixin via base-class segregation.
         :return: List of Arg nodes representing the base classes.
         """
         role_for_bases = []
@@ -772,86 +965,13 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if self.should_make_role_attributes_for_node(node, wrapped_class):
             role_for_bases.insert(0, RoleNodeFactory.make_argument(role_attributes_name))
 
+        for base_type in (segregated_base_types or []):
+            role_for_bases.append(RoleNodeFactory.make_argument(f"RoleFor{base_type.__name__}"))
+
         role_for_bases.append(RoleNodeFactory.make_argument("ABC"))
 
         return role_for_bases
 
-    def make_role_for_properties(
-        self, taker_wrapped_class: WrappedClass, all_taker_fields: list[str]
-    ) -> dict[str, list[libcst.FunctionDef]]:
-        """
-        Generate property getter and setter methods for the RoleFor class fields.
-
-        :param taker_wrapped_class: Wrapped class of the role taker.
-        :param all_taker_fields: List of field names already covered by base taker mixins.
-        :return: Dictionary mapping field names to lists of getter/setter FunctionDef nodes.
-        """
-        taker_type_name = self._normaliser.get_type_name(taker_wrapped_class.clazz)
-        result: dict[str, list[libcst.FunctionDef]] = {
-            "role_taker": [
-                RoleNodeFactory.make_property_getter_node("role_taker", taker_type_name, "...")
-            ]
-        }
-        result.update(self._make_field_properties(taker_wrapped_class, all_taker_fields, taker_type_name))
-        result.update(self._make_data_descriptor_properties(taker_wrapped_class))
-        return result
-
-    def _make_field_properties(
-        self,
-        taker_wrapped_class: WrappedClass,
-        all_taker_fields: list[str],
-        taker_type_name: str,
-    ) -> dict[str, list[libcst.FunctionDef]]:
-        """Build getter/setter properties for each initialised field of the taker."""
-        field_properties: dict[str, list[libcst.FunctionDef]] = {}
-        for field_ in taker_wrapped_class.fields:
-            if field_.name in all_taker_fields:
-                continue
-            if field_.field.kw_only or field_.field.init:
-                field_type_name = self._get_consistent_type_name(field_.field.type)
-                field_properties[field_.name] = RoleNodeFactory.make_property_getter_and_setter_nodes(
-                    field_.name,
-                    field_type_name,
-                    f"self.role_taker.{field_.name}",
-                    f"self.role_taker.{field_.name} = value",
-                )
-        return field_properties
-
-    def _make_data_descriptor_properties(
-        self, taker_wrapped_class: WrappedClass
-    ) -> dict[str, list[libcst.FunctionDef]]:
-        """Build getter/setter properties for each data descriptor on the taker class."""
-        descriptor_properties: dict[str, list[libcst.FunctionDef]] = {}
-        for property_name, property_value in inspect.getmembers(
-            taker_wrapped_class.clazz, inspect.isdatadescriptor
-        ):
-            if not isinstance(property_value, property):
-                continue
-            if _is_from_role_class(property_name, taker_wrapped_class.clazz):
-                continue
-            return_annotation = (
-                property_value.fget.__annotations__["return"]
-                if "return" in property_value.fget.__annotations__
-                else None
-            )
-            if return_annotation:
-                return_annotation = self._get_consistent_type_name(return_annotation)
-            if property_value.fset is not None:
-                descriptor_properties[property_name] = RoleNodeFactory.make_property_getter_and_setter_nodes(
-                    property_name,
-                    return_annotation,
-                    f"self.role_taker.{property_name}",
-                    f"self.role_taker.{property_name} = value",
-                )
-            else:
-                descriptor_properties[property_name] = [
-                    RoleNodeFactory.make_property_getter_node(
-                        property_name,
-                        return_annotation,
-                        f"self.role_taker.{property_name}",
-                    )
-                ]
-        return descriptor_properties
 
     def _get_consistent_type_name(self, type_obj: Any) -> str:
         """
