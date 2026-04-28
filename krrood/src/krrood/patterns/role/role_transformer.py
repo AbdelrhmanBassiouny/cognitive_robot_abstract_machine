@@ -50,10 +50,10 @@ _ALWAYS_EXCLUDED_METHODS: frozenset[str] = frozenset({"__init__", "__post_init__
 
 
 def _same_package(module_a: str, module_b: str) -> bool:
-    """Return True when both modules share the same immediate parent package."""
-    if '.' not in module_a or '.' not in module_b:
-        return False
-    return module_a.rsplit('.', 1)[0] == module_b.rsplit('.', 1)[0]
+    """Return True when both modules belong to the same top-level package."""
+    top_a = module_a.split('.')[0]
+    top_b = module_b.split('.')[0]
+    return bool(top_a) and top_a == top_b
 
 
 def _is_from_role_class(name: str, clazz: type) -> bool:
