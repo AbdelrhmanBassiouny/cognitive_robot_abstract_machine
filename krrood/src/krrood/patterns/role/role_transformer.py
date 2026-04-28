@@ -37,11 +37,7 @@ from krrood.patterns.role.meta_data import RoleType
 from krrood.patterns.role.mixin_import_orchestrator import MixinImportOrchestrator
 from krrood.patterns.role.role import Role
 from krrood.patterns.role.role_mixin_file_writer import RoleMixinFileWriter
-from krrood.patterns.role.role_node_factory import (
-    RoleNodeFactory,
-    NameCollector,
-    RuntimeNameCollector,
-)
+from krrood.patterns.role.role_node_factory import RoleNodeFactory
 from krrood.patterns.role.type_name_normaliser import TypeNameNormaliser
 
 GROUND_TRUTH = "_ground_truth_"
@@ -396,7 +392,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
 
         return node.with_changes(
             relative=[],
-            module=self.to_cst_expression(absolute_module) if absolute_module else None,
+            module=RoleNodeFactory.to_cst_expression(absolute_module) if absolute_module else None,
         )
 
     def _rewrite_prefixed_module_name(
@@ -492,11 +488,11 @@ class RoleModuleTransformer(ContextAwareTransformer):
             role_attributes_name = self.get_role_attributes_name(wrapped_class)
             role_taker_class_bases = list(role_taker_node.bases)
             if not any(
-                self.get_name_from_base_node(base.value) == role_attributes_name
+                RoleNodeFactory.get_name_from_base_node(base.value) == role_attributes_name
                 for base in role_taker_class_bases
             ):
                 role_taker_class_bases.insert(
-                    0, self.make_argument(role_attributes_name)
+                    0, RoleNodeFactory.make_argument(role_attributes_name)
                 )
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
 
@@ -519,7 +515,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :return: True if a RoleAttributes class should be generated.
         """
         return not (
-            any(self._is_role_base(base.value) for base in node.bases)
+            any(RoleNodeFactory._is_role_base(base.value) for base in node.bases)
             or self.bases_of_class_that_are_role_takers(wrapped_class)
         )
 
@@ -538,19 +534,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if base in self.class_diagram.role_takers
         }
 
-    def _transform_original_role_taker_node(
-        self,
-        node: libcst.ClassDef,
-        wrapped_class: WrappedClass,
-    ) -> libcst.ClassDef:
-        """Transform the original role taker class node by adding role attributes if needed."""
-        reentry_class_bases = list(node.bases)
-        if self.should_make_role_attributes_for_node(node, wrapped_class):
-            reentry_class_bases.insert(
-                0, self.make_argument(self.get_role_attributes_name(wrapped_class))
-            )
-        return node.with_changes(bases=reentry_class_bases)
-
     def make_role_attributes_node(self, wrapped_class: WrappedClass) -> None:
         """
         Generate and store the RoleAttributes dataclass node for the given role taker.
@@ -558,7 +541,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param wrapped_class: The wrapped class for which to generate the RoleAttributes node.
         """
         propagated_fields = self._get_propagated_fields(wrapped_class)
-        role_attributes_node = self.make_dataclass(
+        role_attributes_node = RoleNodeFactory.make_dataclass(
             self.get_role_attributes_name(wrapped_class), body=propagated_fields
         )
         self.role_attributes[wrapped_class] = role_attributes_node
@@ -586,23 +569,24 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param wrapped_class: The wrapped class of the role taker.
         """
         role_for_name = self.get_role_for_name(wrapped_class.clazz)
-        role_for_node = self.get_renamed_node(node, role_for_name)
+        role_for_node = RoleNodeFactory.get_renamed_node(node, role_for_name)
         role_attributes_name = self.get_role_attributes_name(wrapped_class)
 
-        role_for_bases = self._build_role_for_bases(
+        role_for_bases = self.make_role_for_bases(
             role_for_node, wrapped_class, role_attributes_name
         )
         role_for_node = role_for_node.with_changes(bases=role_for_bases)
 
         all_taker_fields = self._collect_base_taker_field_names(wrapped_class)
-        role_for_body = self._build_role_for_body(wrapped_class, all_taker_fields)
+        role_for_body = self.make_role_for_properties(wrapped_class, all_taker_fields)
+        role_for_body.update(self.make_role_for_methods(wrapped_class))
 
         flattened_body = [
             method_node
             for method_nodes in role_for_body.values()
             for method_node in method_nodes
         ]
-        self.role_for[wrapped_class] = self.get_node_with_new_body(
+        self.role_for[wrapped_class] = RoleNodeFactory.get_node_with_new_body(
             role_for_node, flattened_body
         )
 
@@ -617,27 +601,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
             wrapped_taker = self.class_diagram.get_wrapped_class(taker_type)
             all_taker_fields.extend([f.name for f in wrapped_taker.fields])
         return all_taker_fields
-
-    def _build_role_for_bases(
-        self,
-        role_for_node: libcst.ClassDef,
-        wrapped_class: WrappedClass,
-        role_attributes_name: str,
-    ) -> list[libcst.Arg]:
-        """Build the base class arguments for a RoleFor class."""
-        return self.make_role_for_bases(
-            role_for_node, wrapped_class, role_attributes_name
-        )
-
-    def _build_role_for_body(
-        self,
-        wrapped_class: WrappedClass,
-        all_taker_fields: list[str],
-    ) -> dict[str, list[libcst.FunctionDef]]:
-        """Build the combined properties and methods body for a RoleFor class."""
-        role_for_body = self.make_role_for_properties(wrapped_class, all_taker_fields)
-        role_for_body.update(self.make_role_for_methods(wrapped_class))
-        return role_for_body
 
     def make_role_for_methods(
         self, wrapped_class: WrappedClass
@@ -671,20 +634,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if method_node is not None:
                 role_for_body[method_name] = [method_node]
         return role_for_body
-
-    def _get_type_name(self, clazz: type) -> str:
-        """
-        Return the TypeVar name for a class if one exists, otherwise the class name.
-
-        :param clazz: The class whose type name is needed.
-        :return: The TypeVar name if present, otherwise the plain class name.
-        """
-        type_var_name = f"T{clazz.__name__}"
-        # Check in the module where the class is defined
-        class_module = sys.modules[clazz.__module__]
-        if type_var_name in class_module.__dict__:
-            return type_var_name
-        return clazz.__name__
 
     def make_method_node(
         self, name: str, method: Callable
@@ -816,23 +765,23 @@ class RoleModuleTransformer(ContextAwareTransformer):
         role_for_bases = []
         bases_that_are_takers = self.bases_of_class_that_are_role_takers(wrapped_class)
         for base in node.bases:
-            base_name = self.get_name_from_base_node(base.value)
+            base_name = RoleNodeFactory.get_name_from_base_node(base.value)
             if base_name in bases_that_are_takers:
-                taker_role_for = self.make_argument(
+                taker_role_for = RoleNodeFactory.make_argument(
                     self.get_role_for_name(bases_that_are_takers[base_name])
                 )
                 role_for_bases.append(taker_role_for)
-            elif self._is_role_base(base.value) and issubclass(
+            elif RoleNodeFactory._is_role_base(base.value) and issubclass(
                 wrapped_class.clazz, Role
             ):
                 taker_type = wrapped_class.clazz.get_role_taker_type()
-                taker_role_for = self.make_argument(self.get_role_for_name(taker_type))
+                taker_role_for = RoleNodeFactory.make_argument(self.get_role_for_name(taker_type))
                 role_for_bases.append(taker_role_for)
 
         if self.should_make_role_attributes_for_node(node, wrapped_class):
-            role_for_bases.insert(0, self.make_argument(role_attributes_name))
+            role_for_bases.insert(0, RoleNodeFactory.make_argument(role_attributes_name))
 
-        role_for_bases.append(self.make_argument("ABC"))
+        role_for_bases.append(RoleNodeFactory.make_argument("ABC"))
 
         return role_for_bases
 
@@ -846,10 +795,10 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param all_taker_fields: List of field names already covered by base taker mixins.
         :return: Dictionary mapping field names to lists of getter/setter FunctionDef nodes.
         """
-        taker_type_name = self._normaliser._get_type_name(taker_wrapped_class.clazz)
+        taker_type_name = self._normaliser.get_type_name(taker_wrapped_class.clazz)
         result: dict[str, list[libcst.FunctionDef]] = {
             "role_taker": [
-                self.make_property_getter_node("role_taker", taker_type_name, "...")
+                RoleNodeFactory.make_property_getter_node("role_taker", taker_type_name, "...")
             ]
         }
         result.update(self._make_field_properties(taker_wrapped_class, all_taker_fields, taker_type_name))
@@ -869,7 +818,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 continue
             if field_.field.kw_only or field_.field.init:
                 field_type_name = self._get_consistent_type_name(field_.field.type)
-                field_properties[field_.name] = self.make_property_getter_and_setter_nodes(
+                field_properties[field_.name] = RoleNodeFactory.make_property_getter_and_setter_nodes(
                     field_.name,
                     field_type_name,
                     f"self.role_taker.{field_.name}",
@@ -897,7 +846,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if return_annotation:
                 return_annotation = self._get_consistent_type_name(return_annotation)
             if property_value.fset is not None:
-                descriptor_properties[property_name] = self.make_property_getter_and_setter_nodes(
+                descriptor_properties[property_name] = RoleNodeFactory.make_property_getter_and_setter_nodes(
                     property_name,
                     return_annotation,
                     f"self.role_taker.{property_name}",
@@ -905,7 +854,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 )
             else:
                 descriptor_properties[property_name] = [
-                    self.make_property_getter_node(
+                    RoleNodeFactory.make_property_getter_node(
                         property_name,
                         return_annotation,
                         f"self.role_taker.{property_name}",
@@ -921,182 +870,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :return: A string type name suitable for inclusion in generated source code.
         """
         return self._normaliser.normalise(type_obj)
-
-    @classmethod
-    def make_dataclass(
-        cls,
-        name: str,
-        bases: list[type | str] | None = None,
-        body: list[libcst.BaseStatement] | None = None,
-    ) -> libcst.ClassDef:
-        """
-        Build a ``@dataclass``-decorated ClassDef node.
-
-        :param name: Name of the dataclass.
-        :param bases: Base classes of the dataclass.
-        :param body: Body of the dataclass.
-        :return: A libcst ClassDef node for the given dataclass.
-        """
-        return RoleNodeFactory.make_dataclass(name, bases, body)
-
-    @classmethod
-    def to_cst_expression(
-        cls, has_name: type | Callable | str
-    ) -> libcst.BaseExpression:
-        """
-        Convert a name or named object to a CST expression node.
-
-        :param has_name: A string, class, or callable whose name should be converted.
-        :return: A libcst expression node for the given name.
-        """
-        return RoleNodeFactory.to_cst_expression(has_name)
-
-    @classmethod
-    def make_dataclass_decorator(cls) -> libcst.Decorator:
-        """Build the ``@dataclass(eq=False)`` decorator node."""
-        return RoleNodeFactory.make_dataclass_decorator()
-
-    def make_property_getter_and_setter_nodes(
-        self, name: str, type_: str, getter_return_statement: str, setter_statement: str
-    ) -> list[libcst.FunctionDef]:
-        """
-        Build both getter and setter property nodes for a field.
-
-        :param name: The name of the field.
-        :param type_: The type annotation for the field.
-        :param getter_return_statement: The expression returned by the getter.
-        :param setter_statement: The statement executed by the setter.
-        :return: A list containing the getter and setter FunctionDef nodes.
-        """
-        return self._factory.make_property_getter_and_setter_nodes(
-            name, type_, getter_return_statement, setter_statement
-        )
-
-    @classmethod
-    def make_property_getter_node(
-        cls, name: str, type_: str, return_statement: str
-    ) -> libcst.FunctionDef:
-        """
-        Build a property getter FunctionDef node.
-
-        :param name: The name of the property.
-        :param type_: The return type annotation.
-        :param return_statement: The expression to return, or ``...`` for abstract.
-        :return: A libcst FunctionDef node representing the property getter.
-        """
-        return RoleNodeFactory.make_property_getter_node(name, type_, return_statement)
-
-    @classmethod
-    def make_property_setter_node(
-        cls, name: str, type_: str, statement: str
-    ) -> libcst.FunctionDef:
-        """
-        Build a property setter FunctionDef node.
-
-        :param name: The name of the property.
-        :param type_: The value type annotation.
-        :param statement: The statement executed by the setter body.
-        :return: A libcst FunctionDef node representing the property setter.
-        """
-        return RoleNodeFactory.make_property_setter_node(name, type_, statement)
-
-    @classmethod
-    def make_decorator(cls, decorator_name: str) -> libcst.Decorator:
-        """
-        Build a Decorator node for the given name.
-
-        :param decorator_name: The decorator expression string.
-        :return: A libcst Decorator node.
-        """
-        return RoleNodeFactory.make_decorator(decorator_name)
-
-    @classmethod
-    def make_function_parameters(
-        cls, parameters: dict[str, str | None]
-    ) -> libcst.Parameters:
-        """
-        Build a Parameters node from a mapping of names to type annotations.
-
-        :param parameters: Mapping of parameter names to their type annotation strings.
-        :return: A libcst Parameters node.
-        """
-        return RoleNodeFactory.make_function_parameters(parameters)
-
-    @classmethod
-    def make_annotation(cls, value: str) -> libcst.Annotation:
-        """
-        Build an Annotation node from a type string.
-
-        :param value: The type annotation as a string.
-        :return: A libcst Annotation node.
-        """
-        return RoleNodeFactory.make_annotation(value)
-
-    @classmethod
-    def make_return_statement_body(cls, statement: str) -> libcst.IndentedBlock:
-        """
-        Build an IndentedBlock containing a single return statement.
-
-        :param statement: The expression to return.
-        :return: A libcst IndentedBlock with a return statement.
-        """
-        return RoleNodeFactory.make_return_statement_body(statement)
-
-    @classmethod
-    def get_node_with_new_body(
-        cls, node: libcst.ClassDef, new_body: list[libcst.BaseStatement]
-    ) -> libcst.ClassDef:
-        """
-        Return a copy of the node with its body replaced.
-
-        :param node: The node to update.
-        :param new_body: The replacement body statements.
-        :return: A new node identical to the original but with the new body.
-        """
-        return RoleNodeFactory.get_node_with_new_body(node, new_body)
-
-    @classmethod
-    def get_renamed_node(cls, node, new_name):
-        """
-        Return a copy of the node with its name replaced.
-
-        :param node: The node to rename.
-        :param new_name: The replacement name string.
-        :return: A new node identical to the original but with the new name.
-        """
-        return RoleNodeFactory.get_renamed_node(node, new_name)
-
-    @classmethod
-    def make_argument(cls, value: str) -> libcst.Arg:
-        """
-        Build an Arg node from a string expression.
-
-        :param value: The argument expression string.
-        :return: A libcst Arg node.
-        """
-        return RoleNodeFactory.make_argument(value)
-
-    @classmethod
-    def _is_role_base(cls, base_node: libcst.BaseExpression) -> bool:
-        """Return True if the base node represents the Role class or Role[T]."""
-        return RoleNodeFactory._is_role_base(base_node)
-
-    @classmethod
-    def get_name_from_base_node(cls, base_node: libcst.BaseExpression) -> str:
-        """
-        Extract the class name from a base class CST node.
-
-        :param base_node: The base node to extract the name from.
-        :return: The class name as a string.
-        """
-        return RoleNodeFactory.get_name_from_base_node(base_node)
-
-    @classmethod
-    def _get_field_name_if_statement_is_field_definition(
-        cls, item: libcst.BaseStatement
-    ) -> str | None:
-        """Return the field name if the statement is an annotated assignment, otherwise None."""
-        return RoleNodeFactory._get_field_name_if_statement_is_field_definition(item)
 
     def _transform_role(
         self, node: libcst.ClassDef, wrapped_class: WrappedClass
@@ -1128,7 +901,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         logger.debug("  role_bases keys: %s", list(role_bases.keys()))
         for base in node.bases:
             new_bases.append(base)
-            base_name = self.get_name_from_base_node(base.value)
+            base_name = RoleNodeFactory.get_name_from_base_node(base.value)
             logger.debug("  Checking base %s", base_name)
 
             # Check if this base is a Role class in our diagram
@@ -1146,11 +919,11 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if is_role_base:
                 role_for_name = self.get_role_for_name(taker_type)
                 if not any(
-                    self.get_name_from_base_node(base.value) == role_for_name
+                    RoleNodeFactory.get_name_from_base_node(base.value) == role_for_name
                     for base in node.bases
                 ):
                     logger.debug("  Adding %s", role_for_name)
-                    new_bases.append(self.make_argument(role_for_name))
+                    new_bases.append(RoleNodeFactory.make_argument(role_for_name))
 
                 taker_module = sys.modules[taker_type.__module__]
                 module_name = taker_module.__name__
@@ -1234,7 +1007,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 libcst.AnnAssign(
                     target=libcst.Name(wrapped_field.name),
                     annotation=libcst.Annotation(
-                        annotation=self.to_cst_expression(type_str)
+                        annotation=RoleNodeFactory.to_cst_expression(type_str)
                     ),
                     value=value_cst,
                 )

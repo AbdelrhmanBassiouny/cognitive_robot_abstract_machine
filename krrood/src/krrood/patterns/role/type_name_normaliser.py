@@ -98,7 +98,7 @@ class TypeNameNormaliser:
         self.resolver.name_to_module_map[clazz.__name__] = clazz.__module__
         from krrood.patterns.role.role import Role
         if issubclass(clazz, Role):
-            return self._get_type_name(clazz)
+            return self.get_type_name(clazz)
         return clazz.__name__
 
     def _handle_fallback_type(self, type_obj: Any) -> str:
@@ -107,7 +107,7 @@ class TypeNameNormaliser:
             self.resolver.name_to_module_map[type_obj.__name__] = type_obj.__module__
         return str(type_obj)
 
-    def _get_type_name(self, clazz: type) -> str:
+    def get_type_name(self, clazz: type) -> str:
         """Return the TypeVar name for a class if one exists, otherwise the plain class name."""
         type_var_name = f"T{clazz.__name__}"
         class_module = sys.modules[clazz.__module__]
