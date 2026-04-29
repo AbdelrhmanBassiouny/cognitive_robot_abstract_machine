@@ -5,8 +5,8 @@ Monorepo for the CRAM cognitive architecture.
 ### Using Lightning Ai
 
 1. go to https://lightning.ai/
-2. create an account (USE free plan (CPU), you have to verify identity using phone number)
-3. create a studio and wait till it is ready
+2. create an account (USE free plan (CPU), you have to verify identity using a phone number)
+3. create a studio (USE Python and the IDE option (VSCode)) and wait till it is ready
 
 ## Installation
 
@@ -41,7 +41,14 @@ uv sync --active
 pip install -e krrood/
 ```
 
-### 5. Open Exercises
+### 5. Install requirements for Exercises
+
+```bash
+cd Exercises
+pip install -r requirements.txt
+```
+
+### 6. Open Exercises
 
 The exercises are in the `Exercises` folder in the root of the repository.
 Exercise 1 (Algebra using EQL):
