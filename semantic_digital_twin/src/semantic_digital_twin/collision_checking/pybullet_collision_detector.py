@@ -246,10 +246,7 @@ def convert_to_decomposed_obj_and_save_in_tmp(
             f.write(obj_str)
         if not trimesh_obj.is_convex and mesh_decomposer is not None:
             with suppress_stdout_stderr():
-                parts = mesh_decomposer.apply_to_mesh(mesh)
-            trimesh.Scene([p.mesh for p in parts]).export(
-                obj_file_name, file_type="obj"
-            )
+                mesh_decomposer.apply_to_mesh_and_save(mesh, obj_file_name)
             logging.info(f'Saved convex decomposition to "{obj_file_name}".')
         else:
             logging.info(f'Saved obj to "{obj_file_name}".')

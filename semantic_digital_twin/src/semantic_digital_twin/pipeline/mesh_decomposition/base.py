@@ -32,6 +32,14 @@ class MeshDecomposer(Step, ABC):
         """
         ...
 
+    @abstractmethod
+    def apply_to_mesh_and_save(self, mesh: Mesh, output_path: str) -> str:
+        """
+        Apply the mesh decomposition to a given mesh and write the decomposed result
+        directly to ``output_path`` (an .obj file).
+        """
+        ...
+
     def apply_to_shape(self, shape: Shape) -> List[Mesh]:
         """
         Apply the mesh decomposition to a given shape.

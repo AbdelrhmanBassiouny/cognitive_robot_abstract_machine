@@ -11,6 +11,9 @@ from semantic_digital_twin.collision_checking.pybullet_collision_detector import
     convert_to_decomposed_obj_and_save_in_tmp,
     create_cache_dir,
 )
+from semantic_digital_twin.pipeline.mesh_decomposition.bullet_vhacd import (
+    BulletVHACDMeshDecomposer,
+)
 from semantic_digital_twin.pipeline.mesh_decomposition.coacd import COACDMeshDecomposer
 from semantic_digital_twin.pipeline.mesh_decomposition.vhacd import VHACDMeshDecomposer
 from semantic_digital_twin.world_description.geometry import Mesh
@@ -50,8 +53,8 @@ def convex_mesh():
 
 @pytest.fixture(
     scope="module",
-    params=[COACDMeshDecomposer, VHACDMeshDecomposer],
-    ids=["coacd", "vhacd"],
+    params=[COACDMeshDecomposer, VHACDMeshDecomposer, BulletVHACDMeshDecomposer],
+    ids=["coacd", "vhacd", "bullet_vhacd"],
 )
 def mesh_decomposer(request):
     return request.param()
