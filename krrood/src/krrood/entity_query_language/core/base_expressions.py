@@ -367,9 +367,17 @@ class SymbolicExpression(ABC):
     def _root_(self) -> SymbolicExpression:
         """
         :return: The root of the symbolic expression tree.
+
+        Traversal stops at ``ResultQuantifier`` boundaries so that inner query
+        subtrees are not merged with outer query trees when a query is used as a
+        sub-expression (e.g. ``set_of(query[A], query[B]).where(query[C].x == v)``).
         """
+        from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+
         expression = self
-        while expression._parent_ is not None:
+        while expression._parent_ is not None and not isinstance(
+            expression, ResultQuantifier
+        ):
             expression = expression._parent_
         return expression
 
@@ -393,10 +401,16 @@ class SymbolicExpression(ABC):
     def _descendants_(self) -> Iterator[SymbolicExpression]:
         """
         :return: All descendants of this symbolic expression in children first, then depth-first by subtree order.
+
+        Does not recurse into ``ResultQuantifier`` children so that inner query
+        subtrees remain isolated from outer query traversals.
         """
+        from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+
         yield from self._children_
         for child in self._children_:
-            yield from child._descendants_
+            if not isinstance(child, ResultQuantifier):
+                yield from child._descendants_
 
     @classmethod
     def _current_parent_in_context_stack_(cls) -> Optional[SymbolicExpression]:
