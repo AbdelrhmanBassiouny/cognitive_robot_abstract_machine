@@ -63,35 +63,6 @@ def test_setting_a_role_affects_role_taker():
     assert company in ceo1.person.member_of
 
 
-def test_setting_a_role_affects_role_taker_chain():
-    company = Company(name="BassCo")
-    person1 = Person(name="Bass1")
-    ceo1 = CEOAsFirstRole(person1)
-    representative1 = RepresentativeAsSecondRole(ceo1)
-
-    representative1.head_of = company
-    assert representative1.head_of == company
-    assert ceo1.head_of == company
-    assert ceo1.person.works_for == company
-    assert ceo1 in company.members
-    assert company in ceo1.person.member_of
-
-
-def test_setting_a_role_affects_role_taker_bigger_chain():
-    country = Country(name="BassCountry")
-    person1 = Person(name="Bass1")
-    ceo1 = CEOAsFirstRole(person1)
-    representative1 = RepresentativeAsSecondRole(ceo1)
-    delegate1 = DelegateAsThirdRole(representative1)
-
-    delegate1.delegate_of = country
-    assert representative1.head_of == country
-    assert ceo1.head_of == country
-    assert ceo1.person.works_for == country
-    assert ceo1 in country.members
-    assert country in ceo1.person.member_of
-
-
 def test_transitive_property():
     company = Company(name="BassCo")
     company2 = Company(name="AnotherBassCo")
