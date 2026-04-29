@@ -63,7 +63,7 @@ class RoleForWorldEntity(ABC):
 
 
 @dataclass(eq=False)
-class RoleForWorldEntityWithID(ABC):
+class RoleForWorldEntityWithID(RoleForWorldEntity, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> WorldEntityWithID: ...
@@ -83,7 +83,7 @@ class RoleForWorldEntityWithID(ABC):
 
 
 @dataclass(eq=False)
-class RoleForSemanticAnnotation(ABC):
+class RoleForSemanticAnnotation(RoleForWorldEntityWithID, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> SemanticAnnotation: ...
@@ -118,7 +118,7 @@ class RoleForSemanticAnnotation(ABC):
 
 
 @dataclass(eq=False)
-class RoleForHasRootKinematicStructureEntity(ABC):
+class RoleForHasRootKinematicStructureEntity(RoleForSemanticAnnotation, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasRootKinematicStructureEntity: ...
@@ -163,7 +163,7 @@ class RoleForHasRootKinematicStructureEntity(ABC):
 
 
 @dataclass(eq=False)
-class RoleForHasRootBody(ABC):
+class RoleForHasRootBody(RoleForHasRootKinematicStructureEntity, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasRootBody: ...
@@ -173,7 +173,7 @@ class RoleForHasRootBody(ABC):
 
 
 @dataclass(eq=False)
-class RoleForHasStorageSpace(ABC):
+class RoleForHasStorageSpace(RoleForHasRootBody, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasStorageSpace: ...
@@ -188,7 +188,7 @@ class RoleForHasStorageSpace(ABC):
 
 
 @dataclass(eq=False)
-class RoleForHasSupportingSurface(ABC):
+class RoleForHasSupportingSurface(RoleForHasStorageSpace, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasSupportingSurface: ...
@@ -252,7 +252,7 @@ class RoleForHasSupportingSurface(ABC):
 
 
 @dataclass(eq=False)
-class RoleForHasCaseAsRootBody(ABC):
+class RoleForHasCaseAsRootBody(RoleForHasSupportingSurface, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasCaseAsRootBody: ...
@@ -309,17 +309,7 @@ class RoleForHasCaseAsRootBody(ABC):
 
 
 @dataclass(eq=False)
-class RoleForBottle(
-    RoleForWorldEntity,
-    RoleForWorldEntityWithID,
-    RoleForSemanticAnnotation,
-    RoleForHasRootKinematicStructureEntity,
-    RoleForHasRootBody,
-    RoleForHasStorageSpace,
-    RoleForHasSupportingSurface,
-    RoleForHasCaseAsRootBody,
-    ABC,
-):
+class RoleForBottle(RoleForHasCaseAsRootBody, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> Bottle: ...
@@ -331,15 +321,7 @@ class RoleForBottle(
 
 
 @dataclass(eq=False)
-class RoleForTinCan(
-    RoleForWorldEntity,
-    RoleForWorldEntityWithID,
-    RoleForSemanticAnnotation,
-    RoleForHasRootKinematicStructureEntity,
-    RoleForHasRootBody,
-    RoleForHasStorageSpace,
-    ABC,
-):
+class RoleForTinCan(RoleForHasStorageSpace, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> TinCan: ...

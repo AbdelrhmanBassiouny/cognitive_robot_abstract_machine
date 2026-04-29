@@ -743,8 +743,12 @@ class RoleModuleTransformer(ContextAwareTransformer):
         body_items: dict[str, list[libcst.FunctionDef]],
     ) -> libcst.ClassDef:
         """
-        Generate a ``@dataclass(eq=False) class RoleFor<Base>(ABC)`` node with an abstract
+        Generate a ``@dataclass(eq=False) class RoleFor<Base>(...)`` node with an abstract
         ``role_taker`` property and delegation members for *body_items*.
+
+        Bases mirror the inheritance of *base_class*: for each direct parent, we walk its
+        MRO to find the nearest ancestor that already has a ``RoleFor`` node, and use that
+        as a base.  This produces a hierarchy that mirrors the original class hierarchy.
 
         :param base_class: The base class to generate a RoleFor node for.
         :param body_items: Mapping of member name → list of FunctionDef nodes.
@@ -757,8 +761,23 @@ class RoleModuleTransformer(ContextAwareTransformer):
         body_nodes: list[libcst.FunctionDef] = [role_taker_node]
         for nodes in body_items.values():
             body_nodes.extend(nodes)
+
+        # Build hierarchical bases: for each direct parent of base_class, walk its MRO
+        # to find the nearest ancestor that already has a RoleFor node.
+        rolefor_bases: list[str] = []
+        seen: set[type] = set()
+        for parent in base_class.__bases__:
+            for ancestor in parent.__mro__:
+                if ancestor is object:
+                    break
+                if ancestor in self._base_class_role_for_nodes and ancestor not in seen:
+                    rolefor_bases.append(f"RoleFor{ancestor.__name__}")
+                    seen.add(ancestor)
+                    break
+
+        bases = rolefor_bases + ["ABC"]
         return RoleNodeFactory.make_dataclass(
-            f"RoleFor{base_class.__name__}", bases=["ABC"], body=body_nodes
+            f"RoleFor{base_class.__name__}", bases=bases, body=body_nodes
         )
 
     def _topological_sort_base_classes(self, base_classes: list[type]) -> list[type]:
@@ -927,8 +946,16 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 taker_role_for = RoleNodeFactory.make_argument(self.get_role_for_name(taker_type))
                 role_for_bases.append(taker_role_for)
 
-        for base_type in (segregated_base_types or []):
-            role_for_bases.append(RoleNodeFactory.make_argument(f"RoleFor{base_type.__name__}"))
+        # Emit only the most-derived (leaf) types: any base_type whose subclass is also
+        # in the set is already covered transitively through the RoleFor hierarchy.
+        all_segregated = list(segregated_base_types or [])
+        for base_type in all_segregated:
+            is_covered = any(
+                other is not base_type and issubclass(other, base_type)
+                for other in all_segregated
+            )
+            if not is_covered:
+                role_for_bases.append(RoleNodeFactory.make_argument(f"RoleFor{base_type.__name__}"))
 
         role_for_bases.append(RoleNodeFactory.make_argument("ABC"))
 
