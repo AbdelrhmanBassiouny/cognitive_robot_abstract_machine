@@ -21,6 +21,13 @@ from krrood.utils import get_generic_type_param
 
 
 @dataclass
+class HasRoles:
+    """Mixin that gives a role taker a registry of its active roles."""
+
+    roles: Dict[type, Any] = field(default_factory=dict, init=False)
+
+
+@dataclass
 class Role(SubClassSafeGeneric[T], Symbol, ABC):
     """
     Represents a role with generic typing. This is used in Role Design Pattern in OOP.
