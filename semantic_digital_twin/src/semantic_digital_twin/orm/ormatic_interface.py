@@ -727,46 +727,6 @@ class WorldEntityWithSimulatorPropertiesDAO_simulator_additional_properties_asso
     )
 
 
-class BottleDAO_simulator_additional_properties_association(
-    Base, AssociationDataAccessObject
-):
-
-    __tablename__ = "_43096456534800896102188207962223886935336715362096675239227645"
-
-    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_bottledao_id: Mapped[int] = mapped_column(
-        ForeignKey("BottleDAO.database_id")
-    )
-    target_simulatoradditionalpropertydao_id: Mapped[int] = mapped_column(
-        ForeignKey("SimulatorAdditionalPropertyDAO.database_id")
-    )
-
-    target: Mapped[SimulatorAdditionalPropertyDAO] = relationship(
-        "SimulatorAdditionalPropertyDAO",
-        foreign_keys=[target_simulatoradditionalpropertydao_id],
-    )
-
-
-class TinCanDAO_simulator_additional_properties_association(
-    Base, AssociationDataAccessObject
-):
-
-    __tablename__ = "_10787025371202400984172593517260315870401749277788861344341053"
-
-    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    source_tincandao_id: Mapped[int] = mapped_column(
-        ForeignKey("TinCanDAO.database_id")
-    )
-    target_simulatoradditionalpropertydao_id: Mapped[int] = mapped_column(
-        ForeignKey("SimulatorAdditionalPropertyDAO.database_id")
-    )
-
-    target: Mapped[SimulatorAdditionalPropertyDAO] = relationship(
-        "SimulatorAdditionalPropertyDAO",
-        foreign_keys=[target_simulatoradditionalpropertydao_id],
-    )
-
-
 class AbstractRobotDAO_manipulators_association(Base, AssociationDataAccessObject):
 
     __tablename__ = "_52106895998347648170461778904010683448969600053998871081561893"
@@ -1200,29 +1160,6 @@ class AtomicWorldModificationNotAtomicDAO(
     world: Mapped[WorldMappingDAO] = relationship(
         "WorldMappingDAO", uselist=False, foreign_keys=[world_id], post_update=True
     )
-
-
-class BottleRoleAttributesDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.BottleRoleAttributes
-    ],
-):
-
-    __tablename__ = "BottleRoleAttributesDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-    polymorphic_type: Mapped[str] = mapped_column(
-        String(255), nullable=False, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_on": "polymorphic_type",
-        "polymorphic_identity": "BottleRoleAttributesDAO",
-    }
 
 
 class BoundingBoxDAO(
@@ -3299,8 +3236,192 @@ class QPProblemDAO(
     )
 
 
+class RoleForHasCaseAsRootBodyDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForHasCaseAsRootBody
+    ],
+):
+
+    __tablename__ = "RoleForHasCaseAsRootBodyDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForHasCaseAsRootBodyDAO",
+    }
+
+
+class RoleForHasRootBodyDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForHasRootBody
+    ],
+):
+
+    __tablename__ = "RoleForHasRootBodyDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForHasRootBodyDAO",
+    }
+
+
+class RoleForHasRootKinematicStructureEntityDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForHasRootKinematicStructureEntity
+    ],
+):
+
+    __tablename__ = "RoleForHasRootKinematicStructureEntityDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForHasRootKinematicStructureEntityDAO",
+    }
+
+
+class RoleForHasStorageSpaceDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForHasStorageSpace
+    ],
+):
+
+    __tablename__ = "RoleForHasStorageSpaceDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForHasStorageSpaceDAO",
+    }
+
+
+class RoleForHasSupportingSurfaceDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForHasSupportingSurface
+    ],
+):
+
+    __tablename__ = "RoleForHasSupportingSurfaceDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForHasSupportingSurfaceDAO",
+    }
+
+
+class RoleForSemanticAnnotationDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForSemanticAnnotation
+    ],
+):
+
+    __tablename__ = "RoleForSemanticAnnotationDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForSemanticAnnotationDAO",
+    }
+
+
+class RoleForWorldEntityDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForWorldEntity
+    ],
+):
+
+    __tablename__ = "RoleForWorldEntityDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForWorldEntityDAO",
+    }
+
+
+class RoleForWorldEntityWithIDDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForWorldEntityWithID
+    ],
+):
+
+    __tablename__ = "RoleForWorldEntityWithIDDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForWorldEntityWithIDDAO",
+    }
+
+
 class RoleForBottleDAO(
-    BottleRoleAttributesDAO,
+    RoleForWorldEntityDAO,
     DataAccessObject[
         semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForBottle
     ],
@@ -3309,14 +3430,14 @@ class RoleForBottleDAO(
     __tablename__ = "RoleForBottleDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(BottleRoleAttributesDAO.database_id),
+        ForeignKey(RoleForWorldEntityDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
 
     __mapper_args__ = {
         "polymorphic_identity": "RoleForBottleDAO",
-        "inherit_condition": database_id == BottleRoleAttributesDAO.database_id,
+        "inherit_condition": database_id == RoleForWorldEntityDAO.database_id,
     }
 
 
@@ -3348,6 +3469,27 @@ class MustardBottleDAO(
     __mapper_args__ = {
         "polymorphic_identity": "MustardBottleDAO",
         "inherit_condition": database_id == RoleForBottleDAO.database_id,
+    }
+
+
+class RoleForTinCanDAO(
+    RoleForWorldEntityDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForTinCan
+    ],
+):
+
+    __tablename__ = "RoleForTinCanDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(RoleForWorldEntityDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RoleForTinCanDAO",
+        "inherit_condition": database_id == RoleForWorldEntityDAO.database_id,
     }
 
 
@@ -4591,50 +4733,6 @@ class COACDMeshDecomposerDAO(
     __mapper_args__ = {
         "polymorphic_identity": "COACDMeshDecomposerDAO",
         "inherit_condition": database_id == MeshDecomposerDAO.database_id,
-    }
-
-
-class TinCanRoleAttributesDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.TinCanRoleAttributes
-    ],
-):
-
-    __tablename__ = "TinCanRoleAttributesDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-    polymorphic_type: Mapped[str] = mapped_column(
-        String(255), nullable=False, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_on": "polymorphic_type",
-        "polymorphic_identity": "TinCanRoleAttributesDAO",
-    }
-
-
-class RoleForTinCanDAO(
-    TinCanRoleAttributesDAO,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForTinCan
-    ],
-):
-
-    __tablename__ = "RoleForTinCanDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(TinCanRoleAttributesDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "RoleForTinCanDAO",
-        "inherit_condition": database_id == TinCanRoleAttributesDAO.database_id,
     }
 
 
@@ -7860,7 +7958,7 @@ class HasCaseAsRootBodyDAO(
 
 
 class BottleDAO(
-    BottleRoleAttributesDAO,
+    HasCaseAsRootBodyDAO,
     DataAccessObject[
         semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle
     ],
@@ -7869,47 +7967,35 @@ class BottleDAO(
     __tablename__ = "BottleDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(BottleRoleAttributesDAO.database_id),
+        ForeignKey(HasCaseAsRootBodyDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sqlalchemy.sql.sqltypes.UUID, nullable=False, use_existing_column=True
-    )
+    __mapper_args__ = {
+        "polymorphic_identity": "BottleDAO",
+        "inherit_condition": database_id == HasCaseAsRootBodyDAO.database_id,
+    }
 
-    name_id: Mapped[int] = mapped_column(
-        ForeignKey("PrefixedNameDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    supporting_surface_id: Mapped[int] = mapped_column(
-        ForeignKey("RegionDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
-    simulator_additional_properties: Mapped[
-        builtins.list[BottleDAO_simulator_additional_properties_association]
-    ] = relationship(
-        "BottleDAO_simulator_additional_properties_association",
-        collection_class=builtins.list,
-        cascade="all, delete-orphan",
-        foreign_keys="[BottleDAO_simulator_additional_properties_association.source_bottledao_id]",
-    )
-    name: Mapped[PrefixedNameDAO] = relationship(
-        "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    supporting_surface: Mapped[RegionDAO] = relationship(
-        "RegionDAO",
-        uselist=False,
-        foreign_keys=[supporting_surface_id],
-        post_update=True,
+class Bottle_WineDAO(
+    BottleDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
+            semantic_digital_twin.semantic_annotations.semantic_annotations.Wine
+        ]
+    ],
+):
+
+    __tablename__ = "Bottle_WineDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
     )
 
     __mapper_args__ = {
-        "polymorphic_identity": "BottleDAO",
-        "inherit_condition": database_id == BottleRoleAttributesDAO.database_id,
+        "polymorphic_identity": "Bottle_WineDAO",
+        "inherit_condition": database_id == BottleDAO.database_id,
     }
 
 
@@ -7951,27 +8037,6 @@ class Bottle_MustardDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "Bottle_MustardDAO",
-        "inherit_condition": database_id == BottleDAO.database_id,
-    }
-
-
-class Bottle_WineDAO(
-    BottleDAO,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
-            semantic_digital_twin.semantic_annotations.semantic_annotations.Wine
-        ]
-    ],
-):
-
-    __tablename__ = "Bottle_WineDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "Bottle_WineDAO",
         "inherit_condition": database_id == BottleDAO.database_id,
     }
 
@@ -8355,7 +8420,7 @@ class SaltPepperShakerDAO(
 
 
 class TinCanDAO(
-    TinCanRoleAttributesDAO,
+    HasStorageSpaceDAO,
     DataAccessObject[
         semantic_digital_twin.semantic_annotations.semantic_annotations.TinCan
     ],
@@ -8364,36 +8429,14 @@ class TinCanDAO(
     __tablename__ = "TinCanDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(TinCanRoleAttributesDAO.database_id),
+        ForeignKey(HasStorageSpaceDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        sqlalchemy.sql.sqltypes.UUID, nullable=False, use_existing_column=True
-    )
-
-    name_id: Mapped[int] = mapped_column(
-        ForeignKey("PrefixedNameDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    simulator_additional_properties: Mapped[
-        builtins.list[TinCanDAO_simulator_additional_properties_association]
-    ] = relationship(
-        "TinCanDAO_simulator_additional_properties_association",
-        collection_class=builtins.list,
-        cascade="all, delete-orphan",
-        foreign_keys="[TinCanDAO_simulator_additional_properties_association.source_tincandao_id]",
-    )
-    name: Mapped[PrefixedNameDAO] = relationship(
-        "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-
     __mapper_args__ = {
         "polymorphic_identity": "TinCanDAO",
-        "inherit_condition": database_id == TinCanRoleAttributesDAO.database_id,
+        "inherit_condition": database_id == HasStorageSpaceDAO.database_id,
     }
 
 

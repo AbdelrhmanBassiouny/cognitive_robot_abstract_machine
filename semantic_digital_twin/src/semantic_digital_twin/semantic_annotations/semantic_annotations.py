@@ -63,11 +63,10 @@ from semantic_digital_twin.world_description.world_entity import (
     Connection,
 )
 from semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins import (
-    BottleRoleAttributes,
     RoleForBottle,
     RoleForTinCan,
-    TinCanRoleAttributes,
 )
+from krrood.patterns.role import HasRoles
 
 
 @dataclass(eq=False)
@@ -630,7 +629,7 @@ A type variable for Liquid types.
 
 
 @dataclass(eq=False)
-class Bottle(BottleRoleAttributes, HasCaseAsRootBody, HasStorageSpace[TLiquid]):
+class Bottle(HasRoles, HasCaseAsRootBody, HasStorageSpace[TLiquid]):
     """
     Abstract class for bottles.
     """
@@ -785,7 +784,7 @@ A type variable for classes that have a root body.
 
 
 @dataclass(eq=False)
-class TinCan(TinCanRoleAttributes, HasStorageSpace[THasRootBody]):
+class TinCan(HasRoles, HasStorageSpace[THasRootBody]):
     """
     A tin can.
     """

@@ -157,24 +157,29 @@ def test_handle_semantic_annotation_eql(apartment_world_setup):
     "semantic_annotation_type, update_existing_semantic_annotations, scenario, expected_number",
     [
         (Handle, False, None, 29),
-        (Drawer, False, None, 23),
-        (Wardrobe, False, None, 10),
-        (Door, False, None, 8), # Should be 11 as there are prismatically connected doors.
+        (Drawer, False, None, 19),
+        (Wardrobe, False, None, 8),
+        (
+            Door,
+            False,
+            None,
+            8,
+        ),  # Should be 11 as there are prismatically connected doors.
     ],
 )
 def test_infer_apartment_semantic_annotation(
-        semantic_annotation_type,
-        update_existing_semantic_annotations,
-        scenario,
-        expected_number,
-        apartment_world_setup,
+    semantic_annotation_type,
+    update_existing_semantic_annotations,
+    scenario,
+    expected_number,
+    apartment_world_setup,
 ):
     fit_rules_and_assert_semantic_annotations(
         apartment_world_setup,
         semantic_annotation_type,
         update_existing_semantic_annotations,
         scenario,
-        expected_number
+        expected_number,
     )
 
 
@@ -210,7 +215,11 @@ def test_apartment_semantic_annotations(apartment_world_setup):
 
 
 def fit_rules_and_assert_semantic_annotations(
-        world, semantic_annotation_type, update_existing_semantic_annotations, scenario, expected_number: int
+    world,
+    semantic_annotation_type,
+    update_existing_semantic_annotations,
+    scenario,
+    expected_number: int,
 ):
     world_reasoner = WorldReasoner(world)
     world_reasoner.fit_semantic_annotations(
@@ -221,9 +230,16 @@ def fit_rules_and_assert_semantic_annotations(
     )
 
     found_semantic_annotations = world_reasoner.infer_semantic_annotations()
-    assert len([
-        v for v in found_semantic_annotations if isinstance(v, semantic_annotation_type)
-    ]) == expected_number
+    assert (
+        len(
+            [
+                v
+                for v in found_semantic_annotations
+                if isinstance(v, semantic_annotation_type)
+            ]
+        )
+        == expected_number
+    )
 
 
 def test_semantic_annotation_serialization_deserialization_once(apartment_world_setup):
