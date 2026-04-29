@@ -137,10 +137,9 @@ def test_transformation_idempotency():
     mod_transformer.transform_module(tree)
     retransformed_source = mod_transformer.transformed_module.code
 
-    # Check for duplicates in retransformed_source
-    # Taker should have TakerRoleAttributes exactly once in the base list
-    # and once in the import.
-    assert retransformed_source.count("TakerRoleAttributes") == 2
+    # Check for duplicates in retransformed_source:
+    # HasRoles should appear exactly once in the base list and once in the import.
+    assert retransformed_source.count("HasRoles") == 2
 
 
 def test_typing_alias_imported_from_base_method():

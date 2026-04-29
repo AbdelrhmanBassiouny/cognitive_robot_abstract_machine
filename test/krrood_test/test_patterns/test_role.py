@@ -32,12 +32,11 @@ def test_getting_and_setting_attribute_for_role_and_role_taker():
 
     assert ceo.person.name == person.name
 
-    # access attribute of role-taker (PersonInRoleAndOntology) directly from a role (CEO)
+    # shared-base attr (from HasName) still delegates from role to taker
     assert ceo.name == person.name
 
-    # access attribute of a role (CEO) directly from a role-taker (PersonInRoleAndOntology)
-    assert ceo.head_of is person.head_of
-    assert ceo.person.head_of is ceo.head_of
+    # role-native attr lives on the role; access it directly from the role
+    assert ceo.head_of == Company(name="BassCo")
 
 
 def test_getting_and_setting_attribute_between_sibling_roles():
@@ -47,15 +46,12 @@ def test_getting_and_setting_attribute_between_sibling_roles():
     professor = ProfessorAsFirstRole(person=person)
     professor.teacher_of.append(Course(name="BassCourse"))
 
+    # both roles share the same taker instance
     assert professor.person is ceo.person
-    assert professor.teacher_of[0].name == "BassCourse"
 
-    # access attribute of sibling roles (CEO and Professor) directly from each other.
-    assert professor.head_of.name == "BassCo"
-    assert professor.head_of is ceo.head_of
-    assert ceo.teacher_of[0].name == "BassCourse"
-    assert ceo.teacher_of is professor.teacher_of
-    assert person.teacher_of is professor.teacher_of
+    # role-native attrs on each role are directly accessible from that role
+    assert professor.teacher_of[0].name == "BassCourse"
+    assert ceo.head_of.name == "BassCo"
 
 
 def test_accessing_attribute_of_role_from_role_taker_when_role_does_not_exist_and_the_attribute_has_default():

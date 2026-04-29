@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from typing_extensions import Set, List, TYPE_CHECKING
+from typing_extensions import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from test.krrood_test.dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
         HasName,
         RecognizedGroup,
-        Course,
         PersonInRoleAndOntology,
         TPersonInRoleAndOntology,
         TSubclassOfARoleTaker,
@@ -49,20 +48,10 @@ class RoleForHasName(ABC):
 
 
 @dataclass(eq=False)
-class PersonInRoleAndOntologyRoleAttributes:
-    head_of: RecognizedGroup = field(init=False)
-    delegate_of: RecognizedGroup = field(init=False)
-    members: Set[PersonInRoleAndOntology] = field(init=False)
-    sub_organization_of: List[RecognizedGroup] = field(init=False)
-    teacher_of: List[Course] = field(init=False)
-    representative_of: RecognizedGroup = field(init=False)
+class RoleForPersonInRoleAndOntology(RoleForHasName, ABC):
 
-
-@dataclass(eq=False)
-class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, RoleForHasName, ABC):
-
-    @abstractmethod
     @property
+    @abstractmethod
     def role_taker(self) -> TPersonInRoleAndOntology: ...
 
     @property
@@ -91,8 +80,8 @@ class RoleForPersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, Role
 @dataclass(eq=False)
 class RoleForSubclassOfARoleTaker(RoleForPersonInRoleAndOntology, ABC):
 
-    @abstractmethod
     @property
+    @abstractmethod
     def role_taker(self) -> TSubclassOfARoleTaker: ...
 
     @property
@@ -107,8 +96,8 @@ class RoleForSubclassOfARoleTaker(RoleForPersonInRoleAndOntology, ABC):
 @dataclass(eq=False)
 class RoleForCEOAsFirstRole(RoleForPersonInRoleAndOntology, ABC):
 
-    @abstractmethod
     @property
+    @abstractmethod
     def role_taker(self) -> TCEOAsFirstRole: ...
 
     @property
@@ -131,8 +120,8 @@ class RoleForCEOAsFirstRole(RoleForPersonInRoleAndOntology, ABC):
 @dataclass(eq=False)
 class RoleForRepresentativeAsSecondRole(RoleForCEOAsFirstRole, ABC):
 
-    @abstractmethod
     @property
+    @abstractmethod
     def role_taker(self) -> TRepresentativeAsSecondRole: ...
 
     @property

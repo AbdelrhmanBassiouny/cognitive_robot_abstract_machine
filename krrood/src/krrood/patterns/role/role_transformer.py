@@ -8,7 +8,6 @@ import dataclasses
 import enum
 import inspect
 import sys
-from copy import copy
 from pathlib import Path
 from textwrap import dedent
 from types import ModuleType
@@ -18,7 +17,6 @@ from typing import (
 )
 
 import libcst
-import rustworkx as rx
 from libcst.codemod import ContextAwareTransformer, CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 
@@ -30,7 +28,6 @@ from krrood.class_diagrams.utils import (
     get_type_hints_of_object,
     resolve_name_in_hierarchy,
 )
-from krrood.class_diagrams.wrapped_field import WrappedField, FieldRepresentation
 from krrood.patterns.role.exceptions import RoleTransformerError
 from krrood.patterns.role.import_name_resolver import ImportNameResolver
 from krrood.patterns.role.meta_data import RoleType
@@ -264,7 +261,7 @@ class RoleTransformer:
             filename = f"{module_name}_role_mixins.py"
             return role_mixins_folder / filename
         else:
-            prefix = copy(self.file_name_prefix)
+            prefix = self.file_name_prefix
             if prefix and not prefix.endswith("_"):
                 prefix = f"{prefix}_"
             filename = f"{prefix}{module_name}.py"
@@ -299,7 +296,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self.source_module = module
         self.taker_modules = taker_modules
         self.file_name_prefix = file_name_prefix
-        self.role_attributes: dict[WrappedClass, libcst.ClassDef] = {}
         self.role_for: dict[WrappedClass, libcst.ClassDef] = {}
         self._base_class_role_for_nodes: dict[type, libcst.ClassDef] = {}
         self.transformed_module: libcst.Module | None = None
@@ -503,11 +499,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
             list(self._base_class_role_for_nodes.keys())
         )
         base_class_nodes = [self._base_class_role_for_nodes[k] for k in sorted_base_types]
-        all_mixin_classes = (
-            base_class_nodes
-            + list(self.role_attributes.values())
-            + list(self.role_for.values())
-        )
+        all_mixin_classes = base_class_nodes + list(self.role_for.values())
         return self._import_orchestrator.build_mixin_module(
             updated_node, all_mixin_classes, self._factory
         )
@@ -524,39 +516,30 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def _transform_role_taker(
         self, role_taker_node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> list[libcst.ClassDef]:
-        """Transform a role taker class by adding RoleAttributes as a base if required."""
+        """Transform a role taker class by adding HasRoles as a base if required."""
         self.make_role_for_node(role_taker_node, wrapped_class)
 
-        if self.should_make_role_attributes_for_node(role_taker_node, wrapped_class):
-            self.make_role_attributes_node(wrapped_class)
-            role_attributes_name = self.get_role_attributes_name(wrapped_class)
+        if self._should_add_has_roles(role_taker_node, wrapped_class):
             role_taker_class_bases = list(role_taker_node.bases)
             if not any(
-                RoleNodeFactory.get_name_from_base_node(base.value) == role_attributes_name
+                RoleNodeFactory.get_name_from_base_node(base.value) == "HasRoles"
                 for base in role_taker_class_bases
             ):
                 role_taker_class_bases.insert(
-                    0, RoleNodeFactory.make_argument(role_attributes_name)
+                    0, RoleNodeFactory.make_argument("HasRoles")
                 )
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
-
-            module_name = self.source_module.__name__
-            package_name = ".".join(module_name.split(".")[:-1])
-            last_part = module_name.split(".")[-1]
-            mixin_module_name = f"{package_name}.role_mixins.{last_part}_role_mixins"
-            self.require_original_import(mixin_module_name, [role_attributes_name])
+            self.require_original_import("krrood.patterns.role", ["HasRoles"])
 
         return [role_taker_node]
 
-    def should_make_role_attributes_for_node(
+    def _should_add_has_roles(
         self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> bool:
-        """
-        Determine whether a RoleAttributes class should be generated for the given taker.
+        """Return True if HasRoles should be added to this role taker's bases.
 
-        :param node: The role taker class node to check.
-        :param wrapped_class: The wrapped class of the role taker.
-        :return: True if a RoleAttributes class should be generated.
+        Only the root taker (not a Role, no role-taker base class) gets HasRoles;
+        subclasses of role takers inherit it automatically.
         """
         return not (
             any(RoleNodeFactory._is_role_base(base.value) for base in node.bases)
@@ -578,28 +561,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if base in self.class_diagram.role_takers
         }
 
-    def make_role_attributes_node(self, wrapped_class: WrappedClass) -> None:
-        """
-        Generate and store the RoleAttributes dataclass node for the given role taker.
-
-        :param wrapped_class: The wrapped class for which to generate the RoleAttributes node.
-        """
-        propagated_fields = self._get_propagated_fields(wrapped_class)
-        role_attributes_node = RoleNodeFactory.make_dataclass(
-            self.get_role_attributes_name(wrapped_class), body=propagated_fields
-        )
-        self.role_attributes[wrapped_class] = role_attributes_node
-
-    @classmethod
-    def get_role_attributes_name(cls, wrapped_class: WrappedClass) -> str:
-        """
-        Return the name of the RoleAttributes dataclass for the given taker.
-
-        :param wrapped_class: Wrapped class of the role taker.
-        :return: Name of the role attributes dataclass.
-        """
-        return f"{wrapped_class.clazz.__name__}RoleAttributes"
-
     def make_role_for_node(
         self,
         node: libcst.ClassDef,
@@ -614,7 +575,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
         """
         role_for_name = self.get_role_for_name(wrapped_class.clazz)
         role_for_node = RoleNodeFactory.get_renamed_node(node, role_for_name)
-        role_attributes_name = self.get_role_attributes_name(wrapped_class)
 
         all_taker_fields = self._collect_base_taker_field_names(wrapped_class)
 
@@ -625,7 +585,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         segregated_base_types = self._populate_base_rolefor_nodes(body_by_class)
 
         role_for_bases = self.make_role_for_bases(
-            role_for_node, wrapped_class, role_attributes_name, segregated_base_types
+            role_for_node, wrapped_class, segregated_base_types
         )
         role_for_node = role_for_node.with_changes(bases=role_for_bases)
 
@@ -940,7 +900,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self,
         node: libcst.ClassDef,
         wrapped_class: WrappedClass,
-        role_attributes_name: str,
         segregated_base_types: list[type] | None = None,
     ) -> list[libcst.Arg]:
         """
@@ -948,7 +907,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
 
         :param node: The original taker class node.
         :param wrapped_class: The taker wrapped class.
-        :param role_attributes_name: Name for the role attributes dataclass.
         :param segregated_base_types: Same-module base classes that received their own
             RoleFor mixin via base-class segregation.
         :return: List of Arg nodes representing the base classes.
@@ -968,9 +926,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 taker_type = wrapped_class.clazz.get_role_taker_type()
                 taker_role_for = RoleNodeFactory.make_argument(self.get_role_for_name(taker_type))
                 role_for_bases.append(taker_role_for)
-
-        if self.should_make_role_attributes_for_node(node, wrapped_class):
-            role_for_bases.insert(0, RoleNodeFactory.make_argument(role_attributes_name))
 
         for base_type in (segregated_base_types or []):
             role_for_bases.append(RoleNodeFactory.make_argument(f"RoleFor{base_type.__name__}"))
@@ -1057,116 +1012,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
         """Return the name of the RoleFor class for the given taker class."""
         return f"RoleFor{taker_class.__name__}"
 
-    def _get_propagated_fields(
-        self, wrapped_class: WrappedClass
-    ) -> list[libcst.BaseStatement]:
-        """
-        Collect the field nodes to propagate from roles to the root role taker's RoleAttributes.
-
-        :param wrapped_class: The wrapped class for the role taker.
-        :return: A list of libcst nodes representing the fields to be propagated.
-        """
-        if not self._is_root_taker(wrapped_class):
-            return []
-        root_taker = wrapped_class.clazz
-        candidate_fields = self._collect_candidate_role_fields(root_taker)
-        seen_field_names = {f.name for f in wrapped_class.fields}
-        return self._deduplicate_fields(candidate_fields, seen_field_names)
-
-    def _is_root_taker(self, wrapped_class: WrappedClass) -> bool:
-        """Return True if the wrapped class is the root (non-role) role taker."""
-        root_taker = wrapped_class.clazz
-        if issubclass(root_taker, Role):
-            root_taker = root_taker.get_root_role_taker_type()
-        return wrapped_class.clazz == root_taker
-
-    def _collect_candidate_role_fields(
-        self, root_taker: type
-    ) -> list[WrappedField]:
-        """Collect all role fields for the root taker, excluding the taker attribute field."""
-        roles = self._get_all_roles_for_taker(root_taker)
-        candidate_fields: list[WrappedField] = []
-        for role_wrapped in roles:
-            taker_attr_name = role_wrapped.clazz.role_taker_attribute_name()
-            candidate_fields.extend(
-                role_field
-                for role_field in role_wrapped.fields
-                if role_field.name != taker_attr_name
-            )
-        return candidate_fields
-
-    def _deduplicate_fields(
-        self,
-        candidate_fields: list[WrappedField],
-        seen_field_names: set[str],
-    ) -> list[libcst.BaseStatement]:
-        """Return field nodes for candidate fields not already in seen_field_names."""
-        fields_to_propagate: list[libcst.BaseStatement] = []
-        for role_field in candidate_fields:
-            if role_field.name not in seen_field_names:
-                fields_to_propagate.append(
-                    self._create_field_node(role_field, init=False)
-                )
-                seen_field_names.add(role_field.name)
-        return fields_to_propagate
-
-    def _create_field_node(
-        self,
-        wrapped_field: WrappedField,
-        init: bool = True,
-        kw_only: bool | None = None,
-    ) -> libcst.SimpleStatementLine:
-        """Create a libcst annotated-assignment node for a dataclass field."""
-        field_copy = self._apply_field_init_flags(wrapped_field, init, kw_only)
-        value_cst = self._parse_field_default_value(field_copy, wrapped_field)
-        type_str = wrapped_field.type_name.replace("typing.", "").replace("typing_extensions.", "")
-        return libcst.SimpleStatementLine(
-            body=[
-                libcst.AnnAssign(
-                    target=libcst.Name(wrapped_field.name),
-                    annotation=libcst.Annotation(
-                        annotation=RoleNodeFactory.to_cst_expression(type_str)
-                    ),
-                    value=value_cst,
-                )
-            ]
-        )
-
-    def _apply_field_init_flags(
-        self,
-        wrapped_field: WrappedField,
-        init: bool,
-        kw_only: bool | None,
-    ):
-        """Return a copy of the field with init and kw_only flags applied."""
-        field_copy = copy(wrapped_field.field)
-        if not init:
-            field_copy.init = False
-            field_copy.default = dataclasses.MISSING
-            field_copy.default_factory = dataclasses.MISSING
-            field_copy.kw_only = False
-        else:
-            field_copy.kw_only = field_copy.kw_only or (
-                not wrapped_field.is_required and field_copy.init
-            )
-        if kw_only is not None:
-            field_copy.kw_only = kw_only
-        return field_copy
-
-    def _parse_field_default_value(
-        self, field_copy, wrapped_field: WrappedField
-    ) -> libcst.BaseExpression | None:
-        """Parse the default value expression for a field, returning None if absent."""
-        field_representation = FieldRepresentation(field_copy)
-        representation_string = field_representation.representation.strip()
-        if representation_string.startswith("="):
-            val_str = representation_string[1:].strip()
-            try:
-                return libcst.parse_expression(val_str)
-            except Exception:
-                return libcst.Name("None")
-        return None
-
     def require_import(self, module: str, names: str | list[str]):
         """
         Record an import that must appear in the generated mixin module.
@@ -1175,30 +1020,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param names: The name or list of names to import.
         """
         self._import_orchestrator.require_import(module, names)
-
-    def _get_all_roles_for_taker(self, taker_type: type) -> list[WrappedClass]:
-        """
-        Recursively find all role WrappedClasses associated with a taker type.
-
-        :param taker_type: The role taker class to search from.
-        :return: All role wrapped classes for this taker, including inherited ones.
-        """
-        roles = []
-        direct_roles = self.class_diagram.get_roles_of_class(taker_type)
-        for role_wrapped in direct_roles:
-            roles.append(role_wrapped)
-            subclasses_of_role = rx.descendants(
-                self.class_diagram.inheritance_subgraph, role_wrapped.index
-            )
-            roles.extend(
-                [
-                    self.class_diagram.inheritance_subgraph[idx]
-                    for idx in subclasses_of_role
-                ]
-            )
-            # A role can also be a taker
-            roles.extend(self._get_all_roles_for_taker(role_wrapped.clazz))
-        return roles
 
     def __hash__(self):
         return hash((self.__class__, self.source_module))

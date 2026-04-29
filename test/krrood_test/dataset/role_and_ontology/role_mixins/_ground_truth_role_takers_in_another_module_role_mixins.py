@@ -1,29 +1,22 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from test.krrood_test.dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
         PersonInRoleAndOntology,
-        DelegateAsThirdRole,
     )
     from test.krrood_test.dataset.role_and_ontology.role_takers_in_another_module import RoleTakerInAnotherModule
 
 
 @dataclass(eq=False)
-class RoleTakerInAnotherModuleRoleAttributes:
-    introduced_attribute: str = field(init=False)
-    same_module_annotated_introduced_attribute: DelegateAsThirdRole = field(init=False)
+class RoleForRoleTakerInAnotherModule(ABC):
 
-
-@dataclass(eq=False)
-class RoleForRoleTakerInAnotherModule(RoleTakerInAnotherModuleRoleAttributes, ABC):
-
-    @abstractmethod
     @property
+    @abstractmethod
     def role_taker(self) -> RoleTakerInAnotherModule: ...
 
     @property

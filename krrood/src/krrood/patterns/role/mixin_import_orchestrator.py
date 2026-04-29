@@ -106,9 +106,8 @@ class MixinImportOrchestrator:
         :param factory: The node factory for creating CST nodes.
         :return: A complete Module node ready to emit as source code.
         """
-        self._add_required_mixin_imports()
-
         used_names = self._collect_used_names_in_mixins(mixin_classes)
+        self._add_required_mixin_imports(used_names)
         runtime_names = self._collect_runtime_names(mixin_classes)
 
         # Names that should be imported at top level (those used in decorators)
@@ -154,9 +153,12 @@ class MixinImportOrchestrator:
             class_def.visit(collector)
         return collector.names
 
-    def _add_required_mixin_imports(self) -> None:
+    def _add_required_mixin_imports(self, used_names: set[str] | None = None) -> None:
         """Record the standard imports that every generated mixin module needs."""
-        self.require_import("dataclasses", ["dataclass", "field"])
+        dataclass_names = ["dataclass"]
+        if used_names and "field" in used_names:
+            dataclass_names.append("field")
+        self.require_import("dataclasses", dataclass_names)
         self.require_import("abc", ["ABC", "abstractmethod"])
         self.require_import("typing_extensions", ["TYPE_CHECKING"])
 

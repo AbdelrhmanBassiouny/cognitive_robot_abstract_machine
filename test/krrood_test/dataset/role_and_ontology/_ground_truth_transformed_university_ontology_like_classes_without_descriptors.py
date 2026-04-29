@@ -7,8 +7,8 @@ from typing_extensions import Set, List, TypeVar
 from test.krrood_test.dataset.role_and_ontology.role_mixins._ground_truth_role_takers_in_another_module_role_mixins import (
     RoleForRoleTakerInAnotherModule,
 )
+from krrood.patterns.role import HasRoles
 from test.krrood_test.dataset.role_and_ontology.role_mixins._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
-    PersonInRoleAndOntologyRoleAttributes,
     RoleForPersonInRoleAndOntology,
     RoleForSubclassOfARoleTaker,
     RoleForCEOAsFirstRole,
@@ -59,7 +59,7 @@ class Course(HasName, Symbol): ...
 
 
 @dataclass(eq=False)
-class PersonInRoleAndOntology(PersonInRoleAndOntologyRoleAttributes, HasName, Symbol):
+class PersonInRoleAndOntology(HasRoles, HasName, Symbol):
     works_for: RecognizedGroup = None
     member_of: List[RecognizedGroup] = field(default_factory=list)
 

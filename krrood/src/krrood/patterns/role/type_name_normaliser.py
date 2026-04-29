@@ -65,6 +65,11 @@ class TypeNameNormaliser:
 
     def _handle_generic_type(self, type_obj: Any, origin: Any) -> str:
         """Normalise a generic type such as List[str] or Dict[str, Any]."""
+        # Capture the typing alias (e.g. 'Dict') before get_origin() erases it to the builtin.
+        alias_name = getattr(type_obj, "_name", None)
+        alias_module = getattr(type_obj, "__module__", None)
+        if alias_name and alias_module and alias_module != "builtins":
+            self.resolver.name_to_module_map.setdefault(alias_name, alias_module)
         origin_name = self.normalise(origin)
         args = get_args(type_obj)
 
