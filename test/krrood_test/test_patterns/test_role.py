@@ -14,13 +14,15 @@ from krrood.class_diagrams.utils import classes_of_module, T
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from ..dataset.role_and_ontology import university_ontology_like_classes
-from ..dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
+from ..dataset.role_and_ontology._ground_truth_transformed_university_ontology_like_classes_without_descriptors import (
     PersonInRoleAndOntology,
     CEOAsFirstRole,
     Company,
     ProfessorAsFirstRole,
     Course,
-    RepresentativeAsSecondRole, DelegateAsThirdRole, InDirectDiamondShapedInheritanceWhereOneIsRole,
+    RepresentativeAsSecondRole,
+    DelegateAsThirdRole,
+    InDirectDiamondShapedInheritanceWhereOneIsRole,
     DirectDiamondShapedInheritanceWhereOneIsRole,
 )
 
@@ -32,11 +34,19 @@ def test_getting_and_setting_attribute_for_role_and_role_taker():
 
     assert ceo.person.name == person.name
 
-    # shared-base attr (from HasName) still delegates from role to taker
+    # shared-base attr (from HasName) delegates from role to taker via RoleFor mixin property
     assert ceo.name == person.name
 
     # role-native attr lives on the role; access it directly from the role
     assert ceo.head_of == Company(name="BassCo")
+
+
+def test_role_native_attr_accessible_from_roles_dict():
+    person = PersonInRoleAndOntology(name="Bass")
+    ceo = CEOAsFirstRole(person=person, head_of=Company(name="BassCo"))
+
+    assert person.roles[CEOAsFirstRole] is ceo
+    assert person.roles[CEOAsFirstRole].head_of == Company(name="BassCo")
 
 
 def test_getting_and_setting_attribute_between_sibling_roles():
@@ -52,6 +62,10 @@ def test_getting_and_setting_attribute_between_sibling_roles():
     # role-native attrs on each role are directly accessible from that role
     assert professor.teacher_of[0].name == "BassCourse"
     assert ceo.head_of.name == "BassCo"
+
+    # sibling role attrs are accessible via the roles dict on the shared taker
+    assert person.roles[CEOAsFirstRole].head_of.name == "BassCo"
+    assert person.roles[ProfessorAsFirstRole].teacher_of[0].name == "BassCourse"
 
 
 def test_accessing_attribute_of_role_from_role_taker_when_role_does_not_exist_and_the_attribute_has_default():
@@ -128,7 +142,9 @@ def test_get_roles_of_type():
 
 
 def test_role_that_inherits_from_class_that_role_taker_inherits_from_that_has_default_attributes():
-    person = PersonInRoleAndOntology(name="Bass", default_name="BassDefualt")
+    person = PersonInRoleAndOntology(name="Bass", default_name="BassDefault")
+    # DirectDiamondShapedInheritanceWhereOneIsRole inherits from HasName and
+    # RoleForPersonInRoleAndOntology; the mixin property delegates name to role_taker.
     ceo = DirectDiamondShapedInheritanceWhereOneIsRole(person=person)
     assert ceo.name == person.name
     assert ceo.default_name == person.default_name
@@ -163,7 +179,6 @@ def test_role_taker_associations():
             )
             == 9
     )
-    # diagram.to_dot("class_diagram.svg")
 
 
 @dataclass

@@ -643,6 +643,34 @@ class GenericClassDAO(
     }
 
 
+class GenericClass_floatDAO(
+    GenericClassDAO,
+    DataAccessObject[test.krrood_test.dataset.example_classes.GenericClass[float]],
+):
+
+    __tablename__ = "GenericClass_floatDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(GenericClassDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    value: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    optional_value: Mapped[typing.Optional[builtins.float]] = mapped_column(
+        use_existing_column=True
+    )
+
+    container: Mapped[typing.List[builtins.float]] = mapped_column(
+        JSON, nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "GenericClass_floatDAO",
+        "inherit_condition": database_id == GenericClassDAO.database_id,
+    }
+
+
 class GenericClass_KRROODPositionDAO(
     GenericClassDAO,
     DataAccessObject[
@@ -691,34 +719,6 @@ class GenericClass_KRROODPositionDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "GenericClass_KRROODPositionDAO",
-        "inherit_condition": database_id == GenericClassDAO.database_id,
-    }
-
-
-class GenericClass_floatDAO(
-    GenericClassDAO,
-    DataAccessObject[test.krrood_test.dataset.example_classes.GenericClass[float]],
-):
-
-    __tablename__ = "GenericClass_floatDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(GenericClassDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    value: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-    optional_value: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-
-    container: Mapped[typing.List[builtins.float]] = mapped_column(
-        JSON, nullable=False, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "GenericClass_floatDAO",
         "inherit_condition": database_id == GenericClassDAO.database_id,
     }
 
@@ -1151,6 +1151,73 @@ class MultipleInheritanceDAO(
     __mapper_args__ = {
         "polymorphic_identity": "MultipleInheritanceDAO",
         "inherit_condition": database_id == PrimaryBaseDAO.database_id,
+    }
+
+
+class RoleForBaseForRoleRecursionDAO(
+    Base,
+    DataAccessObject[
+        test.krrood_test.dataset.role_and_ontology.classes_for_testing_role_recursion_error.RoleForBaseForRoleRecursion
+    ],
+):
+
+    __tablename__ = "RoleForBaseForRoleRecursionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForBaseForRoleRecursionDAO",
+    }
+
+
+class RoleForIntermediateForRoleRecursionDAO(
+    RoleForBaseForRoleRecursionDAO,
+    DataAccessObject[
+        test.krrood_test.dataset.role_and_ontology.classes_for_testing_role_recursion_error.RoleForIntermediateForRoleRecursion
+    ],
+):
+
+    __tablename__ = "RoleForIntermediateForRoleRecursionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(RoleForBaseForRoleRecursionDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RoleForIntermediateForRoleRecursionDAO",
+        "inherit_condition": database_id == RoleForBaseForRoleRecursionDAO.database_id,
+    }
+
+
+class RoleForPersonForRoleRecursionDAO(
+    Base,
+    DataAccessObject[
+        test.krrood_test.dataset.role_and_ontology.classes_for_testing_role_recursion_error.RoleForPersonForRoleRecursion
+    ],
+):
+
+    __tablename__ = "RoleForPersonForRoleRecursionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForPersonForRoleRecursionDAO",
     }
 
 
@@ -2550,13 +2617,6 @@ class DirectDiamondShapedInheritanceWhereOneIsRoleDAO(
 
     database_id: Mapped[builtins.int] = mapped_column(
         ForeignKey(RoleDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    name: Mapped[builtins.str] = mapped_column(
-        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
-    )
-    default_name: Mapped[builtins.str] = mapped_column(
-        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
     )
 
     __mapper_args__ = {
