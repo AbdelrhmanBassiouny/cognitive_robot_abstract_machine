@@ -20,6 +20,7 @@ from typing import (
 import libcst
 from libcst.codemod import ContextAwareTransformer, CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
+from typing_extensions import Dict
 
 from krrood import logger
 from krrood.class_diagrams import ClassDiagram
@@ -56,6 +57,8 @@ Suffix for generated role mixin file names.
 _ALWAYS_EXCLUDED_METHODS: frozenset[str] = frozenset(
     {"__init__", "__post_init__", "__new__"}
 )
+
+
 # __new__ is defined on Symbol (a Role base) as a staticmethod; inspect.getmembers
 # unwraps it to a plain function, so it must be excluded explicitly here.
 
@@ -89,11 +92,11 @@ def _is_from_role_class(name: str, clazz: type) -> bool:
 
 
 def _find_defining_class(
-    name: str,
-    clazz: type,
-    module_name: str,
-    role_takers: set[type],
-    is_member: Callable[[type], bool],
+        name: str,
+        clazz: type,
+        module_name: str,
+        role_takers: set[type],
+        is_member: Callable[[type], bool],
 ) -> type | None:
     """Return the first class in clazz's MRO that defines name under the given membership test.
 
@@ -116,7 +119,7 @@ def _find_defining_class(
             if klass in role_takers:
                 return None
             if klass.__module__ == module_name or same_package(
-                klass.__module__, module_name
+                    klass.__module__, module_name
             ):
                 return klass
             return None
@@ -150,9 +153,9 @@ class RoleTransformer:
 
     @classmethod
     def _build_role_diagram(
-        cls,
-        module: ModuleType,
-        taker_modules: list[ModuleType],
+            cls,
+            module: ModuleType,
+            taker_modules: list[ModuleType],
     ) -> tuple[ClassDiagram, list[ModuleType]]:
         """Build a ClassDiagram for the module, auto-discovering role taker modules.
 
@@ -248,7 +251,7 @@ class RoleTransformer:
         return prefix
 
     def get_generated_file_path(
-        self, module: ModuleType, is_mixin: bool = False
+            self, module: ModuleType, is_mixin: bool = False
     ) -> Path:
         """Return the path where the generated file for the module should be written.
 
@@ -275,12 +278,12 @@ class RoleModuleTransformer(ContextAwareTransformer):
     """
 
     def __init__(
-        self,
-        context: CodemodContext,
-        class_diagram: ClassDiagram,
-        module: ModuleType,
-        taker_modules: list[ModuleType],
-        file_name_prefix: str = "",
+            self,
+            context: CodemodContext,
+            class_diagram: ClassDiagram,
+            module: ModuleType,
+            taker_modules: list[ModuleType],
+            file_name_prefix: str = "",
     ):
         """Initialise the transformer with the class diagram and module context.
 
@@ -318,7 +321,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
 
     def require_original_import(
-        self, module: str, obj: str | list[str] | None = None
+            self, module: str, obj: str | list[str] | None = None
     ) -> None:
         """Record an import that must appear in the transformed original module.
 
@@ -328,7 +331,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self._import_orchestrator.require_original_import(module, obj)
 
     def leave_ClassDef(
-        self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
+            self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
     ) -> libcst.ClassDef | libcst.FlattenSentinel[libcst.BaseCompoundStatement]:
         """Handle class-level transformations for role takers and role classes.
 
@@ -364,7 +367,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return None
 
     def _handle_taker_transformation(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+            self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> list[libcst.ClassDef]:
         """Apply role-taker transformation, tracking current_class for import resolution."""
         self.current_class = wrapped_class.clazz
@@ -373,7 +376,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return result
 
     def _handle_role_transformation(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+            self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> libcst.ClassDef:
         """Apply role transformation, tracking current_class for import resolution."""
         self.current_class = wrapped_class.clazz
@@ -382,7 +385,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return result
 
     def leave_ImportFrom(
-        self, original_node: libcst.ImportFrom, updated_node: libcst.ImportFrom
+            self, original_node: libcst.ImportFrom, updated_node: libcst.ImportFrom
     ) -> libcst.ImportFrom:
         """Rewrite import statements: resolve relative imports and prefix transformed module names.
 
@@ -427,7 +430,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
 
     def _rewrite_prefixed_module_name(
-        self, node: libcst.ImportFrom
+            self, node: libcst.ImportFrom
     ) -> libcst.ImportFrom:
         """Rewrite the last module segment to include the file name prefix."""
         module_name = self._get_module_name_str(node.module)
@@ -461,7 +464,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return None
 
     def _update_last_module_part(
-        self, node: libcst.BaseExpression, new_name: str
+            self, node: libcst.BaseExpression, new_name: str
     ) -> libcst.BaseExpression:
         """Replace the last segment of a dotted module expression with new_name."""
         if isinstance(node, libcst.Name):
@@ -471,7 +474,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return node
 
     def leave_Module(
-        self, original_node: libcst.Module, updated_node: libcst.Module
+            self, original_node: libcst.Module, updated_node: libcst.Module
     ) -> libcst.Module:
         """Capture the transformed original module and produce the mixin module AST.
 
@@ -508,7 +511,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return self._resolver.resolve(name, self.current_class)
 
     def _transform_role_taker(
-        self, role_taker_node: libcst.ClassDef, wrapped_class: WrappedClass
+            self, role_taker_node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> list[libcst.ClassDef]:
         """Transform a role taker class by adding HasRoles as a base if required."""
         self.make_role_for_node(role_taker_node, wrapped_class)
@@ -516,19 +519,50 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if self._should_add_has_roles(role_taker_node, wrapped_class):
             role_taker_class_bases = list(role_taker_node.bases)
             if not any(
-                RoleNodeFactory.get_name_from_base_node(base.value) == HasRoles.__name__
-                for base in role_taker_class_bases
+                    RoleNodeFactory.get_name_from_base_node(base.value) == HasRoles.__name__
+                    for base in role_taker_class_bases
             ):
                 role_taker_class_bases.insert(
                     0, RoleNodeFactory.make_argument(HasRoles.__name__)
                 )
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
+            role_taker_node = self._ensure_HasRoles_init_is_called_in_explicit_init_of_role_taker_class(role_taker_node)
             self.require_original_import("krrood.patterns.role", [HasRoles.__name__])
 
         return [role_taker_node]
 
+    def _ensure_HasRoles_init_is_called_in_explicit_init_of_role_taker_class(self,
+                                                                             role_taker_node: libcst.ClassDef) -> libcst.ClassDef:
+        """Handle explicit __init__ method in a class definition. This will ensure that HasRoles.__init__ is called in
+        the __init__ method of the class.
+
+        :param role_taker_node: The class definition node to handle.
+
+        :return: The modified class definition node with HasRoles.__init__ call added if necessary.
+        """
+        decorator_kwargs = self._get_keyword_arguments_of_decorator_of_class_node(role_taker_node, "dataclass")
+        if not decorator_kwargs or "init" not in decorator_kwargs or decorator_kwargs["init"].value != "False":
+            return role_taker_node
+        # add a line that calls the init method of the HasRoles class
+        original_body = role_taker_node.body
+        init_function_index, init_function = next(((i, node) for i, node in enumerate(original_body.body) if
+                                                   isinstance(node,
+                                                              libcst.FunctionDef) and node.name.value == "__init__"),
+                                                  (None, None))
+        if init_function:
+            new_body = libcst.IndentedBlock(
+                list(init_function.body.body) + [
+                    libcst.parse_statement(f"{HasRoles.__name__}.__init__(self)")
+                ])
+            init_function = init_function.with_changes(body=new_body)
+            new_body = libcst.IndentedBlock(
+                list(original_body.body[:init_function_index]) + [init_function] + list(original_body.body[
+                                                                                            init_function_index + 1:]))
+            role_taker_node = role_taker_node.with_changes(body=new_body)
+        return role_taker_node
+
     def _should_add_has_roles(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+            self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> bool:
         """Return True if HasRoles should be added to this role taker's bases.
 
@@ -537,12 +571,12 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :return: True only for root takers that do not already inherit HasRoles.
         """
         return not (
-            any(RoleNodeFactory._is_role_base(base.value) for base in node.bases)
-            or self.bases_of_class_that_are_role_takers(wrapped_class)
+                any(RoleNodeFactory._is_role_base(base.value) for base in node.bases)
+                or self.bases_of_class_that_are_role_takers(wrapped_class)
         )
 
     def bases_of_class_that_are_role_takers(
-        self, wrapped_class: WrappedClass
+            self, wrapped_class: WrappedClass
     ) -> dict[str, type]:
         """Return all direct base classes of the wrapped class that are also role takers.
 
@@ -556,9 +590,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
         }
 
     def make_role_for_node(
-        self,
-        node: libcst.ClassDef,
-        wrapped_class: WrappedClass,
+            self,
+            node: libcst.ClassDef,
+            wrapped_class: WrappedClass,
     ) -> None:
         """Create and store a RoleFor<RoleTaker> class for the given role taker.
 
@@ -585,9 +619,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
 
     def _assemble_role_for_body(
-        self,
-        wrapped_class: WrappedClass,
-        taker_direct_items: dict[str, list],
+            self,
+            wrapped_class: WrappedClass,
+            taker_direct_items: dict[str, list],
     ) -> list[libcst.FunctionDef]:
         """Return the body nodes for a RoleFor class.
 
@@ -610,16 +644,16 @@ class RoleModuleTransformer(ContextAwareTransformer):
         """Return all field names from base taker classes of the given wrapped class."""
         all_taker_fields = []
         for base_name, taker_type in self.bases_of_class_that_are_role_takers(
-            wrapped_class
+                wrapped_class
         ).items():
             wrapped_taker = self.class_diagram.get_wrapped_class(taker_type)
             all_taker_fields.extend([f.name for f in wrapped_taker.fields])
         return all_taker_fields
 
     def _group_all_body_items(
-        self,
-        wrapped_class: WrappedClass,
-        all_taker_fields: list[str],
+            self,
+            wrapped_class: WrappedClass,
+            all_taker_fields: list[str],
     ) -> dict[type | None, dict[str, list[libcst.FunctionDef]]]:
         """Return delegation nodes grouped by the class in the MRO that defines each item.
 
@@ -642,12 +676,12 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return groups
 
     def _collect_field_delegations(
-        self,
-        wrapped_class: WrappedClass,
-        taker_fields: list[str],
-        role_takers: set[type],
-        module_name: str,
-        groups: dict[type | None, dict[str, list]],
+            self,
+            wrapped_class: WrappedClass,
+            taker_fields: list[str],
+            role_takers: set[type],
+            module_name: str,
+            groups: dict[type | None, dict[str, list]],
     ) -> None:
         """Populate groups with getter/setter delegation nodes for each dataclass field.
 
@@ -675,16 +709,16 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 module_name,
                 role_takers,
                 lambda klass: hasattr(klass, "__dataclass_fields__")
-                and field_.name in klass.__dataclass_fields__,
+                              and field_.name in klass.__dataclass_fields__,
             )
             groups.setdefault(defining_base, {})[field_.name] = prop_nodes
 
     def _collect_property_delegations(
-        self,
-        wrapped_class: WrappedClass,
-        role_takers: set[type],
-        module_name: str,
-        groups: dict[type | None, dict[str, list]],
+            self,
+            wrapped_class: WrappedClass,
+            role_takers: set[type],
+            module_name: str,
+            groups: dict[type | None, dict[str, list]],
     ) -> None:
         """Populate groups with getter/setter delegation nodes for each data descriptor.
 
@@ -694,7 +728,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param groups: The accumulator dict to populate.
         """
         for property_name, property_value in inspect.getmembers(
-            wrapped_class.clazz, inspect.isdatadescriptor
+                wrapped_class.clazz, inspect.isdatadescriptor
         ):
             if not isinstance(property_value, property):
                 continue
@@ -728,11 +762,11 @@ class RoleModuleTransformer(ContextAwareTransformer):
             groups.setdefault(defining_base, {})[property_name] = prop_nodes
 
     def _collect_method_delegations(
-        self,
-        wrapped_class: WrappedClass,
-        role_takers: set[type],
-        module_name: str,
-        groups: dict[type | None, dict[str, list]],
+            self,
+            wrapped_class: WrappedClass,
+            role_takers: set[type],
+            module_name: str,
+            groups: dict[type | None, dict[str, list]],
     ) -> None:
         """Populate groups with delegation nodes for each delegatable method.
 
@@ -748,7 +782,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
             base_takers.append(wrapped_class.clazz.get_role_taker_type())
 
         for method_name, method_object in inspect.getmembers(
-            wrapped_class.clazz, predicate=inspect.isfunction
+                wrapped_class.clazz, predicate=inspect.isfunction
         ):
             if method_name in _ALWAYS_EXCLUDED_METHODS:
                 continue
@@ -770,8 +804,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 groups.setdefault(defining_base, {})[method_name] = [method_node]
 
     def _populate_base_rolefor_nodes(
-        self,
-        body_by_class: dict[type | None, dict[str, list]],
+            self,
+            body_by_class: dict[type | None, dict[str, list]],
     ) -> list[type]:
         """Ensure a RoleFor<Base> node exists for every non-None key in body_by_class.
 
@@ -790,9 +824,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return sorted_bases
 
     def _make_base_rolefor_node(
-        self,
-        base_class: type,
-        body_items: dict[str, list[libcst.FunctionDef]],
+            self,
+            base_class: type,
+            body_items: dict[str, list[libcst.FunctionDef]],
     ) -> libcst.ClassDef:
         """Generate a ``@dataclass(eq=False) class RoleFor<Base>(...)`` node.
 
@@ -833,7 +867,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return rolefor_bases
 
     def make_method_node(
-        self, name: str, method: Callable, clazz: type
+            self, name: str, method: Callable, clazz: type
     ) -> libcst.FunctionDef | None:
         """Create a delegation FunctionDef node for a method of the role taker.
 
@@ -890,8 +924,41 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if sig.return_annotation is not inspect.Signature.empty:
             self._get_consistent_type_name(sig.return_annotation)
 
+    def _get_keyword_arguments_of_decorator_of_class_node(
+            self,
+            class_node: libcst.ClassDef,
+            decorator_name: str
+    ) -> Dict[str, libcst.BaseExpression]:
+        """
+        Return the keyword arguments of the decorator of a class node.
+
+        :param class_node: The class node to get the decorator of.
+        :param decorator_name: The name of the decorator to get the arguments of.
+
+        :return: A dictionary of keyword arguments and their values.
+        """
+        decorator_node = next(
+            (
+                d for d in class_node.decorators
+                if self._get_decorator_name(d.decorator) == decorator_name
+            ),
+            None
+        )
+
+        if decorator_node is None:
+            return {}
+
+        if isinstance(decorator_node.decorator, libcst.Call):
+            return {
+                arg.keyword.value: arg.value
+                for arg in decorator_node.decorator.args
+                if arg.keyword is not None
+            }
+
+        return {}
+
     def _register_decorator_imports(
-        self, method_node: libcst.FunctionDef, method: Callable
+            self, method_node: libcst.FunctionDef, method: Callable
     ) -> None:
         """Register the source module of each decorator used on the method.
 
@@ -915,13 +982,13 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if isinstance(decorator_node, libcst.Name):
             return decorator_node.value
         if isinstance(decorator_node, libcst.Call) and isinstance(
-            decorator_node.func, libcst.Name
+                decorator_node.func, libcst.Name
         ):
             return decorator_node.func.value
         return None
 
     def _generate_delegation_body(
-        self, method_node: libcst.FunctionDef, name: str, method: Callable, clazz: type
+            self, method_node: libcst.FunctionDef, name: str, method: Callable, clazz: type
     ) -> libcst.FunctionDef:
         """Replace the method body with a delegation call to ``self.role_taker.<name>``.
 
@@ -956,10 +1023,10 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
 
     def make_role_for_bases(
-        self,
-        node: libcst.ClassDef,
-        wrapped_class: WrappedClass,
-        segregated_base_types: list[type] | None = None,
+            self,
+            node: libcst.ClassDef,
+            wrapped_class: WrappedClass,
+            segregated_base_types: list[type] | None = None,
     ) -> list[libcst.Arg]:
         """Generate the base class arguments for a RoleFor class.
 
@@ -979,7 +1046,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                     )
                 )
             elif RoleNodeFactory._is_role_base(base.value) and issubclass(
-                wrapped_class.clazz, Role
+                    wrapped_class.clazz, Role
             ):
                 taker_type = wrapped_class.clazz.get_role_taker_type()
                 role_for_bases.append(
@@ -1009,7 +1076,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return self._normaliser.normalise(type_obj)
 
     def _transform_role(
-        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+            self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> libcst.ClassDef:
         """Adjust a role class by replacing Role bases with their corresponding RoleFor bases.
 
@@ -1034,8 +1101,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if self._is_role_base_node(base):
                 role_for_name = self.get_role_for_name(taker_type)
                 if not any(
-                    RoleNodeFactory.get_name_from_base_node(b.value) == role_for_name
-                    for b in node.bases
+                        RoleNodeFactory.get_name_from_base_node(b.value) == role_for_name
+                        for b in node.bases
                 ):
                     logger.debug("  Adding %s", role_for_name)
                     new_bases.append(RoleNodeFactory.make_argument(role_for_name))

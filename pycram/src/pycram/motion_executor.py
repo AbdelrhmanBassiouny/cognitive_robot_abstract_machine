@@ -16,7 +16,10 @@ from giskardpy.motion_statechart.motion_statechart import (
     MotionStatechart,
 )
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from giskardpy.ros_executor import Ros2Executor
+try:
+    from giskardpy.ros_executor import Ros2Executor
+except ModuleNotFoundError as e:
+    Ros2Executor = None
 from pycram.datastructures.enums import ExecutionType
 from pycram.exceptions import MotionDidNotFinish
 

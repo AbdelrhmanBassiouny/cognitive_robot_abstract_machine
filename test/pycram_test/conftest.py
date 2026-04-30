@@ -4,6 +4,7 @@ from functools import partial
 
 import pytest
 
+from pycram import logger
 from pycram.datastructures.grasp import GraspPose
 
 try:
@@ -91,28 +92,13 @@ def pycram_testing_session():
 
 
 def pytest_configure(config):
-    # all_classes = set(classes_of_package(pycram))
-    all_classes = [GraspPose]
-    # all_classes -= set(classes_of_module(semantic_digital_twin.orm.ormatic_interface))
-    # all_classes -= set(classes_of_package(semantic_digital_twin.adapters))
-    # all_classes |= set(
-    #     classes_of_package(semantic_digital_twin.adapters.sage_10k_dataset)
-    # )
-    # # remove classes that should not be mapped
-    # all_classes -= {
-    #     ResetStateContextManager,
-    #     WorldModelUpdateContextManager,
-    #     ForwardKinematicsManager,
-    #     semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,
-    #     ContainsType,
-    #     SemanticDirection,
-    #     SubclassJSONSerializer,
-    # }
-    # keep only dataclasses that are NOT AlternativeMapping subclasses
-    all_classes = {
-        c
-        for c in all_classes
-        if is_dataclass(c)  # and not issubclass(c, AlternativeMapping)
-    }
-    class_diagram = ClassDiagram(list(all_classes))
-    transform_roles_in_class_diagram(class_diagram)
+    """
+    Configures pytest to generate a class diagram for all dataclasses in pycram. Then
+    apply role transformation all role classes in the class diagram
+    """
+    all_classes = [c for c in classes_of_package(pycram) if is_dataclass(c)]
+    class_diagram = ClassDiagram(all_classes)
+    try:
+        transform_roles_in_class_diagram(class_diagram)
+    except Exception as e:
+        logger.warning(f"Failed to transform roles in class diagram: {e}")
