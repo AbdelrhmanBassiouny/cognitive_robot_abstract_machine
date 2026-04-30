@@ -1799,8 +1799,6 @@ class Pose(HasRoles, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         self.reference_frame = reference_frame
         super().__post_init__()
         HasRoles.__init__(self)
-        HasRoles.__init__(self)
-        HasRoles.__init__(self)
 
     def _verify_type(self):
         if self.shape != (4, 4):

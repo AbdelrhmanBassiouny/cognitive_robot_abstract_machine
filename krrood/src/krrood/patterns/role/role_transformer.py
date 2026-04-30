@@ -549,16 +549,32 @@ class RoleModuleTransformer(ContextAwareTransformer):
                                                    isinstance(node,
                                                               libcst.FunctionDef) and node.name.value == "__init__"),
                                                   (None, None))
-        if init_function:
-            new_body = libcst.IndentedBlock(
-                list(init_function.body.body) + [
-                    libcst.parse_statement(f"{HasRoles.__name__}.__init__(self)")
-                ])
-            init_function = init_function.with_changes(body=new_body)
-            new_body = libcst.IndentedBlock(
-                list(original_body.body[:init_function_index]) + [init_function] + list(original_body.body[
-                                                                                            init_function_index + 1:]))
-            role_taker_node = role_taker_node.with_changes(body=new_body)
+        if not init_function:
+            return role_taker_node
+
+        init_line_exists = any(
+            isinstance(stmt, libcst.SimpleStatementLine)
+            and len(stmt.body) == 1
+            and isinstance(stmt.body[0], libcst.Expr)
+            and isinstance(stmt.body[0].value, libcst.Call)
+            and libcst.Module([]).code_for_node(stmt.body[0].value.func)
+            == f"{HasRoles.__name__}.__init__"
+            for stmt in init_function.body.body
+        )
+
+        if init_line_exists:
+            return role_taker_node
+
+        new_body = libcst.IndentedBlock(
+            list(init_function.body.body) + [
+                libcst.parse_statement(f"{HasRoles.__name__}.__init__(self)")
+            ])
+        init_function = init_function.with_changes(body=new_body)
+        new_body = libcst.IndentedBlock(
+            list(original_body.body[:init_function_index]) + [init_function] + list(original_body.body[
+                                                                                        init_function_index + 1:]))
+        role_taker_node = role_taker_node.with_changes(body=new_body)
+
         return role_taker_node
 
     def _should_add_has_roles(
