@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import inspect
 import sys
 from copy import copy
@@ -392,6 +393,8 @@ def get_object_by_name_from_another_object_in_same_module(
     scope = get_scope_from_imports(file_path=source_path)
     if name in scope:
         return scope[name]
+    elif name in builtins.__dict__:
+        return builtins.__dict__[name]
     else:
         raise CouldNotResolveType(
             name,

@@ -9,8 +9,9 @@ import subprocess
 import sys
 import types
 from collections import defaultdict
+from contextlib import contextmanager
 from copy import deepcopy
-from dataclasses import Field
+from dataclasses import Field, field, dataclass
 from dataclasses import fields, MISSING
 from functools import lru_cache, wraps
 from importlib.util import resolve_name
@@ -18,10 +19,10 @@ from inspect import isclass
 from os import PathLike
 from os.path import dirname
 from pathlib import Path
-from typing import Tuple
+from typing import Generator, Tuple
 from typing import Union, Any
 
-from typing_extensions import TypeVar, Type, List, Optional, Callable
+from typing_extensions import TypeVar, Type, List, Optional, Callable, Set
 from typing_extensions import (
     _SpecialForm,
     Iterable,
@@ -646,21 +647,21 @@ def get_scope_from_imports(
     source: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Create a scope dictionary from imports in a Python file or an AST tree.
+    Build a scope dictionary from the import statements in a Python file or AST tree.
 
-    :param file_path: The path to the Python file to extract imports from.
-    :param tree: An AST tree to extract imports from. If provided, file_path is ignored.
-    :param package_name: The name of the package to use for relative imports.
-    :param source: The source code to extract imports from. If provided, file_path and tree are ignored.
-    :return: A dictionary representing the scope with imported modules and their attributes.
+    :param file_path: Path to the Python file to extract imports from.
+    :param tree: Parsed AST to extract imports from.
+    :param package_name: Package name used to resolve relative imports.
+    :param source: Raw source code to extract imports from.
+    :return: A dictionary mapping imported names to their runtime objects.
     """
     if tree is None and file_path is None and source is None:
         raise SourceDataNotProvided(file_path, tree, source)
 
-    # Ensure we have source and a parsed AST
     if file_path and source is None:
         with open(file_path, "r") as f:
             source = f.read()
+
     parsed_tree = tree or (
         ast.parse(source)
         if file_path is None
@@ -683,9 +684,348 @@ def get_scope_from_imports(
     return scope
 
 
+def find_module_source_path(module_name: str) -> Optional[str]:
+    """
+    Find the source .py file for a module by searching sys.path without importing anything.
+
+    :param module_name: Absolute dotted module name (e.g. 'pycram.exceptions').
+    :return: Absolute path to the .py source file, or None if not found.
+    """
+    parts = module_name.split(".")
+    for base in sys.path:
+        pkg_init = os.path.join(base, *parts, "__init__.py")
+        if os.path.isfile(pkg_init):
+            return str(Path(pkg_init).resolve())
+        mod_file = os.path.join(base, *parts[:-1], parts[-1] + ".py") if parts else None
+        if mod_file and os.path.isfile(mod_file):
+            return str(Path(mod_file).resolve())
+    return None
+
+
+def _is_external_package(path: str) -> bool:
+    """
+    Return True when the source path belongs to an externally installed package.
+
+    :param path: Absolute path to a Python source file.
+    """
+    return "site-packages" in path or "dist-packages" in path
+
+
+_MAX_MOCK_ITERATIONS = 20
+
+
+@dataclass
+class ModuleMock:
+    """
+    A minimal module substitute that satisfies the Python module protocol.
+
+    Produces a unique stub ``type`` for every attribute access so that import
+    statements can succeed even when the real module is unavailable. The stub
+    types carry the correct ``__module__`` and ``__name__`` of the originating
+    mock module, making them distinguishable from real objects.
+    """
+
+    module_name: str
+    _stub_cache: Dict[str, type] = field(default_factory=dict, init=False, repr=False)
+
+    @property
+    def __name__(self) -> str:
+        return self.module_name
+
+    @property
+    def __package__(self) -> str:
+        return self.module_name.rsplit(".", 1)[0] if "." in self.module_name else self.module_name
+
+    @property
+    def __path__(self) -> list:
+        return []
+
+    @property
+    def __spec__(self):
+        return None
+
+    @property
+    def __loader__(self):
+        return None
+
+    @property
+    def __file__(self):
+        return None
+
+    def __getattr__(self, attr: str) -> type:
+        cache = object.__getattribute__(self, "_stub_cache")
+        name = object.__getattribute__(self, "module_name")
+        if attr not in cache:
+            cache[attr] = type(attr, (object,), {"__module__": name})
+        return cache[attr]
+
+
+@dataclass
+class MockImportResult:
+    """
+    The outcome of a :func:`_try_mock_import` call.
+
+    :param module: The successfully imported module, or ``None`` on failure.
+    :param external_mocked_names: Frozenset of module names that were replaced
+        with :class:`ModuleMock` instances during the import.
+    """
+
+    module: Optional[types.ModuleType]
+    external_mocked_names: frozenset
+
+    @property
+    def succeeded(self) -> bool:
+        """True when the module was successfully imported."""
+        return self.module is not None
+
+
+@contextmanager
+def _patched_sys_modules(
+    entries: Dict[str, Any],
+) -> Generator[None, None, None]:
+    """
+    Temporarily inject ``entries`` into ``sys.modules`` and roll back ALL
+    changes (including any new modules loaded during the block) on exit.
+    """
+    snapshot = set(sys.modules.keys())
+    originals = {key: sys.modules[key] for key in entries if key in sys.modules}
+    for key, value in entries.items():
+        sys.modules[key] = value
+    try:
+        yield
+    finally:
+        for key in entries:
+            if key in originals:
+                sys.modules[key] = originals[key]
+            else:
+                sys.modules.pop(key, None)
+        for key in set(sys.modules.keys()) - snapshot:
+            sys.modules.pop(key, None)
+
+
+def _extract_failing_module_name(error: ImportError) -> Optional[str]:
+    """
+    Return the dotted name of the module that caused an import failure.
+    """
+    return error.name
+
+
+def _is_internal_module(module_name: str) -> bool:
+    """
+    Return True when a module's source file exists locally outside of any
+    external package directory.
+    """
+    source_path = find_module_source_path(module_name)
+    return source_path is not None and not _is_external_package(source_path)
+
+
+def _attempt_import_with_mocks(
+    module_name: str,
+    patch_dict: Dict[str, Any],
+) -> types.ModuleType:
+    """
+    Import ``module_name`` with ``patch_dict`` injected into ``sys.modules``.
+
+    All ``sys.modules`` changes (including any modules loaded transitively) are
+    rolled back on exit, so the imported module object is returned without
+    leaving traces in the module cache.
+
+    :raises ImportError: when the import still fails with the patched environment.
+    """
+    with _patched_sys_modules(patch_dict):
+        return importlib.import_module(module_name)
+
+
+def _resolve_dependency(
+    failing_name: str,
+    patch_dict: Dict[str, Any],
+    external_mocked_names: Set[str],
+    visiting: Set[str],
+) -> bool:
+    """
+    Resolve a single failing import dependency.
+
+    External dependencies are replaced with a :class:`ModuleMock`; internal
+    dependencies are resolved recursively via :func:`_try_mock_import`.
+
+    :param failing_name: Dotted module name that failed to import.
+    :param patch_dict: Mutable mapping injected into ``sys.modules`` on each
+        import attempt; updated in place when resolved.
+    :param external_mocked_names: Mutable set of externally mocked module
+        names; updated in place when an external dep is mocked.
+    :param visiting: Set of module names currently being mock-imported, used
+        to detect and break import cycles.
+    :return: ``True`` when the dependency was successfully resolved.
+    """
+    if _is_internal_module(failing_name):
+        result = _try_mock_import(failing_name, visiting)
+        if not result.succeeded:
+            return False
+        patch_dict[failing_name] = result.module
+        external_mocked_names.update(result.external_mocked_names)
+    else:
+        logger.warning(
+            f"Mocking unavailable external module '{failing_name}'"
+        )
+        patch_dict[failing_name] = ModuleMock(failing_name)
+        external_mocked_names.add(failing_name)
+    return True
+
+
+def _try_mock_import(
+    module_name: str,
+    visiting: Optional[Set[str]] = None,
+) -> MockImportResult:
+    """
+    Import a module by iteratively mocking any unavailable dependencies.
+
+    External dependencies are replaced with :class:`ModuleMock` instances that
+    preserve the original module's ``__name__`` and ``__module__`` on every
+    stub type they produce. Internal dependencies are resolved recursively
+    using the same strategy.
+
+    :param module_name: Dotted name of the module to import.
+    :param visiting: Set of module names currently being processed, used to
+        detect and break import cycles.
+    :return: A :class:`MockImportResult` describing the outcome.
+    """
+    if visiting is None:
+        visiting = set()
+
+    if module_name in visiting:
+        return MockImportResult(module=None, external_mocked_names=frozenset())
+
+    visiting.add(module_name)
+
+    patch_dict: Dict[str, Any] = {}
+    external_mocked_names: Set[str] = set()
+
+    for _ in range(_MAX_MOCK_ITERATIONS):
+        try:
+            module = _attempt_import_with_mocks(module_name, patch_dict)
+            return MockImportResult(
+                module=module,
+                external_mocked_names=frozenset(external_mocked_names),
+            )
+        except (ImportError, ModuleNotFoundError) as error:
+            failing_name = _extract_failing_module_name(error)
+            if failing_name is None or failing_name == module_name or failing_name in patch_dict:
+                break
+            if not _resolve_dependency(failing_name, patch_dict, external_mocked_names, visiting):
+                break
+        except Exception as error:
+            logger.warning(f"Mock-import of '{module_name}' failed unexpectedly: {error}")
+            break
+
+    return MockImportResult(module=None, external_mocked_names=frozenset(external_mocked_names))
+
+
+def _is_object_from_mocked_module(obj: Any, external_mocked_names: frozenset) -> bool:
+    """
+    Return True when ``obj`` is a stub type that originated from a mocked
+    external module rather than being defined in the real source.
+    """
+    return isinstance(obj, type) and obj.__module__ in external_mocked_names
+
+
+def _add_alias_to_scope(
+    alias: ast.alias,
+    module: types.ModuleType,
+    external_mocked_names: frozenset,
+    scope: Dict[str, Any],
+    resolved_module_name: str,
+    source_file: Optional[str],
+) -> None:
+    """
+    Extract a single aliased name from a mock-imported module into ``scope``,
+    skipping any object that originates from a mocked external module.
+
+    :param alias: The AST alias node describing the name (and optional ``as`` alias).
+    :param module: The successfully mock-imported module.
+    :param external_mocked_names: Frozenset of externally mocked module names
+        used to filter stub objects.
+    :param scope: The scope dict to populate.
+    :param resolved_module_name: Dotted name of the mock-imported module
+        (used only for log messages).
+    :param source_file: Path of the file that triggered this import (for logs).
+    """
+    name = alias.name
+    asname = alias.asname or name
+    module_namespace = vars(module)
+
+    if name == "*":
+        for attr_name, obj in module_namespace.items():
+            if not _is_object_from_mocked_module(obj, external_mocked_names):
+                scope[attr_name] = obj
+        return
+
+    if name not in module_namespace:
+        logger.warning(
+            f"'{name}' not found in '{resolved_module_name}' "
+            f"(imported from '{source_file}')"
+        )
+        return
+
+    obj = module_namespace[name]
+
+    if _is_object_from_mocked_module(obj, external_mocked_names):
+        logger.warning(
+            f"Skipping '{name}' from '{resolved_module_name}': "
+            f"originates from mocked external module '{obj.__module__}'"
+        )
+        return
+
+    scope[asname] = obj
+
+
+def _try_extract_from_source(
+    resolved_module_name: Optional[str],
+    node: ast.ImportFrom,
+    scope: Dict[str, Any],
+    file_path: Optional[str],
+) -> None:
+    """
+    Fallback for a failed from-import: mock-import the target module with any
+    unavailable external dependencies replaced by :class:`ModuleMock` stubs,
+    then extract the requested names into ``scope``.
+
+    Skips gracefully when the module has no local source file, is itself an
+    external package, or cannot be imported even with all external dependencies
+    mocked.
+    """
+    if not resolved_module_name:
+        return
+
+    source_path = find_module_source_path(resolved_module_name)
+
+    if source_path is None:
+        logger.warning(f"No source found for '{resolved_module_name}', skipping")
+        return
+
+    if _is_external_package(source_path):
+        logger.warning(f"Skipping external package '{resolved_module_name}'")
+        return
+
+    result = _try_mock_import(resolved_module_name)
+
+    if not result.succeeded:
+        logger.warning(f"Could not mock-import '{resolved_module_name}', skipping")
+        return
+
+    for alias in node.names:
+        _add_alias_to_scope(
+            alias=alias,
+            module=result.module,
+            external_mocked_names=result.external_mocked_names,
+            scope=scope,
+            resolved_module_name=resolved_module_name,
+            source_file=file_path,
+        )
+
+
 def _import_module_safely(
     module_name: str, package_name: Optional[str]
-) -> Optional[types.ModuleType]:
+) -> Union[types.ModuleType | ModuleNotFoundError | ImportError]:
     """
     Attempt to import a module with an optional package context and return the module or None on failure.
 
@@ -699,9 +1039,9 @@ def _import_module_safely(
 
     try:
         return importlib.import_module(module_name, package=package_name)
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as e:
         if not package_name:
-            return None
+            return e
         try:
             if module_name.startswith(".") and package_name:
                 full_name = resolve_name(module_name, package_name)
@@ -710,10 +1050,10 @@ def _import_module_safely(
             if full_name in sys.modules:
                 return sys.modules[full_name]
             return importlib.import_module(full_name)
-        except Exception:
-            return None
-    except ImportError:
-        return None
+        except (ModuleNotFoundError, ImportError) as e:
+            return e
+    except ImportError as e:
+        return e
 
 
 def get_module_object(
@@ -793,7 +1133,9 @@ def _handle_import_node(
         module_name = alias.name
         asname = alias.asname or alias.name
         module = _import_module_safely(module_name, package_name)
-        if module is not None:
+        if isinstance(module, Exception):
+            logger.warning(f"Could not import {module_name}: {module}")
+        elif module is not None:
             scope[asname] = module
         else:
             logger.warning(f"Could not import {module_name}")
@@ -808,15 +1150,18 @@ def _handle_import_from_node(
     """
     Process a from-import node and update the provided scope mapping.
 
+    When the target module cannot be imported normally, delegates to
+    :func:`_try_extract_from_source` which mock-imports the module with
+    unavailable external dependencies replaced by stubs.
+
     :param node: The from-import node to process.
     :param scope: The scope mapping to update.
-    :param file_path: The path to the file containing the import statement.
-    :param package_name: The package name to use for relative imports.
-    :return: the (possibly) updated package_name to mimic original behavior.
+    :param file_path: Path to the file containing the import statement.
+    :param package_name: Package name used to resolve relative imports.
+    :return: The (possibly updated) package name.
     """
     module_name = node.module
 
-    # Resolve relative imports (may update package_name and module_name)
     resolved_module_name, resolved_package_name = _resolve_relative_import(
         file_path=file_path,
         node=node,
@@ -824,7 +1169,6 @@ def _handle_import_from_node(
         package_name=package_name,
     )
 
-    # Mimic original behavior: allow package_name to be overwritten for subsequent iterations
     package_name = resolved_package_name
 
     module = None
@@ -832,28 +1176,34 @@ def _handle_import_from_node(
         module = _import_module_safely(resolved_module_name, package_name)
 
     if module is None and resolved_package_name and resolved_module_name:
-        # Fallback already attempted in _import_module_safely; keep for parity
         module = _import_module_safely(
             f"{resolved_package_name}.{resolved_module_name}", None
         )
 
-    if module is None:
+    if isinstance(module, Exception):
         logger.warning(
-            f"Could not import {resolved_module_name} while extracting imports from {file_path}"
+            f"Could not import '{resolved_module_name}' from '{file_path}': {module}"
+        )
+        _try_extract_from_source(
+            resolved_module_name=resolved_module_name,
+            node=node,
+            scope=scope,
+            file_path=file_path,
         )
         return package_name
 
+    module_namespace = vars(module)
     for alias in node.names:
         name = alias.name
         asname = alias.asname or name
-        try:
-            if name == "*":
-                scope.update(module.__dict__)
-            else:
-                scope[asname] = getattr(module, name)
-        except AttributeError as e:
+        if name == "*":
+            scope.update(module_namespace)
+        elif name in module_namespace:
+            scope[asname] = module_namespace[name]
+        else:
             logger.warning(
-                f"Could not import {resolved_module_name}: {e} while extracting imports from {file_path}"
+                f"'{name}' not found in '{resolved_module_name}' "
+                f"(imported from '{file_path}')"
             )
 
     return package_name
