@@ -301,7 +301,7 @@ class CostmapLocation(Location):
                     use_fullbody_ik=test_robot.full_body_controlled,
                 )
                 if is_reachable:
-                    pose = GraspPose.from_pose(
+                    pose = GraspPose(
                         pose=pose_candidate,
                         arm=self.reachable_arm,
                         grasp_description=grasp_description,
@@ -680,7 +680,7 @@ class GiskardLocation(Location):
                 if dist > 0.02:
                     continue
 
-                ret = GraspPose.from_pose(
+                ret = GraspPose(
                     test_robot.root.global_pose,
                     grasp_description=grasp_desc,
                     arm=self.arm,

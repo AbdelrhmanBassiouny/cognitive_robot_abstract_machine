@@ -1,18 +1,35 @@
 from copy import deepcopy
+from dataclasses import is_dataclass
 from functools import partial
 
 import pytest
-import rclpy
+
+try:
+    import rclpy
+except ModuleNotFoundError:
+    pass
 from sqlalchemy.orm import sessionmaker
 
-from krrood.ormatic.utils import create_engine, drop_database
-from pycram.datastructures.dataclasses import Context
+import pycram
+from krrood.class_diagrams import ClassDiagram
+from krrood.ormatic.utils import create_engine, drop_database, classes_of_package
+from krrood.patterns.role.helpers import transform_roles_in_class_diagram
 
-from pycram.orm.ormatic_interface import Base
+try:
+    from pycram.datastructures.dataclasses import Context
+except ModuleNotFoundError:
+    pass
 
-from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
-    VizMarkerPublisher,
-)
+try:
+    from pycram.orm.ormatic_interface import Base
+except ModuleNotFoundError:
+    pass
+try:
+    from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+        VizMarkerPublisher,
+    )
+except ModuleNotFoundError:
+    pass
 from semantic_digital_twin.robots.pr2 import PR2
 
 
@@ -69,3 +86,30 @@ def pycram_testing_session():
     drop_database(session.bind)
     session.close()
     engine.dispose()
+
+
+def pytest_configure(config):
+    all_classes = set(classes_of_package(pycram))
+    # all_classes -= set(classes_of_module(semantic_digital_twin.orm.ormatic_interface))
+    # all_classes -= set(classes_of_package(semantic_digital_twin.adapters))
+    # all_classes |= set(
+    #     classes_of_package(semantic_digital_twin.adapters.sage_10k_dataset)
+    # )
+    # # remove classes that should not be mapped
+    # all_classes -= {
+    #     ResetStateContextManager,
+    #     WorldModelUpdateContextManager,
+    #     ForwardKinematicsManager,
+    #     semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,
+    #     ContainsType,
+    #     SemanticDirection,
+    #     SubclassJSONSerializer,
+    # }
+    # keep only dataclasses that are NOT AlternativeMapping subclasses
+    all_classes = {
+        c
+        for c in all_classes
+        if is_dataclass(c)  # and not issubclass(c, AlternativeMapping)
+    }
+    class_diagram = ClassDiagram(list(all_classes))
+    transform_roles_in_class_diagram(class_diagram)

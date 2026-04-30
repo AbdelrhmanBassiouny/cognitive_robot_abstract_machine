@@ -9,6 +9,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from typing_extensions import Optional, Union, List
 
+from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.factories import variable_from
+from krrood.patterns.role import Role
 from semantic_digital_twin import utils
 from semantic_digital_twin.robots.abstract_robot import Manipulator, AbstractRobot
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -400,34 +403,24 @@ class PreferredGraspAlignment:
     Indicates if the gripper should be rotated by 90° around X.
     """
 
-@dataclass(eq=False, init=False)
-class GraspPose(Pose):
+@dataclass(eq=False)
+class GraspPose(Role[Pose]):
     """
     A pose from which a grasp can be performed along with the respective arm and grasp description.
     """
-
-    arm: Arms = None
+    pose: Pose
+    """
+    The pose of the grasp.
+    """
+    arm: Optional[Arms] = None
     """
     Arm corresponding to the grasp pose.
     """
-    grasp_description: GraspDescription = None
+    grasp_description: Optional[GraspDescription] = None
     """
     Grasp description corresponding to the grasp pose.
     """
 
-    def __init__(
-            self,
-            position: Optional[Point3] = None,
-            orientation: Optional[Quaternion] = None,
-            reference_frame: Optional[KinematicStructureEntity] = None,
-            arm: Arms = None,
-            grasp_description: GraspDescription = None,
-        ):
-        super().__init__(position, orientation, reference_frame)
-        self.arm = arm
-        self.grasp_description = grasp_description
-
     @classmethod
-    def from_pose(cls, pose: Pose, arm: Arms, grasp_description: GraspDescription):
-        return cls(position=pose.to_position(), orientation=pose.to_quaternion(), reference_frame=pose.reference_frame,
-                   arm=arm, grasp_description=grasp_description)
+    def role_taker_attribute(cls) -> Attribute[Pose]:
+        return variable_from(cls).pose

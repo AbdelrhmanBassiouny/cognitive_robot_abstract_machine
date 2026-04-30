@@ -2,6 +2,7 @@ import sys
 
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedSpecializedGeneric
+from krrood.patterns.role.helpers import transform_roles_in_class_diagram
 from krrood.patterns.role.role import Role
 from krrood.patterns.role.role_transformer import RoleTransformer
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
@@ -32,18 +33,4 @@ def pytest_configure(config):
     )
     SymbolGraph(_class_diagram=class_diagram)
 
-    modules_with_roles = []
-    for wrapped_class in class_diagram.wrapped_classes:
-        if (
-            not isinstance(wrapped_class, WrappedSpecializedGeneric)
-            and Role in wrapped_class.clazz.__bases__
-        ):
-            new_module = sys.modules[wrapped_class.clazz.__module__]
-            if new_module not in modules_with_roles:
-                modules_with_roles.append(new_module)
-    for module in modules_with_roles:
-        # generator = RoleStubGenerator(module)
-        # generator = RoleStubGeneratorV2(module)
-        # stub = generator.generate_stub(write=True)
-        transformer = RoleTransformer(module)
-        transformer.transform(write=True)
+    transform_roles_in_class_diagram(class_diagram)
