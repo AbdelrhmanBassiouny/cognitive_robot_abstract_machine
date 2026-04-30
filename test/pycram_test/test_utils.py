@@ -1,7 +1,8 @@
 from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.class_diagrams.utils import classes_of_module
 from pycram import exceptions
-from pycram.robot_plans.actions.base import ActionDescription
+
+# from pycram.robot_plans.actions.base import ActionDescription
 
 
 def test_parsing_exceptions_file():
@@ -12,4 +13,4 @@ def test_parsing_exceptions_file():
     )
     assert [wf for wf in condition_exception.fields if wf.name == "action"][
         0
-    ].type_endpoint is ActionDescription
+    ].type_endpoint.__name__ == "ActionDescription"

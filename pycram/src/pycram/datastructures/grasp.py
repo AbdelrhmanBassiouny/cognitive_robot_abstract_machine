@@ -6,21 +6,32 @@ from dataclasses import dataclass
 from typing import Tuple
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 from typing_extensions import Optional, Union, List
 
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role import Role
-from semantic_digital_twin import utils
-from semantic_digital_twin.robots.abstract_robot import Manipulator, AbstractRobot
+from semantic_digital_twin.robots.abstract_robot import Manipulator
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.spatial_types.spatial_types import Pose, Point3, Vector3, Quaternion
-from semantic_digital_twin.world_description.world_entity import Body, KinematicStructureEntity
+from semantic_digital_twin.spatial_types.spatial_types import (
+    Pose,
+    Point3,
+    Vector3,
+    Quaternion,
+)
+from semantic_digital_twin.world_description.world_entity import Body
 from pycram.datastructures.rotations import Rotations
-from pycram.datastructures.enums import AxisIdentifier, ApproachDirection, VerticalAlignment, Arms
+from pycram.datastructures.enums import (
+    AxisIdentifier,
+    ApproachDirection,
+    VerticalAlignment,
+    Arms,
+)
 from pycram.tf_transformations import quaternion_multiply
 from pycram.utils import translate_pose_along_local_axis
+from semantic_digital_twin.spatial_types.role_mixins.spatial_types_role_mixins import (
+    RoleForPose,
+)
 
 
 @dataclass
@@ -76,8 +87,15 @@ class GraspDescription:
 
         # if we just did target_T_grasp_pose @ grasp_pose_R_gripper_goal we would also rotate the translation in the
         # global frame, which we dont want here. Thus we just multiply the rotations, and take the translation as is
-        target_R_gripper_goal = target_T_grasp_pose.to_rotation_matrix() @ grasp_pose_R_gripper_goal.to_rotation_matrix()
-        target_T_gripper_goal: Pose = Pose(position=target_T_grasp_pose.to_position(), orientation=target_R_gripper_goal.to_quaternion(), reference_frame=target)
+        target_R_gripper_goal = (
+            target_T_grasp_pose.to_rotation_matrix()
+            @ grasp_pose_R_gripper_goal.to_rotation_matrix()
+        )
+        target_T_gripper_goal: Pose = Pose(
+            position=target_T_grasp_pose.to_position(),
+            orientation=target_R_gripper_goal.to_quaternion(),
+            reference_frame=target,
+        )
 
         if body:
             bb_in_frame = body.collision.as_bounding_box_collection_in_frame(
@@ -102,8 +120,12 @@ class GraspDescription:
         target_T_gripper_goal_copy = deepcopy(target_T_gripper_goal)
 
         # Lift pose calculation. We want the lift pose to be moved along the global z-axis, but the final pose should be in the target frame.
-        map_T_grasp = world.transform(target_T_grasp_pose.to_homogeneous_matrix(), world.root)
-        grasp_T_lift = HomogeneousTransformationMatrix.from_xyz_rpy(z=self.manipulation_offset)
+        map_T_grasp = world.transform(
+            target_T_grasp_pose.to_homogeneous_matrix(), world.root
+        )
+        grasp_T_lift = HomogeneousTransformationMatrix.from_xyz_rpy(
+            z=self.manipulation_offset
+        )
 
         # the grasp pose, not adjusted for the gripper orientation, used to calculate the lift pose
         map_T_lift = (map_T_grasp @ grasp_T_lift).to_position()
@@ -112,7 +134,9 @@ class GraspDescription:
         target_P_lift = world.transform(map_T_lift, target)
 
         # the lift pose is adjusted for the gripper orientation, but without rotating the point we want to grasp
-        lift_pose = Pose(target_P_lift, target_T_gripper_goal.to_quaternion(), reference_frame=target)
+        lift_pose = Pose(
+            target_P_lift, target_T_gripper_goal.to_quaternion(), reference_frame=target
+        )
 
         sequence = [pre_pose, target_T_gripper_goal_copy, lift_pose]
 
@@ -237,9 +261,7 @@ class GraspDescription:
         """
         edge_offset = -self.edge_offset(body) if grasp_edge else 0
         orientation = self.grasp_orientation()
-        grasp_pose = Pose(Point3(
-            edge_offset, 0, 0), orientation, reference_frame=body
-        )
+        grasp_pose = Pose(Point3(edge_offset, 0, 0), orientation, reference_frame=body)
 
         return grasp_pose
 
@@ -261,7 +283,9 @@ class GraspDescription:
         :return: A sorted list of GraspDescription instances representing all grasp permutations.
         """
         world = manipulator._world
-        map_T_object = world.transform(pose.to_homogeneous_matrix(), world.root).to_pose()
+        map_T_object = world.transform(
+            pose.to_homogeneous_matrix(), world.root
+        ).to_pose()
 
         map_T_robot = manipulator._robot.root.global_pose
 
@@ -280,7 +304,6 @@ class GraspDescription:
         map_P_robot = map_T_robot.to_position()
 
         map_V_robot_to_object = map_P_robot - map_P_object
-
 
         object_R_map = map_T_object.to_rotation_matrix().inverse()
 
@@ -382,6 +405,7 @@ class GraspDescription:
     def __hash__(self):
         return id(self)
 
+
 @dataclass
 class PreferredGraspAlignment:
     """
@@ -403,11 +427,13 @@ class PreferredGraspAlignment:
     Indicates if the gripper should be rotated by 90° around X.
     """
 
+
 @dataclass(eq=False)
-class GraspPose(Role[Pose]):
+class GraspPose(Role[Pose], RoleForPose):
     """
     A pose from which a grasp can be performed along with the respective arm and grasp description.
     """
+
     pose: Pose
     """
     The pose of the grasp.
