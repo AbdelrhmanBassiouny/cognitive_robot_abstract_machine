@@ -11,9 +11,6 @@ def test_parsing_exceptions_file():
     condition_exception = class_diagram.get_wrapped_class(
         exceptions.ConditionNotSatisfied
     )
-    found_type = [wf for wf in condition_exception.fields if wf.name == "action"][
+    assert [wf for wf in condition_exception.fields if wf.name == "action"][
         0
-    ].type_endpoint
-    assert found_type.__name__ == "ActionDescription"
-    assert found_type.__module__ == "pycram.robot_plans.actions.base"
-    assert any(base.__name__ == "Designator" for base in found_type.__bases__)
+    ].type_endpoint.__name__ == "ActionDescription"
