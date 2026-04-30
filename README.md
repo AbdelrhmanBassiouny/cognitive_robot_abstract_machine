@@ -10,6 +10,16 @@ Monorepo for the CRAM cognitive architecture.
 
 ## Installation
 
+If you already have the repositories cloned, then just update the version by pulling the latest changes:
+
+```bash
+git pull
+```
+
+Then, go to step 3.
+
+Otherwise, follow the steps below to install the repo and its dependencies.
+
 ### 1. Install missing linux libraries
 ```bash
 sudo apt install graphviz-dev
