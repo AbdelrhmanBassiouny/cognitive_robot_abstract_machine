@@ -33,6 +33,7 @@ from semantic_digital_twin.exceptions import (
     SpatialTypesError,
     SpatialTypeNotJsonSerializable,
 )
+from krrood.patterns.role import HasRoles
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -1766,7 +1767,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose(HasRoles, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def __init__(
         self,

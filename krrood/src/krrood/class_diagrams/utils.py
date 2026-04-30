@@ -93,8 +93,7 @@ def resolve_name_in_hierarchy(name: str, start_object: Any) -> Any:
     :return: The resolved object.
     :raises CouldNotResolveType: If the name cannot be resolved.
     """
-    module = inspect.getmodule(start_object)
-    if module is not None:  # or not inspect.isclass(start_object):
+    if not inspect.isclass(start_object):
         # Fallback to current module logic if not a class
         return get_object_by_name_from_another_object_in_same_module(name, start_object)
 

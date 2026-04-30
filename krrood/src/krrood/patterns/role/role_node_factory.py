@@ -113,9 +113,7 @@ class RoleNodeFactory:
             decorators=[cls.make_decorator(f"{name}.setter")],
             name=libcst.Name(name),
             params=cls.make_function_parameters({"self": None, "value": type_}),
-            body=libcst.IndentedBlock(
-                [libcst.parse_statement(statement)]
-            ),
+            body=libcst.IndentedBlock([libcst.parse_statement(statement)]),
         )
 
     @classmethod
@@ -131,7 +129,9 @@ class RoleNodeFactory:
         :param setter_statement: The statement executed by the setter.
         :return: A list containing the getter and setter FunctionDef nodes.
         """
-        getter_node = cls.make_property_getter_node(name, type_, getter_return_statement)
+        getter_node = cls.make_property_getter_node(
+            name, type_, getter_return_statement
+        )
         setter_node = cls.make_property_setter_node(name, type_, setter_statement)
         return [getter_node, setter_node]
 
@@ -249,6 +249,8 @@ class RoleNodeFactory:
         if isinstance(base_node, libcst.Subscript):
             if isinstance(base_node.value, libcst.Name):
                 return base_node.value.value
+        elif isinstance(base_node, libcst.Attribute):
+            return base_node.attr.value
         raise ValueError(f"Unexpected base node type: {base_node}")
 
     @classmethod

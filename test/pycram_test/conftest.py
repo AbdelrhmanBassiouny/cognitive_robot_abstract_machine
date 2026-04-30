@@ -4,6 +4,8 @@ from functools import partial
 
 import pytest
 
+from pycram.datastructures.grasp import GraspPose
+
 try:
     import rclpy
 except ModuleNotFoundError:
@@ -89,7 +91,8 @@ def pycram_testing_session():
 
 
 def pytest_configure(config):
-    all_classes = set(classes_of_package(pycram))
+    # all_classes = set(classes_of_package(pycram))
+    all_classes = [GraspPose]
     # all_classes -= set(classes_of_module(semantic_digital_twin.orm.ormatic_interface))
     # all_classes -= set(classes_of_package(semantic_digital_twin.adapters))
     # all_classes |= set(
