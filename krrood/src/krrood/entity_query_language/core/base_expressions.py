@@ -405,12 +405,9 @@ class SymbolicExpression(ABC):
         Does not recurse into ``ResultQuantifier`` children so that inner query
         subtrees remain isolated from outer query traversals.
         """
-        from krrood.entity_query_language.query.quantifiers import ResultQuantifier
-
         yield from self._children_
         for child in self._children_:
-            if not isinstance(child, ResultQuantifier):
-                yield from child._descendants_
+            yield from child._descendants_
 
     @classmethod
     def _current_parent_in_context_stack_(cls) -> Optional[SymbolicExpression]:
