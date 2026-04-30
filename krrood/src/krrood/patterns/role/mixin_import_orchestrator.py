@@ -6,34 +6,44 @@ from __future__ import annotations
 
 import dataclasses
 from types import ModuleType
-from typing import Protocol, runtime_checkable
 
 import libcst
 from libcst.codemod import CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 
 from krrood.patterns.role.import_name_resolver import ImportNameResolver
-from krrood.patterns.role.role_node_factory import (
-    RoleNodeFactory,
-    NameCollector,
-    RuntimeNameCollector,
+from krrood.patterns.role.role_node_factory import RoleNodeFactory
+
+_TYPING_MODULES: frozenset[str] = frozenset({"typing", "typing_extensions"})
+_NON_IMPORTABLE_MODULES: frozenset[str] = frozenset(
+    {"typing", "typing_extensions", "builtins"}
+)
+_EXCLUDED_IMPORT_NAMES: frozenset[str] = frozenset(
+    {"dataclass", "field", "ABC", "abstractmethod", "TYPE_CHECKING"}
 )
 
 
-@runtime_checkable
-class ImportContext(Protocol):
-    """
-    Minimal interface for recording needed imports.
-    """
+class NameCollector(libcst.CSTVisitor):
+    """Collects all Name node values encountered during a CST traversal."""
 
-    def add_needed_import(self, module: str, name: str | None = None) -> None:
-        """
-        Record that an import of ``name`` from ``module`` is needed.
+    def __init__(self):
+        self.names: set[str] = set()
 
-        :param module: The module to import from.
-        :param name: The name to import, or None for a bare module import.
-        """
-        ...
+    def visit_Name(self, node: libcst.Name) -> None:
+        self.names.add(node.value)
+
+
+class RuntimeNameCollector(libcst.CSTVisitor):
+    """Collects names that appear inside decorator expressions."""
+
+    def __init__(self):
+        self.names: set[str] = set()
+
+    def visit_Decorator(self, node: libcst.Decorator) -> None:
+        """Record all names found inside a decorator expression."""
+        collector = NameCollector()
+        node.visit(collector)
+        self.names.update(collector.names)
 
 
 @dataclasses.dataclass
@@ -47,17 +57,8 @@ class MixinImportOrchestrator:
     resolver: ImportNameResolver
     source_module: ModuleType
 
-    _TYPING_MODULES: frozenset[str] = dataclasses.field(
-        default_factory=lambda: frozenset({"typing", "typing_extensions"}), init=False
-    )
-    _NON_IMPORTABLE_MODULES: frozenset[str] = dataclasses.field(
-        default_factory=lambda: frozenset({"typing", "typing_extensions", "builtins"}),
-        init=False,
-    )
-
     def require_import(self, module: str, names: str | list[str]) -> None:
-        """
-        Record an import that must appear in the generated mixin module.
+        """Record an import that must appear in the generated mixin module.
 
         :param module: The module to import from.
         :param names: The name or list of names to import.
@@ -76,8 +77,7 @@ class MixinImportOrchestrator:
     def require_original_import(
         self, module: str, obj: str | list[str] | None = None
     ) -> None:
-        """
-        Record an import that must appear in the transformed original module.
+        """Record an import that must appear in the transformed original module.
 
         :param module: The module to import from.
         :param obj: The name or names to import from the module.
@@ -89,8 +89,8 @@ class MixinImportOrchestrator:
         elif isinstance(obj, str):
             AddImportsVisitor.add_needed_import(self.original_context, module, obj)
         else:
-            for o in obj:
-                AddImportsVisitor.add_needed_import(self.original_context, module, o)
+            for name in obj:
+                AddImportsVisitor.add_needed_import(self.original_context, module, name)
 
     def build_mixin_module(
         self,
@@ -98,8 +98,7 @@ class MixinImportOrchestrator:
         mixin_classes: list[libcst.ClassDef],
         factory: RoleNodeFactory,
     ) -> libcst.Module:
-        """
-        Build the complete mixin module AST with all imports.
+        """Build the complete mixin module AST with all imports.
 
         :param updated_module_node: The transformed source module node (used for header/footer).
         :param mixin_classes: The generated mixin class nodes to include.
@@ -109,12 +108,9 @@ class MixinImportOrchestrator:
         used_names = self._collect_used_names_in_mixins(mixin_classes)
         self._add_required_mixin_imports(used_names)
         runtime_names = self._collect_runtime_names(mixin_classes)
-
-        # Names that should be imported at top level (those used in decorators)
-        top_level_names = runtime_names
-
-        # Names for the TYPE_CHECKING block
-        type_checking_names = used_names - top_level_names
+        top_level_names, type_checking_names = self._classify_import_names(
+            used_names, runtime_names
+        )
 
         self._add_typing_imports(used_names)
         self._add_runtime_imports(top_level_names, mixin_classes)
@@ -135,6 +131,17 @@ class MixinImportOrchestrator:
             footer=updated_module_node.footer,
         )
 
+    def _classify_import_names(
+        self, used_names: set[str], runtime_names: set[str]
+    ) -> tuple[set[str], set[str]]:
+        """Partition used names into top-level and TYPE_CHECKING groups.
+
+        :param used_names: All names referenced inside the mixin classes.
+        :param runtime_names: Names that must be available at runtime (e.g. decorator names).
+        :return: A tuple of (top_level_names, type_checking_names).
+        """
+        return runtime_names, used_names - runtime_names
+
     def _collect_used_names_in_mixins(
         self, mixin_classes: list[libcst.ClassDef]
     ) -> set[str]:
@@ -147,7 +154,7 @@ class MixinImportOrchestrator:
         return used_names
 
     def _collect_runtime_names(self, mixin_classes: list[libcst.ClassDef]) -> set[str]:
-        """Collect all names used inside decorator expressions in the given mixin classes."""
+        """Return all names used inside decorator expressions in the given mixin classes."""
         collector = RuntimeNameCollector()
         for class_def in mixin_classes:
             class_def.visit(collector)
@@ -163,34 +170,26 @@ class MixinImportOrchestrator:
         self.require_import("typing_extensions", ["TYPE_CHECKING"])
 
     def _add_typing_imports(self, used_names: set[str]) -> None:
-        """Add top-level imports for names whose source module is typing or typing_extensions."""
+        """Record imports for names whose source module is typing or typing_extensions."""
         for name in used_names:
             module = self.resolver.resolve(name)
-            if module in self._TYPING_MODULES:
+            if module in _TYPING_MODULES:
                 self.require_import(module, name)
 
     def _add_runtime_imports(
         self, names: set[str], mixin_classes: list[libcst.ClassDef]
     ) -> None:
         """Record top-level imports for names that must be available at runtime."""
-        common_names = {
-            "dataclass",
-            "field",
-            "ABC",
-            "abstractmethod",
-            "TYPE_CHECKING",
-        }
         mixin_defined_names = {cd.name.value for cd in mixin_classes}
-
         for name in names:
-            if name in common_names or name in mixin_defined_names:
+            if name in _EXCLUDED_IMPORT_NAMES or name in mixin_defined_names:
                 continue
             module_name = self.resolver.resolve(name)
             if module_name:
                 self.require_import(module_name, name)
 
     def _create_future_annotations_import(self) -> libcst.SimpleStatementLine:
-        """Create a ``from __future__ import annotations`` statement node."""
+        """Return a ``from __future__ import annotations`` statement node."""
         return libcst.SimpleStatementLine(
             body=[
                 libcst.ImportFrom(
@@ -203,16 +202,14 @@ class MixinImportOrchestrator:
     def _build_mixin_import_map(
         self, used_names: set[str], mixin_classes: list[libcst.ClassDef]
     ) -> dict[str, set[str]]:
-        """Build a mapping of module name to the set of names to import for the mixin module."""
-        excluded_names = {"dataclass", "field", "ABC", "abstractmethod", "TYPE_CHECKING"}
+        """Return a mapping of module name to the set of names to import for the mixin module."""
         mixin_defined_names = {cd.name.value for cd in mixin_classes}
-
         import_map: dict[str, set[str]] = {}
         for name in used_names:
-            if name in excluded_names or name in mixin_defined_names:
+            if name in _EXCLUDED_IMPORT_NAMES or name in mixin_defined_names:
                 continue
             module_name = self.resolver.resolve(name)
-            if module_name and module_name not in self._NON_IMPORTABLE_MODULES:
+            if module_name and module_name not in _NON_IMPORTABLE_MODULES:
                 import_map.setdefault(module_name, set()).add(name)
         return import_map
 
@@ -227,11 +224,10 @@ class MixinImportOrchestrator:
         if not import_map:
             return None
 
-        type_checking_body = []
-        for module_name, names in sorted(import_map.items()):
-            type_checking_body.append(
-                self._create_import_from_node(module_name, names, factory)
-            )
+        type_checking_body = [
+            self._create_import_from_node(module_name, names, factory)
+            for module_name, names in sorted(import_map.items())
+        ]
 
         return libcst.If(
             test=libcst.Name("TYPE_CHECKING"),
@@ -241,7 +237,7 @@ class MixinImportOrchestrator:
     def _create_import_from_node(
         self, module_name: str, names: set[str], factory: RoleNodeFactory
     ) -> libcst.SimpleStatementLine:
-        """Build a ``from <module> import <names>`` CST node."""
+        """Return a ``from <module> import <names>`` CST node."""
         return libcst.SimpleStatementLine(
             body=[
                 libcst.ImportFrom(

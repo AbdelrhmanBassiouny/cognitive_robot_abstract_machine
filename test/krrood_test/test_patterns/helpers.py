@@ -3,7 +3,10 @@ from pathlib import Path
 from types import ModuleType
 from typing import Dict, Sequence, Optional, Tuple, Any, Set
 
-from krrood.patterns.role.role_transformer import GROUND_TRUTH, TRANSFORMED
+from krrood.patterns.role.role_transformer import TransformationMode
+
+GROUND_TRUTH = TransformationMode.GROUND_TRUTH.value
+TRANSFORMED = TransformationMode.TRANSFORMED.value
 
 import libcst as cst
 

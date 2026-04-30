@@ -22,8 +22,7 @@ class TypeNameNormaliser:
     class_diagram: ClassDiagram
 
     def normalise(self, type_obj: Any) -> str:
-        """
-        Return a consistent string representation of a type for use in generated code.
+        """Return a consistent string representation of a type for use in generated code.
 
         :param type_obj: The type object to normalise.
         :return: A string type name suitable for inclusion in generated source code.
@@ -44,7 +43,11 @@ class TypeNameNormaliser:
         return self._handle_fallback_type(type_obj)
 
     def _handle_string_type(self, type_str: str) -> str:
-        """Resolve a forward-reference string type name."""
+        """Return a normalised name for a forward-reference string type.
+
+        :param type_str: The forward-reference string to normalise.
+        :return: The resolved or unchanged type name string.
+        """
         # Avoid importing Role here to prevent circular imports — use duck typing.
         if type_str.startswith("T"):
             class_name = type_str[1:]
@@ -56,7 +59,6 @@ class TypeNameNormaliser:
                     else:
                         return class_name
 
-        # Try to resolve module for the string type if not already known
         if type_str not in self.resolver.name_to_module_map:
             resolved_module = self.resolver.resolve(type_str)
             if resolved_module:
@@ -64,10 +66,14 @@ class TypeNameNormaliser:
         return type_str
 
     def _handle_generic_type(self, type_obj: Any, origin: Any) -> str:
-        """Normalise a generic type such as List[str] or Dict[str, Any]."""
-        # Capture the typing alias (e.g. 'Dict') before get_origin() erases it to the builtin.
-        alias_name = getattr(type_obj, "_name", None)
-        alias_module = getattr(type_obj, "__module__", None)
+        """Return a normalised name for a generic type such as ``List[str]``.
+
+        :param type_obj: The generic type object.
+        :param origin: The origin type returned by ``get_origin``.
+        :return: A normalised string representation of the generic type.
+        """
+        alias_name = type_obj._name if hasattr(type_obj, "_name") else None
+        alias_module = type_obj.__module__ if hasattr(type_obj, "__module__") else None
         if alias_name and alias_module and alias_module != "builtins":
             self.resolver.name_to_module_map.setdefault(alias_name, alias_module)
         origin_name = self.normalise(origin)
@@ -75,19 +81,22 @@ class TypeNameNormaliser:
 
         if args:
             arg_names = [self.normalise(arg) for arg in args]
-            res = f"{origin_name}[{', '.join(arg_names)}]"
+            result = f"{origin_name}[{', '.join(arg_names)}]"
         else:
-            res = origin_name
+            result = origin_name
 
-        return res.replace("typing.", "").replace("typing_extensions.", "")
+        return result.replace("typing.", "").replace("typing_extensions.", "")
 
     def _handle_type_var(self, type_var: TypeVar) -> str:
-        """Normalise a TypeVar to its name or bound type name."""
+        """Return a normalised name for a TypeVar.
+
+        :param type_var: The TypeVar to normalise.
+        :return: The TypeVar name or its bound type's name.
+        """
         if hasattr(type_var, "__module__"):
             self.resolver.name_to_module_map[type_var.__name__] = type_var.__module__
 
         if type_var.__bound__ is not None:
-            # Recursively handle bound to record its module
             self.normalise(type_var.__bound__)
             from krrood.patterns.role.role import Role
             if issubclass(type_var.__bound__, Role):
@@ -96,7 +105,11 @@ class TypeNameNormaliser:
         return type_var.__name__
 
     def _handle_class_type(self, clazz: type) -> str:
-        """Normalise a plain class type to its name."""
+        """Return a normalised name for a plain class type.
+
+        :param clazz: The class to normalise.
+        :return: The class name string.
+        """
         if clazz is type(None):
             return "None"
 
@@ -107,13 +120,21 @@ class TypeNameNormaliser:
         return clazz.__name__
 
     def _handle_fallback_type(self, type_obj: Any) -> str:
-        """Normalise an unrecognised type object using str() as a last resort."""
+        """Return a normalised name for an unrecognised type object.
+
+        :param type_obj: The unrecognised type to normalise.
+        :return: A string representation of the type.
+        """
         if hasattr(type_obj, "__name__") and hasattr(type_obj, "__module__"):
             self.resolver.name_to_module_map[type_obj.__name__] = type_obj.__module__
         return str(type_obj)
 
     def get_type_name(self, clazz: type) -> str:
-        """Return the TypeVar name for a class if one exists, otherwise the plain class name."""
+        """Return the TypeVar name for a class if one exists, otherwise the plain class name.
+
+        :param clazz: The class whose name to retrieve.
+        :return: The TypeVar name or the plain class name.
+        """
         type_var_name = f"T{clazz.__name__}"
         class_module = sys.modules[clazz.__module__]
         if type_var_name in class_module.__dict__:

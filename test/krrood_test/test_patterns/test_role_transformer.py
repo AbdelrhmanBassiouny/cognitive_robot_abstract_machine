@@ -1,6 +1,8 @@
 import pytest
 
-from krrood.patterns.role.role_transformer import RoleTransformer, TRANSFORMED
+from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
+
+TRANSFORMED = TransformationMode.TRANSFORMED.value
 from .helpers import get_module_comparators
 from ..dataset.role_and_ontology import (
     university_ontology_like_classes_without_descriptors,

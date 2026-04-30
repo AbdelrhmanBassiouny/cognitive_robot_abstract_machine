@@ -10,29 +10,6 @@ from typing import Callable
 import libcst
 
 
-class NameCollector(libcst.CSTVisitor):
-    """Collects all Name node values encountered during a CST traversal."""
-
-    def __init__(self):
-        self.names: set[str] = set()
-
-    def visit_Name(self, node: libcst.Name) -> None:
-        self.names.add(node.value)
-
-
-class RuntimeNameCollector(libcst.CSTVisitor):
-    """Collects names that appear inside decorator expressions."""
-
-    def __init__(self):
-        self.names: set[str] = set()
-
-    def visit_Decorator(self, node: libcst.Decorator) -> None:
-        """Record all names found inside a decorator expression."""
-        collector = NameCollector()
-        node.visit(collector)
-        self.names.update(collector.names)
-
-
 @dataclasses.dataclass
 class RoleNodeFactory:
     """

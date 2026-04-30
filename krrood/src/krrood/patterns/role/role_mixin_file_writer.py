@@ -24,8 +24,7 @@ class RoleMixinFileWriter:
         module_sources: dict,
         get_path_fn: Callable,
     ) -> None:
-        """
-        Write all transformed sources to disk and run formatters on each file.
+        """Write all transformed sources to disk and run formatters on each file.
 
         :param module_sources: Mapping of module to (transformed_source, mixin_source) tuples.
         :param get_path_fn: Callable that accepts (module, is_mixin) and returns a Path.
@@ -34,6 +33,7 @@ class RoleMixinFileWriter:
         for module, (module_source, mixin_source) in module_sources.items():
             original_path = get_path_fn(module, is_mixin=False)
             mixin_path = get_path_fn(module, is_mixin=True)
+            self._ensure_mixin_package(mixin_path.parent)
             for path, content in [
                 (original_path, module_source),
                 (mixin_path, mixin_source),
@@ -45,3 +45,11 @@ class RoleMixinFileWriter:
         for path in generated_paths:
             run_ruff_on_file(str(path))
             run_black_on_file(str(path))
+
+    @staticmethod
+    def _ensure_mixin_package(folder: Path) -> None:
+        """Create the mixin package directory and its ``__init__.py`` if they do not exist."""
+        folder.mkdir(exist_ok=True)
+        init_file = folder / "__init__.py"
+        if not init_file.exists():
+            init_file.touch()

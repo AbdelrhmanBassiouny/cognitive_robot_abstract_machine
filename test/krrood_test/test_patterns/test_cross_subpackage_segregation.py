@@ -1,7 +1,9 @@
 import pytest
 import libcst as cst
 
-from krrood.patterns.role.role_transformer import RoleTransformer, TRANSFORMED
+from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
+
+TRANSFORMED = TransformationMode.TRANSFORMED.value
 from test.krrood_test.dataset.role_and_ontology import cross_subpackage_takers
 
 

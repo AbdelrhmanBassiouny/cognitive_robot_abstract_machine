@@ -345,6 +345,31 @@ def get_type_hints_of_object(
     return type_hints
 
 
+def same_package(module_a: str, module_b: str) -> bool:
+    """Return True when both module names belong to the same top-level package."""
+    top_a = module_a.split(".")[0]
+    top_b = module_b.split(".")[0]
+    return bool(top_a) and top_a == top_b
+
+
+def topological_sort_by_inheritance(classes: list[type]) -> list[type]:
+    """Return classes sorted so that ancestors come before their descendants."""
+    result: list[type] = []
+    remaining = list(classes)
+    while remaining:
+        for cls in remaining:
+            if not any(
+                issubclass(cls, other) and other is not cls for other in remaining
+            ):
+                result.append(cls)
+                remaining.remove(cls)
+                break
+        else:
+            result.extend(remaining)
+            break
+    return result
+
+
 def get_object_by_name_from_another_object_in_same_module(
     name: str, object_: Any
 ) -> Any:

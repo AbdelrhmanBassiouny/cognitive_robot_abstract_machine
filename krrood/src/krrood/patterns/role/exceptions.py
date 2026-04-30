@@ -6,6 +6,4 @@ from __future__ import annotations
 
 
 class RoleTransformerError(ValueError):
-    """
-    Raised when the role transformer encounters an unexpected state.
-    """
+    """Raised when a parsed node has an unexpected type during role transformation."""

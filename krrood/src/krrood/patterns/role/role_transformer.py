@@ -27,6 +27,8 @@ from krrood.class_diagrams.utils import (
     classes_of_module,
     get_type_hints_of_object,
     resolve_name_in_hierarchy,
+    same_package,
+    topological_sort_by_inheritance,
 )
 from krrood.patterns.role.exceptions import RoleTransformerError
 from krrood.patterns.role.import_name_resolver import ImportNameResolver
@@ -37,27 +39,38 @@ from krrood.patterns.role.role_mixin_file_writer import RoleMixinFileWriter
 from krrood.patterns.role.role_node_factory import RoleNodeFactory
 from krrood.patterns.role.type_name_normaliser import TypeNameNormaliser
 
-GROUND_TRUTH = "_ground_truth_"
-TRANSFORMED = "transformed_"
+ROLE_TAKER_ATTR = "role_taker"
+ABC_NAME = "ABC"
+HAS_ROLES_NAME = "HasRoles"
+ROLE_MIXINS_FOLDER = "role_mixins"
+ROLE_MIXINS_SUFFIX = "_role_mixins"
 
-# Dataclass/object lifecycle hooks that should never be delegated regardless of origin.
+_ALWAYS_EXCLUDED_METHODS: frozenset[str] = frozenset({"__init__", "__post_init__", "__new__"})
 # __new__ is defined on Symbol (a Role base) as a staticmethod; inspect.getmembers
 # unwraps it to a plain function, so it must be excluded explicitly here.
-_ALWAYS_EXCLUDED_METHODS: frozenset[str] = frozenset({"__init__", "__post_init__", "__new__"})
 
 
-def _same_package(module_a: str, module_b: str) -> bool:
-    """Return True when both modules belong to the same top-level package."""
-    top_a = module_a.split('.')[0]
-    top_b = module_b.split('.')[0]
-    return bool(top_a) and top_a == top_b
+class TransformationMode(str, enum.Enum):
+    """Enumeration of transformation mode identifiers used as file-name prefixes."""
+
+    GROUND_TRUTH = "_ground_truth_"
+    TRANSFORMED = "transformed_"
+
+
+def _mixin_module_dotted_name(module_dotted_name: str) -> str:
+    """Return the fully-qualified module name for the generated mixin module."""
+    parts = module_dotted_name.split(".")
+    package = ".".join(parts[:-1])
+    leaf = parts[-1]
+    return f"{package}.{ROLE_MIXINS_FOLDER}.{leaf}{ROLE_MIXINS_SUFFIX}"
 
 
 def _is_from_role_class(name: str, clazz: type) -> bool:
     """Return True if *name* is inherited from the Role hierarchy without being overridden.
 
-    Walks the MRO of *clazz* and returns True iff the first class that defines *name*
-    is itself a Role subclass, meaning the taker has not provided its own version.
+    :param name: The attribute name to look up.
+    :param clazz: The class whose MRO is searched.
+    :return: True if the first defining class in the MRO is a Role subclass.
     """
     for klass in clazz.__mro__:
         if name in vars(klass):
@@ -65,86 +78,44 @@ def _is_from_role_class(name: str, clazz: type) -> bool:
     return False
 
 
-def _get_defining_non_role_class(
-    name: str, clazz: type, module_name: str, role_takers: set[type]
+def _find_defining_class(
+    name: str,
+    clazz: type,
+    module_name: str,
+    role_takers: set[type],
+    is_member: Callable[[type], bool],
 ) -> type | None:
-    """Return the first class in clazz's MRO (excluding clazz itself, Role subclasses,
-    role takers, and classes outside the source module's package) that defines *name*, or None.
+    """Return the first class in clazz's MRO that defines name under the given membership test.
 
-    None means the name belongs to the taker's own RoleFor class (defined directly on
-    the taker, in a role taker base, in the Role hierarchy, or in an external package).
+    Returns None when the name belongs directly to the taker, to a Role subclass,
+    to another role taker, or to a class in a different package.
+
+    :param name: The attribute name to find.
+    :param clazz: The class whose MRO is walked.
+    :param module_name: The source module name used for package comparison.
+    :param role_takers: The set of known role taker types to skip.
+    :param is_member: Callable that returns True when a class defines the name.
+    :return: The defining class, or None.
     """
     for klass in clazz.__mro__[1:]:
         if klass is object:
             return None
-        if name in vars(klass):
+        if is_member(klass):
             if issubclass(klass, Role):
                 return None
             if klass in role_takers:
                 return None
-            if klass.__module__ == module_name or _same_package(klass.__module__, module_name):
+            if klass.__module__ == module_name or same_package(klass.__module__, module_name):
                 return klass
             return None
     return None
-
-
-def _get_defining_class_for_field(
-    field_name: str, clazz: type, module_name: str, role_takers: set[type]
-) -> type | None:
-    """Same as _get_defining_non_role_class but looks up __dataclass_fields__ instead of vars."""
-    for klass in clazz.__mro__[1:]:
-        if klass is object:
-            return None
-        if field_name in getattr(klass, "__dataclass_fields__", {}):
-            if issubclass(klass, Role):
-                return None
-            if klass in role_takers:
-                return None
-            if klass.__module__ == module_name or _same_package(klass.__module__, module_name):
-                return klass
-            return None
-    return None
-
-
-def build_role_diagram(
-    module: ModuleType,
-    taker_modules: list[ModuleType],
-) -> tuple[ClassDiagram, list[ModuleType]]:
-    """
-    Build a ClassDiagram for the given module, auto-discovering role taker modules.
-
-    :param module: The primary module containing role classes.
-    :param taker_modules: The initial list of known taker modules.
-    :return: A tuple of the constructed ClassDiagram and the updated taker_modules list.
-    """
-    classes = classes_of_module(module)
-    role_classes = [clazz for clazz in classes if issubclass(clazz, Role)]
-    updated_taker_modules = list(taker_modules)
-    for clazz in role_classes:
-        role_taker_type = clazz.get_role_taker_type()
-        if role_taker_type not in classes:
-            classes.append(role_taker_type)
-            role_taker_module = sys.modules[role_taker_type.__module__]
-            if role_taker_module not in updated_taker_modules:
-                updated_taker_modules.append(role_taker_module)
-    return ClassDiagram(classes), updated_taker_modules
-
-
-class TransformationMode(str, enum.Enum):
-    """
-    Enumeration of transformation mode identifiers used as file-name prefixes.
-    """
-
-    GROUND_TRUTH = "_ground_truth_"
-    TRANSFORMED = "transformed_"
 
 
 @dataclasses.dataclass
 class RoleTransformer:
     """
-    Transform classes related to roles to inherit from the generated mixins
-    that add the gained attributes and to adjust their fields.
-    Also generates these mixin classes for role takers.
+    Transforms role-pattern modules into mixin-based equivalents and generates
+    the corresponding RoleFor mixin classes for each role taker.
     """
 
     module: ModuleType
@@ -154,24 +125,45 @@ class RoleTransformer:
     file_name_prefix: str = ""
 
     def __post_init__(self):
-        """
-        Initialise the generated file path and build the class diagram.
-        """
+        """Set up the transformer for the given module."""
         if self.path is None:
             self.path = self.get_generated_file_path(self.module)
         self._refresh_diagram()
 
     def _refresh_diagram(self) -> None:
-        """Rebuild the class diagram, updating taker_modules with any newly discovered ones."""
-        self.class_diagram, self.taker_modules = build_role_diagram(
+        """Sync the class diagram and taker modules list with the current module state."""
+        self.class_diagram, self.taker_modules = self._build_role_diagram(
             self.module, self.taker_modules
         )
 
-    def transform(self, write: bool = False) -> dict[ModuleType, tuple[str, str]]:
-        """
-        Transform the module and its taker modules, generating mixins for each role taker.
+    @classmethod
+    def _build_role_diagram(
+        cls,
+        module: ModuleType,
+        taker_modules: list[ModuleType],
+    ) -> tuple[ClassDiagram, list[ModuleType]]:
+        """Build a ClassDiagram for the module, auto-discovering role taker modules.
 
-        :param write: When True, writes the generated edits to the file system and formats them.
+        :param module: The primary module containing role classes.
+        :param taker_modules: The initial list of known taker modules.
+        :return: A tuple of the constructed ClassDiagram and the updated taker_modules list.
+        """
+        classes = classes_of_module(module)
+        role_classes = [clazz for clazz in classes if issubclass(clazz, Role)]
+        updated_taker_modules = list(taker_modules)
+        for clazz in role_classes:
+            role_taker_type = clazz.get_role_taker_type()
+            if role_taker_type not in classes:
+                classes.append(role_taker_type)
+                role_taker_module = sys.modules[role_taker_type.__module__]
+                if role_taker_module not in updated_taker_modules:
+                    updated_taker_modules.append(role_taker_module)
+        return ClassDiagram(classes), updated_taker_modules
+
+    def transform(self, write: bool = False) -> dict[ModuleType, tuple[str, str]]:
+        """Transform the module and its taker modules, generating mixins for each role taker.
+
+        :param write: When True, writes the generated files to the file system and formats them.
         :return: A dictionary mapping each transformed module to a tuple of its transformed
                  module content and its mixin module content.
         """
@@ -202,19 +194,14 @@ class RoleTransformer:
             tree = libcst.parse_module(source)
 
             mixin_result = transformer.transform_module(tree)
-            # Run AddImportsVisitor on the mixin module
             mixin_result = AddImportsVisitor(context).transform_module(mixin_result)
 
-            # Run AddImportsVisitor on the transformed original module
             transformed_original = transformer.transformed_module
             transformed_original = AddImportsVisitor(
                 transformer.original_context
             ).transform_module(transformed_original)
 
-            module_source = transformed_original.code
-            mixin_source = mixin_result.code
-
-            all_modules_sources[module] = (module_source, mixin_source)
+            all_modules_sources[module] = (transformed_original.code, mixin_result.code)
 
         if write:
             writer = RoleMixinFileWriter(file_name_prefix=self.file_name_prefix)
@@ -230,48 +217,49 @@ class RoleTransformer:
 
     @staticmethod
     def get_module_file_path(module: ModuleType) -> Path:
-        """
-        Return the file path of the given module.
+        """Return the file path of the given module.
 
         :param module: The module whose file path is needed.
         :return: Path to the module file.
         """
         return Path(sys.modules[module.__name__].__file__)
 
+    @staticmethod
+    def _normalize_file_prefix(prefix: str) -> str:
+        """Return the prefix with a trailing underscore, adding one if absent.
+
+        :param prefix: The raw file name prefix string.
+        :return: The normalised prefix string.
+        """
+        if prefix and not prefix.endswith("_"):
+            return f"{prefix}_"
+        return prefix
+
     def get_generated_file_path(
         self, module: ModuleType, is_mixin: bool = False
     ) -> Path:
-        """
-        Return the path where the generated file for the module should be written.
+        """Return the path where the generated file for the module should be written.
 
         :param module: The module for which to compute the generated path.
         :param is_mixin: Whether the path is for the mixin file rather than the transformed original.
         :return: Path to the generated file.
         """
-        parent_directory = Path(RoleTransformer.get_module_file_path(module)).parent
+        parent_directory = Path(self.get_module_file_path(module)).parent
         module_name = module.__name__.split(".")[-1]
         if is_mixin:
-            # add role mixins folder if it does not exist, and add a __init__.py file to it
-            postfix = "role_mixins"
-            role_mixins_folder = parent_directory / postfix
-            role_mixins_folder.mkdir(exist_ok=True)
-            init_file_path = role_mixins_folder / "__init__.py"
-            if not init_file_path.exists():
-                init_file_path.touch()
-            filename = f"{module_name}_role_mixins.py"
+            role_mixins_folder = parent_directory / ROLE_MIXINS_FOLDER
+            filename = f"{module_name}{ROLE_MIXINS_SUFFIX}.py"
             return role_mixins_folder / filename
         else:
-            prefix = self.file_name_prefix
-            if prefix and not prefix.endswith("_"):
-                prefix = f"{prefix}_"
+            prefix = self._normalize_file_prefix(self.file_name_prefix)
             filename = f"{prefix}{module_name}.py"
             return parent_directory / filename
 
 
 class RoleModuleTransformer(ContextAwareTransformer):
     """
-    Transforms a Python module AST into a mixin classes file AST by pruning methods
-    and applying the Role pattern transformations.
+    Applies role pattern transformations to a Python module AST and generates
+    the corresponding mixin module.
     """
 
     def __init__(
@@ -282,8 +270,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         taker_modules: list[ModuleType],
         file_name_prefix: str = "",
     ):
-        """
-        Initialise the transformer with the class diagram and module context.
+        """Initialise the transformer with the class diagram and module context.
 
         :param context: The codemod context for import tracking.
         :param class_diagram: The class diagram describing all relevant classes.
@@ -318,16 +305,10 @@ class RoleModuleTransformer(ContextAwareTransformer):
             source_module=module,
         )
 
-    @property
-    def name_to_module_map(self) -> dict[str, str]:
-        """Expose the resolver's name-to-module map for backward compatibility."""
-        return self._resolver.name_to_module_map
-
     def require_original_import(
         self, module: str, obj: str | list[str] | None = None
     ) -> None:
-        """
-        Record an import that must appear in the transformed original module.
+        """Record an import that must appear in the transformed original module.
 
         :param module: The module to import from.
         :param obj: The name or names to import from the module.
@@ -337,8 +318,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def leave_ClassDef(
         self, original_node: libcst.ClassDef, updated_node: libcst.ClassDef
     ) -> libcst.ClassDef | libcst.FlattenSentinel[libcst.BaseCompoundStatement]:
-        """
-        Transform class definitions by pruning methods, renaming takers, and adjusting roles.
+        """Handle class-level transformations for role takers and role classes.
 
         :param original_node: The original class node before any transformations.
         :param updated_node: The class node after child transformations.
@@ -392,8 +372,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def leave_ImportFrom(
         self, original_node: libcst.ImportFrom, updated_node: libcst.ImportFrom
     ) -> libcst.ImportFrom:
-        """
-        Rewrite import statements: resolve relative imports and prefix transformed module names.
+        """Rewrite import statements: resolve relative imports and prefix transformed module names.
 
         :param original_node: The original import node.
         :param updated_node: The import node after child transformations.
@@ -410,13 +389,13 @@ class RoleModuleTransformer(ContextAwareTransformer):
             return node
         current_module_parts = self.source_module.__name__.split(".")
         is_package = hasattr(self.source_module, "__path__")
-        pkg_parts = current_module_parts if is_package else current_module_parts[:-1]
+        package_parts = current_module_parts if is_package else current_module_parts[:-1]
 
         levels_up = len(node.relative) - 1
         if levels_up > 0:
-            pkg_parts = pkg_parts[:-levels_up]
+            package_parts = package_parts[:-levels_up]
 
-        base_module = ".".join(pkg_parts)
+        base_module = ".".join(package_parts)
         module_name = self._get_module_name_str(node.module)
 
         if module_name:
@@ -443,9 +422,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 m.__name__.split(".")[-1] for m in all_target_modules
             }
             if last_part in all_target_module_names:
-                prefix = self.file_name_prefix
-                if prefix and not prefix.endswith("_"):
-                    prefix = f"{prefix}_"
+                prefix = RoleTransformer._normalize_file_prefix(self.file_name_prefix)
                 new_last_part = f"{prefix}{last_part}"
                 new_module_node = self._update_last_module_part(node.module, new_last_part)
 
@@ -478,8 +455,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def leave_Module(
         self, original_node: libcst.Module, updated_node: libcst.Module
     ) -> libcst.Module:
-        """
-        Capture the transformed original module and produce the mixin module AST.
+        """Capture the transformed original module and produce the mixin module AST.
 
         :param original_node: The module node before any transformations.
         :param updated_node: The module node after all child transformations.
@@ -489,13 +465,12 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return self._generate_mixin_module_ast(updated_node)
 
     def _generate_mixin_module_ast(self, updated_node: libcst.Module) -> libcst.Module:
-        """
-        Build the complete mixin module AST from the transformed node and collected mixins.
+        """Build the complete mixin module AST from the transformed node and collected mixins.
 
         :param updated_node: The module node after all class transformations.
         :return: A new Module node containing only the mixin classes and their imports.
         """
-        sorted_base_types = self._topological_sort_base_classes(
+        sorted_base_types = topological_sort_by_inheritance(
             list(self._base_class_role_for_nodes.keys())
         )
         base_class_nodes = [self._base_class_role_for_nodes[k] for k in sorted_base_types]
@@ -505,8 +480,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
 
     def _resolve_name_to_module(self, name: str) -> str | None:
-        """
-        Look up the source module for the given identifier name.
+        """Return the source module for the given identifier name.
 
         :param name: The identifier to resolve.
         :return: The fully-qualified module name, or None if unresolvable.
@@ -522,14 +496,14 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if self._should_add_has_roles(role_taker_node, wrapped_class):
             role_taker_class_bases = list(role_taker_node.bases)
             if not any(
-                RoleNodeFactory.get_name_from_base_node(base.value) == "HasRoles"
+                RoleNodeFactory.get_name_from_base_node(base.value) == HAS_ROLES_NAME
                 for base in role_taker_class_bases
             ):
                 role_taker_class_bases.insert(
-                    0, RoleNodeFactory.make_argument("HasRoles")
+                    0, RoleNodeFactory.make_argument(HAS_ROLES_NAME)
                 )
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
-            self.require_original_import("krrood.patterns.role", ["HasRoles"])
+            self.require_original_import("krrood.patterns.role", [HAS_ROLES_NAME])
 
         return [role_taker_node]
 
@@ -538,8 +512,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
     ) -> bool:
         """Return True if HasRoles should be added to this role taker's bases.
 
-        Only the root taker (not a Role, no role-taker base class) gets HasRoles;
-        subclasses of role takers inherit it automatically.
+        :param node: The role taker class node.
+        :param wrapped_class: The wrapped class of the role taker.
+        :return: True only for root takers that do not already inherit HasRoles.
         """
         return not (
             any(RoleNodeFactory._is_role_base(base.value) for base in node.bases)
@@ -549,8 +524,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def bases_of_class_that_are_role_takers(
         self, wrapped_class: WrappedClass
     ) -> dict[str, type]:
-        """
-        Return all direct base classes of the wrapped class that are also role takers.
+        """Return all direct base classes of the wrapped class that are also role takers.
 
         :param wrapped_class: Wrapped class of the role taker.
         :return: Dictionary of base class names to base class types for role takers.
@@ -566,9 +540,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         node: libcst.ClassDef,
         wrapped_class: WrappedClass,
     ) -> None:
-        """
-        Create a RoleFor<RoleTaker> class for the given role taker class node.
-        Roles of this role taker will inherit from this class.
+        """Create and store a RoleFor<RoleTaker> class for the given role taker.
 
         :param node: The role taker class node to transform.
         :param wrapped_class: The wrapped class of the role taker.
@@ -577,11 +549,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         role_for_node = RoleNodeFactory.get_renamed_node(node, role_for_name)
 
         all_taker_fields = self._collect_base_taker_field_names(wrapped_class)
-
-        # Group body items by the class that defines them (None = taker-direct).
         body_by_class = self._group_all_body_items(wrapped_class, all_taker_fields)
-
-        # Ensure RoleFor<Base> nodes exist for each non-taker base class group.
         segregated_base_types = self._populate_base_rolefor_nodes(body_by_class)
 
         role_for_bases = self.make_role_for_bases(
@@ -589,27 +557,39 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
         role_for_node = role_for_node.with_changes(bases=role_for_bases)
 
-        taker_type_name = self._normaliser.get_type_name(wrapped_class.clazz)
-        role_for_body: dict[str, list] = {
-            "role_taker": [
-                RoleNodeFactory.make_property_getter_node("role_taker", taker_type_name, "...")
-            ]
-        }
-        role_for_body.update(body_by_class.get(None, {}))
-
-        flattened_body = [
-            method_node
-            for method_nodes in role_for_body.values()
-            for method_node in method_nodes
-        ]
+        flattened_body = self._assemble_role_for_body(
+            wrapped_class, body_by_class.get(None, {})
+        )
         self.role_for[wrapped_class] = RoleNodeFactory.get_node_with_new_body(
             role_for_node, flattened_body
         )
 
+    def _assemble_role_for_body(
+        self,
+        wrapped_class: WrappedClass,
+        taker_direct_items: dict[str, list],
+    ) -> list[libcst.FunctionDef]:
+        """Return the body nodes for a RoleFor class.
+
+        :param wrapped_class: The role taker whose RoleFor body is being built.
+        :param taker_direct_items: Members defined directly on the taker (not from a base class).
+        :return: Flattened list of FunctionDef nodes for the class body.
+        """
+        taker_type_name = self._normaliser.get_type_name(wrapped_class.clazz)
+        body_items: dict[str, list] = {
+            ROLE_TAKER_ATTR: [
+                RoleNodeFactory.make_property_getter_node(
+                    ROLE_TAKER_ATTR, taker_type_name, "..."
+                )
+            ]
+        }
+        body_items.update(taker_direct_items)
+        return [node for nodes in body_items.values() for node in nodes]
+
     def _collect_base_taker_field_names(
         self, wrapped_class: WrappedClass
     ) -> list[str]:
-        """Collect all field names from base taker classes."""
+        """Return all field names from base taker classes of the given wrapped class."""
         all_taker_fields = []
         for base_name, taker_type in self.bases_of_class_that_are_role_takers(
             wrapped_class
@@ -623,26 +603,38 @@ class RoleModuleTransformer(ContextAwareTransformer):
         wrapped_class: WrappedClass,
         all_taker_fields: list[str],
     ) -> dict[type | None, dict[str, list[libcst.FunctionDef]]]:
-        """
-        Collect all property and method delegation nodes for the given taker, grouped by
-        the class in the MRO that defines each item.
-
-        Key ``None`` means the item is defined directly on the taker class (or covered by
-        an existing base-taker RoleFor chain) and should stay in the taker's own RoleFor.
-        Any other key is a same-module, non-Role, non-taker base class whose members will
-        be hoisted into a shared ``RoleFor<Base>`` mixin.
+        """Return delegation nodes grouped by the class in the MRO that defines each item.
 
         :param wrapped_class: Wrapped class of the role taker.
         :param all_taker_fields: Field names already covered by base-taker RoleFor nodes.
-        :return: Nested dict mapping defining class (or None) → name → list of nodes.
+        :return: Nested dict mapping defining class (or None for taker-direct) to name to nodes.
         """
         role_takers: set[type] = set(self.class_diagram.role_takers)
         module_name = self.source_module.__name__
         groups: dict[type | None, dict[str, list]] = {}
+        self._collect_field_delegations(wrapped_class, all_taker_fields, role_takers, module_name, groups)
+        self._collect_property_delegations(wrapped_class, role_takers, module_name, groups)
+        self._collect_method_delegations(wrapped_class, role_takers, module_name, groups)
+        return groups
 
-        # --- Field properties ------------------------------------------------
+    def _collect_field_delegations(
+        self,
+        wrapped_class: WrappedClass,
+        taker_fields: list[str],
+        role_takers: set[type],
+        module_name: str,
+        groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Populate groups with getter/setter delegation nodes for each dataclass field.
+
+        :param wrapped_class: The role taker whose fields are delegated.
+        :param taker_fields: Field names already covered by a base-taker RoleFor.
+        :param role_takers: The set of all known role taker types.
+        :param module_name: The source module name for package comparison.
+        :param groups: The accumulator dict to populate.
+        """
         for field_ in wrapped_class.fields:
-            if field_.name in all_taker_fields:
+            if field_.name in taker_fields:
                 continue
             if not (field_.field.kw_only or field_.field.init):
                 continue
@@ -650,15 +642,29 @@ class RoleModuleTransformer(ContextAwareTransformer):
             prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
                 field_.name,
                 field_type_name,
-                f"self.role_taker.{field_.name}",
-                f"self.role_taker.{field_.name} = value",
+                f"self.{ROLE_TAKER_ATTR}.{field_.name}",
+                f"self.{ROLE_TAKER_ATTR}.{field_.name} = value",
             )
-            defining_base = _get_defining_class_for_field(
-                field_.name, wrapped_class.clazz, module_name, role_takers
+            defining_base = _find_defining_class(
+                field_.name, wrapped_class.clazz, module_name, role_takers,
+                lambda klass: hasattr(klass, "__dataclass_fields__") and field_.name in klass.__dataclass_fields__,
             )
             groups.setdefault(defining_base, {})[field_.name] = prop_nodes
 
-        # --- Data descriptor properties --------------------------------------
+    def _collect_property_delegations(
+        self,
+        wrapped_class: WrappedClass,
+        role_takers: set[type],
+        module_name: str,
+        groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Populate groups with getter/setter delegation nodes for each data descriptor.
+
+        :param wrapped_class: The role taker whose properties are delegated.
+        :param role_takers: The set of all known role taker types.
+        :param module_name: The source module name for package comparison.
+        :param groups: The accumulator dict to populate.
+        """
         for property_name, property_value in inspect.getmembers(
             wrapped_class.clazz, inspect.isdatadescriptor
         ):
@@ -673,23 +679,37 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
                     property_name,
                     return_annotation,
-                    f"self.role_taker.{property_name}",
-                    f"self.role_taker.{property_name} = value",
+                    f"self.{ROLE_TAKER_ATTR}.{property_name}",
+                    f"self.{ROLE_TAKER_ATTR}.{property_name} = value",
                 )
             else:
                 prop_nodes = [
                     RoleNodeFactory.make_property_getter_node(
                         property_name,
                         return_annotation,
-                        f"self.role_taker.{property_name}",
+                        f"self.{ROLE_TAKER_ATTR}.{property_name}",
                     )
                 ]
-            defining_base = _get_defining_non_role_class(
-                property_name, wrapped_class.clazz, module_name, role_takers
+            defining_base = _find_defining_class(
+                property_name, wrapped_class.clazz, module_name, role_takers,
+                lambda klass: property_name in vars(klass),
             )
             groups.setdefault(defining_base, {})[property_name] = prop_nodes
 
-        # --- Methods ---------------------------------------------------------
+    def _collect_method_delegations(
+        self,
+        wrapped_class: WrappedClass,
+        role_takers: set[type],
+        module_name: str,
+        groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Populate groups with delegation nodes for each delegatable method.
+
+        :param wrapped_class: The role taker whose methods are delegated.
+        :param role_takers: The set of all known role taker types.
+        :param module_name: The source module name for package comparison.
+        :param groups: The accumulator dict to populate.
+        """
         base_takers = [
             base for base in wrapped_class.clazz.__mro__[1:]
             if base in role_takers
@@ -708,20 +728,17 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 continue
             method_node = self.make_method_node(method_name, method_object)
             if method_node is not None:
-                defining_base = _get_defining_non_role_class(
-                    method_name, wrapped_class.clazz, module_name, role_takers
+                defining_base = _find_defining_class(
+                    method_name, wrapped_class.clazz, module_name, role_takers,
+                    lambda klass: method_name in vars(klass),
                 )
                 groups.setdefault(defining_base, {})[method_name] = [method_node]
-
-        return groups
 
     def _populate_base_rolefor_nodes(
         self,
         body_by_class: dict[type | None, dict[str, list]],
     ) -> list[type]:
-        """
-        Ensure a ``RoleFor<Base>`` node exists in ``_base_class_role_for_nodes`` for every
-        non-``None`` key in *body_by_class*.
+        """Ensure a RoleFor<Base> node exists for every non-None key in body_by_class.
 
         :param body_by_class: Grouped body items produced by ``_group_all_body_items``.
         :return: The segregated base class types in topological order (ancestors first).
@@ -729,7 +746,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         base_classes = [k for k in body_by_class if k is not None]
         if not base_classes:
             return []
-        sorted_bases = self._topological_sort_base_classes(base_classes)
+        sorted_bases = topological_sort_by_inheritance(base_classes)
         for base_class in sorted_bases:
             if base_class not in self._base_class_role_for_nodes:
                 self._base_class_role_for_nodes[base_class] = self._make_base_rolefor_node(
@@ -742,28 +759,32 @@ class RoleModuleTransformer(ContextAwareTransformer):
         base_class: type,
         body_items: dict[str, list[libcst.FunctionDef]],
     ) -> libcst.ClassDef:
-        """
-        Generate a ``@dataclass(eq=False) class RoleFor<Base>(...)`` node with an abstract
-        ``role_taker`` property and delegation members for *body_items*.
-
-        Bases mirror the inheritance of *base_class*: for each direct parent, we walk its
-        MRO to find the nearest ancestor that already has a ``RoleFor`` node, and use that
-        as a base.  This produces a hierarchy that mirrors the original class hierarchy.
+        """Generate a ``@dataclass(eq=False) class RoleFor<Base>(...)`` node.
 
         :param base_class: The base class to generate a RoleFor node for.
-        :param body_items: Mapping of member name → list of FunctionDef nodes.
+        :param body_items: Mapping of member name to list of FunctionDef nodes.
         :return: The generated ClassDef node.
         """
         self._resolver.name_to_module_map[base_class.__name__] = base_class.__module__
         role_taker_node = RoleNodeFactory.make_property_getter_node(
-            "role_taker", base_class.__name__, "..."
+            ROLE_TAKER_ATTR, base_class.__name__, "..."
         )
         body_nodes: list[libcst.FunctionDef] = [role_taker_node]
         for nodes in body_items.values():
             body_nodes.extend(nodes)
 
-        # Build hierarchical bases: for each direct parent of base_class, walk its MRO
-        # to find the nearest ancestor that already has a RoleFor node.
+        rolefor_bases = self._resolve_rolefor_bases_for(base_class)
+        bases = rolefor_bases + [ABC_NAME]
+        return RoleNodeFactory.make_dataclass(
+            self.get_role_for_name(base_class), bases=bases, body=body_nodes
+        )
+
+    def _resolve_rolefor_bases_for(self, base_class: type) -> list[str]:
+        """Return RoleFor class names for the nearest ancestors of base_class that already have RoleFor nodes.
+
+        :param base_class: The class whose parent hierarchy is searched.
+        :return: List of RoleFor class name strings.
+        """
         rolefor_bases: list[str] = []
         seen: set[type] = set()
         for parent in base_class.__bases__:
@@ -771,42 +792,15 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 if ancestor is object:
                     break
                 if ancestor in self._base_class_role_for_nodes and ancestor not in seen:
-                    rolefor_bases.append(f"RoleFor{ancestor.__name__}")
+                    rolefor_bases.append(self.get_role_for_name(ancestor))
                     seen.add(ancestor)
                     break
-
-        bases = rolefor_bases + ["ABC"]
-        return RoleNodeFactory.make_dataclass(
-            f"RoleFor{base_class.__name__}", bases=bases, body=body_nodes
-        )
-
-    def _topological_sort_base_classes(self, base_classes: list[type]) -> list[type]:
-        """
-        Return *base_classes* sorted so that ancestors come before their descendants.
-
-        :param base_classes: Unordered list of base class types.
-        :return: Topologically ordered list (most ancestral first).
-        """
-        result: list[type] = []
-        remaining = list(base_classes)
-        while remaining:
-            for cls in remaining:
-                if not any(
-                    issubclass(cls, other) and other is not cls for other in remaining
-                ):
-                    result.append(cls)
-                    remaining.remove(cls)
-                    break
-            else:
-                result.extend(remaining)
-                break
-        return result
+        return rolefor_bases
 
     def make_method_node(
         self, name: str, method: Callable
     ) -> libcst.FunctionDef | None:
-        """
-        Create a delegation FunctionDef node for a method of the role taker.
+        """Create a delegation FunctionDef node for a method of the role taker.
 
         :param name: The name of the method.
         :param method: The method to create the delegation node for.
@@ -823,20 +817,19 @@ class RoleModuleTransformer(ContextAwareTransformer):
             )
 
         self._resolve_signature_types(method)
-        method_node = self._handle_decorators(method_node, method)
+        self._register_decorator_imports(method_node, method)
 
         return self._generate_delegation_body(method_node, name, method)
 
     def _parse_method_source(self, method: Callable) -> str | None:
-        """Retrieve the source code of a method, returning None if unavailable."""
+        """Return the source code of a method, or None if it is unavailable."""
         try:
             return inspect.getsource(method)
         except OSError:
             return None
 
     def _resolve_signature_types(self, method: Callable) -> None:
-        """
-        Register name-to-module mappings for all types appearing in a method's signature.
+        """Register name-to-module mappings for all types in a method's signature.
 
         :param method: The method whose type annotations should be registered.
         """
@@ -854,27 +847,23 @@ class RoleModuleTransformer(ContextAwareTransformer):
 
     def _register_signature_annotations(self, method: Callable) -> None:
         """Register types via inspect.signature (fallback path)."""
-        parameters = inspect.signature(method).parameters
-        for param in parameters.values():
+        sig = inspect.signature(method)
+        for param in sig.parameters.values():
             if param.annotation is not inspect.Parameter.empty:
                 self._get_consistent_type_name(param.annotation)
-        return_annotation = inspect.signature(method).return_annotation
-        if return_annotation is not inspect.Signature.empty:
-            self._get_consistent_type_name(return_annotation)
+        if sig.return_annotation is not inspect.Signature.empty:
+            self._get_consistent_type_name(sig.return_annotation)
 
-    def _handle_decorators(
+    def _register_decorator_imports(
         self, method_node: libcst.FunctionDef, method: Callable
-    ) -> libcst.FunctionDef:
-        """
-        Register the source module of each decorator used on the method.
+    ) -> None:
+        """Register the source module of each decorator used on the method.
 
         :param method_node: The parsed FunctionDef node containing decorator nodes.
         :param method: The live method object, used for runtime name resolution.
-        :return: The unchanged method_node (side effect: updates name_to_module_map).
         """
         for decorator in method_node.decorators:
-            decorator_node = decorator.decorator
-            decorator_name = self._get_decorator_name(decorator_node)
+            decorator_name = self._get_decorator_name(decorator.decorator)
             if decorator_name:
                 try:
                     decorator_object = resolve_name_in_hierarchy(decorator_name, method)
@@ -882,10 +871,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
                         self._resolver.name_to_module_map[decorator_name] = decorator_object.__module__
                 except Exception:
                     pass
-        return method_node
 
     def _get_decorator_name(self, decorator_node: libcst.BaseExpression) -> str | None:
-        """Extract the simple name from a decorator expression node."""
+        """Return the simple name from a decorator expression node, or None."""
         if isinstance(decorator_node, libcst.Name):
             return decorator_node.value
         if isinstance(decorator_node, libcst.Call) and isinstance(decorator_node.func, libcst.Name):
@@ -895,8 +883,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def _generate_delegation_body(
         self, method_node: libcst.FunctionDef, name: str, method: Callable
     ) -> libcst.FunctionDef:
-        """
-        Replace the method body with a delegation call to ``self.role_taker.<name>``.
+        """Replace the method body with a delegation call to ``self.role_taker.<name>``.
 
         :param method_node: The original parsed method node.
         :param name: The method name to delegate to on the role taker.
@@ -909,7 +896,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
             body=libcst.IndentedBlock(
                 [
                     libcst.parse_statement(
-                        f"return self.role_taker.{name}({', '.join(call_params)})"
+                        f"return self.{ROLE_TAKER_ATTR}.{name}({', '.join(call_params)})"
                     )
                 ]
             )
@@ -921,13 +908,11 @@ class RoleModuleTransformer(ContextAwareTransformer):
         wrapped_class: WrappedClass,
         segregated_base_types: list[type] | None = None,
     ) -> list[libcst.Arg]:
-        """
-        Generate the base class arguments for a RoleFor class.
+        """Generate the base class arguments for a RoleFor class.
 
         :param node: The original taker class node.
         :param wrapped_class: The taker wrapped class.
-        :param segregated_base_types: Same-module base classes that received their own
-            RoleFor mixin via base-class segregation.
+        :param segregated_base_types: Same-module base classes that received their own RoleFor mixin.
         :return: List of Arg nodes representing the base classes.
         """
         role_for_bases = []
@@ -935,19 +920,19 @@ class RoleModuleTransformer(ContextAwareTransformer):
         for base in node.bases:
             base_name = RoleNodeFactory.get_name_from_base_node(base.value)
             if base_name in bases_that_are_takers:
-                taker_role_for = RoleNodeFactory.make_argument(
-                    self.get_role_for_name(bases_that_are_takers[base_name])
+                role_for_bases.append(
+                    RoleNodeFactory.make_argument(
+                        self.get_role_for_name(bases_that_are_takers[base_name])
+                    )
                 )
-                role_for_bases.append(taker_role_for)
             elif RoleNodeFactory._is_role_base(base.value) and issubclass(
                 wrapped_class.clazz, Role
             ):
                 taker_type = wrapped_class.clazz.get_role_taker_type()
-                taker_role_for = RoleNodeFactory.make_argument(self.get_role_for_name(taker_type))
-                role_for_bases.append(taker_role_for)
+                role_for_bases.append(
+                    RoleNodeFactory.make_argument(self.get_role_for_name(taker_type))
+                )
 
-        # Emit only the most-derived (leaf) types: any base_type whose subclass is also
-        # in the set is already covered transitively through the RoleFor hierarchy.
         all_segregated = list(segregated_base_types or [])
         for base_type in all_segregated:
             is_covered = any(
@@ -955,16 +940,15 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 for other in all_segregated
             )
             if not is_covered:
-                role_for_bases.append(RoleNodeFactory.make_argument(f"RoleFor{base_type.__name__}"))
+                role_for_bases.append(
+                    RoleNodeFactory.make_argument(self.get_role_for_name(base_type))
+                )
 
-        role_for_bases.append(RoleNodeFactory.make_argument("ABC"))
-
+        role_for_bases.append(RoleNodeFactory.make_argument(ABC_NAME))
         return role_for_bases
 
-
     def _get_consistent_type_name(self, type_obj: Any) -> str:
-        """
-        Return a normalised string representation of a type for use in generated code.
+        """Return a normalised string representation of a type for use in generated code.
 
         :param type_obj: The type object to normalise.
         :return: A string type name suitable for inclusion in generated source code.
@@ -974,8 +958,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def _transform_role(
         self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> libcst.ClassDef:
-        """
-        Adjust a primary role class by replacing Role bases with RoleFor bases.
+        """Adjust a role class by replacing Role bases with their corresponding RoleFor bases.
 
         :param node: The original class node.
         :param wrapped_class: The wrapped class information.
@@ -989,50 +972,41 @@ class RoleModuleTransformer(ContextAwareTransformer):
             return node
         taker_type = wrapped_class.clazz.get_role_taker_type()
 
-        # Filter out original Role bases and redundant bases
         new_bases = []
-
-        role_bases = {
-            base.__name__: base
-            for base in wrapped_class.clazz.__bases__
-            if base is Role
-            or (issubclass(base, Role) and base.updates_role_taker_type())
-        }
-        logger.debug("  role_bases keys: %s", list(role_bases.keys()))
         for base in node.bases:
             new_bases.append(base)
             base_name = RoleNodeFactory.get_name_from_base_node(base.value)
             logger.debug("  Checking base %s", base_name)
 
-            # Check if this base is a Role class in our diagram
-            is_role_base = False
-            if base_name == "Role":
-                is_role_base = True
-            else:
-                for wrapped in self.class_diagram.wrapped_classes:
-                    if wrapped.clazz.__name__ == base_name and issubclass(
-                        wrapped.clazz, Role
-                    ):
-                        is_role_base = True
-                        break
-
-            if is_role_base:
+            if self._is_role_base_node(base):
                 role_for_name = self.get_role_for_name(taker_type)
                 if not any(
-                    RoleNodeFactory.get_name_from_base_node(base.value) == role_for_name
-                    for base in node.bases
+                    RoleNodeFactory.get_name_from_base_node(b.value) == role_for_name
+                    for b in node.bases
                 ):
                     logger.debug("  Adding %s", role_for_name)
                     new_bases.append(RoleNodeFactory.make_argument(role_for_name))
 
-                taker_module = sys.modules[taker_type.__module__]
-                module_name = taker_module.__name__
-                package_name = ".".join(module_name.split(".")[:-1])
-                last_part = module_name.split(".")[-1]
-                mixin_module_name = f"{package_name}.role_mixins.{last_part}_role_mixins"
+                mixin_module_name = _mixin_module_dotted_name(
+                    sys.modules[taker_type.__module__].__name__
+                )
                 self.require_original_import(mixin_module_name, [role_for_name])
 
         return node.with_changes(bases=new_bases)
+
+    def _is_role_base_node(self, base: libcst.Arg) -> bool:
+        """Return True if the base argument represents a Role class in the diagram.
+
+        :param base: A base class argument from a ClassDef node.
+        :return: True if the base is Role or a Role subclass in the class diagram.
+        """
+        base_name = RoleNodeFactory.get_name_from_base_node(base.value)
+        if base_name == "Role":
+            return True
+        return any(
+            wrapped.clazz.__name__ == base_name and issubclass(wrapped.clazz, Role)
+            for wrapped in self.class_diagram.wrapped_classes
+        )
 
     @classmethod
     def get_role_for_name(cls, taker_class: type) -> str:
@@ -1040,8 +1014,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         return f"RoleFor{taker_class.__name__}"
 
     def require_import(self, module: str, names: str | list[str]):
-        """
-        Record an import that must appear in the generated mixin module.
+        """Record an import that must appear in the generated mixin module.
 
         :param module: The module to import from.
         :param names: The name or list of names to import.
