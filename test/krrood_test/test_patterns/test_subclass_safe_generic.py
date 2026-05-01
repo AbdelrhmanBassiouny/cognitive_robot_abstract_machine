@@ -22,6 +22,45 @@ from ..dataset.classes_with_generic import (
 )
 
 
+from dataclasses import dataclass
+
+from typing_extensions import TypeVar
+
+from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+
+T = TypeVar("T")
+U = TypeVar("U")
+
+
+@dataclass
+class A(SubClassSafeGeneric[T]):
+    a: T
+
+
+@dataclass
+class B(A[int]): ...
+
+
+@dataclass
+class C(B, SubClassSafeGeneric[U]):
+    b: U
+
+
+@dataclass
+class D(C[str]): ...
+
+
+def test_multi_generic_through_inheritance():
+    class_diagram = ClassDiagram([A, B, C, D])
+    D_wrapped = class_diagram.get_wrapped_class(D)
+    for f in D_wrapped.fields:
+        if f.name == "a":
+            assert f.type_endpoint is int
+        if f.name == "b":
+            assert f.type_endpoint is str
+
+
 def test_resolve_generic_type_same_class():
     _assert_generic_type_is_resolved(FirstGeneric)
 
@@ -67,8 +106,8 @@ def assert_field_kwargs_are_preserved_when_resolving_generic_type(cls, kw_only=F
     evaluated_type = eval(field_.type, sys.modules[cls.__module__].__dict__)
     assert get_origin(evaluated_type) is list
     assert (
-            get_args(evaluated_type)[0]
-            is get_generic_type_param(cls, SubClassSafeGeneric)[0]
+        get_args(evaluated_type)[0]
+        is get_generic_type_param(cls, SubClassSafeGeneric)[0]
     )
 
 
@@ -93,13 +132,13 @@ def _assert_generic_type_is_resolved(cls):
     resolved_hints = get_type_hints(cls, include_extras=True)
     generic_type = get_generic_type_param(cls, SubClassSafeGeneric)[0]
     assert (
-            resolved_hints[variable_from(cls).attribute_using_generic._attribute_name_]
-            is generic_type
+        resolved_hints[variable_from(cls).attribute_using_generic._attribute_name_]
+        is generic_type
     )
     nested_generic_type = resolved_hints[
         variable_from(cls).generic_attribute_using_generic._attribute_name_
     ]
     assert (
-            get_origin(nested_generic_type) is list
-            and get_args(nested_generic_type)[0] is generic_type
+        get_origin(nested_generic_type) is list
+        and get_args(nested_generic_type)[0] is generic_type
     )
