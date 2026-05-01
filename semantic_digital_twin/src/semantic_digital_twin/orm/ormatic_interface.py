@@ -72,6 +72,7 @@ import semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotatio
 import semantic_digital_twin.semantic_annotations.semantic_annotations
 import semantic_digital_twin.spatial_computations.ik_solver
 import semantic_digital_twin.spatial_types.derivatives
+import semantic_digital_twin.spatial_types.role_mixins.spatial_types_role_mixins
 import semantic_digital_twin.spatial_types.spatial_types
 import semantic_digital_twin.world
 import semantic_digital_twin.world_description.connection_properties
@@ -3234,6 +3235,50 @@ class QPProblemDAO(
         foreign_keys=[target_id],
         post_update=True,
     )
+
+
+class RoleForSpatialTypeDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.spatial_types.role_mixins.spatial_types_role_mixins.RoleForSpatialType
+    ],
+):
+
+    __tablename__ = "RoleForSpatialTypeDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "RoleForSpatialTypeDAO",
+    }
+
+
+class RoleForPoseDAO(
+    RoleForSpatialTypeDAO,
+    DataAccessObject[
+        semantic_digital_twin.spatial_types.role_mixins.spatial_types_role_mixins.RoleForPose
+    ],
+):
+
+    __tablename__ = "RoleForPoseDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(RoleForSpatialTypeDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RoleForPoseDAO",
+        "inherit_condition": database_id == RoleForSpatialTypeDAO.database_id,
+    }
 
 
 class RoleForWorldEntityDAO(
