@@ -10,6 +10,7 @@ from typing_extensions import Any, Optional, Dict, Type, List, TYPE_CHECKING, Tu
 
 from krrood.ripple_down_rules.utils import make_set, row_to_dict, table_rows_as_str, get_value_type_from_type_hint, SubclassJSONSerializer, \
     get_full_class_name, get_type_from_string, make_list, is_iterable, serialize_dataclass, dataclass_to_dict, copy_case
+from ...symbol_graph.symbol_graph import Symbol
 
 if TYPE_CHECKING:
     from ..rules import Rule

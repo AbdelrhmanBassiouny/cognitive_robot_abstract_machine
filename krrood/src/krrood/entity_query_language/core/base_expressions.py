@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections import UserDict
 from copy import copy
 from dataclasses import dataclass, field
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 from typing_extensions import (
     Dict,
@@ -109,7 +109,7 @@ class SymbolicExpression(ABC):
     def __post_init__(self):
         self._expression_ = self
 
-    @memoize
+    @lru_cache
     def _get_expression_by_id_(self, id_: uuid.UUID) -> SymbolicExpression:
         try:
             return next(
