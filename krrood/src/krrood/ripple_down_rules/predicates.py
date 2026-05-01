@@ -5,10 +5,10 @@ from typing_extensions import Generator, ClassVar
 
 from typing_extensions import Type, TYPE_CHECKING, Tuple, Dict, List, TypeVar, Iterator, Union
 
-from .datastructures.enums import InferMode
-from .datastructures.tracked_object import TrackedObjectMixin, Direction, Relation
-from .types import PredicateArgType, PredicateOutputType
-from .utils import is_iterable
+from krrood.ripple_down_rules.datastructures.enums import InferMode
+from krrood.ripple_down_rules.datastructures.tracked_object import TrackedObjectMixin, Direction, Relation
+from krrood.ripple_down_rules.types import PredicateArgType, PredicateOutputType
+from krrood.ripple_down_rules.utils import is_iterable
 
 if TYPE_CHECKING:
     pass

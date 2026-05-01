@@ -8,8 +8,8 @@ from functools import lru_cache
 from pandas import DataFrame
 from typing_extensions import Any, Optional, Dict, Type, List, TYPE_CHECKING, Tuple
 
-from ..utils import table_rows_as_str, is_iterable, dataclass_to_dict
-from ...symbol_graph.symbol_graph import Symbol
+from krrood.ripple_down_rules.utils import make_set, row_to_dict, table_rows_as_str, get_value_type_from_type_hint, SubclassJSONSerializer, \
+    get_full_class_name, get_type_from_string, make_list, is_iterable, serialize_dataclass, dataclass_to_dict, copy_case
 
 if TYPE_CHECKING:
     from ..rules import Rule

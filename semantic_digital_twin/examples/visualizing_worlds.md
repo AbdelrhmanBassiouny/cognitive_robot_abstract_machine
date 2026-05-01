@@ -47,8 +47,8 @@ node = rclpy.create_node("semantic_digital_twin")
 thread = threading.Thread(target=rclpy.spin, args=(node,), daemon=True)
 thread.start()
 
-tf_publisher = TFPublisher(world=world, node=node)
-viz = VizMarkerPublisher(world=world, node=node)
+tf_publisher = TFPublisher(_world=world, node=node)
+viz = VizMarkerPublisher(_world=world, node=node)
 ```
 
 When you want to stop visualizing, you have to stop the visualizer and afterwards clean up ROS2.
@@ -58,7 +58,10 @@ node.destroy_node()
 rclpy.shutdown()
 ```
 
-The multiverse way relies on multiverse and is WIP. Do it faster giang.
+The world can also be visualized directly through a running simulation.
+Although this approach is computationally heavier, it provides the important advantage of enabling interaction with the environment. 
+In addition to visualization, the physics engine can be used to simulate dynamics, contacts, and collisions.
+Further details are provided in the [physics simulators](physics-simulators) section.
 
 If you have followed the guide until here, you have probably noticed that we have used the RayTracer to visualize the world 
 a few times. This is a convenient way of visualizing a world inside a notebook, like in these guides, but it is not recommended 

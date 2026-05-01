@@ -4,22 +4,27 @@ from dataclasses import dataclass, field
 
 from typing_extensions import ClassVar, Optional, Dict
 
-from .rules.conclusion import Conclusion
-from .rules.conclusion_selector import ConclusionSelector
-from .query.query import (
+from krrood.entity_query_language.rules.conclusion import Conclusion
+from krrood.entity_query_language.rules.conclusion_selector import ConclusionSelector
+from krrood.entity_query_language.query.query import (
     Query,
 )
-from .query.operations import OrderedBy, GroupedBy
-from .query.quantifiers import ResultQuantifier
-from .operators.concatenation import Concatenation
-from .operators.aggregators import Aggregator
-from .operators.core_logical_operators import LogicalOperator
-from .core.base_expressions import SymbolicExpression, Filter
-from .core.variable import Variable, Literal
-from .core.mapped_variable import MappedVariable
-from .operators.comparator import Comparator
+from krrood.entity_query_language.query.operations import OrderedBy, GroupedBy
+from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+from krrood.entity_query_language.operators.concatenation import Concatenation
+from krrood.entity_query_language.operators.aggregators import Aggregator
+from krrood.entity_query_language.operators.core_logical_operators import (
+    LogicalOperator,
+)
+from krrood.entity_query_language.core.base_expressions import (
+    SymbolicExpression,
+    Filter,
+)
+from krrood.entity_query_language.core.variable import Variable, Literal
+from krrood.entity_query_language.core.mapped_variable import MappedVariable
+from krrood.entity_query_language.operators.comparator import Comparator
 
-from ..rustworkx_utils import (
+from krrood.rustworkx_utils import (
     GraphVisualizer,
     RWXNode as RXUtilsNode,
     ColorLegend as RXUtilsColorLegend,
@@ -54,6 +59,8 @@ class QueryGraph:
             raise ModuleNotFoundError(
                 "rustworkx_utils is not installed. Please install it with `pip install rustworkx_utils`"
             )
+        if isinstance(self.query, Query):
+            self.query.build()
         self.construct_graph()
 
     def visualize(
@@ -130,13 +137,13 @@ class QueryGraph:
         """
         parent_expression = parent_node.data
         selected_var_ids = (
-            [v._binding_id_ for v in parent_expression._selected_variables_]
+            [v._id_ for v in parent_expression._selected_variables_]
             if isinstance(parent_expression, Query)
             else []
         )
         for child in parent_expression._children_:
             child_node = self.construct_graph(child)
-            if child._binding_id_ in selected_var_ids:
+            if child._id_ in selected_var_ids:
                 child_node.enclosed = True
             child_node.parent = parent_node
 

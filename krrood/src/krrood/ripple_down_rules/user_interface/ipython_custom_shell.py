@@ -7,10 +7,10 @@ from IPython.terminal.embed import InteractiveShellEmbed
 from colorama import Fore, Style
 from traitlets.config import Config
 
-from .template_file_creator import TemplateFileCreator
-from ..datastructures.dataclasses import CaseQuery
-from ..datastructures.enums import PromptFor
-from ..utils import contains_return_statement, extract_dependencies, encapsulate_code_lines_into_a_function
+from krrood.ripple_down_rules.user_interface.template_file_creator import TemplateFileCreator
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
+from krrood.ripple_down_rules.datastructures.enums import PromptFor
+from krrood.ripple_down_rules.utils import contains_return_statement, extract_dependencies, encapsulate_code_lines_into_a_function
 
 
 @magics_class

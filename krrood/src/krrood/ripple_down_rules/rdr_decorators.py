@@ -10,18 +10,18 @@ from functools import wraps
 
 from typing_extensions import Callable, Optional, Type, Tuple, Dict, Any, List
 
-from .datastructures.dataclasses import CaseFactoryMetaData
-from .experts import Expert, Human
-from .rdr import GeneralRDR
-from .utils import get_origin_type_of_function_output, get_arg_type_of_function_output, fill_in_missing_kwargs
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseFactoryMetaData
+from krrood.ripple_down_rules.experts import Expert, Human
+from krrood.ripple_down_rules.rdr import GeneralRDR
+from krrood.ripple_down_rules.utils import get_origin_type_of_function_output, get_arg_type_of_function_output, fill_in_missing_kwargs
 
 try:
     from .user_interface.gui import RDRCaseViewer
 except ImportError:
     RDRCaseViewer = None
-from .utils import get_func_rdr_model_name, make_set, \
+from krrood.ripple_down_rules.utils import get_func_rdr_model_name, make_set, \
     make_list
-from .helpers import create_case_from_method, create_case_query_from_method
+from krrood.ripple_down_rules.helpers import create_case_from_method, create_case_query_from_method
 
 
 @dataclass(unsafe_hash=True)

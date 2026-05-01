@@ -9,9 +9,9 @@ from omegaconf import MISSING
 from sqlalchemy.orm import DeclarativeBase as SQLTable
 from typing_extensions import Any, Optional, Dict, Type, Tuple, Union, List, Set, Callable, TYPE_CHECKING
 
-from .callable_expression import CallableExpression
-from .case import create_case, Case
-from ..utils import copy_case, make_list, make_set, get_origin_and_args_from_type_hint, render_tree, \
+from krrood.ripple_down_rules.datastructures.callable_expression import CallableExpression
+from krrood.ripple_down_rules.datastructures.case import create_case, Case
+from krrood.ripple_down_rules.utils import copy_case, make_list, make_set, get_origin_and_args_from_type_hint, render_tree, \
     get_function_representation, get_method_object_from_pytest_request, typing_to_python_type
 
 if TYPE_CHECKING:

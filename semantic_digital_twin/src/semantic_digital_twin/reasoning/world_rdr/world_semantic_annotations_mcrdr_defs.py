@@ -7,20 +7,20 @@ from krrood.entity_query_language.factories import (
     variable,
     match_variable,
 )
-from ...semantic_annotations.semantic_annotations import (
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Wardrobe,
     Door,
     Drawer,
     Fridge,
     Handle,
 )
-from ...world import World
-from ...world_description.connections import (
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import (
     FixedConnection,
     PrismaticConnection,
     RevoluteConnection,
 )
-from ...world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 def conditions_90574698325129464513441443063592862114(case) -> bool:

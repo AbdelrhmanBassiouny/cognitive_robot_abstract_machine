@@ -6,8 +6,9 @@ from typing import Type
 
 from typing_extensions import Generic, TypeVar, Any, get_args
 
-from krrood.utils import recursive_subclasses, DataclassException
-from ...world import World
+from krrood.utils import recursive_subclasses
+from krrood.exceptions import DataclassException
+from semantic_digital_twin.world import World
 
 InputType = TypeVar("InputType")
 OutputType = TypeVar("OutputType")

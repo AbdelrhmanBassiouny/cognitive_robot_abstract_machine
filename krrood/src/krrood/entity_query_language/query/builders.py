@@ -13,27 +13,45 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
+from ordered_set import OrderedSet
 from typing_extensions import Tuple, List, Type, Optional, Callable, TYPE_CHECKING
 
-from ..core.base_expressions import SymbolicExpression, Selectable
-from ..operators.comparator import Comparator
-from ..operators.core_logical_operators import chained_logic, AND, LogicalOperator
-from ..failures import (
+from krrood.entity_query_language.core.base_expressions import (
+    SymbolicExpression,
+    Selectable,
+)
+from krrood.entity_query_language.operators.core_logical_operators import (
+    chained_logic,
+    AND,
+)
+from krrood.entity_query_language.exceptions import (
     NoConditionsProvided,
     LiteralConditionError,
     AggregatorInWhereConditionsError,
     NonAggregatorInHavingConditionsError,
     NonAggregatedSelectedVariablesError,
 )
-from .quantifiers import ResultQuantificationConstraint, ResultQuantifier, An
-from .operations import Where, Having, OrderedBy, GroupedBy
-from ..operators.aggregators import Aggregator
-from ..core.variable import Literal, Variable, InstantiatedVariable
-from ..core.mapped_variable import MappedVariable
+from krrood.entity_query_language.query.quantifiers import (
+    ResultQuantificationConstraint,
+    ResultQuantifier,
+    An,
+)
+from krrood.entity_query_language.query.operations import (
+    Where,
+    Having,
+    OrderedBy,
+    GroupedBy,
+)
+from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
+from krrood.entity_query_language.core.variable import (
+    Literal,
+)
+from krrood.entity_query_language.core.mapped_variable import MappedVariable
+from krrood.utils import memoize
 
 if TYPE_CHECKING:
-    from ..factories import ConditionType
-    from .query import Query
+    from krrood.entity_query_language.factories import ConditionType
+    from krrood.entity_query_language.query.query import Query
 
 
 @dataclass
@@ -47,10 +65,22 @@ class ExpressionBuilder(ABC):
     """
     The query that the expression is being built for.
     """
+    _built_expression: Optional[SymbolicExpression] = field(init=False, default=None)
+    """
+    The expression that is built from the metadata.
+    """
 
-    @abstractmethod
-    @cached_property
+    @property
     def expression(self) -> SymbolicExpression:
+        """
+        :return: The expression that is built from the metadata.
+        """
+        if self._built_expression is not None:
+            return self._built_expression
+        self._built_expression = self.build()
+        return self._built_expression
+
+    def build(self) -> SymbolicExpression:
         """
         :return: The expression that is built from the metadata.
         """
@@ -96,7 +126,7 @@ class FilterBuilder(ExpressionBuilder, ABC):
         """
         :return: A tuple containing the aggregators and non-aggregators in the conditions.
         """
-        from .query import Query
+        from krrood.entity_query_language.query.query import Query
 
         aggregators, non_aggregators = [], []
 
@@ -105,23 +135,21 @@ class FilterBuilder(ExpressionBuilder, ABC):
             if isinstance(expr, Aggregator):
                 aggregators.append(expr)
                 # No need to traverse inside aggregators
-                return False
-            elif isinstance(expr, Selectable) and not isinstance(expr, Literal):
+                return
+            elif isinstance(expr, Selectable) and not isinstance(
+                expr, (Literal, ResultQuantifier, Query)
+            ):
                 non_aggregators.append(expr)
 
-            # Stop traversal early if both found
-            if aggregators and non_aggregators:
-                return True
-
-            if isinstance(expr, Query):
+            if isinstance(expr, (Literal, ResultQuantifier, Query)):
                 # Subqueries are a boundary, we don't need to traverse inside them.
-                return False
+                return
 
-            return any(walk(child) for child in expr._children_)
+            for child in expr._children_:
+                walk(child)
 
         for condition in self.conditions:
-            if walk(condition):
-                break
+            walk(condition)
 
         return tuple(aggregators), tuple(non_aggregators)
 
@@ -152,8 +180,7 @@ class WhereBuilder(FilterBuilder):
         if aggregators:
             raise AggregatorInWhereConditionsError(aggregators, query=self.query)
 
-    @cached_property
-    def expression(self) -> Where:
+    def build(self) -> Where:
         return Where(self.conditions_expression)
 
 
@@ -169,23 +196,17 @@ class HavingBuilder(FilterBuilder):
      the aggregations of grouped results.
     """
 
-    def assert_correct_conditions(self):
-        """
-        Assert that the having conditions are correct.
-
-        :raises NonAggregatorInHavingConditionsError: If the having conditions contain any non-aggregator expressions.
-        """
-        super().assert_correct_conditions()
+    def build(self) -> Having:
         aggregators, non_aggregators = (
             self.aggregators_and_non_aggregators_in_conditions
         )
-        if non_aggregators:
+        if any(
+            var._id_ not in self.grouped_by.ids_of_variables_to_group_by
+            for var in non_aggregators
+        ):
             raise NonAggregatorInHavingConditionsError(
                 non_aggregators, query=self.query
             )
-
-    @cached_property
-    def expression(self) -> Having:
         return Having(self.grouped_by, self.conditions_expression)
 
 
@@ -203,21 +224,21 @@ class GroupedByBuilder(ExpressionBuilder):
     def __post_init__(self):
         self.assert_correct_selected_variables()
 
-    @cached_property
-    def expression(self) -> GroupedBy:
+    def build(self) -> GroupedBy:
         aggregators, non_aggregators = self.aggregators_and_non_aggregators
         where = self.query._where_expression_
-        children = []
+        children = OrderedSet()
         if where:
-            children.append(where)
-        children.extend(non_aggregators)
+            children.add(where)
+        children.update(non_aggregators)
+        children.update(self.variables_to_group_by)
         return GroupedBy(
             _operation_children_=tuple(children),
             aggregators=tuple(aggregators),
             variables_to_group_by=tuple(self.variables_to_group_by),
         )
 
-    @lru_cache
+    @memoize
     def assert_correct_selected_variables(self):
         """
         Assert that the selected variables are correct.
@@ -225,7 +246,7 @@ class GroupedByBuilder(ExpressionBuilder):
         :raises UsageError: If the selected variables are not valid.
         """
         aggregators, non_aggregated_variables = (
-            self.query._aggregated_and_non_aggregated_variables_in_selection_
+            self.query._aggregators_and_non_aggregators_in_selection_
         )
         if aggregators and not all(
             self.variable_is_in_or_derived_from_a_grouped_by_variable(v)
@@ -238,7 +259,7 @@ class GroupedByBuilder(ExpressionBuilder):
                 query=self.query,
             )
 
-    @lru_cache
+    @memoize
     def variable_is_in_or_derived_from_a_grouped_by_variable(
         self, variable: SymbolicExpression
     ) -> bool:
@@ -247,9 +268,9 @@ class GroupedByBuilder(ExpressionBuilder):
 
         :param variable: The variable to check.
         """
-        if variable._binding_id_ in self.ids_of_variables_to_group_by:
+        if variable._id_ in self.ids_of_variables_to_group_by:
             return True
-        elif variable._binding_id_ in self.ids_of_aggregated_variables:
+        elif variable._id_ in self.ids_of_aggregated_variables:
             return False
         elif isinstance(variable, MappedVariable) and any(
             self.variable_is_in_or_derived_from_a_grouped_by_variable(d)
@@ -265,7 +286,7 @@ class GroupedByBuilder(ExpressionBuilder):
         :return: A tuple of ids of aggregated variables.
         """
         return tuple(
-            v._child_._binding_id_
+            v._child_._id_
             for v in self.aggregators_in_selected_variables
             if v._child_ is not None
         )
@@ -275,7 +296,7 @@ class GroupedByBuilder(ExpressionBuilder):
         """
         :return: A tuple of the binding IDs of the variables to group by.
         """
-        return tuple(var._binding_id_ for var in self.variables_to_group_by)
+        return tuple(var._id_ for var in self.variables_to_group_by)
 
     @cached_property
     def aggregators_and_non_aggregators(
@@ -284,37 +305,42 @@ class GroupedByBuilder(ExpressionBuilder):
         """
         :return: A tuple of lists of aggregator and non-aggregator variables used in the query.
         """
-        aggregated_variables, non_aggregated_variables = (
-            self.query._aggregated_and_non_aggregated_variables_in_selection_
+        all_aggregators = OrderedSet()
+        all_non_aggregators = OrderedSet()
+
+        aggregators_in_selection, non_aggregators_in_selection = (
+            self.query._aggregators_and_non_aggregators_in_selection_
         )
 
-        all_aggregators, non_aggregators = (
-            self.aggregators_and_non_aggregators_in_ordered_by
-        )
         # Extend aggregators
-        ids_of_aggregators = [v._id_ for v in all_aggregators]
-        all_aggregators.extend(
+        all_aggregators.update(aggregators_in_selection)
+
+        # Extend non-aggregators
+        all_non_aggregators.update(non_aggregators_in_selection)
+
+        if self.query._having_builder_:
+            having_aggregators, having_non_aggregators = (
+                self.query._having_builder_.aggregators_and_non_aggregators_in_conditions
+            )
+            all_aggregators.update(having_aggregators)
+            all_non_aggregators.update(having_non_aggregators)
+
+        if self.query._ordered_by_builder_:
+            ordered_by_variable = self.query._ordered_by_builder_.variable
+            if isinstance(ordered_by_variable, Aggregator):
+                all_aggregators.add(ordered_by_variable)
+            else:
+                all_non_aggregators.add(ordered_by_variable)
+
+        all_non_aggregators.update(
             [
-                var
-                for var in self.aggregators_in_selected_variables
-                if var._id_ not in ids_of_aggregators
+                aggregator._child_
+                for aggregator in all_aggregators
+                if not isinstance(aggregator, CountAll)
             ]
         )
 
-        # Extend non-aggregators
-        ids_of_non_aggregated_variables = [v._id_ for v in non_aggregated_variables]
-        all_non_aggregators = non_aggregated_variables + [
-            var._child_
-            for var in aggregated_variables
-            if var._child_ is not None
-            and var._child_._id_ not in ids_of_non_aggregated_variables
-        ]
-        ids_of_non_aggregators = [v._id_ for v in all_non_aggregators]
-        all_non_aggregators.extend(
-            [var for var in non_aggregators if var._id_ not in ids_of_non_aggregators]
-        )
-
-        return all_aggregators, all_non_aggregators
+        return list(all_aggregators), list(all_non_aggregators)
 
     @cached_property
     def aggregators_and_non_aggregators_in_ordered_by(
@@ -358,13 +384,12 @@ class QuantifierBuilder(ExpressionBuilder):
     """
     The quantification constraint that must be satisfied by the result quantifier if present.
     """
-    child: Optional[SymbolicExpression] = None
+    child: Optional[Selectable] = None
     """
     The child expression of the quantifier.
     """
 
-    @cached_property
-    def expression(self) -> ResultQuantifier:
+    def build(self) -> ResultQuantifier:
         """
         Builds a result quantifier of the specified type with the given child and quantification constraint.
         """
@@ -374,7 +399,7 @@ class QuantifierBuilder(ExpressionBuilder):
                 _quantification_constraint_=self.quantification_constraint,
             )
         else:
-            return self.type(self.query._expression_)
+            return self.type(self.child)
 
 
 @dataclass(eq=False)
@@ -396,6 +421,5 @@ class OrderedByBuilder(ExpressionBuilder):
     The data source that generates the results to be ordered.
     """
 
-    @cached_property
-    def expression(self) -> SymbolicExpression:
+    def build(self) -> OrderedBy:
         return OrderedBy(self.data_source, self.variable, self.descending, self.key)

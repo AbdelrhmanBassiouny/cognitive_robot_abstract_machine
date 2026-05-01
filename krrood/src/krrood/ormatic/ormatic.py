@@ -12,20 +12,20 @@ from sqlalchemy import JSON
 from typing_extensions import List, Type, Dict
 from typing_extensions import Optional, TextIO
 
-from .custom_types import TypeType, PolymorphicEnumType
-from .dao import AlternativeMapping
-from .sqlalchemy_generator import SQLAlchemyGenerator
-from .type_dict import TypeDict
-from .utils import InheritanceStrategy
-from ..utils import module_and_class_name
-from .wrapped_table import WrappedTable, AssociationObject
-from ..adapters.json_serializer import SubclassJSONSerializer
-from ..class_diagrams.class_diagram import (
+from krrood.ormatic.custom_types import TypeType, PolymorphicEnumType
+from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
+from krrood.ormatic.sqlalchemy_generator import SQLAlchemyGenerator
+from krrood.ormatic.type_dict import TypeDict
+from krrood.ormatic.utils import InheritanceStrategy
+from krrood.utils import module_and_class_name
+from krrood.ormatic.wrapped_table import WrappedTable, AssociationObject
+from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.class_diagrams.class_diagram import (
     ClassDiagram,
     ClassRelation,
     WrappedClass,
 )
-from ..class_diagrams.wrapped_field import WrappedField
+from krrood.class_diagrams.wrapped_field import WrappedField
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +114,7 @@ class ORMatic:
         Fill the type mappings of this with needed defaults
         """
         self.type_mappings[Type] = TypeType
+        self.type_mappings[type] = TypeType
         self.type_mappings[Enum] = PolymorphicEnumType
         self.type_mappings[SubclassJSONSerializer] = JSON
         self.type_mappings[uuid.UUID] = sqlalchemy.UUID

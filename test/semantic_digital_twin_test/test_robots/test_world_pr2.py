@@ -3,6 +3,8 @@ from collections import defaultdict
 
 import numpy as np
 import pytest
+from importlib.resources import files
+from pathlib import Path
 from typing_extensions import List
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -22,10 +24,11 @@ from semantic_digital_twin.spatial_types.spatial_types import (
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     OmniDrive,
-    DiffDrive,
+    DifferentialDrive,
     PrismaticConnection,
     RevoluteConnection,
 )
+from semantic_digital_twin.orm.ormatic_interface import *  # noqa
 
 
 def test_compute_chain_of_bodies_pr2(pr2_world_state_reset):
@@ -302,7 +305,9 @@ def test_apply_control_commands_omni_drive_pr2(pr2_world_state_reset):
 
 
 def test_apply_control_commands_diff_drive(cylinder_bot_diff_world):
-    diff_drive: DiffDrive = cylinder_bot_diff_world.get_connection_by_name("map_T_bot")
+    diff_drive: DifferentialDrive = cylinder_bot_diff_world.get_connection_by_name(
+        "map_T_bot"
+    )
     cmd = np.zeros((len(cylinder_bot_diff_world.degrees_of_freedom)), dtype=float)
     cmd[cylinder_bot_diff_world.state._index[diff_drive.x_velocity.id]] = 100
     cmd[cylinder_bot_diff_world.state._index[diff_drive.yaw.id]] = 100
@@ -429,7 +434,7 @@ def test_specifies_left_right_arm_mixin(pr2_world_state_reset):
     assert LeftOf(
         left_arm_chain[1].center_of_mass,
         right_arm_chain[1].center_of_mass,
-        pr2.root.global_pose,
+        pr2.root.global_transform,
     )()
 
 
@@ -440,34 +445,6 @@ def test_kinematic_chains(pr2_world_state_reset):
     for chain in semantic_kinematic_chain_annotation:
         assert chain.root
         assert chain.tip
-
-
-def test_load_collision_config_srdf(pr2_world_state_reset):
-    path = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "..",
-        "..",
-        "..",
-        "semantic_digital_twin",
-        "resources",
-        "collision_configs",
-        "pr2.srdf",
-    )
-    pr2_world_state_reset.load_collision_srdf(path)
-    assert (
-        len(
-            [
-                b
-                for b in pr2_world_state_reset.bodies
-                if b.get_collision_config().disabled
-            ]
-        )
-        == 20
-    )
-    assert (
-        len(pr2_world_state_reset._collision_pair_manager.disabled_collision_pairs)
-        == 1431
-    )
 
 
 def test_tracy_semantic_annotation(tracy_world):

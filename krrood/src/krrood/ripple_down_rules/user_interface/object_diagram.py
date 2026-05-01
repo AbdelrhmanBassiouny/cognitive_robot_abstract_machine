@@ -1,8 +1,8 @@
 import logging
 
-from ..datastructures.case import Case
-from ..datastructures.dataclasses import CaseQuery
-from ..utils import SubclassJSONSerializer
+from krrood.ripple_down_rules.datastructures.case import Case
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
+from krrood.ripple_down_rules.utils import SubclassJSONSerializer
 
 try:
     import graphviz

@@ -9,10 +9,10 @@ from types import ModuleType
 from typing_extensions import Tuple, Sequence, get_type_hints, Set
 from typing_extensions import Type, Optional, Callable, Any, Dict, TYPE_CHECKING, Union, Iterable
 
-from .datastructures.case import create_case, Case
-from .datastructures.dataclasses import CaseQuery
-from .utils import calculate_precision_and_recall, get_method_args_as_dict
-from .utils import get_func_rdr_model_name, copy_case, make_set, update_case_in_case_query
+from krrood.ripple_down_rules.datastructures.case import create_case, Case
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
+from krrood.ripple_down_rules.utils import calculate_precision_and_recall, get_method_args_as_dict
+from krrood.ripple_down_rules.utils import get_func_rdr_model_name, copy_case, make_set, update_case_in_case_query
 
 if TYPE_CHECKING:
     from .rdr import RippleDownRules

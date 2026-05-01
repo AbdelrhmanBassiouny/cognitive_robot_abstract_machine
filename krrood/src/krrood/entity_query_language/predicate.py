@@ -20,17 +20,18 @@ from typing_extensions import (
     ClassVar,
     Sized,
     Dict,
+    Union,
 )
 
-from .utils import T, merge_args_and_kwargs
-from .core.variable import Variable, InstantiatedVariable
-from .core.base_expressions import Selectable
-from ..symbol_graph.symbol_graph import Symbol
+from krrood.entity_query_language.utils import T, merge_args_and_kwargs
+from krrood.entity_query_language.core.variable import Variable, InstantiatedVariable
+from krrood.entity_query_language.core.base_expressions import Selectable
+from krrood.symbol_graph.symbol_graph import Symbol
 
 
 def symbolic_function(
     function: Callable[..., T],
-) -> Callable[..., Variable[T]]:
+) -> Union[Callable[..., Variable[T]], T]:
     """
     Function decorator that constructs a symbolic expression representing the function call
      when inside a symbolic_rule context.

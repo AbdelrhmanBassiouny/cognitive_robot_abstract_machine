@@ -1,24 +1,42 @@
 from __future__ import annotations
 
-import itertools
 from typing import Optional, List
 
 import trimesh.sample
-from krrood.entity_query_language.factories import entity, variable, and_, not_, contains, an, the
 
-from ..collision_checking.collision_detector import Collision, CollisionCheck
-from ..collision_checking.trimesh_collision_detector import TrimeshCollisionDetector
-from ..robots.abstract_robot import AbstractRobot, ParallelGripper
-from ..spatial_computations.raytracer import RayTracer
-from ..spatial_types import HomogeneousTransformationMatrix
-from ..world_description.world_entity import Body
+from krrood.entity_query_language.factories import (
+    entity,
+    variable,
+    contains,
+    an,
+    the,
+)
+from krrood.entity_query_language.predicate import symbolic_function
+from semantic_digital_twin.collision_checking.collision_detector import (
+    ClosestPoints,
+)
+from semantic_digital_twin.collision_checking.collision_rules import (
+    AllowCollisionBetweenGroups,
+    AvoidExternalCollisions,
+    AllowSelfCollisions,
+)
+from semantic_digital_twin.reasoning.predicates import is_place_occupied
+from semantic_digital_twin.robots.abstract_robot import (
+    AbstractRobot,
+    ParallelGripper,
+    Manipulator,
+)
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.world_entity import Body
 
 
+@symbolic_function
 def robot_in_collision(
     robot: AbstractRobot,
     ignore_collision_with: Optional[List[Body]] = None,
     threshold: float = 0.001,
-) -> List[Collision]:
+) -> List[ClosestPoints]:
     """
     Check if the robot collides with any object in the world at the given pose.
 
@@ -31,30 +49,30 @@ def robot_in_collision(
     if ignore_collision_with is None:
         ignore_collision_with = []
 
-    body = variable(type_=Body, domain=robot._world.bodies_with_enabled_collision)
-    possible_collisions_bodies = an(
-        entity(body).where(
-            and_(
-                not_(contains(robot.bodies, body)),
-                not_(contains(ignore_collision_with, body)),
-            ),
-        ),
-    )
-    possible_collisions_bodies = possible_collisions_bodies.evaluate()
+    world = robot._world
 
-    tcd = TrimeshCollisionDetector(robot._world)
-
-    collisions = tcd.check_collisions(
-        {
-            CollisionCheck(robot_body, collision_body, threshold, robot._world)
-            for robot_body, collision_body in itertools.product(
-                robot.bodies_with_collisions, possible_collisions_bodies
+    with world.modify_world():
+        world.collision_manager.clear_temporary_rules()
+        world.collision_manager.add_temporary_rule(
+            AvoidExternalCollisions(
+                buffer_zone_distance=threshold,
+                robot=robot,
             )
-        }
-    )
-    return collisions
+        )
+        world.collision_manager.add_temporary_rule(AllowSelfCollisions(robot=robot))
+        world.collision_manager.add_temporary_rule(
+            AllowCollisionBetweenGroups(
+                body_group_a=robot.bodies, body_group_b=ignore_collision_with
+            )
+        )
+    world.collision_manager.update_collision_matrix()
+
+    collisions = world.collision_manager.compute_collisions()
+
+    return collisions.contacts
 
 
+@symbolic_function
 def robot_holds_body(robot: AbstractRobot, body: Body) -> bool:
     """
     Check if a robot is holding an object.
@@ -75,11 +93,12 @@ def robot_holds_body(robot: AbstractRobot, body: Body) -> bool:
     )
 
 
+@symbolic_function
 def blocking(
     pose: HomogeneousTransformationMatrix,
     root: Body,
     tip: Body,
-) -> List[Collision]:
+) -> List[ClosestPoints]:
     """
     Get the bodies that are blocking the robot from reaching a given position.
     The blocking are all bodies that are in collision with the robot when reaching for the pose.
@@ -105,8 +124,38 @@ def blocking(
     return robot_in_collision(robot.first(), [])
 
 
+@symbolic_function
+def bodies_in_gripper(gripper: ParallelGripper, sample_size: int = 100) -> List[Body]:
+    """
+    Gets all bodies which are between the finger of the gripper.
+    This method uses samples of rays which are cast between the finger
+
+    :param gripper: The gripper for which the check should be done.
+    :param sample_size: The number of rays to sample.
+    """
+    # Retrieve meshes in local frames
+    thumb_mesh = gripper.thumb.tip.collision.combined_mesh.copy()
+    finger_mesh = gripper.finger.tip.collision.combined_mesh.copy()
+
+    # Transform copies of the meshes into the world frame
+    # body_mesh.apply_transform(body.global_transform.to_np())
+    thumb_mesh.apply_transform(gripper.thumb.tip.global_transform.to_np())
+    finger_mesh.apply_transform(gripper.finger.tip.global_transform.to_np())
+
+    # get random points from thumb mesh
+    finger_points = trimesh.sample.sample_surface(finger_mesh, sample_size)[0]
+    thumb_points = trimesh.sample.sample_surface(thumb_mesh, sample_size)[0]
+
+    rt = gripper._world.ray_tracer
+    rt.update_scene()
+
+    points, index_ray, bodies = rt.ray_test(finger_points, thumb_points)
+    return list(set(bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies))
+
+
+@symbolic_function
 def is_body_in_gripper(
-    body: Body, gripper: ParallelGripper, sample_size: int = 100
+    body: Body, gripper: Manipulator, sample_size: int = 100
 ) -> float:
     """
     Check if the body in the gripper.
@@ -120,23 +169,36 @@ def is_body_in_gripper(
 
     :return: The percentage of rays between the fingers that hit the body.
     """
-
-    # Retrieve meshes in local frames
-    thumb_mesh = gripper.thumb.tip.collision.combined_mesh.copy()
-    finger_mesh = gripper.finger.tip.collision.combined_mesh.copy()
-    body_mesh = body.collision.combined_mesh.copy()
-
-    # Transform copies of the meshes into the world frame
-    body_mesh.apply_transform(body.global_pose.to_np())
-    thumb_mesh.apply_transform(gripper.thumb.tip.global_pose.to_np())
-    finger_mesh.apply_transform(gripper.finger.tip.global_pose.to_np())
-
-    # get random points from thumb mesh
-    finger_points = trimesh.sample.sample_surface(finger_mesh, sample_size)[0]
-    thumb_points = trimesh.sample.sample_surface(thumb_mesh, sample_size)[0]
-
-    rt = RayTracer(gripper._world)
-    rt.update_scene()
-
-    points, index_ray, bodies = rt.ray_test(finger_points, thumb_points)
+    bodies = bodies_in_gripper(gripper, sample_size)
     return len([b for b in bodies if b == body]) / sample_size
+
+
+@symbolic_function
+def is_gripper_holding_something(gripper: Manipulator) -> bool:
+    """
+    Check if the gripper is holding something.
+
+    :param gripper: The gripper for which the check should be done.
+    :return: True if there is a body mounted beneath the gripper in the kinematic chain.
+    """
+    bodies_under_tcp = gripper._world.get_kinematic_structure_entities_of_branch(
+        gripper.tool_frame
+    )
+    return len(bodies_under_tcp) > 0
+
+
+@symbolic_function
+def is_pose_free_for_robot(
+    robot: AbstractRobot, pose: HomogeneousTransformationMatrix
+) -> bool:
+    robot_bb = robot.base.bounding_box.transform_to_origin(robot.root.global_pose)
+    target_bb = BoundingBox(
+        robot_bb.min_x,
+        robot_bb.min_y,
+        robot_bb.min_z,
+        robot_bb.max_x,
+        robot_bb.max_y,
+        robot_bb.max_z,
+        pose,
+    )
+    return not is_place_occupied(target_bb, robot._world, robot.bodies_with_collision)

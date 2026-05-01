@@ -27,45 +27,57 @@ from typing_extensions import (
     Iterator,
 )
 
-from ..core.mapped_variable import CanBehaveLikeAVariable
-from .builders import (
+from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
+from krrood.entity_query_language.query.builders import (
     WhereBuilder,
     HavingBuilder,
     GroupedByBuilder,
     QuantifierBuilder,
     OrderedByBuilder,
 )
-from .operations import Where, Having, GroupedBy
-from .quantifiers import (
+from krrood.entity_query_language.query.operations import (
+    Where,
+    Having,
+    GroupedBy,
+    OrderedBy,
+)
+from krrood.entity_query_language.query.quantifiers import (
     ResultQuantificationConstraint,
     ResultQuantifier,
     An,
 )
-from ..core.base_expressions import (
+from krrood.entity_query_language.core.base_expressions import (
     Bindings,
     OperationResult,
     SymbolicExpression,
     UnaryExpression,
     Selectable,
+    UnificationDict,
 )
-from ..cache_data import (
+from krrood.entity_query_language.cache_data import (
     SeenSet,
 )
-from ..core.variable import InstantiatedVariable, Variable, ExternallySetVariable
-from ..enums import DomainSource
-from ..failures import (
+from krrood.entity_query_language.core.variable import (
+    InstantiatedVariable,
+    Variable,
+    ExternallySetVariable,
+)
+from krrood.entity_query_language.enums import DomainSource
+from krrood.entity_query_language.exceptions import (
     UnsupportedNegation,
     TryingToModifyAnAlreadyBuiltQuery,
     NonPositiveLimitValue,
 )
-from ..operators.aggregators import Aggregator
-from ..operators.set_operations import MultiArityExpressionThatPerformsACartesianProduct
-from ..utils import (
+from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
+from krrood.entity_query_language.operators.set_operations import (
+    MultiArityExpressionThatPerformsACartesianProduct,
+)
+from krrood.entity_query_language.utils import (
     T,
 )
 
 if TYPE_CHECKING:
-    from ..factories import ConditionType
+    from krrood.entity_query_language.factories import ConditionType
 
 ResultMapping = Callable[[Iterator[OperationResult]], Iterator[OperationResult]]
 """
@@ -74,7 +86,9 @@ A function that maps the results of a query to a new set of results.
 
 
 @dataclass(eq=False, repr=False)
-class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
+class Query(
+    MultiArityExpressionThatPerformsACartesianProduct, CanBehaveLikeAVariable[T], ABC
+):
     """
     Describes the queried object(s), could be a query over a single variable or a set of variables,
     also describes the condition(s)/properties of the queried object(s).
@@ -106,7 +120,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
     """
     The builder for the `GroupedBy` expression of the query.
     """
-    _having_builder: Optional[HavingBuilder] = field(init=False, default=None)
+    _having_builder_: Optional[HavingBuilder] = field(init=False, default=None)
     """
     The builder for the `Having` expression of the query.
     """
@@ -124,13 +138,24 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
     Whether the query has built the query (wired the query operations) or not. If built already, it
     cannot be modified further and an error will be raised if a user tries to modify the query.
     """
+    _update_ordered_by_: bool = field(default=True, init=False)
+    """
+    Whether the query has updated the ordered by expression or not. If updated already, it
+    cannot be modified further and an error will be raised if a user tries to modify the query.
+    """
+    _update_quantifier_: bool = field(default=True, init=False)
+    """
+    Whether the query has updated the quantifier expression or not. If updated already, it
+    cannot be modified further and an error will be raised if a user tries to modify the query.
+    """
 
     def __post_init__(self):
-        for var in self._selected_variables_:
-            if isinstance(var, Query):
-                var.build()
         self._operation_children_ = tuple(self._selected_variables_)
-        super().__post_init__()
+        MultiArityExpressionThatPerformsACartesianProduct.__post_init__(self)
+
+        self._var_ = self
+        Selectable.__post_init__(self)
+
         self._quantifier_builder_ = QuantifierBuilder(self)
 
     @staticmethod
@@ -154,7 +179,10 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
          returning an iterator over the results.
         """
         self.build()
-        return self._expression_.evaluate()
+        if self._expression_ is not self:
+            return self._expression_.evaluate()
+        else:
+            return MultiArityExpressionThatPerformsACartesianProduct.evaluate(self)
 
     @modifies_query_structure
     def where(self, *conditions: ConditionType) -> Self:
@@ -178,10 +206,10 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         :param conditions: The conditions that describe the query object.
         :return: This query.
         """
-        if self._having_builder is None:
-            self._having_builder = HavingBuilder(conditions=conditions, query=self)
+        if self._having_builder_ is None:
+            self._having_builder_ = HavingBuilder(conditions=conditions, query=self)
         else:
-            self._having_builder.conditions += conditions
+            self._having_builder_.conditions += conditions
         return self
 
     def ordered_by(
@@ -200,6 +228,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         self._ordered_by_builder_ = OrderedByBuilder(
             self, variable, descending=descending, key=key
         )
+        self._update_ordered_by_ = True
         return self
 
     def distinct(
@@ -259,6 +288,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         self._quantifier_builder_ = QuantifierBuilder(
             self, quantifier_type, quantification_constraint
         )
+        self._update_quantifier_ = True
         return self
 
     def __enter__(self):
@@ -277,6 +307,9 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         :return: This query.
         """
         if self._built_:
+            # TODO: This is a temporary fix, a coming PR will clean it up.
+            self._update_ordered_by_expression_()
+            self._update_quantifier_expression_()
             return self
 
         self._built_ = True
@@ -285,23 +318,73 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
             self._grouped_by_builder_ = GroupedByBuilder(self)
 
         children = []
-        if self._having_builder is not None:
-            self._having_builder.grouped_by = self._grouped_by_builder_.expression
-            children.append(self._having_builder.expression)
+        if self._having_builder_ is not None:
+            self._having_builder_.grouped_by = self._grouped_by_builder_.expression
+            children.append(self._having_builder_.expression)
         elif self._grouped_by_builder_ is not None:
             children.append(self._grouped_by_builder_.expression)
         elif self._where_builder_ is not None:
             children.append(self._where_builder_.expression)
 
+        self._if_count_all_is_used_update_its_child_to_be_the_grouped_by_expression_()
+
         children.extend(self._selected_variables_)
 
         self.update_children(*children)
 
-        if self._ordered_by_builder_ is not None:
-            self._ordered_by_builder_.data_source = self._expression_
-            self._expression_ = self._ordered_by_builder_.expression
+        self._update_ordered_by_expression_()
 
-        self._quantifier_builder_.child = self._expression_
+        self._update_quantifier_expression_()
+
+        return self
+
+    def _if_count_all_is_used_update_its_child_to_be_the_grouped_by_expression_(
+        self,
+    ) -> None:
+        """
+        Update the child of the `CountAll` aggregator to be the `GroupedBy` expression if it exists.
+        """
+        if self._grouped_by_builder_ is None:
+            return
+        count_all = next(
+            (
+                aggregator
+                for aggregator in self._grouped_by_builder_.aggregators_and_non_aggregators[
+                    0
+                ]
+                if isinstance(aggregator, CountAll)
+            ),
+            None,
+        )
+        if count_all is None:
+            return
+        count_all._replace_child_(
+            count_all._child_, self._grouped_by_builder_.expression
+        )
+
+    # TODO: This is a temporary fix, a coming PR will clean it up.
+    def _update_ordered_by_expression_(self):
+        if (self._ordered_by_builder_ is None) or not self._update_ordered_by_:
+            return self
+        og_child = self._expression_
+        if isinstance(self._expression_, OrderedBy):
+            og_child = self._expression_._child_
+            self._remove_parent_(self._expression_)
+        self._update_ordered_by_ = False
+        self._ordered_by_builder_.data_source = og_child
+        self._expression_ = self._ordered_by_builder_.expression
+        return self
+
+    # TODO: This is a temporary fix, a coming PR will clean it up.
+    def _update_quantifier_expression_(self):
+        if (self._quantifier_builder_ is None) or not self._update_quantifier_:
+            return self
+        og_child = self._expression_
+        if isinstance(self._expression_, ResultQuantifier):
+            og_child = self._expression_._child_
+            self._remove_parent_(self._expression_)
+        self._update_quantifier_ = False
+        self._quantifier_builder_.child = og_child
         self._expression_ = self._quantifier_builder_.expression
         self._expression_._limit_ = self._limit_
         return self
@@ -331,10 +414,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         :return: The operation result.
         """
         return OperationResult(
-            {
-                v._binding_id_: child_result[v._binding_id_]
-                for v in self._selected_variables_
-            },
+            {v._id_: child_result[v._id_] for v in self._selected_variables_},
             self._is_false_,
             self,
             child_result,
@@ -352,7 +432,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         """
         The built `Having` expression.
         """
-        return self._having_builder.expression if self._having_builder else None
+        return self._having_builder_.expression if self._having_builder_ else None
 
     @property
     def _grouped_by_expression_(self) -> Optional[GroupedBy]:
@@ -374,7 +454,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         """
         Get the IDs of variables used for distinctness.
         """
-        return tuple(k._binding_id_ for k in self._distinct_on)
+        return tuple(k._id_ for k in self._distinct_on)
 
     def _get_distinct_results_(
         self, results_gen: Iterator[OperationResult]
@@ -410,14 +490,14 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         """
         :return: Whether the results should be grouped or not. Is true when an aggregator is selected.
         """
-        return (
-            len(self._aggregated_and_non_aggregated_variables_in_selection_[0]) > 0
-        ) or (self._grouped_by_builder_ is not None)
+        return (len(self._aggregators_and_non_aggregators_in_selection_[0]) > 0) or (
+            self._grouped_by_builder_ is not None
+        )
 
     @cached_property
-    def _aggregated_and_non_aggregated_variables_in_selection_(
+    def _aggregators_and_non_aggregators_in_selection_(
         self,
-    ) -> Tuple[List[Selectable], List[Selectable]]:
+    ) -> Tuple[List[Aggregator], List[Selectable]]:
         """
         :return: The aggregated and non-aggregated variables from the selected variables.
         """
@@ -430,7 +510,7 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
                 non_aggregated_variables.extend(variable._operation_children_)
             elif (
                 isinstance(variable, ExternallySetVariable)
-                and variable._domain_source_ is DomainSource.DEDUCTION
+                and variable._domain_source_ == DomainSource.DEDUCTION
             ):
                 continue
             else:
@@ -458,7 +538,9 @@ class Query(MultiArityExpressionThatPerformsACartesianProduct, ABC):
         """
         Make sure to set the parent of the built expression of the query instead of the query itself.
         """
-        self.build()
+        # TODO: A hot fix for now, will be cleaned in a coming PR.
+        if not isinstance(parent, (ResultQuantifier, OrderedBy)):
+            self.build()
         if self._expression_ is not self:
             self._expression_._parent_ = parent
         else:
@@ -478,69 +560,24 @@ class SetOf(Query):
     A query over a set of variables.
     """
 
-    def __getitem__(
-        self, selected_variable: TypingUnion[CanBehaveLikeAVariable[T], T]
-    ) -> TypingUnion[T, SetOfSelectable[T]]:
+    def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
         """
-        Select one of the set of variables, this is useful when you have another query that uses this set of and
-        wants to select a specific variable out of the set of variables.
-
-        :param selected_variable: The selected variable from the set of variables.
+        Update the result bindings with this operation's bindings.
         """
-        return SetOfSelectable(self, selected_variable)
-
-
-@dataclass(eq=False, repr=False)
-class SetOfSelectable(UnaryExpression, CanBehaveLikeAVariable[T]):
-    """
-    A selected variable from the SetOf operation selected variables.
-    """
-
-    _child_: SetOf
-    """
-    The SetOf operation from which `_selected_var_` was selected.
-    """
-    _selected_var_: CanBehaveLikeAVariable[T]
-    """
-    The selected variable in the SetOf.
-    """
-
-    def __post_init__(self):
-        super().__post_init__()
-        self._var_ = self
-
-    @property
-    def _set_of_(self) -> SetOf:
-        """
-        The SetOf operation from which `_selected_var_` was selected.
-        """
-        return self._child_
-
-    def _evaluate__(
-        self,
-        sources: Bindings,
-    ) -> Iterator[OperationResult]:
-        for v in self._set_of_._evaluate_(sources, self):
-            yield OperationResult(
-                {**v.bindings, self._binding_id_: v[self._selected_var_._binding_id_]},
-                False,
-                self,
+        operation_result = super()._get_operation_result_(child_result)
+        operation_result.bindings = {
+            self._id_: UnificationDict(
+                {var: operation_result[var._id_] for var in self._selected_variables_}
             )
-
-    @property
-    def _name_(self) -> str:
-        return f"{self._set_of_._name_}[{self._selected_var_._name_}]"
+        }
+        return operation_result
 
 
 @dataclass(eq=False, repr=False)
-class Entity(Query, CanBehaveLikeAVariable[T]):
+class Entity(Query[T]):
     """
     A query over a single variable.
     """
-
-    def __post_init__(self):
-        self._var_ = self
-        super().__post_init__()
 
     def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
         """
@@ -548,7 +585,7 @@ class Entity(Query, CanBehaveLikeAVariable[T]):
         """
         operation_result = super()._get_operation_result_(child_result)
         operation_result.bindings = {
-            self._binding_id_: operation_result[self.selected_variable._binding_id_]
+            self._id_: operation_result[self.selected_variable._id_]
         }
         return operation_result
 

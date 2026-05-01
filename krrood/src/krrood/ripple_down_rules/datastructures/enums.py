@@ -4,7 +4,7 @@ from enum import auto, Enum
 
 from typing_extensions import List, Dict, Any, Type
 
-from ..utils import SubclassJSONSerializer
+from krrood.ripple_down_rules.utils import SubclassJSONSerializer
 
 
 class InferMode(Enum):

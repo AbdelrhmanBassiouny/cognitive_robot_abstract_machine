@@ -11,16 +11,16 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing_extensions import Optional, Iterable, TYPE_CHECKING, Self
 
-from .conclusion import Conclusion
-from ..operators.set_operations import Union as EQLUnion
-from ..operators.core_logical_operators import (
+from krrood.entity_query_language.rules.conclusion import Conclusion
+from krrood.entity_query_language.operators.set_operations import Union as EQLUnion
+from krrood.entity_query_language.operators.core_logical_operators import (
     LogicalBinaryOperator,
     OR,
     AND,
     chained_logic,
     LogicalOperator,
 )
-from ..core.base_expressions import (
+from krrood.entity_query_language.core.base_expressions import (
     Bindings,
     OperationResult,
     SymbolicExpression,
@@ -28,7 +28,7 @@ from ..core.base_expressions import (
 )
 
 if TYPE_CHECKING:
-    from ..factories import ConditionType
+    from krrood.entity_query_language.factories import ConditionType
 
 
 @dataclass(eq=False)
@@ -139,7 +139,7 @@ class Refinement(LogicalBinaryOperator, ConclusionSelector):
     def get_operation_result_and_clear_conclusion(
         self, result: OperationResult
     ) -> Iterable[OperationResult]:
-        self._is_false_ = result.is_false
+        self._is_false_ = result.operand is self.left and result.is_false
         if result.is_true:
             self._conclusions_.update(result.operand._conclusions_)
         yield OperationResult(result.bindings, self._is_false_, self, result)

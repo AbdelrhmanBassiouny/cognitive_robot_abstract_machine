@@ -10,6 +10,7 @@ import operator
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, is_dataclass, fields, field
 from functools import cached_property
+from typing import Self
 
 from typing_extensions import (
     Iterable,
@@ -18,22 +19,23 @@ from typing_extensions import (
     Optional,
     Tuple,
     Dict,
+    List,
 )
 
-from .base_expressions import (
+from krrood.entity_query_language.core.base_expressions import (
     UnaryExpression,
     Bindings,
     OperationResult,
     Selectable,
 )
-from ..operators.comparator import Comparator
-from ..utils import (
+from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.utils import (
     T,
     merge_args_and_kwargs,
     convert_args_and_kwargs_into_hashable_key,
 )
 
-from ...symbol_graph.helpers import get_field_type_endpoint
+from krrood.symbol_graph.helpers import get_field_type_endpoint
 
 
 @dataclass(eq=False, repr=False)
@@ -48,6 +50,11 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
     )
     """
     A storage of created MappedVariable instances to prevent recreating same mapping multiple times.
+    """
+
+    __iter__ = None
+    """
+    Prevent iteration on this class.
     """
 
     def _get_mapped_variable_(
@@ -83,11 +90,6 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         return convert_args_and_kwargs_into_hashable_key(all_kwargs)
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
-        # Prevent debugger/private attribute lookups from being interpreted as symbolic attributes
-        if name.startswith("__") and name.endswith("__"):
-            raise AttributeError(
-                f"{self.__class__.__name__} object has no attribute {name}"
-            )
         return self._get_mapped_variable_(Attribute, name)
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
@@ -151,7 +153,7 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
 
         yield from (
             self._build_operation_result_and_update_truth_value_(
-                child_result.bindings | {self._binding_id_: mapped_value}, child_result
+                child_result.bindings | {self._id_: mapped_value}, child_result
             )
             for child_result in self._child_._evaluate_(sources, parent=self)
             for mapped_value in self._apply_mapping_(child_result.value)
@@ -163,6 +165,46 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         Apply the mapping to a value from the child variable.
         """
         pass
+
+    @property
+    def _access_path_(self) -> List[Self]:
+        """
+        :return: The access path of the variable as a list of operations.
+        """
+        current = self
+        result = [current]
+        while isinstance(current, MappedVariable):
+            current = current._child_
+            result.append(current)
+        return result[:-1][::-1]
+
+    def _set_external_root_instance_value_(self, instance: Any, value: Any):
+        """
+        Set the field of the instance at this access path to the given value.
+        This modifies instance in-place.
+
+        .. warning::
+            This method is only for use cases where symbolic access is needed outside of EQLs query evaluation.
+
+
+        :param instance: The instance to be updated.
+        :param value: The value to set.
+        """
+        current = instance
+        for domain_mapping in self._access_path_[:-1]:
+            current = next(domain_mapping._apply_mapping_(current))
+
+        self._set_child_instance_value_(current, value)
+
+    def _set_child_instance_value_(self, instance: Any, value: Any):
+        """
+        Set the field of the instance using this operation to the given value.
+        This modifies instance in-place.
+
+        :param instance: The instance to be updated.
+        :param value: The value to set.
+        """
+        raise NotImplementedError
 
 
 @dataclass(eq=False, repr=False)
@@ -198,6 +240,9 @@ class Attribute(MappedVariable):
     def _name_(self):
         return f"{self._child_._name_}.{self._attribute_name_}"
 
+    def _set_child_instance_value_(self, obj: Any, value: Any):
+        setattr(obj, self._attribute_name_, value)
+
 
 @dataclass(eq=False, repr=False)
 class Index(MappedVariable):
@@ -211,11 +256,17 @@ class Index(MappedVariable):
     """
 
     def _apply_mapping_(self, value: Any) -> Iterable[Any]:
-        yield value[self._key_]
+        try:
+            yield value[self._key_]
+        except IndexError:  # break iterator if the key does not exist
+            return
 
     @property
     def _name_(self):
         return f"{self._child_._var_._name_}[{self._key_}]"
+
+    def _set_child_instance_value_(self, instance: Any, value: Any):
+        instance[self._key_] = value
 
 
 @dataclass(eq=False, repr=False)

@@ -6,16 +6,16 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field, Field, fields
 from enum import Enum
-from functools import lru_cache
+from krrood.utils import memoize
 
 import pydot
 import rustworkx as rx
 from typing_extensions import Any, Type, ClassVar, Dict, List, Optional, Tuple, Generator
 
-from .field_info import FieldInfo
-from .. import logger
-from ..rules import Rule
-from ..utils import recursive_subclasses
+from krrood.ripple_down_rules.datastructures.field_info import FieldInfo
+from krrood.ripple_down_rules import logger
+from krrood.ripple_down_rules.rules import Rule
+from krrood.ripple_down_rules.utils import recursive_subclasses
 
 
 class Direction(Enum):
@@ -113,7 +113,7 @@ class TrackedObjectMixin:
             yield from TrackedObjectMixin.parse_fields(clazz)
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @memoize
     def parse_fields(clazz) -> Generator[Tuple[Type[TrackedObjectMixin], Type[TrackedObjectMixin]], None, None]:
         for f in TrackedObjectMixin.get_fields(clazz):
 
@@ -129,7 +129,7 @@ class TrackedObjectMixin:
             yield from TrackedObjectMixin.parse_field(field_info)
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @memoize
     def get_fields(clazz) -> List[Field]:
         skip_fields = []
         bases = [base for base in clazz.__bases__ if issubclass(base, TrackedObjectMixin)]
@@ -141,7 +141,7 @@ class TrackedObjectMixin:
         return result
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @memoize
     def parse_field(field_info: FieldInfo)\
             -> Generator[Tuple[Type[TrackedObjectMixin], Type[TrackedObjectMixin]], None, None]:
         parent = field_info.clazz

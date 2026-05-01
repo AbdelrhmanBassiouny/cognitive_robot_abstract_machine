@@ -48,3 +48,7 @@ class DomainSource(Enum):
     """
     Inferred using deductive reasoning.
     """
+    GROUPING = auto()
+    """
+    Derived from grouping operations.
+    """

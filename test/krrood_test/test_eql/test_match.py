@@ -1,14 +1,37 @@
+from dataclasses import dataclass
+
 import pytest
 
-from krrood.entity_query_language.factories import entity, set_of, variable, the, match, match_variable
-from krrood.entity_query_language.failures import NoKwargsInMatchVar
+from krrood.entity_query_language.factories import (
+    entity,
+    set_of,
+    variable,
+    the,
+    match,
+    match_variable,
+    a,
+)
+from krrood.entity_query_language.exceptions import NoKwargsInMatchVar
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.core.base_expressions import UnificationDict
+from krrood.parametrization.random_events_translator import is_literal_comparator
+from ..dataset.example_classes import KRROODPositions, KRROODPosition
 from ..dataset.semantic_world_like_classes import (
     FixedConnection,
     Container,
     Handle,
 )
+
+
+def test_doc_match():
+    @dataclass(unsafe_hash=True)
+    class Robot:
+        name: str
+        battery: int
+
+    robots = [Robot("R2D2", 100), Robot("C3PO", 0)]
+    query = match_variable(Robot, domain=robots)(name="R2D2", battery=100)
+    assert query.tolist()[0].name == "R2D2"
 
 
 def test_match(handles_and_containers_world):
@@ -83,12 +106,12 @@ def test_select_where(handles_and_containers_world):
         parent=match(Container),
         child=match(Handle),
     )
-    container_and_handle = the(
+    container_and_handle = a(
         set_of(
             container := fixed_connection.parent, handle := fixed_connection.child
         ).where(container.size > 1)
     )
-
+    # QueryGraph(container_and_handle.build()).visualize()
     # Method 2
     fixed_connection_2 = variable(FixedConnection, domain=world.connections)
     container_and_handle_2 = the(
@@ -102,17 +125,39 @@ def test_select_where(handles_and_containers_world):
         )
     )
 
-    assert set(container_and_handle_2.tolist()[0].values()) == set(
-        container_and_handle.tolist()[0].values()
-    )
+    assert set(
+        map(lambda x: tuple(x.values()), container_and_handle_2.tolist())
+    ) == set(map(lambda x: tuple(x.values()), container_and_handle.tolist()))
 
-    answers = container_and_handle.tolist()[0]
-    assert isinstance(answers, UnificationDict)
-    assert answers[container].name == "Container3"
-    assert answers[handle].name == "Handle3"
+    answers = container_and_handle.tolist()
+    assert len(answers) == 1
+    assert isinstance(answers[0], UnificationDict)
+    assert answers[0][container].name == "Container3"
+    assert answers[0][handle].name == "Handle3"
 
 
 def test_empty_conditions_match_var(handles_and_containers_world):
     world = handles_and_containers_world
     with pytest.raises(NoKwargsInMatchVar):
         match_variable(FixedConnection, domain=world.connections)()
+
+
+def test_match_with_list():
+    domain = [
+        KRROODPositions([KRROODPosition(1, 2, 3), KRROODPosition(1, 2, 3)], ["a", "b"]),
+        KRROODPositions([KRROODPosition(1, 2, 3)], ["a"]),
+    ]
+
+    q = match_variable(KRROODPositions, domain=domain)(
+        positions=[
+            match(KRROODPosition)(
+                x=1,
+                y=2,
+            ),
+            KRROODPosition(1, 2, 3),
+        ],
+        some_strings=["a", "b"],
+    )
+
+    r = q.tolist()
+    assert r == [domain[0]]

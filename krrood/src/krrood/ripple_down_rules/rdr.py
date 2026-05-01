@@ -10,10 +10,10 @@ from io import TextIOWrapper
 from pathlib import Path
 from types import NoneType, ModuleType
 
-from .datastructures.dataclasses import CaseFactoryMetaData
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseFactoryMetaData
 
-from . import logger
-from .failures import RDRLoadError
+from krrood.ripple_down_rules import logger
+from krrood.ripple_down_rules.exceptions import RDRLoadError
 
 try:
     from matplotlib import pyplot as plt
@@ -39,19 +39,25 @@ from typing_extensions import (
     Set,
 )
 
-from .datastructures.callable_expression import CallableExpression
-from .datastructures.case import Case, CaseAttribute, create_case
-from .datastructures.dataclasses import CaseQuery
-from .datastructures.enums import MCRDRMode, RDREdge
-from .experts import Expert, Human
-from .helpers import (
+from krrood.ripple_down_rules.datastructures.callable_expression import (
+    CallableExpression,
+)
+from krrood.ripple_down_rules.datastructures.case import (
+    Case,
+    CaseAttribute,
+    create_case,
+)
+from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
+from krrood.ripple_down_rules.datastructures.enums import MCRDRMode, RDREdge
+from krrood.ripple_down_rules.experts import Expert, Human
+from krrood.ripple_down_rules.helpers import (
     is_matching,
     general_rdr_classify,
     get_an_updated_case_copy,
     update_case_and_conclusions_with_rule_output,
     update_case_with_conclusion_output,
 )
-from .rules import (
+from krrood.ripple_down_rules.rules import (
     Rule,
     SingleClassRule,
     MultiClassTopRule,
@@ -64,7 +70,7 @@ try:
     from .user_interface.gui import RDRCaseViewer
 except ImportError as e:
     RDRCaseViewer = None
-from .utils import (
+from krrood.ripple_down_rules.utils import (
     draw_tree,
     make_set,
     SubclassJSONSerializer,
@@ -72,12 +78,9 @@ from .utils import (
     get_type_from_string,
     is_value_conflicting,
     extract_function_or_class_file,
-    extract_imports,
     get_full_class_name,
     is_iterable,
     str_to_snake_case,
-    get_import_path_from_path,
-    get_imports_from_types,
     render_tree,
     get_function_return_type,
     get_file_that_ends_with,
@@ -87,6 +90,11 @@ from .utils import (
     are_results_subclass_of_types,
     update_case_in_case_query,
     copy_case,
+)
+from krrood.utils import (
+    get_import_path_from_path,
+    get_imports_from_types,
+    get_scope_from_imports,
 )
 
 
@@ -318,9 +326,7 @@ class RippleDownRules(SubclassJSONSerializer, ABC):
                 f"Make sure the file exists and is valid."
             )
             if rdr is None:
-                raise RDRLoadError(
-                    f"Could not load the rdr model {model_name} from {model_dir}, error is {e}"
-                )
+                raise RDRLoadError(model_name, model_dir)
             rdr.save(
                 save_dir=load_dir, model_name=model_name, package_name=package_name
             )
@@ -1086,19 +1092,21 @@ class RDRWithCodeWriter(RippleDownRules, ABC):
         functions_source = extract_function_or_class_file(
             defs_module.__file__, all_func_names, include_signature=True
         )
-        scope = extract_imports(defs_module.__file__, package_name=parent_package_name)
+        scope = get_scope_from_imports(
+            defs_module.__file__, package_name=parent_package_name
+        )
 
         cases_source, cases_scope = None, None
         if cases_module:
             with open(cases_module.__file__, "r") as f:
                 cases_source = f.read()
-            cases_scope = extract_imports(
+            cases_scope = get_scope_from_imports(
                 cases_module.__file__, package_name=parent_package_name
             )
 
         with open(main_module.__file__, "r") as f:
             main_source = f.read()
-        main_scope = extract_imports(
+        main_scope = get_scope_from_imports(
             main_module.__file__, package_name=parent_package_name
         )
         attribute_name_line = [

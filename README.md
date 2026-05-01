@@ -2,7 +2,17 @@
 
 Monorepo for the CRAM cognitive architecture. 
 
-## Installation 
+## Installation
+
+### Clone the repo and its submodules
+Pull the submodules:
+```bash
+git clone https://github.com/cram2/cognitive_robot_abstract_machine.git
+cd cognitive_robot_abstract_machine
+git submodule update --init --recursive
+```
+
+### CRAM Architecture Installation
 
 To install the CRAM architecture, follow these steps:
 
@@ -14,7 +24,7 @@ grep -qxF 'export WORKON_HOME=$HOME/.virtualenvs' ~/.bashrc || echo 'export WORK
 grep -qxF 'export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3' ~/.bashrc || echo 'export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3' >> ~/.bashrc && \
 grep -qxF 'source /usr/share/virtualenvwrapper/virtualenvwrapper.sh' ~/.bashrc || echo 'source /usr/share/virtualenvwrapper/virtualenvwrapper.sh' >> ~/.bashrc && \
 source ~/.bashrc && \
-mkvirtualenv cram-env
+mkvirtualenv cram-env --system-site-packages
 ```
 Activate / deactivate
 
@@ -23,11 +33,15 @@ workon cram-env
 deactivate
 ```
 
-Pull the submodules: 
+#### Optional: Create symlink for ROS2 packages
+If you are using this repo with ROS2, you need to create a symlink for the ROS2 packages.
+Currently, only jazzy is supported.
 ```bash
-cd cognitive_robot_abstract_machine
-git submodule update --init --recursive
+cd <your_ros2_ws_path>/src
+ln -s <your_cram_repo_path>/cram_ros2_packages cram_ros2_packages
+colcon build
 ```
+
 
 ### Install using UV 
 
@@ -60,6 +74,22 @@ Install the CRAM package along with its dependencies:
 ```bash 
 poetry install
 ```
+
+## To run tests
+
+**1. Install system dependencies, set up and build the ROS 2 workspace**
+
+```bash
+sudo bash .github/docker/setup_ros_workspace.sh && source ~/.bashrc
+```
+
+**2. Run a test**
+
+```bash
+pytest test/<package>_test
+```
+
+e.g. `pytest test/pycram_test`
 
 ## Contribution
 
@@ -127,7 +157,9 @@ Example:
 
     Import Strategy:
 
-    - Use relative importing (e.g., from . import utils) always within the package.
+    - Use absolute imports always within the package as this is easier to maintain and clearer to read and understand.
+
+    - Use relative imports always in tests when importing modules defined in the same test folder/package.
 
     - When importing types, use typing extensions instead of typing or the standard library types;
 
