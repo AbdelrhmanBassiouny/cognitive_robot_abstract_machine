@@ -289,14 +289,35 @@ def test_minimal_robot_annotation(pr2_world_state_reset):
 def test_bottle_roles():
     bottle = Bottle(root=Body(name=PrefixedName("bottle_supporting_surface")))
     mustard_bottle = MustardBottle(bottle=bottle)
+
+    # Test ability to access Bottle properties
+    assert bottle.root is mustard_bottle.root
+
+    # Test correct caching of roles
     assert MustardBottle in bottle.roles
     assert bottle.roles[MustardBottle] == mustard_bottle
     assert Role.has_role(bottle, MustardBottle)
     assert HasRole(bottle, MustardBottle)()
 
     wine_bottle = WineBottle(bottle=bottle)
+
+    # Test correct caching of roles
     assert WineBottle in bottle.roles
     assert bottle.roles[WineBottle] == wine_bottle
     assert len(bottle.roles) == 2
     assert Role.has_role(bottle, WineBottle)
     assert HasRole(bottle, WineBottle)()
+
+
+def test_tincan_roles():
+    tin_can = TinCan(root=Body(name=PrefixedName("tin_can")))
+    tuna_can = TunaCan(can=tin_can)
+
+    # Test ability to access TinCan properties
+    assert tuna_can.root == tin_can.root
+
+    # Test correct caching of roles
+    assert TunaCan in tin_can.roles
+    assert tin_can.roles[TunaCan] == tuna_can
+    assert Role.has_role(tin_can, TunaCan)
+    assert HasRole(tin_can, TunaCan)()

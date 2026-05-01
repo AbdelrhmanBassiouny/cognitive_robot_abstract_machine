@@ -24,7 +24,6 @@ if TYPE_CHECKING:
         HasRootKinematicStructureEntity,
         HasStorageSpace,
         HasSupportingSurface,
-        TKinematicStructureEntity,
     )
     from semantic_digital_twin.semantic_annotations.semantic_annotations import (
         Bottle,
@@ -281,11 +280,11 @@ class RoleForHasCaseAsRootBody(RoleForHasSupportingSurface, ABC):
         self.role_taker.id = value
 
     @property
-    def root(self) -> TKinematicStructureEntity:
+    def root(self) -> Body:
         return self.role_taker.root
 
     @root.setter
-    def root(self, value: TKinematicStructureEntity):
+    def root(self, value: Body):
         self.role_taker.root = value
 
     @property
