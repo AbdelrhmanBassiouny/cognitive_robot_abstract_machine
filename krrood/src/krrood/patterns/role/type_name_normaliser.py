@@ -48,16 +48,21 @@ class TypeNameNormaliser:
         :param type_str: The forward-reference string to normalise.
         :return: The resolved or unchanged type name string.
         """
-        # Avoid importing Role here to prevent circular imports — use duck typing.
         if type_str.startswith("T"):
             class_name = type_str[1:]
             for wrapped in self.class_diagram.wrapped_classes:
                 if wrapped.clazz.__name__ == class_name:
-                    from krrood.patterns.role.role import Role
-                    if issubclass(wrapped.clazz, Role):
-                        return type_str
-                    else:
-                        return class_name
+                    # Register the bound class for imports
+                    self.resolver.name_to_module_map.setdefault(
+                        class_name, wrapped.clazz.__module__
+                    )
+                    # Register the TypeVar itself if it exists in the defining module
+                    module = sys.modules.get(wrapped.clazz.__module__)
+                    if module is not None:
+                        candidate = vars(module).get(type_str)
+                        if isinstance(candidate, TypeVar) and hasattr(candidate, "__module__"):
+                            self.resolver.name_to_module_map[type_str] = candidate.__module__
+                    return type_str
 
         if type_str not in self.resolver.name_to_module_map:
             resolved_module = self.resolver.resolve(type_str)
@@ -91,17 +96,14 @@ class TypeNameNormaliser:
         """Return a normalised name for a TypeVar.
 
         :param type_var: The TypeVar to normalise.
-        :return: The TypeVar name or its bound type's name.
+        :return: The TypeVar name.
         """
         if hasattr(type_var, "__module__"):
             self.resolver.name_to_module_map[type_var.__name__] = type_var.__module__
 
         if type_var.__bound__ is not None:
             self.normalise(type_var.__bound__)
-            from krrood.patterns.role.role import Role
-            if issubclass(type_var.__bound__, Role):
-                return type_var.__name__
-            return type_var.__bound__.__name__
+
         return type_var.__name__
 
     def _handle_class_type(self, clazz: type) -> str:

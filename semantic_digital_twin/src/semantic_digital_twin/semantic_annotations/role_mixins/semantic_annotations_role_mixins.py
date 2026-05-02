@@ -4,10 +4,11 @@ from dataclasses import dataclass
 from semantic_digital_twin.world_description.world_modification import (
     synchronized_attribute_modification,
 )
-from typing import Any, Dict, Iterable, List, Optional, Self, Tuple, Type
+from typing import Any, Dict, List, Optional, Self, Type
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from krrood.adapters.json_serializer import JSONAttributeDiff
     from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
         ProbabilisticCircuit,
@@ -27,10 +28,11 @@ if TYPE_CHECKING:
         HasRootKinematicStructureEntity,
         HasStorageSpace,
         HasSupportingSurface,
+        THasRootBody,
+        TKinematicStructureEntity,
     )
     from semantic_digital_twin.semantic_annotations.semantic_annotations import (
         Bottle,
-        Liquid,
         TinCan,
     )
     from semantic_digital_twin.spatial_types.spatial_types import (
@@ -155,11 +157,11 @@ class RoleForHasRootKinematicStructureEntity(RoleForSemanticAnnotation, ABC):
     @abstractmethod
     def role_taker(self) -> HasRootKinematicStructureEntity: ...
     @property
-    def root(self) -> Body:
+    def root(self) -> TKinematicStructureEntity:
         return self.role_taker.root
 
     @root.setter
-    def root(self, value: Body):
+    def root(self, value: TKinematicStructureEntity):
         self.role_taker.root = value
 
     @property
@@ -167,7 +169,7 @@ class RoleForHasRootKinematicStructureEntity(RoleForSemanticAnnotation, ABC):
         return self.role_taker.global_transform
 
     @property
-    def min_max_points(self) -> Tuple[Point3, Point3]:
+    def min_max_points(self) -> tuple[Point3, Point3]:
         return self.role_taker.min_max_points
 
     @property
@@ -218,11 +220,11 @@ class RoleForHasStorageSpace(RoleForHasRootBody, ABC):
     @abstractmethod
     def role_taker(self) -> HasStorageSpace: ...
     @property
-    def objects(self) -> list[Liquid]:
+    def objects(self) -> list[THasRootBody]:
         return self.role_taker.objects
 
     @objects.setter
-    def objects(self, value: list[Liquid]):
+    def objects(self, value: list[THasRootBody]):
         self.role_taker.objects = value
 
     @synchronized_attribute_modification

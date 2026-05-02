@@ -26,6 +26,7 @@ from krrood import logger
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.utils import (
+    GenericTypeSubstitution,
     classes_of_module,
     get_type_hints_of_object,
     resolve_name_in_hierarchy,
@@ -732,13 +733,6 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 continue
             if not (field_.field.kw_only or field_.field.init):
                 continue
-            field_type_name = self._get_consistent_type_name(field_.field.type)
-            prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
-                field_.name,
-                field_type_name,
-                f"self.{ROLE_TAKER_ATTR}.{field_.name}",
-                f"self.{ROLE_TAKER_ATTR}.{field_.name} = value",
-            )
             defining_base = _find_defining_class(
                 field_.name,
                 wrapped_class.clazz,
@@ -746,7 +740,64 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 role_takers,
                 lambda klass: _is_original_field_definer(klass, field_.name),
             )
-            groups.setdefault(defining_base, {})[field_.name] = prop_nodes
+            if defining_base is not None:
+                self._delegate_inherited_field(
+                    field_.name, field_.field, wrapped_class.clazz, defining_base, groups
+                )
+            else:
+                field_type_name = self._get_consistent_type_name(field_.field.type)
+                prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
+                    field_.name,
+                    field_type_name,
+                    f"self.{ROLE_TAKER_ATTR}.{field_.name}",
+                    f"self.{ROLE_TAKER_ATTR}.{field_.name} = value",
+                )
+                groups.setdefault(None, {})[field_.name] = prop_nodes
+
+    def _delegate_inherited_field(
+            self,
+            field_name: str,
+            field: Any,
+            concrete_class: type,
+            defining_base: type,
+            groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Place delegation nodes for a field inherited from a generic base, adding a re-declaration
+        in the concrete class's own body when the base TypeVar is substituted.
+
+        :param field_name: The dataclass field name.
+        :param field: The dataclass Field object.
+        :param concrete_class: The role taker class being processed.
+        :param defining_base: The ancestor class that originally defines the field.
+        :param groups: The accumulator dict to populate.
+        """
+        try:
+            base_hints = get_type_hints_of_object(defining_base)
+            base_type = base_hints.get(field_name, field.type)
+        except Exception:
+            base_type = field.type
+
+        base_type_name = self._get_consistent_type_name(base_type)
+        prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
+            field_name,
+            base_type_name,
+            f"self.{ROLE_TAKER_ATTR}.{field_name}",
+            f"self.{ROLE_TAKER_ATTR}.{field_name} = value",
+        )
+        groups.setdefault(defining_base, {})[field_name] = prop_nodes
+
+        substitution = GenericTypeSubstitution.from_specialization(concrete_class, defining_base)
+        if substitution.has_substitutions:
+            result = substitution.apply(base_type)
+            if result.resolved:
+                concrete_type_name = self._get_consistent_type_name(result.resolved_type)
+                redecl_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
+                    field_name,
+                    concrete_type_name,
+                    f"self.{ROLE_TAKER_ATTR}.{field_name}",
+                    f"self.{ROLE_TAKER_ATTR}.{field_name} = value",
+                )
+                groups.setdefault(None, {})[field_name] = redecl_nodes
 
     def _collect_property_delegations(
             self,
@@ -769,24 +820,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 continue
             if _is_from_role_class(property_name, wrapped_class.clazz):
                 continue
-            return_annotation = property_value.fget.__annotations__.get("return")
-            if return_annotation:
-                return_annotation = self._get_consistent_type_name(return_annotation)
-            if property_value.fset is not None:
-                prop_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
-                    property_name,
-                    return_annotation,
-                    f"self.{ROLE_TAKER_ATTR}.{property_name}",
-                    f"self.{ROLE_TAKER_ATTR}.{property_name} = value",
-                )
-            else:
-                prop_nodes = [
-                    RoleNodeFactory.make_property_getter_node(
-                        property_name,
-                        return_annotation,
-                        f"self.{ROLE_TAKER_ATTR}.{property_name}",
-                    )
-                ]
+
             defining_base = _find_defining_class(
                 property_name,
                 wrapped_class.clazz,
@@ -794,7 +828,80 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 role_takers,
                 lambda klass: property_name in vars(klass),
             )
+
+            has_setter = property_value.fset is not None
+            base_return_type = self._resolve_property_return_type(
+                property_value, defining_base, property_name
+            )
+            return_annotation = (
+                self._get_consistent_type_name(base_return_type) if base_return_type else None
+            )
+
+            prop_nodes = self._make_property_delegation_nodes(
+                property_name, return_annotation, has_setter
+            )
             groups.setdefault(defining_base, {})[property_name] = prop_nodes
+
+            if defining_base is not None and base_return_type is not None:
+                substitution = GenericTypeSubstitution.from_specialization(
+                    wrapped_class.clazz, defining_base
+                )
+                if substitution.has_substitutions:
+                    result = substitution.apply(base_return_type)
+                    if result.resolved:
+                        concrete_annotation = self._get_consistent_type_name(result.resolved_type)
+                        redecl_nodes = self._make_property_delegation_nodes(
+                            property_name, concrete_annotation, has_setter
+                        )
+                        groups.setdefault(None, {})[property_name] = redecl_nodes
+
+    def _resolve_property_return_type(
+            self,
+            property_value: property,
+            defining_base: type | None,
+            property_name: str,
+    ) -> Any:
+        """Return the return-type annotation of a property, resolved from its defining class.
+
+        :param property_value: The property descriptor.
+        :param defining_base: The class where the property is first defined, or None.
+        :param property_name: The property name (used as fallback key).
+        :return: The resolved return type, or None if unavailable.
+        """
+        try:
+            hints = get_type_hints_of_object(property_value.fget)
+            return hints.get("return")
+        except Exception:
+            raw = property_value.fget.__annotations__.get("return")
+            return raw if raw else None
+
+    def _make_property_delegation_nodes(
+            self,
+            property_name: str,
+            return_annotation: str | None,
+            has_setter: bool,
+    ) -> list:
+        """Build getter (and optionally setter) delegation nodes for a property.
+
+        :param property_name: The property name.
+        :param return_annotation: The normalised return type string, or None.
+        :param has_setter: Whether to also generate a setter node.
+        :return: A list of FunctionDef nodes.
+        """
+        if has_setter:
+            return RoleNodeFactory.make_property_getter_and_setter_nodes(
+                property_name,
+                return_annotation,
+                f"self.{ROLE_TAKER_ATTR}.{property_name}",
+                f"self.{ROLE_TAKER_ATTR}.{property_name} = value",
+            )
+        return [
+            RoleNodeFactory.make_property_getter_node(
+                property_name,
+                return_annotation,
+                f"self.{ROLE_TAKER_ATTR}.{property_name}",
+            )
+        ]
 
     def _collect_method_delegations(
             self,

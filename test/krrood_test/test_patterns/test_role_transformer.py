@@ -3,10 +3,11 @@ import pytest
 from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
 
 TRANSFORMED = TransformationMode.TRANSFORMED.value
-from .helpers import get_module_comparators
+from .helpers import get_module_comparators, get_ground_truth_module_source, get_comparator_for_modules
 from ..dataset.role_and_ontology import (
     university_ontology_like_classes_without_descriptors,
     reproduction_module,
+    generic_typevar_takers,
 )
 
 import libcst as cst
@@ -215,3 +216,66 @@ def test_no_init_or_post_init_in_role_for():
         else:
             if hasattr(Taker, "__post_init__"):
                 del Taker.__post_init__
+
+
+# ---------------------------------------------------------------------------
+# TypeVar preservation and re-declaration tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def generic_typevar_mixin_source():
+    transformer = RoleTransformer(generic_typevar_takers, file_name_prefix=TRANSFORMED)
+    _, mixin_source = transformer.transform()[generic_typevar_takers]
+    return mixin_source
+
+
+@pytest.fixture
+def generic_typevar_mixin_comparator(generic_typevar_mixin_source):
+    expected = get_ground_truth_module_source(generic_typevar_takers, is_mixin=True)
+    return get_comparator_for_modules(generic_typevar_mixin_source, expected)
+
+
+def test_typevar_preserved_in_base_rolefor(generic_typevar_mixin_source):
+    """entity in RoleForGenericBaseMixin uses TBase, not BaseEntity."""
+    assert "TBase" in generic_typevar_mixin_source
+    assert "def entity(self) -> TBase" in generic_typevar_mixin_source
+
+
+def test_typevar_narrowing_redeclared(generic_typevar_mixin_source):
+    """RoleForNarrowedTypeVarTaker re-declares entity with the narrowed TConcreteEntity."""
+    assert "TConcreteEntity" in generic_typevar_mixin_source
+    assert "def entity(self) -> TConcreteEntity" in generic_typevar_mixin_source
+
+
+def test_concrete_type_substitution_redeclared(generic_typevar_mixin_source):
+    """RoleForConcreteTypeTaker re-declares entity with the concrete ConcreteEntity."""
+    assert "ConcreteEntity" in generic_typevar_mixin_source
+    assert "def entity(self) -> ConcreteEntity" in generic_typevar_mixin_source
+
+
+def test_unspecialized_subclass_no_entity_redeclaration(generic_typevar_mixin_source):
+    """RoleForUnspecializedSubTaker inherits entity from base without re-declaring it."""
+    assert "class RoleForUnspecializedSubTaker" in generic_typevar_mixin_source
+    unspecialized_section = generic_typevar_mixin_source.split("class RoleForUnspecializedSubTaker")[1]
+    assert "def entity" not in unspecialized_section
+
+
+def test_generic_typevar_mixin_class_hierarchy(generic_typevar_mixin_comparator):
+    """All RoleFor classes have the correct base classes."""
+    generic_typevar_mixin_comparator.compare_class_hierarchy()
+
+
+def test_generic_typevar_mixin_class_existence(generic_typevar_mixin_comparator):
+    """All expected RoleFor classes are generated."""
+    generic_typevar_mixin_comparator.compare_class_existence()
+
+
+def test_generic_typevar_mixin_method_details(generic_typevar_mixin_comparator):
+    """All methods and properties have correct signatures and return types."""
+    generic_typevar_mixin_comparator.compare_method_details()
+
+
+def test_generic_typevar_mixin_imports(generic_typevar_mixin_comparator):
+    """Generated mixin imports the correct TypeVars and classes."""
+    generic_typevar_mixin_comparator.compare_imports()

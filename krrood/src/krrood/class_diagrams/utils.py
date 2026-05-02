@@ -189,6 +189,48 @@ def get_and_resolve_generic_type_hints_of_object_using_substitutions(
     return {name: resolve_type(hint, substitution) for name, hint in type_hints.items()}
 
 
+@dataclass(frozen=True)
+class GenericTypeSubstitution:
+    """
+    Represents the TypeVar-to-type mappings produced by specializing a generic class.
+
+    :param substitution: A mapping of TypeVars to their substitutions.
+    """
+
+    substitution: Dict[TypeVar, Any]
+
+    @classmethod
+    def from_specialization(
+        cls, concrete_class: type, generic_base: type
+    ) -> GenericTypeSubstitution:
+        """
+        Build a substitution from how concrete_class specializes generic_base.
+
+        :param concrete_class: The class that specializes generic_base.
+        :param generic_base: The generic base class being specialized.
+        :return: A GenericTypeSubstitution representing the TypeVar mappings.
+        """
+        params = getattr(generic_base, "__parameters__", ())
+        args = get_generic_type_param(concrete_class, generic_base) or ()
+        return cls(dict(zip(params, args)))
+
+    def apply(self, type_hint: Any) -> TypeHintResolutionResult:
+        """
+        Apply the substitution to a type hint.
+
+        :param type_hint: The type hint to resolve.
+        :return: A TypeHintResolutionResult with the resolved type and a flag indicating if substitution occurred.
+        """
+        return resolve_type(type_hint, self.substitution)
+
+    @property
+    def has_substitutions(self) -> bool:
+        """
+        Return True if any TypeVar is actually mapped to a different type.
+        """
+        return any(key is not value for key, value in self.substitution.items())
+
+
 def resolve_type(
     type_to_resolve: Any,
     substitution: Dict[TypeVar, Any],
