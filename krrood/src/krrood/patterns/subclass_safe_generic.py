@@ -17,6 +17,7 @@ from typing_extensions import (
     get_args,
 )
 
+from krrood import logger
 from krrood.class_diagrams.utils import (
     get_and_resolve_generic_type_hints_of_object_using_substitutions,
 )
@@ -68,11 +69,18 @@ class SubClassSafeGeneric(Generic[T], ABC):
         old_generic_type = cls._get_old_generic_type_if_different()
         if not old_generic_type:
             return
-        resolution_results = (
-            get_and_resolve_generic_type_hints_of_object_using_substitutions(
-                cls, {old_generic_type: cls.get_generic_type()}
+        try:
+            resolution_results = (
+                get_and_resolve_generic_type_hints_of_object_using_substitutions(
+                    cls, {old_generic_type: cls.get_generic_type()}
+                )
             )
-        )
+        except Exception as e:
+            logger.warning(
+                f"SubClassSafeGeneric: could not resolve type hints for {cls} — "
+                f"field types will not be updated. Cause: {e}"
+            )
+            return
         for name, result in resolution_results.items():
             if not result.resolved:
                 continue
@@ -101,8 +109,20 @@ class SubClassSafeGeneric(Generic[T], ABC):
                 if non_type_kwargs:
                     setattr(cls, name, field(**non_type_kwargs))
         else:
-            # If not, check if there's an existing field that needs to be updated
-            field_ = copy(next((f for f in fields(cls) if f.name == name), None))
+            # If not, check if there's an existing field that needs to be updated.
+            # fields(cls) reads only the nearest ancestor's __dataclass_fields__ via
+            # MRO lookup; search the full MRO so we don't miss a field defined on a
+            # farther ancestor (e.g. objects on HasStorageSpace when cls is Bottle).
+            raw_field = next(
+                (
+                    ancestor.__dict__["__dataclass_fields__"][name]
+                    for ancestor in cls.__mro__[1:]
+                    if "__dataclass_fields__" in ancestor.__dict__
+                    and name in ancestor.__dict__["__dataclass_fields__"]
+                ),
+                None,
+            )
+            field_ = copy(raw_field)
             if field_ is not None:
                 for key, value in kwargs.items():
                     setattr(field_, key, value)
@@ -110,7 +130,8 @@ class SubClassSafeGeneric(Generic[T], ABC):
             else:
                 non_type_kwargs = copy(kwargs)
                 non_type_kwargs.pop("type", None)
-                setattr(cls, name, field(**non_type_kwargs))
+                if non_type_kwargs:
+                    setattr(cls, name, field(**non_type_kwargs))
         if "type" in kwargs:
             cls.__annotations__[name] = kwargs["type"]
         elif type_ is not None:

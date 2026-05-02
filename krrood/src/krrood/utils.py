@@ -856,7 +856,6 @@ def _handle_import_from_node(
             logger.warning(
                 f"Could not import {resolved_module_name}: {e} while extracting imports from {file_path}"
             )
-            raise e
 
     return package_name
 
