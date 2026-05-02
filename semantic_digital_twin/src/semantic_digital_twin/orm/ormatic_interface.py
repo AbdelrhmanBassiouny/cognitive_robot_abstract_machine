@@ -3237,6 +3237,20 @@ class QPProblemDAO(
     )
 
 
+class RoleForHasSimulatorPropertiesDAO(
+    Base,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins.RoleForHasSimulatorProperties
+    ],
+):
+
+    __tablename__ = "RoleForHasSimulatorPropertiesDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+
 class RoleForSpatialTypeDAO(
     Base,
     DataAccessObject[
@@ -8010,6 +8024,27 @@ class BottleDAO(
     }
 
 
+class Bottle_MustardDAO(
+    BottleDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
+            semantic_digital_twin.semantic_annotations.semantic_annotations.Mustard
+        ]
+    ],
+):
+
+    __tablename__ = "Bottle_MustardDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "Bottle_MustardDAO",
+        "inherit_condition": database_id == BottleDAO.database_id,
+    }
+
+
 class Bottle_LiquidSoapDAO(
     BottleDAO,
     DataAccessObject[
@@ -8048,27 +8083,6 @@ class Bottle_WineDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "Bottle_WineDAO",
-        "inherit_condition": database_id == BottleDAO.database_id,
-    }
-
-
-class Bottle_MustardDAO(
-    BottleDAO,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
-            semantic_digital_twin.semantic_annotations.semantic_annotations.Mustard
-        ]
-    ],
-):
-
-    __tablename__ = "Bottle_MustardDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "Bottle_MustardDAO",
         "inherit_condition": database_id == BottleDAO.database_id,
     }
 

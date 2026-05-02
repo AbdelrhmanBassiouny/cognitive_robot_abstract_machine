@@ -91,6 +91,26 @@ def _is_from_role_class(name: str, clazz: type) -> bool:
     return False
 
 
+def _is_original_field_definer(klass: type, field_name: str) -> bool:
+    """Return True if klass is where field_name is first introduced in its own MRO.
+
+    Uses per-class ``__annotations__`` (not the cumulative ``__dataclass_fields__``)
+    and confirms no ancestor of klass also declares the same annotation, which
+    filters out annotations injected by generic-resolution machinery.
+
+    :param klass: The class to test.
+    :param field_name: The dataclass field name to look up.
+    :return: True only when klass is the original introducer of the field.
+    """
+    if field_name not in vars(klass).get("__annotations__", {}):
+        return False
+    return not any(
+        field_name in vars(ancestor).get("__annotations__", {})
+        for ancestor in klass.__mro__[1:]
+        if ancestor is not object
+    )
+
+
 def _find_defining_class(
         name: str,
         clazz: type,
@@ -724,8 +744,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 wrapped_class.clazz,
                 module_name,
                 role_takers,
-                lambda klass: hasattr(klass, "__dataclass_fields__")
-                              and field_.name in klass.__dataclass_fields__,
+                lambda klass: _is_original_field_definer(klass, field_.name),
             )
             groups.setdefault(defining_base, {})[field_.name] = prop_nodes
 

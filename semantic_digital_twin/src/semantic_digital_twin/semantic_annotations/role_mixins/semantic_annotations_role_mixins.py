@@ -17,7 +17,10 @@ if TYPE_CHECKING:
         WorldEntityWithIDKwargsTracker,
     )
     from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-    from semantic_digital_twin.mixin import SimulatorAdditionalProperty
+    from semantic_digital_twin.mixin import (
+        HasSimulatorProperties,
+        SimulatorAdditionalProperty,
+    )
     from semantic_digital_twin.semantic_annotations.mixins import (
         HasCaseAsRootBody,
         HasRootBody,
@@ -27,7 +30,7 @@ if TYPE_CHECKING:
     )
     from semantic_digital_twin.semantic_annotations.semantic_annotations import (
         Bottle,
-        THasRootBody,
+        Liquid,
         TinCan,
     )
     from semantic_digital_twin.spatial_types.spatial_types import (
@@ -53,10 +56,32 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
+class RoleForHasSimulatorProperties(ABC):
+    @property
+    @abstractmethod
+    def role_taker(self) -> HasSimulatorProperties: ...
+    @property
+    def simulator_additional_properties(self) -> list[SimulatorAdditionalProperty]:
+        return self.role_taker.simulator_additional_properties
+
+    @simulator_additional_properties.setter
+    def simulator_additional_properties(self, value: list[SimulatorAdditionalProperty]):
+        self.role_taker.simulator_additional_properties = value
+
+
+@dataclass(eq=False)
 class RoleForWorldEntity(ABC):
     @property
     @abstractmethod
     def role_taker(self) -> WorldEntity: ...
+    @property
+    def name(self) -> PrefixedName:
+        return self.role_taker.name
+
+    @name.setter
+    def name(self, value: PrefixedName):
+        self.role_taker.name = value
+
     def remove_from_world(self):
         return self.role_taker.remove_from_world()
 
@@ -66,6 +91,14 @@ class RoleForWorldEntityWithID(RoleForWorldEntity, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> WorldEntityWithID: ...
+    @property
+    def id(self) -> UUID:
+        return self.role_taker.id
+
+    @id.setter
+    def id(self, value: UUID):
+        self.role_taker.id = value
+
     def _track_object_in_from_json(
         self, from_json_kwargs
     ) -> WorldEntityWithIDKwargsTracker:
@@ -122,6 +155,14 @@ class RoleForHasRootKinematicStructureEntity(RoleForSemanticAnnotation, ABC):
     @abstractmethod
     def role_taker(self) -> HasRootKinematicStructureEntity: ...
     @property
+    def root(self) -> Body:
+        return self.role_taker.root
+
+    @root.setter
+    def root(self, value: Body):
+        self.role_taker.root = value
+
+    @property
     def global_transform(self) -> HomogeneousTransformationMatrix:
         return self.role_taker.global_transform
 
@@ -176,6 +217,14 @@ class RoleForHasStorageSpace(RoleForHasRootBody, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasStorageSpace: ...
+    @property
+    def objects(self) -> list[Liquid]:
+        return self.role_taker.objects
+
+    @objects.setter
+    def objects(self, value: list[Liquid]):
+        self.role_taker.objects = value
+
     @synchronized_attribute_modification
     def add_object(self, object: HasRootBody):
         return self.role_taker.add_object(object)
@@ -191,6 +240,14 @@ class RoleForHasSupportingSurface(RoleForHasStorageSpace, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasSupportingSurface: ...
+    @property
+    def supporting_surface(self) -> Region:
+        return self.role_taker.supporting_surface
+
+    @supporting_surface.setter
+    def supporting_surface(self, value: Region):
+        self.role_taker.supporting_surface = value
+
     def _2d_gaussian_sampler_from_2d_sample_space(
         self,
         objects_of_interest: List[HasRootBody],
@@ -255,54 +312,6 @@ class RoleForHasCaseAsRootBody(RoleForHasSupportingSurface, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasCaseAsRootBody: ...
-    @property
-    def simulator_additional_properties(self) -> list[SimulatorAdditionalProperty]:
-        return self.role_taker.simulator_additional_properties
-
-    @simulator_additional_properties.setter
-    def simulator_additional_properties(self, value: list[SimulatorAdditionalProperty]):
-        self.role_taker.simulator_additional_properties = value
-
-    @property
-    def name(self) -> PrefixedName:
-        return self.role_taker.name
-
-    @name.setter
-    def name(self, value: PrefixedName):
-        self.role_taker.name = value
-
-    @property
-    def id(self) -> UUID:
-        return self.role_taker.id
-
-    @id.setter
-    def id(self, value: UUID):
-        self.role_taker.id = value
-
-    @property
-    def root(self) -> Body:
-        return self.role_taker.root
-
-    @root.setter
-    def root(self, value: Body):
-        self.role_taker.root = value
-
-    @property
-    def objects(self) -> List[THasRootBody]:
-        return self.role_taker.objects
-
-    @objects.setter
-    def objects(self, value: List[THasRootBody]):
-        self.role_taker.objects = value
-
-    @property
-    def supporting_surface(self) -> Region:
-        return self.role_taker.supporting_surface
-
-    @supporting_surface.setter
-    def supporting_surface(self, value: Region):
-        self.role_taker.supporting_surface = value
-
     def hole_direction(self) -> Vector3:
         return self.role_taker.hole_direction()
 

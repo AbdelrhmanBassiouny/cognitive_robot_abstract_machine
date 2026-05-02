@@ -13,6 +13,8 @@ from typing_extensions import (
     Optional,
     Dict,
     Any,
+    get_origin,
+    get_args,
 )
 
 from krrood.class_diagrams.utils import (
@@ -25,6 +27,21 @@ from krrood.utils import (
 
 if TYPE_CHECKING:
     pass
+
+
+def _is_strictly_more_specific_bound(current: TypeVar, base: TypeVar) -> bool:
+    """Return True if current's bound is strictly narrower than base's bound."""
+    current_bound = getattr(current, "__bound__", None)
+    base_bound = getattr(base, "__bound__", None)
+    if current_bound is None:
+        return False
+    if base_bound is None:
+        return True
+    try:
+        return issubclass(current_bound, base_bound) and current_bound is not base_bound
+    except TypeError:
+        # base_bound is a subscripted generic (e.g. Callable[..., Any]) — treat current as more specific.
+        return True
 
 
 @dataclass
@@ -111,6 +128,12 @@ class SubClassSafeGeneric(Generic[T], ABC):
         current_generic_type = cls.get_generic_type()
         if current_generic_type is None:
             return None
+        # True when cls has SubClassSafeGeneric[X] as a direct explicit base, meaning
+        # it introduces a fresh TypeVar rather than specialising an inherited one.
+        cls_directly_introduces_generic = any(
+            get_origin(base) is SubClassSafeGeneric
+            for base in getattr(cls, "__orig_bases__", [])
+        )
         for base in cls.__bases__:
             if not issubclass(base, SubClassSafeGeneric):
                 continue
@@ -118,6 +141,19 @@ class SubClassSafeGeneric(Generic[T], ABC):
             if base_generic_type is None:
                 continue
             if base_generic_type is not current_generic_type:
+                if isinstance(current_generic_type, TypeVar):
+                    # Skip when this class directly introduces a new generic or when the base's
+                    # generic is already concrete (current TypeVar replaces a concrete type).
+                    if cls_directly_introduces_generic or not isinstance(
+                        base_generic_type, TypeVar
+                    ):
+                        continue
+                    # Both are TypeVars. Only allow substitution when current has a strictly
+                    # more specific bound (e.g. NewVar bound to a subclass of base's bound).
+                    if not _is_strictly_more_specific_bound(
+                        current_generic_type, base_generic_type
+                    ):
+                        continue
                 return base_generic_type
         return None
 
