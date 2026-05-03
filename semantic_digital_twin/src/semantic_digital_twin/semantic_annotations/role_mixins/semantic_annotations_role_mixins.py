@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Self, Type
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
     from krrood.adapters.json_serializer import JSONAttributeDiff
     from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
         ProbabilisticCircuit,
@@ -220,7 +219,7 @@ class RoleForHasRootBody(RoleForHasRootKinematicStructureEntity, ABC):
         self.role_taker.root = value
 
     @property
-    def bodies(self) -> Iterable[Body]:
+    def bodies(self) -> list[Body]:
         return self.role_taker.bodies
 
 
@@ -334,11 +333,11 @@ class RoleForBottle(RoleForHasCaseAsRootBody, ABC):
     @abstractmethod
     def role_taker(self) -> Bottle: ...
     @property
-    def root(self) -> TLiquid:
+    def root(self) -> TBody:
         return self.role_taker.root
 
     @root.setter
-    def root(self, value: TLiquid):
+    def root(self, value: TBody):
         self.role_taker.root = value
 
     @property
@@ -362,11 +361,11 @@ class RoleForTinCan(RoleForHasStorageSpace, ABC):
     @abstractmethod
     def role_taker(self) -> TinCan: ...
     @property
-    def root(self) -> THasRootBody:
+    def root(self) -> TBody:
         return self.role_taker.root
 
     @root.setter
-    def root(self, value: THasRootBody):
+    def root(self, value: TBody):
         self.role_taker.root = value
 
     @property

@@ -2306,6 +2306,22 @@ class HasRoleDAO(
     }
 
 
+class IsSubClassDAO(
+    PredicateDAO, DataAccessObject[krrood.entity_query_language.predicate.IsSubClass]
+):
+
+    __tablename__ = "IsSubClassDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(PredicateDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "IsSubClassDAO",
+        "inherit_condition": database_id == PredicateDAO.database_id,
+    }
+
+
 class PrivateDefaultFactoryDAO(
     SymbolDAO,
     DataAccessObject[test.krrood_test.dataset.example_classes.PrivateDefaultFactory],

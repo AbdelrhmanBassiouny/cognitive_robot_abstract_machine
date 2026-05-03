@@ -9,6 +9,7 @@ from ..dataset.role_and_ontology import (
     reproduction_module,
     generic_typevar_takers,
     subclass_safe_generic_takers,
+    independent_typevar_takers,
 )
 
 import libcst as cst
@@ -325,3 +326,60 @@ def test_subclasssafegeneric_mixin_method_details(subclass_safe_generic_mixin_co
 def test_subclasssafegeneric_mixin_imports(subclass_safe_generic_mixin_comparator):
     """Generated mixin imports TItem and TSpecificItem."""
     subclass_safe_generic_mixin_comparator.compare_imports()
+
+
+# ---------------------------------------------------------------------------
+# Independent TypeVar tests
+# Regression: get_generic_type_param incorrectly resolved transitive generic
+# bases returning the wrong TypeVar (e.g. THasRootBody instead of TBody).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def independent_typevar_mixin_source():
+    transformer = RoleTransformer(independent_typevar_takers, file_name_prefix=TRANSFORMED)
+    _, mixin_source = transformer.transform()[independent_typevar_takers]
+    return mixin_source
+
+
+@pytest.fixture
+def independent_typevar_mixin_comparator(independent_typevar_mixin_source):
+    expected = get_ground_truth_module_source(independent_typevar_takers, is_mixin=True)
+    return get_comparator_for_modules(independent_typevar_mixin_source, expected)
+
+
+def test_independent_typevar_root_not_overwritten_by_content_typevar(independent_typevar_mixin_source):
+    """root in RoleForMultiTaker must use TSpecificRoot, not TContent2.
+
+    Regression: transitive get_generic_type_param returned the wrong TypeVar
+    from an unrelated independent generic (TContent2) for the root property.
+    """
+    multi_taker_section = independent_typevar_mixin_source.split("class RoleForMultiTaker")[1]
+    assert "def root(self) -> TSpecificRoot" in multi_taker_section
+    assert "def root(self) -> TContent2" not in multi_taker_section
+
+
+def test_independent_typevar_content_uses_narrowed_typevar(independent_typevar_mixin_source):
+    """content in RoleForMultiTaker uses TContent2 (narrowed from TContent)."""
+    multi_taker_section = independent_typevar_mixin_source.split("class RoleForMultiTaker")[1]
+    assert "def content(self) -> TContent2" in multi_taker_section
+
+
+def test_independent_typevar_mixin_class_existence(independent_typevar_mixin_comparator):
+    """All expected RoleFor classes are generated."""
+    independent_typevar_mixin_comparator.compare_class_existence()
+
+
+def test_independent_typevar_mixin_class_hierarchy(independent_typevar_mixin_comparator):
+    """All RoleFor classes have the correct base classes."""
+    independent_typevar_mixin_comparator.compare_class_hierarchy()
+
+
+def test_independent_typevar_mixin_method_details(independent_typevar_mixin_comparator):
+    """All methods and properties have correct signatures and return types."""
+    independent_typevar_mixin_comparator.compare_method_details()
+
+
+def test_independent_typevar_mixin_imports(independent_typevar_mixin_comparator):
+    """Generated mixin imports the correct TypeVars and classes."""
+    independent_typevar_mixin_comparator.compare_imports()

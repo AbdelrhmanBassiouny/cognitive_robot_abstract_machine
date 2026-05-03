@@ -120,20 +120,69 @@ def resolve_name_in_hierarchy(name: str, start_object: Any) -> Any:
 T = TypeVar("T")
 
 
+def _trace_generic_params(cls: type, generic_base: type):
+    """Trace how cls parameterizes generic_base by walking its __orig_bases__.
+
+    Handles both subscripted bases (e.g. ``B[T]``) and plain bases (e.g. ``B``),
+    recursively resolving TypeVar substitutions at each level of the hierarchy.
+
+    :param cls: The class whose hierarchy is searched.
+    :param generic_base: The target generic base whose parameters should be resolved.
+    :return: A tuple of type arguments for generic_base as seen from cls, or None.
+    """
+    for base in getattr(cls, "__orig_bases__", []):
+        origin = get_origin(base)
+        if origin is None:
+            if isinstance(base, type) and issubclass(base, generic_base):
+                result = _trace_generic_params(base, generic_base)
+                if result is not None:
+                    return result
+        elif issubclass(origin, generic_base):
+            args = get_args(base)
+            if origin is generic_base:
+                return args
+            inner = _trace_generic_params(origin, generic_base)
+            if inner is None:
+                return args
+            params = getattr(origin, "__parameters__", ())
+            if not params:
+                return inner
+            sub = {p: a for p, a in zip(params, args) if isinstance(p, TypeVar)}
+            return tuple(sub.get(p, p) if isinstance(p, TypeVar) else p for p in inner)
+    return None
+
+
 def get_generic_type_param(cls, generic_base):
     """
     Given a subclass and its generic base, return the concrete type parameter(s).
+
+    Correctly traces TypeVar substitutions through transitive subclass relationships.
+    When a direct base is a subscripted transitive subclass of generic_base (e.g.
+    ``B[T]`` where ``B`` is a subclass of ``generic_base`` but not ``generic_base``
+    itself), the substitution is resolved through the full inheritance chain rather
+    than returning ``B``'s type arguments directly.
 
     Example:
         get_generic_type_param(Employee, Role) -> (<class '__main__.Person'>,)
     """
     orig_bases = cls.__orig_bases__ if hasattr(cls, "__orig_bases__") else []
     for base in orig_bases:
-        base_origin = get_origin(base)
-        if base_origin is None:
+        origin = get_origin(base)
+        if origin is None:
             continue
-        if issubclass(get_origin(base), generic_base):
-            return get_args(base)
+        if not issubclass(origin, generic_base):
+            continue
+        args = get_args(base)
+        if origin is generic_base:
+            return args
+        inner = _trace_generic_params(origin, generic_base)
+        if inner is None:
+            return args
+        params = getattr(origin, "__parameters__", ())
+        if not params:
+            return inner
+        sub = {p: a for p, a in zip(params, args) if isinstance(p, TypeVar)}
+        return tuple(sub.get(p, p) if isinstance(p, TypeVar) else p for p in inner)
     return None
 
 

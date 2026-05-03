@@ -637,7 +637,11 @@ def get_generic_type_param(cls, generic_base: Type[T]) -> Optional[List[Type[T]]
             return list(args) if args else None
     # Second pass: recurse into unparameterized bases.
     for base in orig_bases:
-        if get_origin(base) is None and isclass(base) and issubclass(base, generic_base):
+        if (
+            get_origin(base) is None
+            and isclass(base)
+            and issubclass(base, generic_base)
+        ):
             res = get_generic_type_param(base, generic_base)
             if res:
                 return res
