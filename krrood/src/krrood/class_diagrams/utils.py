@@ -189,6 +189,29 @@ def get_and_resolve_generic_type_hints_of_object_using_substitutions(
     return {name: resolve_type(hint, substitution) for name, hint in type_hints.items()}
 
 
+def _resolve_annotation_typevar(param: TypeVar, generic_base: type) -> TypeVar:
+    """
+    Return the annotation-level TypeVar that param corresponds to in generic_base.
+
+    When a class inherits from a generic like ``SubClassSafeGeneric[TSpecific]``,
+    Python's ``__parameters__`` may expose the *defining* TypeVar (e.g. ``T`` from
+    ``SubClassSafeGeneric``) rather than ``TSpecific``.  This function walks
+    ``generic_base.__orig_bases__`` to find the actual TypeVar used in annotations.
+
+    :param param: A TypeVar from ``generic_base.__parameters__``.
+    :param generic_base: The class whose bases are searched.
+    :return: The annotation-level TypeVar, or param if no aliasing is found.
+    """
+    for base in getattr(generic_base, "__orig_bases__", []):
+        base_origin = get_origin(base)
+        if base_origin is None:
+            continue
+        for bp, ba in zip(getattr(base_origin, "__parameters__", ()), get_args(base)):
+            if bp is param and isinstance(ba, TypeVar):
+                return ba
+    return param
+
+
 @dataclass(frozen=True)
 class GenericTypeSubstitution:
     """
@@ -206,13 +229,23 @@ class GenericTypeSubstitution:
         """
         Build a substitution from how concrete_class specializes generic_base.
 
+        Resolves TypeVar aliasing that arises when ``generic_base`` inherits from
+        another generic (e.g. ``SubClassSafeGeneric[TSpecific]``): in that case
+        ``__parameters__`` may expose the *defining* TypeVar rather than the
+        annotation-level one, so the mapping is adjusted via the base's
+        ``__orig_bases__``.
+
         :param concrete_class: The class that specializes generic_base.
         :param generic_base: The generic base class being specialized.
         :return: A GenericTypeSubstitution representing the TypeVar mappings.
         """
         params = getattr(generic_base, "__parameters__", ())
         args = get_generic_type_param(concrete_class, generic_base) or ()
-        return cls(dict(zip(params, args)))
+        substitution = {
+            _resolve_annotation_typevar(p, generic_base): a
+            for p, a in zip(params, args)
+        }
+        return cls(substitution)
 
     def apply(self, type_hint: Any) -> TypeHintResolutionResult:
         """

@@ -28,11 +28,13 @@ if TYPE_CHECKING:
         HasRootKinematicStructureEntity,
         HasStorageSpace,
         HasSupportingSurface,
-        THasRootBody,
+        TBody,
         TKinematicStructureEntity,
     )
     from semantic_digital_twin.semantic_annotations.semantic_annotations import (
         Bottle,
+        THasRootBody,
+        TLiquid,
         TinCan,
     )
     from semantic_digital_twin.spatial_types.spatial_types import (
@@ -210,6 +212,14 @@ class RoleForHasRootBody(RoleForHasRootKinematicStructureEntity, ABC):
     @abstractmethod
     def role_taker(self) -> HasRootBody: ...
     @property
+    def root(self) -> TBody:
+        return self.role_taker.root
+
+    @root.setter
+    def root(self, value: TBody):
+        self.role_taker.root = value
+
+    @property
     def bodies(self) -> Iterable[Body]:
         return self.role_taker.bodies
 
@@ -323,6 +333,22 @@ class RoleForBottle(RoleForHasCaseAsRootBody, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> Bottle: ...
+    @property
+    def root(self) -> TLiquid:
+        return self.role_taker.root
+
+    @root.setter
+    def root(self, value: TLiquid):
+        self.role_taker.root = value
+
+    @property
+    def objects(self) -> list[TLiquid]:
+        return self.role_taker.objects
+
+    @objects.setter
+    def objects(self, value: list[TLiquid]):
+        self.role_taker.objects = value
+
     def _apply_diff(self, diff: JSONAttributeDiff, **kwargs) -> None:
         return self.role_taker._apply_diff(diff, kwargs)
 
@@ -335,6 +361,22 @@ class RoleForTinCan(RoleForHasStorageSpace, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> TinCan: ...
+    @property
+    def root(self) -> THasRootBody:
+        return self.role_taker.root
+
+    @root.setter
+    def root(self, value: THasRootBody):
+        self.role_taker.root = value
+
+    @property
+    def objects(self) -> list[THasRootBody]:
+        return self.role_taker.objects
+
+    @objects.setter
+    def objects(self, value: list[THasRootBody]):
+        self.role_taker.objects = value
+
     def _apply_diff(self, diff: JSONAttributeDiff, **kwargs) -> None:
         return self.role_taker._apply_diff(diff, kwargs)
 

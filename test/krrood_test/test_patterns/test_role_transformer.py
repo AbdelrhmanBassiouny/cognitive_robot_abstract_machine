@@ -8,6 +8,7 @@ from ..dataset.role_and_ontology import (
     university_ontology_like_classes_without_descriptors,
     reproduction_module,
     generic_typevar_takers,
+    subclass_safe_generic_takers,
 )
 
 import libcst as cst
@@ -279,3 +280,48 @@ def test_generic_typevar_mixin_method_details(generic_typevar_mixin_comparator):
 def test_generic_typevar_mixin_imports(generic_typevar_mixin_comparator):
     """Generated mixin imports the correct TypeVars and classes."""
     generic_typevar_mixin_comparator.compare_imports()
+
+
+# ---------------------------------------------------------------------------
+# SubClassSafeGeneric TypeVar narrowing tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def subclass_safe_generic_mixin_source():
+    transformer = RoleTransformer(subclass_safe_generic_takers, file_name_prefix=TRANSFORMED)
+    _, mixin_source = transformer.transform()[subclass_safe_generic_takers]
+    return mixin_source
+
+
+@pytest.fixture
+def subclass_safe_generic_mixin_comparator(subclass_safe_generic_mixin_source):
+    expected = get_ground_truth_module_source(subclass_safe_generic_takers, is_mixin=True)
+    return get_comparator_for_modules(subclass_safe_generic_mixin_source, expected)
+
+
+def test_subclasssafegeneric_base_rolefor_uses_base_typevar(subclass_safe_generic_mixin_source):
+    """item in RoleForItemHolder uses TItem (the SubClassSafeGeneric TypeVar), not a concrete type."""
+    assert "def item(self) -> TItem" in subclass_safe_generic_mixin_source
+
+
+def test_subclasssafegeneric_typevar_narrowing_redeclared(subclass_safe_generic_mixin_source):
+    """RoleForSpecificItemTaker re-declares item with TSpecificItem despite the SubClassSafeGeneric
+    TypeVar aliasing that causes __parameters__ to expose T instead of the annotation-level TypeVar."""
+    section = subclass_safe_generic_mixin_source.split("class RoleForSpecificItemTaker")[1]
+    assert "def item(self) -> TSpecificItem" in section
+
+
+def test_subclasssafegeneric_mixin_class_hierarchy(subclass_safe_generic_mixin_comparator):
+    """RoleForSpecificItemTaker inherits from RoleForItemHolder."""
+    subclass_safe_generic_mixin_comparator.compare_class_hierarchy()
+
+
+def test_subclasssafegeneric_mixin_method_details(subclass_safe_generic_mixin_comparator):
+    """All methods and properties have correct signatures and return types."""
+    subclass_safe_generic_mixin_comparator.compare_method_details()
+
+
+def test_subclasssafegeneric_mixin_imports(subclass_safe_generic_mixin_comparator):
+    """Generated mixin imports TItem and TSpecificItem."""
+    subclass_safe_generic_mixin_comparator.compare_imports()

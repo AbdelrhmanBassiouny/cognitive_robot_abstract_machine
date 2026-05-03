@@ -742,7 +742,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
             )
             if defining_base is not None:
                 self._delegate_inherited_field(
-                    field_.name, field_.field, wrapped_class.clazz, defining_base, groups
+                    field_.name, field_.field, wrapped_class.clazz, defining_base,
+                    groups, role_takers, module_name
                 )
             else:
                 field_type_name = self._get_consistent_type_name(field_.field.type)
@@ -761,15 +762,23 @@ class RoleModuleTransformer(ContextAwareTransformer):
             concrete_class: type,
             defining_base: type,
             groups: dict[type | None, dict[str, list]],
+            role_takers: set[type],
+            module_name: str,
     ) -> None:
         """Place delegation nodes for a field inherited from a generic base, adding a re-declaration
         in the concrete class's own body when the base TypeVar is substituted.
+
+        Also adds re-declarations in any same-package non-taker intermediate ancestor that narrows
+        the TypeVar (e.g. HasRootBody narrowing TKinematicStructureEntity → TBody between the
+        defining base and the concrete role taker class).
 
         :param field_name: The dataclass field name.
         :param field: The dataclass Field object.
         :param concrete_class: The role taker class being processed.
         :param defining_base: The ancestor class that originally defines the field.
         :param groups: The accumulator dict to populate.
+        :param role_takers: The set of all known role taker types.
+        :param module_name: The source module name for package comparison.
         """
         try:
             base_hints = get_type_hints_of_object(defining_base)
@@ -786,6 +795,17 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
         groups.setdefault(defining_base, {})[field_name] = prop_nodes
 
+        for ancestor in concrete_class.__mro__[1:]:
+            if ancestor is defining_base:
+                break
+            if ancestor in role_takers:
+                continue
+            if ancestor.__module__ != module_name and not same_package(
+                ancestor.__module__, module_name
+            ):
+                continue
+            self._add_narrowing_redeclaration(field_name, base_type, ancestor, defining_base, groups)
+
         substitution = GenericTypeSubstitution.from_specialization(concrete_class, defining_base)
         if substitution.has_substitutions:
             result = substitution.apply(base_type)
@@ -798,6 +818,37 @@ class RoleModuleTransformer(ContextAwareTransformer):
                     f"self.{ROLE_TAKER_ATTR}.{field_name} = value",
                 )
                 groups.setdefault(None, {})[field_name] = redecl_nodes
+
+    def _add_narrowing_redeclaration(
+            self,
+            field_name: str,
+            base_type: Any,
+            ancestor: type,
+            defining_base: type,
+            groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Add a narrowing re-declaration to groups[ancestor] if ancestor substitutes the TypeVar.
+
+        :param field_name: The dataclass field name.
+        :param base_type: The type annotation from defining_base.
+        :param ancestor: The intermediate ancestor class to check.
+        :param defining_base: The class that originally defines the field.
+        :param groups: The accumulator dict to populate.
+        """
+        substitution = GenericTypeSubstitution.from_specialization(ancestor, defining_base)
+        if not substitution.has_substitutions:
+            return
+        result = substitution.apply(base_type)
+        if not result.resolved:
+            return
+        type_name = self._get_consistent_type_name(result.resolved_type)
+        nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
+            field_name,
+            type_name,
+            f"self.{ROLE_TAKER_ATTR}.{field_name}",
+            f"self.{ROLE_TAKER_ATTR}.{field_name} = value",
+        )
+        groups.setdefault(ancestor, {}).setdefault(field_name, nodes)
 
     def _collect_property_delegations(
             self,
