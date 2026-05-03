@@ -435,6 +435,20 @@ def _all_nearest_common_ancestors_from_classes_method_resolution_order(
             yield candidate
 
 
+def get_property_return_type(property_value: property) -> Any:
+    """Return the return-type annotation of a property.
+
+    :param property_value: The property descriptor.
+    :return: The resolved return type, or None if unavailable.
+    """
+    try:
+        hints = get_type_hints_of_object(property_value.fget)
+        return hints.get("return")
+    except Exception:
+        raw = property_value.fget.__annotations__.get("return")
+        return raw if raw else None
+
+
 @lru_cache
 def get_type_hints_of_object(
     object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
