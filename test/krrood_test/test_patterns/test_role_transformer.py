@@ -349,13 +349,14 @@ def independent_typevar_mixin_comparator(independent_typevar_mixin_source):
 
 
 def test_independent_typevar_root_not_overwritten_by_content_typevar(independent_typevar_mixin_source):
-    """root in RoleForMultiTaker must use TSpecificRoot, not TContent2.
+    """root must not be redeclared in RoleForMultiTaker — TSpecificRoot is already established
+    in RoleForNarrowedRootHolder and inherited through the chain.
 
     Regression: transitive get_generic_type_param returned the wrong TypeVar
     from an unrelated independent generic (TContent2) for the root property.
     """
     multi_taker_section = independent_typevar_mixin_source.split("class RoleForMultiTaker")[1]
-    assert "def root(self) -> TSpecificRoot" in multi_taker_section
+    assert "def root" not in multi_taker_section
     assert "def root(self) -> TContent2" not in multi_taker_section
 
 

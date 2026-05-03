@@ -333,14 +333,6 @@ class RoleForBottle(RoleForHasCaseAsRootBody, ABC):
     @abstractmethod
     def role_taker(self) -> Bottle: ...
     @property
-    def root(self) -> TBody:
-        return self.role_taker.root
-
-    @root.setter
-    def root(self, value: TBody):
-        self.role_taker.root = value
-
-    @property
     def objects(self) -> list[TLiquid]:
         return self.role_taker.objects
 
@@ -360,14 +352,6 @@ class RoleForTinCan(RoleForHasStorageSpace, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> TinCan: ...
-    @property
-    def root(self) -> TBody:
-        return self.role_taker.root
-
-    @root.setter
-    def root(self, value: TBody):
-        self.role_taker.root = value
-
     @property
     def objects(self) -> list[THasRootBody]:
         return self.role_taker.objects

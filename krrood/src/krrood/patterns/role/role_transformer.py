@@ -795,6 +795,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         )
         groups.setdefault(defining_base, {})[field_name] = prop_nodes
 
+        last_narrowed_type: Any = None
         for ancestor in concrete_class.__mro__[1:]:
             if ancestor is defining_base:
                 break
@@ -804,12 +805,14 @@ class RoleModuleTransformer(ContextAwareTransformer):
                 ancestor.__module__, module_name
             ):
                 continue
-            self._add_narrowing_redeclaration(field_name, base_type, ancestor, defining_base, groups)
+            narrowed = self._add_narrowing_redeclaration(field_name, base_type, ancestor, defining_base, groups)
+            if narrowed is not None:
+                last_narrowed_type = narrowed
 
         substitution = GenericTypeSubstitution.from_specialization(concrete_class, defining_base)
         if substitution.has_substitutions:
             result = substitution.apply(base_type)
-            if result.resolved:
+            if result.resolved and result.resolved_type is not last_narrowed_type:
                 concrete_type_name = self._get_consistent_type_name(result.resolved_type)
                 redecl_nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
                     field_name,
@@ -826,8 +829,10 @@ class RoleModuleTransformer(ContextAwareTransformer):
             ancestor: type,
             defining_base: type,
             groups: dict[type | None, dict[str, list]],
-    ) -> None:
+    ) -> Any | None:
         """Add a narrowing re-declaration to groups[ancestor] if ancestor substitutes the TypeVar.
+
+        Returns the resolved type object if a narrowing was added, None otherwise.
 
         :param field_name: The dataclass field name.
         :param base_type: The type annotation from defining_base.
@@ -837,10 +842,10 @@ class RoleModuleTransformer(ContextAwareTransformer):
         """
         substitution = GenericTypeSubstitution.from_specialization(ancestor, defining_base)
         if not substitution.has_substitutions:
-            return
+            return None
         result = substitution.apply(base_type)
         if not result.resolved:
-            return
+            return None
         type_name = self._get_consistent_type_name(result.resolved_type)
         nodes = RoleNodeFactory.make_property_getter_and_setter_nodes(
             field_name,
@@ -849,6 +854,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
             f"self.{ROLE_TAKER_ATTR}.{field_name} = value",
         )
         groups.setdefault(ancestor, {}).setdefault(field_name, nodes)
+        return result.resolved_type
 
     def _collect_property_delegations(
             self,
