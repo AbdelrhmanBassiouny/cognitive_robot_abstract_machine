@@ -27,7 +27,7 @@ class HasRoles:
 
 
 @dataclass
-class Role(HasRoles, SubClassSafeGeneric[T], Symbol, ABC):
+class Role(Symbol, SubClassSafeGeneric[T], HasRoles, ABC):
     """
     Represents a role with generic typing. This is used in Role Design Pattern in OOP.
 
@@ -241,7 +241,9 @@ class Role(HasRoles, SubClassSafeGeneric[T], Symbol, ABC):
                     wrapped_role_taker, HasRoleTaker
                 ):
                     SymbolGraph().add_relation(
-                        HasRoleTaker(wrapped_self, relation.target, relation.wrapped_field)
+                        HasRoleTaker(
+                            wrapped_self, relation.target, relation.wrapped_field
+                        )
                     )
         except ClassIsUnMappedInClassDiagram:
             pass

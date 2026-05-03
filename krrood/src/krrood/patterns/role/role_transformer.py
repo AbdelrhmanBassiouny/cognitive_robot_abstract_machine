@@ -13,16 +13,18 @@ from types import ModuleType
 from typing import (
     Any,
     Callable,
+    _GenericAlias,
 )
 
 import libcst
 from libcst.codemod import ContextAwareTransformer, CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
-from typing_extensions import Dict
+from typing_extensions import Dict, Type, get_args, get_origin
 
 from krrood import logger
 from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedClass
+from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 from krrood.class_diagrams.utils import (
     classes_of_module,
     topological_sort_by_inheritance,
@@ -135,13 +137,17 @@ class RoleTransformer:
         classes = classes_of_module(module)
         role_classes = [clazz for clazz in classes if issubclass(clazz, Role)]
         updated_taker_modules = list(taker_modules)
+
+        def add_role_taker_class(role_taker_class: Type):
+            classes.append(role_taker_class)
+            role_taker_module = sys.modules[role_taker_class.__module__]
+            if role_taker_module not in updated_taker_modules:
+                updated_taker_modules.append(role_taker_module)
+
         for clazz in role_classes:
             role_taker_type = clazz.get_role_taker_type()
             if role_taker_type not in classes:
-                classes.append(role_taker_type)
-                role_taker_module = sys.modules[role_taker_type.__module__]
-                if role_taker_module not in updated_taker_modules:
-                    updated_taker_modules.append(role_taker_module)
+                add_role_taker_class(role_taker_type)
         return ClassDiagram(classes), updated_taker_modules
 
     def transform(self, write: bool = False) -> dict[ModuleType, tuple[str, str]]:
@@ -524,14 +530,17 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if self._should_add_has_roles(role_taker_node, wrapped_class):
             role_taker_class_bases = list(role_taker_node.bases)
             if not any(
-                LibCSTNodeFactory.get_name_from_base_node(base.value) == HasRoles.__name__
+                LibCSTNodeFactory.get_name_from_base_node(base.value)
+                == HasRoles.__name__
                 for base in role_taker_class_bases
             ):
-                role_taker_class_bases.insert(
-                    0, LibCSTNodeFactory.make_argument(HasRoles.__name__)
+                role_taker_class_bases.append(
+                    LibCSTNodeFactory.make_argument(HasRoles.__name__)
                 )
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
-            role_taker_node = self._ensure_HasRoles_init_is_called_in_explicit_init_of_role_taker_class(role_taker_node)
+            role_taker_node = self._ensure_HasRoles_init_is_called_in_explicit_init_of_role_taker_class(
+                role_taker_node
+            )
             self.require_original_import("krrood.patterns.role", [HasRoles.__name__])
 
         return [role_taker_node]
@@ -546,15 +555,22 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param role_taker_node: The class definition node to handle.
         :return: The modified class definition node with HasRoles.__init__ call added if necessary.
         """
-        decorator_kwargs = self._get_keyword_arguments_of_decorator_of_class_node(role_taker_node, "dataclass")
-        if not decorator_kwargs or "init" not in decorator_kwargs or decorator_kwargs["init"].value != "False":
+        decorator_kwargs = self._get_keyword_arguments_of_decorator_of_class_node(
+            role_taker_node, "dataclass"
+        )
+        if (
+            not decorator_kwargs
+            or "init" not in decorator_kwargs
+            or decorator_kwargs["init"].value != "False"
+        ):
             return role_taker_node
         original_body = role_taker_node.body
         init_function_index, init_function = next(
             (
                 (i, node)
                 for i, node in enumerate(original_body.body)
-                if isinstance(node, libcst.FunctionDef) and node.name.value == "__init__"
+                if isinstance(node, libcst.FunctionDef)
+                and node.name.value == "__init__"
             ),
             (None, None),
         )
@@ -575,15 +591,14 @@ class RoleModuleTransformer(ContextAwareTransformer):
             return role_taker_node
 
         new_body = libcst.IndentedBlock(
-            list(init_function.body.body) + [
-                libcst.parse_statement(f"{HasRoles.__name__}.__init__(self)")
-            ]
+            list(init_function.body.body)
+            + [libcst.parse_statement(f"{HasRoles.__name__}.__init__(self)")]
         )
         init_function = init_function.with_changes(body=new_body)
         new_body = libcst.IndentedBlock(
             list(original_body.body[:init_function_index])
             + [init_function]
-            + list(original_body.body[init_function_index + 1:])
+            + list(original_body.body[init_function_index + 1 :])
         )
         role_taker_node = role_taker_node.with_changes(body=new_body)
 
@@ -693,7 +708,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
         if issubclass(wrapped_class.clazz, Role):
             additional_skip_bases = {wrapped_class.clazz.get_role_taker_type()}
         return self._delegation_generator.collect_delegation_groups(
-            wrapped_class, self.source_module.__name__,
+            wrapped_class,
+            self.source_module.__name__,
             already_delegated_field_names=all_taker_fields,
             additional_skip_bases=additional_skip_bases,
         )
@@ -885,7 +901,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
         """
         decorator_node = next(
             (
-                d for d in class_node.decorators
+                d
+                for d in class_node.decorators
                 if self._get_decorator_name(d.decorator) == decorator_name
             ),
             None,

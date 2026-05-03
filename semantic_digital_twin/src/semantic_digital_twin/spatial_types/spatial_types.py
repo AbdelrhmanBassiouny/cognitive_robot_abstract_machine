@@ -1767,7 +1767,7 @@ class Quaternion(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class Pose(HasRoles, sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, HasRoles):
 
     def __init__(
         self,

@@ -374,9 +374,13 @@ class ClassDiagram:
     def __post_init__(self):
         """Initialize the diagram with the provided classes and build relations."""
         self._dependency_graph = rx.PyDiGraph()
+        generics = []
         for clazz in self.classes:
+            if is_dataclass(get_origin(clazz)):
+                generics.append(clazz)
+                clazz = get_origin(clazz)
             self.add_node(WrappedClass(clazz=clazz))
-        self._create_nodes_for_specialized_generic_type_hints()
+        self._create_nodes_for_specialized_generic_type_hints(generics)
         self._create_all_relations()
 
     def get_roles_of_class(self, cls: Type) -> Tuple[WrappedClass[Role], ...]:
@@ -1047,7 +1051,9 @@ class ClassDiagram:
     def __eq__(self, other):
         return self is other
 
-    def _create_nodes_for_specialized_generic_type_hints(self):
+    def _create_nodes_for_specialized_generic_type_hints(
+        self, additional_classes: Optional[List] = None
+    ):
         """
         Creates nodes for specialized generic type hints utilized in the wrapped classes. This process involves
         analyzing fields for references to specialized generic types, creating corresponding nodes, and establishing
@@ -1058,12 +1064,14 @@ class ClassDiagram:
             in the class diagram, it will skip further processing for that type.
         """
         # Phase 1: Collect all unique specialized generic types referenced in fields
+        additional_classes = additional_classes or []
         to_process = set()
         [
             to_process.add(wrapped_field.type_endpoint)
             for wrapped_class in self.wrapped_classes
             for wrapped_field in wrapped_class.fields
         ]
+        [to_process.add(clazz) for clazz in additional_classes]
 
         # Phase 2: Add nodes for discovered types that do not already exists
         while to_process:

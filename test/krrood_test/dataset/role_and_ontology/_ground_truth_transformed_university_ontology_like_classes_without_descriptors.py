@@ -59,7 +59,7 @@ class Course(HasName, Symbol): ...
 
 
 @dataclass(eq=False)
-class PersonInRoleAndOntology(HasRoles, HasName, Symbol):
+class PersonInRoleAndOntology(HasName, Symbol, HasRoles):
     works_for: RecognizedGroup = None
     member_of: List[RecognizedGroup] = field(default_factory=list)
 
