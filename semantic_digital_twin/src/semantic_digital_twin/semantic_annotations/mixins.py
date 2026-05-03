@@ -320,7 +320,7 @@ class HasRootBody(HasRootKinematicStructureEntity[TBody], ABC):
     """
 
     @property
-    def bodies(self) -> Iterable[Body]:
+    def bodies(self) -> List[Body]:
         """
         The bodies that are part of the semantic annotation.
         """
