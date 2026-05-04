@@ -62,15 +62,15 @@ from semantic_digital_twin.world_description.world_entity import (
     Region,
     Connection,
 )
-from semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins import (
-    RoleForCabinet,
-    RoleForRoom,
-    RoleForBottle,
-    RoleForTinCan,
-)
 from krrood.patterns.role import HasRoles
 from semantic_digital_twin.semantic_annotations.role_mixins.mixins_role_mixins import (
     RoleForHasStorageSpace,
+)
+from semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins import (
+    RoleForBottle,
+    RoleForCabinet,
+    RoleForRoom,
+    RoleForTinCan,
 )
 
 

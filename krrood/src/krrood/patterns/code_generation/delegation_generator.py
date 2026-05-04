@@ -200,7 +200,20 @@ class DelegationGenerator:
             base_hints = get_type_hints_of_object(defining_base)
             base_type = base_hints.get(field_name, field.type)
         except TypeError:
-            base_type = field.type
+            # SubClassSafeGeneric may inject a narrowed TypeVar into a subclass's __annotations__;
+            # read from the defining class's own __annotations__ to recover the original TypeVar.
+            raw = vars(defining_base).get("__annotations__", {}).get(field_name)
+            if raw is not None and not isinstance(raw, str):
+                base_type = raw
+            elif isinstance(raw, str):
+                module = inspect.getmodule(defining_base)
+                globalns = getattr(module, "__dict__", {}) if module is not None else {}
+                try:
+                    base_type = eval(raw, globalns)  # noqa: S307
+                except Exception:
+                    base_type = field.type
+            else:
+                base_type = field.type
 
         base_type_name = self._normalise_type_name(base_type)
         prop_nodes = self.node_factory.make_property_getter_and_setter_nodes(

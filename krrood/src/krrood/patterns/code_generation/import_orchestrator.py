@@ -46,6 +46,20 @@ class RuntimeNameCollector(libcst.CSTVisitor):
         self.names.update(collector.names)
 
 
+class BaseClassNameCollector(libcst.CSTVisitor):
+    """Collects names that appear in class base class expressions."""
+
+    def __init__(self):
+        self.names: set[str] = set()
+
+    def visit_ClassDef(self, node: libcst.ClassDef) -> None:
+        """Record all names found in class base expressions."""
+        collector = NameCollector()
+        for arg in node.bases:
+            arg.value.visit(collector)
+        self.names.update(collector.names)
+
+
 @dataclasses.dataclass
 class GeneratedModuleImportOrchestrator:
     """
@@ -154,11 +168,13 @@ class GeneratedModuleImportOrchestrator:
         return used_names
 
     def _collect_runtime_names(self, generated_classes: list[libcst.ClassDef]) -> set[str]:
-        """Return all names used inside decorator expressions in the given classes."""
-        collector = RuntimeNameCollector()
+        """Return all names used inside decorator or base class expressions in the given classes."""
+        runtime_collector = RuntimeNameCollector()
+        base_class_collector = BaseClassNameCollector()
         for class_def in generated_classes:
-            class_def.visit(collector)
-        return collector.names
+            class_def.visit(runtime_collector)
+            class_def.visit(base_class_collector)
+        return runtime_collector.names | base_class_collector.names
 
     def _add_required_imports(self, used_names: set[str] | None = None) -> None:
         """Record the standard imports that every generated module needs."""
