@@ -36,7 +36,7 @@ class ConstraintCollection:
 
     def get_equality_constraint_blocks(
         self,
-    ) -> dict[EnforcementStrategy, list[GiskardEqualityConstraint]]:
+    ) -> dict[type[EnforcementStrategy], list[GiskardEqualityConstraint]]:
         result = defaultdict(list)
         for c in self._constraints:
             if isinstance(c, GiskardEqualityConstraint):
@@ -45,7 +45,7 @@ class ConstraintCollection:
 
     def get_inequality_constraint_blocks(
         self,
-    ) -> dict[EnforcementStrategy, list[GiskardInequalityConstraint]]:
+    ) -> dict[type[EnforcementStrategy], list[GiskardInequalityConstraint]]:
         result = defaultdict(list)
         for c in self._constraints:
             if isinstance(c, GiskardInequalityConstraint):

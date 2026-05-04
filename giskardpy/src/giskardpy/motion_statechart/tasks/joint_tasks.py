@@ -2,6 +2,11 @@ from dataclasses import field, dataclass
 from typing import Optional, Dict, List, Tuple, Union
 
 import krrood.symbolic_math.symbolic_math as sm
+from giskardpy.qp.constraint import (
+    GiskardEqualityConstraint,
+    PositionStrategy,
+    IntegralStrategy,
+)
 from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.derivatives import Derivatives
@@ -59,12 +64,15 @@ class JointPositionList(Task):
                 error = sm.shortest_angular_distance(current, target)
             else:
                 error = target - current
-            artifacts.constraints.add_equality_constraint(
-                name=str(connection.name),
-                reference_velocity=velocity,
-                equality_bound=error,
-                quadratic_weight=self.weight,
-                task_expression=current,
+            artifacts.constraints.add_constraint(
+                GiskardEqualityConstraint(
+                    name=str(connection.name),
+                    normalization_factor=velocity,
+                    bound=error,
+                    quadratic_weight=self.weight,
+                    expression=current,
+                    enforcement_strategy=IntegralStrategy,
+                )
             )
             errors.append(sm.abs(error) < self.threshold)
         artifacts.observation = sm.logic_all(sm.Vector(errors))

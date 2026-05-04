@@ -125,64 +125,65 @@ class QPDataSymbolic:
         self.free_variable_names = direct_limits.names
 
         system_dynamics_strategy = SystemDynamicsStrategy(
-            self.degrees_of_freedom, self.config
+            degrees_of_freedom=self.degrees_of_freedom,
+            config=self.config,
+            constraints=[],
         )
-        eq_matrix_dofs.append(system_dynamics_strategy.create_matrix([]))
-        eq_matrix_slack.append(system_dynamics_strategy.create_slack_matrix([]))
+        eq_matrix_dofs.append(system_dynamics_strategy.create_matrix())
+        eq_matrix_slack.append(system_dynamics_strategy.create_slack_matrix())
         eq_bounds.append(system_dynamics_strategy.create_bounds([], []))
-        self.eq_constraint_names.extend(system_dynamics_strategy.create_names([]))
+        self.eq_constraint_names.extend(system_dynamics_strategy.create_names())
 
         for (
             enforcement_strategy,
             constraints,
         ) in self.constraint_collection.get_equality_constraint_blocks().items():
-            strategy = enforcement_strategy(self.degrees_of_freedom, self.config)
+            strategy = enforcement_strategy(
+                degrees_of_freedom=self.degrees_of_freedom,
+                config=self.config,
+                constraints=constraints,
+            )
 
-            slack_variables = strategy.create_slack_variables(constraints)
+            slack_variables = strategy.create_slack_variables()
             quadratic_weights.append(slack_variables.quadratic_weights)
             linear_weights.append(slack_variables.linear_weights)
             box_lower_constraints.append(slack_variables.lower_bounds)
             box_upper_constraints.append(slack_variables.upper_bounds)
 
-            matrix = strategy.create_matrix(constraints)
-            slack_matrix = strategy.create_slack_matrix(constraints)
-            bounds = strategy.create_bounds(
-                [c.bound for c in constraints],
-                [c.normalization_factor for c in constraints],
-            )
+            matrix = strategy.create_matrix()
+            slack_matrix = strategy.create_slack_matrix()
+            bounds = strategy.create_equality_bounds()
             eq_matrix_dofs.append(matrix)
             eq_matrix_slack.append(slack_matrix)
             eq_bounds.append(bounds)
-            self.eq_constraint_names.extend(strategy.create_names(constraints))
+            self.eq_constraint_names.extend(strategy.create_names())
             self.free_variable_names.extend(slack_variables.names)
 
         for (
             enforcement_strategy,
             constraints,
         ) in self.constraint_collection.get_inequality_constraint_blocks().items():
-            strategy = enforcement_strategy(self.degrees_of_freedom, self.config)
+            strategy = enforcement_strategy(
+                degrees_of_freedom=self.degrees_of_freedom,
+                config=self.config,
+                constraints=constraints,
+            )
 
-            slack_variables = strategy.create_slack_variables(constraints)
+            slack_variables = strategy.create_slack_variables()
             quadratic_weights.append(slack_variables.quadratic_weights)
             linear_weights.append(slack_variables.linear_weights)
             box_lower_constraints.append(slack_variables.lower_bounds)
             box_upper_constraints.append(slack_variables.upper_bounds)
 
-            matrix = strategy.create_matrix(constraints)
-            slack_matrix = strategy.create_slack_matrix(constraints)
-            lower_bound = strategy.create_bounds(
-                [c.lower_bound for c in constraints],
-                [c.normalization_factor for c in constraints],
-            )
-            upper_bound = strategy.create_bounds(
-                [c.upper_bound for c in constraints],
-                [c.normalization_factor for c in constraints],
-            )
+            matrix = strategy.create_matrix()
+            slack_matrix = strategy.create_slack_matrix()
+            lower_bound = strategy.create_lower_bounds()
+            upper_bound = strategy.create_upper_bounds()
             ineq_matrix_dofs.append(matrix)
             ineq_matrix_slack.append(slack_matrix)
             lower_bounds.append(lower_bound)
             upper_bounds.append(upper_bound)
-            self.neq_constraint_names.extend(strategy.create_names(constraints))
+            self.neq_constraint_names.extend(strategy.create_names())
             self.free_variable_names.extend(slack_variables.names)
 
         self.quadratic_weights = sm.concatenate(*quadratic_weights)

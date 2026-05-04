@@ -10,7 +10,7 @@ from typing import List, TYPE_CHECKING, Type
 from uuid import UUID
 
 import numpy as np
-from typing_extensions import Self
+from typing_extensions import Self, Callable
 
 import giskardpy.utils.math as gm
 import krrood.symbolic_math.symbolic_math as sm
@@ -505,26 +505,40 @@ class DofLimits(DirectLimits):
 @dataclass
 class EnforcementStrategy(ABC):
     degrees_of_freedom: list[DegreeOfFreedom]
+    constraints: list[GiskardConstraint]
     config: QPControllerConfig
 
     @abstractmethod
-    def create_matrix(self, constraints: list[GiskardConstraint]) -> Matrix: ...
+    def create_matrix(self) -> Matrix: ...
 
     @abstractmethod
-    def create_slack_matrix(self, constraints: list[GiskardConstraint]) -> Matrix: ...
+    def create_slack_matrix(self) -> Matrix: ...
 
     @abstractmethod
-    def create_names(self, constraints: list[GiskardConstraint]) -> list[str]: ...
+    def create_names(self) -> list[str]: ...
 
     @abstractmethod
-    def create_slack_variables(
-        self, constraints: list[GiskardConstraint]
-    ) -> DirectLimits: ...
+    def create_slack_variables(self) -> DirectLimits: ...
 
     @abstractmethod
     def create_bounds(
-        self, bounds: list[Scalar], normalization_numbers: list[float]
+        self, bounds_getter: Callable[GiskardConstraint, Scalar]
     ) -> Vector: ...
+
+    def create_lower_bounds(self) -> Vector:
+        for c in self.constraints:
+            assert isinstance(c, GiskardInequalityConstraint)
+        return self.create_bounds(lambda c: c.lower_bound)
+
+    def create_upper_bounds(self) -> Vector:
+        for c in self.constraints:
+            assert isinstance(c, GiskardInequalityConstraint)
+        return self.create_bounds(lambda c: c.upper_bound)
+
+    def create_equality_bounds(self) -> Vector:
+        for c in self.constraints:
+            assert isinstance(c, GiskardEqualityConstraint)
+        return self.create_bounds(lambda c: c.bound)
 
     @property
     def number_of_free_variables(self) -> int:
@@ -552,10 +566,6 @@ class EnforcementStrategy(ABC):
 
 
 @dataclass
-class PositionStrategy(EnforcementStrategy): ...
-
-
-@dataclass
 class IntegralStrategy(EnforcementStrategy):
     """
     Equality constraints have the form:
@@ -577,11 +587,11 @@ class IntegralStrategy(EnforcementStrategy):
         |-----------------------------------------------------|
     """
 
-    def create_matrix(self, constraints: list[GiskardConstraint]) -> Matrix:
-        if len(constraints) == 0:
+    def create_matrix(self) -> Matrix:
+        if len(self.constraints) == 0:
             return sm.Matrix()
         jacobian = (
-            sm.Vector([c.expression for c in constraints]).jacobian(
+            sm.Vector([c.expression for c in self.constraints]).jacobian(
                 variables=self.position_variables
             )
             * self.config.mpc_dt
@@ -591,16 +601,14 @@ class IntegralStrategy(EnforcementStrategy):
             + [sm.Matrix.zeros(jacobian.shape[0], self.number_of_jerk_columns)]
         )
 
-    def create_slack_matrix(self, constraints: list[GiskardConstraint]) -> Matrix:
-        if len(constraints) == 0:
+    def create_slack_matrix(self) -> Matrix:
+        if len(self.constraints) == 0:
             return sm.Matrix()
-        return sm.Matrix.diag([self.config.mpc_dt for _ in constraints])
+        return sm.Matrix.diag([self.config.mpc_dt for _ in self.constraints])
 
-    def create_slack_variables(
-        self, constraints: list[GiskardConstraint]
-    ) -> DirectLimits:
+    def create_slack_variables(self) -> DirectLimits:
         return SlackLimits.from_constraints(
-            constraints=constraints,
+            constraints=self.constraints,
             config=self.config,
         )
 
@@ -630,22 +638,40 @@ class IntegralStrategy(EnforcementStrategy):
         )
 
     def create_bounds(
-        self, bounds: list[Scalar], normalization_numbers: list[float]
+        self, bounds_getter: Callable[GiskardConstraint, Scalar]
     ) -> Vector:
         return Vector(
             [
                 self.capped_bound(
-                    bound,
+                    bounds_getter(c),
                     self.config.mpc_dt,
-                    normalization_number,
+                    c.normalization_factor,
                     self.config.velocity_horizon,
                 )
-                for bound, normalization_number in zip(bounds, normalization_numbers)
+                for c in self.constraints
             ]
         )
 
-    def create_names(self, constraints: list[GiskardConstraint]) -> list[str]:
-        return [c.name for c in constraints]
+    def create_names(self) -> list[str]:
+        return [c.name for c in self.constraints]
+
+
+@dataclass
+class PositionStrategy(IntegralStrategy):
+    def create_bounds(
+        self, bounds_getter: Callable[GiskardConstraint, Scalar]
+    ) -> Vector:
+        return Vector(
+            [
+                self.capped_bound(
+                    bounds_getter(c) - c.expression,
+                    self.config.mpc_dt,
+                    c.normalization_factor,
+                    self.config.velocity_horizon,
+                )
+                for c in self.constraints
+            ]
+        )
 
 
 @dataclass
@@ -699,12 +725,14 @@ class VelocityStrategy(EnforcementStrategy):
         |--------------------------------------------------------------------------------|
     """
 
-    def create_matrix(self, constraints: list[GiskardConstraint]) -> Matrix:
-        number_of_vel_rows = len(constraints) * (self.config.prediction_horizon - 2)
+    def create_matrix(self) -> Matrix:
+        number_of_vel_rows = len(self.constraints) * (
+            self.config.prediction_horizon - 2
+        )
         if number_of_vel_rows == 0:
             return sm.Matrix()
         jacobian = (
-            sm.Vector([c.expression for c in constraints]).jacobian(
+            sm.Vector([c.expression for c in self.constraints]).jacobian(
                 variables=self.position_variables
             )
             * self.config.mpc_dt
@@ -724,24 +752,22 @@ class VelocityStrategy(EnforcementStrategy):
             ]
         )
 
-    def create_slack_matrix(self, constraints: list[GiskardConstraint]) -> Matrix:
-        if len(constraints) == 0:
+    def create_slack_matrix(self) -> Matrix:
+        if len(self.constraints) == 0:
             return sm.Matrix()
         num_slack_variables = sum(
-            self.config.prediction_horizon - 2 for c in constraints
+            self.config.prediction_horizon - 2 for c in self.constraints
         )
         return sm.Matrix.eye(num_slack_variables) * self.config.mpc_dt
 
-    def create_slack_variables(
-        self, constraints: list[GiskardConstraint]
-    ) -> DirectLimits:
+    def create_slack_variables(self) -> DirectLimits:
         lower_slack = []
         upper_slack = []
         quadratic_weights = []
         linear_weights = []
         names = []
         for t in range(self.config.prediction_horizon):
-            for c in constraints:
+            for c in self.constraints:
                 if t < self.config.prediction_horizon - 2:
                     lower_slack.append(c.lower_slack_limit)
                     upper_slack.append(c.upper_slack_limit)
@@ -766,18 +792,18 @@ class VelocityStrategy(EnforcementStrategy):
         return quadratic_weight * (1 / sm.Scalar(normalization_factor)) ** 2
 
     def create_bounds(
-        self, bounds: list[Scalar], normalization_numbers: list[float]
+        self, bounds_getter: Callable[GiskardConstraint, Scalar]
     ) -> Vector:
         bounds2 = []
         for t in range(self.config.control_horizon):
-            for b in bounds:
-                bounds2.append(b * self.config.mpc_dt)
+            for c in self.constraints:
+                bounds2.append(bounds_getter(c) * self.config.mpc_dt)
         return Vector(bounds2)
 
-    def create_names(self, constraints: list[GiskardConstraint]) -> list[str]:
+    def create_names(self) -> list[str]:
         names = []
         for t in range(self.config.control_horizon):
-            for c in constraints:
+            for c in self.constraints:
                 names.append(f"t{t:03}/{c.name}")
         return names
 
@@ -832,7 +858,7 @@ class SystemDynamicsStrategy(EnforcementStrategy):
         |------------------|   |-----------------------------------------------|   | j_4*dt**2 |
     """
 
-    def create_matrix(self, constraints: list[GiskardConstraint]) -> Matrix:
+    def create_matrix(self) -> Matrix:
         matrix = np.zeros(
             (
                 self.number_of_jerk_columns,
@@ -876,19 +902,17 @@ class SystemDynamicsStrategy(EnforcementStrategy):
 
         return sm.Matrix(matrix)
 
-    def create_slack_matrix(self, constraints: list[GiskardConstraint]) -> Matrix:
+    def create_slack_matrix(self) -> Matrix:
         return sm.Matrix.zeros(self.number_of_jerk_columns, 0)
 
-    def create_names(self, constraints: list[GiskardConstraint]) -> list[str]:
+    def create_names(self) -> list[str]:
         names = []
         for k in range(self.config.prediction_horizon):
             for dof in self.degrees_of_freedom:
                 names.append(f"{dof.name} k_{k} vel/jerk link")
         return names
 
-    def create_slack_variables(
-        self, constraints: list[GiskardConstraint]
-    ) -> DirectLimits:
+    def create_slack_variables(self) -> DirectLimits:
         return SlackLimits()
 
     def create_bounds(
@@ -904,7 +928,7 @@ class SystemDynamicsStrategy(EnforcementStrategy):
         return res
 
 
-@dataclass
+@dataclass(kw_only=True)
 class GiskardConstraint(ABC):
     """
     Defines a (slack-relaxed) constraint on expression for a quadratic program.
@@ -914,12 +938,9 @@ class GiskardConstraint(ABC):
 
     expression: Scalar
 
-    lower_slack_limit: sm.ScalarData
-    upper_slack_limit: sm.ScalarData
-
     quadratic_weight: sm.ScalarData
 
-    linear_weight: sm.ScalarData
+    linear_weight: sm.ScalarData = field(default=0)
 
     normalization_factor: NormalizationFactors
     """
@@ -935,6 +956,9 @@ class GiskardConstraint(ABC):
     """
 
     enforcement_strategy: type[EnforcementStrategy]
+
+    lower_slack_limit: sm.ScalarData = field(default=-np.inf)
+    upper_slack_limit: sm.ScalarData = field(default=np.inf)
 
 
 @dataclass
