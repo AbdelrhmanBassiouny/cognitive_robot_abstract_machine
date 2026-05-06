@@ -2436,6 +2436,44 @@ class Vector3MappingDAO(
     )
 
 
+class WorldDAO(
+    SymbolDAO,
+    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.World],
+):
+
+    __tablename__ = "WorldDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    id: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+
+    bodies: Mapped[builtins.list[WorldDAO_bodies_association]] = relationship(
+        "WorldDAO_bodies_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[WorldDAO_bodies_association.source_worlddao_id]",
+    )
+    connections: Mapped[builtins.list[WorldDAO_connections_association]] = relationship(
+        "WorldDAO_connections_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[WorldDAO_connections_association.source_worlddao_id]",
+    )
+    views: Mapped[builtins.list[WorldDAO_views_association]] = relationship(
+        "WorldDAO_views_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[WorldDAO_views_association.source_worlddao_id]",
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "WorldDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+    }
+
+
 class WorldMappingDAO(
     Base, DataAccessObject[semantic_digital_twin.orm.model.WorldMapping]
 ):
@@ -2480,44 +2518,6 @@ class WorldMappingDAO(
     )
 
 
-class WorldDAO(
-    SymbolDAO,
-    DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.World],
-):
-
-    __tablename__ = "WorldDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    id: Mapped[builtins.int] = mapped_column(use_existing_column=True)
-
-    bodies: Mapped[builtins.list[WorldDAO_bodies_association]] = relationship(
-        "WorldDAO_bodies_association",
-        collection_class=builtins.list,
-        cascade="all, delete-orphan",
-        foreign_keys="[WorldDAO_bodies_association.source_worlddao_id]",
-    )
-    connections: Mapped[builtins.list[WorldDAO_connections_association]] = relationship(
-        "WorldDAO_connections_association",
-        collection_class=builtins.list,
-        cascade="all, delete-orphan",
-        foreign_keys="[WorldDAO_connections_association.source_worlddao_id]",
-    )
-    views: Mapped[builtins.list[WorldDAO_views_association]] = relationship(
-        "WorldDAO_views_association",
-        collection_class=builtins.list,
-        cascade="all, delete-orphan",
-        foreign_keys="[WorldDAO_views_association.source_worlddao_id]",
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "WorldDAO",
-        "inherit_condition": database_id == SymbolDAO.database_id,
-    }
-
-
 class WorldEntityDAO(
     SymbolDAO,
     DataAccessObject[test.krrood_test.dataset.semantic_world_like_classes.WorldEntity],
@@ -2530,13 +2530,13 @@ class WorldEntityDAO(
     )
 
     world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldMappingDAO.database_id", use_alter=True),
+        ForeignKey("WorldDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    world: Mapped[WorldMappingDAO] = relationship(
-        "WorldMappingDAO", uselist=False, foreign_keys=[world_id], post_update=True
+    world: Mapped[WorldDAO] = relationship(
+        "WorldDAO", uselist=False, foreign_keys=[world_id], post_update=True
     )
 
     __mapper_args__ = {

@@ -7,7 +7,9 @@ import pandas as pd
 from typing import (
     Any,
     Dict,
+    Iterator,
     List,
+    Optional,
     Tuple,
     Type,
     Set,
@@ -76,188 +78,72 @@ def get_python_type_from_sqlalchemy_column(column: Column):
     return python_type
 
 
-def get_features_of_class_bfs(
-    example_instance: DataAccessObject,
-    symbolic_attribute_access: Variable,
-):
-    """
-    BFS version: traverses the object graph level-by-level instead of recursively (DFS).
-    """
-
-    result = []
-    seen = set()
-    queue = deque()
-    queue.append((example_instance, symbolic_attribute_access))
-
-    while queue:
-        current_instance, current_symbolic = queue.popleft()
-
-        if id(current_instance) in seen:
-            continue
-        seen.add(id(current_instance))
-
-        specification = RSPNSpecification(type(current_instance))
-
-        for attribute in specification.attributes:
-            value = getattr(current_instance, attribute.key)
-
-            if not isinstance(value, compatible_types):
-                continue
-
-            current_symbolic_attribute_access = getattr(
-                current_symbolic, attribute.name
-            )
-
-            current_symbolic_attribute_access._type_ = (
-                get_python_type_from_sqlalchemy_column(attribute)
-            )
-
-            result.append(current_symbolic_attribute_access)
-
-        # Enqueue children instead of recursing
-        for part in specification.unique_parts:
-            value = getattr(current_instance, part)
-
-            if value is None:
-                continue
-
-            queue.append((value, getattr(current_symbolic, part)))
-
-    return result
-
-
-def get_features_of_class(
-    example_instance: DataAccessObject,
-    symbolic_attribute_access: Variable,
-    result: List,
-    seen: Set,
-):
-    """
-    Get all the class attributes of the given instance that are compatible with the supported types and return them as a list of symbolic attribute accesses.
-    :param example_instance: The instance to extract features from.
-    :param symbolic_attribute_access: The symbolic variable representing the instance, used to create symbolic accesses to its attributes.
-    :param result: The list to append the extracted features to.
-    :param seen: A set to keep track of already seen instances to avoid infinite recursion.
-    :return: A list of symbolic attribute accesses for the compatible attributes of the instance.
-    """
-    if id(example_instance) in seen:
-        return result
-    seen.add(id(example_instance))
-
-    specification = RSPNSpecification(type(example_instance))
-    for attribute in specification.attributes:
-
-        value = getattr(example_instance, attribute.key)
-        if not isinstance(value, compatible_types):
-            continue
-
-        current_symbolic_attribute_access = getattr(
-            symbolic_attribute_access, attribute.name
-        )
-
-        current_symbolic_attribute_access._type_ = (
-            get_python_type_from_sqlalchemy_column(attribute)
-        )
-        result.append(current_symbolic_attribute_access)
-
-    for part in specification.unique_parts:
-        value = getattr(example_instance, part)
-        if value is None:
-            continue
-        result = get_features_of_class(
-            value, getattr(symbolic_attribute_access, part), result, seen
-        )
-    return result
-
-
-def LearnRSPN(cls: Any, instances: List[DataAccessObject]) -> RSPNTemplate:
-    """
-    Learn an RSPN for class C.
-
-    - Attributes become univariate leaves (Gaussian for numeric, Bernoulli for boolean)
-    - Relation aggregates become Bernoulli leaves over presence (1 if present, else 0)
-    - Parts recurse into their class (unique part: map one-to-one; exchangeable part: flatten list)
-    - Independent partitions become product nodes; clustering on instances becomes sum nodes with weights
-
-    Returns the root node (ProductUnit or SumUnit) within a ProbabilisticCircuit.
-    """
-    features = get_features_of_class_bfs(instances[0], variable(cls, []))
-    if not features:
-        raise ValueError(f"No features found for class {cls}")
-
-    feature_extractor = FeatureExtractor(features)
-
-    df: pd.DataFrame = feature_extractor.create_dataframe(instances)
-    df = preprocess_dataframe(features, df)
-    df = df.sort_index(axis=1)
-    variables = infer_variables_from_dataframe(df)
-
-    jpt = JointProbabilityTree(variables, min_samples_per_leaf=2)
-    jpt = jpt.fit(df)
-    rspn = RSPNTemplate(RSPNSpecification(get_dao_class(cls)), jpt)
-    return rspn
-
-
 @dataclass
 class FeatureExtractor:
     """
     A class to extract features from a given class. Features are all attributes of the class, propagating custom types/objects down. The features are represented as symbolic variables.
     """
 
-    features: List[MappedVariable]
+    instances: Union[Any, List[Any]]
     """
-    The class to extract features from.
+    The instances to extract features from. Can be a single instance or a list.
     """
 
-    # @property
-    # def features(self):
-    #     result = []
-    #     seen = set()
-    #     queue = deque()
-    #     queue.append((example_instance, symbolic_attribute_access))
-    #
-    #     while queue:
-    #         current_instance, current_symbolic = queue.popleft()
-    #
-    #         if id(current_instance) in seen:
-    #             continue
-    #         seen.add(id(current_instance))
-    #
-    #         specification = RSPNSpecification(type(current_instance))
-    #
-    #         result.append(self._process_attributes(specification.attributes))
-    #
-    #         # Enqueue children instead of recursing
-    #         for part in specification.unique_parts:
-    #             value = getattr(current_instance, part)
-    #
-    #             if value is None:
-    #                 continue
-    #
-    #             queue.append((value, getattr(current_symbolic, part)))
-    #
-    #     return result
-    #
-    # def _process_attributes(self, attributes: Iterable, current_instance, current_symbolic):
-    #     result = []
-    #     for attribute in attributes:
-    #         value = getattr(current_instance, attribute.key)
-    #
-    #         if not isinstance(value, compatible_types):
-    #             continue
-    #
-    #         current_symbolic_attribute_access = getattr(
-    #             current_symbolic, attribute.name
-    #         )
-    #
-    #         current_symbolic_attribute_access._type_ = (
-    #             get_python_type_from_sqlalchemy_column(attribute)
-    #         )
-    #
-    #         result.append(current_symbolic_attribute_access)
-    #     return result
-    #
-    # def _process
+    symbolic_root: Optional[Variable] = None
+    """
+    The root symbolic variable to use when traversing the object graph. Defaults to variable(type(instances[0]), []).
+    """
+
+    def __post_init__(self):
+        if not isinstance(self.instances, list):
+            self.instances = [self.instances]
+
+    @property
+    def features(self) -> List[MappedVariable]:
+        root = self.symbolic_root or variable(type(self.instances[0]), [])
+        return self._extract_features(self.instances[0], root)
+
+    def _extract_features(
+        self, example_instance: DataAccessObject, symbolic_root: Variable
+    ) -> List[MappedVariable]:
+        result = []
+        seen = set()
+        queue = deque()
+        queue.append((example_instance, symbolic_root))
+
+        while queue:
+            current_instance, current_symbolic = queue.popleft()
+
+            if id(current_instance) in seen:
+                continue
+            seen.add(id(current_instance))
+
+            specification = RSPNSpecification(type(current_instance))
+
+            for attribute in specification.attributes:
+                value = getattr(current_instance, attribute.key)
+
+                if not isinstance(value, compatible_types):
+                    continue
+
+                symbolic_attribute = getattr(current_symbolic, attribute.name)
+                symbolic_attribute._type_ = get_python_type_from_sqlalchemy_column(
+                    attribute
+                )
+                result.append(symbolic_attribute)
+
+            for part in specification.unique_parts:
+                value = getattr(current_instance, part)
+
+                if value is None:
+                    continue
+
+                queue.append((value, getattr(current_symbolic, part)))
+
+        return result
+
+    def __iter__(self) -> Iterator[MappedVariable]:
+        return iter(self.features)
 
     def apply_mapping(self, instance: Any) -> List:
         return [
@@ -289,3 +175,31 @@ def preprocess_dataframe(
         elif feature._type_ not in compatible_types and feature._type_ is not None:
             raise TypeError(f"Unsupported type {feature._type_} for column {column}")
     return df
+
+
+def LearnRSPN(cls: Any, instances: List[DataAccessObject]) -> RSPNTemplate:
+    """
+    Learn an RSPN for class C.
+
+    - Attributes become univariate leaves (Gaussian for numeric, Bernoulli for boolean)
+    - Relation aggregates become Bernoulli leaves over presence (1 if present, else 0)
+    - Parts recurse into their class (unique part: map one-to-one; exchangeable part: flatten list)
+    - Independent partitions become product nodes; clustering on instances becomes sum nodes with weights
+
+    Returns the root node (ProductUnit or SumUnit) within a ProbabilisticCircuit.
+    """
+
+    feature_extractor = FeatureExtractor(instances)
+
+    if not feature_extractor.features:
+        raise ValueError(f"No features found for class {cls}")
+
+    df: pd.DataFrame = feature_extractor.create_dataframe(instances)
+    df = preprocess_dataframe(feature_extractor.features, df)
+    df = df.sort_index(axis=1)
+    variables = infer_variables_from_dataframe(df)
+
+    jpt = JointProbabilityTree(variables, min_samples_per_leaf=2)
+    jpt = jpt.fit(df)
+    rspn = RSPNTemplate(RSPNSpecification(get_dao_class(cls)), jpt)
+    return rspn

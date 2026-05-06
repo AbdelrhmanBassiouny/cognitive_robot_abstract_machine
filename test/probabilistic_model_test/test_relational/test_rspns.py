@@ -29,10 +29,8 @@ from krrood_test.dataset.example_classes import (
 )
 from probabilistic_model.probabilistic_circuit.relational.learn_rspn import (
     LearnRSPN,
-    get_features_of_class,
     FeatureExtractor,
     preprocess_dataframe,
-    get_features_of_class_bfs,
 )
 from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
 from pycram.robot_plans.actions.composite.transporting import MoveAndPickUpAction
@@ -148,9 +146,7 @@ def data_preparation(mutable_model_world):
 def test_move_and_pick_up(database, mutable_model_world, data_preparation):
     samples, circuit = data_preparation
 
-    feature_extractor = FeatureExtractor(
-        get_features_of_class_bfs(samples[0], variable(MoveAndPickUpAction, []))
-    )
+    feature_extractor = FeatureExtractor(samples)
     dataframe = feature_extractor.create_dataframe(samples)
     dataframe = preprocess_dataframe(feature_extractor.features, dataframe)
     sorted = dataframe.sort_index(axis=1)
@@ -175,19 +171,15 @@ def test_move_and_pick_up(database, mutable_model_world, data_preparation):
 def test_features_extraction(database, data_preparation):
     values, move_and_pick_up_distribution = data_preparation
 
-    features = get_features_of_class_bfs(
-        to_dao(values[0]), variable(MoveAndPickUpAction, [])
-    )
-
-    feature_extractor = FeatureExtractor(features)
     to_data_access_object_state = ToDataAccessObjectState()
     data_access_objects = [
         to_dao(sample, state=to_data_access_object_state) for sample in values
     ]
+    feature_extractor = FeatureExtractor(data_access_objects)
     dataframe = feature_extractor.create_dataframe(data_access_objects)
 
     assert [
         dataframe[column].dtype in (np.float64, np.int64)
         for column in dataframe.columns
     ]
-    assert dataframe.shape == (len(values), len(features))
+    assert dataframe.shape == (len(values), len(feature_extractor.features))

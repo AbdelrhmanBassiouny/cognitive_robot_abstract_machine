@@ -34,9 +34,7 @@ from krrood.parametrization.random_events_translator import (
     WhereExpressionToRandomEventTranslator,
 )
 from probabilistic_model.probabilistic_circuit.relational.learn_rspn import (
-    get_features_of_class,
     FeatureExtractor,
-    get_features_of_class_bfs,
 )
 from random_events.interval import singleton
 from random_events.product_algebra import Event, SimpleEvent
@@ -178,11 +176,8 @@ class UnderspecifiedParameters:
         dao_state = ToDataAccessObjectState()
 
         for feature in FeatureExtractor(
-            get_features_of_class_bfs(
-                to_dao(attribute_match.assigned_value, dao_state),
-                variable(type(attribute_match.assigned_value), []),
-            )
-        ).features:
+            to_dao(attribute_match.assigned_value, dao_state)
+        ):
             result[feature._name_] = random_events.variable.Continuous(
                 name=feature._name_
             )
@@ -263,15 +258,12 @@ class UnderspecifiedParameters:
         hashes = [hash(obj) for obj in domain_objects]
         data_access_objects = [to_dao(obj, state=state) for obj in domain_objects]
 
-        features = get_features_of_class_bfs(
-            data_access_objects[0],
-            attribute_match.assigned_variable,
+        extractor = FeatureExtractor(
+            data_access_objects, symbolic_root=attribute_match.assigned_variable
         )
-        extractor = FeatureExtractor(features)
 
         result = {}
 
-        # extract feature variables
         for feature in extractor.features:
             feature_name = feature.get_clean_name_from_mapped_variable()
             name = (
@@ -291,7 +283,7 @@ class UnderspecifiedParameters:
             current_feature_values = extractor.apply_mapping(dao)
 
             data = {identifier_variable: hash_}
-            for feature, value in zip(features, current_feature_values):
+            for feature, value in zip(extractor.features, current_feature_values):
                 feature_name = feature.get_clean_name_from_mapped_variable()
                 name = (
                     f"{attribute_match.name_from_variable_access_path}.{feature_name}"
