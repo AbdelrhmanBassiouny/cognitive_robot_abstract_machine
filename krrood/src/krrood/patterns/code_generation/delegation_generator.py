@@ -317,7 +317,9 @@ class DelegationGenerator:
             if klass not in self.already_covered_bases:
                 continue
             nearest_covered_base = klass
-            sub = GenericTypeSubstitution.from_specialization(klass, defining_base)
+            sub = GenericTypeSubstitution.from_specialization(
+                klass, defining_base, trace_unsubscripted=True
+            )
             if sub.has_substitutions:
                 result = sub.apply(base_type)
                 if result.resolved:

@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from semantic_digital_twin.semantic_annotations.mixins import (
         HasRootBody,
         HasSupportingSurface,
-        TBody,
     )
     from semantic_digital_twin.semantic_annotations.semantic_annotations import (
         Bottle,
@@ -151,14 +150,6 @@ class RoleForBottle(RoleForHasSupportingSurface, ABC):
     @abstractmethod
     def role_taker(self) -> Bottle: ...
     @property
-    def root(self) -> TBody:
-        return self.role_taker.root
-
-    @root.setter
-    def root(self, value: TBody):
-        self.role_taker.root = value
-
-    @property
     def objects(self) -> list[TLiquid]:
         return self.role_taker.objects
 
@@ -172,14 +163,6 @@ class RoleForTinCan(RoleForHasStorageSpace, RoleForHasRootBody, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> TinCan: ...
-    @property
-    def root(self) -> TBody:
-        return self.role_taker.root
-
-    @root.setter
-    def root(self, value: TBody):
-        self.role_taker.root = value
-
     @property
     def objects(self) -> list[THasRootBody]:
         return self.role_taker.objects

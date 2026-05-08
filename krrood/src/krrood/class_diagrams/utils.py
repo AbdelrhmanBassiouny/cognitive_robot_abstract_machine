@@ -273,7 +273,11 @@ class GenericTypeSubstitution:
 
     @classmethod
     def from_specialization(
-        cls, concrete_class: type, generic_base: type
+        cls,
+        concrete_class: type,
+        generic_base: type,
+        *,
+        trace_unsubscripted: bool = False,
     ) -> GenericTypeSubstitution:
         """
         Build a substitution from how concrete_class specializes generic_base.
@@ -286,10 +290,21 @@ class GenericTypeSubstitution:
 
         :param concrete_class: The class that specializes generic_base.
         :param generic_base: The generic base class being specialized.
+        :param trace_unsubscripted: When True, fall back to ``_trace_generic_params``
+            when ``get_generic_type_param`` returns nothing.  This handles chains where
+            an intermediate class inherits the generic base *without* a subscript
+            (e.g. ``Shelf(CargoCrate)`` where ``CargoCrate(Box[Cargo])``).  The
+            fallback is not applied by default because it would incorrectly add
+            re-declarations for unsubscripted intermediates that already inherit the
+            narrowing from a more-base ancestor.
         :return: A GenericTypeSubstitution representing the TypeVar mappings.
         """
         params = getattr(generic_base, "__parameters__", ())
         args = get_generic_type_param(concrete_class, generic_base) or ()
+        if not args and params and trace_unsubscripted:
+            traced = _trace_generic_params(concrete_class, generic_base)
+            if traced:
+                args = traced
         substitution = {
             _resolve_annotation_typevar(p, generic_base): a
             for p, a in zip(params, args)

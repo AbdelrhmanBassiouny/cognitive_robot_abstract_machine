@@ -11,6 +11,7 @@ from ..dataset.role_and_ontology import (
     subclass_safe_generic_takers,
     independent_typevar_takers,
     two_role_taker_narrowing,
+    unsubscripted_intermediate_taker,
 )
 
 import libcst as cst
@@ -444,3 +445,71 @@ def test_two_role_taker_narrowing_method_details(two_role_taker_narrowing_compar
 def test_two_role_taker_narrowing_imports(two_role_taker_narrowing_comparator):
     """Generated mixin imports TBaseEntity and TSpecificEntity."""
     two_role_taker_narrowing_comparator.compare_imports()
+
+
+# ---------------------------------------------------------------------------
+# Unsubscripted intermediate taker tests
+# Regression: when a role taker (Shelf) inherits a concrete intermediate
+# (CargoCrate(Box[Cargo])) without subscript, from_specialization(Shelf, Box)
+# returned an empty substitution because get_generic_type_param skips
+# unsubscripted bases.  As a result, nearest_covered_type stayed as TBoxItem
+# and the derived role taker (Rack) got a spurious ``item -> Cargo``
+# re-declaration even though Shelf already covered it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def unsubscripted_intermediate_mixin_source():
+    transformer = RoleTransformer(unsubscripted_intermediate_taker, file_name_prefix=TRANSFORMED)
+    _, mixin_source = transformer.transform()[unsubscripted_intermediate_taker]
+    return mixin_source
+
+
+@pytest.fixture
+def unsubscripted_intermediate_mixin_comparator(unsubscripted_intermediate_mixin_source):
+    expected = get_ground_truth_module_source(unsubscripted_intermediate_taker, is_mixin=True)
+    return get_comparator_for_modules(unsubscripted_intermediate_mixin_source, expected)
+
+
+def test_unsubscripted_intermediate_item_not_redeclared_in_rack(unsubscripted_intermediate_mixin_source):
+    """item must not appear in RoleForRack — it is already covered by RoleForShelf (via CargoCrate).
+
+    Regression: from_specialization(Shelf, Box) returned empty because Shelf inherits CargoCrate
+    without a subscript, so get_generic_type_param skipped CargoCrate.  nearest_covered_type
+    stayed as TBoxItem instead of Cargo, causing a spurious ``item -> Cargo`` re-declaration.
+    """
+    rack_section = unsubscripted_intermediate_mixin_source.split("class RoleForRack")[1]
+    assert "def item" not in rack_section
+
+
+def test_unsubscripted_intermediate_item_narrowed_in_cargo_crate(unsubscripted_intermediate_mixin_source):
+    """item -> Cargo is generated for RoleForCargoCrate (the concrete intermediate)."""
+    cargo_crate_section = unsubscripted_intermediate_mixin_source.split("class RoleForCargoCrate")[1]
+    cargo_crate_section = cargo_crate_section.split("class RoleForShelf")[0]
+    assert "def item(self) -> Cargo" in cargo_crate_section
+
+
+def test_unsubscripted_intermediate_slot_narrowed_in_rack(unsubscripted_intermediate_mixin_source):
+    """slot -> TRackSlot is generated for RoleForRack (Rack narrows TShelfContent to TRackSlot)."""
+    rack_section = unsubscripted_intermediate_mixin_source.split("class RoleForRack")[1]
+    assert "def slot(self) -> TRackSlot" in rack_section
+
+
+def test_unsubscripted_intermediate_mixin_class_existence(unsubscripted_intermediate_mixin_comparator):
+    """All expected RoleFor classes are generated."""
+    unsubscripted_intermediate_mixin_comparator.compare_class_existence()
+
+
+def test_unsubscripted_intermediate_mixin_class_hierarchy(unsubscripted_intermediate_mixin_comparator):
+    """RoleForRack extends RoleForShelf which extends RoleForCargoCrate which extends RoleForBox."""
+    unsubscripted_intermediate_mixin_comparator.compare_class_hierarchy()
+
+
+def test_unsubscripted_intermediate_mixin_method_details(unsubscripted_intermediate_mixin_comparator):
+    """All methods and properties have correct signatures and return types."""
+    unsubscripted_intermediate_mixin_comparator.compare_method_details()
+
+
+def test_unsubscripted_intermediate_mixin_imports(unsubscripted_intermediate_mixin_comparator):
+    """Generated mixin imports TBoxItem, Cargo, TShelfContent, TRack, TRackSlot."""
+    unsubscripted_intermediate_mixin_comparator.compare_imports()
