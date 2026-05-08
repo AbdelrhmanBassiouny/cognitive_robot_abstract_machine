@@ -10,6 +10,7 @@ from ..dataset.role_and_ontology import (
     generic_typevar_takers,
     subclass_safe_generic_takers,
     independent_typevar_takers,
+    two_role_taker_narrowing,
 )
 
 import libcst as cst
@@ -384,3 +385,62 @@ def test_independent_typevar_mixin_method_details(independent_typevar_mixin_comp
 def test_independent_typevar_mixin_imports(independent_typevar_mixin_comparator):
     """Generated mixin imports the correct TypeVars and classes."""
     independent_typevar_mixin_comparator.compare_imports()
+
+
+# ---------------------------------------------------------------------------
+# Two role taker narrowing tests
+# Regression: when BOTH the defining base and the narrowing subclass are role
+# takers, the field ends up in taker_fields and was skipped before any type-
+# narrowing check, so the re-declaration was never generated.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def two_role_taker_narrowing_mixin_source():
+    transformer = RoleTransformer(two_role_taker_narrowing, file_name_prefix=TRANSFORMED)
+    _, mixin_source = transformer.transform()[two_role_taker_narrowing]
+    return mixin_source
+
+
+@pytest.fixture
+def two_role_taker_narrowing_comparator(two_role_taker_narrowing_mixin_source):
+    expected = get_ground_truth_module_source(two_role_taker_narrowing, is_mixin=True)
+    return get_comparator_for_modules(two_role_taker_narrowing_mixin_source, expected)
+
+
+def test_two_role_taker_narrowing_entity_redeclared_in_derived(two_role_taker_narrowing_mixin_source):
+    """entity in RoleForDerivedHolder must be redeclared as TSpecificEntity, not TBaseEntity.
+
+    Regression: when both BaseHolder and DerivedHolder are role takers, entity was in
+    taker_fields and skipped before the narrowing check, so no re-declaration was generated.
+    """
+    derived_section = two_role_taker_narrowing_mixin_source.split("class RoleForDerivedHolder")[1]
+    assert "def entity(self) -> TSpecificEntity" in derived_section
+    assert "def entity(self) -> TBaseEntity" not in derived_section
+
+
+def test_two_role_taker_narrowing_base_uses_base_typevar(two_role_taker_narrowing_mixin_source):
+    """entity in RoleForBaseHolder uses TBaseEntity (not narrowed)."""
+    base_section = two_role_taker_narrowing_mixin_source.split("class RoleForBaseHolder")[1]
+    base_section = base_section.split("class RoleForDerivedHolder")[0]
+    assert "def entity(self) -> TBaseEntity" in base_section
+
+
+def test_two_role_taker_narrowing_class_existence(two_role_taker_narrowing_comparator):
+    """All expected RoleFor classes are generated."""
+    two_role_taker_narrowing_comparator.compare_class_existence()
+
+
+def test_two_role_taker_narrowing_class_hierarchy(two_role_taker_narrowing_comparator):
+    """RoleForDerivedHolder extends RoleForBaseHolder."""
+    two_role_taker_narrowing_comparator.compare_class_hierarchy()
+
+
+def test_two_role_taker_narrowing_method_details(two_role_taker_narrowing_comparator):
+    """All methods and properties have correct signatures and return types."""
+    two_role_taker_narrowing_comparator.compare_method_details()
+
+
+def test_two_role_taker_narrowing_imports(two_role_taker_narrowing_comparator):
+    """Generated mixin imports TBaseEntity and TSpecificEntity."""
+    two_role_taker_narrowing_comparator.compare_imports()

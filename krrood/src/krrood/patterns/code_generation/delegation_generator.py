@@ -144,6 +144,9 @@ class DelegationGenerator:
         """
         for field_ in wrapped_class.fields:
             if field_.name in taker_fields:
+                self._maybe_add_narrowing_redecl_for_covered_field(
+                    field_, wrapped_class, groups
+                )
                 continue
             if not (field_.field.kw_only or field_.field.init):
                 continue
@@ -254,6 +257,85 @@ class DelegationGenerator:
                     f"self.{self.delegatee_attribute_name}.{field_name} = value",
                 )
                 groups.setdefault(None, {})[field_name] = redecl_nodes
+
+    def _maybe_add_narrowing_redecl_for_covered_field(
+        self,
+        field_: Any,
+        wrapped_class: WrappedClass,
+        groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Add a narrowing re-declaration if the current class further narrows a covered field's type.
+
+        Called for fields already delegated by a parent RoleFor class. Generates a re-declaration
+        under groups[None] only when the current class specializes the defining base with a more
+        specific TypeVar than the nearest covered ancestor already provides.
+
+        :param field_: The WrappedField object for the covered field.
+        :param wrapped_class: The class being processed.
+        :param groups: The accumulator dict to populate.
+        """
+        if not (field_.field.kw_only or field_.field.init):
+            return
+
+        defining_base: type | None = None
+        for klass in wrapped_class.clazz.__mro__[1:]:
+            if klass is object:
+                break
+            if _is_original_field_definer(klass, field_.name):
+                defining_base = klass
+                break
+        if defining_base is None:
+            return
+
+        try:
+            base_hints = get_type_hints_of_object(defining_base)
+            base_type = base_hints.get(field_.name, field_.field.type)
+        except TypeError:
+            raw = vars(defining_base).get("__annotations__", {}).get(field_.name)
+            if raw is not None and not isinstance(raw, str):
+                base_type = raw
+            elif isinstance(raw, str):
+                module = inspect.getmodule(defining_base)
+                globalns = getattr(module, "__dict__", {}) if module is not None else {}
+                try:
+                    base_type = eval(raw, globalns)  # noqa: S307
+                except Exception:
+                    base_type = field_.field.type
+            else:
+                base_type = field_.field.type
+
+        # Determine the type the nearest covered ancestor already provides so we can
+        # skip re-declaration when the current class adds no additional narrowing.
+        nearest_covered_type = base_type
+        for klass in wrapped_class.clazz.__mro__[1:]:
+            if klass is object or klass is defining_base:
+                break
+            if klass not in self.already_covered_bases:
+                continue
+            sub = GenericTypeSubstitution.from_specialization(klass, defining_base)
+            if sub.has_substitutions:
+                result = sub.apply(base_type)
+                if result.resolved:
+                    nearest_covered_type = result.resolved_type
+            break
+
+        substitution = GenericTypeSubstitution.from_specialization(
+            wrapped_class.clazz, defining_base
+        )
+        if not substitution.has_substitutions:
+            return
+        result = substitution.apply(base_type)
+        if not result.resolved or result.resolved_type is nearest_covered_type:
+            return
+
+        concrete_type_name = self._normalise_type_name(result.resolved_type)
+        redecl_nodes = self.node_factory.make_property_getter_and_setter_nodes(
+            field_.name,
+            concrete_type_name,
+            f"self.{self.delegatee_attribute_name}.{field_.name}",
+            f"self.{self.delegatee_attribute_name}.{field_.name} = value",
+        )
+        groups.setdefault(None, {})[field_.name] = redecl_nodes
 
     def _add_narrowing_redeclaration(
         self,
