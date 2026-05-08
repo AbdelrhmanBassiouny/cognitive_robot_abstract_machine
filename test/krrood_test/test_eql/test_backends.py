@@ -46,7 +46,7 @@ def test_nested_action():
     apple = Apple("apple", 7)
 
     prob_q = underspecified(NestedAction)(
-        object=variable(Apple, domain=[apple]),
+        obj=variable(Apple, domain=[apple]),
         pose=underspecified(KRROODPose)(
             position=underspecified(KRROODPosition)(x=0.02, y=..., z=...),
             orientation=underspecified(KRROODOrientation)(
@@ -69,7 +69,7 @@ def test_nested_action():
     ]
 
     assert names_of_actual_specified_parameters == [
-        "NestedAction.object",
+        "NestedAction.obj",
         "NestedAction.pose.position.x",
         "NestedAction.pose.orientation.w",
     ]
@@ -187,7 +187,7 @@ def test_underspecified_parameters_with_only_literals():
 
 
 def test_enum_value_as_literal():
-    prob_q = underspecified(EnumAction)(object=..., enum=TestEnum.OPTION_A)
+    prob_q = underspecified(EnumAction)(obj=..., enum=TestEnum.OPTION_A)
     pm_backend = ProbabilisticBackend(number_of_samples=10)
     values = list(pm_backend.evaluate(prob_q))
     for value in values:

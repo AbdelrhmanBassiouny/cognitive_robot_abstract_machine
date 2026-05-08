@@ -135,14 +135,15 @@ class KRROODBowl(KRROODPhysicalObject):
     pass
 
 
+@dataclass(unsafe_hash=True)
 class NestedAction:
-    object: Body
+    obj: Body
     pose: KRROODPose
 
 
 @dataclass
 class EnumAction:
-    object: Body
+    obj: Body
     enum: TestEnum
 
 

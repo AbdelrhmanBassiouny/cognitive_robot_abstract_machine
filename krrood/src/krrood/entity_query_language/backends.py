@@ -227,6 +227,9 @@ class ProbabilisticBackend(GenerativeBackend):
         conditioned, _ = model.conditional(
             parameters.conditioning_assignments_from_literal_values
         )
+        print(
+            list(variable.domain.simple_sets[0] for variable in conditioned.variables)
+        )
 
         if conditioned is None:
             raise NoSolutionFound(expression.expression)

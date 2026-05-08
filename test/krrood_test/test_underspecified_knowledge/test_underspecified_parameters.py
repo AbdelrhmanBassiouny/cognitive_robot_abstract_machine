@@ -27,7 +27,7 @@ def test_enum_domain():
     Test that a KRROOD variable with an Enum domain is correctly handled.
     """
     prob_q = underspecified(EnumAction)(
-        object=...,
+        obj=...,
         enum=variable(
             TestEnum, [TestEnum.OPTION_A, TestEnum.OPTION_B, TestEnum.OPTION_C]
         ),

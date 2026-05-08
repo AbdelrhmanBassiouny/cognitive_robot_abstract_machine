@@ -4,7 +4,7 @@ import types
 from dataclasses import dataclass, field
 from enum import Enum, EnumType
 from functools import cached_property
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, List, Iterable
 
 import numpy as np
 from typing_extensions import Any, get_args
@@ -65,7 +65,7 @@ class UnderspecifiedParameters:
     Dictionary of events that are created from literal values, e.g. actual values. These are the assignments, that the probabilistic model is *conditioned* on.
     """
 
-    truncation_assignments_from_krrood_variables: typing.List[Event] = field(
+    truncation_assignments_from_krrood_variables: List[Event] = field(
         init=False, default_factory=list
     )
     """
@@ -202,7 +202,7 @@ class UnderspecifiedParameters:
         )
 
     def _extract_variables_from_primitive_krrood_variable(
-        self, attribute_match: AttributeMatch, domain_objects: typing.List[Any]
+        self, attribute_match: AttributeMatch, domain_objects: List[Any]
     ) -> Dict[str, random_events.variable.Variable]:
         """
         Extract variables from a KRROOD variable with a primitive type.
@@ -232,7 +232,7 @@ class UnderspecifiedParameters:
         return result
 
     def _extract_variables_from_non_primitive_krrood_variable(
-        self, attribute_match: AttributeMatch, domain_objects: typing.List[Any]
+        self, attribute_match: AttributeMatch, domain_objects: List[Any]
     ) -> Dict[str, random_events.variable.Variable]:
         """
         Extract variables from a KRROOD variable with a non-primitive type.
@@ -288,7 +288,7 @@ class UnderspecifiedParameters:
 
     def construct_instance_from_model_sample(
         self,
-        variables: typing.Iterable[random_events.variable.Variable],
+        variables: Iterable[random_events.variable.Variable],
         sample: np.ndarray,
     ) -> Dict[random_events.variable.Variable, Any]:
         """

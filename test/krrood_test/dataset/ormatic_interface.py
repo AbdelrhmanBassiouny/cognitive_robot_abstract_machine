@@ -563,14 +563,14 @@ class EnumActionDAO(
         use_existing_column=True,
     )
 
-    object_id: Mapped[int] = mapped_column(
+    obj_id: Mapped[int] = mapped_column(
         ForeignKey("BodyDAO.database_id", use_alter=True),
         nullable=True,
         use_existing_column=True,
     )
 
-    object: Mapped[BodyDAO] = relationship(
-        "BodyDAO", uselist=False, foreign_keys=[object_id], post_update=True
+    obj: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[obj_id], post_update=True
     )
 
 
@@ -846,6 +846,35 @@ class NamedNumbersDAO(
 
     numbers: Mapped[typing.List[builtins.int]] = mapped_column(
         JSON, nullable=False, use_existing_column=True
+    )
+
+
+class NestedActionDAO(
+    Base, DataAccessObject[test.krrood_test.dataset.example_classes.NestedAction]
+):
+
+    __tablename__ = "NestedActionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    obj_id: Mapped[int] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    pose_id: Mapped[int] = mapped_column(
+        ForeignKey("KRROODPoseDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    obj: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[obj_id], post_update=True
+    )
+    pose: Mapped[KRROODPoseDAO] = relationship(
+        "KRROODPoseDAO", uselist=False, foreign_keys=[pose_id], post_update=True
     )
 
 
