@@ -256,7 +256,7 @@ def get_type_hints_of_object(
         except TypeError as type_error:
             logger.warning(
                 f"Could not get type hints for {object_} due to TypeError: {type_error}. This may be caused by a type"
-                f" hint that cannot be resolved. Returning empty type hints."
+                f" hint that cannot be resolved."
             )
             raise
     return type_hints
