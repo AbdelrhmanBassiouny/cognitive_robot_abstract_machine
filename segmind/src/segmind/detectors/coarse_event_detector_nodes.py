@@ -1,16 +1,51 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import List, Callable, Any
+from typing import List, TypeVar
+
 from giskardpy.motion_statechart.context import MotionStatechartContext
+from krrood.entity_query_language.factories import variable, and_, entity, inference, ConditionType, not_
+from krrood.entity_query_language.predicate import symbolic_function
+from krrood.entity_query_language.query.query import Entity
 from segmind.datastructures.events import (
     SupportEvent,
     DetectionEvent,
     PlacingEvent, TranslationEvent, LossOfSupportEvent, PickUpEvent, StopTranslationEvent, ContactEvent,
-    ContainmentEvent, InsertionEvent,
-)
-from semantic_digital_twin.world_description.world_entity import Body
+    ContainmentEvent, InsertionEvent, EventWithOneTrackedObject, EventWithTwoTrackedObjects, )
 from segmind.detectors.base import AbstractDetector, SegmindContext
+from semantic_digital_twin.world_description.world_entity import Body
+from typing_extensions import Type, Iterable
+
+TDetectionEvent = TypeVar('TDetectionEvent', bound=DetectionEvent)
+
+
+@symbolic_function
+def event_time_difference(first_event: TDetectionEvent, second_event: TDetectionEvent) -> timedelta:
+    """
+    Computes the absolute time difference between two events.
+
+    :param first_event: The first event with a timestamp.
+    :param second_event: The second event with a timestamp.
+    :return: The absolute time difference between the two events.
+    """
+    return abs(first_event.timestamp - second_event.timestamp)
+
+
+def interaction_event_detected_before(event_type: Type[EventWithTwoTrackedObjects], first_object: Body,
+                                      second_object: Body | None,
+                                      events_to_consider: Iterable[DetectionEvent]) -> ConditionType:
+    """
+    Checks if an interaction event of the given type was detected before the interaction between two bodies.
+
+    :param event_type: The type of interaction event to check.
+    :param first_object: The first body involved in the interaction.
+    :param second_object: The second body involved in the interaction.
+    :param events_to_consider: The events to consider for the interaction event detection.
+    :return: True if an interaction event of the given type was detected before the interaction, False otherwise.
+    """
+    similar_event = variable(event_type, events_to_consider)
+    return and_(similar_event.tracked_object == first_object,
+                similar_event.with_object == second_object)
 
 
 @dataclass
@@ -30,18 +65,16 @@ class AbstractInteractionDetector(AbstractDetector):
     def _find_interaction_events(
             self,
             segmind_context: SegmindContext,
-            primary_event_type: type,
-            secondary_event_type: type,
-            make_event: Callable[[Any, Any], DetectionEvent],
-    ) -> List[DetectionEvent]:
+            primary_event_type: Type[EventWithOneTrackedObject],
+            secondary_event_type: Type[EventWithTwoTrackedObjects],
+            event_type: Type[EventWithTwoTrackedObjects],
+    ) -> Entity[EventWithTwoTrackedObjects]:
         """
         Scans logged events for correlated pairs of primary and secondary event types
         and emits a detection event for each new, unseen pairing.
 
         For each secondary event, this method searches for a primary event on the same
-        tracked object whose timestamp is within :attr:`shift_threshold`. If such a pair
-        is found and has not been recorded in ``segmind_context.placing_pairs`` before,
-        the pair is registered and a detection event is produced via ``make_event``.
+        tracked object whose timestamp is within :attr:`shift_threshold`.
 
         :param segmind_context: The shared context holding the event logger and
             previously seen interaction pairs.
@@ -49,38 +82,24 @@ class AbstractInteractionDetector(AbstractDetector):
             (e.g. ``StopTranslationEvent`` for placing, ``TranslationEvent`` for pickup).
         :param secondary_event_type: The event type to correlate against the primary
             (e.g. ``SupportEvent`` for placing, ``LossOfSupportEvent`` for pickup).
-        :param make_event: Factory called with ``(primary, secondary)`` to produce the
-            outgoing :class:`DetectionEvent`. Only called once per unique pair.
+        :param event_type: The event type to produce for each unique pair.
         :return: List of newly detected interaction events.
         """
-        primary_events = [
-            e for e in segmind_context.logger.get_events()
-            if isinstance(e, primary_event_type)
-        ]
-        secondary_events = [
-            e for e in segmind_context.logger.get_events()
-            if isinstance(e, secondary_event_type)
-        ]
-
-        events = []
-        by_object = defaultdict(list)
-        for e in primary_events:
-            by_object[e.tracked_object].append(e)
-
-        for secondary in secondary_events:
-            for primary in by_object.get(secondary.tracked_object, []):
-                if abs(secondary.timestamp - primary.timestamp) >= self.shift_threshold:
-                    continue
-
-                key = (secondary.tracked_object.id, secondary.with_object.id)
-                if key in segmind_context.placing_pairs:
-                    continue
-
-                segmind_context.placing_pairs.add(key)
-                events.append(make_event(primary, secondary))
-                break
-
-        return events
+        events = segmind_context.logger.get_events()
+        primary_event = variable(primary_event_type, events)
+        secondary_event = variable(secondary_event_type, events)
+        primary_object = primary_event.tracked_object
+        secondary_object = secondary_event.with_object
+        return entity(inference(
+            event_type)(tracked_object=primary_object, with_object=secondary_object)).where(
+            secondary_event.tracked_object == primary_event.tracked_object,
+            event_time_difference(primary_event,
+                                  secondary_event) <= self.shift_threshold,
+            not_(interaction_event_detected_before(event_type,
+                                                   primary_object,
+                                                   secondary_object,
+                                                   events))
+        )
 
 
 @dataclass
@@ -95,7 +114,8 @@ class PlacingDetector(AbstractInteractionDetector):
     the class helps maintain consistency and prevent duplication of events.
     """
 
-    def update_context_and_events(self, context:MotionStatechartContext, segmind_context:SegmindContext, obj: List[Body]) -> List[DetectionEvent]:
+    def update_context_and_events(self, context: MotionStatechartContext, segmind_context: SegmindContext,
+                                  obj: List[Body]) -> List[DetectionEvent]:
         """
         Updates the system context with new placing event instances based on past
         actions logged in the system. It analyzes and filters specific event types
@@ -111,10 +131,7 @@ class PlacingDetector(AbstractInteractionDetector):
             segmind_context,
             primary_event_type=StopTranslationEvent,
             secondary_event_type=SupportEvent,
-            make_event=lambda primary, secondary: PlacingEvent(
-                tracked_object=primary.tracked_object,
-                with_object=secondary.with_object,
-            ),
+            event_type=PlacingEvent,
         )
 
 
@@ -131,7 +148,8 @@ class PickUpDetector(AbstractInteractionDetector):
     data and uses a context to manage event pairs and thresholds.
     """
 
-    def update_context_and_events(self, context:MotionStatechartContext, segmind_context: SegmindContext,obj: List[Body]) -> List[DetectionEvent]:
+    def update_context_and_events(self, context: MotionStatechartContext, segmind_context: SegmindContext,
+                                  obj: List[Body]) -> List[DetectionEvent]:
         """
         Updates the context and generates a list of events based on translation events and loss
         of support events. The method identifies pairs of related events that are close in
@@ -147,9 +165,7 @@ class PickUpDetector(AbstractInteractionDetector):
             segmind_context,
             primary_event_type=TranslationEvent,
             secondary_event_type=LossOfSupportEvent,
-            make_event=lambda primary, secondary: PickUpEvent(
-                tracked_object=primary.tracked_object,
-            ),
+            event_type=PickUpEvent,
         )
 
     @dataclass(eq=False, repr=False)

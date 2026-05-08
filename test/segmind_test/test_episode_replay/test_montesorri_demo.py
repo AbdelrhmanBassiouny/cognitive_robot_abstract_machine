@@ -85,5 +85,8 @@ def test_replay_episode(test_csv_player_context):
     finally:
         print(segmind_context.logger.get_events())
 
+    events = segmind_context.logger.get_events()
+
+
 
 

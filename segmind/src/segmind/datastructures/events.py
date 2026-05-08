@@ -263,7 +263,7 @@ class LossOfContactEvent(AbstractContactEvent):
 
 
 @dataclass(unsafe_hash=True)
-class PickUpEvent(EventWithOneTrackedObject):
+class PickUpEvent(EventWithTwoTrackedObjects):
     """
     Represents an event where an object is picked up by another object.
     """
