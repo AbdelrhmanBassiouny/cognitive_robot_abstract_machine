@@ -7,6 +7,7 @@ from enum import Enum
 from functools import lru_cache
 from typing import get_args, get_origin
 from uuid import UUID
+import builtins
 
 import typing_extensions
 from typing_extensions import Callable, get_args, get_origin
