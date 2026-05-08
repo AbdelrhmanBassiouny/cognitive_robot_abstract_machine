@@ -2,7 +2,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from semantic_digital_twin.semantic_annotations.role_mixins.mixins_role_mixins import (
+    RoleForHasRootBody,
     RoleForHasStorageSpace,
+    RoleForSemanticAnnotation,
 )
 from semantic_digital_twin.world_description.world_modification import (
     synchronized_attribute_modification,
@@ -16,16 +18,9 @@ if TYPE_CHECKING:
         ProbabilisticCircuit,
     )
     from random_events.product_algebra import Event
-    from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-    from semantic_digital_twin.mixin import (
-        HasSimulatorProperties,
-        SimulatorAdditionalProperty,
-    )
     from semantic_digital_twin.semantic_annotations.mixins import (
         HasRootBody,
-        HasRootKinematicStructureEntity,
         HasSupportingSurface,
-        TKinematicStructureEntity,
     )
     from semantic_digital_twin.semantic_annotations.semantic_annotations import (
         Bottle,
@@ -35,116 +30,15 @@ if TYPE_CHECKING:
         THasRootBody,
         TinCan,
     )
-    from semantic_digital_twin.spatial_types.spatial_types import (
-        HomogeneousTransformationMatrix,
-        Point3,
-    )
-    from semantic_digital_twin.world_description.geometry import Scale
+    from semantic_digital_twin.spatial_types.spatial_types import Point3
     from semantic_digital_twin.world_description.world_entity import (
-        Body,
-        KinematicStructureEntity,
         Region,
         SemanticAnnotation,
-        WorldEntity,
-        WorldEntityWithID,
     )
-    from uuid import UUID
 
 
 @dataclass(eq=False)
-class RoleForHasSimulatorProperties(ABC):
-    @property
-    @abstractmethod
-    def role_taker(self) -> HasSimulatorProperties: ...
-    @property
-    def simulator_additional_properties(self) -> list[SimulatorAdditionalProperty]:
-        return self.role_taker.simulator_additional_properties
-
-    @simulator_additional_properties.setter
-    def simulator_additional_properties(self, value: list[SimulatorAdditionalProperty]):
-        self.role_taker.simulator_additional_properties = value
-
-
-@dataclass(eq=False)
-class RoleForWorldEntity(ABC):
-    @property
-    @abstractmethod
-    def role_taker(self) -> WorldEntity: ...
-    @property
-    def name(self) -> PrefixedName:
-        return self.role_taker.name
-
-    @name.setter
-    def name(self, value: PrefixedName):
-        self.role_taker.name = value
-
-
-@dataclass(eq=False)
-class RoleForWorldEntityWithID(RoleForWorldEntity, ABC):
-    @property
-    @abstractmethod
-    def role_taker(self) -> WorldEntityWithID: ...
-    @property
-    def id(self) -> UUID:
-        return self.role_taker.id
-
-    @id.setter
-    def id(self, value: UUID):
-        self.role_taker.id = value
-
-
-@dataclass(eq=False)
-class RoleForSemanticAnnotation(RoleForWorldEntityWithID, ABC):
-    @property
-    @abstractmethod
-    def role_taker(self) -> SemanticAnnotation: ...
-    @property
-    def kinematic_structure_entities(self) -> list[KinematicStructureEntity]:
-        return self.role_taker.kinematic_structure_entities
-
-    @property
-    def regions(self) -> list[Region]:
-        return self.role_taker.regions
-
-
-@dataclass(eq=False)
-class RoleForHasRootKinematicStructureEntity(RoleForSemanticAnnotation, ABC):
-    @property
-    @abstractmethod
-    def role_taker(self) -> HasRootKinematicStructureEntity: ...
-    @property
-    def root(self) -> TKinematicStructureEntity:
-        return self.role_taker.root
-
-    @root.setter
-    def root(self, value: TKinematicStructureEntity):
-        self.role_taker.root = value
-
-    @property
-    def global_transform(self) -> HomogeneousTransformationMatrix:
-        return self.role_taker.global_transform
-
-    @property
-    def min_max_points(self) -> tuple[Point3, Point3]:
-        return self.role_taker.min_max_points
-
-    @property
-    def scale(self) -> Scale:
-        return self.role_taker.scale
-
-
-@dataclass(eq=False)
-class RoleForHasRootBody(RoleForHasRootKinematicStructureEntity, ABC):
-    @property
-    @abstractmethod
-    def role_taker(self) -> HasRootBody: ...
-    @property
-    def bodies(self) -> list[Body]:
-        return self.role_taker.bodies
-
-
-@dataclass(eq=False)
-class RoleForHasSupportingSurface(RoleForHasRootBody, ABC):
+class RoleForHasSupportingSurface(RoleForHasStorageSpace, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> HasSupportingSurface: ...
@@ -250,7 +144,7 @@ class RoleForRoom(RoleForSemanticAnnotation, ABC):
 
 
 @dataclass(eq=False)
-class RoleForBottle(RoleForHasStorageSpace, RoleForHasSupportingSurface, ABC):
+class RoleForBottle(RoleForHasSupportingSurface, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> Bottle: ...

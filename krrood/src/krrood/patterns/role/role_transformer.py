@@ -97,6 +97,48 @@ def _is_role_base_node(base_node: libcst.BaseExpression) -> bool:
     return name == "Role"
 
 
+def _sort_modules_by_dependency(
+    modules: list[ModuleType], class_diagram: ClassDiagram
+) -> list[ModuleType]:
+    """Return modules in topological order so that modules containing base classes come first.
+
+    If role taker T (in module B) inherits from class C (in module A), module A is placed
+    before module B. This ensures base-class RoleFor nodes are generated before they are
+    referenced by derived-class transformers.
+    """
+    module_set = set(modules)
+    deps: dict[ModuleType, set[ModuleType]] = {m: set() for m in modules}
+    for taker in class_diagram.role_takers:
+        taker_module = sys.modules.get(taker.__module__)
+        if taker_module not in module_set:
+            continue
+        for ancestor in taker.__mro__[1:]:
+            if ancestor is object:
+                continue
+            ancestor_module = sys.modules.get(ancestor.__module__)
+            if (
+                ancestor_module is not None
+                and ancestor_module in module_set
+                and ancestor_module is not taker_module
+            ):
+                deps[taker_module].add(ancestor_module)
+
+    result: list[ModuleType] = []
+    visited: set[ModuleType] = set()
+
+    def visit(m: ModuleType) -> None:
+        if m in visited:
+            return
+        visited.add(m)
+        for dep in deps.get(m, set()):
+            visit(dep)
+        result.append(m)
+
+    for m in modules:
+        visit(m)
+    return result
+
+
 @dataclasses.dataclass
 class RoleTransformer:
     """
@@ -166,6 +208,8 @@ class RoleTransformer:
         for module in all_modules:
             importlib.reload(module)
         self._refresh_diagram()
+
+        all_modules = _sort_modules_by_dependency(all_modules, self.class_diagram)
 
         global_base_class_ownership: dict[type, ModuleType] = {}
         all_modules_sources = {}
@@ -669,6 +713,7 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self.role_for[wrapped_class] = LibCSTNodeFactory.get_node_with_new_body(
             role_for_node, flattened_body
         )
+        self._global_base_class_ownership[wrapped_class.clazz] = self.source_module
 
     def _assemble_role_for_body(
         self,
@@ -784,7 +829,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
     def _resolve_rolefor_bases_for(self, base_class: type) -> list[str]:
         """Return RoleFor class names for the nearest ancestors of base_class that already have RoleFor nodes.
 
-        Checks both locally generated nodes and cross-module imported nodes.
+        Checks locally generated nodes, cross-module imported nodes, and the global ownership
+        registry (which tracks direct role-taker RoleFor nodes from any module transformer).
 
         :param base_class: The class whose parent hierarchy is searched.
         :return: List of RoleFor class name strings.
@@ -797,7 +843,15 @@ class RoleModuleTransformer(ContextAwareTransformer):
                     break
                 in_local = ancestor in self._base_class_role_for_nodes
                 in_cross = ancestor in self._cross_module_rolefor_bases
-                if (in_local or in_cross) and ancestor not in seen:
+                owner_module = self._global_base_class_ownership.get(ancestor)
+                if (in_local or in_cross or owner_module is not None) and ancestor not in seen:
+                    if owner_module is not None and not in_local and not in_cross:
+                        role_for_name = self.get_role_for_name(ancestor)
+                        if owner_module is not self.source_module:
+                            mixin_module = _mixin_module_dotted_name(owner_module.__name__)
+                            self._cross_module_rolefor_bases[ancestor] = mixin_module
+                            self.require_import(mixin_module, role_for_name)
+                            self._resolver.name_to_module_map[role_for_name] = mixin_module
                     rolefor_bases.append(self.get_role_for_name(ancestor))
                     seen.add(ancestor)
                     break
@@ -818,14 +872,33 @@ class RoleModuleTransformer(ContextAwareTransformer):
         """
         role_for_bases = []
         bases_that_are_takers = self.bases_of_class_that_are_role_takers(wrapped_class)
+        all_segregated = list(segregated_base_types or [])
+        uncovered_segregated = [
+            st
+            for st in all_segregated
+            if not any(
+                other is not st and issubclass(other, st) for other in all_segregated
+            )
+        ]
+
         for base in node.bases:
             base_name = LibCSTNodeFactory.get_name_from_base_node(base.value)
             if base_name in bases_that_are_takers:
-                role_for_bases.append(
-                    LibCSTNodeFactory.make_argument(
-                        self.get_role_for_name(bases_that_are_takers[base_name])
-                    )
-                )
+                taker_type = bases_that_are_takers[base_name]
+                if any(
+                    issubclass(seg, taker_type) and seg is not taker_type
+                    for seg in uncovered_segregated
+                ):
+                    continue  # A more-derived segregated base already covers this taker
+                role_for_name = self.get_role_for_name(taker_type)
+                role_for_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
+                owner_module = self._global_base_class_ownership.get(taker_type)
+                if owner_module is not None and owner_module is not self.source_module:
+                    mixin_module = _mixin_module_dotted_name(owner_module.__name__)
+                    if taker_type not in self._cross_module_rolefor_bases:
+                        self._cross_module_rolefor_bases[taker_type] = mixin_module
+                        self.require_import(mixin_module, role_for_name)
+                        self._resolver.name_to_module_map[role_for_name] = mixin_module
             elif _is_role_base_node(base.value) and issubclass(
                 wrapped_class.clazz, Role
             ):
@@ -834,16 +907,10 @@ class RoleModuleTransformer(ContextAwareTransformer):
                     LibCSTNodeFactory.make_argument(self.get_role_for_name(taker_type))
                 )
 
-        all_segregated = list(segregated_base_types or [])
-        for base_type in all_segregated:
-            is_covered = any(
-                other is not base_type and issubclass(other, base_type)
-                for other in all_segregated
+        for base_type in uncovered_segregated:
+            role_for_bases.append(
+                LibCSTNodeFactory.make_argument(self.get_role_for_name(base_type))
             )
-            if not is_covered:
-                role_for_bases.append(
-                    LibCSTNodeFactory.make_argument(self.get_role_for_name(base_type))
-                )
 
         role_for_bases.append(LibCSTNodeFactory.make_argument(ABC.__name__))
         return role_for_bases
