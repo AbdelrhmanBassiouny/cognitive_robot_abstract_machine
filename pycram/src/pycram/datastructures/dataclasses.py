@@ -17,8 +17,13 @@ from semantic_digital_twin.world import World
 
 try:
     import rclpy
-except ImportError:
-    rclpy = None
+except ImportError as e:
+    logging.warning("Could not import rclpy. This is expected if you are not using ROS. Mocking rclpy.")
+    class MockNode:
+        Node = None
+    class MockRclpy:
+        node = MockNode()
+    rclpy = MockRclpy()
 
 @dataclass
 class Context(PlanEntity):

@@ -732,7 +732,9 @@ def get_scope_from_imports(
     return scope
 
 
-def _import_module_safely(module_name: str, package_name: Optional[str]) -> Optional[types.ModuleType]:
+def _import_module_safely(
+    module_name: str, package_name: Optional[str]
+) -> Union[types.ModuleType, ModuleNotFoundError, ImportError]:
     """
     Attempt to import a module with an optional package context and return the module or None on failure.
 
@@ -746,9 +748,9 @@ def _import_module_safely(module_name: str, package_name: Optional[str]) -> Opti
 
     try:
         return importlib.import_module(module_name, package=package_name)
-    except ModuleNotFoundError:
+    except ModuleNotFoundError as e:
         if not package_name:
-            return None
+            return e
         try:
             if module_name.startswith('.') and package_name:
                 full_name = resolve_name(module_name, package_name)
@@ -757,10 +759,10 @@ def _import_module_safely(module_name: str, package_name: Optional[str]) -> Opti
             if full_name in sys.modules:
                 return sys.modules[full_name]
             return importlib.import_module(full_name)
-        except Exception:
-            return None
-    except ImportError:
-        return None
+        except (ModuleNotFoundError, ImportError) as e:
+            return e
+    except ImportError as e:
+        return e
 
 
 def get_module_object(module_name: str, package_name: Optional[str] = None) -> Optional[types.ModuleType]:
@@ -831,10 +833,9 @@ def _handle_import_node(node: ast.Import, scope: Dict[str, Any], package_name: O
         module_name = alias.name
         asname = alias.asname or alias.name
         module = _import_module_safely(module_name, package_name)
-        if module is not None:
-            scope[asname] = module
-        else:
-            logger.warning(f"Could not import {module_name}")
+        if isinstance(module, Exception):
+            raise module
+        scope[asname] = module
 
 
 def _handle_import_from_node(
@@ -867,11 +868,8 @@ def _handle_import_from_node(
         # Fallback already attempted in _import_module_safely; keep for parity
         module = _import_module_safely(f"{resolved_package_name}.{resolved_module_name}", None)
 
-    if module is None:
-        logger.warning(
-            f"Could not import {resolved_module_name} while extracting imports from {file_path}"
-        )
-        return package_name
+    if isinstance(module, Exception):
+        raise module
 
     for alias in node.names:
         name = alias.name
