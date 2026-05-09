@@ -4,6 +4,13 @@
 format: jb-book
 root: intro
 parts:
+- caption: Design Patterns
+  chapters:
+    - file: patterns/index
+      sections:
+        - file: patterns/property_delegator
+        - file: patterns/role
+
 - caption: Entity Query Language
   chapters:
     - file: eql/intro

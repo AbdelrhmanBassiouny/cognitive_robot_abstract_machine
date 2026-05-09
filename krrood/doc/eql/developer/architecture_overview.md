@@ -55,7 +55,8 @@ Directly manipulating expression nodes is discouraged for end-users. Always use 
 
 ## Simplified Visualization of the Pipeline
 
-```mermaid
+```{mermaid}
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '20px', 'lineColor': '#333333', 'primaryColor': '#ddeeff', 'primaryTextColor': '#111111', 'primaryBorderColor': '#3a7abf'}, 'flowchart': {'nodeSpacing': 80, 'rankSpacing': 80, 'padding': 20}}}%%
 graph LR
     A[User Code] --> B[Builders]
     B -- .build() --> C[Expression Graph]

@@ -1,0 +1,11 @@
+/* Mermaid diagrams: full-width container, centred */
+.mermaid {
+    display: block;
+    width: 100%;
+    text-align: center;
+}
+
+.mermaid svg {
+    max-width: 100% !important;
+    height: auto !important;
+}
