@@ -19,6 +19,7 @@ from ..dataset.classes_with_generic import (
     SubClassGenericThatRecreatesAField,
     SubClassGenericThatRecreatesAFieldWithAnotherVar,
     SubClassGenericThatRecreatesAFieldWithNonBuiltInType,
+    TwoGenericContainerBoundToBuiltIns,
 )
 
 
@@ -123,6 +124,17 @@ def test_resolve_generic_type_subclass_with_type_defined_in_imported_module_of_t
 def test_resolve_generic_type_subclass_with_new_type_var_as_generic_type():
     cls = SubClassGenericThatUpdatesGenericTypeToAnotherTypeVar
     _assert_generic_type_is_resolved(cls)
+
+
+def test_resolve_two_generic_types_subclass_with_built_in_types():
+    cls = TwoGenericContainerBoundToBuiltIns
+    resolved_hints = get_type_hints(cls, include_extras=True)
+    assert resolved_hints[variable_from(cls).first_attribute._attribute_name_] is int
+    assert resolved_hints[variable_from(cls).second_attribute._attribute_name_] is str
+    list_of_first = resolved_hints[variable_from(cls).list_of_first._attribute_name_]
+    list_of_second = resolved_hints[variable_from(cls).list_of_second._attribute_name_]
+    assert get_origin(list_of_first) is list and get_args(list_of_first)[0] is int
+    assert get_origin(list_of_second) is list and get_args(list_of_second)[0] is str
 
 
 def _assert_generic_type_is_resolved(cls):
