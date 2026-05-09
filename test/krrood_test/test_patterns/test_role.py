@@ -34,7 +34,7 @@ def test_getting_and_setting_attribute_for_role_and_role_taker():
 
     assert ceo.person.name == person.name
 
-    # shared-base attr (from HasName) delegates from role to taker via RoleFor mixin property
+    # shared-base attr (from HasName) delegates from role to taker via DelegatorFor mixin property
     assert ceo.name == person.name
 
     # role-native attr lives on the role; access it directly from the role
@@ -144,7 +144,7 @@ def test_get_roles_of_type():
 def test_role_that_inherits_from_class_that_role_taker_inherits_from_that_has_default_attributes():
     person = PersonInRoleAndOntology(name="Bass", default_name="BassDefault")
     # DirectDiamondShapedInheritanceWhereOneIsRole inherits from HasName and
-    # RoleForPersonInRoleAndOntology; the mixin property delegates name to role_taker.
+    # DelegatorForPersonInRoleAndOntology; the mixin property delegates name to role_taker.
     ceo = DirectDiamondShapedInheritanceWhereOneIsRole(person=person)
     assert ceo.name == person.name
     assert ceo.default_name == person.default_name

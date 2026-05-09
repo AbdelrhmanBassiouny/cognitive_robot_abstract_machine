@@ -33,65 +33,65 @@ def _base_names(cls_def: cst.ClassDef) -> list[str]:
 
 
 def test_base_class_mixin_is_generated(mixin_source):
-    """A RoleForSharedBase class must be emitted for the shared ancestor."""
-    assert "class RoleForSharedBase" in mixin_source
+    """A DelegatorForSharedBase class must be emitted for the shared ancestor."""
+    assert "class DelegatorForSharedBase" in mixin_source
 
 
 def test_shared_methods_not_duplicated(mixin_source):
-    """Methods from SharedBase appear exactly once (in RoleForSharedBase)."""
+    """Methods from SharedBase appear exactly once (in DelegatorForSharedBase)."""
     assert mixin_source.count("def shared_method") == 1
     assert mixin_source.count("def another_shared_method") == 1
 
 
 def test_shared_field_property_in_base_mixin_only(mixin_source):
-    """shared_field property is in RoleForSharedBase and not in the taker-specific RoleFors."""
+    """shared_field property is in DelegatorForSharedBase and not in the taker-specific DelegatorFors."""
     classes = _classes(mixin_source)
-    assert "shared_field" in _method_names(classes["RoleForSharedBase"])
-    assert "shared_field" not in _method_names(classes["RoleForExclusiveTakerA"])
-    assert "shared_field" not in _method_names(classes["RoleForExclusiveTakerB"])
+    assert "shared_field" in _method_names(classes["DelegatorForSharedBase"])
+    assert "shared_field" not in _method_names(classes["DelegatorForExclusiveTakerA"])
+    assert "shared_field" not in _method_names(classes["DelegatorForExclusiveTakerB"])
 
 
 def test_single_base_mixin_per_base(mixin_source):
-    """RoleForSharedBase is defined exactly once."""
-    assert mixin_source.count("class RoleForSharedBase") == 1
+    """DelegatorForSharedBase is defined exactly once."""
+    assert mixin_source.count("class DelegatorForSharedBase") == 1
 
 
 def test_taker_rolefor_inherits_base_mixin(mixin_source):
-    """Both RoleForExclusiveTakerA and RoleForExclusiveTakerB inherit from RoleForSharedBase."""
+    """Both DelegatorForExclusiveTakerA and DelegatorForExclusiveTakerB inherit from DelegatorForSharedBase."""
     classes = _classes(mixin_source)
-    for name in ("RoleForExclusiveTakerA", "RoleForExclusiveTakerB"):
+    for name in ("DelegatorForExclusiveTakerA", "DelegatorForExclusiveTakerB"):
         bases = _base_names(classes[name])
-        assert "RoleForSharedBase" in bases, (
-            f"{name} does not inherit RoleForSharedBase; got bases: {bases}"
+        assert "DelegatorForSharedBase" in bases, (
+            f"{name} does not inherit DelegatorForSharedBase; got bases: {bases}"
         )
 
 
 def test_taker_direct_methods_stay_in_taker_rolefor(mixin_source):
-    """taker_a_only_method is in RoleForExclusiveTakerA, not in RoleForSharedBase."""
+    """taker_a_only_method is in DelegatorForExclusiveTakerA, not in DelegatorForSharedBase."""
     classes = _classes(mixin_source)
-    assert "taker_a_only_method" in _method_names(classes["RoleForExclusiveTakerA"])
-    assert "taker_b_only_method" in _method_names(classes["RoleForExclusiveTakerB"])
-    shared_methods = _method_names(classes["RoleForSharedBase"])
+    assert "taker_a_only_method" in _method_names(classes["DelegatorForExclusiveTakerA"])
+    assert "taker_b_only_method" in _method_names(classes["DelegatorForExclusiveTakerB"])
+    shared_methods = _method_names(classes["DelegatorForSharedBase"])
     assert "taker_a_only_method" not in shared_methods
     assert "taker_b_only_method" not in shared_methods
 
 
 def test_shared_methods_in_base_mixin(mixin_source):
-    """shared_method and another_shared_method are in RoleForSharedBase."""
+    """shared_method and another_shared_method are in DelegatorForSharedBase."""
     classes = _classes(mixin_source)
-    shared_methods = _method_names(classes["RoleForSharedBase"])
+    shared_methods = _method_names(classes["DelegatorForSharedBase"])
     assert "shared_method" in shared_methods
     assert "another_shared_method" in shared_methods
 
 
 def test_base_mixin_has_abstract_role_taker(mixin_source):
-    """RoleForSharedBase declares an abstract role_taker property."""
+    """DelegatorForSharedBase declares an abstract role_taker property."""
     classes = _classes(mixin_source)
-    assert "role_taker" in _method_names(classes["RoleForSharedBase"])
+    assert "delegatee" in _method_names(classes["DelegatorForSharedBase"])
 
 
 def test_base_mixin_emitted_before_taker_rolefors(mixin_source):
-    """RoleForSharedBase appears before RoleForExclusiveTakerA in the source."""
-    assert mixin_source.index("class RoleForSharedBase") < mixin_source.index(
-        "class RoleForExclusiveTakerA"
+    """DelegatorForSharedBase appears before DelegatorForExclusiveTakerA in the source."""
+    assert mixin_source.index("class DelegatorForSharedBase") < mixin_source.index(
+        "class DelegatorForExclusiveTakerA"
     )

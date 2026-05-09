@@ -18,88 +18,88 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForGenericBaseMixin(ABC):
+class DelegatorForGenericBaseMixin(ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> GenericBaseMixin: ...
+    def delegatee(self) -> GenericBaseMixin: ...
 
     @property
     def entity(self) -> TBase:
-        return self.role_taker.entity
+        return self.delegatee.entity
 
     @entity.setter
     def entity(self, value: TBase):
-        self.role_taker.entity = value
+        self.delegatee.entity = value
 
     @property
     def count(self) -> int:
-        return self.role_taker.count
+        return self.delegatee.count
 
     @count.setter
     def count(self, value: int):
-        self.role_taker.count = value
+        self.delegatee.count = value
 
 
 @dataclass(eq=False)
-class RoleForNarrowedTypeVarTaker(RoleForGenericBaseMixin, ABC):
+class DelegatorForNarrowedTypeVarTaker(DelegatorForGenericBaseMixin, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TNarrowedTypeVarTaker: ...
+    def delegatee(self) -> TNarrowedTypeVarTaker: ...
 
     @property
     def entity(self) -> TConcreteEntity:
-        return self.role_taker.entity
+        return self.delegatee.entity
 
     @entity.setter
     def entity(self, value: TConcreteEntity):
-        self.role_taker.entity = value
+        self.delegatee.entity = value
 
     @property
     def label(self) -> str:
-        return self.role_taker.label
+        return self.delegatee.label
 
     @label.setter
     def label(self, value: str):
-        self.role_taker.label = value
+        self.delegatee.label = value
 
 
 @dataclass(eq=False)
-class RoleForConcreteTypeTaker(RoleForGenericBaseMixin, ABC):
+class DelegatorForConcreteTypeTaker(DelegatorForGenericBaseMixin, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TConcreteTypeTaker: ...
+    def delegatee(self) -> TConcreteTypeTaker: ...
 
     @property
     def entity(self) -> ConcreteEntity:
-        return self.role_taker.entity
+        return self.delegatee.entity
 
     @entity.setter
     def entity(self, value: ConcreteEntity):
-        self.role_taker.entity = value
+        self.delegatee.entity = value
 
     @property
     def name(self) -> str:
-        return self.role_taker.name
+        return self.delegatee.name
 
     @name.setter
     def name(self, value: str):
-        self.role_taker.name = value
+        self.delegatee.name = value
 
 
 @dataclass(eq=False)
-class RoleForUnspecializedSubTaker(RoleForGenericBaseMixin, ABC):
+class DelegatorForUnspecializedSubTaker(DelegatorForGenericBaseMixin, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TUnspecializedSubTaker: ...
+    def delegatee(self) -> TUnspecializedSubTaker: ...
 
     @property
     def tag(self) -> str:
-        return self.role_taker.tag
+        return self.delegatee.tag
 
     @tag.setter
     def tag(self, value: str):
-        self.role_taker.tag = value
+        self.delegatee.tag = value

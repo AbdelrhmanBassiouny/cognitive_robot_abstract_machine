@@ -47,129 +47,129 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForHasSimulatorProperties(ABC):
+class DelegatorForHasSimulatorProperties(ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> HasSimulatorProperties: ...
+    def delegatee(self) -> HasSimulatorProperties: ...
     @property
     def simulator_additional_properties(self) -> list[SimulatorAdditionalProperty]:
-        return self.role_taker.simulator_additional_properties
+        return self.delegatee.simulator_additional_properties
 
     @simulator_additional_properties.setter
     def simulator_additional_properties(self, value: list[SimulatorAdditionalProperty]):
-        self.role_taker.simulator_additional_properties = value
+        self.delegatee.simulator_additional_properties = value
 
 
 @dataclass(eq=False)
-class RoleForWorldEntity(ABC):
+class DelegatorForWorldEntity(ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> WorldEntity: ...
+    def delegatee(self) -> WorldEntity: ...
     @property
     def name(self) -> PrefixedName:
-        return self.role_taker.name
+        return self.delegatee.name
 
     @name.setter
     def name(self, value: PrefixedName):
-        self.role_taker.name = value
+        self.delegatee.name = value
 
     def remove_from_world(self):
-        return self.role_taker.remove_from_world()
+        return self.delegatee.remove_from_world()
 
 
 @dataclass(eq=False)
-class RoleForWorldEntityWithID(RoleForWorldEntity, ABC):
+class DelegatorForWorldEntityWithID(DelegatorForWorldEntity, ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> WorldEntityWithID: ...
+    def delegatee(self) -> WorldEntityWithID: ...
     @property
     def id(self) -> UUID:
-        return self.role_taker.id
+        return self.delegatee.id
 
     @id.setter
     def id(self, value: UUID):
-        self.role_taker.id = value
+        self.delegatee.id = value
 
     def _track_object_in_from_json(
         self, from_json_kwargs
     ) -> WorldEntityWithIDKwargsTracker:
-        return self.role_taker._track_object_in_from_json(from_json_kwargs)
+        return self.delegatee._track_object_in_from_json(from_json_kwargs)
 
     def add_to_world(self, world: World):
-        return self.role_taker.add_to_world(world)
+        return self.delegatee.add_to_world(world)
 
     def copy_for_world(self, world: World) -> Self:
-        return self.role_taker.copy_for_world(world)
+        return self.delegatee.copy_for_world(world)
 
     def to_json(self) -> Dict[str, Any]:
-        return self.role_taker.to_json()
+        return self.delegatee.to_json()
 
 
 @dataclass(eq=False)
-class RoleForSemanticAnnotation(RoleForWorldEntityWithID, ABC):
+class DelegatorForSemanticAnnotation(DelegatorForWorldEntityWithID, ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> SemanticAnnotation: ...
+    def delegatee(self) -> SemanticAnnotation: ...
     @property
     def kinematic_structure_entities(self) -> list[KinematicStructureEntity]:
-        return self.role_taker.kinematic_structure_entities
+        return self.delegatee.kinematic_structure_entities
 
     @property
     def regions(self) -> list[Region]:
-        return self.role_taker.regions
+        return self.delegatee.regions
 
     def __eq__(self, other):
-        return self.role_taker.__eq__(other)
+        return self.delegatee.__eq__(other)
 
     def __hash__(self):
-        return self.role_taker.__hash__()
+        return self.delegatee.__hash__()
 
     def _kinematic_structure_entities(
         self, aggregation_type: Type[GenericKinematicStructureEntity]
     ) -> list[GenericKinematicStructureEntity]:
-        return self.role_taker._kinematic_structure_entities(aggregation_type)
+        return self.delegatee._kinematic_structure_entities(aggregation_type)
 
     def as_bounding_box_collection_at_origin(
         self, origin: HomogeneousTransformationMatrix
     ) -> BoundingBoxCollection:
-        return self.role_taker.as_bounding_box_collection_at_origin(origin)
+        return self.delegatee.as_bounding_box_collection_at_origin(origin)
 
     def as_bounding_box_collection_in_frame(
         self, reference_frame: KinematicStructureEntity
     ) -> BoundingBoxCollection:
-        return self.role_taker.as_bounding_box_collection_in_frame(reference_frame)
+        return self.delegatee.as_bounding_box_collection_in_frame(reference_frame)
 
 
 @dataclass(eq=False)
-class RoleForHasRootKinematicStructureEntity(RoleForSemanticAnnotation, ABC):
+class DelegatorForHasRootKinematicStructureEntity(DelegatorForSemanticAnnotation, ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> HasRootKinematicStructureEntity: ...
+    def delegatee(self) -> HasRootKinematicStructureEntity: ...
     @property
     def root(self) -> TKinematicStructureEntity:
-        return self.role_taker.root
+        return self.delegatee.root
 
     @root.setter
     def root(self, value: TKinematicStructureEntity):
-        self.role_taker.root = value
+        self.delegatee.root = value
 
     @property
     def global_transform(self) -> HomogeneousTransformationMatrix:
-        return self.role_taker.global_transform
+        return self.delegatee.global_transform
 
     @property
     def min_max_points(self) -> tuple[Point3, Point3]:
-        return self.role_taker.min_max_points
+        return self.delegatee.min_max_points
 
     @property
     def scale(self) -> Scale:
-        return self.role_taker.scale
+        return self.delegatee.scale
 
     def _attach_child_entity_in_kinematic_structure(
         self,
         child_kinematic_structure_entity: KinematicStructureEntity,
     ):
-        return self.role_taker._attach_child_entity_in_kinematic_structure(
+        return self.delegatee._attach_child_entity_in_kinematic_structure(
             child_kinematic_structure_entity
         )
 
@@ -177,64 +177,64 @@ class RoleForHasRootKinematicStructureEntity(RoleForSemanticAnnotation, ABC):
         self,
         new_parent_entity: KinematicStructureEntity,
     ):
-        return self.role_taker._attach_parent_entity_in_kinematic_structure(
+        return self.delegatee._attach_parent_entity_in_kinematic_structure(
             new_parent_entity
         )
 
     def _offline_root_T_entity(
         self, entity: KinematicStructureEntity
     ) -> HomogeneousTransformationMatrix:
-        return self.role_taker._offline_root_T_entity(entity)
+        return self.delegatee._offline_root_T_entity(entity)
 
     def get_new_grandparent(
         self,
         parent_kinematic_structure_entity: KinematicStructureEntity,
     ):
-        return self.role_taker.get_new_grandparent(parent_kinematic_structure_entity)
+        return self.delegatee.get_new_grandparent(parent_kinematic_structure_entity)
 
 
 @dataclass(eq=False)
-class RoleForHasRootBody(RoleForHasRootKinematicStructureEntity, ABC):
+class DelegatorForHasRootBody(DelegatorForHasRootKinematicStructureEntity, ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> HasRootBody: ...
+    def delegatee(self) -> HasRootBody: ...
     @property
     def root(self) -> TBody:
-        return self.role_taker.root
+        return self.delegatee.root
 
     @root.setter
     def root(self, value: TBody):
-        self.role_taker.root = value
+        self.delegatee.root = value
 
     @property
     def bodies(self) -> list[Body]:
-        return self.role_taker.bodies
+        return self.delegatee.bodies
 
 
 @dataclass(eq=False)
-class RoleForHasStorageSpace(RoleForHasRootBody, ABC):
+class DelegatorForHasStorageSpace(DelegatorForHasRootBody, ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> HasStorageSpace: ...
+    def delegatee(self) -> HasStorageSpace: ...
     @property
     def objects(self) -> List[THasRootBody]:
-        return self.role_taker.objects
+        return self.delegatee.objects
 
     @objects.setter
     def objects(self, value: List[THasRootBody]):
-        self.role_taker.objects = value
+        self.delegatee.objects = value
 
     def _apply_diff(self, diff: JSONAttributeDiff, **kwargs) -> None:
-        return self.role_taker._apply_diff(diff, kwargs)
+        return self.delegatee._apply_diff(diff, kwargs)
 
     @synchronized_attribute_modification
     def add_object(self, object: HasRootBody):
-        return self.role_taker.add_object(object)
+        return self.delegatee.add_object(object)
 
     def get_objects_of_type(
         self, object_type: Type[SemanticAnnotation]
     ) -> List[HasRootBody]:
-        return self.role_taker.get_objects_of_type(object_type)
+        return self.delegatee.get_objects_of_type(object_type)
 
     def update_from_json_diff(self, diffs: List[JSONAttributeDiff], **kwargs) -> None:
-        return self.role_taker.update_from_json_diff(diffs, kwargs)
+        return self.delegatee.update_from_json_diff(diffs, kwargs)

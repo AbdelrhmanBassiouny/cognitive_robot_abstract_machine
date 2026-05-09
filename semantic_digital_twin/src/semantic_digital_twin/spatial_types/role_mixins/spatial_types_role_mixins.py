@@ -33,28 +33,28 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForSpatialType(ABC):
+class DelegatorForSpatialType(ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> SpatialType: ...
+    def delegatee(self) -> SpatialType: ...
     @property
     def casadi_sx(self) -> SX:
-        return self.role_taker.casadi_sx
+        return self.delegatee.casadi_sx
 
     @casadi_sx.setter
     def casadi_sx(self, value: SX):
-        self.role_taker.casadi_sx = value
+        self.delegatee.casadi_sx = value
 
     @property
     def reference_frame(self) -> Union[KinematicStructureEntity, None]:
-        return self.role_taker.reference_frame
+        return self.delegatee.reference_frame
 
     @reference_frame.setter
     def reference_frame(self, value: Union[KinematicStructureEntity, None]):
-        self.role_taker.reference_frame = value
+        self.delegatee.reference_frame = value
 
     def __deepcopy__(self, memo) -> Self:
-        return self.role_taker.__deepcopy__(memo)
+        return self.delegatee.__deepcopy__(memo)
 
     @staticmethod
     def _ensure_consistent_frame(
@@ -66,115 +66,115 @@ class RoleForSpatialType(ABC):
 
 
 @dataclass(eq=False, init=False, repr=False)
-class RoleForPose(RoleForSpatialType, ABC):
+class DelegatorForPose(DelegatorForSpatialType, ABC):
     @property
     @abstractmethod
-    def role_taker(self) -> Pose: ...
+    def delegatee(self) -> Pose: ...
     @property
     def casadi_sx(self) -> SX:
-        return self.role_taker.casadi_sx
+        return self.delegatee.casadi_sx
 
     @casadi_sx.setter
     def casadi_sx(self, value: SX):
-        self.role_taker.casadi_sx = value
+        self.delegatee.casadi_sx = value
 
     @property
     def shape(self) -> tuple[int, int]:
-        return self.role_taker.shape
+        return self.delegatee.shape
 
     @property
     def x(self) -> Scalar:
-        return self.role_taker.x
+        return self.delegatee.x
 
     @x.setter
     def x(self, value: Scalar):
-        self.role_taker.x = value
+        self.delegatee.x = value
 
     @property
     def y(self) -> Scalar:
-        return self.role_taker.y
+        return self.delegatee.y
 
     @y.setter
     def y(self, value: Scalar):
-        self.role_taker.y = value
+        self.delegatee.y = value
 
     @property
     def z(self) -> Scalar:
-        return self.role_taker.z
+        return self.delegatee.z
 
     @z.setter
     def z(self, value: Scalar):
-        self.role_taker.z = value
+        self.delegatee.z = value
 
     def __abs__(self) -> Self:
-        return self.role_taker.__abs__()
+        return self.delegatee.__abs__()
 
     def __array__(self):
-        return self.role_taker.__array__()
+        return self.delegatee.__array__()
 
     def __copy__(self) -> Self:
-        return self.role_taker.__copy__()
+        return self.delegatee.__copy__()
 
     def __getitem__(
         self, item: np.ndarray | int | slice | Tuple[int | slice, int | slice]
     ) -> Scalar | Vector:
-        return self.role_taker.__getitem__(item)
+        return self.delegatee.__getitem__(item)
 
     def __hash__(self):
-        return self.role_taker.__hash__()
+        return self.delegatee.__hash__()
 
     def __len__(self) -> int:
-        return self.role_taker.__len__()
+        return self.delegatee.__len__()
 
     def __neg__(self) -> Self:
-        return self.role_taker.__neg__()
+        return self.delegatee.__neg__()
 
     def __repr__(self):
-        return self.role_taker.__repr__()
+        return self.delegatee.__repr__()
 
     def __setitem__(
         self,
         key: int | slice | Tuple[int | slice, int | slice],
         value: ScalarData,
     ):
-        return self.role_taker.__setitem__(key, value)
+        return self.delegatee.__setitem__(key, value)
 
     def __str__(self):
-        return self.role_taker.__str__()
+        return self.delegatee.__str__()
 
     def _apply_diff(self, diff: JSONAttributeDiff, **kwargs) -> None:
-        return self.role_taker._apply_diff(diff, kwargs)
+        return self.delegatee._apply_diff(diff, kwargs)
 
     def _verify_type(self):
-        return self.role_taker._verify_type()
+        return self.delegatee._verify_type()
 
     def compile(
         self,
         parameters: Optional[VariableParameters] = None,
         sparse: bool = False,
     ) -> CompiledFunction:
-        return self.role_taker.compile(parameters, sparse)
+        return self.delegatee.compile(parameters, sparse)
 
     def equivalent(self, other: ScalarData) -> bool:
-        return self.role_taker.equivalent(other)
+        return self.delegatee.equivalent(other)
 
     def evaluate(self) -> np.ndarray:
-        return self.role_taker.evaluate()
+        return self.delegatee.evaluate()
 
     def flatten(self) -> Vector:
-        return self.role_taker.flatten()
+        return self.delegatee.flatten()
 
     def free_variables(self) -> List[FloatVariable]:
-        return self.role_taker.free_variables()
+        return self.delegatee.free_variables()
 
     def is_constant(self) -> bool:
-        return self.role_taker.is_constant()
+        return self.delegatee.is_constant()
 
     def is_scalar(self) -> bool:
-        return self.role_taker.is_scalar()
+        return self.delegatee.is_scalar()
 
     def jacobian(self, variables: Iterable[FloatVariable]) -> Matrix:
-        return self.role_taker.jacobian(variables)
+        return self.delegatee.jacobian(variables)
 
     def jacobian_ddot(
         self,
@@ -182,24 +182,24 @@ class RoleForPose(RoleForSpatialType, ABC):
         variables_dot: Iterable[FloatVariable],
         variables_ddot: Iterable[FloatVariable],
     ) -> Matrix:
-        return self.role_taker.jacobian_ddot(variables, variables_dot, variables_ddot)
+        return self.delegatee.jacobian_ddot(variables, variables_dot, variables_ddot)
 
     def jacobian_dot(
         self,
         variables: Iterable[FloatVariable],
         variables_dot: Iterable[FloatVariable],
     ) -> Matrix:
-        return self.role_taker.jacobian_dot(variables, variables_dot)
+        return self.delegatee.jacobian_dot(variables, variables_dot)
 
     def pretty_str(self) -> List[List[str]]:
-        return self.role_taker.pretty_str()
+        return self.delegatee.pretty_str()
 
     def safe_division(
         self,
         other: GenericSymbolicType,
         if_nan: Optional[ScalarData] = None,
     ) -> GenericSymbolicType:
-        return self.role_taker.safe_division(other, if_nan)
+        return self.delegatee.safe_division(other, if_nan)
 
     def second_order_total_derivative(
         self,
@@ -207,7 +207,7 @@ class RoleForPose(RoleForSpatialType, ABC):
         variables_dot: Iterable[FloatVariable],
         variables_ddot: Iterable[FloatVariable],
     ) -> Vector:
-        return self.role_taker.second_order_total_derivative(
+        return self.delegatee.second_order_total_derivative(
             variables, variables_dot, variables_ddot
         )
 
@@ -216,35 +216,35 @@ class RoleForPose(RoleForSpatialType, ABC):
         old_variables: List[FloatVariable],
         new_variables: List[ScalarData] | Vector,
     ) -> Self:
-        return self.role_taker.substitute(old_variables, new_variables)
+        return self.delegatee.substitute(old_variables, new_variables)
 
     def to_homogeneous_matrix(self) -> HomogeneousTransformationMatrix:
-        return self.role_taker.to_homogeneous_matrix()
+        return self.delegatee.to_homogeneous_matrix()
 
     def to_json(self) -> Dict[str, Any]:
-        return self.role_taker.to_json()
+        return self.delegatee.to_json()
 
     def to_list(self) -> list:
-        return self.role_taker.to_list()
+        return self.delegatee.to_list()
 
     def to_np(self) -> np.ndarray:
-        return self.role_taker.to_np()
+        return self.delegatee.to_np()
 
     def to_position(self) -> Point3:
-        return self.role_taker.to_position()
+        return self.delegatee.to_position()
 
     def to_quaternion(self) -> Quaternion:
-        return self.role_taker.to_quaternion()
+        return self.delegatee.to_quaternion()
 
     def to_rotation_matrix(self) -> RotationMatrix:
-        return self.role_taker.to_rotation_matrix()
+        return self.delegatee.to_rotation_matrix()
 
     def total_derivative(
         self,
         variables: Iterable[FloatVariable],
         variables_dot: Iterable[FloatVariable],
     ) -> Vector:
-        return self.role_taker.total_derivative(variables, variables_dot)
+        return self.delegatee.total_derivative(variables, variables_dot)
 
     def update_from_json_diff(self, diffs: List[JSONAttributeDiff], **kwargs) -> None:
-        return self.role_taker.update_from_json_diff(diffs, kwargs)
+        return self.delegatee.update_from_json_diff(diffs, kwargs)

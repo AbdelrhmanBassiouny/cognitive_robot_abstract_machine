@@ -33,58 +33,58 @@ def _base_names(cls_def: cst.ClassDef) -> list[str]:
 
 
 def test_base_mixin_generated(mixin_source):
-    """A RoleForCrossModuleBase class must be emitted for the cross-module ancestor."""
-    assert "class RoleForCrossModuleBase" in mixin_source
+    """A DelegatorForCrossModuleBase class must be emitted for the cross-module ancestor."""
+    assert "class DelegatorForCrossModuleBase" in mixin_source
 
 
 def test_shared_method_not_duplicated(mixin_source):
-    """cross_method appears exactly once (in RoleForCrossModuleBase)."""
+    """cross_method appears exactly once (in DelegatorForCrossModuleBase)."""
     assert mixin_source.count("def cross_method") == 1
 
 
 def test_shared_field_in_base_mixin_only(mixin_source):
-    """cross_field property is in RoleForCrossModuleBase and not in taker-specific RoleFors."""
+    """cross_field property is in DelegatorForCrossModuleBase and not in taker-specific DelegatorFors."""
     classes = _classes(mixin_source)
-    assert "cross_field" in _method_names(classes["RoleForCrossModuleBase"])
-    assert "cross_field" not in _method_names(classes["RoleForTakerX"])
-    assert "cross_field" not in _method_names(classes["RoleForTakerY"])
+    assert "cross_field" in _method_names(classes["DelegatorForCrossModuleBase"])
+    assert "cross_field" not in _method_names(classes["DelegatorForTakerX"])
+    assert "cross_field" not in _method_names(classes["DelegatorForTakerY"])
 
 
 def test_single_base_mixin_per_base(mixin_source):
-    """RoleForCrossModuleBase is defined exactly once."""
-    assert mixin_source.count("class RoleForCrossModuleBase") == 1
+    """DelegatorForCrossModuleBase is defined exactly once."""
+    assert mixin_source.count("class DelegatorForCrossModuleBase") == 1
 
 
 def test_taker_rolefors_inherit_base_mixin(mixin_source):
-    """Both RoleForTakerX and RoleForTakerY inherit from RoleForCrossModuleBase."""
+    """Both DelegatorForTakerX and DelegatorForTakerY inherit from DelegatorForCrossModuleBase."""
     classes = _classes(mixin_source)
-    for name in ("RoleForTakerX", "RoleForTakerY"):
+    for name in ("DelegatorForTakerX", "DelegatorForTakerY"):
         bases = _base_names(classes[name])
-        assert "RoleForCrossModuleBase" in bases, (
-            f"{name} does not inherit RoleForCrossModuleBase; got bases: {bases}"
+        assert "DelegatorForCrossModuleBase" in bases, (
+            f"{name} does not inherit DelegatorForCrossModuleBase; got bases: {bases}"
         )
 
 
 def test_taker_only_methods_stay_in_taker(mixin_source):
-    """taker_x_only_method stays in RoleForTakerX; taker_y_only_method stays in RoleForTakerY."""
+    """taker_x_only_method stays in DelegatorForTakerX; taker_y_only_method stays in DelegatorForTakerY."""
     classes = _classes(mixin_source)
-    assert "taker_x_only_method" in _method_names(classes["RoleForTakerX"])
-    assert "taker_y_only_method" in _method_names(classes["RoleForTakerY"])
-    shared_methods = _method_names(classes["RoleForCrossModuleBase"])
+    assert "taker_x_only_method" in _method_names(classes["DelegatorForTakerX"])
+    assert "taker_y_only_method" in _method_names(classes["DelegatorForTakerY"])
+    shared_methods = _method_names(classes["DelegatorForCrossModuleBase"])
     assert "taker_x_only_method" not in shared_methods
     assert "taker_y_only_method" not in shared_methods
 
 
 def test_base_mixin_has_abstract_role_taker(mixin_source):
-    """RoleForCrossModuleBase declares an abstract role_taker property."""
+    """DelegatorForCrossModuleBase declares an abstract role_taker property."""
     classes = _classes(mixin_source)
-    assert "role_taker" in _method_names(classes["RoleForCrossModuleBase"])
+    assert "delegatee" in _method_names(classes["DelegatorForCrossModuleBase"])
 
 
 def test_base_mixin_emitted_before_taker_rolefors(mixin_source):
-    """RoleForCrossModuleBase appears before RoleForTakerX in the source."""
-    assert mixin_source.index("class RoleForCrossModuleBase") < mixin_source.index(
-        "class RoleForTakerX"
+    """DelegatorForCrossModuleBase appears before DelegatorForTakerX in the source."""
+    assert mixin_source.index("class DelegatorForCrossModuleBase") < mixin_source.index(
+        "class DelegatorForTakerX"
     )
 
 

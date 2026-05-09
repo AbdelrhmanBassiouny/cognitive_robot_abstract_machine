@@ -175,7 +175,7 @@ def test_typing_alias_imported_from_base_method():
 
 def test_no_init_or_post_init_in_role_for():
     """
-    Tests that __init__ and __post_init__ are NOT present in the generated RoleFor class.
+    Tests that __init__ and __post_init__ are NOT present in the generated DelegatorFor class.
     """
     # We add them to Taker for this test
     from test.krrood_test.dataset.role_and_ontology.reproduction_module import Taker
@@ -201,10 +201,10 @@ def test_no_init_or_post_init_in_role_for():
         assert reproduction_module in results
         _, mixin_source = results[reproduction_module]
 
-        # RoleForTaker should be generated for Taker
-        assert "class RoleForTaker" in mixin_source
+        # DelegatorForTaker should be generated for Taker
+        assert "class DelegatorForTaker" in mixin_source
 
-        # Ensure __init__ and __post_init__ are not present as methods in RoleForTaker
+        # Ensure __init__ and __post_init__ are not present as methods in DelegatorForTaker
         assert "def __init__" not in mixin_source
         assert "def __post_init__" not in mixin_source
     finally:
@@ -241,37 +241,37 @@ def generic_typevar_mixin_comparator(generic_typevar_mixin_source):
 
 
 def test_typevar_preserved_in_base_rolefor(generic_typevar_mixin_source):
-    """entity in RoleForGenericBaseMixin uses TBase, not BaseEntity."""
+    """entity in DelegatorForGenericBaseMixin uses TBase, not BaseEntity."""
     assert "TBase" in generic_typevar_mixin_source
     assert "def entity(self) -> TBase" in generic_typevar_mixin_source
 
 
 def test_typevar_narrowing_redeclared(generic_typevar_mixin_source):
-    """RoleForNarrowedTypeVarTaker re-declares entity with the narrowed TConcreteEntity."""
+    """DelegatorForNarrowedTypeVarTaker re-declares entity with the narrowed TConcreteEntity."""
     assert "TConcreteEntity" in generic_typevar_mixin_source
     assert "def entity(self) -> TConcreteEntity" in generic_typevar_mixin_source
 
 
 def test_concrete_type_substitution_redeclared(generic_typevar_mixin_source):
-    """RoleForConcreteTypeTaker re-declares entity with the concrete ConcreteEntity."""
+    """DelegatorForConcreteTypeTaker re-declares entity with the concrete ConcreteEntity."""
     assert "ConcreteEntity" in generic_typevar_mixin_source
     assert "def entity(self) -> ConcreteEntity" in generic_typevar_mixin_source
 
 
 def test_unspecialized_subclass_no_entity_redeclaration(generic_typevar_mixin_source):
-    """RoleForUnspecializedSubTaker inherits entity from base without re-declaring it."""
-    assert "class RoleForUnspecializedSubTaker" in generic_typevar_mixin_source
-    unspecialized_section = generic_typevar_mixin_source.split("class RoleForUnspecializedSubTaker")[1]
+    """DelegatorForUnspecializedSubTaker inherits entity from base without re-declaring it."""
+    assert "class DelegatorForUnspecializedSubTaker" in generic_typevar_mixin_source
+    unspecialized_section = generic_typevar_mixin_source.split("class DelegatorForUnspecializedSubTaker")[1]
     assert "def entity" not in unspecialized_section
 
 
 def test_generic_typevar_mixin_class_hierarchy(generic_typevar_mixin_comparator):
-    """All RoleFor classes have the correct base classes."""
+    """All DelegatorFor classes have the correct base classes."""
     generic_typevar_mixin_comparator.compare_class_hierarchy()
 
 
 def test_generic_typevar_mixin_class_existence(generic_typevar_mixin_comparator):
-    """All expected RoleFor classes are generated."""
+    """All expected DelegatorFor classes are generated."""
     generic_typevar_mixin_comparator.compare_class_existence()
 
 
@@ -304,19 +304,19 @@ def subclass_safe_generic_mixin_comparator(subclass_safe_generic_mixin_source):
 
 
 def test_subclasssafegeneric_base_rolefor_uses_base_typevar(subclass_safe_generic_mixin_source):
-    """item in RoleForItemHolder uses TItem (the SubClassSafeGeneric TypeVar), not a concrete type."""
+    """item in DelegatorForItemHolder uses TItem (the SubClassSafeGeneric TypeVar), not a concrete type."""
     assert "def item(self) -> TItem" in subclass_safe_generic_mixin_source
 
 
 def test_subclasssafegeneric_typevar_narrowing_redeclared(subclass_safe_generic_mixin_source):
-    """RoleForSpecificItemTaker re-declares item with TSpecificItem despite the SubClassSafeGeneric
+    """DelegatorForSpecificItemTaker re-declares item with TSpecificItem despite the SubClassSafeGeneric
     TypeVar aliasing that causes __parameters__ to expose T instead of the annotation-level TypeVar."""
-    section = subclass_safe_generic_mixin_source.split("class RoleForSpecificItemTaker")[1]
+    section = subclass_safe_generic_mixin_source.split("class DelegatorForSpecificItemTaker")[1]
     assert "def item(self) -> TSpecificItem" in section
 
 
 def test_subclasssafegeneric_mixin_class_hierarchy(subclass_safe_generic_mixin_comparator):
-    """RoleForSpecificItemTaker inherits from RoleForItemHolder."""
+    """DelegatorForSpecificItemTaker inherits from DelegatorForItemHolder."""
     subclass_safe_generic_mixin_comparator.compare_class_hierarchy()
 
 
@@ -351,30 +351,30 @@ def independent_typevar_mixin_comparator(independent_typevar_mixin_source):
 
 
 def test_independent_typevar_root_not_overwritten_by_content_typevar(independent_typevar_mixin_source):
-    """root must not be redeclared in RoleForMultiTaker — TSpecificRoot is already established
-    in RoleForNarrowedRootHolder and inherited through the chain.
+    """root must not be redeclared in DelegatorForMultiTaker — TSpecificRoot is already established
+    in DelegatorForNarrowedRootHolder and inherited through the chain.
 
     Regression: transitive get_generic_type_param returned the wrong TypeVar
     from an unrelated independent generic (TContent2) for the root property.
     """
-    multi_taker_section = independent_typevar_mixin_source.split("class RoleForMultiTaker")[1]
+    multi_taker_section = independent_typevar_mixin_source.split("class DelegatorForMultiTaker")[1]
     assert "def root" not in multi_taker_section
     assert "def root(self) -> TContent2" not in multi_taker_section
 
 
 def test_independent_typevar_content_uses_narrowed_typevar(independent_typevar_mixin_source):
-    """content in RoleForMultiTaker uses TContent2 (narrowed from TContent)."""
-    multi_taker_section = independent_typevar_mixin_source.split("class RoleForMultiTaker")[1]
+    """content in DelegatorForMultiTaker uses TContent2 (narrowed from TContent)."""
+    multi_taker_section = independent_typevar_mixin_source.split("class DelegatorForMultiTaker")[1]
     assert "def content(self) -> TContent2" in multi_taker_section
 
 
 def test_independent_typevar_mixin_class_existence(independent_typevar_mixin_comparator):
-    """All expected RoleFor classes are generated."""
+    """All expected DelegatorFor classes are generated."""
     independent_typevar_mixin_comparator.compare_class_existence()
 
 
 def test_independent_typevar_mixin_class_hierarchy(independent_typevar_mixin_comparator):
-    """All RoleFor classes have the correct base classes."""
+    """All DelegatorFor classes have the correct base classes."""
     independent_typevar_mixin_comparator.compare_class_hierarchy()
 
 
@@ -410,30 +410,30 @@ def two_role_taker_narrowing_comparator(two_role_taker_narrowing_mixin_source):
 
 
 def test_two_role_taker_narrowing_entity_redeclared_in_derived(two_role_taker_narrowing_mixin_source):
-    """entity in RoleForDerivedHolder must be redeclared as TSpecificEntity, not TBaseEntity.
+    """entity in DelegatorForDerivedHolder must be redeclared as TSpecificEntity, not TBaseEntity.
 
     Regression: when both BaseHolder and DerivedHolder are role takers, entity was in
     taker_fields and skipped before the narrowing check, so no re-declaration was generated.
     """
-    derived_section = two_role_taker_narrowing_mixin_source.split("class RoleForDerivedHolder")[1]
+    derived_section = two_role_taker_narrowing_mixin_source.split("class DelegatorForDerivedHolder")[1]
     assert "def entity(self) -> TSpecificEntity" in derived_section
     assert "def entity(self) -> TBaseEntity" not in derived_section
 
 
 def test_two_role_taker_narrowing_base_uses_base_typevar(two_role_taker_narrowing_mixin_source):
-    """entity in RoleForBaseHolder uses TBaseEntity (not narrowed)."""
-    base_section = two_role_taker_narrowing_mixin_source.split("class RoleForBaseHolder")[1]
-    base_section = base_section.split("class RoleForDerivedHolder")[0]
+    """entity in DelegatorForBaseHolder uses TBaseEntity (not narrowed)."""
+    base_section = two_role_taker_narrowing_mixin_source.split("class DelegatorForBaseHolder")[1]
+    base_section = base_section.split("class DelegatorForDerivedHolder")[0]
     assert "def entity(self) -> TBaseEntity" in base_section
 
 
 def test_two_role_taker_narrowing_class_existence(two_role_taker_narrowing_comparator):
-    """All expected RoleFor classes are generated."""
+    """All expected DelegatorFor classes are generated."""
     two_role_taker_narrowing_comparator.compare_class_existence()
 
 
 def test_two_role_taker_narrowing_class_hierarchy(two_role_taker_narrowing_comparator):
-    """RoleForDerivedHolder extends RoleForBaseHolder."""
+    """DelegatorForDerivedHolder extends DelegatorForBaseHolder."""
     two_role_taker_narrowing_comparator.compare_class_hierarchy()
 
 
@@ -472,36 +472,36 @@ def unsubscripted_intermediate_mixin_comparator(unsubscripted_intermediate_mixin
 
 
 def test_unsubscripted_intermediate_item_not_redeclared_in_rack(unsubscripted_intermediate_mixin_source):
-    """item must not appear in RoleForRack — it is already covered by RoleForShelf (via CargoCrate).
+    """item must not appear in DelegatorForRack — it is already covered by DelegatorForShelf (via CargoCrate).
 
     Regression: from_specialization(Shelf, Box) returned empty because Shelf inherits CargoCrate
     without a subscript, so get_generic_type_param skipped CargoCrate.  nearest_covered_type
     stayed as TBoxItem instead of Cargo, causing a spurious ``item -> Cargo`` re-declaration.
     """
-    rack_section = unsubscripted_intermediate_mixin_source.split("class RoleForRack")[1]
+    rack_section = unsubscripted_intermediate_mixin_source.split("class DelegatorForRack")[1]
     assert "def item" not in rack_section
 
 
 def test_unsubscripted_intermediate_item_narrowed_in_cargo_crate(unsubscripted_intermediate_mixin_source):
-    """item -> Cargo is generated for RoleForCargoCrate (the concrete intermediate)."""
-    cargo_crate_section = unsubscripted_intermediate_mixin_source.split("class RoleForCargoCrate")[1]
-    cargo_crate_section = cargo_crate_section.split("class RoleForShelf")[0]
+    """item -> Cargo is generated for DelegatorForCargoCrate (the concrete intermediate)."""
+    cargo_crate_section = unsubscripted_intermediate_mixin_source.split("class DelegatorForCargoCrate")[1]
+    cargo_crate_section = cargo_crate_section.split("class DelegatorForShelf")[0]
     assert "def item(self) -> Cargo" in cargo_crate_section
 
 
 def test_unsubscripted_intermediate_slot_narrowed_in_rack(unsubscripted_intermediate_mixin_source):
-    """slot -> TRackSlot is generated for RoleForRack (Rack narrows TShelfContent to TRackSlot)."""
-    rack_section = unsubscripted_intermediate_mixin_source.split("class RoleForRack")[1]
+    """slot -> TRackSlot is generated for DelegatorForRack (Rack narrows TShelfContent to TRackSlot)."""
+    rack_section = unsubscripted_intermediate_mixin_source.split("class DelegatorForRack")[1]
     assert "def slot(self) -> TRackSlot" in rack_section
 
 
 def test_unsubscripted_intermediate_mixin_class_existence(unsubscripted_intermediate_mixin_comparator):
-    """All expected RoleFor classes are generated."""
+    """All expected DelegatorFor classes are generated."""
     unsubscripted_intermediate_mixin_comparator.compare_class_existence()
 
 
 def test_unsubscripted_intermediate_mixin_class_hierarchy(unsubscripted_intermediate_mixin_comparator):
-    """RoleForRack extends RoleForShelf which extends RoleForCargoCrate which extends RoleForBox."""
+    """DelegatorForRack extends DelegatorForShelf which extends DelegatorForCargoCrate which extends DelegatorForBox."""
     unsubscripted_intermediate_mixin_comparator.compare_class_hierarchy()
 
 

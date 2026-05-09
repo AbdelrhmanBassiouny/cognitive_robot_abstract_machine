@@ -13,26 +13,26 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForRoleTakerInAnotherModule(ABC):
+class DelegatorForRoleTakerInAnotherModule(ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> RoleTakerInAnotherModule: ...
+    def delegatee(self) -> RoleTakerInAnotherModule: ...
 
     @property
     def original_attribute(self) -> str:
-        return self.role_taker.original_attribute
+        return self.delegatee.original_attribute
 
     @original_attribute.setter
     def original_attribute(self, value: str):
-        self.role_taker.original_attribute = value
+        self.delegatee.original_attribute = value
 
     @property
     def attribute_with_annotation_from_role_module(self) -> PersonInRoleAndOntology:
-        return self.role_taker.attribute_with_annotation_from_role_module
+        return self.delegatee.attribute_with_annotation_from_role_module
 
     @attribute_with_annotation_from_role_module.setter
     def attribute_with_annotation_from_role_module(
         self, value: PersonInRoleAndOntology
     ):
-        self.role_taker.attribute_with_annotation_from_role_module = value
+        self.delegatee.attribute_with_annotation_from_role_module = value

@@ -1,6 +1,6 @@
 """
 Tests that when an intermediate ancestor narrows a TypeVar and the concrete class does
-not further narrow it, the RoleFor for the concrete class does NOT redeclare the field.
+not further narrow it, the DelegatorFor for the concrete class does NOT redeclare the field.
 
 Dataset: independent_typevar_takers.py
     RootHolder[TRoot]
@@ -9,10 +9,10 @@ Dataset: independent_typevar_takers.py
                       └─ MultiTaker[TContent2]  (narrows TContent → TContent2; root unchanged)
 
 Expected mixin output:
-    RoleForRootHolder           – root: TRoot
-    RoleForNarrowedRootHolder   – root: TSpecificRoot  (genuine narrowing)
-    RoleForContentHolder        – content: TContent; no root redeclaration
-    RoleForMultiTaker           – content: TContent2; no root redeclaration
+    DelegatorForRootHolder           – root: TRoot
+    DelegatorForNarrowedRootHolder   – root: TSpecificRoot  (genuine narrowing)
+    DelegatorForContentHolder        – content: TContent; no root redeclaration
+    DelegatorForMultiTaker           – content: TContent2; no root redeclaration
 """
 
 import pytest
@@ -37,20 +37,20 @@ def _body_of_class(source: str, class_name: str) -> str:
 
 
 def test_narrowed_root_holder_declares_root_with_specific_typevar(mixin_source):
-    body = _body_of_class(mixin_source, "RoleForNarrowedRootHolder")
+    body = _body_of_class(mixin_source, "DelegatorForNarrowedRootHolder")
     assert "def root(self) -> TSpecificRoot" in body
 
 
 def test_content_holder_does_not_redeclare_root(mixin_source):
-    body = _body_of_class(mixin_source, "RoleForContentHolder")
+    body = _body_of_class(mixin_source, "DelegatorForContentHolder")
     assert "def root" not in body
 
 
 def test_multi_taker_does_not_redeclare_root(mixin_source):
-    body = _body_of_class(mixin_source, "RoleForMultiTaker")
+    body = _body_of_class(mixin_source, "DelegatorForMultiTaker")
     assert "def root" not in body
 
 
 def test_multi_taker_redeclares_content_with_narrowed_typevar(mixin_source):
-    body = _body_of_class(mixin_source, "RoleForMultiTaker")
+    body = _body_of_class(mixin_source, "DelegatorForMultiTaker")
     assert "def content(self) -> TContent2" in body

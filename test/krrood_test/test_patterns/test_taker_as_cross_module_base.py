@@ -3,10 +3,10 @@ Tests that when a role taker (BaseTaker) is defined in a separate module from th
 derived takers (DerivedTakerA, DerivedTakerB) that inherit from it, and all their
 roles are in the same module, the generated mixin for the derived-takers module:
 
-  - imports RoleForCrossModuleBaseTaker from the base-taker module's mixin
-  - does NOT re-define RoleForCrossModuleBaseTaker locally
-  - generates RoleForDerivedTakerA and RoleForDerivedTakerB inheriting from
-    RoleForCrossModuleBaseTaker
+  - imports DelegatorForCrossModuleBaseTaker from the base-taker module's mixin
+  - does NOT re-define DelegatorForCrossModuleBaseTaker locally
+  - generates DelegatorForDerivedTakerA and DelegatorForDerivedTakerB inheriting from
+    DelegatorForCrossModuleBaseTaker
 
 This exercises the fix for the circular-import bug caused by make_role_for_node
 not registering direct takers in _global_base_class_ownership.
@@ -51,38 +51,38 @@ def _base_names(cls_def: cst.ClassDef) -> list[str]:
 
 
 def test_base_taker_module_has_role_for_base(mixin_sources):
-    """RoleForCrossModuleBaseTaker is generated in the base-taker module's mixin."""
+    """DelegatorForCrossModuleBaseTaker is generated in the base-taker module's mixin."""
     src = mixin_sources[cross_module_base_taker]
-    assert "class RoleForCrossModuleBaseTaker" in src
+    assert "class DelegatorForCrossModuleBaseTaker" in src
 
 
 def test_derived_module_does_not_redefine_base_rolefor(mixin_sources):
-    """The derived-takers mixin must NOT define RoleForCrossModuleBaseTaker."""
+    """The derived-takers mixin must NOT define DelegatorForCrossModuleBaseTaker."""
     src = mixin_sources[cross_module_derived_takers_with_base_role]
-    assert "class RoleForCrossModuleBaseTaker" not in src
+    assert "class DelegatorForCrossModuleBaseTaker" not in src
 
 
 def test_derived_module_imports_base_rolefor(mixin_sources):
-    """The derived-takers mixin must import RoleForCrossModuleBaseTaker from the base mixin."""
+    """The derived-takers mixin must import DelegatorForCrossModuleBaseTaker from the base mixin."""
     src = mixin_sources[cross_module_derived_takers_with_base_role]
-    assert "RoleForCrossModuleBaseTaker" in src
+    assert "DelegatorForCrossModuleBaseTaker" in src
     assert "cross_module_base_taker" in src
 
 
 def test_derived_a_inherits_base_rolefor(mixin_sources):
-    """RoleForDerivedTakerA must inherit from RoleForCrossModuleBaseTaker."""
+    """DelegatorForDerivedTakerA must inherit from DelegatorForCrossModuleBaseTaker."""
     src = mixin_sources[cross_module_derived_takers_with_base_role]
     classes = _classes(src)
-    assert "RoleForDerivedTakerA" in classes
-    assert "RoleForCrossModuleBaseTaker" in _base_names(classes["RoleForDerivedTakerA"])
+    assert "DelegatorForDerivedTakerA" in classes
+    assert "DelegatorForCrossModuleBaseTaker" in _base_names(classes["DelegatorForDerivedTakerA"])
 
 
 def test_derived_b_inherits_base_rolefor(mixin_sources):
-    """RoleForDerivedTakerB must inherit from RoleForCrossModuleBaseTaker."""
+    """DelegatorForDerivedTakerB must inherit from DelegatorForCrossModuleBaseTaker."""
     src = mixin_sources[cross_module_derived_takers_with_base_role]
     classes = _classes(src)
-    assert "RoleForDerivedTakerB" in classes
-    assert "RoleForCrossModuleBaseTaker" in _base_names(classes["RoleForDerivedTakerB"])
+    assert "DelegatorForDerivedTakerB" in classes
+    assert "DelegatorForCrossModuleBaseTaker" in _base_names(classes["DelegatorForDerivedTakerB"])
 
 
 def test_no_circular_import(mixin_sources):
@@ -92,4 +92,4 @@ def test_no_circular_import(mixin_sources):
     base_mixin_name = "cross_module_base_taker_role_mixins"
     derived_mixin_name = "cross_module_derived_takers_with_base_role_role_mixins"
     assert derived_mixin_name not in base_src
-    assert base_mixin_name not in derived_src or "RoleForCrossModuleBaseTaker" in base_src
+    assert base_mixin_name not in derived_src or "DelegatorForCrossModuleBaseTaker" in base_src

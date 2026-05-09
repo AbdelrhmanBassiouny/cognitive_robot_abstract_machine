@@ -19,64 +19,64 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForRootHolder(ABC):
+class DelegatorForRootHolder(ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> RootHolder: ...
+    def delegatee(self) -> RootHolder: ...
 
     @property
     def root(self) -> TRoot:
-        return self.role_taker.root
+        return self.delegatee.root
 
     @root.setter
     def root(self, value: TRoot):
-        self.role_taker.root = value
+        self.delegatee.root = value
 
 
 @dataclass(eq=False)
-class RoleForNarrowedRootHolder(RoleForRootHolder, ABC):
+class DelegatorForNarrowedRootHolder(DelegatorForRootHolder, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> NarrowedRootHolder: ...
+    def delegatee(self) -> NarrowedRootHolder: ...
 
     @property
     def root(self) -> TSpecificRoot:
-        return self.role_taker.root
+        return self.delegatee.root
 
     @root.setter
     def root(self, value: TSpecificRoot):
-        self.role_taker.root = value
+        self.delegatee.root = value
 
 
 @dataclass(eq=False)
-class RoleForContentHolder(RoleForNarrowedRootHolder, ABC):
+class DelegatorForContentHolder(DelegatorForNarrowedRootHolder, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> ContentHolder: ...
+    def delegatee(self) -> ContentHolder: ...
 
     @property
     def content(self) -> TContent:
-        return self.role_taker.content
+        return self.delegatee.content
 
     @content.setter
     def content(self, value: TContent):
-        self.role_taker.content = value
+        self.delegatee.content = value
 
 
 @dataclass(eq=False)
-class RoleForMultiTaker(RoleForContentHolder, ABC):
+class DelegatorForMultiTaker(DelegatorForContentHolder, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TMultiTaker: ...
+    def delegatee(self) -> TMultiTaker: ...
 
     @property
     def content(self) -> TContent2:
-        return self.role_taker.content
+        return self.delegatee.content
 
     @content.setter
     def content(self, value: TContent2):
-        self.role_taker.content = value
+        self.delegatee.content = value

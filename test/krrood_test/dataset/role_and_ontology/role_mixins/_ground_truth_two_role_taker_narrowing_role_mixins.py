@@ -15,40 +15,40 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForBaseHolder(ABC):
+class DelegatorForBaseHolder(ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TBaseHolder: ...
+    def delegatee(self) -> TBaseHolder: ...
 
     @property
     def entity(self) -> TBaseEntity:
-        return self.role_taker.entity
+        return self.delegatee.entity
 
     @entity.setter
     def entity(self, value: TBaseEntity):
-        self.role_taker.entity = value
+        self.delegatee.entity = value
 
 
 @dataclass(eq=False)
-class RoleForDerivedHolder(RoleForBaseHolder, ABC):
+class DelegatorForDerivedHolder(DelegatorForBaseHolder, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TDerivedHolder: ...
+    def delegatee(self) -> TDerivedHolder: ...
 
     @property
     def entity(self) -> TSpecificEntity:
-        return self.role_taker.entity
+        return self.delegatee.entity
 
     @entity.setter
     def entity(self, value: TSpecificEntity):
-        self.role_taker.entity = value
+        self.delegatee.entity = value
 
     @property
     def label(self) -> str:
-        return self.role_taker.label
+        return self.delegatee.label
 
     @label.setter
     def label(self, value: str):
-        self.role_taker.label = value
+        self.delegatee.label = value

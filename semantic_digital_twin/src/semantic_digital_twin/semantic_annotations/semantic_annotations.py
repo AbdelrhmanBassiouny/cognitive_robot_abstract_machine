@@ -64,13 +64,13 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 from krrood.patterns.role import HasRoles
 from semantic_digital_twin.semantic_annotations.role_mixins.mixins_role_mixins import (
-    RoleForHasStorageSpace,
+    DelegatorForHasStorageSpace,
 )
 from semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins import (
-    RoleForBottle,
-    RoleForCabinet,
-    RoleForRoom,
-    RoleForTinCan,
+    DelegatorForBottle,
+    DelegatorForCabinet,
+    DelegatorForRoom,
+    DelegatorForTinCan,
 )
 
 
@@ -413,7 +413,7 @@ class Cabinet(Furniture, HasCaseAsRootBody, HasRoles):
 
 
 @dataclass(eq=False)
-class Fridge(Role[Cabinet], RoleForCabinet, HasDrawers, HasDoors):
+class Fridge(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
     """
     A fridge is a cabinet with doors and possibly drawers.
     """
@@ -437,7 +437,7 @@ class Oven(HasCaseAsRootBody):
 
 
 @dataclass(eq=False)
-class Dresser(Role[Cabinet], RoleForCabinet, HasDrawers, HasDoors):
+class Dresser(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
     """
     A dresser is a cabinet with doors and possibly drawers.
     """
@@ -453,7 +453,7 @@ class Dresser(Role[Cabinet], RoleForCabinet, HasDrawers, HasDoors):
 
 
 @dataclass(eq=False)
-class Cupboard(Role[Cabinet], RoleForCabinet, HasDoors):
+class Cupboard(Role[Cabinet], DelegatorForCabinet, HasDoors):
     """
     A cupboard is a cabinet with doors.
     """
@@ -469,7 +469,7 @@ class Cupboard(Role[Cabinet], RoleForCabinet, HasDoors):
 
 
 @dataclass(eq=False)
-class Wardrobe(Role[Cabinet], RoleForCabinet, HasDrawers, HasDoors):
+class Wardrobe(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
     """
     A wardrobe is a cabinet with doors and possibly drawers, used for storing clothes.
     """
@@ -547,7 +547,7 @@ class Room(SemanticAnnotation, HasRoles):
 
 
 @dataclass(eq=False)
-class Kitchen(Role[Room], RoleForRoom):
+class Kitchen(Role[Room], DelegatorForRoom):
     """
     A kitchen is a room that has kitchen utilities and machines.
     """
@@ -563,7 +563,7 @@ class Kitchen(Role[Room], RoleForRoom):
 
 
 @dataclass(eq=False)
-class Bedroom(Role[Room], RoleForRoom):
+class Bedroom(Role[Room], DelegatorForRoom):
     """
     A bedroom is a room that is used for sleeping.
     """
@@ -579,7 +579,7 @@ class Bedroom(Role[Room], RoleForRoom):
 
 
 @dataclass(eq=False)
-class Bathroom(Role[Room], RoleForRoom):
+class Bathroom(Role[Room], DelegatorForRoom):
     """
     A bathroom is a room that is used for personal hygiene activities.
     """
@@ -595,7 +595,7 @@ class Bathroom(Role[Room], RoleForRoom):
 
 
 @dataclass(eq=False)
-class LivingRoom(Role[Room], RoleForRoom):
+class LivingRoom(Role[Room], DelegatorForRoom):
     """
     A living room is a room that is used for social activities and relaxation.
     """
@@ -745,7 +745,7 @@ class Statue(HasRootBody): ...
 
 
 @dataclass(eq=False)
-class SoapBottle(Role[Bottle[LiquidSoap]], RoleForBottle):
+class SoapBottle(Role[Bottle[LiquidSoap]], DelegatorForBottle):
     """
     A soap bottle is a bottle that contains liquid soap.
     """
@@ -761,7 +761,7 @@ class SoapBottle(Role[Bottle[LiquidSoap]], RoleForBottle):
 
 
 @dataclass(eq=False)
-class WineBottle(Role[Bottle[Wine]], RoleForBottle):
+class WineBottle(Role[Bottle[Wine]], DelegatorForBottle):
     """
     A wine bottle is a bottle that contains wine.
     """
@@ -777,7 +777,7 @@ class WineBottle(Role[Bottle[Wine]], RoleForBottle):
 
 
 @dataclass(eq=False)
-class MustardBottle(Role[Bottle[Mustard]], RoleForBottle):
+class MustardBottle(Role[Bottle[Mustard]], DelegatorForBottle):
     """
     A mustard bottle is a bottle that contains mustard.
     """
@@ -902,7 +902,7 @@ class TinCan(HasStorageSpace[THasRootBody]):
 
 
 @dataclass(eq=False)
-class TunaCan(Role[TinCan[Tuna]], RoleForTinCan):
+class TunaCan(Role[TinCan[Tuna]], DelegatorForTinCan):
     """
     A tuna can.
     """
@@ -1073,7 +1073,11 @@ class Salt(SaltOrPepper):
 
 
 @dataclass(eq=False)
-class SaltContainer(Role[HasStorageSpace[Salt]], RoleForHasStorageSpace, IsPerceivable):
+class SaltContainer(
+    Role[HasStorageSpace[Salt]],
+    DelegatorForHasStorageSpace,
+    IsPerceivable,
+):
     """
     A container of salt.
     """
@@ -1266,7 +1270,10 @@ class BookFront(HasRootBody): ...
 
 
 @dataclass(eq=False)
-class SaltPepperShaker(Role[HasStorageSpace[SaltOrPepper]], RoleForHasStorageSpace):
+class SaltPepperShaker(
+    Role[HasStorageSpace[SaltOrPepper]],
+    DelegatorForHasStorageSpace,
+):
     """
     A salt and pepper shaker is a container that cotains salt and pepper and can be shaken to sprinkle the contents
      onto food.

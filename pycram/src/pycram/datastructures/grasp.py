@@ -30,7 +30,7 @@ from pycram.datastructures.enums import (
 from pycram.tf_transformations import quaternion_multiply
 from pycram.utils import translate_pose_along_local_axis
 from semantic_digital_twin.spatial_types.role_mixins.spatial_types_role_mixins import (
-    RoleForPose,
+    DelegatorForPose,
 )
 
 
@@ -429,7 +429,7 @@ class PreferredGraspAlignment:
 
 
 @dataclass(eq=False)
-class GraspPose(Role[Pose], RoleForPose):
+class GraspPose(Role[Pose], DelegatorForPose):
     """
     A pose from which a grasp can be performed along with the respective arm and grasp description.
     """

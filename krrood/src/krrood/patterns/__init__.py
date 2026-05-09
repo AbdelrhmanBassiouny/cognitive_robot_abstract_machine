@@ -1,0 +1,1 @@
+from krrood.patterns.property_delegator import PropertyDelegator

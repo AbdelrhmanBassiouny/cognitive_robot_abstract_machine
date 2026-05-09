@@ -15,40 +15,40 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForItemHolder(ABC):
+class DelegatorForItemHolder(ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> ItemHolder: ...
+    def delegatee(self) -> ItemHolder: ...
 
     @property
     def item(self) -> TItem:
-        return self.role_taker.item
+        return self.delegatee.item
 
     @item.setter
     def item(self, value: TItem):
-        self.role_taker.item = value
+        self.delegatee.item = value
 
 
 @dataclass(eq=False)
-class RoleForSpecificItemTaker(RoleForItemHolder, ABC):
+class DelegatorForSpecificItemTaker(DelegatorForItemHolder, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> SpecificItemTaker: ...
+    def delegatee(self) -> SpecificItemTaker: ...
 
     @property
     def item(self) -> TSpecificItem:
-        return self.role_taker.item
+        return self.delegatee.item
 
     @item.setter
     def item(self, value: TSpecificItem):
-        self.role_taker.item = value
+        self.delegatee.item = value
 
     @property
     def label(self) -> str:
-        return self.role_taker.label
+        return self.delegatee.label
 
     @label.setter
     def label(self, value: str):
-        self.role_taker.label = value
+        self.delegatee.label = value

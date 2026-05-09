@@ -19,64 +19,64 @@ if TYPE_CHECKING:
 
 
 @dataclass(eq=False)
-class RoleForBox(ABC):
+class DelegatorForBox(ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> Box: ...
+    def delegatee(self) -> Box: ...
 
     @property
     def item(self) -> TBoxItem:
-        return self.role_taker.item
+        return self.delegatee.item
 
     @item.setter
     def item(self, value: TBoxItem):
-        self.role_taker.item = value
+        self.delegatee.item = value
 
 
 @dataclass(eq=False)
-class RoleForCargoCrate(RoleForBox, ABC):
+class DelegatorForCargoCrate(DelegatorForBox, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> CargoCrate: ...
+    def delegatee(self) -> CargoCrate: ...
 
     @property
     def item(self) -> Cargo:
-        return self.role_taker.item
+        return self.delegatee.item
 
     @item.setter
     def item(self, value: Cargo):
-        self.role_taker.item = value
+        self.delegatee.item = value
 
 
 @dataclass(eq=False)
-class RoleForShelf(RoleForCargoCrate, ABC):
+class DelegatorForShelf(DelegatorForCargoCrate, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TShelf: ...
+    def delegatee(self) -> TShelf: ...
 
     @property
     def slot(self) -> TShelfContent:
-        return self.role_taker.slot
+        return self.delegatee.slot
 
     @slot.setter
     def slot(self, value: TShelfContent):
-        self.role_taker.slot = value
+        self.delegatee.slot = value
 
 
 @dataclass(eq=False)
-class RoleForRack(RoleForShelf, RoleForCargoCrate, ABC):
+class DelegatorForRack(DelegatorForShelf, DelegatorForCargoCrate, ABC):
 
     @property
     @abstractmethod
-    def role_taker(self) -> TRack: ...
+    def delegatee(self) -> TRack: ...
 
     @property
     def slot(self) -> TRackSlot:
-        return self.role_taker.slot
+        return self.delegatee.slot
 
     @slot.setter
     def slot(self, value: TRackSlot):
-        self.role_taker.slot = value
+        self.delegatee.slot = value

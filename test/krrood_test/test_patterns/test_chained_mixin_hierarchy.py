@@ -1,14 +1,14 @@
 """
-Tests that RoleFor classes produced from a chain of non-taker mixin base classes
+Tests that DelegatorFor classes produced from a chain of non-taker mixin base classes
 mirror the inheritance hierarchy instead of being all listed flat.
 
 Dataset: chained_mixin_takers.py
     BaseA → ChildA → GrandchildA (role taker)
 
 Expected mixin hierarchy:
-    RoleForBaseA(ABC)
-    RoleForChildA(RoleForBaseA, ABC)
-    RoleForGrandchildA(RoleForChildA, ABC)   # NOT listing RoleForBaseA directly
+    DelegatorForBaseA(ABC)
+    DelegatorForChildA(DelegatorForBaseA, ABC)
+    DelegatorForGrandchildA(DelegatorForChildA, ABC)   # NOT listing DelegatorForBaseA directly
 """
 
 import pytest
@@ -47,9 +47,9 @@ def _method_names(cls_def: cst.ClassDef) -> set[str]:
 
 def test_all_rolefor_classes_generated(mixin_source):
     classes = _classes(mixin_source)
-    assert "RoleForBaseA" in classes
-    assert "RoleForChildA" in classes
-    assert "RoleForGrandchildA" in classes
+    assert "DelegatorForBaseA" in classes
+    assert "DelegatorForChildA" in classes
+    assert "DelegatorForGrandchildA" in classes
 
 
 # ---------------------------------------------------------------------------
@@ -58,37 +58,37 @@ def test_all_rolefor_classes_generated(mixin_source):
 
 
 def test_base_rolefor_has_only_abc(mixin_source):
-    """RoleForBaseA is the root: its only base should be ABC."""
+    """DelegatorForBaseA is the root: its only base should be ABC."""
     classes = _classes(mixin_source)
-    bases = _base_names(classes["RoleForBaseA"])
+    bases = _base_names(classes["DelegatorForBaseA"])
     assert bases == ["ABC"], f"Expected ['ABC'], got {bases}"
 
 
 def test_child_rolefor_inherits_base(mixin_source):
-    """RoleForChildA must list RoleForBaseA as a base (not duplicate its methods)."""
+    """DelegatorForChildA must list DelegatorForBaseA as a base (not duplicate its methods)."""
     classes = _classes(mixin_source)
-    bases = _base_names(classes["RoleForChildA"])
-    assert "RoleForBaseA" in bases, f"RoleForChildA bases: {bases}"
+    bases = _base_names(classes["DelegatorForChildA"])
+    assert "DelegatorForBaseA" in bases, f"DelegatorForChildA bases: {bases}"
 
 
 def test_grandchild_rolefor_inherits_child_not_base_directly(mixin_source):
-    """RoleForGrandchildA lists RoleForChildA but NOT RoleForBaseA (covered transitively)."""
+    """DelegatorForGrandchildA lists DelegatorForChildA but NOT DelegatorForBaseA (covered transitively)."""
     classes = _classes(mixin_source)
-    bases = _base_names(classes["RoleForGrandchildA"])
-    assert "RoleForChildA" in bases, f"RoleForGrandchildA bases: {bases}"
-    assert "RoleForBaseA" not in bases, (
-        f"RoleForBaseA should be transitively inherited, not listed directly; got: {bases}"
+    bases = _base_names(classes["DelegatorForGrandchildA"])
+    assert "DelegatorForChildA" in bases, f"DelegatorForGrandchildA bases: {bases}"
+    assert "DelegatorForBaseA" not in bases, (
+        f"DelegatorForBaseA should be transitively inherited, not listed directly; got: {bases}"
     )
 
 
 def test_topological_order(mixin_source):
-    """RoleForBaseA must appear before RoleForChildA, which must appear before RoleForGrandchildA."""
-    base_pos = mixin_source.index("class RoleForBaseA")
-    child_pos = mixin_source.index("class RoleForChildA")
-    grand_pos = mixin_source.index("class RoleForGrandchildA")
+    """DelegatorForBaseA must appear before DelegatorForChildA, which must appear before DelegatorForGrandchildA."""
+    base_pos = mixin_source.index("class DelegatorForBaseA")
+    child_pos = mixin_source.index("class DelegatorForChildA")
+    grand_pos = mixin_source.index("class DelegatorForGrandchildA")
     assert base_pos < child_pos < grand_pos, (
-        f"Wrong order: RoleForBaseA at {base_pos}, RoleForChildA at {child_pos}, "
-        f"RoleForGrandchildA at {grand_pos}"
+        f"Wrong order: DelegatorForBaseA at {base_pos}, DelegatorForChildA at {child_pos}, "
+        f"DelegatorForGrandchildA at {grand_pos}"
     )
 
 
@@ -98,37 +98,37 @@ def test_topological_order(mixin_source):
 
 
 def test_base_method_only_in_base_rolefor(mixin_source):
-    """base_method is defined on BaseA and must appear only in RoleForBaseA."""
+    """base_method is defined on BaseA and must appear only in DelegatorForBaseA."""
     classes = _classes(mixin_source)
-    assert "base_method" in _method_names(classes["RoleForBaseA"])
-    assert "base_method" not in _method_names(classes["RoleForChildA"])
-    assert "base_method" not in _method_names(classes["RoleForGrandchildA"])
+    assert "base_method" in _method_names(classes["DelegatorForBaseA"])
+    assert "base_method" not in _method_names(classes["DelegatorForChildA"])
+    assert "base_method" not in _method_names(classes["DelegatorForGrandchildA"])
 
 
 def test_child_method_only_in_child_rolefor(mixin_source):
-    """child_method is defined on ChildA and must appear only in RoleForChildA."""
+    """child_method is defined on ChildA and must appear only in DelegatorForChildA."""
     classes = _classes(mixin_source)
-    assert "child_method" in _method_names(classes["RoleForChildA"])
-    assert "child_method" not in _method_names(classes["RoleForBaseA"])
-    assert "child_method" not in _method_names(classes["RoleForGrandchildA"])
+    assert "child_method" in _method_names(classes["DelegatorForChildA"])
+    assert "child_method" not in _method_names(classes["DelegatorForBaseA"])
+    assert "child_method" not in _method_names(classes["DelegatorForGrandchildA"])
 
 
 def test_grandchild_method_only_in_grandchild_rolefor(mixin_source):
-    """grandchild_method is defined on GrandchildA and must appear only in RoleForGrandchildA."""
+    """grandchild_method is defined on GrandchildA and must appear only in DelegatorForGrandchildA."""
     classes = _classes(mixin_source)
-    assert "grandchild_method" in _method_names(classes["RoleForGrandchildA"])
-    assert "grandchild_method" not in _method_names(classes["RoleForBaseA"])
-    assert "grandchild_method" not in _method_names(classes["RoleForChildA"])
+    assert "grandchild_method" in _method_names(classes["DelegatorForGrandchildA"])
+    assert "grandchild_method" not in _method_names(classes["DelegatorForBaseA"])
+    assert "grandchild_method" not in _method_names(classes["DelegatorForChildA"])
 
 
 def test_grandchild_rolefor_has_abstract_role_taker(mixin_source):
-    """RoleForGrandchildA must declare an abstract role_taker property."""
+    """DelegatorForGrandchildA must declare an abstract role_taker property."""
     classes = _classes(mixin_source)
-    assert "role_taker" in _method_names(classes["RoleForGrandchildA"])
+    assert "delegatee" in _method_names(classes["DelegatorForGrandchildA"])
 
 
 def test_each_segregated_rolefor_has_abstract_role_taker(mixin_source):
-    """Both segregated RoleFor classes must declare an abstract role_taker property."""
+    """Both segregated DelegatorFor classes must declare an abstract role_taker property."""
     classes = _classes(mixin_source)
-    assert "role_taker" in _method_names(classes["RoleForBaseA"])
-    assert "role_taker" in _method_names(classes["RoleForChildA"])
+    assert "delegatee" in _method_names(classes["DelegatorForBaseA"])
+    assert "delegatee" in _method_names(classes["DelegatorForChildA"])
