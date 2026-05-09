@@ -82,6 +82,42 @@ from krrood.class_diagrams import ClassDiagram
 from krrood.ormatic.utils import classes_of_package
 from krrood.patterns.code_generation.generated_code_file_writer import has_class_definitions
 from krrood.patterns.role.helpers import transform_roles_in_class_diagram
+from krrood.utils import run_black_on_file, run_ruff_on_file
+
+
+# ── source normalisation ──────────────────────────────────────────────────────
+
+
+def _format_source(source: str) -> str:
+    """Return *source* after running the same ruff + black pipeline used by the writer.
+
+    Writes *source* to a temporary file, applies ``ruff --fix`` then ``black``,
+    and reads the result back.  If any step fails (e.g. a syntax error in the
+    generated code), the original string is returned unchanged.
+
+    :param source: Python source code string to format.
+    :return: Formatted source string, or *source* unchanged on error.
+    """
+    import tempfile
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            suffix=".py", mode="w", delete=False, encoding="utf-8"
+        ) as tmp:
+            tmp.write(source)
+            tmp_path = tmp.name
+        run_ruff_on_file(tmp_path)
+        run_black_on_file(tmp_path)
+        with open(tmp_path, encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return source
+    finally:
+        try:
+            import os
+            os.unlink(tmp_path)
+        except Exception:
+            pass
 
 
 # ── semantic comparison ───────────────────────────────────────────────────────
@@ -136,14 +172,16 @@ def _stale_files_for_package(package_name: str) -> list[Path]:
         for m, (transformed_source, mixin_content) in result.items():
             mixin_path = transformer.get_generated_file_path(m, is_mixin=True)
             if has_class_definitions(mixin_content):
+                formatted_mixin = _format_source(mixin_content)
                 if not mixin_path.exists() or not _are_semantically_equal(
-                    mixin_path.read_text(), mixin_content
+                    mixin_path.read_text(), formatted_mixin
                 ):
                     stale.append(mixin_path)
             elif mixin_path.exists():
                 stale.append(mixin_path)
             original_path = RoleTransformer.get_module_file_path(m)
-            if not _are_semantically_equal(original_path.read_text(), transformed_source):
+            formatted_source = _format_source(transformed_source)
+            if not _are_semantically_equal(original_path.read_text(), formatted_source):
                 stale.append(original_path)
     return stale
 

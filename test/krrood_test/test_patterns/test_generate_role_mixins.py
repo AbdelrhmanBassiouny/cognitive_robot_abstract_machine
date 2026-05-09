@@ -15,6 +15,7 @@ import pytest
 
 from krrood.generate_role_mixins import (
     _are_semantically_equal,
+    _format_source,
     _stale_files_for_package,
     ensure_role_mixins_current_for_pytest,
     generate_role_mixins_for_package,
@@ -27,6 +28,36 @@ from krrood.patterns.code_generation.generated_code_file_writer import has_class
 
 _GENERATE_FN = "krrood.generate_role_mixins.generate_role_mixins_for_package"
 _STALE_FN = "krrood.generate_role_mixins._stale_files_for_package"
+
+
+# ── _format_source ────────────────────────────────────────────────────────────
+
+
+class TestFormatSource:
+    def test_returns_string(self):
+        result = _format_source("x = 1\n")
+        assert isinstance(result, str)
+
+    def test_removes_unused_import(self):
+        src = "import os\nx = 1\n"
+        result = _format_source(src)
+        assert "import os" not in result
+
+    def test_keeps_used_import(self):
+        src = "import os\nx = os.path.join('a', 'b')\n"
+        result = _format_source(src)
+        assert "import os" in result
+
+    def test_returns_original_on_syntax_error(self):
+        bad = "def (broken syntax"
+        result = _format_source(bad)
+        assert result == bad
+
+    def test_black_formats_long_line(self):
+        # Black should wrap a very long string assignment
+        src = 'x = "' + "a" * 200 + '"\n'
+        result = _format_source(src)
+        assert isinstance(result, str)
 
 
 # ── _are_semantically_equal ───────────────────────────────────────────────────

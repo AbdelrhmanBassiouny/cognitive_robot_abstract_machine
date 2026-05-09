@@ -24,10 +24,24 @@ _EXCLUDED_IMPORT_NAMES: frozenset[str] = frozenset(
 
 
 class NameCollector(libcst.CSTVisitor):
-    """Collects all Name node values encountered during a CST traversal."""
+    """Collects all Name node values encountered during a CST traversal.
+
+    Parameter names (the identifier in ``def f(self, param: T)``) are
+    explicitly excluded: only the annotation and default expressions are
+    visited, not the name node itself.  This prevents a parameter whose
+    name happens to match a module-level import from generating a spurious
+    import in the output file.
+    """
 
     def __init__(self):
         self.names: set[str] = set()
+
+    def visit_Param(self, node: libcst.Param) -> bool:
+        if node.annotation is not None:
+            node.annotation.visit(self)
+        if node.default is not None:
+            node.default.visit(self)
+        return False  # suppress default recursion so node.name is never visited
 
     def visit_Name(self, node: libcst.Name) -> None:
         self.names.add(node.value)
