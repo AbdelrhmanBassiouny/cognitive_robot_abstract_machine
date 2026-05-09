@@ -80,6 +80,7 @@ from types import ModuleType
 from krrood import logger as krrood_logger
 from krrood.class_diagrams import ClassDiagram
 from krrood.ormatic.utils import classes_of_package
+from krrood.patterns.code_generation.generated_code_file_writer import has_class_definitions
 from krrood.patterns.role.helpers import transform_roles_in_class_diagram
 
 
@@ -134,9 +135,12 @@ def _stale_files_for_package(package_name: str) -> list[Path]:
         result = transformer.transform(write=False)
         for m, (transformed_source, mixin_content) in result.items():
             mixin_path = transformer.get_generated_file_path(m, is_mixin=True)
-            if not mixin_path.exists() or not _are_semantically_equal(
-                mixin_path.read_text(), mixin_content
-            ):
+            if has_class_definitions(mixin_content):
+                if not mixin_path.exists() or not _are_semantically_equal(
+                    mixin_path.read_text(), mixin_content
+                ):
+                    stale.append(mixin_path)
+            elif mixin_path.exists():
                 stale.append(mixin_path)
             original_path = RoleTransformer.get_module_file_path(m)
             if not _are_semantically_equal(original_path.read_text(), transformed_source):

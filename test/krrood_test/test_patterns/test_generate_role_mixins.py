@@ -20,6 +20,7 @@ from krrood.generate_role_mixins import (
     generate_role_mixins_for_package,
     main,
 )
+from krrood.patterns.code_generation.generated_code_file_writer import has_class_definitions
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -244,3 +245,69 @@ class TestIntegration:
     def test_invalid_package_raises_import_error(self):
         with pytest.raises((ImportError, ModuleNotFoundError)):
             generate_role_mixins_for_package("krrood.__nonexistent_package__")
+
+
+# ── _stale_files_for_package: empty-mixin staleness logic ────────────────────
+
+
+def _make_stale_check_monkeypatches(monkeypatch, tmp_path, mixin_src, mod_src):
+    """Wire up monkeypatches so _stale_files_for_package exercises just the
+    mixin-staleness branch without importing a real package.
+
+    _modules_with_roles and RoleTransformer are local imports inside
+    _stale_files_for_package, so they are patched at their source modules.
+    """
+    from unittest.mock import MagicMock
+    import types
+    import krrood.generate_role_mixins as grm
+    import krrood.patterns.role.helpers as helpers_mod
+    import krrood.patterns.role.role_transformer as rt_mod
+
+    module_path = tmp_path / "foo.py"
+    module_path.write_text(mod_src)
+    mixin_path = tmp_path / "role_mixins" / "foo_role_mixins.py"
+
+    fake_module = types.ModuleType("fake_module")
+    fake_module.__file__ = str(module_path)
+
+    transformer = MagicMock()
+    transformer.transform.return_value = {fake_module: (mod_src, mixin_src)}
+    transformer.get_generated_file_path.return_value = mixin_path
+
+    fake_transformer_cls = MagicMock(return_value=transformer)
+    fake_transformer_cls.get_module_file_path = staticmethod(lambda m: module_path)
+
+    monkeypatch.setattr(grm.importlib, "import_module", lambda name: fake_module)
+    monkeypatch.setattr(grm, "classes_of_package", lambda pkg: [])
+    monkeypatch.setattr(grm, "ClassDiagram", MagicMock(return_value=MagicMock()))
+    monkeypatch.setattr(helpers_mod, "_modules_with_roles", lambda cd: [fake_module])
+    monkeypatch.setattr(rt_mod, "RoleTransformer", fake_transformer_cls)
+
+    return mixin_path
+
+
+class TestStaleFilesEmptyMixinLogic:
+    """Unit tests for the empty-mixin branch of _stale_files_for_package."""
+
+    def test_missing_mixin_with_content_is_stale(self, monkeypatch, tmp_path):
+        """A missing mixin file is stale when mixin content has class definitions."""
+        mixin_src = "class FooMixin:\n    pass\n"
+        mixin_path = _make_stale_check_monkeypatches(monkeypatch, tmp_path, mixin_src, "x = 1\n")
+        stale = _stale_files_for_package("fake_pkg")
+        assert mixin_path in stale
+
+    def test_missing_mixin_without_content_is_not_stale(self, monkeypatch, tmp_path):
+        """A missing mixin file is NOT stale when mixin content has no class definitions."""
+        mixin_src = "from __future__ import annotations\n"
+        mixin_path = _make_stale_check_monkeypatches(monkeypatch, tmp_path, mixin_src, "x = 1\n")
+        stale = _stale_files_for_package("fake_pkg")
+        assert mixin_path not in stale
+
+    def test_existing_mixin_without_content_is_stale(self, monkeypatch, tmp_path):
+        """An existing mixin file IS stale when new mixin content has no class definitions."""
+        mixin_src = "from __future__ import annotations\n"
+        mixin_path = _make_stale_check_monkeypatches(monkeypatch, tmp_path, mixin_src, "x = 1\n")
+        mixin_path.parent.mkdir(parents=True, exist_ok=True)
+        mixin_path.write_text("class OldMixin:\n    pass\n")
+        stale = _stale_files_for_package("fake_pkg")
+        assert mixin_path in stale
