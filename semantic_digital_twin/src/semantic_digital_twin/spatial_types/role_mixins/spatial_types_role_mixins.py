@@ -129,6 +129,9 @@ class RoleForPose(RoleForSpatialType, ABC):
     def __neg__(self) -> Self:
         return self.role_taker.__neg__()
 
+    def __repr__(self):
+        return self.role_taker.__repr__()
+
     def __setitem__(
         self,
         key: int | slice | Tuple[int | slice, int | slice],
