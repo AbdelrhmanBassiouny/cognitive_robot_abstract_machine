@@ -211,15 +211,11 @@ class TestEnsureRoleMixinsCurrentForPytest:
         monkeypatch.setattr("subprocess.run", mock_run)
         monkeypatch.setenv("KRROOD_PYTEST_RERUN_COUNT", "2")
 
-        execv_calls: list = []
-        monkeypatch.setattr("os.execv", lambda exe, args: execv_calls.append((exe, args)))
-
-        ensure_role_mixins_current_for_pytest(["mypkg"])
+        with pytest.raises(SystemExit):
+            ensure_role_mixins_current_for_pytest(["mypkg"])
 
         assert any("--check" in c for c in run_calls)
-        assert len(execv_calls) == 1
-        _, args = execv_calls[0]
-        assert "-m" in args and "pytest" in args
+        assert any("-m" in c and "pytest" in c for c in run_calls)
 
     def test_decrements_rerun_counter(self, monkeypatch):
         monkeypatch.setattr(
@@ -227,11 +223,11 @@ class TestEnsureRoleMixinsCurrentForPytest:
             lambda cmd, **kw: MagicMock(returncode=1 if "--check" in cmd else 0),
         )
         monkeypatch.setenv("KRROOD_PYTEST_RERUN_COUNT", "2")
-        monkeypatch.setattr("os.execv", lambda *a: None)
 
         import os
 
-        ensure_role_mixins_current_for_pytest(["mypkg"])
+        with pytest.raises(SystemExit):
+            ensure_role_mixins_current_for_pytest(["mypkg"])
         assert os.environ["KRROOD_PYTEST_RERUN_COUNT"] == "1"
 
     def test_raises_usage_error_when_counter_exhausted(self, monkeypatch):
