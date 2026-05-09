@@ -15,10 +15,12 @@ from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.utils import (
     GenericTypeSubstitution,
     get_type_hints_of_object,
+    is_genuine_narrowing,
     resolve_name_in_hierarchy,
     same_package,
     get_property_return_type,
 )
+from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.patterns.code_generation.exceptions import CodeGenerationError
 from krrood.patterns.code_generation.import_name_resolver import ImportNameResolver
 from krrood.patterns.code_generation.libcst_node_factory import LibCSTNodeFactory
@@ -160,14 +162,13 @@ class DelegationGenerator:
             )
             if defining_base is not None:
                 self._delegate_inherited_field(
-                    field_.name,
-                    field_.field,
+                    field_,
                     wrapped_class.clazz,
                     defining_base,
                     groups,
                     module_name,
                 )
-            else:
+            elif _is_original_field_definer(wrapped_class.clazz, field_.name):
                 field_type_name = self._normalise_type_name(field_.field.type)
                 prop_nodes = self.node_factory.make_property_getter_and_setter_nodes(
                     field_.name,
@@ -176,11 +177,15 @@ class DelegationGenerator:
                     f"self.{self.delegatee_attribute_name}.{field_.name} = value",
                 )
                 groups.setdefault(None, {})[field_.name] = prop_nodes
+            else:
+                # Field's defining class is already covered — only redeclare on genuine narrowing
+                self._maybe_add_narrowing_redecl_for_covered_field(
+                    field_, wrapped_class, module_name, groups
+                )
 
     def _delegate_inherited_field(
         self,
-        field_name: str,
-        field: Any,
+        field_: WrappedField,
         concrete_class: type,
         defining_base: type,
         groups: dict[type | None, dict[str, list]],
@@ -188,46 +193,29 @@ class DelegationGenerator:
     ) -> None:
         """Place delegation nodes for a field inherited from a generic base.
 
-        Adds a re-declaration in the concrete class's own body when the base TypeVar
-        is substituted. Also adds re-declarations in any same-package non-covered
-        intermediate ancestor that narrows the TypeVar.
+        Adds a re-declaration in the concrete class's own body only when the
+        concrete class genuinely narrows the TypeVar (i.e. binds it to a strictly
+        more specific type, not merely a same-bound TypeVar from another module).
+        Also adds re-declarations in any same-package non-covered intermediate
+        ancestor that narrows the TypeVar.
 
-        :param field_name: The dataclass field name.
-        :param field: The dataclass Field object.
+        :param field_: The WrappedField for the inherited field.
         :param concrete_class: The class being processed.
         :param defining_base: The ancestor class that originally defines the field.
         :param groups: The accumulator dict to populate.
         :param module_name: The source module name for package comparison.
         """
-        try:
-            base_hints = get_type_hints_of_object(defining_base)
-            base_type = base_hints.get(field_name, field.type)
-        except TypeError:
-            # SubClassSafeGeneric may inject a narrowed TypeVar into a subclass's __annotations__;
-            # read from the defining class's own __annotations__ to recover the original TypeVar.
-            raw = vars(defining_base).get("__annotations__", {}).get(field_name)
-            if raw is not None and not isinstance(raw, str):
-                base_type = raw
-            elif isinstance(raw, str):
-                module = inspect.getmodule(defining_base)
-                globalns = getattr(module, "__dict__", {}) if module is not None else {}
-                try:
-                    base_type = eval(raw, globalns)  # noqa: S307
-                except Exception:
-                    base_type = field.type
-            else:
-                base_type = field.type
-
+        base_type = field_.type_at_definer(defining_base)
         base_type_name = self._normalise_type_name(base_type)
         prop_nodes = self.node_factory.make_property_getter_and_setter_nodes(
-            field_name,
+            field_.name,
             base_type_name,
-            f"self.{self.delegatee_attribute_name}.{field_name}",
-            f"self.{self.delegatee_attribute_name}.{field_name} = value",
+            f"self.{self.delegatee_attribute_name}.{field_.name}",
+            f"self.{self.delegatee_attribute_name}.{field_.name} = value",
         )
-        groups.setdefault(defining_base, {})[field_name] = prop_nodes
+        groups.setdefault(defining_base, {})[field_.name] = prop_nodes
 
-        last_narrowed_type: Any = None
+        last_narrowed_type = None
         for ancestor in concrete_class.__mro__[1:]:
             if ancestor is defining_base:
                 break
@@ -238,25 +226,15 @@ class DelegationGenerator:
             ):
                 continue
             narrowed = self._add_narrowing_redeclaration(
-                field_name, base_type, ancestor, defining_base, groups
+                field_.name, base_type, ancestor, defining_base, groups
             )
             if narrowed is not None:
                 last_narrowed_type = narrowed
 
-        substitution = GenericTypeSubstitution.from_specialization(
-            concrete_class, defining_base
+        self._maybe_add_concrete_narrowing(
+            field_.name, base_type, concrete_class, defining_base, groups,
+            reference_type=last_narrowed_type,
         )
-        if substitution.has_substitutions:
-            result = substitution.apply(base_type)
-            if result.resolved and result.resolved_type is not last_narrowed_type:
-                concrete_type_name = self._normalise_type_name(result.resolved_type)
-                redecl_nodes = self.node_factory.make_property_getter_and_setter_nodes(
-                    field_name,
-                    concrete_type_name,
-                    f"self.{self.delegatee_attribute_name}.{field_name}",
-                    f"self.{self.delegatee_attribute_name}.{field_name} = value",
-                )
-                groups.setdefault(None, {})[field_name] = redecl_nodes
 
     def _maybe_add_narrowing_redecl_for_covered_field(
         self,
@@ -265,13 +243,14 @@ class DelegationGenerator:
         module_name: str,
         groups: dict[type | None, dict[str, list]],
     ) -> None:
-        """Add narrowing re-declarations for a covered field when intermediate or current class narrows the type.
+        """Add narrowing re-declarations for a covered field when an intermediate or the current class genuinely narrows the type.
 
-        Called for fields already delegated by a parent RoleFor class. Walks intermediate
-        non-covered same-package ancestors between the nearest covered base and the defining
-        base, adding narrowing re-declarations for each. Also adds one under groups[None] when
-        the current class specializes the defining base more specifically than the nearest
-        covered ancestor.
+        Called for fields already delegated by a parent RoleFor class (or when the
+        defining class is in ``already_covered_bases``).  Walks intermediate non-covered
+        same-package ancestors and adds a re-declaration for each that substitutes the
+        TypeVar.  Also adds one under ``groups[None]`` when the current class genuinely
+        narrows the defining base's TypeVar (i.e. binds it to a strictly more specific
+        type, not merely a same-bound TypeVar from another module).
 
         :param field_: The WrappedField object for the covered field.
         :param wrapped_class: The class being processed.
@@ -281,54 +260,20 @@ class DelegationGenerator:
         if not (field_.field.kw_only or field_.field.init):
             return
 
-        defining_base: type | None = None
-        for klass in wrapped_class.clazz.__mro__[1:]:
-            if klass is object:
-                break
-            if _is_original_field_definer(klass, field_.name):
-                defining_base = klass
-                break
+        defining_base = self._find_defining_base(field_, wrapped_class)
         if defining_base is None:
             return
 
-        try:
-            base_hints = get_type_hints_of_object(defining_base)
-            base_type = base_hints.get(field_.name, field_.field.type)
-        except TypeError:
-            raw = vars(defining_base).get("__annotations__", {}).get(field_.name)
-            if raw is not None and not isinstance(raw, str):
-                base_type = raw
-            elif isinstance(raw, str):
-                module = inspect.getmodule(defining_base)
-                globalns = getattr(module, "__dict__", {}) if module is not None else {}
-                try:
-                    base_type = eval(raw, globalns)  # noqa: S307
-                except Exception:
-                    base_type = field_.field.type
-            else:
-                base_type = field_.field.type
-
-        # Find the nearest covered ancestor and record the type it already provides.
-        nearest_covered_base: type | None = None
-        nearest_covered_type = base_type
-        for klass in wrapped_class.clazz.__mro__[1:]:
-            if klass is object or klass is defining_base:
-                break
-            if klass not in self.already_covered_bases:
-                continue
-            nearest_covered_base = klass
-            sub = GenericTypeSubstitution.from_specialization(
-                klass, defining_base, trace_unsubscripted=True
-            )
-            if sub.has_substitutions:
-                result = sub.apply(base_type)
-                if result.resolved:
-                    nearest_covered_type = result.resolved_type
-            break
+        base_type = field_.type_at_definer(defining_base)
+        nearest_covered_base, nearest_covered_type = self._nearest_covered_base_and_type(
+            wrapped_class, defining_base, base_type
+        )
 
         # Walk intermediate non-covered same-package ancestors between nearest_covered_base
         # and defining_base, adding narrowing re-declarations for each (e.g. HasRootBody).
-        walk_start = nearest_covered_base if nearest_covered_base is not None else wrapped_class.clazz
+        walk_start = (
+            nearest_covered_base if nearest_covered_base is not None else wrapped_class.clazz
+        )
         for ancestor in walk_start.__mro__[1:]:
             if ancestor is object or ancestor is defining_base:
                 break
@@ -342,24 +287,10 @@ class DelegationGenerator:
                 field_.name, base_type, ancestor, defining_base, groups
             )
 
-        # Check if the current class itself further narrows beyond nearest_covered_base.
-        substitution = GenericTypeSubstitution.from_specialization(
-            wrapped_class.clazz, defining_base
+        self._maybe_add_concrete_narrowing(
+            field_.name, base_type, wrapped_class.clazz, defining_base, groups,
+            reference_type=nearest_covered_type,
         )
-        if not substitution.has_substitutions:
-            return
-        result = substitution.apply(base_type)
-        if not result.resolved or result.resolved_type is nearest_covered_type:
-            return
-
-        concrete_type_name = self._normalise_type_name(result.resolved_type)
-        redecl_nodes = self.node_factory.make_property_getter_and_setter_nodes(
-            field_.name,
-            concrete_type_name,
-            f"self.{self.delegatee_attribute_name}.{field_.name}",
-            f"self.{self.delegatee_attribute_name}.{field_.name} = value",
-        )
-        groups.setdefault(None, {})[field_.name] = redecl_nodes
 
     def _add_narrowing_redeclaration(
         self,
@@ -395,6 +326,96 @@ class DelegationGenerator:
         )
         groups.setdefault(ancestor, {}).setdefault(field_name, nodes)
         return result.resolved_type
+
+    def _find_defining_base(
+        self,
+        field_: WrappedField,
+        wrapped_class: WrappedClass,
+    ) -> type | None:
+        """Return the first class in wrapped_class's MRO that originally defines field_.name.
+
+        :param field_: The WrappedField to look up.
+        :param wrapped_class: The class whose MRO is searched.
+        :return: The original defining class, or None if not found.
+        """
+        for klass in wrapped_class.clazz.__mro__[1:]:
+            if klass is object:
+                return None
+            if _is_original_field_definer(klass, field_.name):
+                return klass
+        return None
+
+    def _nearest_covered_base_and_type(
+        self,
+        wrapped_class: WrappedClass,
+        defining_base: type,
+        base_type: Any,
+    ) -> tuple[type | None, Any]:
+        """Return the nearest covered ancestor and its resolved type between wrapped_class and defining_base.
+
+        :param wrapped_class: The class being processed.
+        :param defining_base: The class that originally defines the field.
+        :param base_type: The type annotation on defining_base.
+        :return: (nearest covered ancestor, resolved type at that ancestor), or (None, base_type).
+        """
+        for klass in wrapped_class.clazz.__mro__[1:]:
+            if klass is object or klass is defining_base:
+                break
+            if klass not in self.already_covered_bases:
+                continue
+            sub = GenericTypeSubstitution.from_specialization(
+                klass, defining_base, trace_unsubscripted=True
+            )
+            if sub.has_substitutions:
+                result = sub.apply(base_type)
+                if result.resolved:
+                    return klass, result.resolved_type
+            return klass, base_type
+        return None, base_type
+
+    def _maybe_add_concrete_narrowing(
+        self,
+        field_name: str,
+        base_type: Any,
+        concrete_class: type,
+        defining_base: type,
+        groups: dict[type | None, dict[str, list]],
+        *,
+        reference_type: Any = None,
+    ) -> None:
+        """Add groups[None][field_name] if concrete_class genuinely narrows base_type.
+
+        When reference_type is provided, the re-declaration is skipped if the resolved
+        type is identical to reference_type — meaning a covered ancestor already provides
+        exactly this narrowing through its RoleFor class, so adding it again would be
+        redundant.
+
+        :param field_name: The dataclass field name.
+        :param base_type: The type annotation from defining_base.
+        :param concrete_class: The class being processed.
+        :param defining_base: The class that originally defines the field.
+        :param groups: The accumulator dict to populate.
+        :param reference_type: Optional type already established by a covered ancestor;
+            skip this re-declaration when the result matches.
+        """
+        substitution = GenericTypeSubstitution.from_specialization(
+            concrete_class, defining_base
+        )
+        if not substitution.has_genuine_substitutions:
+            return
+        result = substitution.apply(base_type)
+        if not result.resolved:
+            return
+        if reference_type is not None and result.resolved_type is reference_type:
+            return
+        type_name = self._normalise_type_name(result.resolved_type)
+        nodes = self.node_factory.make_property_getter_and_setter_nodes(
+            field_name,
+            type_name,
+            f"self.{self.delegatee_attribute_name}.{field_name}",
+            f"self.{self.delegatee_attribute_name}.{field_name} = value",
+        )
+        groups.setdefault(None, {})[field_name] = nodes
 
     def _collect_property_delegations(
         self,

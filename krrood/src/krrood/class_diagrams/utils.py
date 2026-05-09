@@ -327,6 +327,79 @@ class GenericTypeSubstitution:
         """
         return any(key is not value for key, value in self.substitution.items())
 
+    @property
+    def has_genuine_substitutions(self) -> bool:
+        """Return True if any TypeVar maps to a strictly more specific type.
+
+        Unlike ``has_substitutions``, this ignores TypeVar-to-TypeVar mappings
+        where both TypeVars share the same effective bound (e.g. two ``THasRootBody``
+        TypeVars from different modules with identical ``__bound__``).
+        """
+        return any(
+            is_genuine_narrowing(key, value)
+            for key, value in self.substitution.items()
+        )
+
+
+def is_genuine_narrowing(original: Any, new_type: Any) -> bool:
+    """Return True iff new_type is strictly more specific than original.
+
+    Rules:
+    - same object → False (identity means no change)
+    - TypeVar → TypeVar with different name → True (intentional re-parameterization, e.g.
+      ``SpecificItemTaker(ItemHolder[TSpecificItem])`` where TItem→TSpecificItem)
+    - TypeVar → TypeVar with same name and same bound → False (module-collision artefact, e.g.
+      two modules each defining ``THasRootBody`` with the same ``__bound__``)
+    - TypeVar → TypeVar with same name but stricter bound → True
+    - TypeVar → ConcreteClass → True (always a genuine specialisation)
+    - ConcreteClass → ConcreteClass → True only if new_type is a proper subclass
+
+    :param original: The original type or TypeVar.
+    :param new_type: The candidate replacement type or TypeVar.
+    :return: True when the substitution represents a meaningful specialisation.
+    """
+    if original is new_type:
+        return False
+    from typing_extensions import TypeVar as _TypeVar
+
+    orig_is_tv = isinstance(original, _TypeVar)
+    new_is_tv = isinstance(new_type, _TypeVar)
+
+    if orig_is_tv and new_is_tv:
+        # Different-named TypeVars: intentional re-parameterization — always genuine.
+        if getattr(original, "__name__", None) != getattr(new_type, "__name__", None):
+            return True
+        # Same-named TypeVars (likely a module-collision artefact): genuine only when
+        # the new TypeVar's bound is strictly more specific.
+        orig_bound = getattr(original, "__bound__", None)
+        new_bound = getattr(new_type, "__bound__", None)
+        if orig_bound is new_bound:
+            return False
+        if orig_bound is None:
+            return True
+        try:
+            return (
+                isinstance(new_bound, type)
+                and issubclass(new_bound, orig_bound)
+                and new_bound is not orig_bound
+            )
+        except TypeError:
+            return False
+
+    if orig_is_tv and not new_is_tv:
+        # TypeVar → ConcreteClass: always genuine.
+        return True
+
+    # ConcreteClass → ConcreteClass
+    try:
+        return (
+            isinstance(new_type, type)
+            and issubclass(new_type, original)
+            and new_type is not original
+        )
+    except TypeError:
+        return False
+
 
 def resolve_type(
     type_to_resolve: Any,

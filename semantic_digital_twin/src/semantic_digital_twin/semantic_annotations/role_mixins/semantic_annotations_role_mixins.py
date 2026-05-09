@@ -27,7 +27,6 @@ if TYPE_CHECKING:
         Cabinet,
         Floor,
         Room,
-        THasRootBody,
         TLiquid,
         TinCan,
     )
@@ -115,13 +114,6 @@ class RoleForCabinet(RoleForHasSupportingSurface, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> Cabinet: ...
-    @property
-    def objects(self) -> List[THasRootBody]:
-        return self.role_taker.objects
-
-    @objects.setter
-    def objects(self, value: List[THasRootBody]):
-        self.role_taker.objects = value
 
 
 @dataclass(eq=False)
@@ -163,10 +155,3 @@ class RoleForTinCan(RoleForHasStorageSpace, RoleForHasRootBody, ABC):
     @property
     @abstractmethod
     def role_taker(self) -> TinCan: ...
-    @property
-    def objects(self) -> list[THasRootBody]:
-        return self.role_taker.objects
-
-    @objects.setter
-    def objects(self, value: list[THasRootBody]):
-        self.role_taker.objects = value
