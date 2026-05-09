@@ -245,7 +245,8 @@ def ensure_role_mixins_current_for_pytest(packages: list[str]) -> None:
         )
 
     os.environ["KRROOD_PYTEST_RERUN_COUNT"] = str(remaining - 1)
-    os.execv(sys.executable, [sys.executable, "-m", "pytest"] + sys.argv[1:])
+    result = subprocess.run([sys.executable, "-m", "pytest"] + sys.argv[1:])
+    sys.exit(result.returncode)
 
 
 # ── generation ────────────────────────────────────────────────────────────────
