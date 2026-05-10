@@ -1,0 +1,124 @@
+from __future__ import annotations
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Dict, List, Self, Type
+from typing_extensions import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from krrood.adapters.json_serializer import JSONAttributeDiff
+    from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
+        WorldEntityWithIDKwargsTracker,
+    )
+    from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+    from semantic_digital_twin.spatial_types.spatial_types import (
+        HomogeneousTransformationMatrix,
+    )
+    from semantic_digital_twin.world import World
+    from semantic_digital_twin.world_description.shape_collection import (
+        BoundingBoxCollection,
+    )
+    from semantic_digital_twin.world_description.world_entity import (
+        Body,
+        GenericKinematicStructureEntity,
+        KinematicStructureEntity,
+        Region,
+        SemanticAnnotation,
+        WorldEntity,
+        WorldEntityWithID,
+        WorldEntityWithSimulatorProperties,
+    )
+    from uuid import UUID
+
+
+@dataclass(eq=False)
+class DelegatorForWorldEntity(ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> WorldEntity: ...
+    @property
+    def name(self) -> PrefixedName:
+        return self.delegatee.name
+
+    @name.setter
+    def name(self, value: PrefixedName):
+        self.delegatee.name = value
+
+    def __eq__(self, other):
+        return self.delegatee.__eq__(other)
+
+    def add_to_world(self, world: World):
+        return self.delegatee.add_to_world(world)
+
+    def remove_from_world(self):
+        return self.delegatee.remove_from_world()
+
+
+@dataclass(eq=False)
+class DelegatorForWorldEntityWithID(ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> WorldEntityWithID: ...
+    @property
+    def id(self) -> UUID:
+        return self.delegatee.id
+
+    @id.setter
+    def id(self, value: UUID):
+        self.delegatee.id = value
+
+    def _apply_diff(self, diff: JSONAttributeDiff, **kwargs) -> None:
+        return self.delegatee._apply_diff(diff, kwargs)
+
+    def _track_object_in_from_json(
+        self, from_json_kwargs
+    ) -> WorldEntityWithIDKwargsTracker:
+        return self.delegatee._track_object_in_from_json(from_json_kwargs)
+
+    def copy_for_world(self, world: World) -> Self:
+        return self.delegatee.copy_for_world(world)
+
+    def to_json(self) -> Dict[str, Any]:
+        return self.delegatee.to_json()
+
+    def update_from_json_diff(self, diffs: List[JSONAttributeDiff], **kwargs) -> None:
+        return self.delegatee.update_from_json_diff(diffs, kwargs)
+
+
+@dataclass(eq=False)
+class DelegatorForWorldEntityWithSimulatorProperties(ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> WorldEntityWithSimulatorProperties: ...
+
+
+@dataclass(eq=False)
+class DelegatorForSemanticAnnotation(ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> SemanticAnnotation: ...
+    @property
+    def bodies(self) -> list[Body]:
+        return self.delegatee.bodies
+
+    @property
+    def kinematic_structure_entities(self) -> list[KinematicStructureEntity]:
+        return self.delegatee.kinematic_structure_entities
+
+    @property
+    def regions(self) -> list[Region]:
+        return self.delegatee.regions
+
+    def _kinematic_structure_entities(
+        self, aggregation_type: Type[GenericKinematicStructureEntity]
+    ) -> list[GenericKinematicStructureEntity]:
+        return self.delegatee._kinematic_structure_entities(aggregation_type)
+
+    def as_bounding_box_collection_at_origin(
+        self, origin: HomogeneousTransformationMatrix
+    ) -> BoundingBoxCollection:
+        return self.delegatee.as_bounding_box_collection_at_origin(origin)
+
+    def as_bounding_box_collection_in_frame(
+        self, reference_frame: KinematicStructureEntity
+    ) -> BoundingBoxCollection:
+        return self.delegatee.as_bounding_box_collection_in_frame(reference_frame)

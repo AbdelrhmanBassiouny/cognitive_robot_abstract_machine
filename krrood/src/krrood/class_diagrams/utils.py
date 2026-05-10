@@ -579,6 +579,20 @@ def same_package(module_a: str, module_b: str) -> bool:
     return bool(top_a) and top_a == top_b
 
 
+def mixin_module_dotted_name(module_dotted_name: str, mixin_folder: str, suffix: str) -> str:
+    """Return the fully-qualified module name for a generated mixin module.
+
+    :param module_dotted_name: The dotted module name of the source module.
+    :param mixin_folder: The sub-folder name containing mixin modules.
+    :param suffix: The suffix appended to the leaf module name.
+    :return: The fully-qualified mixin module dotted name.
+    """
+    parts = module_dotted_name.split(".")
+    package = ".".join(parts[:-1])
+    leaf = parts[-1]
+    return f"{package}.{mixin_folder}.{leaf}{suffix}"
+
+
 def topological_sort_by_inheritance(classes: list[type]) -> list[type]:
     """Return classes sorted so that ancestors come before their descendants."""
     result: list[type] = []

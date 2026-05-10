@@ -2077,7 +2077,7 @@ class DegreeOfFreedomLimitsDAO(
 class DelegatorForHasSimulatorPropertiesDAO(
     Base,
     DataAccessObject[
-        semantic_digital_twin.role_mixins.mixin_role_mixins.DelegatorForHasSimulatorProperties
+        semantic_digital_twin.semantic_annotations.role_mixins.mixins_role_mixins.DelegatorForHasSimulatorProperties
     ],
 ):
 
@@ -2091,7 +2091,7 @@ class DelegatorForHasSimulatorPropertiesDAO(
 class DelegatorForHasSimulatorPropertiesDAO(
     Base,
     DataAccessObject[
-        semantic_digital_twin.semantic_annotations.role_mixins.mixins_role_mixins.DelegatorForHasSimulatorProperties
+        semantic_digital_twin.role_mixins.mixin_role_mixins.DelegatorForHasSimulatorProperties
     ],
 ):
 
@@ -8543,27 +8543,6 @@ class Bottle_LiquidSoapDAO(
     }
 
 
-class Bottle_MustardDAO(
-    BottleDAO,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
-            semantic_digital_twin.semantic_annotations.semantic_annotations.Mustard
-        ]
-    ],
-):
-
-    __tablename__ = "Bottle_MustardDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "Bottle_MustardDAO",
-        "inherit_condition": database_id == BottleDAO.database_id,
-    }
-
-
 class Bottle_WineDAO(
     BottleDAO,
     DataAccessObject[
@@ -8581,6 +8560,27 @@ class Bottle_WineDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "Bottle_WineDAO",
+        "inherit_condition": database_id == BottleDAO.database_id,
+    }
+
+
+class Bottle_MustardDAO(
+    BottleDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.semantic_annotations.Bottle[
+            semantic_digital_twin.semantic_annotations.semantic_annotations.Mustard
+        ]
+    ],
+):
+
+    __tablename__ = "Bottle_MustardDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BottleDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "Bottle_MustardDAO",
         "inherit_condition": database_id == BottleDAO.database_id,
     }
 
@@ -8883,29 +8883,6 @@ class TinCan_TunaDAO(
     }
 
 
-class HasStorageSpace_SaltDAO(
-    HasStorageSpaceDAO,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.mixins.HasStorageSpace[
-            semantic_digital_twin.semantic_annotations.semantic_annotations.Salt
-        ]
-    ],
-):
-
-    __tablename__ = "HasStorageSpace_SaltDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(HasStorageSpaceDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "HasStorageSpace_SaltDAO",
-        "inherit_condition": database_id == HasStorageSpaceDAO.database_id,
-    }
-
-
 class HasStorageSpace_SaltOrPepperDAO(
     HasStorageSpaceDAO,
     DataAccessObject[
@@ -8925,6 +8902,29 @@ class HasStorageSpace_SaltOrPepperDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "HasStorageSpace_SaltOrPepperDAO",
+        "inherit_condition": database_id == HasStorageSpaceDAO.database_id,
+    }
+
+
+class HasStorageSpace_SaltDAO(
+    HasStorageSpaceDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.mixins.HasStorageSpace[
+            semantic_digital_twin.semantic_annotations.semantic_annotations.Salt
+        ]
+    ],
+):
+
+    __tablename__ = "HasStorageSpace_SaltDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(HasStorageSpaceDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HasStorageSpace_SaltDAO",
         "inherit_condition": database_id == HasStorageSpaceDAO.database_id,
     }
 
