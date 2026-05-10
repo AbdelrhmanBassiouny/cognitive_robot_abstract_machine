@@ -63,14 +63,8 @@ from semantic_digital_twin.world_description.world_entity import (
     Connection,
 )
 from krrood.patterns.role import HasRoles
-from semantic_digital_twin.semantic_annotations.role_mixins.mixins_role_mixins import (
-    DelegatorForHasStorageSpace,
-)
 from semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins import (
-    DelegatorForBottle,
-    DelegatorForCabinet,
     DelegatorForRoom,
-    DelegatorForTinCan,
 )
 
 
@@ -413,19 +407,10 @@ class Cabinet(Furniture, HasCaseAsRootBody, HasRoles):
 
 
 @dataclass(eq=False)
-class Fridge(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
+class Fridge(Cabinet, HasDrawers, HasDoors):
     """
     A fridge is a cabinet with doors and possibly drawers.
     """
-
-    cabinet: Cabinet
-    """
-    The cabinet of the fridge.
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Cabinet]:
-        return variable_from(cls).cabinet
 
 
 @dataclass(eq=False)
@@ -437,51 +422,24 @@ class Oven(HasCaseAsRootBody):
 
 
 @dataclass(eq=False)
-class Dresser(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
+class Dresser(Cabinet, HasDrawers, HasDoors):
     """
     A dresser is a cabinet with doors and possibly drawers.
     """
 
-    cabinet: Cabinet
-    """
-    The cabinet of the dresser.
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Cabinet]:
-        return variable_from(cls).cabinet
-
 
 @dataclass(eq=False)
-class Cupboard(Role[Cabinet], DelegatorForCabinet, HasDoors):
+class Cupboard(Cabinet, HasDoors):
     """
     A cupboard is a cabinet with doors.
     """
 
-    cabinet: Cabinet
-    """
-    The cabinet of the cupboard.
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Cabinet]:
-        return variable_from(cls).cabinet
-
 
 @dataclass(eq=False)
-class Wardrobe(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
+class Wardrobe(Cabinet, HasDrawers, HasDoors):
     """
     A wardrobe is a cabinet with doors and possibly drawers, used for storing clothes.
     """
-
-    cabinet: Cabinet
-    """
-    The cabinet of the wardrobe.
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Cabinet]:
-        return variable_from(cls).cabinet
 
 
 @dataclass(eq=False)
@@ -745,51 +703,24 @@ class Statue(HasRootBody): ...
 
 
 @dataclass(eq=False)
-class SoapBottle(Role[Bottle[LiquidSoap]], DelegatorForBottle):
+class SoapBottle(Bottle[LiquidSoap]):
     """
     A soap bottle is a bottle that contains liquid soap.
     """
 
-    bottle: Bottle[LiquidSoap]
-    """
-    The bottle
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Bottle[LiquidSoap]]:
-        return variable_from(cls).bottle
-
 
 @dataclass(eq=False)
-class WineBottle(Role[Bottle[Wine]], DelegatorForBottle):
+class WineBottle(Bottle[Wine]):
     """
     A wine bottle is a bottle that contains wine.
     """
 
-    bottle: Bottle[Wine]
-    """
-    The bottle
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Bottle[Wine]]:
-        return variable_from(cls).bottle
-
 
 @dataclass(eq=False)
-class MustardBottle(Role[Bottle[Mustard]], DelegatorForBottle):
+class MustardBottle(Bottle[Mustard]):
     """
     A mustard bottle is a bottle that contains mustard.
     """
-
-    bottle: Bottle[Mustard]
-    """
-    The bottle
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Bottle[Mustard]]:
-        return variable_from(cls).bottle
 
 
 @dataclass(eq=False)
@@ -902,16 +833,10 @@ class TinCan(HasStorageSpace[THasRootBody]):
 
 
 @dataclass(eq=False)
-class TunaCan(Role[TinCan[Tuna]], DelegatorForTinCan):
+class TunaCan(TinCan[Tuna]):
     """
     A tuna can.
     """
-
-    can: TinCan[Tuna]
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[TinCan[Tuna]]:
-        return variable_from(cls).can
 
 
 @dataclass(eq=False)
@@ -1074,22 +999,12 @@ class Salt(SaltOrPepper):
 
 @dataclass(eq=False)
 class SaltContainer(
-    Role[HasStorageSpace[Salt]],
-    DelegatorForHasStorageSpace,
+    HasStorageSpace[Salt],
     IsPerceivable,
 ):
     """
     A container of salt.
     """
-
-    storage_space: HasStorageSpace[Salt]
-    """
-    A body with storage space for salt.
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[HasStorageSpace[Salt]]:
-        return variable_from(cls).storage_space
 
 
 @dataclass(eq=False)
@@ -1271,22 +1186,12 @@ class BookFront(HasRootBody): ...
 
 @dataclass(eq=False)
 class SaltPepperShaker(
-    Role[HasStorageSpace[SaltOrPepper]],
-    DelegatorForHasStorageSpace,
+    HasStorageSpace[SaltOrPepper],
 ):
     """
     A salt and pepper shaker is a container that cotains salt and pepper and can be shaken to sprinkle the contents
      onto food.
     """
-
-    storage_space: HasStorageSpace[SaltOrPepper]
-    """
-    The storage space that can have salt and pepper
-    """
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[HasStorageSpace[SaltOrPepper]]:
-        return variable_from(cls).storage_space
 
 
 @dataclass(eq=False)

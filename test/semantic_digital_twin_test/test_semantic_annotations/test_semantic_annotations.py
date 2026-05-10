@@ -286,38 +286,23 @@ def test_minimal_robot_annotation(pr2_world_state_reset):
     assert len(robot.connections) == len(pr2.connections)
 
 
-def test_bottle_roles():
-    bottle = Bottle(root=Body(name=PrefixedName("bottle_supporting_surface")))
-    mustard_bottle = MustardBottle(bottle=bottle)
+def test_room_roles():
+    room = Room(floor=Floor(root=Body(name=PrefixedName("room_floor"))))
+    kitchen = Kitchen(room=room)
 
-    # Test ability to access Bottle properties
-    assert bottle.root is mustard_bottle.root
-
-    # Test correct caching of roles
-    assert MustardBottle in bottle.roles
-    assert bottle.roles[MustardBottle] == mustard_bottle
-    assert Role.has_role(bottle, MustardBottle)
-    assert HasRole(bottle, MustardBottle)()
-
-    wine_bottle = WineBottle(bottle=bottle)
+    # Test ability to access Room properties
+    assert room.floor is kitchen.floor
 
     # Test correct caching of roles
-    assert WineBottle in bottle.roles
-    assert bottle.roles[WineBottle] == wine_bottle
-    assert len(bottle.roles) == 2
-    assert Role.has_role(bottle, WineBottle)
-    assert HasRole(bottle, WineBottle)()
-
-
-def test_tincan_roles():
-    tin_can = TinCan(root=Body(name=PrefixedName("tin_can")))
-    tuna_can = TunaCan(can=tin_can)
-
-    # Test ability to access TinCan properties
-    assert tuna_can.root == tin_can.root
+    assert Kitchen in room.roles
+    assert room.roles[Kitchen] == kitchen
+    assert Role.has_role(room, Kitchen)
+    assert HasRole(room, Kitchen)()
 
     # Test correct caching of roles
-    assert TunaCan in tin_can.roles
-    assert tin_can.roles[TunaCan] == tuna_can
-    assert Role.has_role(tin_can, TunaCan)
-    assert HasRole(tin_can, TunaCan)()
+    living_room = LivingRoom(room=room)
+    assert LivingRoom in room.roles
+    assert room.roles[LivingRoom] == living_room
+    assert len(room.roles) == 2
+    assert Role.has_role(room, LivingRoom)
+    assert HasRole(room, LivingRoom)()
