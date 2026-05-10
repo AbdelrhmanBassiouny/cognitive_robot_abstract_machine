@@ -66,6 +66,12 @@ _ALWAYS_EXCLUDED_METHODS: frozenset[str] = frozenset(
 # unwraps it to a plain function, so it must be excluded explicitly here.
 
 
+def _normalize_type(t: type) -> type:
+    """Return the origin class if *t* is a parameterized generic alias, else *t* unchanged."""
+    origin = get_origin(t)
+    return origin if origin is not None else t
+
+
 class TransformationMode(str, enum.Enum):
     """Enumeration of transformation mode identifiers used as file-name prefixes."""
 
@@ -90,10 +96,11 @@ def _compute_all_delegatees(
     direct = set(class_diagram.role_takers) | pd_only_delegatees
     result = set(direct)
     for delegatee in direct:
-        for ancestor in delegatee.__mro__:
-            if ancestor is object or ancestor is delegatee:
+        concrete = _normalize_type(delegatee)
+        for ancestor in concrete.__mro__:
+            if ancestor is object or ancestor is concrete:
                 continue
-            if not same_package(ancestor.__module__, delegatee.__module__):
+            if not same_package(ancestor.__module__, concrete.__module__):
                 continue
             result.add(ancestor)
     return result
@@ -130,20 +137,27 @@ def _sort_modules_by_dependency(
     """
     module_set = set(modules)
     deps: dict[ModuleType, set[ModuleType]] = {m: set() for m in modules}
-    for taker in class_diagram.role_takers:
-        taker_module = sys.modules.get(taker.__module__)
-        if taker_module not in module_set:
+
+    # Build dependency edges from ALL wrapped classes (not just role_takers) so that
+    # transitive same-package ancestors also constrain module ordering.  Without this,
+    # a WorldEntityWithSimulatorProperties (world_entity) whose base HasSimulatorProperties
+    # (mixin) hasn't been processed yet would miss its cross-module DelegatorFor import.
+    all_types = {wc.clazz for wc in class_diagram.wrapped_classes}
+    for clazz in all_types:
+        concrete = _normalize_type(clazz)
+        clazz_module = sys.modules.get(concrete.__module__)
+        if clazz_module not in module_set:
             continue
-        for ancestor in taker.__mro__[1:]:
+        for ancestor in concrete.__mro__[1:]:
             if ancestor is object:
                 continue
             ancestor_module = sys.modules.get(ancestor.__module__)
             if (
                 ancestor_module is not None
                 and ancestor_module in module_set
-                and ancestor_module is not taker_module
+                and ancestor_module is not clazz_module
             ):
-                deps[taker_module].add(ancestor_module)
+                deps[clazz_module].add(ancestor_module)
 
     result: list[ModuleType] = []
     visited: set[ModuleType] = set()
@@ -211,8 +225,10 @@ class RoleTransformer:
         updated_taker_modules = list(taker_modules)
 
         def add_delegatee_class(delegatee_class: Type):
-            classes.append(delegatee_class)
-            delegatee_module = sys.modules[delegatee_class.__module__]
+            concrete = _normalize_type(delegatee_class)
+            if concrete not in classes:
+                classes.append(concrete)
+            delegatee_module = sys.modules[concrete.__module__]
             if delegatee_module not in updated_taker_modules:
                 updated_taker_modules.append(delegatee_module)
 
@@ -235,10 +251,11 @@ class RoleTransformer:
             c for c in classes if c not in role_classes and c not in pd_only_classes
         ]
         for delegatee in list(delegatee_classes):
-            for ancestor in delegatee.__mro__:
-                if ancestor is object or ancestor is delegatee:
+            concrete = _normalize_type(delegatee)
+            for ancestor in concrete.__mro__:
+                if ancestor is object or ancestor is concrete:
                     continue
-                if not same_package(ancestor.__module__, delegatee.__module__):
+                if not same_package(ancestor.__module__, concrete.__module__):
                     continue
                 if ancestor not in classes:
                     add_delegatee_class(ancestor)

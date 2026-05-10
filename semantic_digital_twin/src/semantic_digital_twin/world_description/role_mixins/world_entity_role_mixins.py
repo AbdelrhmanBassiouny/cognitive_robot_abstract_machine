@@ -1,6 +1,9 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from semantic_digital_twin.role_mixins.mixin_role_mixins import (
+    DelegatorForHasSimulatorProperties,
+)
 from typing import Any, Dict, List, Self, Type
 from typing_extensions import TYPE_CHECKING
 
@@ -54,7 +57,7 @@ class DelegatorForWorldEntity(ABC):
 
 
 @dataclass(eq=False)
-class DelegatorForWorldEntityWithID(ABC):
+class DelegatorForWorldEntityWithID(DelegatorForWorldEntity, ABC):
     @property
     @abstractmethod
     def delegatee(self) -> WorldEntityWithID: ...
@@ -85,14 +88,18 @@ class DelegatorForWorldEntityWithID(ABC):
 
 
 @dataclass(eq=False)
-class DelegatorForWorldEntityWithSimulatorProperties(ABC):
+class DelegatorForWorldEntityWithSimulatorProperties(
+    DelegatorForWorldEntityWithID, DelegatorForHasSimulatorProperties, ABC
+):
     @property
     @abstractmethod
     def delegatee(self) -> WorldEntityWithSimulatorProperties: ...
 
 
 @dataclass(eq=False)
-class DelegatorForSemanticAnnotation(ABC):
+class DelegatorForSemanticAnnotation(
+    DelegatorForWorldEntityWithSimulatorProperties, ABC
+):
     @property
     @abstractmethod
     def delegatee(self) -> SemanticAnnotation: ...
