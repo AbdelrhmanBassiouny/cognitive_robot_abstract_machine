@@ -7,7 +7,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 from textwrap import dedent
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 import libcst
 
@@ -17,7 +17,6 @@ from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.utils import (
     GenericTypeSubstitution,
     get_type_hints_of_object,
-    is_genuine_narrowing,
     resolve_name_in_hierarchy,
     same_package,
     get_property_return_type,
@@ -49,76 +48,96 @@ def _is_original_field_definer(klass: type, field_name: str) -> bool:
     )
 
 
-def _find_defining_class(
-    name: str,
-    clazz: type,
-    module_name: str,
-    already_covered_bases: set[type],
-    is_member: Callable[[type], bool],
-    is_excluded_defining_class: Callable[[type], bool] | None = None,
-) -> type | None:
-    """Return the first class in clazz's MRO that defines name under the given membership test.
+@dataclasses.dataclass
+class MroWalker:
+    """Encapsulates MRO-walking logic with package and coverage checks.
 
-    Returns None when the name belongs directly to the class, to an excluded base,
-    to a class rejected by the exclusion predicate, or to a class in a different package.
-
-    :param name: The attribute name to find.
-    :param clazz: The class whose MRO is walked.
-    :param module_name: The source module name used for package comparison.
-    :param already_covered_bases: The set of base types whose members are already delegated.
-    :param is_member: Callable that returns True when a class defines the name.
-    :param is_excluded_defining_class: Optional predicate; when it returns True for a class
-        in the MRO, that class is skipped as a valid defining class.
-    :return: The defining class, or None.
+    Provides common iteration patterns over a class's MRO that are used
+    throughout the delegation generator to find defining ancestors,
+    iterate non-covered same-package bases, etc.
     """
-    for klass in clazz.__mro__[1:]:
-        if klass is object:
-            return None
-        if is_member(klass):
-            if is_excluded_defining_class is not None and is_excluded_defining_class(
-                klass
-            ):
-                return None
-            if klass in already_covered_bases:
-                return None
-            if klass.__module__ == module_name or same_package(
-                klass.__module__, module_name
-            ):
-                return klass
-            return None
-    return None
 
+    clazz: type
+    already_covered_bases: set[type]
+    module_name: str
+    is_excluded_defining_class: Callable[[type], bool] | None = None
 
-def _is_member_already_covered(
-    name: str,
-    clazz: type,
-    already_covered_bases: set[type],
-    is_member: Callable[[type], bool],
-    is_excluded_defining_class: Callable[[type], bool] | None = None,
-) -> bool:
-    """Return True if the first class in clazz's MRO that defines name is in already_covered_bases.
+    def _should_skip(self, klass: type) -> bool:
+        """Return True if klass should be skipped during MRO traversal."""
+        return klass is object
 
-    Unlike ``_find_defining_class``, this function ignores package boundaries and
-    reports the covered status so callers can decide whether to suppress a
-    re-declaration.
-
-    :param name: The attribute name to find.
-    :param clazz: The class whose MRO is walked.
-    :param already_covered_bases: Set of base types whose members are already delegated.
-    :param is_member: Callable that returns True when a class defines name.
-    :param is_excluded_defining_class: Optional predicate that excludes a class.
-    :return: True when the name's defining class is in ``already_covered_bases``.
-    """
-    for klass in clazz.__mro__[1:]:
-        if klass is object:
+    def _is_excluded(self, klass: type) -> bool:
+        """Return True if klass is excluded by the defining-class predicate."""
+        if self.is_excluded_defining_class is None:
             return False
-        if is_member(klass):
-            if is_excluded_defining_class is not None and is_excluded_defining_class(
-                klass
-            ):
+        return self.is_excluded_defining_class(klass)
+
+    def _is_same_package(self, klass: type) -> bool:
+        """Return True if klass is in the same package as the source module."""
+        return (
+            klass.__module__ == self.module_name
+            or same_package(klass.__module__, self.module_name)
+        )
+
+    def find_defining_class(self, is_member: Callable[[type], bool]) -> type | None:
+        """Return the first class in the MRO that defines the member.
+
+        Returns None when the member belongs directly to the class, to an excluded
+        base, or to a class in a different package.
+        """
+        for klass in self.clazz.__mro__[1:]:
+            if self._should_skip(klass):
+                return None
+            if is_member(klass):
+                if self._is_excluded(klass):
+                    return None
+                if klass in self.already_covered_bases:
+                    return None
+                if self._is_same_package(klass):
+                    return klass
+                return None
+        return None
+
+    def is_member_already_covered(self, is_member: Callable[[type], bool]) -> bool:
+        """Return True if the first defining class in the MRO is already covered."""
+        for klass in self.clazz.__mro__[1:]:
+            if self._should_skip(klass):
                 return False
-            return klass in already_covered_bases
-    return False
+            if is_member(klass):
+                if self._is_excluded(klass):
+                    return False
+                return klass in self.already_covered_bases
+        return False
+
+    def iter_non_covered_same_package(
+        self, stop_at: type | None = None
+    ) -> Iterator[type]:
+        """Yield non-covered same-package ancestors, optionally stopping at a given type."""
+        for klass in self.clazz.__mro__[1:]:
+            if self._should_skip(klass) or klass is stop_at:
+                return
+            if klass in self.already_covered_bases:
+                continue
+            if self._is_same_package(klass):
+                yield klass
+
+    def find_first(self, predicate: Callable[[type], bool]) -> type | None:
+        """Return the first class in the MRO that satisfies predicate."""
+        for klass in self.clazz.__mro__[1:]:
+            if self._should_skip(klass):
+                return None
+            if predicate(klass):
+                return klass
+        return None
+
+    def find_nearest_covered(self, stop_at: type) -> type | None:
+        """Return the nearest already_covered base between clazz and stop_at."""
+        for klass in self.clazz.__mro__[1:]:
+            if self._should_skip(klass) or klass is stop_at:
+                return None
+            if klass in self.already_covered_bases:
+                return klass
+        return None
 
 
 @dataclasses.dataclass
@@ -136,6 +155,15 @@ class DelegationGenerator:
     excluded_member_predicate: Callable[[str, type], bool] | None = None
     is_excluded_defining_class: Callable[[type], bool] | None = None
     name_resolver: ImportNameResolver | None = None
+
+    def _mro_walker(self, clazz: type, module_name: str) -> MroWalker:
+        """Return an MroWalker configured from this generator's settings."""
+        return MroWalker(
+            clazz=clazz,
+            already_covered_bases=self.already_covered_bases,
+            module_name=module_name,
+            is_excluded_defining_class=self.is_excluded_defining_class,
+        )
 
     def collect_delegation_groups(
         self,
@@ -186,13 +214,10 @@ class DelegationGenerator:
                 continue
             if not (field_.field.kw_only or field_.field.init):
                 continue
-            defining_base = _find_defining_class(
-                field_.name,
-                wrapped_class.clazz,
-                module_name,
-                self.already_covered_bases,
-                lambda klass: _is_original_field_definer(klass, field_.name),
-                self.is_excluded_defining_class,
+            defining_base = self._mro_walker(
+                wrapped_class.clazz, module_name
+            ).find_defining_class(
+                lambda klass: _is_original_field_definer(klass, field_.name)
             )
             if defining_base is not None:
                 self._delegate_inherited_field(
@@ -204,13 +229,9 @@ class DelegationGenerator:
                 )
             elif _is_original_field_definer(wrapped_class.clazz, field_.name):
                 field_type_name = self._normalise_type_name(field_.field.type)
-                prop_nodes = self.node_factory.make_property_getter_and_setter_nodes(
-                    field_.name,
-                    field_type_name,
-                    f"self.{self.delegatee_attribute_name}.{field_.name}",
-                    f"self.{self.delegatee_attribute_name}.{field_.name} = value",
+                groups.setdefault(None, {})[field_.name] = (
+                    self._make_field_delegation_nodes(field_.name, field_type_name)
                 )
-                groups.setdefault(None, {})[field_.name] = prop_nodes
             else:
                 # Field's defining class is already covered — only redeclare on genuine narrowing
                 self._maybe_add_narrowing_redecl_for_covered_field(
@@ -241,24 +262,12 @@ class DelegationGenerator:
         """
         base_type = field_.type_at_definer(defining_base)
         base_type_name = self._normalise_type_name(base_type)
-        prop_nodes = self.node_factory.make_property_getter_and_setter_nodes(
-            field_.name,
-            base_type_name,
-            f"self.{self.delegatee_attribute_name}.{field_.name}",
-            f"self.{self.delegatee_attribute_name}.{field_.name} = value",
-        )
+        prop_nodes = self._make_field_delegation_nodes(field_.name, base_type_name)
         groups.setdefault(defining_base, {})[field_.name] = prop_nodes
 
         last_narrowed_type = None
-        for ancestor in concrete_class.__mro__[1:]:
-            if ancestor is defining_base:
-                break
-            if ancestor in self.already_covered_bases:
-                continue
-            if ancestor.__module__ != module_name and not same_package(
-                ancestor.__module__, module_name
-            ):
-                continue
+        walker = self._mro_walker(concrete_class, module_name)
+        for ancestor in walker.iter_non_covered_same_package(stop_at=defining_base):
             narrowed = self._add_narrowing_redeclaration(
                 field_.name, base_type, ancestor, defining_base, groups
             )
@@ -314,15 +323,8 @@ class DelegationGenerator:
             if nearest_covered_base is not None
             else wrapped_class.clazz
         )
-        for ancestor in walk_start.__mro__[1:]:
-            if ancestor is object or ancestor is defining_base:
-                break
-            if ancestor in self.already_covered_bases:
-                continue
-            if ancestor.__module__ != module_name and not same_package(
-                ancestor.__module__, module_name
-            ):
-                continue
+        walker = self._mro_walker(walk_start, module_name)
+        for ancestor in walker.iter_non_covered_same_package(stop_at=defining_base):
             self._add_narrowing_redeclaration(
                 field_.name, base_type, ancestor, defining_base, groups
             )
@@ -348,8 +350,7 @@ class DelegationGenerator:
 
         Only adds a re-declaration when the current class genuinely narrows the
         property's return type (i.e., substitutes a TypeVar with a strictly more
-        specific type).  Reuses ``_nearest_covered_base_and_type`` and
-        ``GenericTypeSubstitution`` to determine whether narrowing has occurred.
+        specific type).
 
         :param property_name: The property name.
         :param base_return_type: The raw return-type annotation of the property.
@@ -369,25 +370,18 @@ class DelegationGenerator:
             )
         )
 
-        substitution = GenericTypeSubstitution.from_specialization(
-            wrapped_class.clazz, raw_defining_base
-        )
-        if not substitution.has_genuine_substitutions:
-            return
-        result = substitution.apply(base_return_type)
-        if not result.resolved:
-            return
-        if (
-            nearest_covered_type is not None
-            and result.resolved_type is nearest_covered_type
-        ):
-            return
+        def _make_nodes(name: str, type_name: str) -> list[libcst.FunctionDef]:
+            return self._make_property_delegation_nodes(name, type_name, has_setter)
 
-        concrete_annotation = self._normalise_type_name(result.resolved_type)
-        redeclared_nodes = self._make_property_delegation_nodes(
-            property_name, concrete_annotation, has_setter
+        self._maybe_add_concrete_narrowing(
+            property_name,
+            base_return_type,
+            wrapped_class.clazz,
+            raw_defining_base,
+            groups,
+            reference_type=nearest_covered_type,
+            make_nodes=_make_nodes,
         )
-        groups.setdefault(None, {})[property_name] = redeclared_nodes
 
     def _add_narrowing_redeclaration(
         self,
@@ -415,12 +409,7 @@ class DelegationGenerator:
         if not result.resolved:
             return None
         type_name = self._normalise_type_name(result.resolved_type)
-        nodes = self.node_factory.make_property_getter_and_setter_nodes(
-            field_name,
-            type_name,
-            f"self.{self.delegatee_attribute_name}.{field_name}",
-            f"self.{self.delegatee_attribute_name}.{field_name} = value",
-        )
+        nodes = self._make_field_delegation_nodes(field_name, type_name)
         groups.setdefault(ancestor, {}).setdefault(field_name, nodes)
         return result.resolved_type
 
@@ -435,12 +424,9 @@ class DelegationGenerator:
         :param wrapped_class: The class whose MRO is searched.
         :return: The original defining class, or None if not found.
         """
-        for klass in wrapped_class.clazz.__mro__[1:]:
-            if klass is object:
-                return None
-            if _is_original_field_definer(klass, field_.name):
-                return klass
-        return None
+        return MroWalker(
+            wrapped_class.clazz, set(), ""
+        ).find_first(lambda klass: _is_original_field_definer(klass, field_.name))
 
     def _find_raw_property_defining_base(
         self,
@@ -449,7 +435,7 @@ class DelegationGenerator:
     ) -> type | None:
         """Return the first class in wrapped_class's MRO that defines property_name, ignoring coverage.
 
-        Unlike ``_find_defining_class``, this method does NOT check
+        Unlike ``find_defining_class``, this method does NOT check
         ``already_covered_bases`` or package boundaries.  It is used by
         ``_maybe_add_narrowing_redecl_for_covered_property`` to find the original
         definer so that TypeVar narrowing can be computed.
@@ -458,17 +444,12 @@ class DelegationGenerator:
         :param wrapped_class: The class whose MRO is searched.
         :return: The defining class, or None if not found.
         """
-        for klass in wrapped_class.clazz.__mro__[1:]:
-            if klass is object:
-                return None
-            if property_name in vars(klass):
-                if (
-                    self.is_excluded_defining_class is not None
-                    and self.is_excluded_defining_class(klass)
-                ):
-                    return None
-                return klass
-        return None
+        return MroWalker(
+            wrapped_class.clazz,
+            set(),
+            "",
+            is_excluded_defining_class=self.is_excluded_defining_class,
+        ).find_first(lambda klass: property_name in vars(klass))
 
     def _nearest_covered_base_and_type(
         self,
@@ -483,20 +464,18 @@ class DelegationGenerator:
         :param base_type: The type annotation on defining_base.
         :return: (nearest covered ancestor, resolved type at that ancestor), or (None, base_type).
         """
-        for klass in wrapped_class.clazz.__mro__[1:]:
-            if klass is object or klass is defining_base:
-                break
-            if klass not in self.already_covered_bases:
-                continue
-            sub = GenericTypeSubstitution.from_specialization(
-                klass, defining_base, trace_unsubscripted=True
-            )
-            if sub.has_substitutions:
-                result = sub.apply(base_type)
-                if result.resolved:
-                    return klass, result.resolved_type
-            return klass, base_type
-        return None, base_type
+        walker = MroWalker(wrapped_class.clazz, self.already_covered_bases, "")
+        nearest = walker.find_nearest_covered(defining_base)
+        if nearest is None:
+            return None, base_type
+        sub = GenericTypeSubstitution.from_specialization(
+            nearest, defining_base, trace_unsubscripted=True
+        )
+        if sub.has_substitutions:
+            result = sub.apply(base_type)
+            if result.resolved:
+                return nearest, result.resolved_type
+        return nearest, base_type
 
     def _maybe_add_concrete_narrowing(
         self,
@@ -507,6 +486,7 @@ class DelegationGenerator:
         groups: dict[type | None, dict[str, list]],
         *,
         reference_type: Any = None,
+        make_nodes: Callable[[str, str], list[libcst.FunctionDef]] | None = None,
     ) -> None:
         """Add groups[None][field_name] if concrete_class genuinely narrows base_type.
 
@@ -522,6 +502,7 @@ class DelegationGenerator:
         :param groups: The accumulator dict to populate.
         :param reference_type: Optional type already established by a covered ancestor;
             skip this re-declaration when the result matches.
+        :param make_nodes: Optional node factory; defaults to _make_field_delegation_nodes.
         """
         substitution = GenericTypeSubstitution.from_specialization(
             concrete_class, defining_base
@@ -534,12 +515,8 @@ class DelegationGenerator:
         if reference_type is not None and result.resolved_type is reference_type:
             return
         type_name = self._normalise_type_name(result.resolved_type)
-        nodes = self.node_factory.make_property_getter_and_setter_nodes(
-            field_name,
-            type_name,
-            f"self.{self.delegatee_attribute_name}.{field_name}",
-            f"self.{self.delegatee_attribute_name}.{field_name} = value",
-        )
+        factory = make_nodes or self._make_field_delegation_nodes
+        nodes = factory(field_name, type_name)
         groups.setdefault(None, {})[field_name] = nodes
 
     def _collect_property_delegations(
@@ -554,6 +531,7 @@ class DelegationGenerator:
         :param module_name: The source module name for package comparison.
         :param groups: The accumulator dict to populate.
         """
+        walker = self._mro_walker(wrapped_class.clazz, module_name)
         for property_name, property_value in inspect.getmembers(
             wrapped_class.clazz, inspect.isdatadescriptor
         ):
@@ -565,65 +543,99 @@ class DelegationGenerator:
             ):
                 continue
 
-            defining_base = _find_defining_class(
-                property_name,
-                wrapped_class.clazz,
-                module_name,
-                self.already_covered_bases,
-                lambda klass: property_name in vars(klass),
-                self.is_excluded_defining_class,
+            defining_base = walker.find_defining_class(
+                lambda klass: property_name in vars(klass)
             )
-
             has_setter = property_value.fset is not None
             base_return_type = get_property_return_type(property_value)
-            return_annotation = (
-                self._normalise_type_name(base_return_type)
-                if base_return_type
-                else None
-            )
-
-            prop_nodes = self._make_property_delegation_nodes(
-                property_name, return_annotation, has_setter
-            )
 
             if defining_base is not None:
-                # Property defined in a same-package, non-covered base class.
-                groups.setdefault(defining_base, {})[property_name] = prop_nodes
-
-                if base_return_type is not None:
-                    substitution = GenericTypeSubstitution.from_specialization(
-                        wrapped_class.clazz, defining_base
-                    )
-                    if substitution.has_substitutions:
-                        result = substitution.apply(base_return_type)
-                        if result.resolved:
-                            concrete_annotation = self._normalise_type_name(
-                                result.resolved_type
-                            )
-                            redeclared_nodes = self._make_property_delegation_nodes(
-                                property_name, concrete_annotation, has_setter
-                            )
-                            groups.setdefault(None, {})[property_name] = redeclared_nodes
-            else:
-                # defining_base is None — disambiguate the reason.
-                if property_name in vars(wrapped_class.clazz):
-                    groups.setdefault(None, {})[property_name] = prop_nodes
-                elif _is_member_already_covered(
+                self._delegate_inherited_property(
                     property_name,
-                    wrapped_class.clazz,
-                    self.already_covered_bases,
-                    lambda klass: property_name in vars(klass),
-                    self.is_excluded_defining_class,
-                ):
-                    self._maybe_add_narrowing_redecl_for_covered_property(
-                        property_name,
-                        base_return_type,
-                        wrapped_class,
-                        has_setter,
-                        groups,
+                    base_return_type,
+                    has_setter,
+                    wrapped_class,
+                    defining_base,
+                    groups,
+                )
+            else:
+                self._delegate_own_or_covered_property(
+                    property_name,
+                    base_return_type,
+                    has_setter,
+                    wrapped_class,
+                    walker,
+                    groups,
+                )
+
+    def _delegate_inherited_property(
+        self,
+        property_name: str,
+        base_return_type: Any,
+        has_setter: bool,
+        wrapped_class: WrappedClass,
+        defining_base: type,
+        groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Delegate a property inherited from a same-package, non-covered base class.
+
+        Also adds a narrowing re-declaration at groups[None] when the concrete class
+        substitutes a TypeVar in the return type.
+        """
+        return_annotation = (
+            self._normalise_type_name(base_return_type) if base_return_type else None
+        )
+        prop_nodes = self._make_property_delegation_nodes(
+            property_name, return_annotation, has_setter
+        )
+        groups.setdefault(defining_base, {})[property_name] = prop_nodes
+
+        if base_return_type is not None:
+            substitution = GenericTypeSubstitution.from_specialization(
+                wrapped_class.clazz, defining_base
+            )
+            if substitution.has_substitutions:
+                result = substitution.apply(base_return_type)
+                if result.resolved:
+                    concrete_annotation = self._normalise_type_name(
+                        result.resolved_type
                     )
-                else:
-                    groups.setdefault(None, {})[property_name] = prop_nodes
+                    redeclared_nodes = self._make_property_delegation_nodes(
+                        property_name, concrete_annotation, has_setter
+                    )
+                    groups.setdefault(None, {})[property_name] = redeclared_nodes
+
+    def _delegate_own_or_covered_property(
+        self,
+        property_name: str,
+        base_return_type: Any,
+        has_setter: bool,
+        wrapped_class: WrappedClass,
+        walker: MroWalker,
+        groups: dict[type | None, dict[str, list]],
+    ) -> None:
+        """Delegate a property when defining_base is None — disambiguate the reason."""
+        return_annotation = (
+            self._normalise_type_name(base_return_type) if base_return_type else None
+        )
+        prop_nodes = self._make_property_delegation_nodes(
+            property_name, return_annotation, has_setter
+        )
+
+        if property_name in vars(wrapped_class.clazz):
+            groups.setdefault(None, {})[property_name] = prop_nodes
+        elif walker.is_member_already_covered(
+            lambda klass: property_name in vars(klass)
+        ):
+            self._maybe_add_narrowing_redecl_for_covered_property(
+                property_name,
+                base_return_type,
+                wrapped_class,
+                has_setter,
+                groups,
+            )
+        else:
+            groups.setdefault(None, {})[property_name] = prop_nodes
 
     def _make_property_delegation_nodes(
         self,
@@ -639,17 +651,12 @@ class DelegationGenerator:
         :return: A list of FunctionDef nodes.
         """
         if has_setter:
-            return self.node_factory.make_property_getter_and_setter_nodes(
-                property_name,
-                return_annotation,
-                f"self.{self.delegatee_attribute_name}.{property_name}",
-                f"self.{self.delegatee_attribute_name}.{property_name} = value",
-            )
+            return self._make_field_delegation_nodes(property_name, return_annotation)
         return [
             self.node_factory.make_property_getter_node(
                 property_name,
                 return_annotation,
-                f"self.{self.delegatee_attribute_name}.{property_name}",
+                self._delegatee_path(property_name),
             )
         ]
 
@@ -667,10 +674,12 @@ class DelegationGenerator:
         :param groups: The accumulator dict to populate.
         :param skip_bases: Combined set of bases whose methods should not be delegated.
         """
-        skip_base_list = [
-            base for base in wrapped_class.clazz.__mro__[1:] if base in skip_bases
-        ]
+        skip_base_names: set[str] = set()
+        for base in wrapped_class.clazz.__mro__[1:]:
+            if base in skip_bases:
+                skip_base_names.update(dir(base))
 
+        walker = self._mro_walker(wrapped_class.clazz, module_name)
         for method_name, method_object in inspect.getmembers(
             wrapped_class.clazz, predicate=inspect.isfunction
         ):
@@ -681,19 +690,14 @@ class DelegationGenerator:
                 and self.excluded_member_predicate(method_name, wrapped_class.clazz)
             ):
                 continue
-            if any(method_name in dir(base) for base in skip_base_list):
+            if method_name in skip_base_names:
                 continue
             method_node = self.make_delegation_method_node(
                 method_name, method_object, wrapped_class.clazz
             )
             if method_node is not None:
-                defining_base = _find_defining_class(
-                    method_name,
-                    wrapped_class.clazz,
-                    module_name,
-                    self.already_covered_bases,
-                    lambda klass: method_name in vars(klass),
-                    self.is_excluded_defining_class,
+                defining_base = walker.find_defining_class(
+                    lambda klass: method_name in vars(klass)
                 )
                 groups.setdefault(defining_base, {})[method_name] = [method_node]
 
@@ -844,6 +848,21 @@ class DelegationGenerator:
                     )
                 ]
             )
+        )
+
+    def _delegatee_path(self, name: str) -> str:
+        """Return the attribute access path for a delegated member."""
+        return f"self.{self.delegatee_attribute_name}.{name}"
+
+    def _make_field_delegation_nodes(
+        self, field_name: str, type_name: str
+    ) -> list[libcst.FunctionDef]:
+        """Build getter and setter nodes that delegate to a field on the delegatee."""
+        return self.node_factory.make_property_getter_and_setter_nodes(
+            field_name,
+            type_name,
+            self._delegatee_path(field_name),
+            f"{self._delegatee_path(field_name)} = value",
         )
 
     def _normalise_type_name(self, type_obj: Any) -> str:

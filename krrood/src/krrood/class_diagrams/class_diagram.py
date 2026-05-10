@@ -1051,6 +1051,22 @@ class ClassDiagram:
     def __eq__(self, other):
         return self is other
 
+    def _collect_specialized_generic_types(
+        self, additional_classes: Optional[List] = None
+    ) -> set[Type]:
+        """Return the set of unique specialized generic types referenced by wrapped class fields.
+
+        :param additional_classes: Extra types to include in the initial collection set.
+        :return: A set of specialized generic type endpoints to be processed.
+        """
+        to_process = set()
+        for wrapped_class in self.wrapped_classes:
+            for wrapped_field in wrapped_class.fields:
+                to_process.add(wrapped_field.type_endpoint)
+        if additional_classes:
+            to_process.update(additional_classes)
+        return to_process
+
     def _create_nodes_for_specialized_generic_type_hints(
         self, additional_classes: Optional[List] = None
     ):
@@ -1063,24 +1079,14 @@ class ClassDiagram:
         :raises ClassIsUnMappedInClassDiagram: If a class referenced by a field or origin type is not mapped
             in the class diagram, it will skip further processing for that type.
         """
-        # Phase 1: Collect all unique specialized generic types referenced in fields
-        additional_classes = additional_classes or []
-        to_process = set()
-        [
-            to_process.add(wrapped_field.type_endpoint)
-            for wrapped_class in self.wrapped_classes
-            for wrapped_field in wrapped_class.fields
-        ]
-        [to_process.add(clazz) for clazz in additional_classes]
+        to_process = self._collect_specialized_generic_types(additional_classes)
 
-        # Phase 2: Add nodes for discovered types that do not already exists
         while to_process:
             next_type = to_process.pop()
 
             # skip existing nodes
             try:
                 self.get_wrapped_class(next_type)
-                # Already wrapped
                 continue
             except ClassIsUnMappedInClassDiagram:
                 pass

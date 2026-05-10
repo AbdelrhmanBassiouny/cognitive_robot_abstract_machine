@@ -670,19 +670,45 @@ class RoleModuleTransformer(ContextAwareTransformer):
                     LibCSTNodeFactory.make_argument(HasRoles.__name__)
                 )
             role_taker_node = role_taker_node.with_changes(bases=role_taker_class_bases)
-            role_taker_node = self._ensure_HasRoles_init_is_called_in_explicit_init_of_role_taker_class(
-                role_taker_node
-            )
+            role_taker_node = self._ensure_has_roles_init_called(role_taker_node)
             self.require_original_import("krrood.patterns.role", [HasRoles.__name__])
 
         return [role_taker_node]
 
-    def _ensure_HasRoles_init_is_called_in_explicit_init_of_role_taker_class(
+    @staticmethod
+    def _find_init_method(
+        body: libcst.IndentedBlock,
+    ) -> tuple[int, libcst.FunctionDef] | None:
+        """Return (index, FunctionDef) for the ``__init__`` method in a class body, or None."""
+        for i, node in enumerate(body.body):
+            if (
+                isinstance(node, libcst.FunctionDef)
+                and node.name.value == "__init__"
+            ):
+                return i, node
+        return None
+
+    @staticmethod
+    def _init_has_super_call(
+        init_function: libcst.FunctionDef, super_class_name: str
+    ) -> bool:
+        """Return True if init_function already contains a call to super_class_name.__init__."""
+        target = f"{super_class_name}.__init__"
+        for stmt in init_function.body.body:
+            if (
+                isinstance(stmt, libcst.SimpleStatementLine)
+                and len(stmt.body) == 1
+                and isinstance(stmt.body[0], libcst.Expr)
+                and isinstance(stmt.body[0].value, libcst.Call)
+                and libcst.Module([]).code_for_node(stmt.body[0].value.func) == target
+            ):
+                return True
+        return False
+
+    def _ensure_has_roles_init_called(
         self, role_taker_node: libcst.ClassDef
     ) -> libcst.ClassDef:
-        """Handle explicit __init__ method in a class definition.
-
-        Ensures that HasRoles.__init__ is called in the __init__ method of the class.
+        """Ensure HasRoles.__init__ is called in an explicit __init__ method.
 
         :param role_taker_node: The class definition node to handle.
         :return: The modified class definition node with HasRoles.__init__ call added if necessary.
@@ -696,45 +722,27 @@ class RoleModuleTransformer(ContextAwareTransformer):
             or decorator_kwargs["init"].value != "False"
         ):
             return role_taker_node
+
+        found = self._find_init_method(role_taker_node.body)
+        if found is None:
+            return role_taker_node
+        init_index, init_function = found
+
+        if self._init_has_super_call(init_function, HasRoles.__name__):
+            return role_taker_node
+
         original_body = role_taker_node.body
-        init_function_index, init_function = next(
-            (
-                (i, node)
-                for i, node in enumerate(original_body.body)
-                if isinstance(node, libcst.FunctionDef)
-                and node.name.value == "__init__"
-            ),
-            (None, None),
-        )
-        if not init_function:
-            return role_taker_node
-
-        init_line_exists = any(
-            isinstance(stmt, libcst.SimpleStatementLine)
-            and len(stmt.body) == 1
-            and isinstance(stmt.body[0], libcst.Expr)
-            and isinstance(stmt.body[0].value, libcst.Call)
-            and libcst.Module([]).code_for_node(stmt.body[0].value.func)
-            == f"{HasRoles.__name__}.__init__"
-            for stmt in init_function.body.body
-        )
-
-        if init_line_exists:
-            return role_taker_node
-
         new_body = libcst.IndentedBlock(
             list(init_function.body.body)
             + [libcst.parse_statement(f"{HasRoles.__name__}.__init__(self)")]
         )
         init_function = init_function.with_changes(body=new_body)
         new_body = libcst.IndentedBlock(
-            list(original_body.body[:init_function_index])
+            list(original_body.body[:init_index])
             + [init_function]
-            + list(original_body.body[init_function_index + 1 :])
+            + list(original_body.body[init_index + 1 :])
         )
-        role_taker_node = role_taker_node.with_changes(body=new_body)
-
-        return role_taker_node
+        return role_taker_node.with_changes(body=new_body)
 
     def _should_add_has_roles(
         self, node: libcst.ClassDef, wrapped_class: WrappedClass
@@ -984,46 +992,76 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param segregated_base_types: Same-module base classes that received their own RoleFor mixin.
         :return: List of Arg nodes representing the base classes.
         """
-        role_for_bases = []
-        bases_that_are_takers = self.bases_of_class_that_are_role_takers(wrapped_class)
         uncovered_segregated = self._most_derived_types(
             list(segregated_base_types or [])
         )
-
+        role_for_bases: list[libcst.Arg] = []
         for base in node.bases:
-            base_name = LibCSTNodeFactory.get_name_from_base_node(base.value)
-            if base_name in bases_that_are_takers:
-                taker_type = bases_that_are_takers[base_name]
-                if any(
-                    issubclass(seg, taker_type) and seg is not taker_type
-                    for seg in uncovered_segregated
-                ):
-                    continue  # A more-derived segregated base already covers this taker
-                role_for_name = self.get_delegator_for_name(taker_type)
-                role_for_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
-                self._register_cross_module_rolefor_import(taker_type)
-            elif self._get_owned_delegatee_for_name(base_name) is not None:
-                delegatee_type = self._get_owned_delegatee_for_name(base_name)
-                role_for_name = self.get_delegator_for_name(delegatee_type)
-                role_for_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
-                self._register_cross_module_rolefor_import(delegatee_type)
-            elif _is_role_base_node(base.value) and issubclass(
-                wrapped_class.clazz, Role
-            ):
-                taker_type = wrapped_class.clazz.get_role_taker_type()
-                role_for_bases.append(
-                    LibCSTNodeFactory.make_argument(
-                        self.get_delegator_for_name(taker_type)
-                    )
-                )
+            self._process_base_for_rolefor(
+                base, wrapped_class, uncovered_segregated, role_for_bases
+            )
+        self._add_segregated_bases(uncovered_segregated, role_for_bases)
+        role_for_bases.append(LibCSTNodeFactory.make_argument(ABC.__name__))
+        return role_for_bases
 
+    def _process_base_for_rolefor(
+        self,
+        base: libcst.Arg,
+        wrapped_class: WrappedClass,
+        uncovered_segregated: list[type],
+        role_for_bases: list[libcst.Arg],
+    ) -> None:
+        """Process a single base class argument and append the appropriate DelegatorFor."""
+        base_name = LibCSTNodeFactory.get_name_from_base_node(base.value)
+        bases_that_are_takers = self.bases_of_class_that_are_role_takers(wrapped_class)
+
+        if base_name in bases_that_are_takers:
+            self._add_taker_delegator_base(
+                base_name, bases_that_are_takers, uncovered_segregated, role_for_bases
+            )
+        elif self._get_owned_delegatee_for_name(base_name) is not None:
+            delegatee_type = self._get_owned_delegatee_for_name(base_name)
+            role_for_name = self.get_delegator_for_name(delegatee_type)
+            role_for_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
+            self._register_cross_module_rolefor_import(delegatee_type)
+        elif _is_role_base_node(base.value) and issubclass(
+            wrapped_class.clazz, Role
+        ):
+            taker_type = wrapped_class.clazz.get_role_taker_type()
+            role_for_bases.append(
+                LibCSTNodeFactory.make_argument(
+                    self.get_delegator_for_name(taker_type)
+                )
+            )
+
+    def _add_taker_delegator_base(
+        self,
+        base_name: str,
+        bases_that_are_takers: dict[str, type],
+        uncovered_segregated: list[type],
+        role_for_bases: list[libcst.Arg],
+    ) -> None:
+        """Add a DelegatorFor base for a taker ancestor, unless a more-derived segregated base covers it."""
+        taker_type = bases_that_are_takers[base_name]
+        if any(
+            issubclass(seg, taker_type) and seg is not taker_type
+            for seg in uncovered_segregated
+        ):
+            return
+        role_for_name = self.get_delegator_for_name(taker_type)
+        role_for_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
+        self._register_cross_module_rolefor_import(taker_type)
+
+    def _add_segregated_bases(
+        self,
+        uncovered_segregated: list[type],
+        role_for_bases: list[libcst.Arg],
+    ) -> None:
+        """Append DelegatorFor bases for uncovered segregated base types."""
         for base_type in uncovered_segregated:
             role_for_bases.append(
                 LibCSTNodeFactory.make_argument(self.get_delegator_for_name(base_type))
             )
-
-        role_for_bases.append(LibCSTNodeFactory.make_argument(ABC.__name__))
-        return role_for_bases
 
     def _transform_role(
         self, node: libcst.ClassDef, wrapped_class: WrappedClass
