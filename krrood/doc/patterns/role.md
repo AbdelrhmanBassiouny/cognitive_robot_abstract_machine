@@ -16,33 +16,6 @@ support for role chaining on top.
 
 ---
 
-## Motivating problem
-
-In a robot's semantic world model, a physical `Cabinet` is represented as a single object with a body,
-storage space, and apertures. Now suppose the robot is in a kitchen and that cabinet is a fridge —
-it has doors and a specific temperature zone. In a bedroom, an identical cabinet is a wardrobe — it
-has different drawers and stores clothes.
-
-The naive approach creates separate objects:
-
-```python
-cabinet = Cabinet(...)
-fridge = Fridge(cabinet=cabinet, doors=[...])
-wardrobe = Wardrobe(cabinet=cabinet, drawers=[...])
-```
-
-But now `cabinet`, `fridge`, and `wardrobe` are three distinct Python objects. Any code that asks
-"is this the fridge?" must look it up from the cabinet manually. Equality checks break. The cabinet
-does not know it is being used as a fridge. When the robot updates `cabinet.objects`, the fridge does
-not reflect the change automatically because it delegates reads — but callers that hold a `Fridge`
-reference see the right data while callers that hold the `Cabinet` reference do not know a `Fridge`
-context exists.
-
-The Role pattern makes `fridge == cabinet` and `hash(fridge) == hash(cabinet)`. The cabinet knows
-about the fridge. There is one physical entity, viewed in two semantic contexts.
-
----
-
 ## Quick example
 
 ### Defining a role taker
@@ -55,8 +28,8 @@ from krrood.patterns.role import HasRoles
 from dataclasses import dataclass, field
 
 @dataclass(eq=False)
-class Cabinet(Furniture, HasCaseAsRootBody, HasRoles):
-    ...
+class Room(SemanticAnnotation, HasRoles):
+    floor: Floor = field(kw_only=True)
 ```
 
 ### Defining a role
@@ -69,72 +42,49 @@ from krrood.patterns.role.role import Role
 from krrood.entity_query_language.factories import variable_from
 
 @dataclass(eq=False)
-class Fridge(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
-    cabinet: Cabinet          # the role taker
+class Kitchen(Role[Room], DelegatorForRoom):
+    room: Room          # the role taker
 
     @classmethod
-    def role_taker_attribute(cls) -> Attribute[Cabinet]:
-        return variable_from(cls).cabinet
+    def role_taker_attribute(cls) -> Attribute[Room]:
+        return variable_from(cls).room
 ```
 
-`DelegatorForCabinet` is the generated mixin (see [PropertyDelegator](property_delegator.md)) that
-forwards `Cabinet`'s attributes onto `Fridge`.
+`DelegatorForRoom` is the generated mixin (see [PropertyDelegator](property_delegator.md)) that
+forwards `Room`'s attributes onto `Kitchen`.
 
 ### Using the role
 
 ```python
-cabinet = Cabinet(...)
-fridge = Fridge(cabinet=cabinet, doors=[...])
+room = Room(floor=ground_floor)
+kitchen = Kitchen(room=room)
 
 # Identity is shared
-assert fridge == cabinet
-assert hash(fridge) == hash(cabinet)
+assert kitchen == room
+assert hash(kitchen) == hash(room)
 
-# Role registry: the cabinet knows about the fridge
-assert cabinet.roles[Fridge] is fridge
+# Role registry: the room knows about the kitchen
+assert room.roles[Kitchen] is kitchen
 
-# Cabinet attributes are accessible directly on the fridge (via delegation)
-fridge.root           # → cabinet.root
-fridge.objects        # → cabinet.objects
-fridge.hole_direction # → cabinet.hole_direction
+# Room attributes are accessible directly on the kitchen (via delegation)
+kitchen.floor   # → room.floor
 
-# Role-specific attributes live on the fridge
-fridge.doors
-fridge.drawers
+# Role-specific attributes live on the kitchen
+kitchen.utilities
 ```
 
 ---
 
-## More examples from semantic_annotations
-
-### Multiple roles for the same role taker type
-
-A `Cabinet` can be a `Fridge`, a `Wardrobe`, or a `Dresser`. Each is a separate role class that
-attaches different context-specific attributes to a plain `Cabinet`:
-
-```python
-@dataclass(eq=False)
-class Fridge(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
-    cabinet: Cabinet
-    ...
-
-@dataclass(eq=False)
-class Wardrobe(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
-    cabinet: Cabinet
-    ...
-
-@dataclass(eq=False)
-class Dresser(Role[Cabinet], DelegatorForCabinet, HasDrawers, HasDoors):
-    cabinet: Cabinet
-    ...
-```
-
-Each role is independent. The same cabinet can have at most one role of each type at a time (the
-`roles` dict is keyed by role type).
+## Examples from semantic_annotations
 
 ### Room roles — Kitchen, Bedroom, Bathroom, LivingRoom
 
-A `Room` is a physical area. Its semantic purpose — *kitchen*, *bedroom*, *living room* — is a role:
+A `Room` is a physical area with spatial bounds and a floor. Its semantic purpose — *kitchen*,
+*bedroom*, *bathroom*, *living room* — is a temporary, contextual role. The same room could be a
+kitchen today and converted to a bedroom tomorrow. The room's identity never changes; only its
+semantic role does.
+
+The `semantic_digital_twin` package defines four room roles, all following the same pattern:
 
 ```python
 @dataclass(eq=False)
@@ -156,50 +106,150 @@ class Bedroom(Role[Room], DelegatorForRoom):
     @classmethod
     def role_taker_attribute(cls) -> Attribute[Room]:
         return variable_from(cls).room
+
+@dataclass(eq=False)
+class Bathroom(Role[Room], DelegatorForRoom):
+    room: Room
+
+    @classmethod
+    def role_taker_attribute(cls) -> Attribute[Room]:
+        return variable_from(cls).room
+
+@dataclass(eq=False)
+class LivingRoom(Role[Room], DelegatorForRoom):
+    room: Room
+
+    @classmethod
+    def role_taker_attribute(cls) -> Attribute[Room]:
+        return variable_from(cls).room
 ```
 
-Usage:
+A single `Room` can take on multiple roles simultaneously — a studio apartment's room might be a
+`Kitchen`, `Bedroom`, and `LivingRoom` all at once:
 
 ```python
-room = Room(floor=floor)
+room = Room(floor=ground_floor)
 kitchen = Kitchen(room=room)
+bedroom = Bedroom(room=room)
+living_room = LivingRoom(room=room)
 
-assert kitchen == room
-assert room.roles[Kitchen] is kitchen
+# All roles share identity with the room
+assert kitchen == bedroom == living_room == room
+assert hash(kitchen) == hash(bedroom) == hash(living_room) == hash(room)
 
-# Room attributes accessible on kitchen (via DelegatorForRoom)
-kitchen.floor   # → room.floor
+# The room's registry sees all active roles
+assert room.roles == {Kitchen: kitchen, Bedroom: bedroom, LivingRoom: living_room}
+
+# Room attributes are accessible on every role (via DelegatorForRoom)
+kitchen.floor       # → room.floor
+bedroom.floor       # → room.floor
+living_room.floor   # → room.floor
 ```
 
-### Typed container roles — WineBottle, SoapBottle, MustardBottle
+This is the key insight of the Role pattern: the physical entity (`Room`) has a stable identity,
+while its semantic roles come and go. No subclassing is needed, and no separate wrapper objects
+fragment the identity of the thing being modelled.
 
-A `Bottle[TLiquid]` is generic. A `WineBottle` is a `Bottle[Wine]` used in a wine context, a
-`SoapBottle` is a `Bottle[LiquidSoap]` used for soap:
+---
+
+## Examples from ontology
+
+### Person, CEO, Professor — parallel roles on the same entity
+
+In an ontology, a `Person` is a persistent entity with a name and identity. Over time, that person
+may take on various roles: they can become a `CEO` (temporarily heading a company), a `Professor`
+(teaching courses), or both simultaneously. These roles are not permanent properties of the person —
+they are contextual relationships that come and go.
 
 ```python
 @dataclass(eq=False)
-class Bottle(HasCaseAsRootBody, HasStorageSpace[TLiquid]):
-    ...
+class Person(Symbol, HasRoles):
+    name: str
 
 @dataclass(eq=False)
-class WineBottle(Role[Bottle[Wine]], DelegatorForBottle):
-    bottle: Bottle[Wine]
+class CEO(Role[Person]):
+    person: Person
+    head_of: Company = None
 
     @classmethod
-    def role_taker_attribute(cls) -> Attribute[Bottle[Wine]]:
-        return variable_from(cls).bottle
+    def role_taker_attribute(cls) -> Attribute[Person]:
+        return variable_from(cls).person
 
 @dataclass(eq=False)
-class SoapBottle(Role[Bottle[LiquidSoap]], DelegatorForBottle):
-    bottle: Bottle[LiquidSoap]
+class Professor(Role[Person]):
+    person: Person
+    teacher_of: List[Course] = field(default_factory=list)
 
     @classmethod
-    def role_taker_attribute(cls) -> Attribute[Bottle[LiquidSoap]]:
-        return variable_from(cls).bottle
+    def role_taker_attribute(cls) -> Attribute[Person]:
+        return variable_from(cls).person
 ```
 
-The role carries the semantic meaning (this bottle *is* a wine bottle), while the underlying `Bottle`
-object holds the physics, geometry, and storage space.
+A single person can hold both roles at once:
+
+```python
+alice = Person(name="Alice")
+ceo = CEO(person=alice, head_of=acme_corp)
+prof = Professor(person=alice, teacher_of=[cs101, math201])
+
+# Both roles share identity with Alice
+assert ceo == prof == alice
+assert hash(ceo) == hash(prof) == hash(alice)
+
+# Alice knows about all her roles
+assert alice.roles[CEO] is ceo
+assert alice.roles[Professor] is prof
+
+# Each role carries its own context
+ceo.head_of         # → acme_corp
+prof.teacher_of     # → [cs101, math201]
+```
+
+### CEO, Representative — role chaining
+
+A role's role taker can itself be a role, creating a **role chain**. A `CEO` can temporarily act as a
+`Representative` for a company, adding another layer of context on top:
+
+```python
+@dataclass(eq=False)
+class Representative(Role[CEO]):
+    ceo: CEO
+    represents: Company = None
+
+    @classmethod
+    def role_taker_attribute(cls) -> Attribute[CEO]:
+        return variable_from(cls).ceo
+```
+
+```python
+alice = Person(name="Alice")
+ceo = CEO(person=alice, head_of=acme_corp)
+rep = Representative(ceo=ceo, represents=acme_corp)
+
+# All three are the same entity
+assert rep == ceo == alice
+assert hash(rep) == hash(ceo) == hash(alice)
+
+# The root entity sees the full chain
+assert alice.roles[CEO] is ceo
+assert alice.roles[Representative] is rep
+
+# The chain is transparent: each role taker sees all roles
+ceo.roles[Representative] is rep   # CEO knows about its Representative role
+```
+
+### Why roles, not subclasses?
+
+A `CEO` is not a subclass of `Person` — a person does not *become* a different kind of thing when
+they take a job. They gain temporary properties (`head_of`) and relationships that may later be
+removed, but their identity as a person persists. Subclassing would imply that a `CEO` is a
+permanently different kind of entity with distinct identifying properties, which is not how these
+concepts work in the real world.
+
+Similarly, `Kitchen` is not a subclass of `Room` — a room can be a kitchen one year and a bedroom
+the next. If `Kitchen` were a subclass, that transition would be impossible to model without
+replacing the room object entirely. A Role captures the temporary, contextual nature of these
+concepts.
 
 ---
 
@@ -216,16 +266,16 @@ This means any collection, set, or dictionary keyed by the original object autom
 role, and code that receives either object can navigate to the other:
 
 ```python
-cabinet = Cabinet(...)
-fridge = Fridge(cabinet=cabinet)
+room = Room(floor=ground_floor)
+kitchen = Kitchen(room=room)
 
 # Both references refer to "the same thing" in sets and dicts
-s = {cabinet}
-assert fridge in s
+s = {room}
+assert kitchen in s
 
 # Navigate from either direction
-fridge.role_taker         # → cabinet
-cabinet.roles[Fridge]     # → fridge
+kitchen.role_taker         # → room
+room.roles[Kitchen]        # → kitchen
 ```
 
 ---
@@ -235,38 +285,19 @@ cabinet.roles[Fridge]     # → fridge
 A role's role taker can itself be a role. This is called **role chaining** and lets you layer multiple
 levels of semantic context onto a single physical entity.
 
-In the university ontology example bundled with krrood's tests, a `Person` can become a `CEO`, and a
-`CEO` can become a `Representative`:
+As shown in the ontology examples above, a `Person` can become a `CEO`, and that `CEO` can become a
+`Representative` — three layers of context, one identity. The chain can be arbitrarily deep: a
+`Representative` could become a `Delegate`, and so on.
+
+All objects in the chain are equal and share the same hash:
 
 ```python
-@dataclass(eq=False)
-class Person(Symbol):
-    name: str
-
-@dataclass(eq=False)
-class CEO(Role[Person]):
-    person: Person
-    head_of: Company = None
-
-@dataclass(eq=False)
-class Representative(Role[CEO]):
-    ceo: CEO
-    represents: Company = None
-```
-
-All three objects are equal and have the same hash:
-
-```python
-person = Person(name="Alice")
-ceo = CEO(person=person, head_of=acme)
-rep = Representative(ceo=ceo, represents=acme)
-
-assert rep == ceo == person
-assert hash(rep) == hash(ceo) == hash(person)
+assert rep == ceo == alice
+assert hash(rep) == hash(ceo) == hash(alice)
 
 # Each role taker in the chain sees all roles
-assert person.roles[CEO] is ceo
-assert person.roles[Representative] is rep
+assert alice.roles[CEO] is ceo
+assert alice.roles[Representative] is rep
 ```
 
 The `Role` class provides helpers to navigate chains:
@@ -300,8 +331,8 @@ introspection and query generation:
 
 ```python
 @classmethod
-def role_taker_attribute(cls) -> Attribute[Cabinet]:
-    return variable_from(cls).cabinet
+def role_taker_attribute(cls) -> Attribute[Room]:
+    return variable_from(cls).room
 ```
 
 ### Shared fields
@@ -310,11 +341,11 @@ If the role class and the role taker class share a common base (e.g. both inheri
 shared fields — such as a persistent `id` — are not duplicated. The role's fields for those
 attributes are set to `init=False` and delegate to the role taker via the generated mixin.
 
-### The generated `RoleFor` mixin
+### The generated `DelegatorFor` mixin
 
 `RoleTransformer` generates a `DelegatorFor<RoleTaker>` mixin (identical in structure to the
 [PropertyDelegator](property_delegator.md) mixin) that forwards every public attribute and method of
-the role taker onto the role. This is how `fridge.root` reaches `fridge.cabinet.root`.
+the role taker onto the role. This is how `kitchen.floor` reaches `kitchen.room.floor`.
 
 ---
 
@@ -322,17 +353,24 @@ the role taker onto the role. This is how `fridge.root` reaches `fridge.cabinet.
 
 - An object needs **context-specific attributes** that do not logically belong to the original type
   but are tightly coupled to a specific usage of that object.
+- The additional context is **temporary or situational** — the same entity may gain and lose this
+  role over its lifetime (a room that is a kitchen today becomes a bedroom tomorrow; a person becomes
+  a CEO and later steps down).
+- The same physical entity can play **multiple semantic roles simultaneously** (a room that is both
+  a kitchen and a living room; a person who is both a CEO and a professor).
 - The extended object and the original object must be **considered the same entity** throughout the
   system (same hash, equality, shared identity in collections).
-- You are modelling an **ontology concept** where the same physical thing plays different semantic
-  roles in different situations (room → kitchen, cabinet → fridge, bottle → wine bottle).
-- You want a **role registry**: any part of the system should be able to ask "does this cabinet have a
-  fridge role?" without scanning all fridge instances.
+- You want a **role registry**: any part of the system should be able to ask "does this room have a
+  kitchen role?" without scanning all kitchen instances.
 
 ## When NOT to use the Role pattern
 
-- **The extension is permanent and always present** — if every cabinet is always a fridge, just
-  inherit from `Cabinet` directly.
+- **The new class changes persistent, identifying properties of the original** — if a `Person` could
+  not exist without being a `CEO`, or if being a `CEO` fundamentally altered what the object *is*
+  rather than what it *does*, subclassing is the right choice.
+- **The new class has its own persistent identity** — if the concept is a permanently different kind
+  of thing that exists independently (e.g., a `Student` who is always a student, with their own
+  student-ID and enrollment records), it is a subclass, not a role.
 - **You do not need identity sharing** — if the wrapper and the wrapped object can be separate
   entities, a plain [PropertyDelegator](property_delegator.md) is simpler.
 - **You need more than one role of the same type at the same time** — the `roles` dict is keyed by
@@ -348,15 +386,19 @@ the role taker onto the role. This is how `fridge.root` reaches `fridge.cabinet.
 %%{init: {'theme': 'base', 'themeVariables': {'fontSize': '20px', 'lineColor': '#333333', 'primaryColor': '#ddeeff', 'primaryTextColor': '#111111', 'primaryBorderColor': '#3a7abf', 'edgeLabelBackground': '#ffffff'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80, 'padding': 20}}}%%
 flowchart TD
     Q1{"Should the wrapper and<br/>the original object be<br/>the same entity?"}
-    Q2{"Does the wrapper need<br/>its own attributes beyond<br/>what the original has?"}
+    Q2{"Is this a temporary<br/>contextual role, or does it<br/>change persistent identity?"}
+    Q3{"Does the wrapper need<br/>its own attributes beyond<br/>what the original has?"}
     ROLE["<b>Role[T]</b><br/>Identity-sharing, role registry,<br/>optional chaining."]
+    SUBCLASS["<b>Subclass / Inheritance</b><br/>The new class has its own<br/>persistent identifying properties."]
     PD["<b>PropertyDelegator[T]</b><br/>Transparent forwarding,<br/>no identity sharing."]
     NEITHER["Plain composition or inheritance<br/>may be sufficient."]
 
-    Q1 -->|Yes| ROLE
-    Q1 -->|No| Q2
-    Q2 -->|Yes| PD
-    Q2 -->|No| NEITHER
+    Q1 -->|Yes| Q2
+    Q1 -->|No| Q3
+    Q2 -->|Temporary / contextual| ROLE
+    Q2 -->|Persistent identity change| SUBCLASS
+    Q3 -->|Yes| PD
+    Q3 -->|No| NEITHER
 ```
 
 ---
