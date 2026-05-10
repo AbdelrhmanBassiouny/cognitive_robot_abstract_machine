@@ -139,7 +139,7 @@ class HasRootKinematicStructureEntity(
         active_axis: Optional[Vector3] = None,
         connection_multiplier: float = 1.0,
         connection_offset: float = 0.0,
-    ):
+    ) -> Self:
         """
         Create a new instance and connect its root entity to the world's root.
 

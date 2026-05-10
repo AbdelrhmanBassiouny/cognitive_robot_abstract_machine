@@ -207,3 +207,5 @@ class DelegatorForHasCaseAsRootBody(DelegatorForHasSupportingSurface, ABC):
     @property
     @abstractmethod
     def delegatee(self) -> HasCaseAsRootBody: ...
+    def _create_container_event(self, scale: Scale, wall_thickness: float) -> Event:
+        return self.delegatee._create_container_event(scale, wall_thickness)

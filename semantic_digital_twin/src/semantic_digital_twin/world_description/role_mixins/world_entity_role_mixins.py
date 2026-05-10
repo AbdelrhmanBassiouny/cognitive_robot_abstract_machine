@@ -1,10 +1,11 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from krrood.utils import memoize
 from semantic_digital_twin.role_mixins.mixin_role_mixins import (
     DelegatorForHasSimulatorProperties,
 )
-from typing import Any, Dict, List, Self, Type
+from typing import Any, Dict, List, Self, Set, Type
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -72,6 +73,12 @@ class DelegatorForWorldEntityWithID(DelegatorForWorldEntity, ABC):
     def _apply_diff(self, diff: JSONAttributeDiff, **kwargs) -> None:
         return self.delegatee._apply_diff(diff, kwargs)
 
+    def _item_from_json(self, data: Dict[str, Any], **kwargs) -> Any:
+        return self.delegatee._item_from_json(data, kwargs)
+
+    def _item_to_json(self, item: Any):
+        return self.delegatee._item_to_json(item)
+
     def _track_object_in_from_json(
         self, from_json_kwargs
     ) -> WorldEntityWithIDKwargsTracker:
@@ -129,3 +136,7 @@ class DelegatorForSemanticAnnotation(
         self, reference_frame: KinematicStructureEntity
     ) -> BoundingBoxCollection:
         return self.delegatee.as_bounding_box_collection_in_frame(reference_frame)
+
+    @memoize
+    def class_name_tokens(self) -> Set[str]:
+        return self.delegatee.class_name_tokens()

@@ -40,6 +40,7 @@ from krrood.patterns.code_generation import (
     DelegationGenerator,
 )
 from krrood.patterns.property_delegator import PropertyDelegator
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.patterns.role.exceptions import RoleTransformerError
 from krrood.patterns.role.meta_data import RoleType
 from krrood.patterns.role.role import Role, HasRoles
@@ -116,7 +117,7 @@ def _is_from_property_delegator_class(name: str, clazz: type) -> bool:
     """
     for klass in clazz.__mro__:
         if name in vars(klass):
-            return issubclass(klass, PropertyDelegator)
+            return issubclass(klass, PropertyDelegator) or klass is SubClassSafeGeneric
     return False
 
 
@@ -438,7 +439,8 @@ class RoleModuleTransformer(ContextAwareTransformer):
             excluded_member_predicate=_is_from_property_delegator_class,
             is_excluded_defining_class=lambda klass: issubclass(
                 klass, PropertyDelegator
-            ),
+            )
+            or klass is SubClassSafeGeneric,
             name_resolver=self._resolver,
         )
 

@@ -681,7 +681,8 @@ class DelegationGenerator:
 
         walker = self._mro_walker(wrapped_class.clazz, module_name)
         for method_name, method_object in inspect.getmembers(
-            wrapped_class.clazz, predicate=inspect.isfunction
+            wrapped_class.clazz,
+            predicate=lambda obj: inspect.isfunction(obj) or inspect.ismethod(obj),
         ):
             if method_name in self.excluded_method_names:
                 continue
@@ -727,10 +728,37 @@ class DelegationGenerator:
 
         method_type = self._get_method_type(method, method_node)
 
+        if method_type is MethodType.FACTORY_METHOD:
+            return None
+
+        if method_type is MethodType.CLASS_METHOD:
+            method_node = method_node.with_changes(
+                decorators=tuple(
+                    d
+                    for d in method_node.decorators
+                    if not (
+                        isinstance(d.decorator, libcst.Name)
+                        and d.decorator.value == "classmethod"
+                    )
+                )
+            )
+            if method_node.params.params:
+                first_param = method_node.params.params[0]
+                method_node = method_node.with_changes(
+                    params=method_node.params.with_changes(
+                        params=(
+                            first_param.with_changes(name=libcst.Name("self")),
+                        )
+                        + method_node.params.params[1:]
+                    )
+                )
+
         self._resolve_signature_types(method)
         self._register_decorator_imports(method_node, method)
 
-        return self._generate_delegation_body(method_node, name, method, source_class)
+        return self._generate_delegation_body(
+            method_node, name, method, source_class, method_type
+        )
 
     def _get_method_type(
         self, method: Callable, method_node: libcst.FunctionDef
@@ -818,6 +846,7 @@ class DelegationGenerator:
         name: str,
         method: Callable,
         source_class: type,
+        method_type: MethodType,
     ) -> libcst.FunctionDef:
         """Replace the method body with a delegation call to the delegatee attribute.
 
@@ -825,24 +854,18 @@ class DelegationGenerator:
         :param name: The method name to delegate to on the delegatee.
         :param method: The live method object used to obtain parameter names.
         :param source_class: The class to which the method belongs.
+        :param method_type: The classified method type.
         :return: The method node with a delegation body.
         """
         parameters = inspect.signature(method).parameters
-        call_params = [p for p in parameters.keys() if p != "self"]
-        import_statement = []
-        if "self" in parameters.keys():
-            attribute_source = f"self.{self.delegatee_attribute_name}"
+        if method_type is MethodType.NORMAL:
+            call_params = [p for p in parameters.keys() if p != "self"]
         else:
-            attribute_source = source_class.__name__
-            import_statement = [
-                libcst.parse_statement(
-                    f"from {source_class.__module__} import {source_class.__name__}"
-                )
-            ]
+            call_params = list(parameters.keys())
+        attribute_source = f"self.{self.delegatee_attribute_name}"
         return method_node.with_changes(
             body=libcst.IndentedBlock(
-                import_statement
-                + [
+                [
                     libcst.parse_statement(
                         f"return {attribute_source}.{name}({', '.join(call_params)})"
                     )
