@@ -3,24 +3,32 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Generic, Type
 
-from krrood.entity_query_language.predicate import Predicate
+from typing_extensions import Tuple
+
+from krrood.entity_query_language import symbolic
+from krrood.entity_query_language.predicate import Predicate, symbolic_function
 from krrood.entity_query_language.utils import T
 from krrood.patterns.role.role import Role
 
 
-@dataclass(eq=False)
-class HasRole(Predicate, Generic[T]):
+@symbolic_function
+def has_role(entity: T, roles: Type[Role[T]] | Tuple[Type[Role[T]], ...]) -> bool:
     """
-    Predicate that checks if an entity has a specific role type.
+    :param entity: The entity to check.
+    :param roles: The role type to check.
+    :return: True if the given entity is a role_taker for any of the given role types, False otherwise.
     """
-    entity: T
-    """
-    The entity to check.
-    """
-    role: Type[Role[T]]
-    """
-    The role type to check.
-    """
+    return Role.has_role(entity, roles)
 
-    def __call__(self) -> bool:
-        return Role.has_role(self.entity, self.role)
+
+@symbolic_function
+def isinstance_or_role(entity: T, types: Type | Tuple[Type, ...]) -> bool:
+    """
+    :param entity: The entity to check.
+    :param types: The types to check for.
+    :return: True if the given entity is an instance of a type in the given types
+    or if it is a Role for a type in the given types, False otherwise.
+    """
+    return isinstance(entity, types) or (
+        isinstance(entity, Role) and isinstance_or_role(entity.role_taker, types)
+    )

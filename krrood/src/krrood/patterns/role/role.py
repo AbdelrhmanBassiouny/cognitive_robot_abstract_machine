@@ -5,7 +5,16 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field, fields, is_dataclass
 from functools import lru_cache, cached_property
 
-from typing_extensions import Type, get_origin, Any, Dict, List, TypeVar, Iterator
+from typing_extensions import (
+    Type,
+    get_origin,
+    Any,
+    Dict,
+    List,
+    TypeVar,
+    Iterator,
+    Tuple,
+)
 
 from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 from krrood.class_diagrams.utils import (
@@ -90,9 +99,15 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
                 cls._update_field_kwargs(field_.name, {"init": False}, type_=type_)
 
     @classmethod
-    def has_role(cls, role_taker: T, role_type: Type[Role]) -> bool:
-        """:return: Whether the role taker has the given role type."""
-        return any(cls.yield_taker_roles_of_type(role_taker, role_type))
+    def has_role(
+        cls, role_taker: T, role_types: Type[Role] | Tuple[Type[Role], ...]
+    ) -> bool:
+        """
+        :param role_taker: The role taker instance to query.
+        :param role_types: The type or tuple of types of roles to check for.
+        :return: Whether the role taker has any of the given role type(s).
+        """
+        return any(cls.yield_taker_roles_of_type(role_taker, role_types))
 
     @property
     def role_taker_roles(self) -> List[Role]:
@@ -108,16 +123,20 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
 
     @classmethod
     def yield_taker_roles_of_type(
-        cls, role_taker: T, role_type: Type[Role[T]]
+        cls, role_taker: T, role_types: Type[Role[T]] | Tuple[Type[Role[T]], ...]
     ) -> Iterator[Role[T]]:
-        """:return: All roles of the given type for the role taker instance."""
+        """
+        :param role_taker: The role taker instance to query.
+        :param role_types: The type or tuple of types of roles to yield.
+        :return: All roles of the given type(s) for the role taker instance.
+        """
         wrapped_taker = SymbolGraph().get_wrapped_instance(role_taker)
         yield from (
             relation.source.instance
             for relation in SymbolGraph().get_incoming_relations_with_type(
                 wrapped_taker, HasRoleTaker
             )
-            if isinstance(relation.source.instance, role_type)
+            if isinstance(relation.source.instance, role_types)
         )
 
     @property

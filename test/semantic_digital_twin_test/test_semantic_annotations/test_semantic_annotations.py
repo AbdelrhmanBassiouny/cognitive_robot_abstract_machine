@@ -5,7 +5,7 @@ from numpy.ma.testutils import (
 )  # You could replace this with numpy's regular assert for better compatibility
 
 from krrood.entity_query_language.factories import entity, variable, in_, inference, an
-from krrood.patterns.role.predicates import HasRole
+from krrood.patterns.role.predicates import has_role, isinstance_or_role
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
@@ -296,13 +296,15 @@ def test_room_roles():
     # Test correct caching of roles
     assert Kitchen in room.roles
     assert room.roles[Kitchen] == kitchen
-    assert Role.has_role(room, Kitchen)
-    assert HasRole(room, Kitchen)()
+    assert has_role(room, Kitchen)
+    assert not isinstance_or_role(room, Kitchen)
+    assert isinstance_or_role(kitchen, Room)
 
     # Test correct caching of roles
     living_room = LivingRoom(room=room)
     assert LivingRoom in room.roles
     assert room.roles[LivingRoom] == living_room
     assert len(room.roles) == 2
-    assert Role.has_role(room, LivingRoom)
-    assert HasRole(room, LivingRoom)()
+    assert has_role(room, LivingRoom)
+    assert not isinstance_or_role(room, LivingRoom)
+    assert isinstance_or_role(living_room, Room)

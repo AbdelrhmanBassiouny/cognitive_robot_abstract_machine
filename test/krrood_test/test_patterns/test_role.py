@@ -11,6 +11,7 @@ from krrood.class_diagrams.class_diagram import (
     AssociationThroughRoleTaker,
 )
 from krrood.class_diagrams.utils import classes_of_module, T
+from krrood.patterns.role.predicates import isinstance_or_role
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from ..dataset.role_and_ontology import university_ontology_like_classes
@@ -39,6 +40,20 @@ def test_getting_and_setting_attribute_for_role_and_role_taker():
 
     # role-native attr lives on the role; access it directly from the role
     assert ceo.head_of == Company(name="BassCo")
+
+
+def test_is_instance_or_role():
+    person = PersonInRoleAndOntology(name="Bass")
+    ceo = CEOAsFirstRole(person=person)
+    representative = RepresentativeAsSecondRole(ceo=ceo)
+    assert isinstance_or_role(ceo, PersonInRoleAndOntology)
+    assert isinstance_or_role(ceo, CEOAsFirstRole)
+    assert isinstance_or_role(representative, RepresentativeAsSecondRole)
+    assert isinstance_or_role(representative, CEOAsFirstRole)
+    assert isinstance_or_role(representative, PersonInRoleAndOntology)
+    assert isinstance_or_role(person, PersonInRoleAndOntology)
+    assert isinstance_or_role(person, CEOAsFirstRole) is False
+    assert isinstance_or_role(person, RepresentativeAsSecondRole) is False
 
 
 def test_role_native_attr_accessible_from_roles_dict():
@@ -107,13 +122,17 @@ def test_mappings_between_roles_and_role_takers():
 
     delegate_role_takers = [representative, ceo, person]
     assert len(delegate_role_takers) == len(delegate.all_role_takers)
-    assert all(EntityAndType(role_taker) in map(EntityAndType, delegate.all_role_takers) for role_taker in
-               delegate_role_takers)
+    assert all(
+        EntityAndType(role_taker) in map(EntityAndType, delegate.all_role_takers)
+        for role_taker in delegate_role_takers
+    )
 
     professor_role_takers = [person]
     assert len(professor_role_takers) == len(professor.all_role_takers)
-    assert all(EntityAndType(role_taker) in map(EntityAndType, professor.all_role_takers) for role_taker in
-               professor_role_takers)
+    assert all(
+        EntityAndType(role_taker) in map(EntityAndType, professor.all_role_takers)
+        for role_taker in professor_role_takers
+    )
 
 
 def test_has_role():
@@ -134,10 +153,18 @@ def test_get_roles_of_type():
     representative = RepresentativeAsSecondRole(ceo=ceo)
     professor = ProfessorAsFirstRole(person=person)
 
-    assert isinstance(Role.get_taker_roles_of_type(person, CEOAsFirstRole)[0], CEOAsFirstRole)
-    assert isinstance(Role.get_taker_roles_of_type(person, RepresentativeAsSecondRole)[0], RepresentativeAsSecondRole)
+    assert isinstance(
+        Role.get_taker_roles_of_type(person, CEOAsFirstRole)[0], CEOAsFirstRole
+    )
+    assert isinstance(
+        Role.get_taker_roles_of_type(person, RepresentativeAsSecondRole)[0],
+        RepresentativeAsSecondRole,
+    )
     assert Role.get_taker_roles_of_type(person, DelegateAsThirdRole) == []
-    assert isinstance(Role.get_taker_roles_of_type(person, ProfessorAsFirstRole)[0], ProfessorAsFirstRole)
+    assert isinstance(
+        Role.get_taker_roles_of_type(person, ProfessorAsFirstRole)[0],
+        ProfessorAsFirstRole,
+    )
     assert Role.get_taker_roles_of_type(person, PersonInRoleAndOntology) == []
 
 
@@ -159,25 +186,25 @@ def test_role_taker_associations():
     diagram = ClassDiagram(classes)
     assert len(diagram._dependency_graph.edges()) == 29
     assert (
-            len(
-                [
-                    e
-                    for e in diagram._dependency_graph.edges()
-                    if isinstance(e, HasRoleTaker)
-                ]
-            )
-            == 3
+        len(
+            [
+                e
+                for e in diagram._dependency_graph.edges()
+                if isinstance(e, HasRoleTaker)
+            ]
+        )
+        == 3
     )
     assert len(diagram._dependency_graph.nodes()) == 14
     assert (
-            len(
-                [
-                    e
-                    for e in diagram._dependency_graph.edges()
-                    if isinstance(e, AssociationThroughRoleTaker)
-                ]
-            )
-            == 9
+        len(
+            [
+                e
+                for e in diagram._dependency_graph.edges()
+                if isinstance(e, AssociationThroughRoleTaker)
+            ]
+        )
+        == 9
     )
 
 
