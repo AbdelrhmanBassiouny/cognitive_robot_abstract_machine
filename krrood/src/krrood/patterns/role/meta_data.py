@@ -20,6 +20,9 @@ class MethodType(enum.Enum):
     CLASS_METHOD = enum.auto()
     """A method decorated with @classmethod."""
 
+    STATIC_METHOD = enum.auto()
+    """A method decorated with @staticmethod."""
+
     FACTORY_METHOD = enum.auto()
     """A @classmethod that returns Self."""
 

@@ -753,6 +753,26 @@ class DelegationGenerator:
                     )
                 )
 
+        if method_type is MethodType.STATIC_METHOD:
+            method_node = method_node.with_changes(
+                decorators=tuple(
+                    d
+                    for d in method_node.decorators
+                    if not (
+                        isinstance(d.decorator, libcst.Name)
+                        and d.decorator.value == "staticmethod"
+                    )
+                )
+            )
+            method_node = method_node.with_changes(
+                params=method_node.params.with_changes(
+                    params=(
+                        libcst.Param(name=libcst.Name("self")),
+                    )
+                    + method_node.params.params
+                )
+            )
+
         self._resolve_signature_types(method)
         self._register_decorator_imports(method_node, method)
 
@@ -770,11 +790,18 @@ class DelegationGenerator:
         :return: The detected MethodType.
         """
         is_classmethod = False
+        is_staticmethod = False
         for decorator in method_node.decorators:
             name = self.node_factory._get_decorator_name(decorator.decorator)
             if name == "classmethod":
                 is_classmethod = True
                 break
+            if name == "staticmethod":
+                is_staticmethod = True
+                break
+
+        if is_staticmethod:
+            return MethodType.STATIC_METHOD
 
         if not is_classmethod:
             return MethodType.NORMAL

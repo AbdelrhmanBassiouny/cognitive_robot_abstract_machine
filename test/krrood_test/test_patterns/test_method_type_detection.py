@@ -12,10 +12,14 @@ from krrood.patterns.role.meta_data import MethodType
 
 
 class Taker:
-    """Delegatee class with normal, class, and factory methods."""
+    """Delegatee class with normal, static, class, and factory methods."""
 
     def normal_method(self, x: int) -> str:
         return str(x)
+
+    @staticmethod
+    def static_method(data: str) -> int:
+        return len(data)
 
     @classmethod
     def class_method(cls, path: str) -> Any:
@@ -38,6 +42,7 @@ def test_method_type_detection():
 
     cases = [
         ("normal_method", MethodType.NORMAL),
+        ("static_method", MethodType.STATIC_METHOD),
         ("class_method", MethodType.CLASS_METHOD),
         ("factory_method", MethodType.FACTORY_METHOD),
     ]
@@ -68,6 +73,42 @@ def test_factory_method_skipped():
         "factory_method", Taker.factory_method, Taker
     )
     assert result is None, "Factory method should return None (be skipped)"
+
+
+def test_static_method_delegation_body():
+    """Static method delegation strips @staticmethod and adds self as first param."""
+    node_factory = LibCSTNodeFactory()
+    type_normaliser = MagicMock()
+    generator = DelegationGenerator(
+        node_factory=node_factory,
+        delegatee_attribute_name="delegatee",
+        type_normaliser=type_normaliser,
+    )
+
+    result = generator.make_delegation_method_node(
+        "static_method", Taker.static_method, Taker
+    )
+    assert result is not None, "Static method should produce a delegation node"
+
+    # Should NOT have @staticmethod decorator
+    decorator_names = [
+        node_factory._get_decorator_name(d.decorator) for d in result.decorators
+    ]
+    assert "staticmethod" not in decorator_names, (
+        "@staticmethod decorator should be stripped"
+    )
+
+    # First param should be 'self' (added by the transformer)
+    assert result.params.params, "Method should have parameters"
+    assert result.params.params[0].name.value == "self", (
+        f"First param should be 'self', got '{result.params.params[0].name.value}'"
+    )
+
+    # Body should delegate via self.delegatee
+    body_code = cst.parse_module("").code_for_node(result.body)
+    assert "self.delegatee.static_method" in body_code, (
+        f"Body should delegate to self.delegatee.static_method, got: {body_code}"
+    )
 
 
 def test_class_method_delegation_body():
@@ -138,6 +179,7 @@ def test_normal_method_delegation_body():
 if __name__ == "__main__":
     test_method_type_detection()
     test_factory_method_skipped()
+    test_static_method_delegation_body()
     test_class_method_delegation_body()
     test_normal_method_delegation_body()
     print("All tests passed!")
