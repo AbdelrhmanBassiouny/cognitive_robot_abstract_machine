@@ -2,12 +2,13 @@
 Runtime tests for the HasRoles mixin and roles-dict population.
 Uses the ground-truth transformed classes, which inherit from HasRoles.
 """
+
 from __future__ import annotations
 
 import pytest
 
 from krrood.patterns.role.role import HasRoles
-from test.krrood_test.dataset.role_and_ontology._ground_truth_transformed_university_ontology_like_classes_without_descriptors import (
+from ..dataset.role_and_ontology._ground_truth_transformed_university_ontology_like_classes_without_descriptors import (
     PersonInRoleAndOntology,
     CEOAsFirstRole,
     ProfessorAsFirstRole,

@@ -4,7 +4,7 @@ import libcst as cst
 from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
 
 TRANSFORMED = TransformationMode.TRANSFORMED.value
-from test.krrood_test.dataset.role_and_ontology import shared_base_takers
+from ..dataset.role_and_ontology import shared_base_takers
 
 
 @pytest.fixture
@@ -16,11 +16,17 @@ def mixin_source():
 
 def _classes(source: str) -> dict[str, cst.ClassDef]:
     tree = cst.parse_module(source)
-    return {stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)}
+    return {
+        stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)
+    }
 
 
 def _method_names(cls_def: cst.ClassDef) -> set[str]:
-    return {stmt.name.value for stmt in cls_def.body.body if isinstance(stmt, cst.FunctionDef)}
+    return {
+        stmt.name.value
+        for stmt in cls_def.body.body
+        if isinstance(stmt, cst.FunctionDef)
+    }
 
 
 def _base_names(cls_def: cst.ClassDef) -> list[str]:
@@ -61,16 +67,20 @@ def test_taker_rolefor_inherits_base_mixin(mixin_source):
     classes = _classes(mixin_source)
     for name in ("DelegatorForExclusiveTakerA", "DelegatorForExclusiveTakerB"):
         bases = _base_names(classes[name])
-        assert "DelegatorForSharedBase" in bases, (
-            f"{name} does not inherit DelegatorForSharedBase; got bases: {bases}"
-        )
+        assert (
+            "DelegatorForSharedBase" in bases
+        ), f"{name} does not inherit DelegatorForSharedBase; got bases: {bases}"
 
 
 def test_taker_direct_methods_stay_in_taker_rolefor(mixin_source):
     """taker_a_only_method is in DelegatorForExclusiveTakerA, not in DelegatorForSharedBase."""
     classes = _classes(mixin_source)
-    assert "taker_a_only_method" in _method_names(classes["DelegatorForExclusiveTakerA"])
-    assert "taker_b_only_method" in _method_names(classes["DelegatorForExclusiveTakerB"])
+    assert "taker_a_only_method" in _method_names(
+        classes["DelegatorForExclusiveTakerA"]
+    )
+    assert "taker_b_only_method" in _method_names(
+        classes["DelegatorForExclusiveTakerB"]
+    )
     shared_methods = _method_names(classes["DelegatorForSharedBase"])
     assert "taker_a_only_method" not in shared_methods
     assert "taker_b_only_method" not in shared_methods

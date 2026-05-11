@@ -2,7 +2,7 @@ import pytest
 import libcst as cst
 
 from krrood.patterns.role.role_transformer import RoleTransformer
-from test.krrood_test.dataset.role_and_ontology import factory_method_takers
+from ..dataset.role_and_ontology import factory_method_takers
 
 
 @pytest.fixture(scope="module")
@@ -18,9 +18,7 @@ def mixin_source():
 def _classes(source: str) -> dict[str, cst.ClassDef]:
     tree = cst.parse_module(source)
     return {
-        stmt.name.value: stmt
-        for stmt in tree.body
-        if isinstance(stmt, cst.ClassDef)
+        stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)
     }
 
 
@@ -41,10 +39,7 @@ def _methods(cls_def: cst.ClassDef) -> dict[str, cst.FunctionDef]:
 
 
 def _base_names(cls_def: cst.ClassDef) -> list[str]:
-    return [
-        cst.parse_module("").code_for_node(b.value).strip()
-        for b in cls_def.bases
-    ]
+    return [cst.parse_module("").code_for_node(b.value).strip() for b in cls_def.bases]
 
 
 def _decorator_names(func_def: cst.FunctionDef) -> set[str]:

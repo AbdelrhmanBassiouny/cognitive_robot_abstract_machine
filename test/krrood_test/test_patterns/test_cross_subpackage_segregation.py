@@ -4,8 +4,8 @@ import libcst as cst
 from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
 
 TRANSFORMED = TransformationMode.TRANSFORMED.value
-from test.krrood_test.dataset.role_and_ontology import cross_subpackage_takers
-from test.krrood_test.dataset.sibling_package import cross_subpackage_base
+from ..dataset.role_and_ontology import cross_subpackage_takers
+from ..dataset.sibling_package import cross_subpackage_base
 
 
 @pytest.fixture
@@ -18,9 +18,7 @@ def all_sources():
 def _classes(source: str) -> dict[str, cst.ClassDef]:
     tree = cst.parse_module(source)
     return {
-        stmt.name.value: stmt
-        for stmt in tree.body
-        if isinstance(stmt, cst.ClassDef)
+        stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)
     }
 
 
@@ -33,10 +31,7 @@ def _method_names(cls_def: cst.ClassDef) -> set[str]:
 
 
 def _base_names(cls_def: cst.ClassDef) -> list[str]:
-    return [
-        cst.parse_module("").code_for_node(b.value).strip()
-        for b in cls_def.bases
-    ]
+    return [cst.parse_module("").code_for_node(b.value).strip() for b in cls_def.bases]
 
 
 # ---------------------------------------------------------------------------
@@ -91,9 +86,9 @@ def test_taker_rolefors_inherit_base_mixin(all_sources):
     classes = _classes(derived_mixin)
     for name in ("DelegatorForTakerP", "DelegatorForTakerQ"):
         bases = _base_names(classes[name])
-        assert "DelegatorForCrossSubpackageBase" in bases, (
-            f"{name} does not inherit DelegatorForCrossSubpackageBase; got bases: {bases}"
-        )
+        assert (
+            "DelegatorForCrossSubpackageBase" in bases
+        ), f"{name} does not inherit DelegatorForCrossSubpackageBase; got bases: {bases}"
 
 
 def test_taker_only_methods_stay_in_taker(all_sources):

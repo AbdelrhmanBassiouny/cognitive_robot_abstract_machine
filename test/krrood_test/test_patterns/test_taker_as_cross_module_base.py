@@ -24,7 +24,7 @@ import pytest
 import libcst as cst
 
 from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
-from test.krrood_test.dataset.role_and_ontology import (
+from ..dataset.role_and_ontology import (
     cross_module_derived_takers_with_base_role,
     cross_module_base_taker,
 )
@@ -43,7 +43,9 @@ def mixin_sources():
 
 def _classes(source: str) -> dict[str, cst.ClassDef]:
     tree = cst.parse_module(source)
-    return {stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)}
+    return {
+        stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)
+    }
 
 
 def _base_names(cls_def: cst.ClassDef) -> list[str]:
@@ -74,7 +76,9 @@ def test_derived_a_inherits_base_rolefor(mixin_sources):
     src = mixin_sources[cross_module_derived_takers_with_base_role]
     classes = _classes(src)
     assert "DelegatorForDerivedTakerA" in classes
-    assert "DelegatorForCrossModuleBaseTaker" in _base_names(classes["DelegatorForDerivedTakerA"])
+    assert "DelegatorForCrossModuleBaseTaker" in _base_names(
+        classes["DelegatorForDerivedTakerA"]
+    )
 
 
 def test_derived_b_inherits_base_rolefor(mixin_sources):
@@ -82,7 +86,9 @@ def test_derived_b_inherits_base_rolefor(mixin_sources):
     src = mixin_sources[cross_module_derived_takers_with_base_role]
     classes = _classes(src)
     assert "DelegatorForDerivedTakerB" in classes
-    assert "DelegatorForCrossModuleBaseTaker" in _base_names(classes["DelegatorForDerivedTakerB"])
+    assert "DelegatorForCrossModuleBaseTaker" in _base_names(
+        classes["DelegatorForDerivedTakerB"]
+    )
 
 
 def test_no_circular_import(mixin_sources):
@@ -92,4 +98,7 @@ def test_no_circular_import(mixin_sources):
     base_mixin_name = "cross_module_base_taker_role_mixins"
     derived_mixin_name = "cross_module_derived_takers_with_base_role_role_mixins"
     assert derived_mixin_name not in base_src
-    assert base_mixin_name not in derived_src or "DelegatorForCrossModuleBaseTaker" in base_src
+    assert (
+        base_mixin_name not in derived_src
+        or "DelegatorForCrossModuleBaseTaker" in base_src
+    )

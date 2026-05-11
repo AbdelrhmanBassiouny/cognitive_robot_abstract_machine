@@ -18,14 +18,16 @@ Expected mixin output:
 import pytest
 
 from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
-from test.krrood_test.dataset.role_and_ontology import independent_typevar_takers
+from ..dataset.role_and_ontology import independent_typevar_takers
 
 TRANSFORMED = TransformationMode.TRANSFORMED.value
 
 
 @pytest.fixture(scope="module")
 def mixin_source():
-    transformer = RoleTransformer(independent_typevar_takers, file_name_prefix=TRANSFORMED)
+    transformer = RoleTransformer(
+        independent_typevar_takers, file_name_prefix=TRANSFORMED
+    )
     _, src = transformer.transform()[independent_typevar_takers]
     return src
 

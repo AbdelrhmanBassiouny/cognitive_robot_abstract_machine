@@ -10,7 +10,7 @@ from krrood.ontomatic.property_descriptor.attribute_introspector import (
 from krrood.utils import recursive_subclasses
 
 from semantic_digital_twin.world import World
-from test.semantic_digital_twin_test.test_spatial_types import example_classes
+from .test_spatial_types import example_classes
 
 
 def pytest_configure(config):

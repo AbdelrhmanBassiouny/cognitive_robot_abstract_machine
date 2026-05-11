@@ -17,7 +17,7 @@ import libcst as cst
 from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
 
 TRANSFORMED = TransformationMode.TRANSFORMED.value
-from test.krrood_test.dataset.role_and_ontology import chained_mixin_takers
+from ..dataset.role_and_ontology import chained_mixin_takers
 
 
 @pytest.fixture(scope="module")
@@ -29,7 +29,9 @@ def mixin_source():
 
 def _classes(source: str) -> dict[str, cst.ClassDef]:
     tree = cst.parse_module(source)
-    return {stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)}
+    return {
+        stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)
+    }
 
 
 def _base_names(cls_def: cst.ClassDef) -> list[str]:
@@ -37,7 +39,11 @@ def _base_names(cls_def: cst.ClassDef) -> list[str]:
 
 
 def _method_names(cls_def: cst.ClassDef) -> set[str]:
-    return {stmt.name.value for stmt in cls_def.body.body if isinstance(stmt, cst.FunctionDef)}
+    return {
+        stmt.name.value
+        for stmt in cls_def.body.body
+        if isinstance(stmt, cst.FunctionDef)
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -76,9 +82,9 @@ def test_grandchild_rolefor_inherits_child_not_base_directly(mixin_source):
     classes = _classes(mixin_source)
     bases = _base_names(classes["DelegatorForGrandchildA"])
     assert "DelegatorForChildA" in bases, f"DelegatorForGrandchildA bases: {bases}"
-    assert "DelegatorForBaseA" not in bases, (
-        f"DelegatorForBaseA should be transitively inherited, not listed directly; got: {bases}"
-    )
+    assert (
+        "DelegatorForBaseA" not in bases
+    ), f"DelegatorForBaseA should be transitively inherited, not listed directly; got: {bases}"
 
 
 def test_topological_order(mixin_source):

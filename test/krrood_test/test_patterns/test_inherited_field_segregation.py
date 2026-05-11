@@ -22,7 +22,7 @@ import libcst as cst
 from krrood.patterns.role.role_transformer import RoleTransformer, TransformationMode
 
 TRANSFORMED = TransformationMode.TRANSFORMED.value
-from test.krrood_test.dataset.role_and_ontology import inherited_field_takers
+from ..dataset.role_and_ontology import inherited_field_takers
 
 
 @pytest.fixture(scope="module")
@@ -34,11 +34,17 @@ def mixin_source():
 
 def _classes(source: str) -> dict[str, cst.ClassDef]:
     tree = cst.parse_module(source)
-    return {stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)}
+    return {
+        stmt.name.value: stmt for stmt in tree.body if isinstance(stmt, cst.ClassDef)
+    }
 
 
 def _method_names(cls_def: cst.ClassDef) -> set[str]:
-    return {stmt.name.value for stmt in cls_def.body.body if isinstance(stmt, cst.FunctionDef)}
+    return {
+        stmt.name.value
+        for stmt in cls_def.body.body
+        if isinstance(stmt, cst.FunctionDef)
+    }
 
 
 def _base_names(cls_def: cst.ClassDef) -> list[str]:
@@ -75,13 +81,16 @@ def test_inheritance_chain(mixin_source):
     classes = _classes(mixin_source)
     assert "DelegatorForIntermediateMixin" in _base_names(classes["DelegatorForTakerA"])
     assert "DelegatorForIntermediateMixin" in _base_names(classes["DelegatorForTakerB"])
-    assert "DelegatorForFieldOrigin" in _base_names(classes["DelegatorForIntermediateMixin"])
+    assert "DelegatorForFieldOrigin" in _base_names(
+        classes["DelegatorForIntermediateMixin"]
+    )
 
 
 def test_shared_field_not_duplicated(mixin_source):
     classes = _classes(mixin_source)
     classes_with_shared_field = [
-        name for name, cls_def in classes.items()
+        name
+        for name, cls_def in classes.items()
         if "shared_field" in _method_names(cls_def)
     ]
     assert classes_with_shared_field == ["DelegatorForFieldOrigin"]
