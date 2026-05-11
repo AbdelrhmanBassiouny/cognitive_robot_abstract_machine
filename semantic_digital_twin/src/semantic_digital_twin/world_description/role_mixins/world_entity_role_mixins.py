@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from krrood.utils import memoize
 from semantic_digital_twin.role_mixins.mixin_role_mixins import (
     DelegatorForHasSimulatorProperties,
+    RoleForHasSimulatorProperties,
 )
 from typing import Any, Dict, List, Self, Set, Type
 from typing_extensions import TYPE_CHECKING
@@ -140,3 +141,38 @@ class DelegatorForSemanticAnnotation(
     @memoize
     def class_name_tokens(self) -> Set[str]:
         return self.delegatee.class_name_tokens()
+
+
+@dataclass(eq=False)
+class RoleForWorldEntity(DelegatorForWorldEntity, ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> WorldEntity: ...
+
+
+@dataclass(eq=False)
+class RoleForWorldEntityWithID(DelegatorForWorldEntityWithID, RoleForWorldEntity, ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> WorldEntityWithID: ...
+
+
+@dataclass(eq=False)
+class RoleForWorldEntityWithSimulatorProperties(
+    DelegatorForWorldEntityWithSimulatorProperties,
+    RoleForWorldEntityWithID,
+    RoleForHasSimulatorProperties,
+    ABC,
+):
+    @property
+    @abstractmethod
+    def delegatee(self) -> WorldEntityWithSimulatorProperties: ...
+
+
+@dataclass(eq=False)
+class RoleForSemanticAnnotation(
+    DelegatorForSemanticAnnotation, RoleForWorldEntityWithSimulatorProperties, ABC
+):
+    @property
+    @abstractmethod
+    def delegatee(self) -> SemanticAnnotation: ...

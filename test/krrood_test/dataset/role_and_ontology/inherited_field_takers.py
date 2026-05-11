@@ -40,7 +40,7 @@ TTakerB = TypeVar("TTakerB", bound=TakerB)
 
 
 @dataclass
-class RoleForTakerA(Role[TTakerA]):
+class TakerARole(Role[TTakerA]):
     taker: TTakerA = field(kw_only=True)
 
     @classmethod
@@ -49,7 +49,7 @@ class RoleForTakerA(Role[TTakerA]):
 
 
 @dataclass
-class RoleForTakerB(Role[TTakerB]):
+class TakerBRole(Role[TTakerB]):
     taker: TTakerB = field(kw_only=True)
 
     @classmethod

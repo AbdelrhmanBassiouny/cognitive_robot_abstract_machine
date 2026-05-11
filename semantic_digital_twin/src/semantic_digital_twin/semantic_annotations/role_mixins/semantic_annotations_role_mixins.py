@@ -3,6 +3,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from semantic_digital_twin.world_description.role_mixins.world_entity_role_mixins import (
     DelegatorForSemanticAnnotation,
+    RoleForSemanticAnnotation,
 )
 from typing_extensions import TYPE_CHECKING
 
@@ -25,3 +26,10 @@ class DelegatorForRoom(DelegatorForSemanticAnnotation, ABC):
     @floor.setter
     def floor(self, value: Floor):
         self.delegatee.floor = value
+
+
+@dataclass(eq=False)
+class RoleForRoom(DelegatorForRoom, RoleForSemanticAnnotation, ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> Room: ...

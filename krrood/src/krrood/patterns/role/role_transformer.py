@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import inspect
 import sys
 from abc import ABC
 from pathlib import Path
+from textwrap import dedent
 from types import ModuleType
 from typing import (
     Any,
@@ -365,6 +367,24 @@ class RoleTransformer:
             return parent_directory / filename
 
 
+@dataclasses.dataclass
+class _MixinContext:
+    """Groups registries for one mixin-generation pass (DelegatorFor or RoleFor).
+
+    The shared ``_global_base_class_ownership`` dict is deliberately kept
+    outside this context — ownership is per delegatee type, so both passes
+    naturally agree on which module owns a given delegatee's mixins.
+    """
+
+    prefix: str
+    local_nodes: dict  # WrappedClass → ClassDef
+    base_nodes: dict  # type → ClassDef
+    cross_module: dict  # type → dotted_module_name
+
+    def class_name(self, delegatee_type: type) -> str:
+        return f"{self.prefix}{delegatee_type.__name__}"
+
+
 class RoleModuleTransformer(ContextAwareTransformer):
     """
     Applies role pattern transformations to a Python module AST and generates
@@ -406,6 +426,21 @@ class RoleModuleTransformer(ContextAwareTransformer):
             else {}
         )
         self._cross_module_rolefor_bases: dict[type, str] = {}
+        self._rolefor_nodes: dict[WrappedClass, libcst.ClassDef] = {}
+        self._base_rolefor_nodes: dict[type, libcst.ClassDef] = {}
+        self._cross_module_rolefor: dict[type, str] = {}
+        self._delegator_ctx = _MixinContext(
+            "DelegatorFor",
+            self.role_for,
+            self._base_class_role_for_nodes,
+            self._cross_module_rolefor_bases,
+        )
+        self._rolefor_ctx = _MixinContext(
+            "RoleFor",
+            self._rolefor_nodes,
+            self._base_rolefor_nodes,
+            self._cross_module_rolefor,
+        )
         self._pd_only_delegatees: set[type] = pd_only_delegatees or set()
         self._all_delegatees: set[type] = _compute_all_delegatees(
             class_diagram, self._pd_only_delegatees
@@ -636,13 +671,23 @@ class RoleModuleTransformer(ContextAwareTransformer):
         :param updated_node: The module node after all class transformations.
         :return: A new Module node containing only the mixin classes and their imports.
         """
-        sorted_base_types = topological_sort_by_inheritance(
+        sorted_delegator_bases = topological_sort_by_inheritance(
             list(self._base_class_role_for_nodes.keys())
         )
-        base_class_nodes = [
-            self._base_class_role_for_nodes[k] for k in sorted_base_types
+        delegator_base_nodes = [
+            self._base_class_role_for_nodes[k] for k in sorted_delegator_bases
         ]
-        all_mixin_classes = base_class_nodes + list(self.role_for.values())
+        delegator_nodes = delegator_base_nodes + list(self.role_for.values())
+
+        sorted_rolefor_bases = topological_sort_by_inheritance(
+            list(self._base_rolefor_nodes.keys())
+        )
+        rolefor_base_nodes = [
+            self._base_rolefor_nodes[k] for k in sorted_rolefor_bases
+        ]
+        rolefor_nodes = rolefor_base_nodes + list(self._rolefor_nodes.values())
+
+        all_mixin_classes = delegator_nodes + rolefor_nodes
         return self._import_orchestrator.build_generated_module(
             updated_node, all_mixin_classes, self._factory
         )
@@ -660,6 +705,9 @@ class RoleModuleTransformer(ContextAwareTransformer):
     ) -> list[libcst.ClassDef]:
         """Transform a role taker class by adding HasRoles as a base if required."""
         self.make_role_for_node(role_taker_node, wrapped_class)
+
+        if wrapped_class.clazz not in self._pd_only_delegatees:
+            self._make_rolefor_node(role_taker_node, wrapped_class)
 
         if self._should_add_has_roles(role_taker_node, wrapped_class):
             role_taker_class_bases = list(role_taker_node.bases)
@@ -815,12 +863,13 @@ class RoleModuleTransformer(ContextAwareTransformer):
         self,
         wrapped_class: WrappedClass,
         taker_direct_items: dict[str, list],
+        extra_body: dict[str, list[libcst.FunctionDef]] | None = None,
     ) -> list[libcst.FunctionDef]:
-        """Return the body nodes for a DelegatorFor class.
+        """Return the body nodes for a DelegatorFor or RoleFor class.
 
-        :param wrapped_class: The delegatee whose DelegatorFor body is being built.
-        :param taker_direct_items: Members defined directly on the delegatee (not from a base class).
-        :return: Flattened list of FunctionDef nodes for the class body.
+        :param wrapped_class: The delegatee whose mixin body is being built.
+        :param taker_direct_items: Members defined directly on the delegatee.
+        :param extra_body: Optional extra items (e.g. factory method wrappers for RoleFor).
         """
         taker_type_name = self._get_role_taker_type_name(wrapped_class.clazz)
         body_items: dict[str, list] = {
@@ -831,7 +880,128 @@ class RoleModuleTransformer(ContextAwareTransformer):
             ]
         }
         body_items.update(taker_direct_items)
+        if extra_body:
+            body_items.update(extra_body)
         return [node for nodes in body_items.values() for node in nodes]
+
+    # ── RoleFor generation ─────────────────────────────────────────
+
+    def _make_factory_wrapper_node(
+        self, method_name: str, method: Callable
+    ) -> libcst.FunctionDef | None:
+        """Generate a ``@classmethod`` that creates a Role via the delegatee's factory.
+
+        Produces::
+
+            @classmethod
+            def <name>(cls, ...) -> Self:
+                delegatee_type = cls.get_delegatee_type()
+                role_taker = delegatee_type.<name>(...)
+                delegatee_attr = cls.delegatee_attribute_name()
+                return cls(**{delegatee_attr: role_taker})
+        """
+        try:
+            source = inspect.getsource(method)
+        except OSError:
+            return None
+
+        method_node = libcst.parse_module(dedent(source)).body[0]
+        if not isinstance(method_node, libcst.FunctionDef):
+            return None
+
+        self._delegation_generator._resolve_signature_types(method)
+        self._delegation_generator._register_decorator_imports(method_node, method)
+
+        params = inspect.signature(method).parameters
+        call_params = [p for p in params.keys() if p != "cls"]
+
+        body = libcst.IndentedBlock(
+            [
+                libcst.parse_statement("delegatee_type = cls.get_delegatee_type()"),
+                libcst.parse_statement(
+                    f"role_taker = delegatee_type.{method_name}({', '.join(call_params)})"
+                ),
+                libcst.parse_statement(
+                    "delegatee_attr = cls.delegatee_attribute_name()"
+                ),
+                libcst.parse_statement(
+                    "return cls(**{delegatee_attr: role_taker})"
+                ),
+            ]
+        )
+        return method_node.with_changes(body=body)
+
+    def _collect_factory_wrappers(
+        self, wrapped_class: WrappedClass
+    ) -> dict[str, list[libcst.FunctionDef]]:
+        """Return factory method wrappers for directly-defined factory methods."""
+        wrappers: dict[str, list[libcst.FunctionDef]] = {}
+        for method_name, method in self._delegation_generator.iter_factory_methods(
+            wrapped_class
+        ):
+            wrapper = self._make_factory_wrapper_node(method_name, method)
+            if wrapper is not None:
+                wrappers[method_name] = [wrapper]
+        return wrappers
+
+    def _make_rolefor_node(
+        self, node: libcst.ClassDef, wrapped_class: WrappedClass
+    ) -> None:
+        """Generate ``RoleFor<Name>`` inheriting from ``DelegatorFor<Name>`` and parent RoleFors.
+
+        The body contains only factory method wrappers — all other members are
+        inherited from the corresponding ``DelegatorFor<Name>`` base.
+        """
+        ctx = self._rolefor_ctx
+        name = ctx.class_name(wrapped_class.clazz)
+        rolefor_node = LibCSTNodeFactory.get_renamed_node(node, name)
+
+        # Body grouping is still needed so that _populate_base_rolefor_nodes can
+        # discover same-package base classes that need their own RoleFor nodes.
+        all_taker_fields = self._collect_base_taker_field_names(wrapped_class)
+        body_by_class = self._group_all_body_items(wrapped_class, all_taker_fields)
+        segregated = self._populate_base_rolefor_nodes(body_by_class, ctx)
+
+        bases = self._make_rolefor_bases(node, wrapped_class, segregated, ctx)
+        rolefor_node = rolefor_node.with_changes(bases=bases)
+
+        factory_wrappers = self._collect_factory_wrappers(wrapped_class)
+        taker_type_name = self._get_role_taker_type_name(wrapped_class.clazz)
+        body_nodes: list[libcst.BaseStatement] = [
+            LibCSTNodeFactory.make_property_getter_node(
+                DELEGATEE_ATTR, taker_type_name, "..."
+            )
+        ]
+        for nodes in factory_wrappers.values():
+            body_nodes.extend(nodes)
+        ctx.local_nodes[wrapped_class] = LibCSTNodeFactory.get_node_with_new_body(
+            rolefor_node, body_nodes
+        )
+        # Ownership already claimed by the DelegatorFor pass; setdefault is a no-op
+        # here but keeps the intent clear.
+        self._global_base_class_ownership.setdefault(
+            wrapped_class.clazz, self.source_module
+        )
+
+    def _make_rolefor_bases(
+        self,
+        node: libcst.ClassDef,
+        wrapped_class: WrappedClass,
+        segregated: list[type],
+        ctx: _MixinContext,
+    ) -> list[libcst.Arg]:
+        """Build the base class list for a RoleFor mixin.
+
+        Every RoleFor inherits from its corresponding DelegatorFor, then from
+        parent RoleFor classes (reusing the full parameterized base-walking
+        logic from ``make_role_for_bases``), and finally ABC.
+        """
+        # Parent RoleFors + ABC (reuses cross-module and taker-ancestor logic)
+        bases = self.make_role_for_bases(node, wrapped_class, segregated, ctx)
+        # Prepend the corresponding DelegatorFor
+        delegator_name = self._delegator_ctx.class_name(wrapped_class.clazz)
+        bases.insert(0, LibCSTNodeFactory.make_argument(delegator_name))
+        return bases
 
     def _collect_base_taker_field_names(self, wrapped_class: WrappedClass) -> list[str]:
         """Return all field names from base taker classes of the given wrapped class."""
@@ -864,34 +1034,33 @@ class RoleModuleTransformer(ContextAwareTransformer):
             additional_skip_bases=additional_skip_bases,
         )
 
+    # ── parameterized base-population pipeline ──────────────────────
+    # Each method accepts a ``ctx: _MixinContext`` so the same logic
+    # serves both DelegatorFor and RoleFor generation.  The original
+    # method names are kept as thin trampolines that delegate with
+    # ``self._delegator_ctx``.
+
     def _populate_base_rolefor_nodes(
         self,
         body_by_class: dict[type | None, dict[str, list]],
+        ctx: _MixinContext | None = None,
     ) -> list[type]:
-        """Ensure a RoleFor<Base> node exists for every non-None key in body_by_class.
-
-        When a base class was already generated by an earlier module transformer (tracked via
-        ``_global_base_class_ownership``), registers a cross-module import instead of re-generating.
-
-        :param body_by_class: Grouped body items produced by ``_group_all_body_items``.
-        :return: The segregated base class types in topological order (ancestors first).
-        """
+        """Ensure a mixin node exists for every non-None key in *body_by_class*."""
+        if ctx is None:
+            ctx = self._delegator_ctx
         base_classes = [k for k in body_by_class if k is not None]
         if not base_classes:
             return []
         sorted_bases = topological_sort_by_inheritance(base_classes)
         for base_class in sorted_bases:
-            if (
-                base_class in self._base_class_role_for_nodes
-                or base_class in self._cross_module_rolefor_bases
-            ):
+            if base_class in ctx.base_nodes or base_class in ctx.cross_module:
                 continue
             owner_module = self._global_base_class_ownership.get(base_class)
             if owner_module is not None and owner_module is not self.source_module:
-                self._register_cross_module_rolefor_import(base_class)
+                self._register_cross_module_import(base_class, ctx)
             elif owner_module is None:
-                self._base_class_role_for_nodes[base_class] = (
-                    self._make_base_rolefor_node(base_class, body_by_class[base_class])
+                ctx.base_nodes[base_class] = self._make_base_node(
+                    base_class, body_by_class[base_class], ctx
                 )
                 self._global_base_class_ownership[base_class] = self.source_module
         return sorted_bases
@@ -901,12 +1070,16 @@ class RoleModuleTransformer(ContextAwareTransformer):
         base_class: type,
         body_items: dict[str, list[libcst.FunctionDef]],
     ) -> libcst.ClassDef:
-        """Generate a ``@dataclass(eq=False) class DelegatorFor<Base>(...)`` node.
+        """Trampoline — see ``_make_base_node``."""
+        return self._make_base_node(base_class, body_items, self._delegator_ctx)
 
-        :param base_class: The base class to generate a DelegatorFor node for.
-        :param body_items: Mapping of member name to list of FunctionDef nodes.
-        :return: The generated ClassDef node.
-        """
+    def _make_base_node(
+        self,
+        base_class: type,
+        body_items: dict[str, list[libcst.FunctionDef]],
+        ctx: _MixinContext,
+    ) -> libcst.ClassDef:
+        """Generate a ``@dataclass(eq=False) class <Prefix><Base>(...)`` node."""
         self._resolver.name_to_module_map[base_class.__name__] = base_class.__module__
         delegatee_node = LibCSTNodeFactory.make_property_getter_node(
             DELEGATEE_ATTR, base_class.__name__, "..."
@@ -914,63 +1087,60 @@ class RoleModuleTransformer(ContextAwareTransformer):
         body_nodes: list[libcst.FunctionDef] = [delegatee_node]
         for nodes in body_items.values():
             body_nodes.extend(nodes)
-
-        rolefor_bases = self._resolve_rolefor_bases_for(base_class)
-        bases = rolefor_bases + [ABC.__name__]
+        parent_bases = self._resolve_parent_bases(base_class, ctx)
+        bases = parent_bases + [ABC.__name__]
         return LibCSTNodeFactory.make_dataclass(
-            self.get_delegator_for_name(base_class), bases=bases, body=body_nodes
+            ctx.class_name(base_class), bases=bases, body=body_nodes
         )
 
     def _register_cross_module_rolefor_import(self, delegatee_type: type) -> str:
-        """Register a cross-module import for delegatee_type's DelegatorFor if owned by another module.
+        """Trampoline — see ``_register_cross_module_import``."""
+        return self._register_cross_module_import(delegatee_type, self._delegator_ctx)
 
-        No-op when delegatee_type is already tracked in ``_cross_module_rolefor_bases``
-        or when the owner is None or this source module.
-
-        :param delegatee_type: The delegatee type whose DelegatorFor may need a cross-module import.
-        :return: The DelegatorFor class name.
-        """
+    def _register_cross_module_import(
+        self, delegatee_type: type, ctx: _MixinContext
+    ) -> str:
+        """Register a cross-module import for *delegatee_type* if owned by another module."""
         owner_module = self._global_base_class_ownership.get(delegatee_type)
         if owner_module is None or owner_module is self.source_module:
-            return self.get_delegator_for_name(delegatee_type)
-        if delegatee_type in self._cross_module_rolefor_bases:
-            return self.get_delegator_for_name(delegatee_type)
-        role_for_name = self.get_delegator_for_name(delegatee_type)
+            return ctx.class_name(delegatee_type)
+        if delegatee_type in ctx.cross_module:
+            return ctx.class_name(delegatee_type)
+        name = ctx.class_name(delegatee_type)
         mixin_module = mixin_module_dotted_name(
             owner_module.__name__, ROLE_MIXINS_FOLDER, ROLE_MIXINS_SUFFIX
         )
-        self._cross_module_rolefor_bases[delegatee_type] = mixin_module
-        self.require_import(mixin_module, role_for_name)
-        self._resolver.name_to_module_map[role_for_name] = mixin_module
-        return role_for_name
+        ctx.cross_module[delegatee_type] = mixin_module
+        self.require_import(mixin_module, name)
+        self._resolver.name_to_module_map[name] = mixin_module
+        return name
 
     def _resolve_rolefor_bases_for(self, base_class: type) -> list[str]:
-        """Return RoleFor class names for the nearest ancestors of base_class that already have RoleFor nodes.
+        """Trampoline — see ``_resolve_parent_bases``."""
+        return self._resolve_parent_bases(base_class, self._delegator_ctx)
 
-        Checks locally generated nodes, cross-module imported nodes, and the global ownership
-        registry (which tracks direct role-taker RoleFor nodes from any module transformer).
-
-        :param base_class: The class whose parent hierarchy is searched.
-        :return: List of RoleFor class name strings.
-        """
-        rolefor_bases: list[str] = []
+    def _resolve_parent_bases(
+        self, base_class: type, ctx: _MixinContext
+    ) -> list[str]:
+        """Return mixin class names for the nearest ancestors that already have nodes."""
+        result: list[str] = []
         seen: set[type] = set()
         for parent in base_class.__bases__:
             for ancestor in parent.__mro__:
                 if ancestor is object:
                     break
-                in_local = ancestor in self._base_class_role_for_nodes
-                in_cross = ancestor in self._cross_module_rolefor_bases
+                in_local = ancestor in ctx.base_nodes
+                in_cross = ancestor in ctx.cross_module
                 owner_module = self._global_base_class_ownership.get(ancestor)
                 if (
                     in_local or in_cross or owner_module is not None
                 ) and ancestor not in seen:
                     if owner_module is not None and not in_local and not in_cross:
-                        self._register_cross_module_rolefor_import(ancestor)
-                    rolefor_bases.append(self.get_delegator_for_name(ancestor))
+                        self._register_cross_module_import(ancestor, ctx)
+                    result.append(ctx.class_name(ancestor))
                     seen.add(ancestor)
                     break
-        return rolefor_bases
+        return result
 
     @staticmethod
     def _most_derived_types(types: list[type]) -> list[type]:
@@ -981,30 +1151,29 @@ class RoleModuleTransformer(ContextAwareTransformer):
             if not any(other is not t and issubclass(other, t) for other in types)
         ]
 
+    # ── mixin base-building (parameterized) ────────────────────────
+
     def make_role_for_bases(
         self,
         node: libcst.ClassDef,
         wrapped_class: WrappedClass,
         segregated_base_types: list[type] | None = None,
+        ctx: _MixinContext | None = None,
     ) -> list[libcst.Arg]:
-        """Generate the base class arguments for a RoleFor class.
-
-        :param node: The original taker class node.
-        :param wrapped_class: The taker wrapped class.
-        :param segregated_base_types: Same-module base classes that received their own RoleFor mixin.
-        :return: List of Arg nodes representing the base classes.
-        """
+        """Generate base class arguments for a mixin class."""
+        if ctx is None:
+            ctx = self._delegator_ctx
         uncovered_segregated = self._most_derived_types(
             list(segregated_base_types or [])
         )
-        role_for_bases: list[libcst.Arg] = []
+        mixin_bases: list[libcst.Arg] = []
         for base in node.bases:
-            self._process_base_for_rolefor(
-                base, wrapped_class, uncovered_segregated, role_for_bases
+            self._process_base_for_mixin(
+                base, wrapped_class, uncovered_segregated, mixin_bases, ctx
             )
-        self._add_segregated_bases(uncovered_segregated, role_for_bases)
-        role_for_bases.append(LibCSTNodeFactory.make_argument(ABC.__name__))
-        return role_for_bases
+        self._add_segregated_mixin_bases(uncovered_segregated, mixin_bases, ctx)
+        mixin_bases.append(LibCSTNodeFactory.make_argument(ABC.__name__))
+        return mixin_bases
 
     def _process_base_for_rolefor(
         self,
@@ -1013,27 +1182,38 @@ class RoleModuleTransformer(ContextAwareTransformer):
         uncovered_segregated: list[type],
         role_for_bases: list[libcst.Arg],
     ) -> None:
-        """Process a single base class argument and append the appropriate DelegatorFor."""
+        """Trampoline — see ``_process_base_for_mixin``."""
+        self._process_base_for_mixin(
+            base, wrapped_class, uncovered_segregated, role_for_bases, self._delegator_ctx
+        )
+
+    def _process_base_for_mixin(
+        self,
+        base: libcst.Arg,
+        wrapped_class: WrappedClass,
+        uncovered_segregated: list[type],
+        mixin_bases: list[libcst.Arg],
+        ctx: _MixinContext,
+    ) -> None:
+        """Process a single base and append the appropriate mixin class name."""
         base_name = LibCSTNodeFactory.get_name_from_base_node(base.value)
         bases_that_are_takers = self.bases_of_class_that_are_role_takers(wrapped_class)
 
         if base_name in bases_that_are_takers:
-            self._add_taker_delegator_base(
-                base_name, bases_that_are_takers, uncovered_segregated, role_for_bases
+            self._add_taker_mixin_base(
+                base_name, bases_that_are_takers, uncovered_segregated, mixin_bases, ctx
             )
         elif self._get_owned_delegatee_for_name(base_name) is not None:
             delegatee_type = self._get_owned_delegatee_for_name(base_name)
-            role_for_name = self.get_delegator_for_name(delegatee_type)
-            role_for_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
-            self._register_cross_module_rolefor_import(delegatee_type)
+            name = ctx.class_name(delegatee_type)
+            mixin_bases.append(LibCSTNodeFactory.make_argument(name))
+            self._register_cross_module_import(delegatee_type, ctx)
         elif _is_role_base_node(base.value) and issubclass(
             wrapped_class.clazz, Role
         ):
             taker_type = wrapped_class.clazz.get_role_taker_type()
-            role_for_bases.append(
-                LibCSTNodeFactory.make_argument(
-                    self.get_delegator_for_name(taker_type)
-                )
+            mixin_bases.append(
+                LibCSTNodeFactory.make_argument(ctx.class_name(taker_type))
             )
 
     def _add_taker_delegator_base(
@@ -1043,36 +1223,61 @@ class RoleModuleTransformer(ContextAwareTransformer):
         uncovered_segregated: list[type],
         role_for_bases: list[libcst.Arg],
     ) -> None:
-        """Add a DelegatorFor base for a taker ancestor, unless a more-derived segregated base covers it."""
+        """Trampoline — see ``_add_taker_mixin_base``."""
+        self._add_taker_mixin_base(
+            base_name, bases_that_are_takers, uncovered_segregated,
+            role_for_bases, self._delegator_ctx
+        )
+
+    def _add_taker_mixin_base(
+        self,
+        base_name: str,
+        bases_that_are_takers: dict[str, type],
+        uncovered_segregated: list[type],
+        mixin_bases: list[libcst.Arg],
+        ctx: _MixinContext,
+    ) -> None:
+        """Add a mixin base for a taker ancestor, unless covered by a more-derived segregated base."""
         taker_type = bases_that_are_takers[base_name]
         if any(
             issubclass(seg, taker_type) and seg is not taker_type
             for seg in uncovered_segregated
         ):
             return
-        role_for_name = self.get_delegator_for_name(taker_type)
-        role_for_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
-        self._register_cross_module_rolefor_import(taker_type)
+        name = ctx.class_name(taker_type)
+        mixin_bases.append(LibCSTNodeFactory.make_argument(name))
+        self._register_cross_module_import(taker_type, ctx)
 
     def _add_segregated_bases(
         self,
         uncovered_segregated: list[type],
         role_for_bases: list[libcst.Arg],
     ) -> None:
-        """Append DelegatorFor bases for uncovered segregated base types."""
+        """Trampoline — see ``_add_segregated_mixin_bases``."""
+        self._add_segregated_mixin_bases(
+            uncovered_segregated, role_for_bases, self._delegator_ctx
+        )
+
+    def _add_segregated_mixin_bases(
+        self,
+        uncovered_segregated: list[type],
+        mixin_bases: list[libcst.Arg],
+        ctx: _MixinContext,
+    ) -> None:
+        """Append mixin bases for uncovered segregated base types."""
         for base_type in uncovered_segregated:
-            role_for_bases.append(
-                LibCSTNodeFactory.make_argument(self.get_delegator_for_name(base_type))
+            mixin_bases.append(
+                LibCSTNodeFactory.make_argument(ctx.class_name(base_type))
             )
 
     def _transform_role(
         self, node: libcst.ClassDef, wrapped_class: WrappedClass
     ) -> libcst.ClassDef:
-        """Adjust a delegator class by adding the corresponding DelegatorFor base.
+        """Add the corresponding DelegatorFor or RoleFor base to a delegator class.
 
-        :param node: The original class node.
-        :param wrapped_class: The wrapped class information.
-        :return: The updated class node with the DelegatorFor base added.
+        Role classes (PRIMARY / SUB_ROLE / SPECIALIZED_ROLE_FOR) receive a
+        ``RoleFor<Taker>`` base.  Plain PropertyDelegator classes (DELEGATOR)
+        continue to receive ``DelegatorFor<Taker>``.
         """
         role_type = RoleType.get_role_type(wrapped_class)
         logger.debug(
@@ -1082,6 +1287,10 @@ class RoleModuleTransformer(ContextAwareTransformer):
             return node
         taker_type = wrapped_class.clazz.get_delegatee_type()
 
+        is_role = role_type != RoleType.DELEGATOR
+        ctx = self._rolefor_ctx if is_role else self._delegator_ctx
+        mixin_name = ctx.class_name(taker_type)
+
         new_bases = []
         for base in node.bases:
             new_bases.append(base)
@@ -1089,18 +1298,18 @@ class RoleModuleTransformer(ContextAwareTransformer):
             logger.debug("  Checking base %s", base_name)
 
             if self._is_delegator_base_node(base):
-                role_for_name = self.get_delegator_for_name(taker_type)
                 if not any(
-                    LibCSTNodeFactory.get_name_from_base_node(b.value) == role_for_name
+                    LibCSTNodeFactory.get_name_from_base_node(b.value) == mixin_name
                     for b in node.bases
                 ):
-                    logger.debug("  Adding %s", role_for_name)
-                    new_bases.append(LibCSTNodeFactory.make_argument(role_for_name))
+                    logger.debug("  Adding %s", mixin_name)
+                    new_bases.append(LibCSTNodeFactory.make_argument(mixin_name))
 
                 mixin_module_name = mixin_module_dotted_name(
-                    sys.modules[taker_type.__module__].__name__, ROLE_MIXINS_FOLDER, ROLE_MIXINS_SUFFIX
+                    sys.modules[taker_type.__module__].__name__,
+                    ROLE_MIXINS_FOLDER, ROLE_MIXINS_SUFFIX,
                 )
-                self.require_original_import(mixin_module_name, [role_for_name])
+                self.require_original_import(mixin_module_name, [mixin_name])
 
         return node.with_changes(bases=new_bases)
 

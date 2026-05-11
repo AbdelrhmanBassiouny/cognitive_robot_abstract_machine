@@ -4,17 +4,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Set, List, TypeVar
 
-from test.krrood_test.dataset.role_and_ontology.role_mixins._ground_truth_role_takers_in_another_module_role_mixins import (
-    DelegatorForRoleTakerInAnotherModule,
-)
-from krrood.patterns.role import HasRoles
-from test.krrood_test.dataset.role_and_ontology.role_mixins._ground_truth_university_ontology_like_classes_without_descriptors_role_mixins import (
-    DelegatorForPersonInRoleAndOntology,
-    DelegatorForSubclassOfARoleTaker,
-    DelegatorForCEOAsFirstRole,
-    DelegatorForRepresentativeAsSecondRole,
-)
-from test.krrood_test.dataset.role_and_ontology._ground_truth_transformed_role_takers_in_another_module import (
+from test.krrood_test.dataset.role_and_ontology.role_takers_in_another_module import (
     RoleTakerInAnotherModule,
 )
 from krrood.entity_query_language.factories import variable_from
@@ -26,6 +16,9 @@ from krrood.entity_query_language.predicate import (
     length,  # type: ignore
 )
 from krrood.patterns.role.role import Role
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.role_takers_in_another_module_role_mixins import RoleForRoleTakerInAnotherModule
+from test.krrood_test.dataset.role_and_ontology.role_mixins.university_ontology_like_classes_without_descriptors_role_mixins import RoleForCEOAsFirstRole, RoleForPersonInRoleAndOntology, RoleForRepresentativeAsSecondRole, RoleForSubclassOfARoleTaker
 
 
 @dataclass(eq=False)
@@ -83,9 +76,7 @@ TPersonInRoleAndOntology = TypeVar(
 
 
 @dataclass(eq=False)
-class CEOAsFirstRole(
-    Role[TPersonInRoleAndOntology], DelegatorForPersonInRoleAndOntology, Symbol
-):
+class CEOAsFirstRole(Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology, Symbol):
     person: TPersonInRoleAndOntology = field(kw_only=True)
     head_of: RecognizedGroup = None
 
@@ -98,14 +89,12 @@ TSubclassOfARoleTaker = TypeVar("TSubclassOfARoleTaker", bound=SubclassOfARoleTa
 
 
 @dataclass(eq=False)
-class SubclassOfRoleThatUpdatesRoleTakerType(
-    CEOAsFirstRole[TSubclassOfARoleTaker], DelegatorForSubclassOfARoleTaker
-): ...
+class SubclassOfRoleThatUpdatesRoleTakerType(CEOAsFirstRole[TSubclassOfARoleTaker], RoleForSubclassOfARoleTaker): ...
 
 
 @dataclass(eq=False)
 class DirectDiamondShapedInheritanceWhereOneIsRole(
-    Role[TPersonInRoleAndOntology], DelegatorForPersonInRoleAndOntology, HasName
+    Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology, HasName
 ):
     person: TPersonInRoleAndOntology = field(kw_only=True)
 
@@ -116,7 +105,7 @@ class DirectDiamondShapedInheritanceWhereOneIsRole(
 
 @dataclass(eq=False)
 class InDirectDiamondShapedInheritanceWhereOneIsRole(
-    RecognizedGroup, Role[TPersonInRoleAndOntology], DelegatorForPersonInRoleAndOntology
+    RecognizedGroup, Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology
 ):
     person: TPersonInRoleAndOntology = field(kw_only=True)
 
@@ -126,9 +115,7 @@ class InDirectDiamondShapedInheritanceWhereOneIsRole(
 
 
 @dataclass(eq=False)
-class ProfessorAsFirstRole(
-    Role[TPersonInRoleAndOntology], DelegatorForPersonInRoleAndOntology, Symbol
-):
+class ProfessorAsFirstRole(Role[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology, Symbol):
     person: TPersonInRoleAndOntology = field(kw_only=True)
     teacher_of: List[Course] = field(default_factory=list, kw_only=True)
 
@@ -139,7 +126,7 @@ class ProfessorAsFirstRole(
 
 @dataclass(eq=False)
 class AssociateProfessorAsSubClassOfARoleInSameModule(
-    ProfessorAsFirstRole[TPersonInRoleAndOntology], DelegatorForPersonInRoleAndOntology
+    ProfessorAsFirstRole[TPersonInRoleAndOntology], RoleForPersonInRoleAndOntology
 ): ...
 
 
@@ -147,7 +134,7 @@ TCEOAsFirstRole = TypeVar("TCEOAsFirstRole", bound=CEOAsFirstRole)
 
 
 @dataclass(eq=False)
-class RepresentativeAsSecondRole(Role[TCEOAsFirstRole], DelegatorForCEOAsFirstRole, Symbol):
+class RepresentativeAsSecondRole(Role[TCEOAsFirstRole], RoleForCEOAsFirstRole, Symbol):
     ceo: TCEOAsFirstRole = field(kw_only=True)
     representative_of: RecognizedGroup = field(default=None, kw_only=True)
 
@@ -162,9 +149,7 @@ TRepresentativeAsSecondRole = TypeVar(
 
 
 @dataclass(eq=False)
-class DelegateAsThirdRole(
-    Role[TRepresentativeAsSecondRole], DelegatorForRepresentativeAsSecondRole, Symbol
-):
+class DelegateAsThirdRole(Role[TRepresentativeAsSecondRole], RoleForRepresentativeAsSecondRole, Symbol):
     representative: TRepresentativeAsSecondRole = field(kw_only=True)
 
     delegate_of: RecognizedGroup = field(kw_only=True, default=None)
@@ -175,9 +160,7 @@ class DelegateAsThirdRole(
 
 
 @dataclass(eq=False)
-class RoleForTakerInAnotherModule(
-    Role[RoleTakerInAnotherModule], DelegatorForRoleTakerInAnotherModule
-):
+class RoleForTakerInAnotherModule(Role[RoleTakerInAnotherModule], RoleForRoleTakerInAnotherModule):
     taker: RoleTakerInAnotherModule = field(kw_only=True)
     introduced_attribute: str = field(default="", kw_only=True)
     same_module_annotated_introduced_attribute: DelegateAsThirdRole = field(

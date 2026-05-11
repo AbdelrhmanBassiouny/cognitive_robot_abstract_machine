@@ -702,6 +702,37 @@ class DelegationGenerator:
                 )
                 groups.setdefault(defining_base, {})[method_name] = [method_node]
 
+    def iter_factory_methods(
+        self, wrapped_class: WrappedClass
+    ) -> Iterator[tuple[str, Callable]]:
+        """Yield (name, method) for factory methods defined directly on the class.
+
+        Only yields methods defined on *wrapped_class.clazz* itself (not inherited),
+        because inherited factory methods are already wrapped by the parent
+        RoleFor mixin.
+        """
+        for method_name, method in inspect.getmembers(
+            wrapped_class.clazz, inspect.isfunction
+        ):
+            if method_name in self.excluded_method_names:
+                continue
+            if (
+                self.excluded_member_predicate is not None
+                and self.excluded_member_predicate(method_name, wrapped_class.clazz)
+            ):
+                continue
+            if method_name not in vars(wrapped_class.clazz):
+                continue
+            try:
+                source = inspect.getsource(method)
+            except OSError:
+                continue
+            method_node = libcst.parse_module(dedent(source)).body[0]
+            if not isinstance(method_node, libcst.FunctionDef):
+                continue
+            if self._get_method_type(method, method_node) is MethodType.FACTORY_METHOD:
+                yield method_name, method
+
     def make_delegation_method_node(
         self,
         name: str,

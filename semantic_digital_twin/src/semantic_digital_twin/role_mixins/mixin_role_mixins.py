@@ -22,3 +22,10 @@ class DelegatorForHasSimulatorProperties(ABC):
     @simulator_additional_properties.setter
     def simulator_additional_properties(self, value: list[SimulatorAdditionalProperty]):
         self.delegatee.simulator_additional_properties = value
+
+
+@dataclass
+class RoleForHasSimulatorProperties(DelegatorForHasSimulatorProperties, ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> HasSimulatorProperties: ...

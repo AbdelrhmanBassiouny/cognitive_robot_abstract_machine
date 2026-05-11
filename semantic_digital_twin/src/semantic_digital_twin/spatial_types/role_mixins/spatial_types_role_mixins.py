@@ -243,3 +243,17 @@ class DelegatorForPose(DelegatorForSpatialType, ABC):
 
     def update_from_json_diff(self, diffs: List[JSONAttributeDiff], **kwargs) -> None:
         return self.delegatee.update_from_json_diff(diffs, kwargs)
+
+
+@dataclass(eq=False, repr=False)
+class RoleForSpatialType(DelegatorForSpatialType, ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> SpatialType: ...
+
+
+@dataclass(eq=False, init=False, repr=False)
+class RoleForPose(DelegatorForPose, RoleForSpatialType, ABC):
+    @property
+    @abstractmethod
+    def delegatee(self) -> Pose: ...

@@ -10,6 +10,7 @@ from krrood.ontomatic.property_descriptor.attribute_introspector import (
 from krrood.utils import recursive_subclasses
 
 from semantic_digital_twin.world import World
+from test.semantic_digital_twin_test.test_spatial_types import example_classes
 
 
 def pytest_configure(config):
@@ -33,4 +34,4 @@ def pytest_configure(config):
     # restarts pytest automatically (up to KRROOD_PYTEST_RERUN_COUNT times, default 2).
     from krrood.generate_role_mixins import ensure_role_mixins_current_for_pytest
 
-    ensure_role_mixins_current_for_pytest(["semantic_digital_twin"])
+    ensure_role_mixins_current_for_pytest(["semantic_digital_twin", example_classes])

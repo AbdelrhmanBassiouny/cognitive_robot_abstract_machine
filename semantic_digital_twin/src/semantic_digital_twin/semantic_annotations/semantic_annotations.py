@@ -64,6 +64,7 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 from krrood.patterns.role import HasRoles
 from semantic_digital_twin.semantic_annotations.role_mixins.semantic_annotations_role_mixins import (
+    RoleForRoom,
     DelegatorForRoom,
 )
 
@@ -505,7 +506,7 @@ class Room(SemanticAnnotation, HasRoles):
 
 
 @dataclass(eq=False)
-class Kitchen(Role[Room], DelegatorForRoom):
+class Kitchen(Role[Room], RoleForRoom, DelegatorForRoom):
     """
     A kitchen is a room that has kitchen utilities and machines.
     """
@@ -521,7 +522,7 @@ class Kitchen(Role[Room], DelegatorForRoom):
 
 
 @dataclass(eq=False)
-class Bedroom(Role[Room], DelegatorForRoom):
+class Bedroom(Role[Room], RoleForRoom, DelegatorForRoom):
     """
     A bedroom is a room that is used for sleeping.
     """
@@ -537,7 +538,7 @@ class Bedroom(Role[Room], DelegatorForRoom):
 
 
 @dataclass(eq=False)
-class Bathroom(Role[Room], DelegatorForRoom):
+class Bathroom(Role[Room], RoleForRoom, DelegatorForRoom):
     """
     A bathroom is a room that is used for personal hygiene activities.
     """
@@ -553,7 +554,7 @@ class Bathroom(Role[Room], DelegatorForRoom):
 
 
 @dataclass(eq=False)
-class LivingRoom(Role[Room], DelegatorForRoom):
+class LivingRoom(Role[Room], RoleForRoom, DelegatorForRoom):
     """
     A living room is a room that is used for social activities and relaxation.
     """

@@ -25,7 +25,6 @@ import krrood.ontomatic.property_descriptor.property_descriptor
 import krrood.ormatic.custom_types
 import krrood.ormatic.data_access_objects.alternative_mappings
 import krrood.ormatic.type_dict
-import krrood.patterns.role.predicates
 import krrood.patterns.role.role
 import krrood.symbol_graph.symbol_graph
 import sqlalchemy.sql.sqltypes
