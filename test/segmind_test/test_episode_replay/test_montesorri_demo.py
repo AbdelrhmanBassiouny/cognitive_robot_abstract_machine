@@ -1,10 +1,17 @@
 import datetime
-import time
-from os.path import dirname
+from dataclasses import dataclass
 from pathlib import Path
-from unittest import TestCase
+from typing import List
 
 import pytest
+
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.explanation import explain_inference
+from krrood.entity_query_language.factories import entity, variable_from, contains
+from krrood.entity_query_language.query.query import Entity
+from segmind.datastructures.events import PickUpEvent, DetectionEvent
+from segmind.event_explainer import EventExplainer
+
 try:
     import rclpy
 except ImportError:
@@ -12,11 +19,11 @@ except ImportError:
 
 import segmind
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from segmind.detectors.base import DetectorStateChart, SegmindContext
+from segmind.detectors.base import SegmindContext
 from segmind.episode_segmenter import EpisodeSegmenterExecutor
-from segmind.event_logger import EventLogger
 from segmind.players.csv_player import CSVEpisodePlayer
 from semantic_digital_twin.adapters.package_resolver import FileUriResolver
+
 try:
     from semantic_digital_twin.adapters.ros.visualization.viz_marker import VizMarkerPublisher
 except ImportError:
@@ -63,6 +70,7 @@ def test_csv_player_context():
         "episode_executor": episode_executor,
     }
 
+
 # @pytest.mark.skip(reason="This test takes too long to run.")
 def test_replay_episode(test_csv_player_context):
     world = test_csv_player_context["world"]
@@ -78,7 +86,6 @@ def test_replay_episode(test_csv_player_context):
     segmind_context = episode_executor.context.require_extension(SegmindContext)
     episode_executor.compile(statechart)
 
-
     try:
         while episode_executor.player.is_alive():
             episode_executor.tick()
@@ -86,7 +93,14 @@ def test_replay_episode(test_csv_player_context):
         print(segmind_context.logger.get_events())
 
     events = segmind_context.logger.get_events()
-
-
-
-
+    i = 0
+    for event in events:
+        if not isinstance(event, PickUpEvent):
+            continue
+        explainer = EventExplainer(event)
+        if explainer.explanation is None:
+            continue
+        filename = f"pick_up_event_{event.tracked_object.name.name}_{i}"
+        explainer.explanation.condition_graph().visualize(filename=f"{filename}_condition_graph.pdf")
+        i += 1
+        print(explainer.explanation.as_string())
