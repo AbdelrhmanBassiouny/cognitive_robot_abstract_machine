@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from inspect import isclass
 from typing import Optional
 
 from graphql.pyutils import cached_property
@@ -28,6 +29,11 @@ def issubclass_(cls: Type, cls_or_tuple: Type) -> bool:
     return issubclass(cls, cls_or_tuple)
 
 
+@symbolic_function
+def is_class(obj: object) -> bool:
+    return isclass(obj)
+
+
 @dataclass
 class EventExplainer:
     """
@@ -53,10 +59,14 @@ class EventExplainer:
         :return: An entity containing events that participated in the inference of the event.
         """
         from segmind.datastructures.events import DetectionEvent
-        explanation = variable(InferenceExplanation, [explain_inference(self.event)])
+        explanation = variable_from(explain_inference(self.event))
         node = flat_variable(node_descendants(explanation.query_root))
-        return entity(explanation.operation_result[node_id(node)]).where(HasType(node, Selectable), node_type(node) != None,
-                                  issubclass_(node_type(node), DetectionEvent))
+        operation_result = explanation.operation_result
+        return entity(operation_result[node_id(node)]).where(HasType(node, Selectable),
+                                                                         node_type(node) != None,
+                                                                         is_class(node_type(node)),
+                                                                         issubclass_(node_type(node), DetectionEvent),
+                                                                         contains(operation_result, node_id(node))).distinct()
 
     @cached_property
     def explanation(self) -> Optional[InferenceExplanation]:

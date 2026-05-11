@@ -160,7 +160,7 @@ def test_pickup(simple_apartment_setup):
         # print(explainer.explanation.as_string())
         explainer.explanation.condition_graph().visualize(filename=f"pick_up_event_condition_graph.pdf")
         print(explainer.get_satisfied_condition_expressions_for_a_detected_event().tolist())
-        # print(explainer.get_participating_events_in_detection().tolist())
+        print(explainer.get_participating_events_in_detection().tolist())
 
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi)
 
