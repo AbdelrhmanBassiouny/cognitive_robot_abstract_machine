@@ -508,13 +508,13 @@ class ProcthorRoom:
                 world_root_T_self=self.world_T_room,
             )
         if "Bedroom" in self.name.name:
-            room = Bedroom(name=self.name, floor=floor)
+            room = Bedroom(room=Room(name=self.name, floor=floor))
         elif "LivingRoom" in self.name.name:
-            room = LivingRoom(name=self.name, floor=floor)
+            room = LivingRoom(room=Room(name=self.name, floor=floor))
         elif "Kitchen" in self.name.name:
-            room = Kitchen(name=self.name, floor=floor)
+            room = Kitchen(room=Room(name=self.name, floor=floor))
         elif "Bathroom" in self.name.name:
-            room = Bathroom(name=self.name, floor=floor)
+            room = Bathroom(room=Room(name=self.name, floor=floor))
         else:
             assert_never(self.name.name)
 
