@@ -31,6 +31,7 @@ import segmind.detectors.coarse_event_detector_nodes
 import segmind.detectors.spatial_relation_detector_nodes
 import segmind.episode_player
 import segmind.episode_segmenter
+import segmind.event_explainer
 import segmind.event_logger
 import segmind.players.csv_player
 import segmind.players.data_player
@@ -225,6 +226,25 @@ class EpisodeSegmenterExecutorDAO(
 
     tmp_folder: Mapped[builtins.str] = mapped_column(
         sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
+
+
+class EventExplainerDAO(Base, DataAccessObject[segmind.event_explainer.EventExplainer]):
+
+    __tablename__ = "EventExplainerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    event_id: Mapped[int] = mapped_column(
+        ForeignKey("DetectionEventDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    event: Mapped[DetectionEventDAO] = relationship(
+        "DetectionEventDAO", uselist=False, foreign_keys=[event_id], post_update=True
     )
 
 
@@ -777,21 +797,21 @@ class PickUpDetectorDAO(
 
 
 class PickUpEventDAO(
-    EventWithOneTrackedObjectDAO,
+    EventWithTwoTrackedObjectsDAO,
     DataAccessObject[segmind.datastructures.events.PickUpEvent],
 ):
 
     __tablename__ = "PickUpEventDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(EventWithOneTrackedObjectDAO.database_id),
+        ForeignKey(EventWithTwoTrackedObjectsDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
 
     __mapper_args__ = {
         "polymorphic_identity": "PickUpEventDAO",
-        "inherit_condition": database_id == EventWithOneTrackedObjectDAO.database_id,
+        "inherit_condition": database_id == EventWithTwoTrackedObjectsDAO.database_id,
     }
 
 

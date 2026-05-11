@@ -496,7 +496,7 @@ def test_condition_graph_pipeline_or_short_circuit():
 
 
 def test_condition_graph_pipeline_complex():
-    """Deeply nested AND/OR/NOT with val=5: all paths evaluated."""
+    """Deeply nested AND/OR/NOT with val=5: inner AND short-circuited by OR."""
     val = variable_from([5])
     query = entity(inference(Item)(value=val)).where(
         and_(val > 0, or_(not_(val == 2), and_(val < 10, val > 1)))
@@ -513,8 +513,19 @@ def test_condition_graph_pipeline_complex():
     nodes_by_name = {
         node.name: node for node in qg.expression_node_map.values()
     }
-    # val=5: 5>0=True, Not(5==2)=Not(False)=True → OR short-circuits, AND satisfied
-    assert nodes_by_name["AND"].is_satisfied is True
+    # Look up AND nodes directly from expression_node_map using the actual expressions
+    and_nodes = [
+        (expr, node)
+        for expr, node in qg.expression_node_map.items()
+        if node.name == "AND"
+    ]
+    assert len(and_nodes) == 2
+    # Root AND: and_(val > 0, ...), the condition root — evaluated and satisfied
+    # Inner AND: and_(val < 10, val > 1), OR's right branch — short-circuited, not satisfied
+    root_and = next(node for _, node in and_nodes if node.is_satisfied)
+    inner_and = next(node for _, node in and_nodes if not node.is_satisfied)
+    assert root_and.is_satisfied is True
+    assert inner_and.is_satisfied is False
     assert nodes_by_name["OR"].is_satisfied is True
     assert nodes_by_name["Not"].is_satisfied is True
     assert nodes_by_name["=="].is_satisfied is False

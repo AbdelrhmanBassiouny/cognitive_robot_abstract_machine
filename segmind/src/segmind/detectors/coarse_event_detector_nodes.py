@@ -1,10 +1,11 @@
+from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import List, TypeVar
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from krrood.entity_query_language.factories import variable, and_, entity, inference, ConditionType, not_
+from krrood.entity_query_language.factories import variable, and_, entity, inference, ConditionType, not_, exists
 from krrood.entity_query_language.predicate import symbolic_function
 from krrood.entity_query_language.query.query import Entity
 from segmind.datastructures.events import (
@@ -44,12 +45,12 @@ def interaction_event_detected_before(event_type: Type[EventWithTwoTrackedObject
     :return: True if an interaction event of the given type was detected before the interaction, False otherwise.
     """
     similar_event = variable(event_type, events_to_consider)
-    return and_(similar_event.tracked_object == first_object,
-                similar_event.with_object == second_object)
+    return exists(similar_event, and_(similar_event.tracked_object == first_object,
+                similar_event.with_object == second_object))
 
 
 @dataclass
-class AbstractInteractionDetector(AbstractDetector):
+class AbstractInteractionDetector(AbstractDetector, ABC):
     """
     Abstract base class for interaction-based detectors.
 
@@ -99,7 +100,7 @@ class AbstractInteractionDetector(AbstractDetector):
                                                    primary_object,
                                                    secondary_object,
                                                    events))
-        )
+        ).tolist()
 
 
 @dataclass

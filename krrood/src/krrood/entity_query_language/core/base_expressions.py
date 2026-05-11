@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from collections import UserDict
 from copy import copy
 from dataclasses import dataclass, field
-from functools import cached_property
+from functools import cached_property, lru_cache
 
 from typing_extensions import (
     Dict,
@@ -36,6 +36,7 @@ from krrood.symbol_graph.symbol_graph import SymbolGraph
 from krrood.utils import memoize
 from krrood.entity_query_language.evaluation import (
     EvaluationContext,
+    EvaluationTracker,
     SatisfiedConditionTracker,
     InferenceRecorder,
     get_evaluation_context,
@@ -116,7 +117,7 @@ class SymbolicExpression(ABC):
     def __post_init__(self):
         self._expression_ = self
 
-    @memoize
+    @lru_cache
     def _get_expression_by_id_(self, id_: uuid.UUID) -> SymbolicExpression:
         try:
             return next(
@@ -280,7 +281,7 @@ class SymbolicExpression(ABC):
         owns_ctx = ctx is None
         if owns_ctx:
             ctx = EvaluationContext(
-                observers=[SatisfiedConditionTracker(), InferenceRecorder()]
+                observers=[EvaluationTracker(), SatisfiedConditionTracker(), InferenceRecorder()]
             )
             set_evaluation_context(ctx)
         try:
@@ -670,6 +671,12 @@ class OperationResult:
     A frozenset of UUIDs of condition expressions in the condition tree that were satisfied (truth value = True)
     during this evaluation. Populated at the conditions root after all conditions have been evaluated.
     Only set when the overall condition result is True.
+    """
+    evaluated_expression_ids: Optional[frozenset] = None
+    """
+    A frozenset of UUIDs of all expressions that were evaluated along the evaluation path that produced
+    this result. Populated by the EvaluationTracker observer. Unlike satisfied_condition_ids, this
+    includes all evaluated expressions regardless of truth value.
     """
 
     @property

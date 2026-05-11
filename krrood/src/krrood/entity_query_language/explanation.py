@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import inspect
 import weakref
 from dataclasses import dataclass, field
@@ -6,10 +8,12 @@ from typing import Any, List, Optional, Type, Callable
 
 from typing_extensions import TYPE_CHECKING
 
+
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import (
-        OperationResult,
-    )
+        OperationResult, SymbolicExpression,
+)
+    from krrood.entity_query_language.query.query import Query
 
 
 def filter_stack(
@@ -71,7 +75,7 @@ class InferenceExplanation:
     """
     The instance that was created.
     """
-    query_node: Any
+    query_node: SymbolicExpression
     """
     The query node that was used to create the instance.
     """
@@ -79,7 +83,7 @@ class InferenceExplanation:
     """
     The stack trace at the point of creation.
     """
-    query_root: Optional[Any] = None
+    query_root: Optional[Query] = None
     """
     The root of the query that was used to create the instance.
     """
@@ -87,6 +91,12 @@ class InferenceExplanation:
     """
     A frozenset of UUIDs of condition expressions that were satisfied (truth value = True)
     during the evaluation that produced this instance. None if no condition information is available.
+    """
+    operation_result: Optional[OperationResult] = None
+    """
+    The full :class:`OperationResult` from the evaluation iteration that produced this instance.
+    Contains bindings, all_bindings, is_false, operand, previous_operation_result, and
+    satisfied_condition_ids. None if no result information is available.
     """
 
     def condition_graph(self):
@@ -143,7 +153,7 @@ INFERENCE_RECORD: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
 
 
 def register_inference(
-    instance: Any, variable_node: Any, result: Optional[Any] = None
+    instance: Any, variable_node: SymbolicExpression, result: Optional[OperationResult] = None
 ) -> None:
     """
     Register an instance created via inference into the internal records.
@@ -156,11 +166,7 @@ def register_inference(
     if not getattr(type(variable_node), "_is_monitored_", False):
         return
 
-    satisfied_ids = (
-        result.satisfied_condition_ids
-        if result is not None and hasattr(result, "satisfied_condition_ids")
-        else None
-    )
+    satisfied_ids = result.satisfied_condition_ids if result else None
     explanation = InferenceExplanation(
         instance=instance,
         query_node=variable_node,
@@ -169,6 +175,7 @@ def register_inference(
         # _root_ is guaranteed by the SymbolicExpression base class
         query_root=variable_node._root_,
         satisfied_condition_ids=satisfied_ids,
+        operation_result=result,
     )
     try:
         INFERENCE_RECORD[instance] = explanation

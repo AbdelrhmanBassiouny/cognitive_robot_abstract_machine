@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import inspect
 import operator
+from typing import List
+from uuid import UUID
 
 from typing_extensions import Union, Iterable, List
 
@@ -43,6 +45,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 from krrood.entity_query_language.operators.logical_quantifiers import ForAll, Exists
 from krrood.entity_query_language.predicate import *  # type: ignore
+from krrood.entity_query_language.predicate import symbolic_function
 from krrood.entity_query_language.query.match import (
     Match,
     MatchVariable,
@@ -622,3 +625,13 @@ def evaluate_condition(condition: ConditionType) -> bool:
     if type(condition) is bool:
         return condition
     return any(condition.evaluate())
+
+
+@symbolic_function
+def node_id(node: SymbolicExpression) -> UUID:
+    return node._id_
+
+
+@symbolic_function
+def node_descendants(node: SymbolicExpression) -> List[SymbolicExpression]:
+    return node._descendants_

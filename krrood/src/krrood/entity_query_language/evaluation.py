@@ -8,8 +8,11 @@ evaluation pipeline without polluting the core evaluation methods.
 from __future__ import annotations
 
 from abc import ABC
+from collections import defaultdict
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+
+from graphql.pyutils import cached_property
 from typing_extensions import Any, Dict, List, Optional
 
 from typing_extensions import TYPE_CHECKING
@@ -101,38 +104,51 @@ def _is_condition_participant(expr) -> bool:
     return False
 
 
-def _collect_satisfied_condition_ids(condition_root, bindings: Bindings) -> frozenset:
-    """Collect the UUIDs of condition expressions in the condition tree that were satisfied."""
-    from krrood.entity_query_language.operators.core_logical_operators import (
-        LogicalOperator,
-    )
-
-    satisfied = set()
-    for expr in condition_root._descendants_:
-        if not _is_condition_participant(expr):
-            continue
-        if expr._id_ in bindings:
-            if bindings[expr._id_]:
-                satisfied.add(expr._id_)
-        elif isinstance(expr, LogicalOperator):
-            if any(d._id_ in bindings for d in expr._descendants_):
-                if not expr._is_false_:
-                    satisfied.add(expr._id_)
-
-    if _is_condition_participant(condition_root):
-        if condition_root._id_ in bindings:
-            if bindings[condition_root._id_]:
-                satisfied.add(condition_root._id_)
-        elif (
-                isinstance(condition_root, LogicalOperator)
-                and not condition_root._is_false_
-        ):
-            satisfied.add(condition_root._id_)
-
-    return frozenset(satisfied)
-
-
 SATISFIED_IDS_KEY = "_satisfied_condition_ids"
+"""
+A reserved key in the evaluation context's data dictionary for tracking the set of satisfied condition expression IDs
+during the current evaluation iteration.
+"""
+
+EVALUATED_IDS_KEY = "_evaluated_expression_ids"
+"""
+A reserved key in the evaluation context's data dictionary for tracking the cumulative set of all expression IDs
+evaluated so far during the current evaluation.
+"""
+
+
+class EvaluationTracker(EvaluationObserver):
+    """Observer that tracks which expressions were evaluated and stamps the cumulative set on each OperationResult.
+
+    Maintains a cumulative set of expression IDs in the evaluation context, adding each expression's ID
+    on :meth:`on_evaluate_enter`. On :meth:`on_result_yielded`, snapshots the current set onto the result
+    as ``evaluated_expression_ids``.
+
+    This tracking is the foundation for distinguishing evaluated-from-skipped logical operators (e.g.
+    short-circuited OR/AND branches) in inference explanations.
+    """
+
+    def on_evaluate_enter(self, expression, sources):
+        from krrood.entity_query_language.core.base_expressions import (
+            OperationResult,
+        )
+
+        ctx = get_evaluation_context()
+        if ctx is None:
+            return
+        evaluated = ctx.data.setdefault(EVALUATED_IDS_KEY, set())
+        evaluated.add(expression._id_)
+
+        if isinstance(sources, OperationResult) and sources.evaluated_expression_ids:
+            evaluated.update(sources.evaluated_expression_ids)
+
+    def on_result_yielded(self, expression, result):
+        ctx = get_evaluation_context()
+        if ctx is None:
+            return
+        evaluated = ctx.data.get(EVALUATED_IDS_KEY)
+        if evaluated is not None and result.evaluated_expression_ids is None:
+            result.evaluated_expression_ids = frozenset(evaluated)
 
 
 class SatisfiedConditionTracker(EvaluationObserver):
@@ -150,6 +166,7 @@ class SatisfiedConditionTracker(EvaluationObserver):
         ctx = get_evaluation_context()
         if ctx is None:
             return
+
         satisfied = None
         if isinstance(sources, OperationResult):
             satisfied = sources.satisfied_condition_ids
@@ -175,9 +192,58 @@ class SatisfiedConditionTracker(EvaluationObserver):
         if expression._conditions_root_ is expression._root_:
             return
 
-        satisfied_ids = _collect_satisfied_condition_ids(expression, result.bindings)
-        result.satisfied_condition_ids = satisfied_ids
         ctx = get_evaluation_context()
+        evaluated = ctx.data.get(EVALUATED_IDS_KEY) if ctx is not None else None
+        if evaluated is None:
+            return
+
+        from krrood.entity_query_language.operators.core_logical_operators import (
+            LogicalOperator,
+        )
+        from krrood.entity_query_language.exceptions import (
+            NoExpressionFoundForGivenID,
+        )
+
+        # Collect candidates: evaluated, condition participant, and truthier/not-false
+        satisfied = set()
+        for expr_id in evaluated:
+            try:
+                expr = expression._get_expression_by_id_(expr_id)
+            except NoExpressionFoundForGivenID:
+                continue
+            if not _is_condition_participant(expr):
+                continue
+            if isinstance(expr, LogicalOperator):
+                if not expr._is_false_:
+                    satisfied.add(expr_id)
+            elif expr_id in result.bindings:
+                if result.bindings[expr_id]:
+                    satisfied.add(expr_id)
+
+        # Parent-chain validation: an expression is only truly satisfied if every
+        # LogicalOperator ancestor up to the conditions root is also satisfied.
+        # This prevents children of a failed quantifier (e.g. AND inside a
+        # short-circuited Exists) from being marked satisfied based on stale
+        # _is_false_ state from a single evaluation pass.
+        final_satisfied = set()
+        for expr_id in satisfied:
+            expr = expression._get_expression_by_id_(expr_id)
+            current = expr
+            ancestor_ok = True
+            while current is not expression:
+                current = current._parent_
+                if current is None:
+                    break
+                if not isinstance(current, LogicalOperator):
+                    continue
+                if current._id_ not in satisfied:
+                    ancestor_ok = False
+                    break
+            if ancestor_ok:
+                final_satisfied.add(expr_id)
+
+        satisfied_ids = frozenset(final_satisfied)
+        result.satisfied_condition_ids = satisfied_ids
         if ctx is not None:
             ctx.data[SATISFIED_IDS_KEY] = satisfied_ids
 
