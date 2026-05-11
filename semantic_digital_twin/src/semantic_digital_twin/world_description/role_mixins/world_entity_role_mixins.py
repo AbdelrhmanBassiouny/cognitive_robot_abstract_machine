@@ -155,6 +155,12 @@ class RoleForWorldEntityWithID(DelegatorForWorldEntityWithID, RoleForWorldEntity
     @property
     @abstractmethod
     def delegatee(self) -> WorldEntityWithID: ...
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type._from_json(data, kwargs)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
 
 
 @dataclass(eq=False)

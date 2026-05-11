@@ -24,8 +24,10 @@ if TYPE_CHECKING:
         Quaternion,
         RotationMatrix,
         SpatialType,
+        Vector3,
         ca,
         np,
+        sm,
     )
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
@@ -257,3 +259,63 @@ class RoleForPose(DelegatorForPose, RoleForSpatialType, ABC):
     @property
     @abstractmethod
     def delegatee(self) -> Pose: ...
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type._from_json(data, kwargs)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
+
+    @classmethod
+    def from_xyz_axis_angle(
+        cls,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        z: sm.ScalarData = 0,
+        axis: Vector3 | sm.NumericalVector = None,
+        angle: sm.ScalarData = 0,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_xyz_axis_angle(
+            x, y, z, axis, angle, reference_frame
+        )
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
+
+    @classmethod
+    def from_xyz_quaternion(
+        cls,
+        pos_x: sm.ScalarData = 0,
+        pos_y: sm.ScalarData = 0,
+        pos_z: sm.ScalarData = 0,
+        quat_x: sm.ScalarData = 0,
+        quat_y: sm.ScalarData = 0,
+        quat_z: sm.ScalarData = 0,
+        quat_w: sm.ScalarData = 1,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_xyz_quaternion(
+            pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w, reference_frame
+        )
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
+
+    @classmethod
+    def from_xyz_rpy(
+        cls,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        z: sm.ScalarData = 0,
+        roll: sm.ScalarData = 0,
+        pitch: sm.ScalarData = 0,
+        yaw: sm.ScalarData = 0,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_xyz_rpy(
+            x, y, z, roll, pitch, yaw, reference_frame
+        )
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})

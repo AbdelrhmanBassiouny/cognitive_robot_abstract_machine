@@ -712,7 +712,8 @@ class DelegationGenerator:
         RoleFor mixin.
         """
         for method_name, method in inspect.getmembers(
-            wrapped_class.clazz, inspect.isfunction
+            wrapped_class.clazz,
+            predicate=lambda obj: inspect.isfunction(obj) or inspect.ismethod(obj),
         ):
             if method_name in self.excluded_method_names:
                 continue
