@@ -5,6 +5,7 @@ from semantic_digital_twin.world_description.role_mixins.world_entity_role_mixin
     DelegatorForSemanticAnnotation,
     RoleForSemanticAnnotation,
 )
+from typing import Any, Dict, Self
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -33,3 +34,9 @@ class RoleForRoom(DelegatorForRoom, RoleForSemanticAnnotation, ABC):
     @property
     @abstractmethod
     def delegatee(self) -> Room: ...
+    @classmethod
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_json(data, kwargs)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})

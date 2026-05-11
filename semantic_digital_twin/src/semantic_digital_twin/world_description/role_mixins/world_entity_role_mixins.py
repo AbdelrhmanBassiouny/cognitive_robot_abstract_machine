@@ -162,6 +162,13 @@ class RoleForWorldEntityWithID(DelegatorForWorldEntityWithID, RoleForWorldEntity
         delegatee_attr = cls.delegatee_attribute_name()
         return cls(**{delegatee_attr: role_taker})
 
+    @classmethod
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_json(data, kwargs)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
+
 
 @dataclass(eq=False)
 class RoleForWorldEntityWithSimulatorProperties(
@@ -173,6 +180,12 @@ class RoleForWorldEntityWithSimulatorProperties(
     @property
     @abstractmethod
     def delegatee(self) -> WorldEntityWithSimulatorProperties: ...
+    @classmethod
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_json(data, kwargs)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
 
 
 @dataclass(eq=False)
@@ -182,3 +195,9 @@ class RoleForSemanticAnnotation(
     @property
     @abstractmethod
     def delegatee(self) -> SemanticAnnotation: ...
+    @classmethod
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_json(data, kwargs)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})

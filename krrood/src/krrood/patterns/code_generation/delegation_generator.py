@@ -702,14 +702,38 @@ class DelegationGenerator:
                 )
                 groups.setdefault(defining_base, {})[method_name] = [method_node]
 
+    def _find_defining_class_for_inherited_method(
+        self, clazz: type, method_name: str
+    ) -> type | None:
+        """Return the first ancestor that defines *method_name*, or None to skip it.
+
+        Returns None when the defining class is already covered by a parent mixin,
+        is excluded by *is_excluded_defining_class*, or is not found at all.
+        This is used by ``iter_factory_methods`` to decide whether an inherited
+        factory method needs a new wrapper in the current mixin.
+        """
+        for klass in clazz.__mro__[1:]:
+            if klass is object:
+                return None
+            if method_name in vars(klass):
+                if (
+                    self.is_excluded_defining_class is not None
+                    and self.is_excluded_defining_class(klass)
+                ):
+                    return None
+                if klass in self.already_covered_bases:
+                    return None
+                return klass
+        return None
+
     def iter_factory_methods(
         self, wrapped_class: WrappedClass
     ) -> Iterator[tuple[str, Callable]]:
-        """Yield (name, method) for factory methods defined directly on the class.
+        """Yield (name, method) for factory methods on the class.
 
-        Only yields methods defined on *wrapped_class.clazz* itself (not inherited),
-        because inherited factory methods are already wrapped by the parent
-        RoleFor mixin.
+        Yields methods defined directly on *wrapped_class.clazz* as well as
+        inherited factory methods whose defining class is not already covered
+        by a parent mixin (i.e. not in *already_covered_bases*).
         """
         for method_name, method in inspect.getmembers(
             wrapped_class.clazz,
@@ -723,7 +747,13 @@ class DelegationGenerator:
             ):
                 continue
             if method_name not in vars(wrapped_class.clazz):
-                continue
+                if (
+                    self._find_defining_class_for_inherited_method(
+                        wrapped_class.clazz, method_name
+                    )
+                    is None
+                ):
+                    continue
             try:
                 source = inspect.getsource(method)
             except OSError:

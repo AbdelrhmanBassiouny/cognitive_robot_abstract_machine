@@ -267,6 +267,20 @@ class RoleForPose(DelegatorForPose, RoleForSpatialType, ABC):
         return cls(**{delegatee_attr: role_taker})
 
     @classmethod
+    def from_casadi_sx(cls, casadi_sx: ca.SX) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_casadi_sx(casadi_sx)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
+
+    @classmethod
+    def from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        delegatee_type = cls.get_delegatee_type()
+        role_taker = delegatee_type.from_json(data, kwargs)
+        delegatee_attr = cls.delegatee_attribute_name()
+        return cls(**{delegatee_attr: role_taker})
+
+    @classmethod
     def from_xyz_axis_angle(
         cls,
         x: sm.ScalarData = 0,
