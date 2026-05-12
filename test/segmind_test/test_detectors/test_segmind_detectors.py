@@ -1,6 +1,7 @@
 import numpy as np
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from krrood.entity_query_language.explanation import explain_inference
+from krrood.entity_query_language.query_graph import QueryGraph
 from segmind.datastructures.events import (
     ContactEvent,
     LossOfContactEvent,
@@ -157,10 +158,16 @@ def test_pickup(simple_apartment_setup):
         explainer = EventExplainer(event)
         if explainer.explanation is None:
             continue
-        # print(explainer.explanation.as_string())
         explainer.explanation.condition_graph().visualize(filename=f"pick_up_event_condition_graph.pdf")
+        print(explainer.explanation.as_string())
+        print("===================================")
         print(explainer.get_satisfied_condition_expressions_for_a_detected_event().tolist())
+        print("===================================")
         print(explainer.get_participating_events_in_detection().tolist())
+        print("===================================")
+        conditions = explainer.get_conditions_that_relate_the_participating_events()
+        QueryGraph(conditions).visualize(filename=f"conditions_meta_query.pdf")
+        print(conditions.tolist())
 
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi)
 
