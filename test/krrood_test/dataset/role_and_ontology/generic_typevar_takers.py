@@ -3,6 +3,12 @@ from typing import Generic, TypeVar
 
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.generic_typevar_takers_role_mixins import (
+    RoleForConcreteTypeTaker,
+    RoleForNarrowedTypeVarTaker,
+    RoleForUnspecializedSubTaker,
+)
 
 
 @dataclass(eq=False)
@@ -28,17 +34,17 @@ TConcreteEntity = TypeVar("TConcreteEntity", bound=ConcreteEntity)
 
 
 @dataclass(eq=False)
-class NarrowedTypeVarTaker(GenericBaseMixin[TConcreteEntity]):
+class NarrowedTypeVarTaker(GenericBaseMixin[TConcreteEntity], HasRoles):
     label: str = field(default="", kw_only=True)
 
 
 @dataclass(eq=False)
-class ConcreteTypeTaker(GenericBaseMixin[ConcreteEntity]):
+class ConcreteTypeTaker(GenericBaseMixin[ConcreteEntity], HasRoles):
     name: str = field(default="", kw_only=True)
 
 
 @dataclass(eq=False)
-class UnspecializedSubTaker(GenericBaseMixin):
+class UnspecializedSubTaker(GenericBaseMixin, HasRoles):
     tag: str = field(default="", kw_only=True)
 
 
@@ -48,7 +54,7 @@ TUnspecializedSubTaker = TypeVar("TUnspecializedSubTaker", bound=UnspecializedSu
 
 
 @dataclass(eq=False)
-class RoleWithNarrowedTaker(Role[TNarrowedTypeVarTaker]):
+class RoleWithNarrowedTaker(Role[TNarrowedTypeVarTaker], RoleForNarrowedTypeVarTaker):
     taker: TNarrowedTypeVarTaker = field(kw_only=True)
 
     @classmethod
@@ -57,7 +63,7 @@ class RoleWithNarrowedTaker(Role[TNarrowedTypeVarTaker]):
 
 
 @dataclass(eq=False)
-class RoleWithConcreteTaker(Role[TConcreteTypeTaker]):
+class RoleWithConcreteTaker(Role[TConcreteTypeTaker], RoleForConcreteTypeTaker):
     taker: TConcreteTypeTaker = field(kw_only=True)
 
     @classmethod
@@ -66,7 +72,9 @@ class RoleWithConcreteTaker(Role[TConcreteTypeTaker]):
 
 
 @dataclass(eq=False)
-class RoleWithUnspecializedTaker(Role[TUnspecializedSubTaker]):
+class RoleWithUnspecializedTaker(
+    Role[TUnspecializedSubTaker], RoleForUnspecializedSubTaker
+):
     taker: TUnspecializedSubTaker = field(kw_only=True)
 
     @classmethod

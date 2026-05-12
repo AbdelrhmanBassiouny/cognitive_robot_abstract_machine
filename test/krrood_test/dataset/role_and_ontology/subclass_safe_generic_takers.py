@@ -6,6 +6,10 @@ from typing_extensions import TypeVar
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.subclass_safe_generic_takers_role_mixins import (
+    RoleForSpecificItemTaker,
+)
 
 
 @dataclass(eq=False)
@@ -27,7 +31,7 @@ TSpecificItem = TypeVar("TSpecificItem", bound=BaseItem)
 
 
 @dataclass(eq=False)
-class SpecificItemTaker(ItemHolder[TSpecificItem]):
+class SpecificItemTaker(ItemHolder[TSpecificItem], HasRoles):
     """Role taker whose item TypeVar is narrowed relative to ItemHolder."""
 
     label: str = field(default="", kw_only=True)
@@ -37,7 +41,7 @@ TConcreteItemTaker = TypeVar("TConcreteItemTaker", bound=SpecificItemTaker)
 
 
 @dataclass(eq=False)
-class ItemRole(Role[TConcreteItemTaker]):
+class ItemRole(Role[TConcreteItemTaker], RoleForSpecificItemTaker):
     taker: TConcreteItemTaker = field(kw_only=True)
 
     @classmethod

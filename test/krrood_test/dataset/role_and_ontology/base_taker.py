@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 from typing_extensions import Dict
-from .external_types import ExternalType
+from test.krrood_test.dataset.role_and_ontology.external_types import ExternalType
 
 
 @dataclass
@@ -19,5 +19,6 @@ class BaseTaker:
 
     def to_dict(self) -> Dict[str, str]:
         """Returns a dict representation. Dict is imported in base_taker but NOT in
-        reproduction_module, so the transformer must resolve it via the method globals."""
+        reproduction_module, so the transformer must resolve it via the method globals.
+        """
         return {}

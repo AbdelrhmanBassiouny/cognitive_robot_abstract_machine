@@ -6,6 +6,11 @@ from typing_extensions import TypeVar
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.two_role_taker_narrowing_role_mixins import (
+    RoleForBaseHolder,
+    RoleForDerivedHolder,
+)
 
 
 @dataclass(eq=False)
@@ -17,7 +22,7 @@ TBaseEntity = TypeVar("TBaseEntity", bound=BaseEntity)
 
 
 @dataclass(eq=False)
-class BaseHolder(SubClassSafeGeneric[TBaseEntity]):
+class BaseHolder(SubClassSafeGeneric[TBaseEntity], HasRoles):
     """First role taker — holds an entity of a parameterised type."""
 
     entity: TBaseEntity = field(kw_only=True)
@@ -27,7 +32,7 @@ TBaseHolder = TypeVar("TBaseHolder", bound=BaseHolder)
 
 
 @dataclass(eq=False)
-class BaseHolderRole(Role[TBaseHolder]):
+class BaseHolderRole(Role[TBaseHolder], RoleForBaseHolder):
     taker: TBaseHolder = field(kw_only=True)
 
     @classmethod
@@ -54,7 +59,7 @@ TDerivedHolder = TypeVar("TDerivedHolder", bound=DerivedHolder)
 
 
 @dataclass(eq=False)
-class DerivedHolderRole(Role[TDerivedHolder]):
+class DerivedHolderRole(Role[TDerivedHolder], RoleForDerivedHolder):
     taker: TDerivedHolder = field(kw_only=True)
 
     @classmethod

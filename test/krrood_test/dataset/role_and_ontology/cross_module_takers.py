@@ -6,16 +6,23 @@ from typing import TypeVar
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 
-from .cross_module_shared_base import CrossModuleBase
+from test.krrood_test.dataset.role_and_ontology.cross_module_shared_base import (
+    CrossModuleBase,
+)
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.cross_module_takers_role_mixins import (
+    RoleForTakerX,
+    RoleForTakerY,
+)
 
 
 @dataclass
-class TakerX(CrossModuleBase):
+class TakerX(CrossModuleBase, HasRoles):
     def taker_x_only_method(self) -> str: ...
 
 
 @dataclass
-class TakerY(CrossModuleBase):
+class TakerY(CrossModuleBase, HasRoles):
     def taker_y_only_method(self) -> float: ...
 
 
@@ -24,7 +31,7 @@ TTakerY = TypeVar("TTakerY", bound=TakerY)
 
 
 @dataclass
-class RoleX(Role[TTakerX]):
+class RoleX(Role[TTakerX], RoleForTakerX):
     taker_x: TTakerX = field(kw_only=True)
 
     @classmethod
@@ -33,7 +40,7 @@ class RoleX(Role[TTakerX]):
 
 
 @dataclass
-class RoleY(Role[TTakerY]):
+class RoleY(Role[TTakerY], RoleForTakerY):
     taker_y: TTakerY = field(kw_only=True)
 
     @classmethod

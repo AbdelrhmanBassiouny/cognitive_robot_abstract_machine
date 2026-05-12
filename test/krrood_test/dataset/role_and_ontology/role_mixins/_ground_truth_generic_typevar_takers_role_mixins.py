@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing_extensions import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from test.krrood_test.dataset.role_and_ontology.generic_typevar_takers import ConcreteEntity, GenericBaseMixin, TBase, TConcreteEntity, TConcreteTypeTaker, TNarrowedTypeVarTaker, TUnspecializedSubTaker
+    from test.krrood_test.dataset.role_and_ontology._ground_truth_generic_typevar_takers import ConcreteEntity, GenericBaseMixin, TBase, TConcreteEntity, TConcreteTypeTaker, TNarrowedTypeVarTaker, TUnspecializedSubTaker
 
 
 @dataclass(eq=False)

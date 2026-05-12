@@ -114,11 +114,17 @@ def generate_sqlalchemy_interface():
 
 def pytest_configure(config):
     """
-    Set log levels before krrood_test collection.
+    Set log levels and ensure role mixins are current before krrood_test collection.
     """
 
     logging.getLogger("matplotlib").setLevel(logging.WARNING)
     logging.getLogger("numpy").setLevel(logging.WARNING)
+
+    from krrood.generate_role_mixins import ensure_role_mixins_current_for_pytest
+
+    ensure_role_mixins_current_for_pytest(
+        ["test.krrood_test.dataset.role_and_ontology"]
+    )
 
 
 # Generate ormatic_interface.py at module level, before the star import below.

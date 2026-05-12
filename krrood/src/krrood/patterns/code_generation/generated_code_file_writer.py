@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import logging
 import shutil
 from pathlib import Path
 from types import ModuleType
@@ -14,6 +15,8 @@ from typing import Callable
 from typing_extensions import Dict, Tuple
 
 from krrood.utils import run_black_on_file, run_ruff_on_file
+
+log = logging.getLogger(__name__)
 
 
 def has_class_definitions(source: str) -> bool:
@@ -94,8 +97,14 @@ class GeneratedCodeFileWriter:
             self._cleanup_empty_generated_package(dir_)
 
         for path in written:
-            run_ruff_on_file(str(path))
-            run_black_on_file(str(path))
+            try:
+                run_ruff_on_file(str(path))
+            except Exception:
+                log.warning("ruff failed on %s", path, exc_info=True)
+            try:
+                run_black_on_file(str(path))
+            except Exception:
+                log.warning("black failed on %s", path, exc_info=True)
 
     @staticmethod
     def _ensure_package_exists(folder: Path) -> None:

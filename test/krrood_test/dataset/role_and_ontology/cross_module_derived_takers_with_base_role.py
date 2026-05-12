@@ -6,7 +6,16 @@ from typing import TypeVar
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 
-from .cross_module_base_taker import CrossModuleBaseTaker
+from test.krrood_test.dataset.role_and_ontology.cross_module_base_taker import (
+    CrossModuleBaseTaker,
+)
+from test.krrood_test.dataset.role_and_ontology.role_mixins.cross_module_base_taker_role_mixins import (
+    RoleForCrossModuleBaseTaker,
+)
+from test.krrood_test.dataset.role_and_ontology.role_mixins.cross_module_derived_takers_with_base_role_role_mixins import (
+    RoleForDerivedTakerA,
+    RoleForDerivedTakerB,
+)
 
 
 @dataclass
@@ -29,7 +38,7 @@ TDerivedB = TypeVar("TDerivedB", bound=DerivedTakerB)
 
 
 @dataclass
-class RoleBase(Role[TBase]):
+class RoleBase(Role[TBase], RoleForCrossModuleBaseTaker):
     base: TBase = field(kw_only=True)
 
     @classmethod
@@ -38,7 +47,7 @@ class RoleBase(Role[TBase]):
 
 
 @dataclass
-class RoleDerivedA(Role[TDerivedA]):
+class RoleDerivedA(Role[TDerivedA], RoleForDerivedTakerA):
     derived_a: TDerivedA = field(kw_only=True)
 
     @classmethod
@@ -47,7 +56,7 @@ class RoleDerivedA(Role[TDerivedA]):
 
 
 @dataclass
-class RoleDerivedB(Role[TDerivedB]):
+class RoleDerivedB(Role[TDerivedB], RoleForDerivedTakerB):
     derived_b: TDerivedB = field(kw_only=True)
 
     @classmethod

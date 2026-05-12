@@ -6,6 +6,11 @@ from typing_extensions import TypeVar
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.unsubscripted_intermediate_taker_role_mixins import (
+    RoleForRack,
+    RoleForShelf,
+)
 
 
 @dataclass(eq=False)
@@ -36,7 +41,7 @@ TShelfContent = TypeVar("TShelfContent", bound=Cargo)
 
 
 @dataclass(eq=False)
-class Shelf(CargoCrate, SubClassSafeGeneric[TShelfContent]):
+class Shelf(CargoCrate, SubClassSafeGeneric[TShelfContent], HasRoles):
     """First role taker — inherits item from CargoCrate (unsubscripted) and adds slot."""
 
     slot: TShelfContent = field(kw_only=True)
@@ -46,7 +51,7 @@ TShelf = TypeVar("TShelf", bound=Shelf)
 
 
 @dataclass(eq=False)
-class ShelfRole(Role[TShelf]):
+class ShelfRole(Role[TShelf], RoleForShelf):
     taker: TShelf = field(kw_only=True)
 
     @classmethod
@@ -66,7 +71,7 @@ TRack = TypeVar("TRack", bound=Rack)
 
 
 @dataclass(eq=False)
-class RackRole(Role[TRack]):
+class RackRole(Role[TRack], RoleForRack):
     taker: TRack = field(kw_only=True)
 
     @classmethod

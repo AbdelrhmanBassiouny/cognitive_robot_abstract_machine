@@ -5,6 +5,11 @@ from typing import TypeVar
 
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.shared_base_takers_role_mixins import (
+    RoleForExclusiveTakerA,
+    RoleForExclusiveTakerB,
+)
 
 
 @dataclass
@@ -17,12 +22,12 @@ class SharedBase:
 
 
 @dataclass
-class ExclusiveTakerA(SharedBase):
+class ExclusiveTakerA(SharedBase, HasRoles):
     def taker_a_only_method(self) -> str: ...
 
 
 @dataclass
-class ExclusiveTakerB(SharedBase):
+class ExclusiveTakerB(SharedBase, HasRoles):
     def taker_b_only_method(self) -> float: ...
 
 
@@ -31,7 +36,7 @@ TExclusiveTakerB = TypeVar("TExclusiveTakerB", bound=ExclusiveTakerB)
 
 
 @dataclass
-class RoleA(Role[TExclusiveTakerA]):
+class RoleA(Role[TExclusiveTakerA], RoleForExclusiveTakerA):
     taker_a: TExclusiveTakerA = field(kw_only=True)
 
     @classmethod
@@ -40,7 +45,7 @@ class RoleA(Role[TExclusiveTakerA]):
 
 
 @dataclass
-class RoleB(Role[TExclusiveTakerB]):
+class RoleB(Role[TExclusiveTakerB], RoleForExclusiveTakerB):
     taker_b: TExclusiveTakerB = field(kw_only=True)
 
     @classmethod

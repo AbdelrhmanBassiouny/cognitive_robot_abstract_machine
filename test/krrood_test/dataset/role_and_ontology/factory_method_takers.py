@@ -7,13 +7,19 @@ from typing_extensions import Self
 
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
-
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.factory_method_takers_role_mixins import (
+    RoleForBaseWorker,
+    RoleForDerivedWorker,
+    RoleForPerson,
+    RoleForPlainEntity,
+)
 
 # ── Simple: delegatee with one factory method ────────────────────────
 
 
 @dataclass
-class Person:
+class Person(HasRoles):
     name: str = field(kw_only=True)
     age: int = field(kw_only=True)
 
@@ -26,7 +32,7 @@ TPerson = TypeVar("TPerson", bound=Person)
 
 
 @dataclass
-class PersonRole(Role[TPerson]):
+class PersonRole(Role[TPerson], RoleForPerson):
     person: TPerson = field(kw_only=True)
 
     @classmethod
@@ -38,7 +44,7 @@ class PersonRole(Role[TPerson]):
 
 
 @dataclass
-class PlainEntity:
+class PlainEntity(HasRoles):
     value: str = field(kw_only=True)
 
 
@@ -46,7 +52,7 @@ TPlainEntity = TypeVar("TPlainEntity", bound=PlainEntity)
 
 
 @dataclass
-class PlainEntityRole(Role[TPlainEntity]):
+class PlainEntityRole(Role[TPlainEntity], RoleForPlainEntity):
     entity: TPlainEntity = field(kw_only=True)
 
     @classmethod
@@ -58,7 +64,7 @@ class PlainEntityRole(Role[TPlainEntity]):
 
 
 @dataclass
-class BaseWorker:
+class BaseWorker(HasRoles):
     name: str = field(kw_only=True)
 
     @classmethod
@@ -82,7 +88,7 @@ TDerivedWorker = TypeVar("TDerivedWorker", bound=DerivedWorker)
 
 
 @dataclass
-class BaseWorkerRole(Role[TBaseWorker]):
+class BaseWorkerRole(Role[TBaseWorker], RoleForBaseWorker):
     worker: TBaseWorker = field(kw_only=True)
 
     @classmethod
@@ -91,7 +97,7 @@ class BaseWorkerRole(Role[TBaseWorker]):
 
 
 @dataclass
-class DerivedWorkerRole(Role[TDerivedWorker]):
+class DerivedWorkerRole(Role[TDerivedWorker], RoleForDerivedWorker):
     worker: TDerivedWorker = field(kw_only=True)
 
     @classmethod

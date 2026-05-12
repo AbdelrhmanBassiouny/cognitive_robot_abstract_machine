@@ -21,6 +21,9 @@ def _modules_with_roles(class_diagram: ClassDiagram) -> list[ModuleType]:
         ):
             module = sys.modules[wrapped_class.clazz.__module__]
             if module not in result:
+                module_path = getattr(module, "__file__", None)
+                if module_path and Path(module_path).stem.startswith("_ground_truth_"):
+                    continue
                 result.append(module)
     return result
 

@@ -6,6 +6,10 @@ from typing_extensions import TypeVar
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.independent_typevar_takers_role_mixins import (
+    RoleForMultiTaker,
+)
 
 
 @dataclass(eq=False)
@@ -59,7 +63,7 @@ TContent2 = TypeVar("TContent2", bound=BaseContent)
 
 
 @dataclass(eq=False)
-class MultiTaker(ContentHolder[TContent2]):
+class MultiTaker(ContentHolder[TContent2], HasRoles):
     """Concrete role taker: content narrows to TContent2, root must remain TSpecificRoot."""
 
 
@@ -67,7 +71,7 @@ TMultiTaker = TypeVar("TMultiTaker", bound=MultiTaker)
 
 
 @dataclass(eq=False)
-class MultiTakerRole(Role[TMultiTaker]):
+class MultiTakerRole(Role[TMultiTaker], RoleForMultiTaker):
     taker: TMultiTaker = field(kw_only=True)
 
     @classmethod

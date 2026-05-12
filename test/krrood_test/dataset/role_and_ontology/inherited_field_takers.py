@@ -5,6 +5,11 @@ from typing import TypeVar
 
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.inherited_field_takers_role_mixins import (
+    RoleForTakerA,
+    RoleForTakerB,
+)
 
 
 @dataclass
@@ -22,14 +27,14 @@ class IntermediateMixin(FieldOrigin):
 
 
 @dataclass
-class TakerA(IntermediateMixin):
+class TakerA(IntermediateMixin, HasRoles):
     """Role taker: inherits `shared_field` transitively through IntermediateMixin."""
 
     taker_a_field: int = field(default=0, kw_only=True)
 
 
 @dataclass
-class TakerB(IntermediateMixin):
+class TakerB(IntermediateMixin, HasRoles):
     """Second role taker: same grandparent but independent branch."""
 
     taker_b_field: float = field(default=0.0, kw_only=True)
@@ -40,7 +45,7 @@ TTakerB = TypeVar("TTakerB", bound=TakerB)
 
 
 @dataclass
-class TakerARole(Role[TTakerA]):
+class TakerARole(Role[TTakerA], RoleForTakerA):
     taker: TTakerA = field(kw_only=True)
 
     @classmethod
@@ -49,7 +54,7 @@ class TakerARole(Role[TTakerA]):
 
 
 @dataclass
-class TakerBRole(Role[TTakerB]):
+class TakerBRole(Role[TTakerB], RoleForTakerB):
     taker: TTakerB = field(kw_only=True)
 
     @classmethod

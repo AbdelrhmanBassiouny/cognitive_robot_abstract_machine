@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, Field, fields
+from dataclasses import dataclass, field
 
 from typing_extensions import Set, List, Type
 
-from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 from krrood.entity_query_language.predicate import Symbol
@@ -14,6 +13,12 @@ from krrood.ontomatic.property_descriptor.mixins import (
 )
 from krrood.ontomatic.property_descriptor.property_descriptor import (
     PropertyDescriptor,
+)
+from krrood.patterns.role import HasRoles
+from test.krrood_test.dataset.role_and_ontology.role_mixins.university_ontology_like_classes_role_mixins import (
+    RoleForCEOAsFirstRole,
+    RoleForPerson,
+    RoleForRepresentativeAsSecondRole,
 )
 
 
@@ -37,7 +42,7 @@ class Country(RecognizedGroup): ...
 
 
 @dataclass(eq=False)
-class Person(Symbol):
+class Person(Symbol, HasRoles):
     name: str
     works_for: RecognizedGroup = None
     member_of: List[RecognizedGroup] = field(default_factory=list)
@@ -47,7 +52,7 @@ class Person(Symbol):
 
 
 @dataclass(eq=False)
-class CEOAsFirstRole(Role[Person], Symbol):
+class CEOAsFirstRole(Role[Person], RoleForPerson, Symbol):
     person: Person
     head_of: RecognizedGroup = None
 
@@ -57,7 +62,7 @@ class CEOAsFirstRole(Role[Person], Symbol):
 
 
 @dataclass(eq=False)
-class RepresentativeAsSecondRole(Role[CEOAsFirstRole], Symbol):
+class RepresentativeAsSecondRole(Role[CEOAsFirstRole], RoleForCEOAsFirstRole, Symbol):
     ceo: CEOAsFirstRole
     representative_of: RecognizedGroup = None
 
@@ -67,7 +72,9 @@ class RepresentativeAsSecondRole(Role[CEOAsFirstRole], Symbol):
 
 
 @dataclass(eq=False)
-class DelegateAsThirdRole(Role[RepresentativeAsSecondRole], Symbol):
+class DelegateAsThirdRole(
+    Role[RepresentativeAsSecondRole], RoleForRepresentativeAsSecondRole, Symbol
+):
     representative: RepresentativeAsSecondRole
 
     delegate_of: RecognizedGroup = field(kw_only=True, default=None)
