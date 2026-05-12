@@ -7,7 +7,7 @@ from krrood.entity_query_language.factories import variable_from
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.patterns.role import HasRoles
-from .role_mixins.unsubscripted_intermediate_taker_role_mixins import (
+from .role_mixins._ground_truth_unsubscripted_intermediate_taker_role_mixins import (
     RoleForRack,
     RoleForShelf,
 )

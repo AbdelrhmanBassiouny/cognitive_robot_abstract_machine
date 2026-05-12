@@ -6,7 +6,7 @@ from typing_extensions import TYPE_CHECKING
 from krrood.patterns.role import HasRoles
 
 if TYPE_CHECKING:
-    from test.krrood_test.dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
+    from .university_ontology_like_classes_without_descriptors import (
         PersonInRoleAndOntology,
     )
 
