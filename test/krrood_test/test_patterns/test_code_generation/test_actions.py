@@ -28,6 +28,7 @@ from krrood.patterns.code_generation.actions.transform import (
     EnsureSuperInitCall,
     RemoveBaseClass,
 )
+from krrood.patterns.code_generation.exceptions import ClassNotFoundError
 from krrood.patterns.code_generation.actions.generate import (
     CreateClass,
     WriteModule,
@@ -265,7 +266,7 @@ class TestAddBaseClass:
     def test_nonexistent_class_raises(self):
         mod = parse_module(PERSON_CLASS)
         action = AddBaseClass("Nonexistent", BaseClassSpec(name="ABC"))
-        with pytest.raises(ValueError, match="Nonexistent"):
+        with pytest.raises(ClassNotFoundError, match="Nonexistent"):
             action.apply(mod)
 
     def test_description(self):
@@ -322,7 +323,7 @@ class TestAddMethod:
         mod = parse_module(PERSON_CLASS)
         method = libcst.parse_statement("def x(self): ...")
         action = AddMethod("Nonexistent", method)
-        with pytest.raises(ValueError):
+        with pytest.raises(ClassNotFoundError):
             action.apply(mod)
 
     def test_description_includes_method_name(self):

@@ -15,6 +15,10 @@ from libcst.codemod import CodemodContext
 from libcst.codemod.visitors import AddImportsVisitor
 
 from krrood.patterns.code_generation.actions.base import TransformationAction
+from krrood.patterns.code_generation.exceptions import (
+    ClassNotFoundError,
+    InvalidCSTNodeError,
+)
 from krrood.patterns.code_generation.specs.specs import BaseClassSpec
 
 
@@ -71,6 +75,13 @@ def _make_arg(name: str) -> libcst.Arg:
     return libcst.Arg(value=libcst.Name(name))
 
 
+def _is_named_arg(arg: libcst.Arg, name: str) -> bool:
+    """Check whether *arg* is a plain ``Name`` argument matching *name*."""
+    if isinstance(arg.value, libcst.Name):
+        return arg.value.value == name
+    return False
+
+
 # ── concrete transformation actions ──────────────────────────────────
 
 
@@ -90,9 +101,7 @@ class AddBaseClass(TransformationAction):
     def apply(self, module: libcst.Module) -> libcst.Module:
         found = _find_class(module, self.target_class)
         if found is None:
-            raise ValueError(
-                f"Class '{self.target_class}' not found in module."
-            )
+            raise ClassNotFoundError(target_class=self.target_class)
         idx, class_def = found
         new_bases = list(class_def.bases) + [_make_arg(self.base_spec.name)]
         new_class = class_def.with_changes(bases=new_bases)
@@ -104,8 +113,9 @@ class AddBaseClass(TransformationAction):
             return module
         idx, class_def = found
         new_bases = tuple(
-            b for b in class_def.bases
-            if libcst.Module([]).code_for_node(b) != self.base_spec.name
+            b
+            for b in class_def.bases
+            if not _is_named_arg(b, self.base_spec.name)
         )
         new_class = class_def.with_changes(bases=new_bases)
         return _replace_in_module(module, idx, new_class)
@@ -136,7 +146,7 @@ class RemoveBaseClass(TransformationAction):
         new_bases = tuple(
             b
             for b in class_def.bases
-            if not self._is_named_arg(b, self.base_name)
+            if not _is_named_arg(b, self.base_name)
         )
         new_class = class_def.with_changes(bases=new_bases)
         return _replace_in_module(module, idx, new_class)
@@ -149,13 +159,6 @@ class RemoveBaseClass(TransformationAction):
         new_bases = list(class_def.bases) + [_make_arg(self.base_name)]
         new_class = class_def.with_changes(bases=new_bases)
         return _replace_in_module(module, idx, new_class)
-
-    @staticmethod
-    def _is_named_arg(arg: libcst.Arg, name: str) -> bool:
-        """Check whether *arg* is a plain ``Name`` argument matching *name*."""
-        if isinstance(arg.value, libcst.Name):
-            return arg.value.value == name
-        return False
 
     @property
     def description(self) -> str:
@@ -178,9 +181,7 @@ class AddMethod(TransformationAction):
     def apply(self, module: libcst.Module) -> libcst.Module:
         found = _find_class(module, self.target_class)
         if found is None:
-            raise ValueError(
-                f"Class '{self.target_class}' not found in module."
-            )
+            raise ClassNotFoundError(target_class=self.target_class)
         idx, class_def = found
         new_body = class_def.body.with_changes(
             body=list(class_def.body.body) + [self.method]
@@ -230,9 +231,7 @@ class AddProperty(TransformationAction):
     def apply(self, module: libcst.Module) -> libcst.Module:
         found = _find_class(module, self.target_class)
         if found is None:
-            raise ValueError(
-                f"Class '{self.target_class}' not found in module."
-            )
+            raise ClassNotFoundError(target_class=self.target_class)
         idx, class_def = found
         new_nodes = list(class_def.body.body) + [self.getter]
         if self.setter is not None:
@@ -281,9 +280,7 @@ class AddDecorator(TransformationAction):
     def apply(self, module: libcst.Module) -> libcst.Module:
         found = _find_class(module, self.target_class)
         if found is None:
-            raise ValueError(
-                f"Class '{self.target_class}' not found in module."
-            )
+            raise ClassNotFoundError(target_class=self.target_class)
         idx, class_def = found
         new_decorators = [self.decorator] + list(class_def.decorators)
         new_class = class_def.with_changes(decorators=new_decorators)

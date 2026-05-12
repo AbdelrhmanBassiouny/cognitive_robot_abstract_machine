@@ -47,6 +47,20 @@ def _make_arg(name: str) -> libcst.Arg:
     return libcst.Arg(value=libcst.Name(name))
 
 
+def _parse_type_annotation(type_str: str) -> libcst.BaseExpression:
+    """Parse a type string into a libcst expression node.
+
+    Handles both simple names (``"int"``) and complex generics
+    (``"Optional[List[str]]"``).
+    """
+    try:
+        return libcst.parse_expression(type_str)
+    except Exception:
+        # Fallback: if the type string is not a valid expression,
+        # use it as a plain name (may still fail for truly invalid types).
+        return libcst.Name(type_str)
+
+
 def _make_delegator_name(class_name: str) -> str:
     return f"DelegatorFor{class_name}"
 
@@ -146,7 +160,7 @@ class RoleTransformationPlanner(ActionPlanner):
         """
         actions: list[Action] = []
         delegation = spec.delegation
-        if delegation is None or not delegation.members:
+        if delegation is None:
             return ActionPlan(actions=actions, description="No delegation needed")
 
         # Separate taker-own members from inherited members
@@ -309,7 +323,7 @@ class RoleTransformationPlanner(ActionPlanner):
             if p.name in ("self", "cls"):
                 continue
             ann = (
-                libcst.Annotation(annotation=libcst.Name(p.type_annotation))
+                libcst.Annotation(annotation=_parse_type_annotation(p.type_annotation))
                 if p.type_annotation
                 else None
             )
@@ -327,7 +341,7 @@ class RoleTransformationPlanner(ActionPlanner):
         returns = None
         if member.return_type:
             returns = libcst.Annotation(
-                annotation=libcst.Name(member.return_type)
+                annotation=_parse_type_annotation(member.return_type)
             )
 
         return libcst.FunctionDef(
