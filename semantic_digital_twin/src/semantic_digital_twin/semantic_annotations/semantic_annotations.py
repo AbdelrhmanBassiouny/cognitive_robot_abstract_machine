@@ -506,7 +506,7 @@ class Room(SemanticAnnotation, HasRoles):
 
 
 @dataclass(eq=False)
-class Kitchen(Role[Room], RoleForRoom, DelegatorForRoom):
+class Kitchen(Role[Room], RoleForRoom):
     """
     A kitchen is a room that has kitchen utilities and machines.
     """

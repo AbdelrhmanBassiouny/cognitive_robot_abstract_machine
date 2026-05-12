@@ -463,10 +463,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
         krrood_logger.setLevel(logging.DEBUG)
+        logging.getLogger(__name__).setLevel(logging.DEBUG)
     else:
-        logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+        krrood_logger.setLevel(logging.INFO)
+        logging.getLogger(__name__).setLevel(logging.INFO)
 
     log = logging.getLogger(__name__)
 
@@ -512,4 +513,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     sys.exit(main())

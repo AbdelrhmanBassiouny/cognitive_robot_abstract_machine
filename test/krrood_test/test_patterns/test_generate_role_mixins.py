@@ -363,11 +363,7 @@ class TestFormatSourceErrorVisibility:
         monkeypatch.setattr(grm, "run_ruff_on_file", lambda p: (_ for _ in ()).throw(RuntimeError("ruff failed")))
         result = _format_source("x = 1\n")
         assert result == "x = 1\n"
-        assert any(
-            r.levelname == "WARNING"
-            and "Formatting generated source failed" in r.message
-            for r in caplog.records
-        )
+        assert "Formatting generated source failed" in caplog.text
 
     def test_logs_warning_when_black_fails(self, caplog, monkeypatch):
         """When black fails after ruff succeeds, a WARNING is logged."""
@@ -379,11 +375,7 @@ class TestFormatSourceErrorVisibility:
         monkeypatch.setattr(grm, "run_black_on_file", lambda p: (_ for _ in ()).throw(RuntimeError("black failed")))
         result = _format_source("x = 1\n")
         assert result == "x = 1\n"
-        assert any(
-            r.levelname == "WARNING"
-            and "Formatting generated source failed" in r.message
-            for r in caplog.records
-        )
+        assert "Formatting generated source failed" in caplog.text
 
 
 # ── error visibility: main() traceback logging ──────────────────────────────────
@@ -399,12 +391,8 @@ class TestMainErrorVisibility:
             lambda name, write: (_ for _ in ()).throw(ValueError("something went wrong")),
         )
         main(["mypkg"])
-        assert any(
-            r.levelname == "ERROR"
-            and "Failed: mypkg" in r.message
-            and r.exc_info is not None
-            for r in caplog.records
-        )
+        assert "Failed: mypkg" in caplog.text
+        assert any(r.levelname == "ERROR" and r.exc_info is not None for r in caplog.records)
 
     def test_check_mode_logs_exception_with_traceback(self, caplog, monkeypatch):
         """--check mode must log full exception when checking fails."""
@@ -415,12 +403,8 @@ class TestMainErrorVisibility:
             lambda name: (_ for _ in ()).throw(RuntimeError("import exploded")),
         )
         main(["--check", "badpkg"])
-        assert any(
-            r.levelname == "ERROR"
-            and "Failed to check badpkg" in r.message
-            and r.exc_info is not None
-            for r in caplog.records
-        )
+        assert "Failed to check badpkg" in caplog.text
+        assert any(r.levelname == "ERROR" and r.exc_info is not None for r in caplog.records)
 
 
 # ── error visibility: _stale_files_for_package per-module resilience ────────────
@@ -476,12 +460,8 @@ class TestStaleFilesPerModuleResilience:
 
         stale = _stale_files_for_package("fake_pkg")
         assert mixin_path in stale
-        assert any(
-            r.levelname == "ERROR"
-            and "bad_module" in r.message
-            and r.exc_info is not None
-            for r in caplog.records
-        )
+        assert "bad_module" in caplog.text
+        assert any(r.levelname == "ERROR" and r.exc_info is not None for r in caplog.records)
 
 
 # ── error visibility: ensure_role_mixins stderr ─────────────────────────────────

@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 import time
@@ -97,6 +98,8 @@ The structure of fixtures in this conftest:
 
 @pytest.fixture(autouse=True, scope="function")
 def cleanup_after_test():
+    # Reset logging disable state
+    logging.disable(logging.NOTSET)
     # We need to pass the class diagram, since otherwise some names are not found anymore after clearing the symbol graph
     # for the first time, since World is not a symbol
     SymbolGraph.clear()
@@ -109,6 +112,8 @@ def cleanup_after_test():
     yield
     # runs AFTER each test (even if the test fails or errors)
     SymbolGraph.clear()
+    # Reset logging disable state again just in case
+    logging.disable(logging.NOTSET)
     class_diagram.clear()
 
 
