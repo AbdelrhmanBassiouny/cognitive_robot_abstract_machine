@@ -139,3 +139,6 @@ doc/doc_out
 /.ijwb/
 /.aswb/
 /.clwb/
+/.junie/memory/
+/uv.lock
+/AGENTS.md
