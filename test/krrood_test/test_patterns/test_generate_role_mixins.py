@@ -356,6 +356,8 @@ class TestStaleFilesEmptyMixinLogic:
 class TestFormatSourceErrorVisibility:
     def test_logs_warning_when_formatting_fails(self, caplog, monkeypatch):
         """When ruff/black fails, a WARNING with traceback is logged."""
+        import logging
+        caplog.set_level(logging.WARNING)
         import krrood.generate_role_mixins as grm
 
         monkeypatch.setattr(grm, "run_ruff_on_file", lambda p: (_ for _ in ()).throw(RuntimeError("ruff failed")))
@@ -369,6 +371,8 @@ class TestFormatSourceErrorVisibility:
 
     def test_logs_warning_when_black_fails(self, caplog, monkeypatch):
         """When black fails after ruff succeeds, a WARNING is logged."""
+        import logging
+        caplog.set_level(logging.WARNING)
         import krrood.generate_role_mixins as grm
 
         monkeypatch.setattr(grm, "run_ruff_on_file", lambda p: None)
@@ -388,6 +392,8 @@ class TestFormatSourceErrorVisibility:
 class TestMainErrorVisibility:
     def test_generate_mode_logs_exception_with_traceback(self, caplog, monkeypatch):
         """main() must log full exception (with traceback) when generation fails."""
+        import logging
+        caplog.set_level(logging.ERROR)
         monkeypatch.setattr(
             _GENERATE_FN,
             lambda name, write: (_ for _ in ()).throw(ValueError("something went wrong")),
@@ -402,6 +408,8 @@ class TestMainErrorVisibility:
 
     def test_check_mode_logs_exception_with_traceback(self, caplog, monkeypatch):
         """--check mode must log full exception when checking fails."""
+        import logging
+        caplog.set_level(logging.ERROR)
         monkeypatch.setattr(
             _STALE_FN,
             lambda name: (_ for _ in ()).throw(RuntimeError("import exploded")),
@@ -421,6 +429,8 @@ class TestMainErrorVisibility:
 class TestStaleFilesPerModuleResilience:
     def test_continues_after_module_error(self, monkeypatch, tmp_path, caplog):
         """One failing module must not prevent other modules from being checked."""
+        import logging
+        caplog.set_level(logging.ERROR)
         from unittest.mock import MagicMock
         import types
         import krrood.generate_role_mixins as grm
