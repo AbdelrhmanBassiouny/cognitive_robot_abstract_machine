@@ -69,6 +69,7 @@ class WorldMapping(HasSimulatorProperties, AlternativeMapping[World]):
             for connection in self.connections:
                 result.add_connection(connection)
 
+        with result.modify_world():
             for semantic_annotation in self.semantic_annotations:
                 result.add_semantic_annotation(semantic_annotation)
 
