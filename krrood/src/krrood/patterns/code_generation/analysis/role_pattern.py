@@ -15,7 +15,7 @@ from krrood.patterns.code_generation.analysis.base import (
 )
 from krrood.patterns.code_generation.specs.specs import (
     BaseClassSpec,
-    ClassTransformationSpec,
+    RoleClassTransformationSpec,
 )
 from krrood.patterns.role.meta_data import RoleType
 from krrood.patterns.role.role import HasRoles, Role
@@ -33,49 +33,64 @@ class RolePatternAnalyzer(CodeAnalyzer):
 
     def analyze(
         self, target: WrappedClass, context: AnalysisContext
-    ) -> ClassTransformationSpec:
-        """Produce a :class:`ClassTransformationSpec` for *target*.
+    ) -> RoleClassTransformationSpec:
+        """Produce a :class:`RoleClassTransformationSpec` for *target*.
 
         :param target: The wrapped class to analyze.
         :param context: Shared analysis context.
         """
         clazz = target.clazz
         role_type = RoleType.get_role_type(target)
-        is_role_taker = clazz in context.already_covered_bases
-        is_role = issubclass(clazz, Role) if not isinstance(target, type) else False
 
-        # More specific check for role taker detection
-        # A class is a role taker if it is an already_covered_bases member AND
-        # not excluded by pd_only_delegatees
+        # A class is a role taker if it appears in any delegatee role.
+        # The class_diagram.role_takers are the direct delegatees of Role subclasses.
+        # already_covered_bases includes transitive same-package ancestors.
+        is_direct_role_taker = clazz in context.class_diagram.role_takers
+        is_transitive_taker = clazz in context.already_covered_bases
+        is_role_taker = is_direct_role_taker or is_transitive_taker
+        is_role = role_type not in (RoleType.NOT_A_ROLE, RoleType.DELEGATOR)
+
         if clazz in context.pd_only_delegatees:
             is_role_taker = True
             is_role = False
-        elif is_role_taker:
-            is_role = is_role and clazz not in context.pd_only_delegatees
 
         bases_to_add: list[BaseClassSpec] = []
         needs_has_roles_init = False
 
-        if is_role_taker and clazz not in context.pd_only_delegatees:
-            # Only add HasRoles to root Role-pattern takers
-            if clazz in context.class_diagram.role_takers:
-                if not self._already_has_has_roles(target):
-                    bases_to_add.append(BaseClassSpec(
-                        name=HasRoles.__name__,
-                        module="krrood.patterns.role",
-                    ))
-                    needs_has_roles_init = True
+        # Only add HasRoles to direct role takers that don't already have it
+        # and don't inherit from another role taker.
+        if (
+            is_direct_role_taker
+            and clazz not in context.pd_only_delegatees
+            and not self._already_has_has_roles(target)
+            and not self._inherits_from_role_taker(target, context)
+        ):
+            bases_to_add.append(BaseClassSpec(
+                name=HasRoles.__name__,
+                module="krrood.patterns.role",
+            ))
+            needs_has_roles_init = True
 
-        return ClassTransformationSpec(
+        return RoleClassTransformationSpec(
             class_name=clazz.__name__,
             qualified_name=f"{clazz.__module__}.{clazz.__qualname__}",
-            role_type=role_type,
             bases_to_add=bases_to_add,
             delegation=None,  # filled in by planner combining with DelegationAnalyzer
+            role_type=role_type,
             is_role_taker=is_role_taker,
             is_role=is_role,
             needs_has_roles_init=needs_has_roles_init,
         )
+
+    @staticmethod
+    def _inherits_from_role_taker(
+        target: WrappedClass, context: AnalysisContext
+    ) -> bool:
+        """Check whether *target* inherits from a class that is already a role taker."""
+        for base in target.clazz.__bases__:
+            if base in context.class_diagram.role_takers:
+                return True
+        return False
 
     @staticmethod
     def _already_has_has_roles(target: WrappedClass) -> bool:

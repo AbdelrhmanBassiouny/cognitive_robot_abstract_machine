@@ -8,7 +8,9 @@ from krrood.class_diagrams import ClassDiagram
 from krrood.class_diagrams.class_diagram import WrappedSpecializedGeneric
 from krrood.patterns.role import Role
 from krrood.patterns.role.exceptions import MissingRoleMixinsError
-from krrood.patterns.role.role_transformer import RoleTransformer
+from krrood.patterns.role.refactored_role_transformer import (
+    RefactoredRoleTransformer as RoleTransformer,
+)
 
 
 def _modules_with_roles(class_diagram: ClassDiagram) -> list[ModuleType]:

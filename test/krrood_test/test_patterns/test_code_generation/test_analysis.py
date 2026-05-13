@@ -30,7 +30,7 @@ from krrood.patterns.code_generation.specs.specs import (
     DelegationSpec,
     MemberKind,
     MemberSpec,
-    ClassTransformationSpec,
+    RoleClassTransformationSpec,
     ImportSpec,
 )
 
@@ -217,7 +217,7 @@ class TestRolePatternAnalyzer:
             if wc.clazz in class_diagram.role_takers
         )
         spec = analyzer.analyze(taker, analysis_context)
-        assert isinstance(spec, ClassTransformationSpec)
+        assert isinstance(spec, RoleClassTransformationSpec)
         assert spec.class_name == taker.clazz.__name__
 
     def test_role_taker_is_detected(self, class_diagram, analysis_context):

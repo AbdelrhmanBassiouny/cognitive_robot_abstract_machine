@@ -6,6 +6,9 @@ from krrood.patterns.code_generation.actions.base import (
 from krrood.patterns.code_generation.actions.generate import (
     CreateClass,
     CreateModule,
+    DelegateField,
+    DelegateMethod,
+    DelegateProperty,
     WriteModule,
 )
 from krrood.patterns.code_generation.actions.plan import (

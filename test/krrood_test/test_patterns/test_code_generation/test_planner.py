@@ -28,12 +28,12 @@ from krrood.patterns.code_generation.planners.role_planner import (
 )
 from krrood.patterns.code_generation.specs import (
     BaseClassSpec,
-    ClassTransformationSpec,
     DelegationSpec,
     ImportSpec,
     MemberKind,
     MemberSpec,
     ModuleTransformationSpec,
+    RoleClassTransformationSpec,
 )
 
 
@@ -116,10 +116,10 @@ class TestRoleTransformationPlanner:
         assert plan.description == "Transform module test_mod"
 
     def test_class_without_delegation(self, planner, planning_context):
-        """A role-taker class with no delegation members still gets a plan."""
+        """A role-taker class with no bases or delegation gets no sub-plans."""
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Simple",
                     qualified_name="test_mod.Simple",
                     role_type="DELEGATOR",
@@ -128,12 +128,13 @@ class TestRoleTransformationPlanner:
             ]
         )
         plan = planner.plan(spec, planning_context)
-        assert len(plan.actions) == 1  # one class transform plan
+        # No sub-planner precondition matches (no bases, no delegation)
+        assert len(plan.actions) == 0
 
     def test_class_with_delegation_creates_delegator_for(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -170,7 +171,7 @@ class TestRoleTransformationPlanner:
     def test_class_with_has_roles_base(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -203,7 +204,7 @@ class TestRoleTransformationPlanner:
         """Non-DELEGATOR role type also generates a RoleFor mixin."""
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="PRIMARY",
@@ -256,7 +257,7 @@ class TestRoleTransformationPlanner:
     def test_field_delegation_creates_getter_and_setter(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -289,7 +290,7 @@ class TestRoleTransformationPlanner:
     def test_method_delegation_creates_delegating_call(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -320,7 +321,7 @@ class TestRoleTransformationPlanner:
     def test_property_delegation_creates_getter_only(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -351,10 +352,13 @@ class TestRoleTransformationPlanner:
         assert "full_name.setter" not in code
 
     def test_defining_class_separates_members(self, planner, planning_context, executor):
-        """Members with a defining_class are grouped separately from taker-own members."""
+        """Members with a defining_class get their own base DelegatorFor class."""
+        # Create a same-module base so it gets a local DelegatorFor
+        same_module_base = type("Base", (), {})
+        same_module_base.__module__ = "test_mod"
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Professor",
                     qualified_name="test_mod.Professor",
                     role_type="DELEGATOR",
@@ -372,7 +376,7 @@ class TestRoleTransformationPlanner:
                                 name="inherited_method",
                                 kind=MemberKind.METHOD,
                                 return_type="int",
-                                defining_class=type("Base", (), {}),
+                                defining_class=same_module_base,
                             ),
                         ],
                     ),
@@ -386,15 +390,57 @@ class TestRoleTransformationPlanner:
         )
         assert result.success
         code = result.module.code
-        # Own member should be in DelegatorFor body
-        assert "def own_field" in code
-        # Inherited member should NOT be in the DelegatorFor body (goes to base mixin)
-        assert "inherited_method" not in code
+        # Both DelegatorFor classes should be created (same-module base)
+        assert "class DelegatorForProfessor" in code
+        assert "class DelegatorForBase" in code
+        # Base mixin gets inherited members
+        assert "inherited_method" in code
+        # Taker's own DelegatorFor gets own members
+        assert "own_field" in code
+
+    def test_cross_module_definer_generates_import(self, planner, planning_context, executor):
+        """A defining_class from another module generates an import, not a local class."""
+        cross_module_base = type("OtherBase", (), {})
+        cross_module_base.__module__ = "some.other.module"
+        spec = _make_spec(
+            classes=[
+                RoleClassTransformationSpec(
+                    class_name="Professor",
+                    qualified_name="test_mod.Professor",
+                    role_type="DELEGATOR",
+                    is_role_taker=True,
+                    delegation=DelegationSpec(
+                        delegatee_attribute="delegatee",
+                        members=[
+                            MemberSpec(
+                                name="inherited_method",
+                                kind=MemberKind.METHOD,
+                                return_type="int",
+                                defining_class=cross_module_base,
+                            ),
+                        ],
+                    ),
+                )
+            ]
+        )
+        plan = planner.plan(spec, planning_context)
+        result = executor.execute(
+            plan,
+            libcst.parse_module("class Professor:\n    name: str\n"),
+        )
+        assert result.success
+        code = result.module.code
+        # Should import the cross-module DelegatorFor instead of creating it
+        assert "import DelegatorForOtherBase" in code
+        # Should NOT create a local DelegatorForOtherBase
+        assert "class DelegatorForOtherBase" not in code
+        # But the local DelegatorFor inherits from it
+        assert "DelegatorForOtherBase" in code
 
     def test_delegatee_property_is_present(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -419,7 +465,7 @@ class TestRoleTransformationPlanner:
     def test_plan_is_executable_multiple_classes(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -436,7 +482,7 @@ class TestRoleTransformationPlanner:
                         ],
                     ),
                 ),
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Company",
                     qualified_name="test_mod.Company",
                     role_type="DELEGATOR",
@@ -468,7 +514,7 @@ class TestRoleTransformationPlanner:
     def test_needs_has_roles_init_creates_ensure_call(self, planner, planning_context, executor):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -496,7 +542,7 @@ class Person:
     def test_plan_actions_are_correct_types(self, planner, planning_context):
         spec = _make_spec(
             classes=[
-                ClassTransformationSpec(
+                RoleClassTransformationSpec(
                     class_name="Person",
                     qualified_name="test_mod.Person",
                     role_type="DELEGATOR",
@@ -517,14 +563,15 @@ class Person:
             imports=[ImportSpec(module="typing", names=frozenset({"List"}))],
         )
         plan = planner.plan(spec, planning_context)
-        # Two top-level actions: class transform + import
-        assert len(plan.actions) == 2
+        # Sub-planners contributed directly: HasRoles, DelegatorFor, + import
+        assert len(plan.actions) == 3
 
-        # First is a nested ActionPlan for the class
-        class_plan = plan.actions[0]
-        assert isinstance(class_plan, ActionPlan)
-        # Second is an AddImport
-        import_action = plan.actions[1]
-        assert isinstance(import_action, AddImport)
-        assert import_action.module_name == "typing"
-        assert "List" in import_action.names
+        # Verify the AddImport is present
+        imports = [a for a in plan.actions if isinstance(a, AddImport)]
+        assert len(imports) == 1
+        assert imports[0].module_name == "typing"
+        assert "List" in imports[0].names
+
+        # Verify sub-plans exist
+        sub_plans = [a for a in plan.actions if isinstance(a, ActionPlan)]
+        assert len(sub_plans) == 2

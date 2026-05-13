@@ -12,8 +12,12 @@ from pathlib import Path
 
 import libcst
 
-from krrood.patterns.code_generation.actions.base import GenerationAction
-from krrood.patterns.code_generation.specs.specs import BaseClassSpec
+from krrood.patterns.code_generation.actions.base import (
+    GenerationAction,
+    TransformationAction,
+)
+from krrood.patterns.code_generation.libcst_node_factory import LibCSTNodeFactory
+from krrood.patterns.code_generation.specs.specs import BaseClassSpec, MemberSpec
 
 
 # ── helpers ───────────────────────────────────────────────────────────
@@ -146,3 +150,153 @@ class WriteModule(GenerationAction):
     @property
     def description(self) -> str:
         return f"Write module to {self.file_path}"
+
+
+# ── delegation actions (compose AddProperty / AddMethod) ──────────────
+
+
+def _parse_type_annotation(type_str: str | None) -> libcst.BaseExpression | None:
+    """Parse a type string into a libcst expression, or return None."""
+    if not type_str:
+        return None
+    try:
+        return libcst.parse_expression(type_str)
+    except Exception:
+        return libcst.Name(type_str)
+
+
+def _build_delegation_method_node(
+    member: MemberSpec, delegatee_attr: str
+) -> libcst.FunctionDef:
+    """Build a method node that delegates to ``self.<delegatee_attr>.<name>()``."""
+    param_names = [p.name for p in member.parameters if p.name not in ("self", "cls")]
+    call_args = ", ".join(param_names)
+    delegatee_path = f"self.{delegatee_attr}.{member.name}"
+    body = libcst.IndentedBlock(
+        [libcst.parse_statement(f"return {delegatee_path}({call_args})")]
+    )
+    params = [libcst.Param(name=libcst.Name("self"))]
+    for p in member.parameters:
+        if p.name in ("self", "cls"):
+            continue
+        ann = (
+            libcst.Annotation(annotation=_parse_type_annotation(p.type_annotation))
+            if p.type_annotation
+            else None
+        )
+        default = None
+        if p.has_default:
+            default = libcst.Name("None")
+        params.append(
+            libcst.Param(name=libcst.Name(p.name), annotation=ann, default=default)
+        )
+    returns = None
+    if member.return_type:
+        returns = libcst.Annotation(
+            annotation=_parse_type_annotation(member.return_type)
+        )
+    return libcst.FunctionDef(
+        name=libcst.Name(member.name),
+        params=libcst.Parameters(params=tuple(params)),
+        body=body,
+        returns=returns,
+    )
+
+
+def _build_field_getter_node(
+    member: MemberSpec, delegatee_attr: str
+) -> libcst.FunctionDef:
+    """Build a property getter that returns ``self.<delegatee_attr>.<name>``."""
+    delegatee_path = f"self.{delegatee_attr}.{member.name}"
+    return LibCSTNodeFactory.make_property_getter_node(
+        member.name, member.return_type, delegatee_path
+    )
+
+
+def _build_field_setter_node(
+    member: MemberSpec, delegatee_attr: str
+) -> libcst.FunctionDef | None:
+    """Build a property setter node, or None for read-only properties."""
+    delegatee_path = f"self.{delegatee_attr}.{member.name}"
+    return LibCSTNodeFactory.make_property_setter_node(
+        member.name,
+        member.return_type,
+        f"{delegatee_path} = value",
+    )
+
+
+@dataclass
+class DelegateField(TransformationAction):
+    """Add getter + setter delegation for a dataclass field."""
+
+    member: MemberSpec
+    target_class: str
+    delegatee_attr: str = "delegatee"
+
+    def apply(self, module: libcst.Module) -> libcst.Module:
+        getter = _build_field_getter_node(self.member, self.delegatee_attr)
+        setter = _build_field_setter_node(self.member, self.delegatee_attr)
+        from krrood.patterns.code_generation.actions.transform import AddProperty
+
+        return AddProperty(self.target_class, getter, setter).apply(module)
+
+    def reverse(self, module: libcst.Module) -> libcst.Module:
+        getter = _build_field_getter_node(self.member, self.delegatee_attr)
+        setter = _build_field_setter_node(self.member, self.delegatee_attr)
+        from krrood.patterns.code_generation.actions.transform import AddProperty
+
+        return AddProperty(self.target_class, getter, setter).reverse(module)
+
+    @property
+    def description(self) -> str:
+        return f"Delegate field {self.member.name} to {self.target_class}"
+
+
+@dataclass
+class DelegateProperty(TransformationAction):
+    """Add getter-only delegation for a Python property."""
+
+    member: MemberSpec
+    target_class: str
+    delegatee_attr: str = "delegatee"
+
+    def apply(self, module: libcst.Module) -> libcst.Module:
+        getter = _build_field_getter_node(self.member, self.delegatee_attr)
+        from krrood.patterns.code_generation.actions.transform import AddProperty
+
+        return AddProperty(self.target_class, getter, None).apply(module)
+
+    def reverse(self, module: libcst.Module) -> libcst.Module:
+        getter = _build_field_getter_node(self.member, self.delegatee_attr)
+        from krrood.patterns.code_generation.actions.transform import AddProperty
+
+        return AddProperty(self.target_class, getter, None).reverse(module)
+
+    @property
+    def description(self) -> str:
+        return f"Delegate property {self.member.name} to {self.target_class}"
+
+
+@dataclass
+class DelegateMethod(TransformationAction):
+    """Add a delegating method that forwards to the delegatee."""
+
+    member: MemberSpec
+    target_class: str
+    delegatee_attr: str = "delegatee"
+
+    def apply(self, module: libcst.Module) -> libcst.Module:
+        node = _build_delegation_method_node(self.member, self.delegatee_attr)
+        from krrood.patterns.code_generation.actions.transform import AddMethod
+
+        return AddMethod(self.target_class, node).apply(module)
+
+    def reverse(self, module: libcst.Module) -> libcst.Module:
+        node = _build_delegation_method_node(self.member, self.delegatee_attr)
+        from krrood.patterns.code_generation.actions.transform import AddMethod
+
+        return AddMethod(self.target_class, node).reverse(module)
+
+    @property
+    def description(self) -> str:
+        return f"Delegate method {self.member.name} to {self.target_class}"

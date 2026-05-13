@@ -3,8 +3,10 @@ from krrood.patterns.code_generation.specs.specs import (
     ClassTransformationSpec,
     DelegationSpec,
     ImportSpec,
+    MemberDelegationSpec,
     MemberKind,
     MemberSpec,
     ModuleTransformationSpec,
     ParameterSpec,
+    RoleClassTransformationSpec,
 )

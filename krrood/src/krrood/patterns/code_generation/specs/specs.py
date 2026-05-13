@@ -118,34 +118,62 @@ class BaseClassSpec:
 
 @dataclass(frozen=True)
 class ClassTransformationSpec:
-    """Complete specification for transforming one class in a module.
+    """Generic specification for transforming one class in a module.
 
-    Produced by :class:`RolePatternAnalyzer` after classifying a wrapped
-    class and determining what bases, delegation, and factory wrappers it
-    needs.
+    Describes *what* a class needs: base classes, delegation members, and
+    factory methods.  Role-specific concerns live in the subclass
+    :class:`RoleClassTransformationSpec`.
 
     Attributes:
         class_name: The short name of the class.
         qualified_name: The fully-qualified dotted name.
-        role_type: Classification within the role/delegation hierarchy.
         bases_to_add: Base classes that should be injected into the class.
         delegation: Delegation members, or ``None`` if no delegation is needed.
         factory_methods: Factory methods that need wrapper generation.
+    """
+
+    class_name: str
+    qualified_name: str
+    bases_to_add: list[BaseClassSpec] = field(default_factory=list)
+    delegation: DelegationSpec | None = None
+    factory_methods: list[MemberSpec] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class RoleClassTransformationSpec(ClassTransformationSpec):
+    """Role-specific transformation spec for one class.
+
+    Extends :class:`ClassTransformationSpec` with fields that describe where
+    the class sits in the role/delegation hierarchy.
+
+    Attributes:
+        role_type: Classification within the role/delegation hierarchy.
         is_role_taker: ``True`` if this class is a role taker (or delegatee).
         is_role: ``True`` if this class is a :class:`Role` subclass.
         needs_has_roles_init: ``True`` if ``HasRoles.__init__`` must be
             called explicitly in the class's ``__init__``.
     """
 
-    class_name: str
-    qualified_name: str
-    role_type: "RoleType"
-    bases_to_add: list[BaseClassSpec] = field(default_factory=list)
-    delegation: DelegationSpec | None = None
-    factory_methods: list[MemberSpec] = field(default_factory=list)
+    role_type: "RoleType" = "NOT_A_ROLE"
     is_role_taker: bool = False
     is_role: bool = False
     needs_has_roles_init: bool = False
+
+
+@dataclass(frozen=True)
+class MemberDelegationSpec(MemberSpec):
+    """A :class:`MemberSpec` extended with delegation-specific semantics.
+
+    All fields are inherited from :class:`MemberSpec`.  The :class:`MemberKind`
+    already encodes the delegation strategy:
+
+    * :attr:`~MemberKind.FIELD` → getter + setter
+    * :attr:`~MemberKind.PROPERTY` → getter only
+    * :attr:`~MemberKind.METHOD` → full delegation method
+    * :attr:`~MemberKind.CLASS_METHOD` → delegation classmethod
+    * :attr:`~MemberKind.STATIC_METHOD` → delegation staticmethod
+    * :attr:`~MemberKind.FACTORY_METHOD` → factory wrapper (not delegated)
+    """
 
 
 @dataclass(frozen=True)

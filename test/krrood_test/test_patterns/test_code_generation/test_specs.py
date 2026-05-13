@@ -9,10 +9,12 @@ from krrood.patterns.code_generation.specs import (
     ClassTransformationSpec,
     DelegationSpec,
     ImportSpec,
+    MemberDelegationSpec,
     MemberKind,
     MemberSpec,
     ModuleTransformationSpec,
     ParameterSpec,
+    RoleClassTransformationSpec,
 )
 
 
@@ -180,12 +182,38 @@ class TestClassTransformationSpec:
         spec = ClassTransformationSpec(
             class_name="Professor",
             qualified_name="uni.Professor",
-            role_type="PRIMARY",
         )
         assert spec.class_name == "Professor"
-        assert spec.role_type == "PRIMARY"
         assert spec.bases_to_add == []
         assert spec.delegation is None
+
+    def test_with_delegation(self):
+        delegation = DelegationSpec(
+            delegatee_attribute="delegatee",
+            members=[MemberSpec(name="name", kind=MemberKind.FIELD, return_type="str")],
+        )
+        spec = ClassTransformationSpec(
+            class_name="Person",
+            qualified_name="uni.Person",
+            bases_to_add=[BaseClassSpec(name="HasRoles")],
+            delegation=delegation,
+        )
+        assert len(spec.bases_to_add) == 1
+        assert spec.delegation.delegatee_attribute == "delegatee"
+
+    def test_is_frozen(self):
+        spec = ClassTransformationSpec(class_name="X", qualified_name="p.X")
+        with pytest.raises(Exception):
+            spec.class_name = "Y"
+
+
+class TestRoleClassTransformationSpec:
+    def test_minimal_construction(self):
+        spec = RoleClassTransformationSpec(
+            class_name="Professor",
+            qualified_name="uni.Professor",
+        )
+        assert spec.role_type == "NOT_A_ROLE"
         assert spec.is_role_taker is False
         assert spec.is_role is False
 
@@ -194,7 +222,7 @@ class TestClassTransformationSpec:
             delegatee_attribute="delegatee",
             members=[MemberSpec(name="name", kind=MemberKind.FIELD, return_type="str")],
         )
-        spec = ClassTransformationSpec(
+        spec = RoleClassTransformationSpec(
             class_name="Person",
             qualified_name="uni.Person",
             role_type="DELEGATOR",
@@ -207,6 +235,30 @@ class TestClassTransformationSpec:
         assert spec.needs_has_roles_init is True
         assert len(spec.bases_to_add) == 1
         assert spec.delegation.delegatee_attribute == "delegatee"
+
+    def test_is_subclass_of_base(self):
+        spec = RoleClassTransformationSpec(class_name="X", qualified_name="p.X")
+        assert isinstance(spec, ClassTransformationSpec)
+
+
+class TestMemberDelegationSpec:
+    def test_is_subclass_of_member_spec(self):
+        spec = MemberDelegationSpec(name="foo", kind=MemberKind.FIELD, return_type="str")
+        assert isinstance(spec, MemberSpec)
+
+    def test_inherits_all_fields(self):
+        spec = MemberDelegationSpec(
+            name="bar",
+            kind=MemberKind.METHOD,
+            return_type="int",
+            defining_class=str,
+            decorators=["abstractmethod"],
+            is_abstract=True,
+        )
+        assert spec.name == "bar"
+        assert spec.kind == MemberKind.METHOD
+        assert spec.defining_class is str
+        assert spec.is_abstract is True
 
 
 class TestImportSpec:
@@ -254,10 +306,9 @@ class TestModuleTransformationSpec:
         import types
 
         mod = types.ModuleType("test_module")
-        cls_spec = ClassTransformationSpec(
+        cls_spec = RoleClassTransformationSpec(
             class_name="Person",
             qualified_name="test_module.Person",
-            role_type="DELEGATOR",
             is_role_taker=True,
         )
         imp_spec = ImportSpec(

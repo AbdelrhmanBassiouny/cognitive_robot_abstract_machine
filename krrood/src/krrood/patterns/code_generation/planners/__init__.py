@@ -5,3 +5,8 @@ from krrood.patterns.code_generation.planners.base import (
 from krrood.patterns.code_generation.planners.role_planner import (
     RoleTransformationPlanner,
 )
+from krrood.patterns.code_generation.planners.role_planners import (
+    DelegatorForPlanner,
+    HasRolesPlanner,
+    RoleForPlanner,
+)
