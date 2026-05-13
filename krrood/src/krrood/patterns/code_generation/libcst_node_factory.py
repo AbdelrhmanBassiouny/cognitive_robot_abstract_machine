@@ -307,8 +307,8 @@ class LibCSTNodeFactory:
     @classmethod
     def make_field_setter_node(
         cls, member: MemberSpec, delegatee_attr: str
-    ) -> libcst.FunctionDef | None:
-        """Build a property setter node, or ``None`` for read-only properties."""
+    ) -> libcst.FunctionDef:
+        """Build a property setter node."""
         delegatee_path = f"self.{delegatee_attr}.{member.name}"
         return cls.make_property_setter_node(
             member.name,

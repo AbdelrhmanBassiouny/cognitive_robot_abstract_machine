@@ -11,7 +11,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import libcst
+from typing_extensions import assert_never, Dict
 
+from krrood.class_diagrams.utils import mixin_module_dotted_name
 from krrood.patterns.code_generation.actions import (
     Action,
     ActionPlan,
@@ -50,7 +52,7 @@ def _make_role_for_name(class_name: str) -> str:
 
 def _delegation_action_for(
     member: MemberSpec, target_class: str, delegatee_attr: str
-) -> Action | None:
+) -> Action:
     """Return a :class:`DelegateField`, :class:`DelegateProperty`, or
     :class:`DelegateMethod` for *member*, dispatching by subclass."""
     if isinstance(member, FieldSpec):
@@ -65,7 +67,8 @@ def _delegation_action_for(
         return DelegateMethod(
             member=member, target_class=target_class, delegatee_attr=delegatee_attr
         )
-    return None
+    else:
+        assert_never(type(member))  # exhaustiveness check for MemberSpec subclasses
 
 
 # ── HasRolesPlanner ──────────────────────────────────────────────────
@@ -98,6 +101,31 @@ class HasRolesPlanner(ActionPlanner):
 # ── DelegatorForPlanner ──────────────────────────────────────────────
 
 
+@dataclass(kw_only=True)
+class ClassDelegationPlan(ActionPlan):
+    """A plan for a class delegation."""
+
+    definer_name: str
+    definer_members: list[MemberSpec] = field(default_factory=list)
+    bases: list[BaseClassSpec] = field(default_factory=list)
+    delegatee_attr: str = "delegatee"
+    base_name: str = field(init=False)
+
+    def __post_init__(self):
+        self.base_name = _make_delegator_name(self.definer_name)
+        self.actions.append(
+            CreateDerivedClass(
+                class_name=self.base_name,
+                delegatee_type_name=self.definer_name,
+                delegatee_attr=self.delegatee_attr,
+                bases=self.bases,
+            )
+        )
+        for member in self.definer_members:
+            action = _delegation_action_for(member, self.base_name, self.delegatee_attr)
+            self.actions.append(action)
+
+
 @dataclass
 class DelegatorForPlanner(ActionPlanner):
     """Plans ``DelegatorFor<Taker>`` mixin creation with base segregation."""
@@ -118,12 +146,14 @@ class DelegatorForPlanner(ActionPlanner):
         own_members: list[MemberSpec] = []
         by_definer: dict[str, list[MemberSpec]] = {}
         cross_module_definers: dict[str, str] = {}  # definer_name → module
+        base_mixin_names: Dict[str, str] = {}
         for member in delegation.members:
             if member.defining_class is None:
                 own_members.append(member)
             else:
                 definer_name = member.defining_class.__name__
                 definer_module = member.defining_class.__module__
+                base_mixin_names[definer_name] = _make_delegator_name(definer_name)
                 if definer_module != current_module:
                     # Cross-module: import, don't create locally
                     cross_module_definers[definer_name] = definer_module
@@ -131,53 +161,40 @@ class DelegatorForPlanner(ActionPlanner):
                     by_definer.setdefault(definer_name, []).append(member)
 
         # Phase A — local base mixin classes
-        base_mixin_names: list[str] = []
-        for definer_name, definer_members in by_definer.items():
-            base_name = _make_delegator_name(definer_name)
-            base_mixin_names.append(base_name)
-            actions.append(
-                CreateDerivedClass(
-                    class_name=base_name,
-                    delegatee_type_name=definer_name,
-                    delegatee_attr=self.delegatee_attr,
+        actions.extend(
+            [
+                ClassDelegationPlan(
+                    definer_name=definer_name, definer_members=definer_members
                 )
-            )
-            for m in definer_members:
-                a = _delegation_action_for(m, base_name, self.delegatee_attr)
-                if a:
-                    actions.append(a)
+                for definer_name, definer_members in by_definer.items()
+            ]
+        )
 
         # Phase A2 — cross-module imports for defining ancestors
-        for definer_name, definer_module in cross_module_definers.items():
-            cross_name = _make_delegator_name(definer_name)
-            base_mixin_names.append(cross_name)
-            from krrood.class_diagrams.utils import mixin_module_dotted_name
-            mixin_mod = mixin_module_dotted_name(
-                definer_module, "role_mixins", "_role_mixins"
-            )
-            actions.append(AddImport(mixin_mod, [cross_name]))
+        actions.extend(
+            [
+                AddImport(
+                    mixin_module_dotted_name(
+                        definer_module, "role_mixins", "_role_mixins"
+                    ),
+                    [base_mixin_names[definer_name]],
+                )
+                for definer_name, definer_module in cross_module_definers.items()
+            ]
+        )
 
         # Phase B — taker's own DelegatorFor, inheriting from base mixins
-        delegator_name = _make_delegator_name(spec.class_name)
-        delegator_bases = [
-            BaseClassSpec(name=bn) for bn in base_mixin_names
-        ]
-        actions.append(
-            CreateDerivedClass(
-                class_name=delegator_name,
-                delegatee_type_name=spec.class_name,
-                delegatee_attr=self.delegatee_attr,
-                bases=delegator_bases,
-            )
+        delegator_bases = [BaseClassSpec(name=bn) for bn in base_mixin_names]
+        delegation_plan = ClassDelegationPlan(
+            definer_name=spec.class_name,
+            definer_members=own_members,
+            bases=delegator_bases,
         )
-        for m in own_members:
-            a = _delegation_action_for(m, delegator_name, self.delegatee_attr)
-            if a:
-                actions.append(a)
+        actions.append(delegation_plan)
 
         return ActionPlan(
             actions=actions,
-            description=f"Create {delegator_name} mixin",
+            description=f"Create {delegation_plan.base_name} mixin",
         )
 
 

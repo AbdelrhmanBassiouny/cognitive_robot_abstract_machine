@@ -12,6 +12,7 @@ comparable, and safe to cache or serialise.
 from __future__ import annotations
 
 import enum
+from abc import ABC
 from dataclasses import dataclass, field
 from types import ModuleType
 
@@ -19,7 +20,12 @@ from krrood.patterns.role.meta_data import RoleType
 
 
 @dataclass(frozen=True)
-class ParameterSpec:
+class AbstractSpec(ABC):
+    """Describes an abstract class."""
+
+
+@dataclass(frozen=True)
+class ParameterSpec(AbstractSpec):
     """Describes one parameter of a method.
 
     Attributes:
@@ -43,7 +49,7 @@ class ParameterSpec:
 
 
 @dataclass(frozen=True)
-class MemberSpec:
+class MemberSpec(AbstractSpec):
     """Base for all member specifications.
 
     Attributes:
@@ -96,7 +102,7 @@ class FactoryMethodSpec(ClassMethodSpec):
 
 
 @dataclass(frozen=True)
-class DelegationSpec:
+class DelegationSpec(AbstractSpec):
     """Describes what members a class should delegate via a named attribute.
 
     Produced by :class:`DelegationAnalyzer` after walking the MRO of a
@@ -116,7 +122,7 @@ class DelegationSpec:
 
 
 @dataclass(frozen=True)
-class BaseClassSpec:
+class BaseClassSpec(AbstractSpec):
     """Describes a base class that should be added to or referenced by a class.
 
     Attributes:
@@ -130,7 +136,7 @@ class BaseClassSpec:
 
 
 @dataclass(frozen=True)
-class ClassTransformationSpec:
+class ClassTransformationSpec(AbstractSpec):
     """Generic specification for transforming one class in a module.
 
     Describes *what* a class needs: base classes, delegation members, and
@@ -174,7 +180,7 @@ class RoleClassTransformationSpec(ClassTransformationSpec):
 
 
 @dataclass(frozen=True)
-class ImportSpec:
+class ImportSpec(AbstractSpec):
     """Describes an import that must appear in a generated or transformed module.
 
     Attributes:
@@ -190,7 +196,7 @@ class ImportSpec:
 
 
 @dataclass(frozen=True)
-class ModuleTransformationSpec:
+class ModuleTransformationSpec(AbstractSpec):
     """Complete specification for transforming one module.
 
     This is the top-level spec produced by running all analyzers over a

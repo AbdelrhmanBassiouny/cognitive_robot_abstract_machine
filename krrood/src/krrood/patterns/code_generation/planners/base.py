@@ -16,6 +16,7 @@ from typing import Any
 from krrood.patterns.code_generation.actions import ActionPlan
 from krrood.patterns.code_generation.import_name_resolver import ImportNameResolver
 from krrood.patterns.code_generation.libcst_node_factory import LibCSTNodeFactory
+from krrood.patterns.code_generation.specs.specs import AbstractSpec
 from krrood.patterns.code_generation.type_normaliser import TypeNormaliser
 
 
@@ -47,6 +48,14 @@ class ActionPlanner(ABC):
     Each subclass implements :meth:`plan`, which takes a spec dataclass and a
     :class:`PlanningContext`, and returns an :class:`ActionPlan`.
     """
+
+    def precondition(self, spec: AbstractSpec) -> bool:
+        """Check if this planner should run for *spec*.
+
+        :param spec: A spec dataclass from :mod:`krrood.patterns.code_generation.specs`.
+        :return: True if this planner should run for *spec*, False otherwise.
+        """
+        return True  # Default to always run; override in subclasses as needed.
 
     @abstractmethod
     def plan(self, spec: Any, context: PlanningContext) -> ActionPlan:

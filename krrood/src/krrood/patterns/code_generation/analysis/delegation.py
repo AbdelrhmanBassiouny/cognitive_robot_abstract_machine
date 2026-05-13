@@ -72,14 +72,11 @@ class MroWalker:
         return self.is_excluded_defining_class(klass)
 
     def _is_same_package(self, klass: type) -> bool:
-        return (
-            klass.__module__ == self.module_name
-            or same_package(klass.__module__, self.module_name)
+        return klass.__module__ == self.module_name or same_package(
+            klass.__module__, self.module_name
         )
 
-    def find_defining_class(
-        self, is_member: Callable[[type], bool]
-    ) -> type | None:
+    def find_defining_class(self, is_member: Callable[[type], bool]) -> type | None:
         for klass in self.clazz.__mro__[1:]:
             if self._should_skip(klass):
                 return None
@@ -93,9 +90,7 @@ class MroWalker:
                 return None
         return None
 
-    def is_member_already_covered(
-        self, is_member: Callable[[type], bool]
-    ) -> bool:
+    def is_member_already_covered(self, is_member: Callable[[type], bool]) -> bool:
         for klass in self.clazz.__mro__[1:]:
             if self._should_skip(klass):
                 return False
@@ -160,9 +155,7 @@ class DelegationAnalyzer(CodeAnalyzer):
     is_excluded_defining_class: Callable[[type], bool] | None = None
     """Optional predicate to exclude entire defining classes."""
 
-    def _mro_walker(
-        self, clazz: type, context: AnalysisContext
-    ) -> MroWalker:
+    def _mro_walker(self, clazz: type, context: AnalysisContext) -> MroWalker:
         return MroWalker(
             clazz=clazz,
             already_covered_bases=context.already_covered_bases,
@@ -192,9 +185,7 @@ class DelegationAnalyzer(CodeAnalyzer):
         """
         members: list[MemberSpec] = []
         taker_fields = already_delegated_field_names or []
-        skip_bases = context.already_covered_bases | (
-            additional_skip_bases or set()
-        )
+        skip_bases = context.already_covered_bases | (additional_skip_bases or set())
 
         self._analyze_fields(target, taker_fields, context, members)
         self._analyze_properties(target, context, members)
@@ -221,23 +212,21 @@ class DelegationAnalyzer(CodeAnalyzer):
                     field_, wrapped_class, context, members
                 )
                 continue
-            if not (field_.field.kw_only or field_.field.init):
-                continue
             walker = self._mro_walker(wrapped_class.clazz, context)
             defining_base = walker.find_defining_class(
                 lambda klass: _is_original_field_definer(klass, field_.name)
             )
             if defining_base is not None:
-                self._analyze_inherited_field(
-                    field_, wrapped_class.clazz, defining_base, context, members
-                )
+                self._analyze_inherited_field(field_, defining_base, context, members)
             elif _is_original_field_definer(wrapped_class.clazz, field_.name):
                 type_name = self._normalise(field_.field.type, context)
-                members.append(FieldSpec(
-                    name=field_.name,
-                    return_type=type_name,
-                    defining_class=None,
-                ))
+                members.append(
+                    FieldSpec(
+                        name=field_.name,
+                        return_type=type_name,
+                        defining_class=None,
+                    )
+                )
             else:
                 self._maybe_narrowing_for_covered_field(
                     field_, wrapped_class, context, members
@@ -246,18 +235,19 @@ class DelegationAnalyzer(CodeAnalyzer):
     def _analyze_inherited_field(
         self,
         field_: WrappedField,
-        concrete_class: type,
         defining_base: type,
         context: AnalysisContext,
         members: list[MemberSpec],
     ) -> None:
         base_type = field_.type_at_definer(defining_base)
         type_name = self._normalise(base_type, context)
-        members.append(FieldSpec(
-            name=field_.name,
-            return_type=type_name,
-            defining_class=defining_base,
-        ))
+        members.append(
+            FieldSpec(
+                name=field_.name,
+                return_type=type_name,
+                defining_class=defining_base,
+            )
+        )
 
     # ── property analysis ─────────────────────────────────────────
 
@@ -285,11 +275,13 @@ class DelegationAnalyzer(CodeAnalyzer):
             return_type = get_property_return_type(prop_value)
             type_name = self._normalise(return_type, context) if return_type else None
 
-            members.append(PropertySpec(
-                name=prop_name,
-                return_type=type_name,
-                defining_class=defining_base,
-            ))
+            members.append(
+                PropertySpec(
+                    name=prop_name,
+                    return_type=type_name,
+                    defining_class=defining_base,
+                )
+            )
 
     # ── method analysis ───────────────────────────────────────────
 
@@ -340,20 +332,24 @@ class DelegationAnalyzer(CodeAnalyzer):
                     ann = None
                     if param.annotation is not inspect.Parameter.empty:
                         ann = self._normalise(param.annotation, context)
-                    params.append(ParameterSpec(
-                        name=param_name,
-                        type_annotation=ann,
-                        has_default=param.default is not inspect.Parameter.empty,
-                    ))
+                    params.append(
+                        ParameterSpec(
+                            name=param_name,
+                            type_annotation=ann,
+                            has_default=param.default is not inspect.Parameter.empty,
+                        )
+                    )
                 if sig.return_annotation is not inspect.Signature.empty:
                     return_type = self._normalise(sig.return_annotation, context)
 
-            members.append(MethodSpec(
-                name=method_name,
-                return_type=return_type,
-                parameters=params,
-                defining_class=defining_base,
-            ))
+            members.append(
+                MethodSpec(
+                    name=method_name,
+                    return_type=return_type,
+                    parameters=params,
+                    defining_class=defining_base,
+                )
+            )
 
     # ── narrowing helpers (simplified) ────────────────────────────
 
@@ -365,12 +361,10 @@ class DelegationAnalyzer(CodeAnalyzer):
         members: list[MemberSpec],
     ) -> None:
         """Detect TypeVar narrowing for fields already covered by a base mixin."""
-        if not (field_.field.kw_only or field_.field.init):
-            return
         # Use original field definer logic to detect genuine narrowing
-        defining_base = MroWalker(
-            wrapped_class.clazz, set(), ""
-        ).find_first(lambda klass: _is_original_field_definer(klass, field_.name))
+        defining_base = MroWalker(wrapped_class.clazz, set(), "").find_first(
+            lambda klass: _is_original_field_definer(klass, field_.name)
+        )
         if defining_base is None:
             return
 
@@ -382,11 +376,13 @@ class DelegationAnalyzer(CodeAnalyzer):
             result = substitution.apply(base_type)
             if result.resolved:
                 type_name = self._normalise(result.resolved_type, context)
-                members.append(FieldSpec(
-                    name=field_.name,
-                    return_type=type_name,
-                    defining_class=None,  # re-declared directly on the taker
-                ))
+                members.append(
+                    FieldSpec(
+                        name=field_.name,
+                        return_type=type_name,
+                        defining_class=None,  # re-declared directly on the taker
+                    )
+                )
 
 
 # ── factory method iteration (preserved for planner use) ─────────────
