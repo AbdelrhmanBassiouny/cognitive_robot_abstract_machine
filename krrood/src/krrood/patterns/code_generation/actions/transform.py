@@ -19,6 +19,7 @@ from krrood.patterns.code_generation.exceptions import (
     ClassNotFoundError,
     InvalidCSTNodeError,
 )
+from krrood.patterns.code_generation.libcst_node_factory import LibCSTNodeFactory
 from krrood.patterns.code_generation.specs.specs import BaseClassSpec
 
 
@@ -70,11 +71,6 @@ def _append_to_module_body(
     return list(body) + [stmt]
 
 
-def _make_arg(name: str) -> libcst.Arg:
-    """Return a :class:`libcst.Arg` wrapping a plain :class:`libcst.Name`."""
-    return libcst.Arg(value=libcst.Name(name))
-
-
 def _is_named_arg(arg: libcst.Arg, name: str) -> bool:
     """Check whether *arg* is a plain ``Name`` argument matching *name*."""
     if isinstance(arg.value, libcst.Name):
@@ -103,7 +99,7 @@ class AddBaseClass(TransformationAction):
         if found is None:
             raise ClassNotFoundError(target_class=self.target_class)
         idx, class_def = found
-        new_bases = list(class_def.bases) + [_make_arg(self.base_spec.name)]
+        new_bases = list(class_def.bases) + [LibCSTNodeFactory.make_name_arg(self.base_spec.name)]
         new_class = class_def.with_changes(bases=new_bases)
         return _replace_in_module(module, idx, new_class)
 
@@ -156,7 +152,7 @@ class RemoveBaseClass(TransformationAction):
         if found is None:
             return module
         idx, class_def = found
-        new_bases = list(class_def.bases) + [_make_arg(self.base_name)]
+        new_bases = list(class_def.bases) + [LibCSTNodeFactory.make_name_arg(self.base_name)]
         new_class = class_def.with_changes(bases=new_bases)
         return _replace_in_module(module, idx, new_class)
 
@@ -262,6 +258,56 @@ class AddProperty(TransformationAction):
     @property
     def description(self) -> str:
         return f"Add property {self.getter.name.value} to {self.target_class}"
+
+
+@dataclass
+class AddField(TransformationAction):
+    """Add getter and setter properties for a field (setter is required).
+
+    Reverse operation removes both getter and setter by name.
+    """
+
+    target_class: str
+    """The name of the class to modify."""
+
+    getter: libcst.FunctionDef
+    """The field getter node."""
+
+    setter: libcst.FunctionDef
+    """The field setter node."""
+
+    def apply(self, module: libcst.Module) -> libcst.Module:
+        found = _find_class(module, self.target_class)
+        if found is None:
+            raise ClassNotFoundError(target_class=self.target_class)
+        idx, class_def = found
+        new_nodes = list(class_def.body.body) + [self.getter, self.setter]
+        new_body = class_def.body.with_changes(body=new_nodes)
+        new_class = class_def.with_changes(body=new_body)
+        return _replace_in_module(module, idx, new_class)
+
+    def reverse(self, module: libcst.Module) -> libcst.Module:
+        found = _find_class(module, self.target_class)
+        if found is None:
+            return module
+        idx, class_def = found
+        prop_name = self.getter.name.value
+        setter_name = self.setter.name.value
+        new_body_nodes = [
+            stmt
+            for stmt in class_def.body.body
+            if not (
+                isinstance(stmt, libcst.FunctionDef)
+                and stmt.name.value in (prop_name, setter_name)
+            )
+        ]
+        new_body = class_def.body.with_changes(body=new_body_nodes)
+        new_class = class_def.with_changes(body=new_body)
+        return _replace_in_module(module, idx, new_class)
+
+    @property
+    def description(self) -> str:
+        return f"Add field {self.getter.name.value} to {self.target_class}"
 
 
 @dataclass

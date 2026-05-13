@@ -4,13 +4,16 @@ Factory for constructing libcst nodes for code generation.
 
 from __future__ import annotations
 
-import dataclasses
-from typing import Callable
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable
 
 import libcst
 
+if TYPE_CHECKING:
+    from krrood.patterns.code_generation.specs.specs import MemberSpec
 
-@dataclasses.dataclass
+
+@dataclass
 class LibCSTNodeFactory:
     """
     Builds libcst nodes for code generation pipelines.
@@ -229,6 +232,122 @@ class LibCSTNodeFactory:
         :return: A libcst Arg node.
         """
         return libcst.Arg(value=libcst.parse_expression(value))
+
+    @classmethod
+    def make_name_arg(cls, name: str) -> libcst.Arg:
+        """Build an :class:`libcst.Arg` wrapping a simple :class:`libcst.Name`.
+
+        Unlike :meth:`make_argument`, this does not parse an expression —
+        it wraps the name directly.
+        """
+        return libcst.Arg(value=libcst.Name(name))
+
+    @classmethod
+    def parse_type_annotation(
+        cls, type_str: str | None
+    ) -> libcst.BaseExpression | None:
+        """Parse a type string into a libcst expression, or return ``None``."""
+        if not type_str:
+            return None
+        try:
+            return libcst.parse_expression(type_str)
+        except Exception:
+            return libcst.Name(type_str)
+
+    @classmethod
+    def make_delegation_method_node(
+        cls, member: MemberSpec, delegatee_attr: str
+    ) -> libcst.FunctionDef:
+        """Build a method node that delegates to ``self.<delegatee_attr>.<name>()``."""
+        param_names = [
+            p.name for p in member.parameters if p.name not in ("self", "cls")
+        ]
+        call_args = ", ".join(param_names)
+        delegatee_path = f"self.{delegatee_attr}.{member.name}"
+        body = libcst.IndentedBlock(
+            [libcst.parse_statement(f"return {delegatee_path}({call_args})")]
+        )
+        params = [libcst.Param(name=libcst.Name("self"))]
+        for p in member.parameters:
+            if p.name in ("self", "cls"):
+                continue
+            ann = (
+                libcst.Annotation(
+                    annotation=cls.parse_type_annotation(p.type_annotation)
+                )
+                if p.type_annotation
+                else None
+            )
+            default = libcst.Name("None") if p.has_default else None
+            params.append(
+                libcst.Param(name=libcst.Name(p.name), annotation=ann, default=default)
+            )
+        returns = None
+        if member.return_type:
+            returns = libcst.Annotation(
+                annotation=cls.parse_type_annotation(member.return_type)
+            )
+        return libcst.FunctionDef(
+            name=libcst.Name(member.name),
+            params=libcst.Parameters(params=tuple(params)),
+            body=body,
+            returns=returns,
+        )
+
+    @classmethod
+    def make_field_getter_node(
+        cls, member: MemberSpec, delegatee_attr: str
+    ) -> libcst.FunctionDef:
+        """Build a property getter that returns ``self.<delegatee_attr>.<name>``."""
+        delegatee_path = f"self.{delegatee_attr}.{member.name}"
+        return cls.make_property_getter_node(
+            member.name, member.return_type, delegatee_path
+        )
+
+    @classmethod
+    def make_field_setter_node(
+        cls, member: MemberSpec, delegatee_attr: str
+    ) -> libcst.FunctionDef | None:
+        """Build a property setter node, or ``None`` for read-only properties."""
+        delegatee_path = f"self.{delegatee_attr}.{member.name}"
+        return cls.make_property_setter_node(
+            member.name,
+            member.return_type,
+            f"{delegatee_path} = value",
+        )
+
+    @classmethod
+    def make_field_delegation_nodes(
+        cls, field_name: str, type_name: str, delegatee_attr: str
+    ) -> list[libcst.FunctionDef]:
+        """Build getter and setter nodes that delegate to a field on the delegatee."""
+        delegatee_path = f"self.{delegatee_attr}.{field_name}"
+        return cls.make_property_getter_and_setter_nodes(
+            field_name,
+            type_name,
+            delegatee_path,
+            f"{delegatee_path} = value",
+        )
+
+    @classmethod
+    def make_property_delegation_nodes(
+        cls,
+        property_name: str,
+        return_annotation: str | None,
+        has_setter: bool,
+        delegatee_attr: str,
+    ) -> list:
+        """Build delegation nodes (getter and optionally setter) for a property."""
+        if has_setter:
+            return cls.make_field_delegation_nodes(
+                property_name, return_annotation, delegatee_attr
+            )
+        delegatee_path = f"self.{delegatee_attr}.{property_name}"
+        return [
+            cls.make_property_getter_node(
+                property_name, return_annotation, delegatee_path
+            )
+        ]
 
     @classmethod
     def get_name_from_base_node(cls, base_node: libcst.BaseExpression) -> str:

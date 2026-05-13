@@ -230,7 +230,7 @@ class DelegationGenerator:
             elif _is_original_field_definer(wrapped_class.clazz, field_.name):
                 field_type_name = self._normalise_type_name(field_.field.type)
                 groups.setdefault(None, {})[field_.name] = (
-                    self._make_field_delegation_nodes(field_.name, field_type_name)
+                    self.node_factory.make_field_delegation_nodes(field_.name, field_type_name, self.delegatee_attribute_name)
                 )
             else:
                 # Field's defining class is already covered — only redeclare on genuine narrowing
@@ -262,7 +262,7 @@ class DelegationGenerator:
         """
         base_type = field_.type_at_definer(defining_base)
         base_type_name = self._normalise_type_name(base_type)
-        prop_nodes = self._make_field_delegation_nodes(field_.name, base_type_name)
+        prop_nodes = self.node_factory.make_field_delegation_nodes(field_.name, base_type_name, self.delegatee_attribute_name)
         groups.setdefault(defining_base, {})[field_.name] = prop_nodes
 
         last_narrowed_type = None
@@ -371,7 +371,9 @@ class DelegationGenerator:
         )
 
         def _make_nodes(name: str, type_name: str) -> list[libcst.FunctionDef]:
-            return self._make_property_delegation_nodes(name, type_name, has_setter)
+            return self.node_factory.make_property_delegation_nodes(
+                name, type_name, has_setter, self.delegatee_attribute_name
+            )
 
         self._maybe_add_concrete_narrowing(
             property_name,
@@ -409,7 +411,7 @@ class DelegationGenerator:
         if not result.resolved:
             return None
         type_name = self._normalise_type_name(result.resolved_type)
-        nodes = self._make_field_delegation_nodes(field_name, type_name)
+        nodes = self.node_factory.make_field_delegation_nodes(field_name, type_name, self.delegatee_attribute_name)
         groups.setdefault(ancestor, {}).setdefault(field_name, nodes)
         return result.resolved_type
 
@@ -502,7 +504,7 @@ class DelegationGenerator:
         :param groups: The accumulator dict to populate.
         :param reference_type: Optional type already established by a covered ancestor;
             skip this re-declaration when the result matches.
-        :param make_nodes: Optional node factory; defaults to _make_field_delegation_nodes.
+        :param make_nodes: Optional node factory; defaults to LibCSTNodeFactory.make_field_delegation_nodes.
         """
         substitution = GenericTypeSubstitution.from_specialization(
             concrete_class, defining_base
@@ -515,7 +517,11 @@ class DelegationGenerator:
         if reference_type is not None and result.resolved_type is reference_type:
             return
         type_name = self._normalise_type_name(result.resolved_type)
-        factory = make_nodes or self._make_field_delegation_nodes
+        factory = make_nodes or (
+            lambda name, type_name: self.node_factory.make_field_delegation_nodes(
+                name, type_name, self.delegatee_attribute_name
+            )
+        )
         nodes = factory(field_name, type_name)
         groups.setdefault(None, {})[field_name] = nodes
 
@@ -585,8 +591,8 @@ class DelegationGenerator:
         return_annotation = (
             self._normalise_type_name(base_return_type) if base_return_type else None
         )
-        prop_nodes = self._make_property_delegation_nodes(
-            property_name, return_annotation, has_setter
+        prop_nodes = self.node_factory.make_property_delegation_nodes(
+            property_name, return_annotation, has_setter, self.delegatee_attribute_name
         )
         groups.setdefault(defining_base, {})[property_name] = prop_nodes
 
@@ -600,8 +606,8 @@ class DelegationGenerator:
                     concrete_annotation = self._normalise_type_name(
                         result.resolved_type
                     )
-                    redeclared_nodes = self._make_property_delegation_nodes(
-                        property_name, concrete_annotation, has_setter
+                    redeclared_nodes = self.node_factory.make_property_delegation_nodes(
+                        property_name, concrete_annotation, has_setter, self.delegatee_attribute_name
                     )
                     groups.setdefault(None, {})[property_name] = redeclared_nodes
 
@@ -618,8 +624,8 @@ class DelegationGenerator:
         return_annotation = (
             self._normalise_type_name(base_return_type) if base_return_type else None
         )
-        prop_nodes = self._make_property_delegation_nodes(
-            property_name, return_annotation, has_setter
+        prop_nodes = self.node_factory.make_property_delegation_nodes(
+            property_name, return_annotation, has_setter, self.delegatee_attribute_name
         )
 
         if property_name in vars(wrapped_class.clazz):
@@ -636,29 +642,6 @@ class DelegationGenerator:
             )
         else:
             groups.setdefault(None, {})[property_name] = prop_nodes
-
-    def _make_property_delegation_nodes(
-        self,
-        property_name: str,
-        return_annotation: str | None,
-        has_setter: bool,
-    ) -> list:
-        """Build getter (and optionally setter) delegation nodes for a property.
-
-        :param property_name: The property name.
-        :param return_annotation: The normalised return type string, or None.
-        :param has_setter: Whether to also generate a setter node.
-        :return: A list of FunctionDef nodes.
-        """
-        if has_setter:
-            return self._make_field_delegation_nodes(property_name, return_annotation)
-        return [
-            self.node_factory.make_property_getter_node(
-                property_name,
-                return_annotation,
-                self._delegatee_path(property_name),
-            )
-        ]
 
     def _collect_method_delegations(
         self,
@@ -965,17 +948,6 @@ class DelegationGenerator:
     def _delegatee_path(self, name: str) -> str:
         """Return the attribute access path for a delegated member."""
         return f"self.{self.delegatee_attribute_name}.{name}"
-
-    def _make_field_delegation_nodes(
-        self, field_name: str, type_name: str
-    ) -> list[libcst.FunctionDef]:
-        """Build getter and setter nodes that delegate to a field on the delegatee."""
-        return self.node_factory.make_property_getter_and_setter_nodes(
-            field_name,
-            type_name,
-            self._delegatee_path(field_name),
-            f"{self._delegatee_path(field_name)} = value",
-        )
 
     def _normalise_type_name(self, type_obj: Any) -> str:
         """Return a normalised string representation of a type for use in generated code.

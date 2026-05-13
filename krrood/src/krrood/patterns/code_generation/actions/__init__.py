@@ -20,6 +20,7 @@ from krrood.patterns.code_generation.actions.plan import (
 from krrood.patterns.code_generation.actions.transform import (
     AddBaseClass,
     AddDecorator,
+    AddField,
     AddImport,
     AddMethod,
     AddProperty,
