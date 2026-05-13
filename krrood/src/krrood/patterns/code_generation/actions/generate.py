@@ -85,6 +85,7 @@ class CreateClass(GenerationAction):
         return f"Create class {self.class_name}"
 
 
+@dataclass(kw_only=True)
 class CreateDerivedClass(CreateClass):
     """Create a ``@dataclass(eq=False)`` mixin class with an abstract delegatee property.
 
@@ -100,29 +101,23 @@ class CreateDerivedClass(CreateClass):
         )
     """
 
-    def __init__(
-        self,
-        class_name: str,
-        delegatee_type_name: str,
-        delegatee_attr: str = "delegatee",
-        bases: list[BaseClassSpec] | None = None,
-        extra_body: list[libcst.BaseStatement] | None = None,
-    ):
-        bases = list(bases or [])
-        if not any(b.name == "ABC" for b in bases):
-            bases.append(BaseClassSpec(name="ABC"))
+    delegatee_type_name: str
+    delegatee_attr: str = "delegatee"
+    extra_body: list[libcst.BaseStatement] | None = None
+
+    bases: list[BaseClassSpec] = field(default_factory=list)
+    body: list[libcst.BaseStatement] = field(default_factory=list, init=False)
+    decorators: list[libcst.Decorator] = field(default_factory=list, init=False)
+
+    def __post_init__(self):
+        if not any(b.name == "ABC" for b in self.bases):
+            self.bases.append(BaseClassSpec(name="ABC"))
 
         delegatee_getter = LibCSTNodeFactory.make_property_getter_node(
-            delegatee_attr, delegatee_type_name, "..."
+            self.delegatee_attr, self.delegatee_type_name, "..."
         )
-        body = [delegatee_getter] + (extra_body or [])
-
-        super().__init__(
-            class_name=class_name,
-            bases=bases,
-            body=body,
-            decorators=[LibCSTNodeFactory.make_dataclass_decorator()],
-        )
+        self.body = [delegatee_getter] + (self.extra_body or [])
+        self.decorators = [LibCSTNodeFactory.make_dataclass_decorator()]
 
     @property
     def description(self) -> str:
@@ -200,56 +195,62 @@ class WriteModule(GenerationAction):
 # ── delegation actions (subclasses of AddField / AddProperty / AddMethod)
 
 
+@dataclass
 class DelegateField(AddField):
     """Add getter + setter delegation for a dataclass field."""
 
-    def __init__(
-        self,
-        member: MemberSpec,
-        target_class: str,
-        delegatee_attr: str = "delegatee",
-    ):
-        getter = LibCSTNodeFactory.make_field_getter_node(member, delegatee_attr)
-        setter = LibCSTNodeFactory.make_field_setter_node(member, delegatee_attr)
-        super().__init__(target_class=target_class, getter=getter, setter=setter)
-        self._member = member
+    member: MemberSpec
+    delegatee_attr: str = "delegatee"
+
+    getter: libcst.FunctionDef = field(init=False)
+    setter: libcst.FunctionDef = field(init=False)
+
+    def __post_init__(self):
+        self.getter = LibCSTNodeFactory.make_field_getter_node(
+            self.member, self.delegatee_attr
+        )
+        self.setter = LibCSTNodeFactory.make_field_setter_node(
+            self.member, self.delegatee_attr
+        )
 
     @property
     def description(self) -> str:
-        return f"Delegate field {self._member.name} to {self.target_class}"
+        return f"Delegate field {self.member.name} to {self.target_class}"
 
 
+@dataclass(kw_only=True)
 class DelegateProperty(AddProperty):
     """Add getter-only delegation for a Python property."""
 
-    def __init__(
-        self,
-        member: MemberSpec,
-        target_class: str,
-        delegatee_attr: str = "delegatee",
-    ):
-        getter = LibCSTNodeFactory.make_field_getter_node(member, delegatee_attr)
-        super().__init__(target_class=target_class, getter=getter, setter=None)
-        self._member = member
+    member: MemberSpec
+    delegatee_attr: str = "delegatee"
+
+    getter: libcst.FunctionDef = field(init=False)
+
+    def __post_init__(self):
+        self.getter = LibCSTNodeFactory.make_field_getter_node(
+            self.member, self.delegatee_attr
+        )
 
     @property
     def description(self) -> str:
-        return f"Delegate property {self._member.name} to {self.target_class}"
+        return f"Delegate property {self.member.name} to {self.target_class}"
 
 
+@dataclass
 class DelegateMethod(AddMethod):
     """Add a delegating method that forwards to the delegatee."""
 
-    def __init__(
-        self,
-        member: MethodSpec,
-        target_class: str,
-        delegatee_attr: str = "delegatee",
-    ):
-        node = LibCSTNodeFactory.make_delegation_method_node(member, delegatee_attr)
-        super().__init__(target_class=target_class, method=node)
-        self._member = member
+    member: MethodSpec
+    delegatee_attr: str = "delegatee"
+
+    method: libcst.FunctionDef = field(init=False)
+
+    def __post_init__(self):
+        self.method = LibCSTNodeFactory.make_delegation_method_node(
+            self.member, self.delegatee_attr
+        )
 
     @property
     def description(self) -> str:
-        return f"Delegate method {self._member.name} to {self.target_class}"
+        return f"Delegate method {self.member.name} to {self.target_class}"
