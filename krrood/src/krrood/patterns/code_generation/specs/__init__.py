@@ -1,12 +1,16 @@
 from krrood.patterns.code_generation.specs.specs import (
     BaseClassSpec,
+    ClassMethodSpec,
     ClassTransformationSpec,
     DelegationSpec,
+    FactoryMethodSpec,
+    FieldSpec,
     ImportSpec,
-    MemberDelegationSpec,
-    MemberKind,
     MemberSpec,
+    MethodSpec,
     ModuleTransformationSpec,
     ParameterSpec,
+    PropertySpec,
     RoleClassTransformationSpec,
+    StaticMethodSpec,
 )

@@ -60,6 +60,7 @@ from krrood.patterns.code_generation.specs import (
 )
 from krrood.patterns.property_delegator import PropertyDelegator
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
+from krrood.patterns.role.meta_data import RoleType
 from krrood.patterns.role.role import HasRoles, Role
 
 DELEGATEE_ATTR = "delegatee"
@@ -351,7 +352,7 @@ class RefactoredRoleTransformer:
         role_spec = role_analyzer.analyze(wrapped_class, ctx)
 
         delegation_spec: DelegationSpec | None = None
-        if role_spec.is_role_taker or role_spec.role_type != "NOT_A_ROLE":
+        if role_spec.is_role_taker or role_spec.role_type != RoleType.NOT_A_ROLE:
             delegation_analyzer = DelegationAnalyzer(
                 delegatee_attribute_name=DELEGATEE_ATTR,
                 excluded_method_names=_ALWAYS_EXCLUDED_METHODS,
@@ -434,15 +435,21 @@ class RefactoredRoleTransformer:
         collector = NameCollector()
         mixin_tree.visit(collector)
 
-        # Resolve each name to its module
+        # Resolve each name to its module, skipping self-imports
         _EXCLUDED = {"ABC", "abstractmethod", "dataclass", "field", "TYPE_CHECKING"}
+        _SKIP_MODULES = {"builtins", "typing", "typing_extensions"}
+        source_module_name = resolver.source_module.__name__
         codemod_ctx = CodemodContext()
         for name in collector.names:
             if name in _EXCLUDED:
                 continue
             mod = resolver.resolve(name)
-            if mod and mod not in ("builtins", "typing", "typing_extensions"):
-                AddImportsVisitor.add_needed_import(codemod_ctx, mod, name)
+            if not mod or mod in _SKIP_MODULES:
+                continue
+            # Skip self-imports: importing from the same module the mixin targets
+            if mod == source_module_name:
+                continue
+            AddImportsVisitor.add_needed_import(codemod_ctx, mod, name)
 
         # Add standard imports that are always needed
         AddImportsVisitor.add_needed_import(codemod_ctx, "abc", "ABC")

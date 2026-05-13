@@ -16,7 +16,7 @@ from krrood.patterns.code_generation.actions import (
     Action,
     ActionPlan,
     AddBaseClass,
-    CreateClass,
+    CreateDerivedClass,
     DelegateField,
     DelegateMethod,
     DelegateProperty,
@@ -31,14 +31,13 @@ from krrood.patterns.code_generation.planners.base import (
 )
 from krrood.patterns.code_generation.specs.specs import (
     BaseClassSpec,
-    MemberKind,
+    FieldSpec,
     MemberSpec,
+    MethodSpec,
+    PropertySpec,
     RoleClassTransformationSpec,
 )
-
-
-def _make_arg(name: str) -> libcst.Arg:
-    return libcst.Arg(value=libcst.Name(name))
+from krrood.patterns.role.meta_data import RoleType
 
 
 def _make_delegator_name(class_name: str) -> str:
@@ -49,41 +48,20 @@ def _make_role_for_name(class_name: str) -> str:
     return f"RoleFor{class_name}"
 
 
-def _make_dataclass_decorator() -> libcst.Decorator:
-    return libcst.Decorator(
-        decorator=libcst.Call(
-            func=libcst.Name("dataclass"),
-            args=[
-                libcst.Arg(
-                    keyword=libcst.Name("eq"),
-                    value=libcst.Name("False"),
-                )
-            ],
-        )
-    )
-
-
-def _make_delegatee_property(
-    class_name: str, delegatee_attr: str, context: PlanningContext
-) -> list[libcst.BaseStatement]:
-    return [
-        context.factory.make_property_getter_node(delegatee_attr, class_name, "...")
-    ]
-
-
-def _action_for_member(
+def _delegation_action_for(
     member: MemberSpec, target_class: str, delegatee_attr: str
 ) -> Action | None:
-    """Return the appropriate delegation action for a member spec."""
-    if member.kind == MemberKind.FIELD:
+    """Return a :class:`DelegateField`, :class:`DelegateProperty`, or
+    :class:`DelegateMethod` for *member*, dispatching by subclass."""
+    if isinstance(member, FieldSpec):
         return DelegateField(
             member=member, target_class=target_class, delegatee_attr=delegatee_attr
         )
-    elif member.kind == MemberKind.PROPERTY:
+    elif isinstance(member, PropertySpec):
         return DelegateProperty(
             member=member, target_class=target_class, delegatee_attr=delegatee_attr
         )
-    elif member.kind == MemberKind.METHOD:
+    elif isinstance(member, MethodSpec):
         return DelegateMethod(
             member=member, target_class=target_class, delegatee_attr=delegatee_attr
         )
@@ -157,27 +135,22 @@ class DelegatorForPlanner(ActionPlanner):
         for definer_name, definer_members in by_definer.items():
             base_name = _make_delegator_name(definer_name)
             base_mixin_names.append(base_name)
-            base_body = _make_delegatee_property(
-                definer_name, self.delegatee_attr, context
+            actions.append(
+                CreateDerivedClass(
+                    class_name=base_name,
+                    delegatee_type_name=definer_name,
+                    delegatee_attr=self.delegatee_attr,
+                )
             )
             for m in definer_members:
-                base_body.extend(
-                    _build_delegation_nodes(m, self.delegatee_attr, context)
-                )
-            actions.append(
-                CreateClass(
-                    class_name=base_name,
-                    bases=[BaseClassSpec(name="ABC")],
-                    body=base_body,
-                    decorators=[_make_dataclass_decorator()],
-                )
-            )
+                a = _delegation_action_for(m, base_name, self.delegatee_attr)
+                if a:
+                    actions.append(a)
 
         # Phase A2 — cross-module imports for defining ancestors
         for definer_name, definer_module in cross_module_definers.items():
             cross_name = _make_delegator_name(definer_name)
             base_mixin_names.append(cross_name)
-            # Generate the import for this cross-module mixin
             from krrood.class_diagrams.utils import mixin_module_dotted_name
             mixin_mod = mixin_module_dotted_name(
                 definer_module, "role_mixins", "_role_mixins"
@@ -186,51 +159,26 @@ class DelegatorForPlanner(ActionPlanner):
 
         # Phase B — taker's own DelegatorFor, inheriting from base mixins
         delegator_name = _make_delegator_name(spec.class_name)
-        delegator_bases = [BaseClassSpec(name=bn) for bn in base_mixin_names] + [
-            BaseClassSpec(name="ABC")
+        delegator_bases = [
+            BaseClassSpec(name=bn) for bn in base_mixin_names
         ]
-        body_nodes = _make_delegatee_property(
-            spec.class_name, self.delegatee_attr, context
-        )
-        for m in own_members:
-            body_nodes.extend(_build_delegation_nodes(m, self.delegatee_attr, context))
-
         actions.append(
-            CreateClass(
+            CreateDerivedClass(
                 class_name=delegator_name,
+                delegatee_type_name=spec.class_name,
+                delegatee_attr=self.delegatee_attr,
                 bases=delegator_bases,
-                body=body_nodes,
-                decorators=[_make_dataclass_decorator()],
             )
         )
+        for m in own_members:
+            a = _delegation_action_for(m, delegator_name, self.delegatee_attr)
+            if a:
+                actions.append(a)
 
         return ActionPlan(
             actions=actions,
             description=f"Create {delegator_name} mixin",
         )
-
-
-def _build_delegation_nodes(
-    member: MemberSpec, delegatee_attr: str, context: PlanningContext
-) -> list[libcst.BaseStatement]:
-    """Build CST nodes for a delegation member. Returns list (1-2 nodes)."""
-    from krrood.patterns.code_generation.actions.generate import (
-        _build_field_getter_node,
-        _build_field_setter_node,
-        _build_delegation_method_node,
-    )
-
-    if member.kind == MemberKind.FIELD:
-        getter = _build_field_getter_node(member, delegatee_attr)
-        setter = _build_field_setter_node(member, delegatee_attr)
-        if setter:
-            return [getter, setter]
-        return [getter]
-    elif member.kind == MemberKind.PROPERTY:
-        return [_build_field_getter_node(member, delegatee_attr)]
-    elif member.kind == MemberKind.METHOD:
-        return [_build_delegation_method_node(member, delegatee_attr)]
-    raise NotImplementedError(f"No node builder for {member.kind}")
 
 
 # ── RoleForPlanner ───────────────────────────────────────────────────
@@ -243,27 +191,21 @@ class RoleForPlanner(ActionPlanner):
     delegatee_attr: str = "delegatee"
 
     def precondition(self, spec: RoleClassTransformationSpec) -> bool:
-        return spec.is_role_taker and spec.role_type != "DELEGATOR"
+        return spec.is_role_taker and spec.role_type != RoleType.DELEGATOR
 
     def plan(
         self, spec: RoleClassTransformationSpec, context: PlanningContext
     ) -> ActionPlan:
         role_for_name = _make_role_for_name(spec.class_name)
         delegator_name = _make_delegator_name(spec.class_name)
-        body_nodes = _make_delegatee_property(
-            spec.class_name, self.delegatee_attr, context
-        )
 
         return ActionPlan(
             actions=[
-                CreateClass(
+                CreateDerivedClass(
                     class_name=role_for_name,
-                    bases=[
-                        BaseClassSpec(name=delegator_name),
-                        BaseClassSpec(name="ABC"),
-                    ],
-                    body=body_nodes,
-                    decorators=[_make_dataclass_decorator()],
+                    delegatee_type_name=spec.class_name,
+                    delegatee_attr=self.delegatee_attr,
+                    bases=[BaseClassSpec(name=delegator_name)],
                 )
             ],
             description=f"Create {role_for_name} mixin",

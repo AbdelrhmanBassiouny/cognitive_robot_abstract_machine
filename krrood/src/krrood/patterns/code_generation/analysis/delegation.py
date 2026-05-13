@@ -27,9 +27,11 @@ from krrood.patterns.code_generation.analysis.base import (
 )
 from krrood.patterns.code_generation.specs.specs import (
     DelegationSpec,
-    MemberKind,
+    FieldSpec,
     MemberSpec,
+    MethodSpec,
     ParameterSpec,
+    PropertySpec,
 )
 
 
@@ -134,36 +136,6 @@ class MroWalker:
 # ── DelegationAnalyzer ───────────────────────────────────────────────
 
 
-def _method_kind(method: Any) -> MemberKind:
-    """Classify a callable member without CST parsing.
-
-    Falls back to inspecting decorator attributes on the underlying function.
-    """
-    func = getattr(method, "__func__", method)
-    if hasattr(func, "__classmethod__") or (
-        hasattr(type(method), "__get__")
-        and hasattr(method, "__func__")
-        and inspect.isroutine(method.__func__)
-    ):
-        pass  # will be classified by checking the actual method type
-
-    # Check for @classmethod and @staticmethod via the bound method
-    if hasattr(method, "__self__"):
-        return MemberKind.CLASS_METHOD
-    if isinstance(method, staticmethod):
-        return MemberKind.STATIC_METHOD
-
-    # For bound methods, check the underlying function
-    if hasattr(method, "__func__"):
-        func = method.__func__
-        if isinstance(func, classmethod):
-            return MemberKind.CLASS_METHOD
-        if isinstance(func, staticmethod):
-            return MemberKind.STATIC_METHOD
-
-    return MemberKind.METHOD
-
-
 @dataclass
 class DelegationAnalyzer(CodeAnalyzer):
     """Analyzes a class's MRO to determine what members need delegation.
@@ -261,9 +233,8 @@ class DelegationAnalyzer(CodeAnalyzer):
                 )
             elif _is_original_field_definer(wrapped_class.clazz, field_.name):
                 type_name = self._normalise(field_.field.type, context)
-                members.append(MemberSpec(
+                members.append(FieldSpec(
                     name=field_.name,
-                    kind=MemberKind.FIELD,
                     return_type=type_name,
                     defining_class=None,
                 ))
@@ -282,9 +253,8 @@ class DelegationAnalyzer(CodeAnalyzer):
     ) -> None:
         base_type = field_.type_at_definer(defining_base)
         type_name = self._normalise(base_type, context)
-        members.append(MemberSpec(
+        members.append(FieldSpec(
             name=field_.name,
-            kind=MemberKind.FIELD,
             return_type=type_name,
             defining_class=defining_base,
         ))
@@ -315,9 +285,8 @@ class DelegationAnalyzer(CodeAnalyzer):
             return_type = get_property_return_type(prop_value)
             type_name = self._normalise(return_type, context) if return_type else None
 
-            members.append(MemberSpec(
+            members.append(PropertySpec(
                 name=prop_name,
-                kind=MemberKind.PROPERTY,
                 return_type=type_name,
                 defining_class=defining_base,
             ))
@@ -361,8 +330,6 @@ class DelegationAnalyzer(CodeAnalyzer):
             except (ValueError, TypeError):
                 sig = None
 
-            # Simplify: use MethodKind.METHOD as default for delegation
-            kind = MemberKind.METHOD
             params: list[ParameterSpec] = []
             return_type: str | None = None
 
@@ -381,9 +348,8 @@ class DelegationAnalyzer(CodeAnalyzer):
                 if sig.return_annotation is not inspect.Signature.empty:
                     return_type = self._normalise(sig.return_annotation, context)
 
-            members.append(MemberSpec(
+            members.append(MethodSpec(
                 name=method_name,
-                kind=kind,
                 return_type=return_type,
                 parameters=params,
                 defining_class=defining_base,
@@ -416,9 +382,8 @@ class DelegationAnalyzer(CodeAnalyzer):
             result = substitution.apply(base_type)
             if result.resolved:
                 type_name = self._normalise(result.resolved_type, context)
-                members.append(MemberSpec(
+                members.append(FieldSpec(
                     name=field_.name,
-                    kind=MemberKind.FIELD,
                     return_type=type_name,
                     defining_class=None,  # re-declared directly on the taker
                 ))

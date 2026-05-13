@@ -4,32 +4,74 @@ from __future__ import annotations
 
 import pytest
 
+from krrood.patterns.role.meta_data import RoleType
 from krrood.patterns.code_generation.specs import (
     BaseClassSpec,
+    ClassMethodSpec,
     ClassTransformationSpec,
     DelegationSpec,
+    FactoryMethodSpec,
+    FieldSpec,
     ImportSpec,
-    MemberDelegationSpec,
-    MemberKind,
     MemberSpec,
+    MethodSpec,
     ModuleTransformationSpec,
     ParameterSpec,
+    PropertySpec,
     RoleClassTransformationSpec,
+    StaticMethodSpec,
 )
 
 
-class TestMemberKind:
-    def test_all_kinds_exist(self):
-        kinds = list(MemberKind)
-        assert MemberKind.METHOD in kinds
-        assert MemberKind.PROPERTY in kinds
-        assert MemberKind.CLASS_METHOD in kinds
-        assert MemberKind.STATIC_METHOD in kinds
-        assert MemberKind.FACTORY_METHOD in kinds
-        assert MemberKind.FIELD in kinds
+class TestMemberSpecHierarchy:
+    def test_field_spec_is_member_spec(self):
+        spec = FieldSpec(name="age", return_type="int")
+        assert isinstance(spec, MemberSpec)
+        assert spec.name == "age"
 
-    def test_kind_is_hashable(self):
-        assert hash(MemberKind.METHOD) == hash(MemberKind.METHOD)
+    def test_property_spec_is_member_spec(self):
+        spec = PropertySpec(name="full_name", return_type="str")
+        assert isinstance(spec, MemberSpec)
+
+    def test_method_spec_is_member_spec(self):
+        spec = MethodSpec(name="get_title", return_type="str")
+        assert isinstance(spec, MemberSpec)
+        assert spec.parameters == []
+        assert spec.decorators == []
+
+    def test_method_spec_with_parameters(self):
+        params = [ParameterSpec(name="x", type_annotation="int")]
+        spec = MethodSpec(name="add", return_type="int", parameters=params)
+        assert len(spec.parameters) == 1
+
+    def test_static_method_spec_is_method_spec(self):
+        spec = StaticMethodSpec(name="factory", return_type="int")
+        assert isinstance(spec, MethodSpec)
+        assert isinstance(spec, MemberSpec)
+
+    def test_class_method_spec_is_method_spec(self):
+        spec = ClassMethodSpec(name="from_str", return_type="Self")
+        assert isinstance(spec, MethodSpec)
+
+    def test_factory_method_spec_is_class_method_spec(self):
+        spec = FactoryMethodSpec(name="create", return_type="Self")
+        assert isinstance(spec, ClassMethodSpec)
+        assert isinstance(spec, MethodSpec)
+
+    def test_field_spec_frozen(self):
+        spec = FieldSpec(name="x")
+        with pytest.raises(Exception):
+            spec.name = "y"
+
+    def test_method_spec_equality(self):
+        a = MethodSpec(name="f", return_type="str")
+        b = MethodSpec(name="f", return_type="str")
+        assert a == b
+
+    def test_different_types_not_equal(self):
+        a = FieldSpec(name="f", return_type="str")
+        b = MethodSpec(name="f", return_type="str")
+        assert a != b
 
 
 class TestParameterSpec:
@@ -67,71 +109,44 @@ class TestParameterSpec:
 
 class TestMemberSpec:
     def test_minimal_construction(self):
-        spec = MemberSpec(name="get_name", kind=MemberKind.METHOD)
+        spec = MethodSpec(name="get_name")
         assert spec.name == "get_name"
-        assert spec.kind == MemberKind.METHOD
         assert spec.return_type is None
         assert spec.parameters == []
         assert spec.defining_class is None
         assert spec.decorators == []
-        assert spec.is_abstract is False
 
     def test_with_return_type(self):
-        spec = MemberSpec(
-            name="get_name",
-            kind=MemberKind.METHOD,
-            return_type="str",
-        )
+        spec = MethodSpec(name="get_name", return_type="str")
         assert spec.return_type == "str"
 
     def test_with_parameters(self):
         params = [ParameterSpec(name="x", type_annotation="int")]
-        spec = MemberSpec(
-            name="add",
-            kind=MemberKind.METHOD,
-            parameters=params,
-        )
+        spec = MethodSpec(name="add", parameters=params)
         assert len(spec.parameters) == 1
         assert spec.parameters[0].name == "x"
 
     def test_with_defining_class(self):
-        spec = MemberSpec(
-            name="method",
-            kind=MemberKind.METHOD,
-            defining_class=str,
-        )
+        spec = MethodSpec(name="method", defining_class=str)
         assert spec.defining_class is str
 
     def test_with_decorators(self):
-        spec = MemberSpec(
-            name="attr",
-            kind=MemberKind.PROPERTY,
-            decorators=["abstractmethod"],
-        )
+        spec = MethodSpec(name="attr", decorators=["abstractmethod"])
         assert "abstractmethod" in spec.decorators
 
-    def test_abstract_member(self):
-        spec = MemberSpec(
-            name="delegatee",
-            kind=MemberKind.PROPERTY,
-            return_type="Person",
-            is_abstract=True,
-        )
-        assert spec.is_abstract is True
-
     def test_frozen(self):
-        spec = MemberSpec(name="x", kind=MemberKind.FIELD)
+        spec = FieldSpec(name="x")
         with pytest.raises(Exception):
             spec.name = "y"
 
     def test_equality(self):
-        a = MemberSpec(name="f", kind=MemberKind.METHOD, return_type="str")
-        b = MemberSpec(name="f", kind=MemberKind.METHOD, return_type="str")
+        a = MethodSpec(name="f", return_type="str")
+        b = MethodSpec(name="f", return_type="str")
         assert a == b
 
     def test_inequality(self):
-        a = MemberSpec(name="f", kind=MemberKind.METHOD)
-        b = MemberSpec(name="f", kind=MemberKind.PROPERTY)
+        a = FieldSpec(name="f")
+        b = MethodSpec(name="f")
         assert a != b
 
 
@@ -144,8 +159,8 @@ class TestDelegationSpec:
 
     def test_with_members(self):
         members = [
-            MemberSpec(name="get_name", kind=MemberKind.METHOD, return_type="str"),
-            MemberSpec(name="age", kind=MemberKind.FIELD, return_type="int"),
+            MethodSpec(name="get_name", return_type="str"),
+            FieldSpec(name="age", return_type="int"),
         ]
         spec = DelegationSpec(delegatee_attribute="role_taker", members=members)
         assert len(spec.members) == 2
@@ -190,7 +205,7 @@ class TestClassTransformationSpec:
     def test_with_delegation(self):
         delegation = DelegationSpec(
             delegatee_attribute="delegatee",
-            members=[MemberSpec(name="name", kind=MemberKind.FIELD, return_type="str")],
+            members=[FieldSpec(name="name", return_type="str")],
         )
         spec = ClassTransformationSpec(
             class_name="Person",
@@ -213,19 +228,20 @@ class TestRoleClassTransformationSpec:
             class_name="Professor",
             qualified_name="uni.Professor",
         )
-        assert spec.role_type == "NOT_A_ROLE"
+        from krrood.patterns.role.meta_data import RoleType
+        assert spec.role_type == RoleType.NOT_A_ROLE
         assert spec.is_role_taker is False
         assert spec.is_role is False
 
     def test_role_taker_with_delegation(self):
         delegation = DelegationSpec(
             delegatee_attribute="delegatee",
-            members=[MemberSpec(name="name", kind=MemberKind.FIELD, return_type="str")],
+            members=[FieldSpec(name="name", return_type="str")],
         )
         spec = RoleClassTransformationSpec(
             class_name="Person",
             qualified_name="uni.Person",
-            role_type="DELEGATOR",
+            role_type=RoleType.DELEGATOR,
             bases_to_add=[BaseClassSpec(name="HasRoles")],
             delegation=delegation,
             is_role_taker=True,
@@ -239,26 +255,6 @@ class TestRoleClassTransformationSpec:
     def test_is_subclass_of_base(self):
         spec = RoleClassTransformationSpec(class_name="X", qualified_name="p.X")
         assert isinstance(spec, ClassTransformationSpec)
-
-
-class TestMemberDelegationSpec:
-    def test_is_subclass_of_member_spec(self):
-        spec = MemberDelegationSpec(name="foo", kind=MemberKind.FIELD, return_type="str")
-        assert isinstance(spec, MemberSpec)
-
-    def test_inherits_all_fields(self):
-        spec = MemberDelegationSpec(
-            name="bar",
-            kind=MemberKind.METHOD,
-            return_type="int",
-            defining_class=str,
-            decorators=["abstractmethod"],
-            is_abstract=True,
-        )
-        assert spec.name == "bar"
-        assert spec.kind == MemberKind.METHOD
-        assert spec.defining_class is str
-        assert spec.is_abstract is True
 
 
 class TestImportSpec:

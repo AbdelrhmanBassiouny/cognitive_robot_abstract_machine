@@ -16,8 +16,15 @@ from krrood.patterns.code_generation.actions.base import (
     GenerationAction,
     TransformationAction,
 )
+from krrood.patterns.code_generation.actions.plan import ActionPlan
 from krrood.patterns.code_generation.libcst_node_factory import LibCSTNodeFactory
-from krrood.patterns.code_generation.specs.specs import BaseClassSpec, MemberSpec
+from krrood.patterns.code_generation.specs.specs import (
+    BaseClassSpec,
+    FieldSpec,
+    MemberSpec,
+    MethodSpec,
+    PropertySpec,
+)
 
 
 # ── helpers ───────────────────────────────────────────────────────────
@@ -82,6 +89,52 @@ class CreateClass(GenerationAction):
     @property
     def description(self) -> str:
         return f"Create class {self.class_name}"
+
+
+@dataclass
+class CreateDerivedClass(ActionPlan):
+    """Create a ``@dataclass(eq=False)`` mixin class with an abstract delegatee property.
+
+    This is an :class:`ActionPlan` that composes a :class:`CreateClass` action
+    with the right bases, decorator, and delegatee-property body pre-configured.
+
+    Usage::
+
+        plan = CreateDerivedClass(
+            class_name="DelegatorForPerson",
+            delegatee_type_name="Person",
+            bases=[BaseClassSpec(name="DelegatorForHasName")],
+        )
+    """
+
+    def __init__(
+        self,
+        class_name: str,
+        delegatee_type_name: str,
+        delegatee_attr: str = "delegatee",
+        bases: list[BaseClassSpec] | None = None,
+        extra_body: list[libcst.BaseStatement] | None = None,
+    ):
+        bases = list(bases or [])
+        # Ensure ABC is always the terminal base
+        if not any(b.name == "ABC" for b in bases):
+            bases.append(BaseClassSpec(name="ABC"))
+
+        delegatee_getter = LibCSTNodeFactory.make_property_getter_node(
+            delegatee_attr, delegatee_type_name, "..."
+        )
+
+        super().__init__(
+            actions=[
+                CreateClass(
+                    class_name=class_name,
+                    bases=bases,
+                    body=[delegatee_getter] + (extra_body or []),
+                    decorators=[LibCSTNodeFactory.make_dataclass_decorator()],
+                )
+            ],
+            description=f"Create derived class {class_name}",
+        )
 
 
 @dataclass

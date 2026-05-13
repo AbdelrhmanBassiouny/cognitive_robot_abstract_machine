@@ -28,8 +28,8 @@ from krrood.patterns.code_generation.analysis.role_pattern import (
 )
 from krrood.patterns.code_generation.specs.specs import (
     DelegationSpec,
-    MemberKind,
     MemberSpec,
+    MethodSpec,
     RoleClassTransformationSpec,
     ImportSpec,
 )
@@ -163,7 +163,7 @@ class TestDelegationAnalyzer:
         for member in spec.members:
             assert isinstance(member, MemberSpec)
             assert isinstance(member.name, str)
-            assert isinstance(member.kind, MemberKind)
+            assert isinstance(member, MemberSpec)
             assert member.name != ""
 
     def test_excluded_methods_not_in_members(self, delegation_analyzer, class_diagram, analysis_context):

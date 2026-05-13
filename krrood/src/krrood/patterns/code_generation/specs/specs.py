@@ -15,32 +15,7 @@ import enum
 from dataclasses import dataclass, field
 from types import ModuleType
 
-
-class MemberKind(enum.Enum):
-    """Classification of a class member's kind.
-
-    Used by :class:`MemberSpec` to describe what kind of delegation or
-    generation a member needs.  This is the generic (non-role-specific)
-    equivalent of :class:`krrood.patterns.role.meta_data.MethodType`.
-    """
-
-    METHOD = enum.auto()
-    """A standard instance method."""
-
-    PROPERTY = enum.auto()
-    """A Python property (getter and optional setter)."""
-
-    CLASS_METHOD = enum.auto()
-    """A method decorated with ``@classmethod``."""
-
-    STATIC_METHOD = enum.auto()
-    """A method decorated with ``@staticmethod``."""
-
-    FACTORY_METHOD = enum.auto()
-    """A ``@classmethod`` that returns an instance of the enclosing class."""
-
-    FIELD = enum.auto()
-    """A dataclass field exposed via getter/setter properties."""
+from krrood.patterns.role.meta_data import RoleType
 
 
 @dataclass(frozen=True)
@@ -59,27 +34,65 @@ class ParameterSpec:
     has_default: bool = False
 
 
+# ── MemberSpec hierarchy ─────────────────────────────────────────────
+#
+# The previous ``MemberKind`` enum + ``kind`` field has been replaced by
+# polymorphic subclasses.  Each subclass carries only the fields relevant
+# to that member type.  Dispatch is done via ``isinstance`` checks rather
+# than comparing an enum value.
+
+
 @dataclass(frozen=True)
 class MemberSpec:
-    """Describes one member of a class that may need delegation or generation.
+    """Base for all member specifications.
 
     Attributes:
         name: The member name (e.g. ``"get_name"``, ``"age"``).
-        kind: What kind of member this is.
         return_type: The string form of the return type, or ``None``.
-        parameters: The method parameters (empty for properties/fields).
         defining_class: The class that originally defines this member.
-        decorators: Decorator names to apply (e.g. ``["abstractmethod"]``).
-        is_abstract: ``True`` if this member should be abstract.
     """
 
     name: str
-    kind: MemberKind
     return_type: str | None = None
-    parameters: list[ParameterSpec] = field(default_factory=list)
     defining_class: type | None = None
+
+
+@dataclass(frozen=True)
+class FieldSpec(MemberSpec):
+    """A dataclass field exposed via getter + setter delegation."""
+
+
+@dataclass(frozen=True)
+class PropertySpec(MemberSpec):
+    """A Python property exposed via getter-only delegation."""
+
+
+@dataclass(frozen=True)
+class MethodSpec(MemberSpec):
+    """A concrete instance method that delegates to the delegatee.
+
+    Attributes:
+        parameters: The method parameters (excluding ``self``).
+        decorators: Decorator names to apply (e.g. ``["abstractmethod"]``).
+    """
+
+    parameters: list[ParameterSpec] = field(default_factory=list)
     decorators: list[str] = field(default_factory=list)
-    is_abstract: bool = False
+
+
+@dataclass(frozen=True)
+class StaticMethodSpec(MethodSpec):
+    """A ``@staticmethod`` that delegates."""
+
+
+@dataclass(frozen=True)
+class ClassMethodSpec(MethodSpec):
+    """A ``@classmethod`` that delegates."""
+
+
+@dataclass(frozen=True)
+class FactoryMethodSpec(ClassMethodSpec):
+    """A ``@classmethod`` that returns an instance (not delegated)."""
 
 
 @dataclass(frozen=True)
@@ -154,26 +167,10 @@ class RoleClassTransformationSpec(ClassTransformationSpec):
             called explicitly in the class's ``__init__``.
     """
 
-    role_type: "RoleType" = "NOT_A_ROLE"
+    role_type: RoleType = RoleType.NOT_A_ROLE
     is_role_taker: bool = False
     is_role: bool = False
     needs_has_roles_init: bool = False
-
-
-@dataclass(frozen=True)
-class MemberDelegationSpec(MemberSpec):
-    """A :class:`MemberSpec` extended with delegation-specific semantics.
-
-    All fields are inherited from :class:`MemberSpec`.  The :class:`MemberKind`
-    already encodes the delegation strategy:
-
-    * :attr:`~MemberKind.FIELD` → getter + setter
-    * :attr:`~MemberKind.PROPERTY` → getter only
-    * :attr:`~MemberKind.METHOD` → full delegation method
-    * :attr:`~MemberKind.CLASS_METHOD` → delegation classmethod
-    * :attr:`~MemberKind.STATIC_METHOD` → delegation staticmethod
-    * :attr:`~MemberKind.FACTORY_METHOD` → factory wrapper (not delegated)
-    """
 
 
 @dataclass(frozen=True)
