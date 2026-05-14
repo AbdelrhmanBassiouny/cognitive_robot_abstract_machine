@@ -18,6 +18,7 @@ from typing_extensions import (
     Callable,
     ClassVar,
     TypeVar,
+    Iterator,
 )
 
 from krrood import logger
@@ -366,7 +367,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         self,
         wrapped_instance: WrappedInstance,
         relation_type: Type[PredicateClassRelation[TSymbol]],
-    ) -> Iterable[PredicateClassRelation[TSymbol]]:
+    ) -> Iterator[PredicateClassRelation[TSymbol]]:
         """
         Get all relations with the given type that are incoming to the given wrapped instance.
 
@@ -381,7 +382,7 @@ class SymbolGraph(metaclass=SingletonMeta):
         self,
         wrapped_instance: WrappedInstance,
         edge_condition: Callable[[PredicateClassRelation], bool],
-    ) -> Iterable[PredicateClassRelation]:
+    ) -> Iterator[PredicateClassRelation]:
         """
         Get all relations with the given condition that are incoming to the given wrapped instance.
 
@@ -393,7 +394,7 @@ class SymbolGraph(metaclass=SingletonMeta):
     def get_incoming_relations(
         self,
         wrapped_instance: WrappedInstance,
-    ) -> Iterable[PredicateClassRelation]:
+    ) -> Iterator[PredicateClassRelation]:
         """
         Get all relations incoming to the given wrapped instance.
 
@@ -401,6 +402,8 @@ class SymbolGraph(metaclass=SingletonMeta):
         """
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         if not wrapped_instance:
+            return
+        if wrapped_instance.index is None:
             return
         yield from (
             edge for _, _, edge in self._instance_graph.in_edges(wrapped_instance.index)

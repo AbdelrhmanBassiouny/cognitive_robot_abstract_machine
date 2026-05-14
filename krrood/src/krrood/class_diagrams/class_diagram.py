@@ -724,7 +724,7 @@ class ClassDiagram:
         except ClassIsUnMappedInClassDiagram:
             return WrappedClass(clazz)
 
-    def get_wrapped_class(self, clazz: Type) -> Optional[WrappedClass]:
+    def get_wrapped_class(self, clazz: Type) -> WrappedClass:
         """
         Gets the wrapped class corresponding to the provided class type.
 

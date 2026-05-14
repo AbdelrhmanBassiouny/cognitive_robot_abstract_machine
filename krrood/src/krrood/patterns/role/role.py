@@ -59,18 +59,13 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
     True
     """
 
-    def __post_init__(self):
-        # Subclasses that define __post_init__ must call super().__post_init__().
-        role_taker = self.role_taker
-        if isinstance(role_taker, HasRoles):
-            role_taker.roles[type(self)] = self
-        self._update_mapping_between_roles_and_role_takers(role_taker)
+    _role_taker_field_set: bool = field(default=False, init=False)
+    _to_set_in_role_taker: Dict[str, Any] = field(default_factory=dict, init=False)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         # Make fields from common bases (shared between the role class and its role-taker
-        # type) init=False so the dataclass constructor does not require them.  Delegation
-        # of those fields is handled by the generated DelegatorFor<Taker> mixin properties.
+        # type) init=False so the dataclass constructor does not require them.
         for common_base in all_nearest_common_ancestors(
             (cls.get_role_taker_type(), cls)
         ):
@@ -88,6 +83,11 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
                     and field_.name in Role.__annotations__
                 ):
                     continue
+                if hasattr(common_base, field_.name) and isinstance(
+                    getattr(common_base, field_.name), property
+                ):
+                    # That means this field was already seen before and was assigned a property.
+                    continue
                 type_ = field_.type
                 if isinstance(field_.type, str):
                     try:
@@ -97,6 +97,11 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
                     except NameError:
                         pass
                 cls._update_field_kwargs(field_.name, {"init": False}, type_=type_)
+                setattr(
+                    cls,
+                    field_.name,
+                    delegate_property(field_.name, cls.role_taker_attribute_name()),
+                )
 
     @classmethod
     def has_role(
@@ -111,14 +116,18 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
 
     @property
     def role_taker_roles(self) -> List[Role]:
-        """:return: All roles of the role taker instance."""
+        """
+        :return: All roles of the role taker instance.
+        """
         return self.get_taker_roles_of_type(self.role_taker, Role)
 
     @classmethod
     def get_taker_roles_of_type(
         cls, role_taker: T, role_type: Type[Role[T]]
     ) -> List[Role[T]]:
-        """:return: All roles of the given type for the role taker instance."""
+        """
+        :return: All roles of the given type for the role taker instance.
+        """
         return list(cls.yield_taker_roles_of_type(role_taker, role_type))
 
     @classmethod
@@ -131,6 +140,8 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
         :return: All roles of the given type(s) for the role taker instance.
         """
         wrapped_taker = SymbolGraph().get_wrapped_instance(role_taker)
+        if wrapped_taker is None:
+            return
         yield from (
             relation.source.instance
             for relation in SymbolGraph().get_incoming_relations_with_type(
@@ -141,13 +152,19 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
 
     @property
     def all_role_takers(self) -> List[Any]:
-        """:return: All role takers of the role instance."""
+        """
+        :return: All role takers of the role instance.
+        """
         return list(self.yield_takers_of_role(self))
 
     @classmethod
     def yield_takers_of_role(cls, role: Role) -> Iterator[Any]:
-        """:return: All role takers of the given role."""
+        """
+        :return: All role takers of the given role.
+        """
         wrapped_role = SymbolGraph().get_wrapped_instance(role)
+        if wrapped_role is None:
+            return
         yield from (
             relation.target.instance
             for relation in SymbolGraph().get_outgoing_relations_with_type(
@@ -158,7 +175,9 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
     @classmethod
     @lru_cache
     def get_root_role_taker_type(cls) -> Type[T]:
-        """:return: The root (non-Role) type of the role taker chain."""
+        """
+        :return: The type of the role taker.
+        """
         current_cls = cls
         while issubclass(current_cls, Role):
             current_cls = current_cls.get_role_taker_type()
@@ -167,7 +186,9 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
     @classmethod
     @lru_cache
     def get_role_generic_type(cls) -> Type[T] | TypeVar:
-        """:return: The generic type parameter of this role class."""
+        """
+        :return: The type of the role taker.
+        """
         if cls is Role:
             return T
         res = get_generic_type_param(cls, Role)
@@ -181,7 +202,9 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
     @classmethod
     @lru_cache
     def updates_role_taker_type(cls) -> bool:
-        """:return: True if this role narrows its parent role's taker type."""
+        """
+        :return: True if this role inherits from another role and updates its role-taker type, False otherwise.
+        """
         if Role in cls.__bases__:
             return False
         role_taker_type = cls.get_role_taker_type()
@@ -197,12 +220,16 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
     @classmethod
     @abstractmethod
     def role_taker_attribute(cls) -> Attribute:
-        """:return: The symbolic representation of the role-taker field."""
+        """
+        :return: The symbolic representation of the attribute that holds the role taker instance.
+        """
         ...
 
     @classmethod
     def role_taker_attribute_name(cls) -> str:
-        """:return: The name of the field that holds the role taker instance."""
+        """
+        :return: The name of the attribute that holds the role taker instance.
+        """
         return cls.role_taker_attribute()._attribute_name_
 
     @classmethod
@@ -212,13 +239,16 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
 
     @cached_property
     def delegatee(self) -> T:
-        """The delegatee (role taker) instance.
-
-        Overridden here so that Role's MRO position guarantees the concrete
-        cached_property is found before the abstract delegatee declared by the
-        generated DelegatorFor<X> mixin, which sits later in the MRO.
         """
-        return getattr(self, self.delegatee_attribute_name())
+        Retrieves the role taker instance.
+
+        Uses object.__getattribute__ to avoid triggering __getattr__ recursion.
+        """
+        attr_name = self.role_taker_attribute_name()
+        try:
+            return object.__getattribute__(self, attr_name)
+        except AttributeError:
+            raise AttributeError(f"Role taker attribute '{attr_name}' not found.")
 
     @property
     def role_taker(self) -> T:
@@ -227,7 +257,9 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
 
     @property
     def root_persistent_entity(self):
-        """:return: The root persistent entity in the role hierarchy."""
+        """
+        :return: The root persistent entity in the role hierarchy.
+        """
         curr = self
         while isinstance(curr, Role):
             rt = getattr(curr, curr.role_taker_attribute_name())
@@ -236,6 +268,67 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
             else:
                 curr = curr.role_taker
         return curr
+
+    def __getattr__(self, item):
+        """
+        Get an attribute from the role taker when not found on the role itself, otherwise raise AttributeError.
+
+        :param item: The attribute name to retrieve.
+        :return: The attribute value if found in the role taker, otherwise raises AttributeError.
+        """
+        # Avoid recursion when looking up the role taker attribute itself
+        if item == self.role_taker_attribute_name():
+            raise AttributeError(item)
+
+        if self._role_taker_field_set:
+            rt = self.role_taker
+            return getattr(rt, item)
+
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{item}'"
+        )
+
+    def __setattr__(self, key, value):
+        """
+        Set an attribute on the role taker instance if the role taker has this attribute,
+         otherwise set on this instance directly.
+        """
+        self._bootstrap_inner_attributes()
+
+        if key == self.role_taker_attribute_name():
+            self._set_role_taker(value)
+        elif self._role_taker_field_set:
+            if key in self.role_taker_field_names:
+                setattr(self.role_taker, key, value)
+                return
+            super().__setattr__(key, value)
+        else:
+            if key in self.__annotations__:
+                super().__setattr__(key, value)
+            if key not in Role.__annotations__ and not isinstance(value, property):
+                self._to_set_in_role_taker[key] = value
+
+    @cached_property
+    def role_taker_field_names(self) -> List[str]:
+        """
+        Returns a list of field names that are defined on the role taker class.
+        """
+        return list(self.get_role_taker_type().__annotations__.keys())
+
+    def _set_role_taker(self, value: T):
+        """
+        Handle setting attributes when the role taker is set.
+        Ensure that attributes intended for delegation are correctly set on the role taker.
+        """
+        object.__setattr__(self, "_role_taker_field_set", True)
+        # Also set the actual attribute defined in the dataclass
+        super().__setattr__(self.role_taker_attribute_name(), value)
+
+        # Set the attributes that were set before the role taker was set
+        for attribute_name, attribute_value in self._to_set_in_role_taker.items():
+            setattr(value, attribute_name, attribute_value)
+        self._to_set_in_role_taker.clear()
+        self._update_mapping_between_roles_and_role_takers(value)
 
     def _update_mapping_between_roles_and_role_takers(self, role_taker: T):
         """
@@ -268,7 +361,9 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
 
     @cached_property
     def role_taker_wrapped_field(self) -> WrappedField:
-        """:return: The wrapped field of this class pointing to the role taker."""
+        """
+        :return: The wrapped field of this class that is pointing to the role taker.
+        """
         return next(
             wf
             for wf in SymbolGraph()
@@ -277,8 +372,24 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
             if wf.name == self.role_taker_attribute_name()
         )
 
+    def _bootstrap_inner_attributes(self):
+        """
+        Initialize internal attributes with default values if they don't exist.
+        """
+        for bootstrap_attr, default in [
+            ("_to_set_in_role_taker", {}),
+            ("_role_taker_field_set", False),
+        ]:
+            try:
+                object.__getattribute__(self, bootstrap_attr)
+            except AttributeError:
+                object.__setattr__(self, bootstrap_attr, default)
+
     def __hash__(self):
-        """Roles and their taker share an identity — hash via the root persistent entity."""
+        """
+        A persistent entity and its roles should be considered the same entity, so we hash based on the root persistent
+         entity.
+        """
         return hash(self.root_persistent_entity)
 
     def __eq__(self, other):
@@ -286,3 +397,21 @@ class Role(Symbol, PropertyDelegator[T], HasRoles, ABC):
 
 
 class HasRoleTaker(PredicateClassRelation[Role]): ...
+
+
+def delegate_property(name, role_taker):
+    """
+    Creates a property that delegates to another attribute's attribute.
+    """
+
+    def getter(self):
+        target = getattr(self, role_taker)
+        return getattr(target, name)
+
+    def setter(self, value):
+        if not self._role_taker_field_set:
+            return
+        target = getattr(self, role_taker)
+        setattr(target, name, value)
+
+    return property(getter, setter)

@@ -6,7 +6,7 @@ import logging
 import sys
 from collections.abc import Sequence
 from copy import copy
-from dataclasses import dataclass, Field, MISSING, field
+from dataclasses import dataclass, Field, MISSING, field as dataclass_field
 from datetime import datetime
 from functools import cached_property, lru_cache
 from inspect import isclass
@@ -66,7 +66,7 @@ class WrappedField:
     The dataclass field object that is wrapped.
     """
 
-    public_name: Optional[str] = None
+    public_name: str = None
     """
     If the field is a relationship managed field, this is public name of the relationship that manages the field.
     """
