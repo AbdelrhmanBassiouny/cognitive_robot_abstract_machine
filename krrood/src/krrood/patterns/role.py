@@ -23,7 +23,6 @@ from krrood.class_diagrams.utils import (
 )
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.core.mapped_variable import Attribute
-from krrood.patterns.property_delegator import PropertyDelegator
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.symbol_graph.symbol_graph import Symbol, PredicateClassRelation, SymbolGraph
 from krrood.utils import get_generic_type_param
