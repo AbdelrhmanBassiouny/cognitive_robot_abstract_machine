@@ -15,7 +15,7 @@ from krrood.patterns.role.predicates import isinstance_or_role
 from krrood.patterns.role.role import Role
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from ..dataset.role_and_ontology import university_ontology_like_classes
-from ..dataset.role_and_ontology._ground_truth_transformed_university_ontology_like_classes_without_descriptors import (
+from ..dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
     PersonInRoleAndOntology,
     CEOAsFirstRole,
     Company,
