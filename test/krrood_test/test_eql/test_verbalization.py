@@ -245,8 +245,8 @@ def test_verbalize_flat_variable_delegates_to_child():
     ("__lt__", "less than"),
     ("__ge__", "at least"),
     ("__le__", "at most"),
-    ("__eq__", "equals"),
-    ("__ne__", "does not equal"),
+    ("__eq__", "is"),
+    ("__ne__", "is not"),
 ])
 def test_verbalize_comparator_operators(op, word):
     x = variable(int, [1])
@@ -277,7 +277,7 @@ def test_verbalize_and_chain_flattening():
     text = _v(cond)
     assert "greater than" in text
     assert "less than" in text
-    assert "does not equal" in text
+    assert "is not" in text
     assert ", and " in text
 
 
@@ -312,7 +312,7 @@ def test_verbalize_not_comparator_gt():
 
 def test_verbalize_not_comparator_eq():
     x = variable(int, [])
-    assert "does not equal" in _v(not_(x == 5))
+    assert "is not" in _v(not_(x == 5))
 
 
 def test_verbalize_not_comparator_le():
@@ -393,7 +393,7 @@ def test_verbalize_for_all(handles_and_containers_world):
     assert "for all" in text
     assert "Cabinet" in text
     assert "Container" in text
-    assert "equals" in text
+    assert "is" in text
 
 
 def test_verbalize_order_by_aggregation(handles_and_containers_world):
@@ -446,10 +446,21 @@ def test_verbalize_nested_rule(doors_and_drawers_world):
     )
     text = verbalize_expression(drawer_var)
 
-    assert "Drawer" in text
-    assert "FixedConnection" in text
-    assert "parent" in text or "container" in text
-    assert "child" in text or "handle" in text
+    # Top-level noun
+    assert text.startswith("a Drawer")
+    # Binding section uses "where"
+    assert "where" in text
+    # First mention of FixedConnection uses indefinite article
+    assert "a FixedConnection's parent" in text
+    # Second mention uses definite article (same entity, different field)
+    assert "the FixedConnection's child" in text
+    # Sub-query constraints appear after binding section
+    assert "such that" in text
+    assert "a PrismaticConnection's child" in text
+    assert "a Handle" in text
+    # Original bugs must be absent
+    assert "Handle's parent" not in text
+    assert "container=Find" not in text
 
 
 def test_verbalize_condition_graph_example():
@@ -466,7 +477,7 @@ def test_verbalize_condition_graph_example():
     assert "either" in text
     assert "greater than" in text
     assert "less than" in text
-    assert "equals" in text
+    assert "is" in text
 
 
 def test_verbalize_has_type_with_exists():
@@ -564,9 +575,10 @@ def test_verbalize_predicate_no_template_fallback():
     emp = variable(Employee, [])
     pred = HasHighSalary(emp, 50000.0)
     text = _v(pred)
-    # No template → generic form mentioning the class and the arg names
-    assert "HasHighSalary" in text
+    # 2-arg predicate without template → triple form "subject predicate-words object"
     assert "Employee" in text
+    assert "has high salary" in text
+    assert "50000.0" in text
 
 
 def test_verbalize_predicate_no_template_no_args_fallback():
@@ -660,6 +672,215 @@ def test_having_negated_comparator_compact(departments_and_employees_fixture):
     having_part = text[text.index("having"):]
     assert "is not greater than" not in having_part
     assert "not greater than" in having_part
+
+
+# ── Comparator "is" form ──────────────────────────────────────────────────────
+
+
+def test_verbalize_comparator_eq_uses_is():
+    x = variable(int, [])
+    text = _v(x == 5)
+    assert "is 5" in text
+    assert "equals" not in text
+
+
+def test_verbalize_comparator_ne_uses_is_not():
+    x = variable(int, [])
+    text = _v(x != 5)
+    assert "is not" in text
+
+
+def test_verbalize_not_comparator_ne():
+    x = variable(int, [])
+    text = _v(not_(x != 5))
+    assert "is" in text
+
+
+def test_verbalize_having_compact_eq_uses_equals():
+    """HAVING compact mode: == keeps 'equals' (not 'is') so the copula-less form is readable."""
+    emp = variable(Employee, domain=None)
+    count_emp = eql.count(emp)
+    query = a(
+        set_of(emp.department, count_emp)
+        .grouped_by(emp.department)
+        .having(count_emp == 2)
+    )
+    text = _vq(query)
+    having_part = text[text.index("having"):]
+    assert "equals" in having_part
+    assert "is 2" not in having_part
+
+
+# ── Non-predicate InstantiatedVariable natural-English form ───────────────────
+
+
+def test_verbalize_inference_no_sub_query(doors_and_drawers_world):
+    """inference(...) with plain variable bindings: 'where' clause, no 'such that'."""
+    world = doors_and_drawers_world
+    h_var = variable(Handle, world.bodies)
+    c_var = variable(Container, world.bodies)
+    drawer = inference(Drawer)(handle=h_var, container=c_var)
+    text = verbalize_expression(drawer)
+
+    assert "a Drawer" in text
+    assert "where" in text
+    assert "a Handle" in text
+    assert "a Container" in text
+    assert "such that" not in text
+
+
+def test_verbalize_inference_repeated_entity_article(doors_and_drawers_world):
+    """Same inner entity used for two fields: first mention 'a', second 'the'."""
+    world = doors_and_drawers_world
+    handle = variable(Handle, world.bodies)
+    pc = variable(PrismaticConnection, world.connections)
+    fc = match_variable(FixedConnection, world.connections)(
+        parent=pc.child, child=handle
+    )
+    drawer = inference(Drawer)(container=fc.parent, handle=fc.child)
+    text = verbalize_expression(drawer)
+
+    assert "a FixedConnection" in text
+    assert "the FixedConnection" in text
+    # Indefinite article comes before definite in the binding section
+    assert text.index("a FixedConnection") < text.index("the FixedConnection")
+
+
+def test_verbalize_inference_literal_field(doors_and_drawers_world):
+    """A child var that is a Python literal value is rendered inside the binding."""
+    world = doors_and_drawers_world
+    h_var = variable(Handle, world.bodies)
+    c_var = variable(Container, world.bodies)
+    drawer = inference(Drawer)(handle=h_var, container=c_var, correct=True)
+    text = verbalize_expression(drawer)
+
+    assert "Drawer" in text
+    assert "Handle" in text
+    assert "True" in text
+
+
+def test_verbalize_double_nested_constraint_stack(doors_and_drawers_world):
+    """
+    InstantiatedVariable whose binding value is itself an InstantiatedVariable with
+    Entity sub-query constraints.  The inner 'such that' must not leak into the outer
+    verbalization — each level keeps its own constraint frame.
+    """
+    @dataclass
+    class Wrapper:
+        drawer: Any
+
+    world = doors_and_drawers_world
+    handle = variable(Handle, world.bodies)
+    pc = variable(PrismaticConnection, world.connections)
+    fc = match_variable(FixedConnection, world.connections)(
+        parent=pc.child, child=handle
+    )
+    drawer_var = inference(Drawer)(container=fc.parent, handle=fc.child)
+    wrapper_var = inference(Wrapper)(drawer=drawer_var)
+    text = verbalize_expression(wrapper_var)
+
+    assert "a Wrapper" in text
+    assert "a Drawer" in text
+    # The "such that" clause belongs to the Drawer level, not leaked to Wrapper
+    assert text.count("such that") == 1
+    # Wrapper's binding references the full Drawer description inline
+    assert "the Wrapper's drawer is a Drawer" in text
+    # Drawer's constraints are present
+    assert "FixedConnection" in text
+    assert "PrismaticConnection" in text
+
+
+def test_verbalize_double_nested_with_outer_entity(doors_and_drawers_world):
+    """
+    Wrapper has both an inner InstantiatedVariable (Drawer) and its own direct
+    Entity binding.  The inner and outer constraint frames must remain separate.
+    """
+    @dataclass
+    class Wrapper:
+        drawer: Any
+        connection: Any
+
+    world = doors_and_drawers_world
+    handle = variable(Handle, world.bodies)
+    pc = variable(PrismaticConnection, world.connections)
+    fc = match_variable(FixedConnection, world.connections)(
+        parent=pc.child, child=handle
+    )
+    drawer_var = inference(Drawer)(container=fc.parent, handle=fc.child)
+
+    # A second entity used directly by the outer Wrapper
+    handle2 = variable(Handle, world.bodies)
+    pc2 = variable(PrismaticConnection, world.connections)
+    fc2 = match_variable(FixedConnection, world.connections)(
+        parent=pc2.child, child=handle2
+    )
+
+    wrapper_var = inference(Wrapper)(drawer=drawer_var, connection=fc2.parent)
+    text = verbalize_expression(wrapper_var)
+
+    assert "a Wrapper" in text
+    assert "a Drawer" in text
+    # Both the Drawer's and Wrapper's sub-query constraints appear as "such that" clauses
+    assert text.count("such that") == 2
+
+
+# ── 2-argument Predicate triple form ─────────────────────────────────────────
+
+
+def test_verbalize_2arg_predicate_triple_form():
+    @dataclass(eq=False)
+    class ConnectsTo(Predicate):
+        source: Any
+        target: Any
+
+        def __call__(self) -> bool:
+            return True
+
+    src = variable(Body, [])
+    tgt = variable(Handle, [])
+    pred = ConnectsTo(src, tgt)
+    text = _v(pred)
+
+    assert "Body" in text
+    assert "connects to" in text
+    assert "Handle" in text
+    # Subject–predicate–object order
+    assert text.index("Body") < text.index("Handle")
+
+
+def test_verbalize_2arg_predicate_camel_converted():
+    @dataclass(eq=False)
+    class IsDirectlyAbove(Predicate):
+        upper: Any
+        lower: Any
+
+        def __call__(self) -> bool:
+            return True
+
+    a_var = variable(Body, [])
+    b_var = variable(Container, [])
+    pred = IsDirectlyAbove(a_var, b_var)
+    text = _v(pred)
+
+    assert "is directly above" in text
+    assert "Body" in text
+    assert "Container" in text
+
+
+def test_verbalize_1arg_predicate_generic_fallback():
+    """1-arg Predicate without template still uses generic constructor-like fallback."""
+    @dataclass(eq=False)
+    class IsActive(Predicate):
+        entity: Any
+
+        def __call__(self) -> bool:
+            return True
+
+    emp = variable(Employee, [])
+    pred = IsActive(emp)
+    text = _v(pred)
+    assert "IsActive" in text
+    assert "Employee" in text
 
 
 # ── Fixture ────────────────────────────────────────────────────────────────────

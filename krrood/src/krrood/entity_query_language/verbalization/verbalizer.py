@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import operator
+import re
 from typing import Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -29,6 +30,7 @@ from krrood.entity_query_language.operators.aggregators import (
 from krrood.entity_query_language.operators.comparator import Comparator, not_contains
 from krrood.entity_query_language.operators.core_logical_operators import AND, OR, Not
 from krrood.entity_query_language.operators.logical_quantifiers import Exists, ForAll
+from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.query.operations import (
     GroupedBy,
     Having,
@@ -40,8 +42,8 @@ from krrood.entity_query_language.query.query import Entity, SetOf
 from krrood.entity_query_language.verbalization.context import VerbalizationContext, _article
 
 _OP_WORDS = {
-    operator.eq: "equals",
-    operator.ne: "does not equal",
+    operator.eq: "is",
+    operator.ne: "is not",
     operator.lt: "is less than",
     operator.le: "is at most",
     operator.gt: "is greater than",
@@ -66,8 +68,8 @@ _NEGATED_OP_WORDS = {
     operator.lt: "is not less than",
     operator.ge: "is not at least",
     operator.le: "is not at most",
-    operator.eq: "does not equal",
-    operator.ne: "equals",
+    operator.eq: "is not",
+    operator.ne: "is",
     operator.contains: "does not contain",
     not_contains: "contains",
 }
@@ -82,6 +84,14 @@ _NEGATED_OP_WORDS_COMPACT = {
     operator.contains: "does not contain",
     not_contains: "contains",
 }
+
+
+def _camel_to_words(name: str) -> str:
+    """Convert a CamelCase class name to space-separated lowercase words.
+
+    Examples: ``"HasRole"`` → ``"has role"``, ``"IsReachable"`` → ``"is reachable"``.
+    """
+    return re.sub(r"([A-Z])", r" \1", name).strip().lower()
 
 _ORDINALS = {0: "first", 1: "second", 2: "third", 3: "fourth", 4: "fifth"}
 
@@ -152,13 +162,26 @@ class EQLVerbalizer:
           ``"Robot's battery"``.
         * Longer or mixed chains: ``"of"`` form —
           ``"name of tasks[0] of the Robot"``.
+
+        When the chain root is an ``Entity`` (a sub-query), it is rendered as a
+        bare noun phrase (``"a FixedConnection"``) and its where-conditions are
+        deferred to the current constraint frame so the enclosing
+        ``InstantiatedVariable`` can emit them as a ``"such that …"`` clause.
         """
         chain: list[MappedVariable] = []
         current = expr
         while isinstance(current, MappedVariable):
             chain.append(current)
             current = current._child_
-        root_text = self.verbalize(current, ctx)
+        # _update_children_ replaces a freshly-built Entity with its An/The wrapper;
+        # unwrap any ResultQuantifier layers to recover the underlying Entity.
+        inner = current
+        while isinstance(inner, ResultQuantifier):
+            inner = inner._child_
+        if isinstance(inner, Entity):
+            root_text = self._verbalize_entity_as_inline_noun_(inner, ctx)
+        else:
+            root_text = self.verbalize(current, ctx)
         chain.reverse()  # root-side first
 
         terminal = chain[-1]
@@ -226,6 +249,7 @@ class EQLVerbalizer:
     def _v_InstantiatedVariable_(
         self, expr: InstantiatedVariable, ctx: VerbalizationContext
     ) -> str:
+        # ── 1. Template takes priority (Predicates with _verbalization_template_) ──
         template: Optional[str] = getattr(expr._type_, "_verbalization_template_", None)
         if template is not None:
             kwargs = {
@@ -239,13 +263,59 @@ class EQLVerbalizer:
             return template.format(**kwargs)
 
         type_name = getattr(expr._type_, "__name__", str(expr._type_))
-        if expr._child_vars_:
-            args_str = ", ".join(
-                f"{name}={ctx.type_name_of_value(child._value_) if isinstance(child, Literal) else self.verbalize(child, ctx)}"
-                for name, child in expr._child_vars_.items()
+
+        # ── 2. Predicate subclasses without a template ─────────────────────────────
+        if isinstance(expr._type_, type) and issubclass(expr._type_, Predicate):
+            if len(expr._child_vars_) == 2:
+                # Binary predicate → subject predicate-words object triple form.
+                items = list(expr._child_vars_.items())
+                left = items[0][1]
+                right = items[1][1]
+                predicate_text = _camel_to_words(type_name)
+                left_text = (
+                    ctx.type_name_of_value(left._value_)
+                    if isinstance(left, Literal)
+                    else self.verbalize(left, ctx)
+                )
+                right_text = (
+                    ctx.type_name_of_value(right._value_)
+                    if isinstance(right, Literal)
+                    else self.verbalize(right, ctx)
+                )
+                return f"{left_text} {predicate_text} {right_text}"
+            # Other arities → generic constructor-like fallback.
+            if expr._child_vars_:
+                args_str = ", ".join(
+                    f"{name}={ctx.type_name_of_value(child._value_) if isinstance(child, Literal) else self.verbalize(child, ctx)}"
+                    for name, child in expr._child_vars_.items()
+                )
+                return f"{_article(type_name)} {type_name}({args_str})"
+            return f"{_article(type_name)} {type_name}"
+
+        # ── 3. Non-predicate class → natural English with binding + deferred clauses ─
+        if expr._id_ in ctx.seen:
+            return f"the {ctx.seen[expr._id_]}"
+        ctx.seen[expr._id_] = type_name
+
+        ctx.push_constraint_frame()
+
+        binding_parts: list[str] = []
+        for field_name, child_expr in expr._child_vars_.items():
+            value_text = (
+                ctx.type_name_of_value(child_expr._value_)
+                if isinstance(child_expr, Literal)
+                else self.verbalize(child_expr, ctx)
             )
-            return f"{_article(type_name)} {type_name}({args_str})"
-        return f"{_article(type_name)} {type_name}"
+            binding_parts.append(f"the {type_name}'s {field_name} is {value_text}")
+
+        constraints = ctx.pop_constraint_frame()
+
+        result = f"{_article(type_name)} {type_name}"
+        if binding_parts:
+            result += ", where " + " and ".join(binding_parts)
+        if constraints:
+            result += ", such that " + " and ".join(constraints)
+        return result
 
     # ── Logical operators ──────────────────────────────────────────────────────
 
@@ -413,6 +483,35 @@ class EQLVerbalizer:
             cond = self.verbalize(where_expr.condition, ctx)
             return f"{article_noun} where {cond}"
         return article_noun
+
+    def _verbalize_entity_as_inline_noun_(self, entity: Entity, ctx: VerbalizationContext) -> str:
+        """
+        Render an ``Entity`` as a bare noun phrase for use as the root of an
+        ``Attribute`` chain inside an ``InstantiatedVariable``.
+
+        On the **first** encounter the entity's type name is registered in
+        *ctx.seen* (so subsequent mentions use "the") and its where-conditions
+        are deferred into the current constraint frame.  On **subsequent**
+        encounters the method returns ``"the <TypeName>"`` immediately with no
+        side effects.
+        """
+        if entity._id_ in ctx.seen:
+            return f"the {ctx.seen[entity._id_]}"
+
+        entity.build()
+        var = entity.selected_variable
+        type_name = var._type_.__name__ if var and getattr(var, "_type_", None) else "entity"
+
+        ctx.seen[entity._id_] = type_name
+        if var is not None and hasattr(var, "_id_"):
+            ctx.seen[var._id_] = type_name
+
+        where_expr = entity._where_expression_
+        if where_expr is not None:
+            cond_text = self.verbalize(where_expr.condition, ctx)
+            ctx.add_constraint(cond_text)
+
+        return f"{_article(type_name)} {type_name}"
 
     def _v_SetOf_(self, expr: SetOf, ctx: VerbalizationContext) -> str:
         expr.build()
