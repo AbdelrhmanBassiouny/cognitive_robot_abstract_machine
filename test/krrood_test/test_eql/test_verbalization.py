@@ -448,26 +448,22 @@ def test_verbalize_nested_rule(doors_and_drawers_world):
     drawer_var = inference(Drawer)(
         container=fixed_connection.parent, handle=fixed_connection.child
     )
-    text = verbalize_expression(drawer_var)
+    # Wrap in entity() to trigger the if/then rule form
+    text = verbalize_expression(entity(drawer_var))
 
-    # Top-level noun
-    assert text.startswith("a Drawer")
-    # Binding section uses "where"
-    assert "where" in text
-    # First mention of FixedConnection uses indefinite article
-    assert "parent of a FixedConnection" in text
-    # Second mention uses definite article (same entity, different field)
-    assert "child of the FixedConnection" in text
-    # Sub-query constraints reuse established binding names, not raw structural paths
-    assert "such that" in text
-    assert "the container of the Drawer is child of a PrismaticConnection" in text
-    assert "the handle of the Drawer is a Handle" in text
-    # Raw structural paths must not appear in the constraints
-    assert "parent of the FixedConnection" not in text.split("such that")[1]
-    assert "child of the FixedConnection" not in text.split("such that")[1]
-    # Original bugs must be absent
-    assert "Handle's parent" not in text
-    assert "container=Find" not in text
+    # if/then structure
+    assert text.startswith("If "), f"Expected 'If' at start, got: {text!r}"
+    assert "then" in text, f"Expected 'then' in: {text!r}"
+    # IF clause introduces the FixedConnection antecedent
+    assert "there's a FixedConnection" in text, f"Expected 'there's a FixedConnection' in: {text!r}"
+    # IF clause describes its bindings as "whose" clauses
+    assert "whose parent is the child of a PrismaticConnection" in text
+    assert "whose child is a Handle" in text
+    # THEN clause introduces the Drawer
+    assert "there's a Drawer" in text, f"Expected 'there's a Drawer' in: {text!r}"
+    # THEN clause uses "whose" for each binding
+    assert "whose container is the parent of the FixedConnection" in text
+    assert "whose handle is the child of the FixedConnection" in text
 
 
 def test_verbalize_condition_graph_example():
@@ -964,7 +960,7 @@ def test_search_by_booking_date_and_aggregate():
 
 
 def test_cabinet_rule_verbalization(handles_and_containers_world):
-    """Plural field binding uses 'are Drawers' and grouped-by names the aggregated variable."""
+    """if/then form: aggregated antecedents plural, group-key binding uses 'common'."""
     drawer = variable(Drawer, handles_and_containers_world.views)
     prismatic_connection = variable(PrismaticConnection, handles_and_containers_world.connections)
     query = (
@@ -979,15 +975,20 @@ def test_cabinet_rule_verbalization(handles_and_containers_world):
     )
     text = verbalize_expression(query)
     assert "Cabinet" in text, f"Expected 'Cabinet' in: {text!r}"
-    # plural field must use "are Drawers", not "is a Drawer"
-    assert "drawers of the Cabinet are Drawers" in text, f"Expected 'drawers of the Cabinet are Drawers' in: {text!r}"
-    assert "drawers is" not in text, f"Did not expect 'drawers is' in: {text!r}"
-    # grouped-by must name what is being grouped and by what
-    assert "Drawers are grouped by" in text, f"Expected 'Drawers are grouped by' in: {text!r}"
-    # group key must use the established binding name, not the raw structural path
-    assert "grouped by the container of the Cabinet" in text, f"Expected 'grouped by the container of the Cabinet' in: {text!r}"
-    # binding clause still names the structural origin
-    assert "parent of a PrismaticConnection" in text, f"Expected binding definition in: {text!r}"
+    # if/then structure
+    assert text.startswith("If "), f"Expected 'If' at start, got: {text!r}"
+    assert "then" in text, f"Expected 'then' in: {text!r}"
+    # IF clause introduces PrismaticConnections in plural (aggregated)
+    assert "there are PrismaticConnections" in text, f"Expected 'there are PrismaticConnections' in: {text!r}"
+    # IF clause contains a "whose children" constraint from the WHERE condition
+    assert "whose children" in text, f"Expected 'whose children' in: {text!r}"
+    # THEN clause introduces the Cabinet
+    assert "there's a Cabinet" in text, f"Expected 'there's a Cabinet' in: {text!r}"
+    # group-key binding uses "common"
+    assert "whose container is the common parent of the PrismaticConnections" in text, \
+        f"Expected 'whose container is the common parent of the PrismaticConnections' in: {text!r}"
+    # aggregated plural binding
+    assert "whose drawers are the Drawers" in text, f"Expected 'whose drawers are the Drawers' in: {text!r}"
 
 
 def test_plural_field_binding_uses_are(handles_and_containers_world):

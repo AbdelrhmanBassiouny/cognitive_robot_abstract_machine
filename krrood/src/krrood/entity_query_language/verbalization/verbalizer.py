@@ -45,6 +45,11 @@ from krrood.entity_query_language.query.operations import (
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier, The
 from krrood.entity_query_language.query.query import Entity, SetOf
 from krrood.entity_query_language.verbalization.context import VerbalizationContext, _article
+from krrood.entity_query_language.verbalization.rule_analysis import (
+    AggregationStatus,
+    RuleAnalyzer,
+    RuleStructure,
+)
 
 _OP_WORDS = {
     operator.eq: "is",
@@ -255,10 +260,11 @@ class EQLVerbalizer:
 
     @staticmethod
     def _render_path_(parts: list, root_text: str) -> str:
-        """Render an attribute path as ``"a of b of root"``."""
+        """Render an attribute path as ``"the a of the b of root"``."""
         if not parts:
             return root_text
-        return " of ".join(reversed(parts)) + f" of {root_text}"
+        inner = " of the ".join(reversed(parts))
+        return f"the {inner} of {root_text}"
 
     def _verbalize_chain_root_(self, leaf, ctx: VerbalizationContext) -> str:
         """Resolve the root text for a chain leaf, unwrapping any ResultQuantifier to find an Entity."""
@@ -331,50 +337,60 @@ class EQLVerbalizer:
     def _v_InstantiatedVariable_(
         self, expr: InstantiatedVariable, ctx: VerbalizationContext
     ) -> str:
-        # ── 1. Template takes priority (Predicates with _verbalization_template_) ──
         template: Optional[str] = getattr(expr._type_, "_verbalization_template_", None)
         if template is not None:
-            kwargs = {
-                name: (
-                    ctx.type_name_of_value(child._value_)
-                    if isinstance(child, Literal)
-                    else self.verbalize(child, ctx)
-                )
-                for name, child in expr._child_vars_.items()
-            }
-            return template.format(**kwargs)
+            return self._verbalize_template_predicate_(expr, ctx, template)
 
+        if isinstance(expr._type_, type) and issubclass(expr._type_, Predicate):
+            return self._verbalize_predicate_no_template_(expr, ctx)
+
+        return self._verbalize_instantiated_natural_(expr, ctx)
+
+    def _verbalize_template_predicate_(
+        self, expr: InstantiatedVariable, ctx: VerbalizationContext, template: str
+    ) -> str:
+        kwargs = {
+            name: (
+                ctx.type_name_of_value(child._value_)
+                if isinstance(child, Literal)
+                else self.verbalize(child, ctx)
+            )
+            for name, child in expr._child_vars_.items()
+        }
+        return template.format(**kwargs)
+
+    def _verbalize_predicate_no_template_(
+        self, expr: InstantiatedVariable, ctx: VerbalizationContext
+    ) -> str:
+        type_name = getattr(expr._type_, "__name__", str(expr._type_))
+        if len(expr._child_vars_) == 2:
+            items = list(expr._child_vars_.items())
+            left, right = items[0][1], items[1][1]
+            predicate_text = _camel_to_words(type_name)
+            left_text = (
+                ctx.type_name_of_value(left._value_)
+                if isinstance(left, Literal)
+                else self.verbalize(left, ctx)
+            )
+            right_text = (
+                ctx.type_name_of_value(right._value_)
+                if isinstance(right, Literal)
+                else self.verbalize(right, ctx)
+            )
+            return f"{left_text} {predicate_text} {right_text}"
+        if expr._child_vars_:
+            args_str = ", ".join(
+                f"{name}={ctx.type_name_of_value(child._value_) if isinstance(child, Literal) else self.verbalize(child, ctx)}"
+                for name, child in expr._child_vars_.items()
+            )
+            return f"{_article(type_name)} {type_name}({args_str})"
+        return f"{_article(type_name)} {type_name}"
+
+    def _verbalize_instantiated_natural_(
+        self, expr: InstantiatedVariable, ctx: VerbalizationContext
+    ) -> str:
         type_name = getattr(expr._type_, "__name__", str(expr._type_))
 
-        # ── 2. Predicate subclasses without a template ─────────────────────────────
-        if isinstance(expr._type_, type) and issubclass(expr._type_, Predicate):
-            if len(expr._child_vars_) == 2:
-                # Binary predicate → subject predicate-words object triple form.
-                items = list(expr._child_vars_.items())
-                left = items[0][1]
-                right = items[1][1]
-                predicate_text = _camel_to_words(type_name)
-                left_text = (
-                    ctx.type_name_of_value(left._value_)
-                    if isinstance(left, Literal)
-                    else self.verbalize(left, ctx)
-                )
-                right_text = (
-                    ctx.type_name_of_value(right._value_)
-                    if isinstance(right, Literal)
-                    else self.verbalize(right, ctx)
-                )
-                return f"{left_text} {predicate_text} {right_text}"
-            # Other arities → generic constructor-like fallback.
-            if expr._child_vars_:
-                args_str = ", ".join(
-                    f"{name}={ctx.type_name_of_value(child._value_) if isinstance(child, Literal) else self.verbalize(child, ctx)}"
-                    for name, child in expr._child_vars_.items()
-                )
-                return f"{_article(type_name)} {type_name}({args_str})"
-            return f"{_article(type_name)} {type_name}"
-
-        # ── 3. Non-predicate class → natural English with binding + deferred clauses ─
         if expr._id_ in ctx.seen:
             return f"the {ctx.seen[expr._id_]}"
         ctx.seen[expr._id_] = type_name
@@ -395,12 +411,6 @@ class EQLVerbalizer:
                     else self.verbalize(child_expr, ctx)
                 )
                 binding_parts.append(f"{field_ref} is {value_text}")
-                # Map the definite form of the value → the field reference so that
-                # deferred constraints (which re-mention the value with "the") are
-                # rewritten to use the already-established binding name instead.
-                # Replace any indefinite article before a PascalCase word to get
-                # the definite form (handles "a Foo", "attr of a Foo", and
-                # already-definite "attr of the Foo").
                 definite_value = re.sub(r"\b(a|an) ([A-Z])", r"the \2", value_text)
                 if re.search(r"\bthe [A-Z]", definite_value) and definite_value not in binding_alias_map:
                     binding_alias_map[definite_value] = field_ref
@@ -533,6 +543,240 @@ class EQLVerbalizer:
         ctx.seen[expr._id_] = phrase
         return phrase
 
+    # ── Rule (If … then …) verbalization ─────────────────────────────────────
+
+    _rule_analyzer = RuleAnalyzer()
+
+    def _verbalize_rule_(self, expr: Entity, ctx: VerbalizationContext) -> str:
+        structure = self._rule_analyzer.analyze(expr)
+        if_parts = self._verbalize_rule_if_(structure, ctx)
+        then_parts = self._verbalize_rule_then_(structure, ctx)
+        return f"If {if_parts}, then {then_parts}"
+
+    def _verbalize_rule_if_(self, s: RuleStructure, ctx: VerbalizationContext) -> str:
+        from krrood.entity_query_language.query.query import Entity as _Entity
+
+        # Bucket extra WHERE conditions by which antecedent owns their left side.
+        ant_by_root_id = {self._antecedent_var_id_(a): a for a in s.antecedents}
+        extra_by_ant: dict = {self._antecedent_var_id_(a): [] for a in s.antecedents}
+        unmatched: list = []
+        for cond in s.extra_where_conditions:
+            owner_id = self._condition_left_owner_id_(cond)
+            if owner_id in extra_by_ant:
+                extra_by_ant[owner_id].append(cond)
+            else:
+                unmatched.append(cond)
+
+        # An antecedent is "primary" (introduced explicitly in IF) if it has
+        # own conditions OR is the left-side owner of at least one extra WHERE.
+        primary_ids = {
+            self._antecedent_var_id_(a)
+            for a in s.antecedents
+            if a.own_conditions or extra_by_ant.get(self._antecedent_var_id_(a))
+        }
+
+        clauses: list[str] = []
+        for ant in s.antecedents:
+            root = ant.root
+            type_name = ant.type_name
+            ant_id = self._antecedent_var_id_(ant)
+
+            if ant_id not in primary_ids:
+                # Non-primary: just register in ctx.seen for later coreference.
+                ctx.seen[root._id_] = type_name
+                if isinstance(root, _Entity):
+                    root.build()
+                    sel = root.selected_variable
+                    if sel is not None and hasattr(sel, "_id_"):
+                        ctx.seen[sel._id_] = type_name
+                continue
+
+            # Introduce the antecedent
+            if ant.aggregation_status == AggregationStatus.AGGREGATED:
+                intro = f"there are {_engine.plural(type_name)}"
+            else:
+                intro = f"there's {_article(type_name)} {type_name}"
+
+            ctx.seen[root._id_] = type_name
+            if isinstance(root, _Entity):
+                root.build()
+                sel = root.selected_variable
+                if sel is not None and hasattr(sel, "_id_"):
+                    ctx.seen[sel._id_] = type_name
+
+            # Own conditions + extra WHERE conditions owned by this antecedent
+            all_conditions = ant.own_conditions + extra_by_ant.get(ant_id, [])
+            whose = self._whose_clauses_from_conditions_(
+                all_conditions, root, type_name, ant.aggregation_status, s.antecedents, ctx
+            )
+            clauses.append(f"{intro}, {whose}" if whose else intro)
+
+        # Unmatched conditions added to the last clause
+        for cond in unmatched:
+            cond_text = self.verbalize(cond, ctx)
+            if clauses:
+                clauses[-1] = clauses[-1] + f", and {cond_text}"
+            else:
+                clauses.append(cond_text)
+
+        return ", and ".join(clauses) if clauses else "true"
+
+    def _verbalize_rule_then_(self, s: RuleStructure, ctx: VerbalizationContext) -> str:
+        type_name = s.consequent_type
+        ctx.seen[id(s)] = type_name  # placeholder; real id set below
+
+        intro = f"there's {_article(type_name)} {type_name}"
+
+        whose_parts: list[str] = []
+        for binding in s.consequent_bindings:
+            field = binding.field_name
+            if binding.is_plural_field:
+                value_text = _ensure_plural(self._verbalize_plural_(binding.value_expr, ctx))
+                if binding.aggregation_status == AggregationStatus.AGGREGATED:
+                    # Second mention — use "the Xs"
+                    value_text = f"the {value_text}"
+                whose_parts.append(f"whose {field} are {value_text}")
+            elif binding.aggregation_status == AggregationStatus.GROUP_KEY:
+                value_text = self._verbalize_group_key_value_(binding.value_expr, ctx)
+                whose_parts.append(f"whose {field} is {value_text}")
+            else:
+                value_text = self.verbalize(binding.value_expr, ctx)
+                whose_parts.append(f"whose {field} is {value_text}")
+
+        if whose_parts:
+            return intro + ", " + ", and ".join(whose_parts)
+        return intro
+
+    def _whose_clauses_from_conditions_(
+        self, conditions, root, type_name: str,
+        agg: AggregationStatus, all_antecedents, ctx: VerbalizationContext
+    ) -> str:
+        """Build comma-joined 'whose X is Y' phrases from a list of conditions."""
+        parts: list[str] = []
+        for cond in conditions:
+            text = self._try_whose_from_condition_(cond, all_antecedents, ctx)
+            parts.append(text if text else self.verbalize(cond, ctx))
+        if not parts:
+            return ""
+        if len(parts) == 1:
+            return parts[0]
+        return ", ".join(parts[:-1]) + f", and {parts[-1]}"
+
+    def _try_whose_from_condition_(
+        self, cond, antecedents, ctx: VerbalizationContext
+    ) -> Optional[str]:
+        """
+        If *cond* is ``left == right`` where ``left`` is an Attribute of a known
+        antecedent variable, return ``"whose {attr} is {right}"``.
+        """
+        from krrood.entity_query_language.operators.comparator import Comparator
+        from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
+        from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+        import operator as _op
+
+        if not isinstance(cond, Comparator) or cond.operation is not _op.eq:
+            return None
+        left = cond.left
+        if not isinstance(left, Attribute):
+            return None
+
+        current = left
+        attr_names: list[str] = []
+        while isinstance(current, MappedVariable):
+            if hasattr(current, "_attribute_name_"):
+                attr_names.append(current._attribute_name_)
+            current = current._child_
+        while isinstance(current, ResultQuantifier):
+            current = current._child_
+
+        matched_ant = self._find_matching_antecedent_(current, antecedents)
+        if matched_ant is None or not attr_names:
+            return None
+
+        raw_attr = attr_names[-1]
+        aggregated = matched_ant.aggregation_status == AggregationStatus.AGGREGATED
+
+        attr_word = _ensure_plural(raw_attr) if aggregated else raw_attr
+        right_text = (
+            self._verbalize_plural_(cond.right, ctx)
+            if aggregated
+            else self.verbalize(cond.right, ctx)
+        )
+        copula = "are" if aggregated else "is"
+        return f"whose {attr_word} {copula} {right_text}"
+
+    @staticmethod
+    def _antecedent_var_id_(ant) -> Optional[object]:
+        from krrood.entity_query_language.query.query import Entity as _Entity
+        root = ant.root
+        if isinstance(root, _Entity):
+            root.build()
+            sel = root.selected_variable
+            return getattr(sel, "_id_", None)
+        return getattr(root, "_id_", None)
+
+    def _condition_left_owner_id_(self, cond) -> Optional[object]:
+        """Return the variable ID of the left-side root of an equality condition, if any."""
+        from krrood.entity_query_language.operators.comparator import Comparator
+        from krrood.entity_query_language.core.mapped_variable import MappedVariable
+        from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+        import operator as _op
+
+        if not isinstance(cond, Comparator) or cond.operation is not _op.eq:
+            return None
+        current = cond.left
+        while isinstance(current, MappedVariable):
+            current = current._child_
+        while isinstance(current, ResultQuantifier):
+            current = current._child_
+        return getattr(current, "_id_", None)
+
+    @staticmethod
+    def _find_matching_antecedent_(var_node, antecedents):
+        """Return the antecedent whose root variable matches *var_node*, or None."""
+        from krrood.entity_query_language.query.query import Entity as _Entity
+        node_id = getattr(var_node, "_id_", None)
+        for ant in antecedents:
+            root = ant.root
+            if isinstance(root, _Entity):
+                root.build()
+                sel = root.selected_variable
+                ant_id = getattr(sel, "_id_", None)
+            else:
+                ant_id = getattr(root, "_id_", None)
+            if ant_id is not None and ant_id == node_id:
+                return ant
+        return None
+
+    def _verbalize_group_key_value_(self, expr, ctx: VerbalizationContext) -> str:
+        """
+        Render a GROUP_KEY binding value as ``"the common {attr} of the {PluralRoot}"``.
+        """
+        from krrood.entity_query_language.core.mapped_variable import MappedVariable, Attribute
+        from krrood.entity_query_language.core.variable import Variable
+
+        chain: list = []
+        current = expr
+        while isinstance(current, MappedVariable):
+            chain.append(current)
+            current = current._child_
+        chain.reverse()  # root-side first
+
+        if not chain or not isinstance(current, Variable):
+            return self.verbalize(expr, ctx)
+
+        root_type = current._type_.__name__ if getattr(current, "_type_", None) else "entity"
+        root_plural = _engine.plural(root_type)
+        # Mark root as seen (plural mention)
+        ctx.seen[current._id_] = root_type
+
+        parts = self._build_path_parts_(chain)
+        if not parts:
+            return f"the common {root_type} of the {root_plural}"
+
+        outermost = list(reversed(parts))[0]
+        return f"the common {outermost} of the {root_plural}"
+
     # ── Query: Entity and SetOf ────────────────────────────────────────────────
 
     def _v_Entity_(self, expr: Entity, ctx: VerbalizationContext) -> str:
@@ -540,6 +784,11 @@ class EQLVerbalizer:
             return f"the {ctx.seen[expr._id_]}"
 
         expr.build()
+
+        # Rule form: entity whose selected variable is an inference
+        if self._rule_analyzer.can_handle(expr):
+            return self._verbalize_rule_(expr, ctx)
+
         is_the = (
             expr._quantifier_builder_ is not None
             and expr._quantifier_builder_.type is The
