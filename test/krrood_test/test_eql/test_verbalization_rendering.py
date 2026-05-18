@@ -400,6 +400,67 @@ def test_hierarchical_plain_rule_structure(doors_and_drawers_world):
     assert any("Drawer" in l for l in lines)
 
 
+# ── Rule fragment structure tests ─────────────────────────────────────────────
+
+
+def _find_block_with_keyword(fragment: VerbFragment, keyword: str) -> BlockFragment | None:
+    """Return the first BlockFragment whose header text contains keyword."""
+    if not isinstance(fragment, BlockFragment):
+        return None
+    if fragment.header is not None and keyword in _str(fragment.header):
+        return fragment
+    for item in fragment.items:
+        found = _find_block_with_keyword(item, keyword)
+        if found is not None:
+            return found
+    return None
+
+
+def _drawer_rule_fragment(doors_and_drawers_world) -> VerbFragment:
+    world = doors_and_drawers_world
+    handle = variable(Handle, world.bodies)
+    pc = variable(PrismaticConnection, world.connections)
+    fc = match_variable(FixedConnection, world.connections)(parent=pc.child, child=handle)
+    drawer_var = inference(Drawer)(container=fc.parent, handle=fc.child)
+    return EQLVerbalizer().build(entity(drawer_var))
+
+
+def test_rule_condition_whose_is_keyword_role(doors_and_drawers_world):
+    frag = _drawer_rule_fragment(doors_and_drawers_world)
+    keyword_texts = _collect_role_texts(frag, SemanticRole.KEYWORD)
+    assert "whose" in keyword_texts
+
+
+def test_rule_condition_attribute_carries_attribute_role(doors_and_drawers_world):
+    frag = _drawer_rule_fragment(doors_and_drawers_world)
+    attr_texts = _collect_role_texts(frag, SemanticRole.ATTRIBUTE)
+    assert any("parent" in t for t in attr_texts)
+    assert any("child" in t for t in attr_texts)
+
+
+def test_rule_if_antecedent_is_block_fragment(doors_and_drawers_world):
+    frag = _drawer_rule_fragment(doors_and_drawers_world)
+    if_block = _find_block_with_keyword(frag, "If")
+    assert if_block is not None
+    antecedent_blocks = [item for item in if_block.items if isinstance(item, BlockFragment)]
+    assert antecedent_blocks, "IF clause must contain at least one antecedent BlockFragment"
+    for block in antecedent_blocks:
+        assert isinstance(block.header, PhraseFragment), "antecedent intro must be a PhraseFragment"
+        assert block.items, "antecedent block must have condition items"
+
+
+def test_rule_then_consequent_is_block_fragment(doors_and_drawers_world):
+    frag = _drawer_rule_fragment(doors_and_drawers_world)
+    then_block = _find_block_with_keyword(frag, "then")
+    assert then_block is not None
+    assert len(then_block.items) == 1, "THEN clause must contain exactly one consequent BlockFragment"
+    consequent = then_block.items[0]
+    assert isinstance(consequent, BlockFragment), "THEN item must be a BlockFragment"
+    assert isinstance(consequent.header, PhraseFragment), "consequent intro must be a PhraseFragment"
+    assert "Drawer" in _str(consequent.header)
+    assert consequent.items, "consequent block must have binding items"
+
+
 # ── VerbalizationPipeline factories ───────────────────────────────────────────
 
 

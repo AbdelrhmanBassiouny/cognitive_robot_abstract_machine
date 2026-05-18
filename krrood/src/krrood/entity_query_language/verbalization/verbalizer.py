@@ -52,6 +52,8 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.rule_analysis import (
     AggregationStatus,
+    AntecedentInfo,
+    ConsequentBinding,
     RuleAnalyzer,
     RuleStructure,
 )
@@ -620,75 +622,20 @@ class EQLVerbalizer(metaclass=SingletonMeta):
         )
 
     def _verbalize_rule_if_(self, s: RuleStructure, ctx: VerbalizationContext) -> list[VerbFragment]:
-        from krrood.entity_query_language.query.query import Entity as _Entity
-
-        ant_by_root_id = {self._antecedent_var_id_(a): a for a in s.antecedents}
-        extra_by_ant: dict = {self._antecedent_var_id_(a): [] for a in s.antecedents}
-        unmatched: list = []
-        for cond in s.extra_where_conditions:
-            owner_id = self._condition_left_owner_id_(cond)
-            if owner_id in extra_by_ant:
-                extra_by_ant[owner_id].append(cond)
-            else:
-                unmatched.append(cond)
-
-        primary_ids = {
-            self._antecedent_var_id_(a)
-            for a in s.antecedents
-            if a.own_conditions or extra_by_ant.get(self._antecedent_var_id_(a))
-        }
+        for ant in s.secondary_antecedents:
+            self._register_antecedent_(ant, ctx)
 
         items: list[VerbFragment] = []
-        for ant in s.antecedents:
-            root = ant.root
-            type_name = ant.type_name
-            ant_id = self._antecedent_var_id_(ant)
+        for ant in s.primary_antecedents:
+            intro = self._antecedent_intro_frag_(ant)
+            self._register_antecedent_(ant, ctx)
+            cond_frags = self._condition_frags_(ant.conditions, ant, ctx)
+            items.append(BlockFragment(header=intro, items=cond_frags) if cond_frags else intro)
 
-            if ant_id not in primary_ids:
-                ctx.seen[root._id_] = type_name
-                if isinstance(root, _Entity):
-                    root.build()
-                    sel = root.selected_variable
-                    if sel is not None and hasattr(sel, "_id_"):
-                        ctx.seen[sel._id_] = type_name
-                continue
+        for cond in s.unmatched_conditions:
+            items.append(self.build(cond, ctx))
 
-            if ant.aggregation_status == AggregationStatus.AGGREGATED:
-                intro = _phrase(
-                    _word("there are"),
-                    _role(inflect_engine.plural(type_name), SemanticRole.VARIABLE),
-                )
-            else:
-                intro = _phrase(
-                    _word(f"there's {_article(type_name)}"),
-                    _role(type_name, SemanticRole.VARIABLE),
-                )
-
-            ctx.seen[root._id_] = type_name
-            if isinstance(root, _Entity):
-                root.build()
-                sel = root.selected_variable
-                if sel is not None and hasattr(sel, "_id_"):
-                    ctx.seen[sel._id_] = type_name
-
-            all_conditions = ant.own_conditions + extra_by_ant.get(ant_id, [])
-            whose = self._whose_str_from_conditions_(
-                all_conditions, root, type_name, ant.aggregation_status, s.antecedents, ctx
-            )
-            if whose:
-                items.append(_phrase(intro, _word(f", {whose}"), sep=""))
-            else:
-                items.append(intro)
-
-        for cond in unmatched:
-            cond_text = self.verbalize(cond, ctx)
-            if items:
-                last = _str(items[-1])
-                items[-1] = _word(f"{last}, and {cond_text}")
-            else:
-                items.append(_word(cond_text))
-
-        return items if items else [_word("true")]
+        return items or [_word("true")]
 
     def _verbalize_rule_then_(self, s: RuleStructure, ctx: VerbalizationContext) -> list[VerbFragment]:
         type_name = s.consequent_type
@@ -696,117 +643,95 @@ class EQLVerbalizer(metaclass=SingletonMeta):
             _word(f"there's {_article(type_name)}"),
             _role(type_name, SemanticRole.VARIABLE),
         )
+        binding_frags = [self._verbalize_binding_frag_(b, ctx) for b in s.consequent_bindings]
+        if not binding_frags:
+            return [intro]
+        return [BlockFragment(header=intro, items=binding_frags)]
 
-        whose_items: list[VerbFragment] = []
-        for binding in s.consequent_bindings:
-            field = binding.field_name
-            if binding.is_plural_field:
-                value_text = _ensure_plural(_str(self._verbalize_plural_(binding.value_expr, ctx)))
-                if binding.aggregation_status == AggregationStatus.AGGREGATED:
-                    value_text = f"the {value_text}"
-                whose_items.append(_word(f"whose {field} are {value_text}"))
-            elif binding.aggregation_status == AggregationStatus.GROUP_KEY:
-                value_text = self._verbalize_group_key_value_(binding.value_expr, ctx)
-                whose_items.append(_word(f"whose {field} is {value_text}"))
-            else:
-                value_text = self.verbalize(binding.value_expr, ctx)
-                whose_items.append(_word(f"whose {field} is {value_text}"))
+    def _antecedent_intro_frag_(self, ant: AntecedentInfo) -> VerbFragment:
+        if ant.aggregation_status == AggregationStatus.AGGREGATED:
+            return _phrase(
+                _word("there are"),
+                _role(inflect_engine.plural(ant.type_name), SemanticRole.VARIABLE),
+            )
+        return _phrase(
+            _word(f"there's {_article(ant.type_name)}"),
+            _role(ant.type_name, SemanticRole.VARIABLE),
+        )
 
-        return [intro] + whose_items
+    def _register_antecedent_(self, ant: AntecedentInfo, ctx: VerbalizationContext) -> None:
+        from krrood.entity_query_language.query.query import Entity as _Entity
+        root = ant.root
+        ctx.seen[root._id_] = ant.type_name
+        if isinstance(root, _Entity):
+            root.build()
+            sel = root.selected_variable
+            if sel is not None and hasattr(sel, "_id_"):
+                ctx.seen[sel._id_] = ant.type_name
 
-    def _whose_str_from_conditions_(
-        self, conditions, root, type_name: str,
-        agg: AggregationStatus, all_antecedents, ctx: VerbalizationContext,
-    ) -> str:
-        parts: list[str] = []
-        for cond in conditions:
-            text = self._try_whose_from_condition_(cond, all_antecedents, ctx)
-            parts.append(text if text else self.verbalize(cond, ctx))
-        if not parts:
-            return ""
-        if len(parts) == 1:
-            return parts[0]
-        return ", ".join(parts[:-1]) + f", and {parts[-1]}"
+    def _condition_frags_(
+        self, conditions: list, ant: AntecedentInfo, ctx: VerbalizationContext
+    ) -> list[VerbFragment]:
+        return [
+            self._try_whose_from_condition_(cond, ant, ctx) or self.build(cond, ctx)
+            for cond in conditions
+        ]
 
     def _try_whose_from_condition_(
-        self, cond, antecedents, ctx: VerbalizationContext
-    ) -> Optional[str]:
-        from krrood.entity_query_language.operators.comparator import Comparator
-        from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
-        from krrood.entity_query_language.query.quantifiers import ResultQuantifier
-        import operator as _op
-
-        if not isinstance(cond, Comparator) or cond.operation is not _op.eq:
+        self, cond, ant: AntecedentInfo, ctx: VerbalizationContext
+    ) -> Optional[VerbFragment]:
+        if not isinstance(cond, Comparator) or cond.operation is not operator.eq:
             return None
-        left = cond.left
-        if not isinstance(left, Attribute):
+        if not isinstance(cond.left, Attribute):
             return None
+        attr_names = self._extract_attr_names_(cond.left)
+        if not attr_names:
+            return None
+        aggregated = ant.aggregation_status == AggregationStatus.AGGREGATED
+        copula = "are" if aggregated else "is"
+        attr_word = _ensure_plural(attr_names[-1]) if aggregated else attr_names[-1]
+        right_frag = (
+            self._verbalize_plural_(cond.right, ctx) if aggregated else self.build(cond.right, ctx)
+        )
+        return _phrase(
+            _role("whose", SemanticRole.KEYWORD),
+            _role(attr_word, SemanticRole.ATTRIBUTE),
+            _role(copula, SemanticRole.OPERATOR),
+            right_frag,
+        )
 
-        current = left
+    @staticmethod
+    def _extract_attr_names_(left: Attribute) -> list[str]:
         attr_names: list[str] = []
+        current = left
         while isinstance(current, MappedVariable):
             if hasattr(current, "_attribute_name_"):
                 attr_names.append(current._attribute_name_)
             current = current._child_
-        while isinstance(current, ResultQuantifier):
-            current = current._child_
+        return attr_names
 
-        matched_ant = self._find_matching_antecedent_(current, antecedents)
-        if matched_ant is None or not attr_names:
-            return None
-
-        raw_attr = attr_names[-1]
-        aggregated = matched_ant.aggregation_status == AggregationStatus.AGGREGATED
-
-        attr_word = _ensure_plural(raw_attr) if aggregated else raw_attr
-        right_text = (
-            _str(self._verbalize_plural_(cond.right, ctx))
-            if aggregated
-            else self.verbalize(cond.right, ctx)
+    def _verbalize_binding_frag_(
+        self, binding: ConsequentBinding, ctx: VerbalizationContext
+    ) -> VerbFragment:
+        copula = "are" if binding.is_plural_field else "is"
+        field_text = _ensure_plural(binding.field_name) if binding.is_plural_field else binding.field_name
+        return _phrase(
+            _role("whose", SemanticRole.KEYWORD),
+            _role(field_text, SemanticRole.ATTRIBUTE),
+            _role(copula, SemanticRole.OPERATOR),
+            self._binding_value_frag_(binding, ctx),
         )
-        copula = "are" if aggregated else "is"
-        return f"whose {attr_word} {copula} {right_text}"
 
-    @staticmethod
-    def _antecedent_var_id_(ant) -> Optional[object]:
-        from krrood.entity_query_language.query.query import Entity as _Entity
-        root = ant.root
-        if isinstance(root, _Entity):
-            root.build()
-            sel = root.selected_variable
-            return getattr(sel, "_id_", None)
-        return getattr(root, "_id_", None)
-
-    def _condition_left_owner_id_(self, cond) -> Optional[object]:
-        from krrood.entity_query_language.operators.comparator import Comparator
-        from krrood.entity_query_language.core.mapped_variable import MappedVariable
-        from krrood.entity_query_language.query.quantifiers import ResultQuantifier
-        import operator as _op
-
-        if not isinstance(cond, Comparator) or cond.operation is not _op.eq:
-            return None
-        current = cond.left
-        while isinstance(current, MappedVariable):
-            current = current._child_
-        while isinstance(current, ResultQuantifier):
-            current = current._child_
-        return getattr(current, "_id_", None)
-
-    @staticmethod
-    def _find_matching_antecedent_(var_node, antecedents):
-        from krrood.entity_query_language.query.query import Entity as _Entity
-        node_id = getattr(var_node, "_id_", None)
-        for ant in antecedents:
-            root = ant.root
-            if isinstance(root, _Entity):
-                root.build()
-                sel = root.selected_variable
-                ant_id = getattr(sel, "_id_", None)
-            else:
-                ant_id = getattr(root, "_id_", None)
-            if ant_id is not None and ant_id == node_id:
-                return ant
-        return None
+    def _binding_value_frag_(
+        self, binding: ConsequentBinding, ctx: VerbalizationContext
+    ) -> VerbFragment:
+        if binding.is_plural_field and binding.aggregation_status == AggregationStatus.AGGREGATED:
+            return _phrase(_word("the"), self._verbalize_plural_(binding.value_expr, ctx))
+        if binding.is_plural_field:
+            return self._verbalize_plural_(binding.value_expr, ctx)
+        if binding.aggregation_status == AggregationStatus.GROUP_KEY:
+            return _word(self._verbalize_group_key_value_(binding.value_expr, ctx))
+        return self.build(binding.value_expr, ctx)
 
     def _verbalize_group_key_value_(self, expr, ctx: VerbalizationContext) -> str:
         from krrood.entity_query_language.core.mapped_variable import MappedVariable

@@ -28,8 +28,8 @@ class AntecedentInfo:
     root: Any                      # Variable or Entity (unwrapped from ResultQuantifier)
     type_name: str
     aggregation_status: AggregationStatus
-    own_conditions: List[Any] = field(default_factory=list)
-    """Conditions from the antecedent's own WHERE clause (e.g. from match_variable)."""
+    conditions: List[Any] = field(default_factory=list)
+    """All conditions attributed to this antecedent (own WHERE clause + matched outer WHERE)."""
 
 
 @dataclass
@@ -43,11 +43,45 @@ class ConsequentBinding:
 
 @dataclass
 class RuleStructure:
-    antecedents: List[AntecedentInfo]
+    primary_antecedents: List[AntecedentInfo]    # have conditions → appear in IF clause
+    secondary_antecedents: List[AntecedentInfo]  # no conditions → only register in ctx.seen
     consequent_type: str
     consequent_bindings: List[ConsequentBinding]
-    extra_where_conditions: List[Any]   # outer WHERE conditions not in antecedent own_conditions
+    unmatched_conditions: List[Any]              # outer WHERE not attributable to any antecedent
     group_key_ids: FrozenSet[uuid.UUID]
+
+
+# ── Module-level helpers (pure domain-analysis utilities) ─────────────────────
+
+def _antecedent_var_id_(ant: AntecedentInfo) -> Optional[object]:
+    """Return the stable _id_ of the underlying variable for an antecedent."""
+    from krrood.entity_query_language.query.query import Entity as _Entity
+    root = ant.root
+    if isinstance(root, _Entity):
+        root.build()
+        sel = root.selected_variable
+        return getattr(sel, "_id_", None)
+    return getattr(root, "_id_", None)
+
+
+def _condition_left_owner_id_(cond) -> Optional[object]:
+    """
+    Return the _id_ of the root variable on the left-hand side of an equality condition,
+    or None if the condition is not a simple attribute equality.
+    """
+    from krrood.entity_query_language.operators.comparator import Comparator
+    from krrood.entity_query_language.core.mapped_variable import MappedVariable
+    from krrood.entity_query_language.query.quantifiers import ResultQuantifier
+    import operator as _op
+
+    if not isinstance(cond, Comparator) or cond.operation is not _op.eq:
+        return None
+    current = cond.left
+    while isinstance(current, MappedVariable):
+        current = current._child_
+    while isinstance(current, ResultQuantifier):
+        current = current._child_
+    return getattr(current, "_id_", None)
 
 
 class RuleAnalyzer:
@@ -59,9 +93,7 @@ class RuleAnalyzer:
         return isinstance(entity.selected_variable, InstantiatedVariable)
 
     def analyze(self, entity) -> RuleStructure:
-        from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
-        from krrood.entity_query_language.core.mapped_variable import MappedVariable
-        from krrood.entity_query_language.operators.core_logical_operators import AND
+        from krrood.entity_query_language.core.variable import InstantiatedVariable
 
         entity.build()
         inferred: InstantiatedVariable = entity.selected_variable
@@ -112,24 +144,53 @@ class RuleAnalyzer:
                 root=root,
                 type_name=root_type_name,
                 aggregation_status=var_agg,
-                own_conditions=own_conditions,
+                conditions=own_conditions,
             )
 
-        # ── Extra outer WHERE conditions ───────────────────────────────────────
+        # ── Attribute outer WHERE conditions to antecedents ────────────────────
         where_expr = entity._where_expression_
         extra: List[Any] = []
         if where_expr is not None:
             extra = self._flatten_and(where_expr.condition)
 
+        primary, secondary, unmatched = self._attribute_conditions_(
+            list(seen_root_ids.values()), extra
+        )
+
         return RuleStructure(
-            antecedents=list(seen_root_ids.values()),
+            primary_antecedents=primary,
+            secondary_antecedents=secondary,
             consequent_type=type_name,
             consequent_bindings=consequent_bindings,
-            extra_where_conditions=extra,
+            unmatched_conditions=unmatched,
             group_key_ids=group_key_ids,
         )
 
-    # ── Helpers ────────────────────────────────────────────────────────────────
+    # ── Private helpers ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _attribute_conditions_(
+        antecedents: List[AntecedentInfo],
+        extra_conditions: List[Any],
+    ) -> Tuple[List[AntecedentInfo], List[AntecedentInfo], List[Any]]:
+        """
+        Distribute extra outer-WHERE conditions to their owning antecedents,
+        then classify antecedents as primary (have conditions) or secondary (none).
+        Returns (primary, secondary, unmatched).
+        """
+        id_to_ant = {_antecedent_var_id_(a): a for a in antecedents}
+        unmatched: List[Any] = []
+
+        for cond in extra_conditions:
+            owner_id = _condition_left_owner_id_(cond)
+            if owner_id is not None and owner_id in id_to_ant:
+                id_to_ant[owner_id].conditions.append(cond)
+            else:
+                unmatched.append(cond)
+
+        primary = [a for a in antecedents if a.conditions]
+        secondary = [a for a in antecedents if not a.conditions]
+        return primary, secondary, unmatched
 
     @staticmethod
     def _find_root(expr) -> Optional[Any]:
@@ -150,9 +211,8 @@ class RuleAnalyzer:
     @staticmethod
     def _extract_root_info(root) -> Tuple[str, List[Any]]:
         """Return (type_name, own_conditions) for a root Variable or Entity."""
-        from krrood.entity_query_language.core.variable import Variable, InstantiatedVariable
+        from krrood.entity_query_language.core.variable import Variable
         from krrood.entity_query_language.query.query import Entity
-        from krrood.entity_query_language.operators.core_logical_operators import AND
 
         if isinstance(root, Entity):
             root.build()
