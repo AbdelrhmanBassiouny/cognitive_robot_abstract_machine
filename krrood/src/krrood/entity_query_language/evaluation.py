@@ -246,7 +246,7 @@ class InferenceRecorder(EvaluationObserver):
     """
 
     def on_result_yielded(self, expression, result):
-        from krrood.entity_query_language.explanation import monitored
+        from krrood.entity_query_language._monitoring import monitored
         if not monitored.is_monitored(type(expression)):
             return
         if expression._id_ not in result.bindings:
@@ -265,6 +265,6 @@ class InferenceRecorder(EvaluationObserver):
             return
         if isinstance(expression, Query):
             return
-        from krrood.entity_query_language.explanation import register_inference
+        from krrood.entity_query_language.explanation.explanation import register_inference
 
         register_inference(result.bindings[expression._id_], expression, result)

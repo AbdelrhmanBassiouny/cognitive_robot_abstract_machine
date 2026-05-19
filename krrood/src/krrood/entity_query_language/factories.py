@@ -6,14 +6,15 @@ from __future__ import annotations
 
 import inspect
 import operator
-from typing import List
+from inspect import isclass
+from typing import List, Optional, Type, Tuple, Any
 from uuid import UUID
 
 from typing_extensions import Union, Iterable, List
 
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
-    TruthValueOperator,
+    TruthValueOperator, Selectable,
 )
 from krrood.entity_query_language.core.mapped_variable import (
     FlatVariable,
@@ -633,5 +634,34 @@ def node_id(node: SymbolicExpression) -> UUID:
 
 
 @symbolic_function
-def node_descendants(node: SymbolicExpression) -> List[SymbolicExpression]:
+def node_descendants(node: SymbolicExpression) -> Iterable[SymbolicExpression]:
     return node._descendants_
+
+
+@symbolic_function
+def node_type(node: CanBehaveLikeAVariable) -> Optional[Type]:
+    return node._type_
+
+
+@symbolic_function
+def node_children(node: CanBehaveLikeAVariable) -> Iterable[SymbolicExpression]:
+    return node._children_
+
+@symbolic_function
+def node_parents(node: SymbolicExpression) -> Iterable[SymbolicExpression]:
+    return node._parents_
+
+
+@symbolic_function
+def issubclass_(cls: Type, cls_or_tuple: Type | Tuple[Type, ...]) -> bool:
+    return issubclass(cls, cls_or_tuple)
+
+
+@symbolic_function
+def is_class(obj: Any) -> bool:
+    return isclass(obj)
+
+
+@symbolic_function
+def type_(obj: Any) -> Type:
+    return obj.__class__

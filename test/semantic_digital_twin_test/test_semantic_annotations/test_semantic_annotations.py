@@ -5,7 +5,7 @@ from numpy.ma.testutils import (
 )  # You could replace this with numpy's regular assert for better compatibility
 
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.explanation import explain_inference
+from krrood.entity_query_language.explanation.explanation import explain_inference
 from krrood.entity_query_language.factories import entity, variable, in_, inference, an
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,

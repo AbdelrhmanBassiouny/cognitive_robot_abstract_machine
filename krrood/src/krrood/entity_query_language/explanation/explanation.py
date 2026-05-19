@@ -3,120 +3,37 @@ from __future__ import annotations
 import inspect
 import weakref
 from dataclasses import dataclass, field
-from functools import wraps
+from functools import cached_property
 from types import ModuleType
-from typing import Any, List, Optional, Type, Callable, Union
+from typing import Any, List, Optional, Type, Union
 from uuid import UUID
 
 from ordered_set import OrderedSet
 from typing_extensions import TYPE_CHECKING
 
+# Import monitoring infrastructure from the isolated sub-module that has no
+# EQL dependencies, breaking the variable.py ↔ explanation.py import cycle.
+from krrood.entity_query_language._monitoring import (
+    filter_stack,
+    MonitoredRegistry,
+    monitored,
+)
+
+from krrood.entity_query_language.predicate import HasType
+from krrood.entity_query_language.factories import (
+    entity, contains, node_id, node_type, is_class, issubclass_,
+    node_descendants, flat_variable, variable_from,
+)
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import LogicalOperator
+from krrood.entity_query_language.core.base_expressions import Selectable
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import (
         OperationResult, SymbolicExpression,
     )
-    from krrood.entity_query_language.query.query import Query
-
-
-def filter_stack(
-        stack: List[inspect.FrameInfo], internal_package: Optional[str] = None
-) -> List[inspect.FrameInfo]:
-    """
-    Filter the stack to remove external libraries and optionally keep only a specific package.
-
-    :param stack: The stack to filter.
-    :param internal_package: The name of the package to focus on.
-    :return: The filtered stack.
-    """
-    filtered = []
-    for frame in stack:
-        path = frame.filename
-        # Exclude standard library/external packages
-        if "site-packages" in path or "dist-packages" in path:
-            continue
-
-        # If a specific package is requested, filter further
-        if internal_package and internal_package not in path:
-            continue
-
-        filtered.append(frame)
-    return filtered
-
-
-@dataclass
-class MonitoredRegistry:
-    """
-    Registry for monitoring EQL object creation stacks.
-    Acts as a class decorator and provides lookup methods.
-    """
-    _monitored: set[type] = field(default_factory=set)
-    """
-    Set of classes that are currently being monitored.
-    """
-
-    def __call__(self, cls: Type) -> Type:
-        """
-        Decorate a class to automatically record its creation stack.
-
-        :param cls: The class to monitor.
-        :return: The monitored class.
-        """
-        cls._is_monitored_ = True
-        self._monitored.add(cls)
-
-        original_post_init = getattr(cls, "__post_init__", lambda self: None)
-
-        @wraps(original_post_init)
-        def new_post_init(self, *args, **kwargs):
-            raw_stack = inspect.stack()[1:]
-            self._creation_stack = filter_stack(raw_stack)
-            original_post_init(self, *args, **kwargs)
-
-        cls.__post_init__ = new_post_init
-        return cls
-
-    def get_stack(self, instance: Any) -> Optional[List[inspect.FrameInfo]]:
-        """
-        Retrieve the creation stack for a monitored instance.
-
-        :param instance: The instance to retrieve the stack for.
-        :return: The creation stack, or None if not monitored.
-        """
-        if not self.is_monitored(type(instance)):
-            return None
-        return instance._creation_stack
-
-    def is_monitored(self, target: Union[Type, Callable]) -> bool:
-        """
-        Check whether a class or callable is monitored.
-
-        :param target: The class or callable to check.
-        :return: True if monitored, False otherwise.
-        """
-        # Check the registry set first, then fall back to the marker attribute
-        return target in self._monitored or bool(getattr(target, "_is_monitored_", False))
-
-    def unregister(self, cls: Type) -> None:
-        """
-        Remove a class from monitoring.
-
-        :param cls: The class to stop monitoring.
-        """
-        self._monitored.discard(cls)
-        if hasattr(cls, "_is_monitored_"):
-            del cls._is_monitored_
-
-    @property
-    def monitored_classes(self) -> tuple[type, ...]:
-        """Return an immutable snapshot of all monitored classes."""
-        return tuple(self._monitored)
-
-
-# Singleton instance — use this as the decorator
-monitored = MonitoredRegistry()
+    from krrood.entity_query_language.core.variable import Variable, InstantiatedVariable
+    from krrood.entity_query_language.query.query import Query, Entity
 
 
 @dataclass
@@ -233,7 +150,6 @@ class InferenceExplanation:
         """
         if isinstance(focus_package, ModuleType):
             focus_package = focus_package.__name__
-        # Allow further filtering at explanation time
         display_stack = filter_stack(self.stack, internal_package=focus_package)
 
         formatted_stack = []
@@ -250,6 +166,101 @@ class InferenceExplanation:
             f"Part of query: {self.query_root}\n"
             f"Call stack at definition:\n{stack_str}"
         )
+
+    def get_satisfied_condition_expressions_for_the_instance(self) -> Entity[SymbolicExpression]:
+        """
+        :return: An entity containing condition expressions that were satisfied during the inference of the instance.
+        """
+        explanation = self.explanation_variable
+        node = self.create_query_node_variable()
+        return entity(node).where(explanation.satisfied_condition_ids != None,
+                                  contains(explanation.satisfied_condition_ids, node_id(node)))
+
+    def get_values_of_variable_nodes_of_given_type(self, type_: Type) -> Entity[SymbolicExpression]:
+        """
+        :param type_: The type of the variable nodes to retrieve.
+        :return: An entity containing variable nodes of the specified type that participated in the inference of the instance.
+        """
+        explanation = self.explanation_variable
+        node = self.get_variable_nodes_of_given_type(type_)
+        operation_result = explanation.operation_result
+        return entity(operation_result.all_bindings[node_id(node)]).where(contains(operation_result.all_bindings, node_id(node))).distinct()
+
+    def get_variable_nodes_of_given_type(self, type_: Type, node_variable: Optional[SymbolicExpression] = None) -> Entity[
+        SymbolicExpression]:
+        """
+        :return: An entity containing instances that participated in the inference of this instance.
+        """
+        if node_variable is None:
+            node_variable = self.create_query_node_variable()
+        return entity(node_variable).where(HasType(node_variable, Selectable),
+                                           node_type(node_variable) != None,
+                                           is_class(node_type(node_variable)),
+                                           issubclass_(node_type(node_variable), type_)).distinct(
+            node_id(node_variable))
+
+    def get_conditions_that_relate_the_variables_of_type(self, type_: Type) -> Entity[SymbolicExpression]:
+        """
+        :return: An entity containing condition expressions that relate the participating instances in the inference of this instance.
+        """
+        from krrood.entity_query_language.core.variable import InstantiatedVariable
+        condition_node = self.get_satisfied_condition_expressions_for_the_instance()
+        condition_node_descendant_1 = self.get_variable_nodes_of_given_type(
+            type_, flat_variable(node_descendants(condition_node)))
+        condition_node_descendant_2 = self.get_variable_nodes_of_given_type(
+            type_, flat_variable(node_descendants(condition_node)))
+        return entity(condition_node).where(HasType(condition_node, (Comparator, InstantiatedVariable)),
+                                            node_id(condition_node_descendant_1) != node_id(
+                                                condition_node_descendant_2)).distinct(node_id(condition_node))
+
+    def get_conditions_that_relate_variables_of_types(self, type_a: Type, type_b: Type) -> Entity[SymbolicExpression]:
+        """
+        Generalisation of :meth:`get_conditions_that_relate_the_variables_of_type` for two
+        potentially different types.  Returns satisfied condition expressions that have at least one
+        descendant variable node whose ``_type_`` is a subclass of *type_a* and at least one
+        (different) descendant variable node whose ``_type_`` is a subclass of *type_b*.
+
+        When ``type_a == type_b`` the semantics reduce to
+        :meth:`get_conditions_that_relate_the_variables_of_type`.
+
+        :param type_a: First participant type.
+        :param type_b: Second participant type.
+        :return: An entity containing the matching condition expressions.
+        """
+        from krrood.entity_query_language.core.variable import InstantiatedVariable
+        condition_node = self.get_satisfied_condition_expressions_for_the_instance()
+        descendant_a = self.get_variable_nodes_of_given_type(
+            type_a, flat_variable(node_descendants(condition_node)))
+        descendant_b = self.get_variable_nodes_of_given_type(
+            type_b, flat_variable(node_descendants(condition_node)))
+        return entity(condition_node).where(
+            HasType(condition_node, (Comparator, InstantiatedVariable)),
+            node_id(descendant_a) != node_id(descendant_b),
+        ).distinct(node_id(condition_node))
+
+    @cached_property
+    def condition_node_variable(self) -> Variable | SymbolicExpression:
+        explanation = self.explanation_variable
+        node = self.query_node_variable
+        return entity(node).where(explanation.satisfied_condition_ids != None,
+                                  contains(explanation.satisfied_condition_ids, node_id(node)))
+
+    @cached_property
+    def query_node_variable(self) -> Variable | SymbolicExpression:
+        """
+        :return: The variable representing the node in the query for the participating instances.
+        """
+        return self.create_query_node_variable()
+
+    def create_query_node_variable(self) -> Variable:
+        return flat_variable(node_descendants(self.explanation_variable.query_root))
+
+    @cached_property
+    def explanation_variable(self) -> Variable | InferenceExplanation:
+        """
+        :return: The variable representing the explanation in the inference process.
+        """
+        return variable_from(self)
 
 
 # Dictionary to store inference explanations for instances.

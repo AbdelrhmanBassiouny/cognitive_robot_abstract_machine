@@ -72,7 +72,7 @@ from krrood.entity_query_language.operators.aggregators import Aggregator, Count
 from krrood.entity_query_language.operators.set_operations import (
     MultiArityExpressionThatPerformsACartesianProduct,
 )
-from krrood.entity_query_language.explanation import (
+from krrood.entity_query_language._monitoring import (
     monitored,
 )
 from krrood.entity_query_language.utils import (

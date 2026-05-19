@@ -43,7 +43,7 @@ from krrood.entity_query_language.utils import (
     is_iterable,
     make_list,
 )
-from krrood.entity_query_language.explanation import (
+from krrood.entity_query_language._monitoring import (
     monitored,
 )
 

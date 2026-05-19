@@ -6,7 +6,7 @@ import pytest
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.evaluation import is_condition_participant
-from krrood.entity_query_language.explanation import (
+from krrood.entity_query_language.explanation.explanation import (
     explain_inference,
     register_inference, monitored,
 )
