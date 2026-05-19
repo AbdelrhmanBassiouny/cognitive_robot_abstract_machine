@@ -13,22 +13,15 @@ Coverage:
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
-from typing import Any, List
-
-import pytest
 
 import krrood.entity_query_language.factories as eql
+from department_and_employee import Employee
 from krrood.entity_query_language.factories import (
     an,
-    a,
     entity,
     variable,
-    flat_variable,
     inference,
-    not_,
-    and_,
     match_variable,
 )
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -38,7 +31,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbFragment,
     WordFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole, ROLE_COLORS
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.pipeline import VerbalizationPipeline
 from krrood.entity_query_language.verbalization.rendering.colorizer import (
     ANSIColorizer,
@@ -50,14 +43,12 @@ from krrood.entity_query_language.verbalization.rendering.renderer import (
     ParagraphRenderer,
 )
 from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer, _str
-
-from ..dataset.semantic_world_like_classes import (
+from semantic_world_like_classes import (
     Drawer,
     FixedConnection,
     Handle,
     PrismaticConnection,
 )
-from ..dataset.department_and_employee import Employee
 
 
 @dataclass
@@ -311,7 +302,7 @@ def test_hierarchical_renderer_block_has_header_line():
 
 
 def test_hierarchical_renderer_items_are_indented():
-    r = HierarchicalRenderer(PlainColorizer(), indent="  ", bullet="- ")
+    r = HierarchicalRenderer(PlainColorizer(), indent="  ", bullet="-")
     block = BlockFragment(
         header=RoleFragment("Find", SemanticRole.KEYWORD),
         items=[WordFragment("a Robot"), WordFragment("b Something")],
@@ -341,7 +332,7 @@ def test_hierarchical_renderer_nested_block_deepens_indent():
 
 
 def test_hierarchical_renderer_custom_bullet():
-    r = HierarchicalRenderer(PlainColorizer(), bullet="• ")
+    r = HierarchicalRenderer(PlainColorizer(), bullet="•")
     block = BlockFragment(
         header=None,
         items=[WordFragment("item one"), WordFragment("item two")],
@@ -488,4 +479,19 @@ def test_pipeline_markdown_hierarchical_has_newlines():
     text = VerbalizationPipeline.markdown(hierarchical=True).verbalize(
         an(entity(r).where(r.battery > 50))
     )
+    assert "\n" in text
+
+
+def test_pipeline_markdown_hierarchical_has_two_newlines_between_headers_on_rule(doors_and_drawers_world):
+    drawer_fragment = _drawer_rule_fragment(doors_and_drawers_world)
+    text = VerbalizationPipeline.markdown(hierarchical=True).verbalize_fragment(drawer_fragment)
+    print("\n" + text)
+    assert "\n\n" in text
+
+
+def test_pipeline_ansi_hierarchical_has_no_two_newlines_between_headers_on_rule(doors_and_drawers_world):
+    drawer_fragment = _drawer_rule_fragment(doors_and_drawers_world)
+    text = VerbalizationPipeline.ansi(hierarchical=True).verbalize_fragment(drawer_fragment)
+    print("\n" + text)
+    assert "\n\n" not in text
     assert "\n" in text

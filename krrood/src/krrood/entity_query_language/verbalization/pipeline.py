@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from krrood.entity_query_language.verbalization.fragments import VerbFragment
 from krrood.entity_query_language.verbalization.rendering.colorizer import (
     ANSIColorizer,
     MarkdownColorizer,
@@ -39,6 +40,9 @@ class VerbalizationPipeline:
         if isinstance(expr, Query):
             expr.build()
         fragment = self._verbalizer.build(expr)
+        return self.verbalize_fragment(fragment)
+
+    def verbalize_fragment(self, fragment: VerbFragment) -> str:
         return self._renderer.render(fragment)
 
     # ── Factories ──────────────────────────────────────────────────────────────

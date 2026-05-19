@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Protocol
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
@@ -9,25 +10,38 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbFragment,
     WordFragment,
 )
+from krrood.entity_query_language.verbalization.rendering import MarkdownColorizer
 from krrood.entity_query_language.verbalization.rendering.colorizer import Colorizer, PlainColorizer
 
 
-class FragmentRenderer(Protocol):
+@dataclass
+class FragmentRenderer(ABC):
     """Converts a VerbFragment tree into a string."""
 
-    def render(self, fragment: VerbFragment) -> str: ...
+    _colorizer: Colorizer = field(default_factory=PlainColorizer)
+    """
+    The colorizer to use for rendering semantic roles.
+    """
+
+    @abstractmethod
+    def render(self, fragment: VerbFragment) -> str:
+        """
+        Render a VerbFragment tree into a string.
+
+        :param fragment: The root of the fragment tree.
+        :return: The rendered string.
+        """
+        ...
 
 
-class ParagraphRenderer:
+@dataclass
+class ParagraphRenderer(FragmentRenderer):
     """
     Flattens the fragment tree into a single prose string.
 
     BlockFragment headers and items are joined inline; nesting adds no
     visual structure — only content.
     """
-
-    def __init__(self, colorizer: Colorizer = PlainColorizer()):
-        self._colorizer = colorizer
 
     def render(self, fragment: VerbFragment) -> str:
         match fragment:
@@ -49,7 +63,8 @@ class ParagraphRenderer:
                 return ""
 
 
-class HierarchicalRenderer:
+@dataclass
+class HierarchicalRenderer(FragmentRenderer):
     """
     Renders BlockFragments as indented bullet lists.
 
@@ -65,29 +80,47 @@ class HierarchicalRenderer:
           - there's a Drawer
             - whose container is …
     """
+    indent: str = field(default="  ")
+    """
+    The indentation string to use for each level of nesting.
+    """
+    bullet: str = field(default="-")
+    """
+    The bullet character to use for the bullet points.
+    """
+    _add_extra_lines_between_headers: bool = field(init=False, default=False)
+    """
+    Internal field, that decides whether to add extra lines between headers, useful when rendering in Markdown.
+    """
 
-    def __init__(
-        self,
-        colorizer: Colorizer = PlainColorizer(),
-        indent: str = "  ",
-        bullet: str = "- ",
-    ):
-        self._colorizer = colorizer
-        self._indent = indent
-        self._bullet = bullet
+    def __post_init__(self):
+        self._add_extra_lines_between_headers = isinstance(self._colorizer, MarkdownColorizer)
 
     def render(self, fragment: VerbFragment, depth: int = 0) -> str:
         match fragment:
             case BlockFragment(header=header, items=items):
                 lines: list[str] = []
                 if header is not None:
-                    header_str = self._inline(header)
-                    lines.append(self._indent * depth + header_str)
+                    lines.extend(self._get_header_lines(header, depth))
+                    depth = depth + 1
                 for item in items:
-                    lines.append(self._render_item(item, depth + 1))
+                    lines.append(self._render_item(item, depth))
                 return "\n".join(lines)
             case _:
-                return self._indent * depth + self._inline(fragment)
+                return self.indent * depth + self._inline(fragment)
+
+    def _get_header_lines(self, header: VerbFragment, depth: int):
+        """
+        Get the lines that make up the header.
+
+        :param header: The header fragment.
+        :param depth: The indentation depth.
+        :return: List of header lines.
+        """
+        header_str = self._inline(header)
+        header_line = self.indent * depth + header_str
+        lines = ["", header_line, ""] if self._add_extra_lines_between_headers else [header_line]
+        return lines
 
     def _render_item(self, fragment: VerbFragment, depth: int) -> str:
         """Render one item, prepending the bullet at its indentation level."""
@@ -95,7 +128,7 @@ class HierarchicalRenderer:
             case BlockFragment():
                 return self.render(fragment, depth)
             case _:
-                prefix = self._indent * depth + self._bullet
+                prefix = self.indent * depth + f"{self.bullet} "
                 return prefix + self._inline(fragment)
 
     def _inline(self, fragment: VerbFragment) -> str:

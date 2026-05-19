@@ -45,7 +45,7 @@ from krrood.entity_query_language.verbalization.verbalizer import (
     VerbalizationContext,
     verbalize_expression,
 )
-from ..dataset.department_and_employee import Department, Employee
+from department_and_employee import Department, Employee
 
 
 @dataclass
@@ -61,7 +61,7 @@ class _Robot:
     tasks: List[_Task]
 
 
-from ..dataset.semantic_world_like_classes import (
+from semantic_world_like_classes import (
     Apple,
     Body,
     Cabinet,

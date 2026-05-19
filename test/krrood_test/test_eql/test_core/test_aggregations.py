@@ -22,12 +22,12 @@ from krrood.entity_query_language.factories import (
     flat_variable,
 )
 from krrood.utils import inheritance_path_length
-from ..dataset.example_classes import KRROODVectorsWithProperty
+from example_classes import KRROODVectorsWithProperty
 from krrood.entity_query_language.predicate import length, symbolic_function
 from krrood.entity_query_language.query.operations import GroupedBy
-from ..dataset.department_and_employee import Department, Employee
-from ..dataset.example_classes import NamedNumbers
-from ..dataset.semantic_world_like_classes import Cabinet, Body, Container, Drawer
+from department_and_employee import Department, Employee
+from example_classes import NamedNumbers
+from semantic_world_like_classes import Cabinet, Body, Container, Drawer
 
 
 def test_count(handles_and_containers_world):
