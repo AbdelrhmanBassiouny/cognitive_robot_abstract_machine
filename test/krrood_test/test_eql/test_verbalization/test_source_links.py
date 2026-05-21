@@ -5,9 +5,9 @@ Coverage:
 - SourceRef: frozen dataclass, cls-only and cls+attribute forms
 - _find_attribute_line: AnnAssign lookup, MRO walk, missing attribute
 - FileURLResolver: file:// URLs for class and attribute
-- IdeaURIResolver: idea:// URI scheme for JetBrains IDEs; PyCharmResolver alias
-- LocalBridgeResolver: http://localhost:PORT/open URLs; bridge server launcher detection
-- AutoAPIResolver: Sphinx AutoAPI URL structure
+- JetBrainsResolver: jetbrains://python/navigate/reference?... URI scheme
+- VSCodeResolver: vscode://file/... URI scheme
+- AutoAPIResolver: Sphinx AutoAPI URL structure; for_package() auto-detection
 - Formatter.wrap_link: PlainFormatter (no-op), HTMLFormatter (<a>), ANSIFormatter (OSC 8)
 - ANSIFormatter OSC 8 detection: enabled / disabled paths
 - RoleFragment.source_ref: default None, explicit value
@@ -15,7 +15,6 @@ Coverage:
 - ParagraphRenderer / HierarchicalRenderer: <a> tags appear in HTML output
 - VerbalizationPipeline: html() with link_resolver produces clickable class names
 - Verbalizer: source_ref propagation for Variable, Attribute chain, bool Attribute
-- HTML page template: localhost links intercepted by JS fetch (no navigation)
 """
 
 from __future__ import annotations
@@ -30,11 +29,11 @@ import pytest
 import krrood.entity_query_language.factories as eql
 from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.fragments.base import (
+    BlockFragment,
     PhraseFragment,
     RoleFragment,
     VerbFragment,
     WordFragment,
-    BlockFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.fragments.source_ref import SourceRef
@@ -51,9 +50,8 @@ from krrood.entity_query_language.verbalization.rendering.renderer import (
 from krrood.entity_query_language.verbalization.rendering.source_link_resolver import (
     AutoAPIResolver,
     FileURLResolver,
-    IdeaURIResolver,
-    LocalBridgeResolver,
-    PyCharmResolver,
+    JetBrainsResolver,
+    VSCodeResolver,
     _find_attribute_line,
 )
 from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
@@ -190,7 +188,6 @@ def test_file_url_resolver_attribute_line_differs_from_class_line():
     r = FileURLResolver()
     class_url = r.resolve(SourceRef(cls=_Sensor))
     attr_url = r.resolve(SourceRef(cls=_Sensor, attribute="level"))
-    # Both must be present and point to different lines
     assert class_url is not None and attr_url is not None
     assert class_url != attr_url
 
@@ -200,56 +197,112 @@ def test_file_url_resolver_returns_none_for_builtin():
     assert r.resolve(SourceRef(cls=int)) is None
 
 
-# ── IdeaURIResolver ───────────────────────────────────────────────────────────
+# ── JetBrainsResolver ─────────────────────────────────────────────────────────
 
 
-def test_idea_uri_resolver_uses_idea_scheme():
-    r = IdeaURIResolver()
+def test_jetbrains_resolver_uses_jetbrains_scheme():
+    r = JetBrainsResolver()
     url = r.resolve(SourceRef(cls=_Sensor))
     assert url is not None
-    assert url.startswith("idea://open?file=")
+    assert url.startswith("jetbrains://python/navigate/reference?project=.&path=")
 
 
-def test_idea_uri_resolver_class_url_contains_path():
-    r = IdeaURIResolver()
+def test_jetbrains_resolver_class_url_contains_path():
+    r = JetBrainsResolver()
     url = r.resolve(SourceRef(cls=_Sensor))
     assert url is not None
     assert "test_source_links" in url
 
 
-def test_idea_uri_resolver_class_url_has_line_param():
-    r = IdeaURIResolver()
+def test_jetbrains_resolver_class_url_has_line_suffix():
+    r = JetBrainsResolver()
     url = r.resolve(SourceRef(cls=_Sensor))
     assert url is not None
-    assert "&line=" in url
-    line_part = url.split("&line=")[1]
+    # Format: ...?project=.&path=/abs/path/file.py:LINE
+    line_part = url.split(":")[-1]
     assert int(line_part) > 0
 
 
-def test_idea_uri_resolver_attribute_url_has_line_param():
-    r = IdeaURIResolver()
+def test_jetbrains_resolver_attribute_url_has_line_suffix():
+    r = JetBrainsResolver()
     url = r.resolve(SourceRef(cls=_Sensor, attribute="level"))
     assert url is not None
-    assert "&line=" in url
-    line_part = url.split("&line=")[1]
+    line_part = url.split(":")[-1]
     assert int(line_part) > 0
 
 
-def test_idea_uri_resolver_attribute_line_differs_from_class_line():
-    r = IdeaURIResolver()
+def test_jetbrains_resolver_attribute_line_differs_from_class_line():
+    r = JetBrainsResolver()
     class_url = r.resolve(SourceRef(cls=_Sensor))
     attr_url = r.resolve(SourceRef(cls=_Sensor, attribute="level"))
     assert class_url is not None and attr_url is not None
     assert class_url != attr_url
 
 
-def test_idea_uri_resolver_returns_none_for_builtin():
-    r = IdeaURIResolver()
+def test_jetbrains_resolver_returns_none_for_builtin():
+    r = JetBrainsResolver()
     assert r.resolve(SourceRef(cls=int)) is None
 
 
-def test_pycharm_resolver_is_alias_for_idea_uri_resolver():
-    assert PyCharmResolver is IdeaURIResolver
+# ── VSCodeResolver ────────────────────────────────────────────────────────────
+
+
+def test_vscode_resolver_uses_vscode_scheme():
+    r = VSCodeResolver()
+    url = r.resolve(SourceRef(cls=_Sensor))
+    assert url is not None
+    assert url.startswith("vscode://file/")
+
+
+def test_vscode_resolver_class_url_contains_path():
+    r = VSCodeResolver()
+    url = r.resolve(SourceRef(cls=_Sensor))
+    assert url is not None
+    assert "test_source_links" in url
+
+
+def test_vscode_resolver_class_url_has_line_suffix():
+    r = VSCodeResolver()
+    url = r.resolve(SourceRef(cls=_Sensor))
+    assert url is not None
+    line_part = url.split(":")[-1]
+    assert int(line_part) > 0
+
+
+def test_vscode_resolver_attribute_url_has_line_suffix():
+    r = VSCodeResolver()
+    url = r.resolve(SourceRef(cls=_Sensor, attribute="level"))
+    assert url is not None
+    line_part = url.split(":")[-1]
+    assert int(line_part) > 0
+
+
+def test_vscode_resolver_attribute_line_differs_from_class_line():
+    r = VSCodeResolver()
+    class_url = r.resolve(SourceRef(cls=_Sensor))
+    attr_url = r.resolve(SourceRef(cls=_Sensor, attribute="level"))
+    assert class_url is not None and attr_url is not None
+    assert class_url != attr_url
+
+
+def test_vscode_resolver_returns_none_for_builtin():
+    r = VSCodeResolver()
+    assert r.resolve(SourceRef(cls=int)) is None
+
+
+def test_vscode_resolver_end_to_end_html():
+    x = variable(_Sensor, [])
+    text = VerbalizationPipeline.html(link_resolver=VSCodeResolver()).verbalize(an(entity(x)))
+    assert 'href="vscode://file/' in text
+    assert "_Sensor" in text
+
+
+def test_vscode_resolver_end_to_end_ansi():
+    x = variable(_Sensor, [])
+    with patch.dict("os.environ", {"VTE_VERSION": "6800"}, clear=False):
+        text = VerbalizationPipeline.ansi(link_resolver=VSCodeResolver()).verbalize(an(entity(x)))
+    assert "\033]8;;vscode://file/" in text
+    assert "_Sensor" in text
 
 
 # ── AutoAPIResolver ────────────────────────────────────────────────────────────
@@ -290,9 +343,105 @@ def test_autoapi_resolver_module_path_uses_slashes():
     r = AutoAPIResolver(base_url="https://docs.example.com")
     url = r.resolve(SourceRef(cls=_Sensor))
     assert url is not None
-    # Module path segment must use "/" not "."
     path_part = url.split("/autoapi/")[1].split("/index.html")[0]
     assert "." not in path_part
+
+
+# ── AutoAPIResolver.for_package ───────────────────────────────────────────────
+
+# Detect at module load whether the krrood docs are built so dependent tests
+# can be skipped cleanly in CI environments where Sphinx has not been run.
+_krrood_resolver: Optional[AutoAPIResolver] = None
+try:
+    _krrood_resolver = AutoAPIResolver.for_package("krrood")
+    _KRROOD_DOCS_AVAILABLE = True
+except (FileNotFoundError, ImportError):
+    _KRROOD_DOCS_AVAILABLE = False
+
+_requires_krrood_docs = pytest.mark.skipif(
+    not _KRROOD_DOCS_AVAILABLE,
+    reason="krrood Sphinx docs not built — run: sphinx-build doc doc/_build/html",
+)
+
+
+def test_autoapi_resolver_for_package_returns_resolver():
+    resolver = AutoAPIResolver.for_package("krrood")
+    assert isinstance(resolver, AutoAPIResolver)
+
+
+def test_autoapi_resolver_for_package_base_url_has_krrood_docs():
+    resolver = AutoAPIResolver.for_package("krrood")
+    assert "localhost" in resolver.base_url
+    assert "krrood" in resolver.base_url
+    assert "doc/_build/html" in resolver.base_url
+
+
+def test_autoapi_resolver_for_package_custom_port():
+    resolver = AutoAPIResolver.for_package("krrood", port=8080)
+    assert "localhost:8080" in resolver.base_url
+
+
+def test_autoapi_resolver_for_package_unknown_package_raises():
+    with pytest.raises(ImportError):
+        AutoAPIResolver.for_package("_nonexistent_pkg_xyz")
+
+
+def test_autoapi_resolver_for_package_missing_docs_raises(tmp_path):
+    """for_package raises FileNotFoundError when doc/_build/html is absent."""
+    import types
+    import krrood.entity_query_language.verbalization.rendering.source_link_resolver as _slr
+    from unittest.mock import patch as _patch
+
+    pkg_src = tmp_path / "fakepkg" / "src" / "fakepkg"
+    pkg_src.mkdir(parents=True)
+    init = pkg_src / "__init__.py"
+    init.write_text("")
+    (tmp_path / "fakepkg" / "pyproject.toml").write_text("")
+
+    fake_mod = types.ModuleType("fakepkg")
+    fake_mod.__file__ = str(init)
+
+    with _patch.object(_slr, "importlib") as mock_importlib:
+        mock_importlib.import_module.return_value = fake_mod
+        with pytest.raises(FileNotFoundError, match="_build"):
+            AutoAPIResolver.for_package("fakepkg")
+
+
+@_requires_krrood_docs
+def test_autoapi_resolver_for_package_url_for_real_class():
+    """URL for a real krrood class has the correct module-path structure."""
+    from krrood.entity_query_language.query.query import Query
+
+    url = _krrood_resolver.resolve(SourceRef(cls=Query))
+    assert url is not None
+    assert "krrood/entity_query_language/query/query/index.html" in url
+    assert "#krrood.entity_query_language.query.query.Query" in url
+
+
+@_requires_krrood_docs
+def test_autoapi_resolver_for_package_html_file_exists():
+    """The HTML page for a real krrood class exists on disk after docs build."""
+    from krrood.entity_query_language.query.query import Query
+    from pathlib import Path
+    import importlib as _il, inspect as _ins
+
+    pkg_file = Path(_ins.getfile(_il.import_module("krrood"))).resolve()
+    for parent in pkg_file.parents:
+        if (parent / "pyproject.toml").exists():
+            module_path = Query.__module__.replace(".", "/")
+            html_file = parent / "doc" / "_build" / "html" / "autoapi" / module_path / "index.html"
+            assert html_file.exists(), f"Expected autoapi page at {html_file}"
+            return
+    pytest.fail("krrood package root not found")
+
+
+@_requires_krrood_docs
+def test_autoapi_resolver_for_package_end_to_end_html():
+    """Full pipeline with for_package() produces <a> tags pointing at the local docs."""
+    x = variable(EQLVerbalizer, [])
+    text = VerbalizationPipeline.html(link_resolver=_krrood_resolver).verbalize(an(entity(x)))
+    assert "localhost" in text
+    assert "EQLVerbalizer" in text
 
 
 # ── Formatter.wrap_link ────────────────────────────────────────────────────────
@@ -504,8 +653,6 @@ def test_bool_attribute_chain_carries_source_ref():
 
 
 def test_comparator_fragment_has_both_class_and_attr_refs():
-    # The where-clause in a full query is reduced to a plain string by verbalize(),
-    # so check the attribute ref on the comparator fragment directly.
     x = variable(_Sensor, [])
     frag = EQLVerbalizer().build(x.level > 0)
     refs = _collect_source_refs(frag)
@@ -515,33 +662,21 @@ def test_comparator_fragment_has_both_class_and_attr_refs():
     assert attr_refs, "Expected a SourceRef for _Sensor.level"
 
 
-# ── FileURLResolver end-to-end with verbalizer ────────────────────────────────
+# ── Resolver end-to-end with verbalizer ───────────────────────────────────────
 
 
 def test_file_url_resolver_end_to_end_html():
-    """Full pipeline: variable query → HTML with file:// links for class names."""
     x = variable(_Sensor, [])
-    resolver = FileURLResolver()
-    text = VerbalizationPipeline.html(link_resolver=resolver).verbalize(an(entity(x)))
+    text = VerbalizationPipeline.html(link_resolver=FileURLResolver()).verbalize(an(entity(x)))
     assert 'href="file://' in text
     assert "_Sensor" in text
 
 
-def test_idea_uri_resolver_end_to_end_ansi():
-    """ANSI pipeline with IdeaURIResolver emits OSC 8 escape sequences."""
+def test_jetbrains_resolver_end_to_end_ansi():
     x = variable(_Sensor, [])
-    resolver = IdeaURIResolver()
     with patch.dict("os.environ", {"VTE_VERSION": "6800"}, clear=False):
-        text = VerbalizationPipeline.ansi(link_resolver=resolver).verbalize(an(entity(x)))
-    assert "\033]8;;idea://open?file=" in text
-    assert "_Sensor" in text
-
-
-def test_autoapi_resolver_end_to_end_html():
-    x = variable(_Sensor, [])
-    resolver = AutoAPIResolver(base_url="https://docs.example.com")
-    text = VerbalizationPipeline.html(link_resolver=resolver).verbalize(an(entity(x)))
-    assert 'href="https://docs.example.com/autoapi/' in text
+        text = VerbalizationPipeline.ansi(link_resolver=JetBrainsResolver()).verbalize(an(entity(x)))
+    assert "\033]8;;jetbrains://python/navigate/reference?" in text
     assert "_Sensor" in text
 
 
@@ -597,7 +732,7 @@ def test_display_in_jupyter_calls_ipython_display():
     import krrood.entity_query_language.verbalization.pipeline as pipeline_mod
 
     x = variable(_Sensor, [])
-    pipeline = VerbalizationPipeline.html(link_resolver=IdeaURIResolver())
+    pipeline = VerbalizationPipeline.html(link_resolver=JetBrainsResolver())
     mock_html_cls = MagicMock()
     mock_ipython_display = MagicMock()
     pipeline.display(an(entity(x)))
@@ -620,7 +755,6 @@ def test_display_fragment_works_like_display():
     """display_fragment() accepts a pre-built fragment instead of an expression."""
     from unittest.mock import patch as _patch
     import krrood.entity_query_language.verbalization.pipeline as pipeline_mod
-    from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
 
     x = variable(_Sensor, [])
     fragment = EQLVerbalizer().build(an(entity(x)))
@@ -653,208 +787,3 @@ def test_display_html_page_has_dark_background_style():
     content = open(captured_path[0], encoding="utf-8").read()
     assert "background" in content
     os.unlink(captured_path[0])
-
-
-# ── LocalBridgeResolver ────────────────────────────────────────────────────────
-
-
-def test_local_bridge_resolver_default_port():
-    r = LocalBridgeResolver()
-    assert r.port == 8765
-
-
-def test_local_bridge_resolver_custom_port():
-    r = LocalBridgeResolver(port=9000)
-    assert r.port == 9000
-
-
-def test_local_bridge_resolver_class_url_format():
-    r = LocalBridgeResolver(port=8765)
-    url = r.resolve(SourceRef(cls=_Sensor))
-    assert url is not None
-    assert url.startswith("http://localhost:8765/open?file=")
-    assert "&line=" in url
-
-
-def test_local_bridge_resolver_class_url_contains_filename():
-    r = LocalBridgeResolver()
-    url = r.resolve(SourceRef(cls=_Sensor))
-    assert url is not None
-    assert "test_source_links" in url
-
-
-def test_local_bridge_resolver_attribute_url_has_line_param():
-    r = LocalBridgeResolver()
-    url = r.resolve(SourceRef(cls=_Sensor, attribute="level"))
-    assert url is not None
-    assert "&line=" in url
-    line_part = url.split("&line=")[1]
-    assert int(line_part) > 0
-
-
-def test_local_bridge_resolver_attribute_line_differs_from_class_line():
-    r = LocalBridgeResolver()
-    class_url = r.resolve(SourceRef(cls=_Sensor))
-    attr_url = r.resolve(SourceRef(cls=_Sensor, attribute="level"))
-    assert class_url is not None and attr_url is not None
-    assert class_url != attr_url
-
-
-def test_local_bridge_resolver_returns_none_for_builtin():
-    r = LocalBridgeResolver()
-    assert r.resolve(SourceRef(cls=int)) is None
-
-
-def test_local_bridge_resolver_custom_port_in_url():
-    r = LocalBridgeResolver(port=12345)
-    url = r.resolve(SourceRef(cls=_Sensor))
-    assert url is not None
-    assert "localhost:12345" in url
-
-
-def test_local_bridge_resolver_end_to_end_html():
-    """Full pipeline: variable → HTML with localhost bridge links."""
-    x = variable(_Sensor, [])
-    resolver = LocalBridgeResolver(port=8765)
-    pipeline = VerbalizationPipeline.html(link_resolver=resolver)
-    text = pipeline.verbalize(an(entity(x)))
-    pipeline.display(an(entity(x)))
-    assert 'href="http://localhost:8765/open?file=' in text
-    assert "_Sensor" in text
-
-
-# ── HTML page template: JS fetch interceptor for localhost links ────────────────
-
-
-def test_html_page_template_contains_fetch_interceptor():
-    """The full-page HTML template for browser display includes the JS fetch interceptor."""
-    from krrood.entity_query_language.verbalization.pipeline import _HTML_PAGE_TEMPLATE
-
-    page = _HTML_PAGE_TEMPLATE.format(body="<p>test</p>")
-    assert "fetch(" in page
-    assert "localhost" in page
-    assert "preventDefault" in page
-
-
-def test_html_page_template_interceptor_targets_localhost_only():
-    """The JS interceptor regex only matches http://localhost: URLs."""
-    from krrood.entity_query_language.verbalization.pipeline import _HTML_PAGE_TEMPLATE
-
-    page = _HTML_PAGE_TEMPLATE.format(body="<p>test</p>")
-    # The regex pattern that guards the fetch call must reference localhost
-    assert "localhost" in page
-
-
-# ── Bridge server: _find_charm launcher detection ──────────────────────────────
-
-
-def test_find_charm_returns_string_or_none():
-    """_find_charm() must return either a non-empty string or None."""
-    from krrood.entity_query_language.verbalization.rendering.bridge_server import _find_charm
-
-    result = _find_charm()
-    assert result is None or (isinstance(result, str) and len(result) > 0)
-
-
-def test_find_charm_returns_executable_when_charm_on_path():
-    """When a known launcher name is on PATH, _find_charm returns its path."""
-    import shutil
-    from unittest.mock import patch as _patch
-    from krrood.entity_query_language.verbalization.rendering.bridge_server import _find_charm
-
-    real_python = shutil.which("python3") or shutil.which("python")
-    if real_python is None:
-        pytest.skip("python not on PATH")
-
-    # Pretend "charm" resolves to our python interpreter to test the detection path.
-    original_which = shutil.which
-
-    def fake_which(name):
-        if name == "charm":
-            return real_python
-        return original_which(name)
-
-    with _patch("shutil.which", side_effect=fake_which):
-        result = _find_charm()
-
-    assert result == real_python
-
-
-def test_find_charm_returns_none_when_nothing_found(tmp_path):
-    """When no launcher is anywhere, _find_charm returns None."""
-    from unittest.mock import patch as _patch
-    from krrood.entity_query_language.verbalization.rendering.bridge_server import _find_charm
-
-    with _patch("shutil.which", return_value=None):
-        with _patch("pathlib.Path.home", return_value=tmp_path):
-            result = _find_charm()
-
-    assert result is None
-
-
-# ── Bridge server: HTTP handler ────────────────────────────────────────────────
-
-
-def test_bridge_server_handler_returns_200(tmp_path):
-    """The bridge HTTP handler responds 200 regardless of whether a launcher is found."""
-    import io
-    from unittest.mock import MagicMock, patch as _patch
-    from http.server import BaseHTTPRequestHandler
-    from krrood.entity_query_language.verbalization.rendering.bridge_server import _BridgeHandler
-
-    # Build a minimal mock request/socket that BaseHTTPRequestHandler needs.
-    raw_request = b"GET /open?file=/tmp/foo.py&line=1 HTTP/1.0\r\n\r\n"
-    mock_socket = MagicMock()
-    mock_socket.makefile.return_value = io.BytesIO(raw_request)
-
-    output_buffer = io.BytesIO()
-    mock_socket.sendall = output_buffer.write
-
-    with _patch(
-        "krrood.entity_query_language.verbalization.rendering.bridge_server._find_charm",
-        return_value=None,
-    ):
-        handler = _BridgeHandler.__new__(_BridgeHandler)
-        handler.rfile = io.BytesIO(b"")
-        handler.wfile = output_buffer
-        handler.client_address = ("127.0.0.1", 0)
-        handler.server = MagicMock()
-        handler.path = "/open?file=/tmp/foo.py&line=1"
-        handler.requestline = "GET /open?file=/tmp/foo.py&line=1 HTTP/1.0"
-        handler.command = "GET"
-        handler.request_version = "HTTP/1.0"
-        response_parts: list[bytes] = []
-        handler.send_response = lambda code, *a: response_parts.append(str(code).encode())
-        handler.send_header = lambda k, v: None
-        handler.end_headers = lambda: None
-        handler.wfile = MagicMock()
-        handler.do_GET()
-
-    assert response_parts and response_parts[0] == b"200"
-
-
-def test_bridge_server_handler_calls_launcher_when_found():
-    """When a launcher is found, the handler spawns it with --line and file path."""
-    import io
-    from unittest.mock import MagicMock, patch as _patch
-    from krrood.entity_query_language.verbalization.rendering.bridge_server import _BridgeHandler
-
-    with _patch(
-        "krrood.entity_query_language.verbalization.rendering.bridge_server._find_charm",
-        return_value="/usr/bin/charm",
-    ):
-        with _patch("subprocess.Popen") as mock_popen:
-            handler = _BridgeHandler.__new__(_BridgeHandler)
-            handler.path = "/open?file=/home/user/foo.py&line=42"
-            handler.send_response = MagicMock()
-            handler.send_header = MagicMock()
-            handler.end_headers = MagicMock()
-            handler.wfile = MagicMock()
-            handler.do_GET()
-
-    mock_popen.assert_called_once()
-    cmd = mock_popen.call_args[0][0]
-    assert "/usr/bin/charm" in cmd
-    assert "--line" in cmd
-    assert "42" in cmd
-    assert "/home/user/foo.py" in cmd

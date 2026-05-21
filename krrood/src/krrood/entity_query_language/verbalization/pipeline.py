@@ -41,15 +41,6 @@ _HTML_PAGE_TEMPLATE = """\
   }}
   a {{ color: inherit; }}
 </style>
-<script>
-document.addEventListener('click', function(e) {{
-  var a = e.target.closest('a');
-  if (a && /^http:\\/\\/localhost:/.test(a.href)) {{
-    e.preventDefault();
-    fetch(a.href).catch(function() {{}});
-  }}
-}});
-</script>
 </head>
 <body>{body}</body>
 </html>
@@ -82,7 +73,12 @@ class VerbalizationPipeline:
     * :meth:`html`   — HTML ``<span>`` colours, paragraph prose or hierarchical
 
     All factory methods accept an optional *link_resolver* that maps class and
-    attribute names to hyperlinks (``file://``, PyCharm, AutoAPI, …).
+    attribute names to hyperlinks.  Built-in resolvers:
+
+    * :class:`~krrood.entity_query_language.verbalization.rendering.source_link_resolver.FileURLResolver` — ``file://`` local paths
+    * :class:`~krrood.entity_query_language.verbalization.rendering.source_link_resolver.JetBrainsResolver` — ``jetbrains://`` IDE URI scheme
+    * :class:`~krrood.entity_query_language.verbalization.rendering.source_link_resolver.VSCodeResolver` — ``vscode://`` IDE URI scheme
+    * :class:`~krrood.entity_query_language.verbalization.rendering.source_link_resolver.AutoAPIResolver` — Sphinx AutoAPI documentation pages
     """
 
     def __init__(self, renderer: FragmentRenderer = ParagraphRenderer()):

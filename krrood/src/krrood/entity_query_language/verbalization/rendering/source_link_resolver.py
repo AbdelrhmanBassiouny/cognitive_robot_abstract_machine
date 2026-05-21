@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import ast
+import importlib
 import inspect
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Protocol
 
 from krrood.entity_query_language.verbalization.fragments.source_ref import SourceRef
@@ -70,17 +73,17 @@ class FileURLResolver:
 
 
 @dataclass
-class IdeaURIResolver:
-    """Resolves source references to the ``idea://`` URI scheme registered by JetBrains IDEs.
+class JetBrainsResolver:
+    """Resolves source references to the ``jetbrains://`` URI scheme registered by JetBrains IDEs.
 
-    Clicking an ``idea://`` link (in the browser or via an OSC 8 terminal hyperlink) is
-    handled by the OS URI dispatcher, which routes it to the running JetBrains IDE.
+    Clicking a ``jetbrains://`` link (in the browser or via an OSC 8 terminal hyperlink)
+    is handled by the OS URI dispatcher, which routes it to the running JetBrains IDE.
     PyCharm registers this scheme during installation (reliably via JetBrains Toolbox;
     also registered by the standalone installer on most systems).
 
     The generated URL format is::
 
-        idea://open?file=/abs/path/to/file.py&line=42
+        jetbrains://python/navigate/reference?project=.&path=/abs/path/to/file.py:42
 
     This works for both HTML output (browser click) and ANSI OSC 8 terminal hyperlinks
     (terminal Ctrl+click → ``xdg-open``).  No HTTP server or running process is required
@@ -89,7 +92,7 @@ class IdeaURIResolver:
 
     def resolve(self, ref: SourceRef) -> Optional[str]:
         try:
-            path = inspect.getfile(ref.cls)
+            path = os.path.abspath(inspect.getfile(ref.cls))
         except (TypeError, OSError):
             return None
         if ref.attribute is None:
@@ -99,35 +102,27 @@ class IdeaURIResolver:
                 line = 1
         else:
             line = _find_attribute_line(ref.cls, ref.attribute) or 1
-        return f"idea://open?file={path}&line={line}"
-
-
-# Alias kept for backward compatibility.
-PyCharmResolver = IdeaURIResolver
+        return f"jetbrains://python/navigate/reference?project=.&path={path}:{line}"
 
 
 @dataclass
-class LocalBridgeResolver:
-    """Resolves source references to the local verbalization bridge server.
+class VSCodeResolver:
+    """Resolves source references to the ``vscode://`` URI scheme registered by VS Code.
 
-    The bridge server translates plain HTTP GET requests into IDE navigation
-    commands, so no URI scheme registration is required.  Start it once with::
+    Clicking a ``vscode://`` link (in the browser or via an OSC 8 terminal hyperlink)
+    is handled by the OS URI dispatcher, which routes it to VS Code at the exact source line.
 
-        python -m krrood.entity_query_language.verbalization.rendering.bridge_server
+    The generated URL format is::
 
-    Generated URL format::
+        vscode://file//abs/path/to/file.py:42
 
-        http://localhost:PORT/open?file=/abs/path/file.py&line=42
-
-    Works for both HTML output (browser click → fetch stays on page) and ANSI
-    OSC 8 terminal hyperlinks (Ctrl+click → browser opens URL → bridge opens IDE).
+    This works for both HTML output (browser click) and ANSI OSC 8 terminal hyperlinks.
+    No process is required beyond VS Code being installed.
     """
-
-    port: int = 8765
 
     def resolve(self, ref: SourceRef) -> Optional[str]:
         try:
-            path = inspect.getfile(ref.cls)
+            path = os.path.abspath(inspect.getfile(ref.cls))
         except (TypeError, OSError):
             return None
         if ref.attribute is None:
@@ -137,7 +132,7 @@ class LocalBridgeResolver:
                 line = 1
         else:
             line = _find_attribute_line(ref.cls, ref.attribute) or 1
-        return f"http://localhost:{self.port}/open?file={path}&line={line}"
+        return f"vscode://file/{path}:{line}"
 
 
 @dataclass
@@ -146,7 +141,10 @@ class AutoAPIResolver:
 
     *base_url* is the root of the generated docs site, e.g.
     ``https://myproject.readthedocs.io/en/latest`` or a local
-    ``file:///path/to/docs/_build/html``.
+    ``http://localhost:63342/project/doc/_build/html``.
+
+    Use :meth:`for_package` to auto-detect the base URL for a locally installed
+    package whose docs are served via the JetBrains IDE built-in HTTP server.
     """
 
     base_url: str
@@ -163,3 +161,52 @@ class AutoAPIResolver:
             anchor = f"{anchor}.{ref.attribute}"
         base = self.base_url.rstrip("/")
         return f"{base}/autoapi/{module_path}/index.html#{anchor}"
+
+    @classmethod
+    def for_package(cls, package_name: str, port: int = 63342) -> "AutoAPIResolver":
+        """Build an :class:`AutoAPIResolver` for *package_name*'s locally built Sphinx docs.
+
+        The base URL targets the JetBrains IDE built-in HTTP server using this algorithm:
+
+        1. Import *package_name* to locate its source tree.
+        2. Walk up to the directory containing ``pyproject.toml`` (the package root).
+        3. Expect the Sphinx HTML output at ``{package_root}/doc/_build/html``.
+        4. Walk up to the git root (directory containing ``.git``).
+        5. Construct ``http://localhost:{port}/{git_root_name}/{relative_html_path}``.
+
+        :raises ImportError: if *package_name* cannot be imported.
+        :raises FileNotFoundError: if ``doc/_build/html`` does not exist —
+            build the docs first with ``sphinx-build doc doc/_build/html``.
+        """
+        try:
+            pkg = importlib.import_module(package_name)
+        except ImportError as exc:
+            raise ImportError(f"Cannot import package {package_name!r}: {exc}") from exc
+
+        pkg_file = Path(inspect.getfile(pkg)).resolve()
+
+        package_root: Optional[Path] = None
+        for parent in pkg_file.parents:
+            if (parent / "pyproject.toml").exists():
+                package_root = parent
+                break
+        if package_root is None:
+            raise FileNotFoundError(f"No pyproject.toml found in any parent of {pkg_file}")
+
+        html_root = package_root / "doc" / "_build" / "html"
+        if not html_root.exists():
+            raise FileNotFoundError(
+                f"Sphinx HTML output not found at {html_root}. "
+                f"Build the docs first: sphinx-build doc doc/_build/html"
+            )
+
+        git_root: Optional[Path] = None
+        for parent in [package_root, *package_root.parents]:
+            if (parent / ".git").exists():
+                git_root = parent
+                break
+        if git_root is None:
+            git_root = package_root.parent
+
+        rel_html = html_root.relative_to(git_root)
+        return cls(base_url=f"http://localhost:{port}/{git_root.name}/{rel_html}")

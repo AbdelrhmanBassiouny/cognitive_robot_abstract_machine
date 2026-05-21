@@ -247,39 +247,40 @@ class EQLVerbalizer:
         return self.build(expr._child_, ctx)
 
     def _verbalize_plural_(self, expr, ctx: VerbalizationContext) -> VerbFragment:
-        if isinstance(expr, FlatVariable):
-            return self._verbalize_plural_(expr._child_, ctx)
+        match expr:
+            case FlatVariable():
+                return self._verbalize_plural_(expr._child_, ctx)
 
-        if isinstance(expr, Variable):
-            type_name = expr._type_.__name__
-            label = ctx.disambiguation_map.get(expr._id_, type_name)
-            ctx.seen[expr._id_] = label
-            plural = label if label != type_name else inflect_engine.plural(type_name)
-            ref = SourceRef(cls=expr._type_) if isinstance(expr._type_, type) else None
-            return _role(plural, SemanticRole.VARIABLE, ref)
+            case Variable():
+                type_name = expr._type_.__name__
+                label = ctx.disambiguation_map.get(expr._id_, type_name)
+                ctx.seen[expr._id_] = label
+                plural = label if label != type_name else inflect_engine.plural(type_name)
+                ref = SourceRef(cls=expr._type_) if isinstance(expr._type_, type) else None
+                return _role(plural, SemanticRole.VARIABLE, ref)
 
-        if isinstance(expr, Attribute):
-            chain: list = []
-            current = expr
-            while isinstance(current, MappedVariable):
-                chain.append(current)
-                current = current._child_
-            root = current
-            if isinstance(root, Variable) and len(chain) == 1 and isinstance(chain[0], Attribute):
-                type_name = root._type_.__name__
-                label = ctx.disambiguation_map.get(root._id_, type_name)
-                ctx.seen[root._id_] = label
-                root_plural = label if label != type_name else inflect_engine.plural(type_name)
-                attr_name = chain[0]._attribute_name_
-                attr_plural = _ensure_plural(attr_name)
-                owner = chain[0]._owner_class_
-                attr_ref = SourceRef(cls=owner, attribute=attr_name) if isinstance(owner, type) else None
-                root_ref = SourceRef(cls=root._type_) if isinstance(root._type_, type) else None
-                return _phrase(
-                    _role(attr_plural, SemanticRole.ATTRIBUTE, attr_ref),
-                    Prepositions.OF.as_fragment(),
-                    _role(root_plural, SemanticRole.VARIABLE, root_ref),
-                )
+            case Attribute():
+                chain: list = []
+                current = expr
+                while isinstance(current, MappedVariable):
+                    chain.append(current)
+                    current = current._child_
+                root = current
+                if isinstance(root, Variable) and len(chain) == 1:
+                    type_name = root._type_.__name__
+                    label = ctx.disambiguation_map.get(root._id_, type_name)
+                    ctx.seen[root._id_] = label
+                    root_plural = label if label != type_name else inflect_engine.plural(type_name)
+                    attr_name = chain[0]._attribute_name_
+                    attr_plural = _ensure_plural(attr_name)
+                    owner = chain[0]._owner_class_
+                    attr_ref = SourceRef(cls=owner, attribute=attr_name) if isinstance(owner, type) else None
+                    root_ref = SourceRef(cls=root._type_) if isinstance(root._type_, type) else None
+                    return _phrase(
+                        _role(attr_plural, SemanticRole.ATTRIBUTE, attr_ref),
+                        Prepositions.OF.as_fragment(),
+                        _role(root_plural, SemanticRole.VARIABLE, root_ref),
+                    )
 
         return self.build(expr, ctx)
 
@@ -338,7 +339,7 @@ class EQLVerbalizer:
         :meth:`build` for plain variables.
 
         This is the canonical entry point for the non-boolean attribute path in
-        :meth:`_verbalize_mapped_chain_`.  It must be the *first* call that touches
+        :meth:`_verbalize_mapped_chain_`. It must be the *first* call that touches
         *leaf* via :meth:`~VerbalizationContext.noun_for` so that the indefinite article
         (``"a"`` / ``"an"``) is used on first mention.
 
@@ -434,23 +435,24 @@ class EQLVerbalizer:
         i = 0
         while i < len(chain):
             node = chain[i]
-            if isinstance(node, Attribute):
-                name = node._attribute_name_
-                owner = node._owner_class_
-                ref: Optional[SourceRef] = (
-                    SourceRef(cls=owner, attribute=name) if isinstance(owner, type) else None
-                )
-                while i + 1 < len(chain) and isinstance(chain[i + 1], Index):
-                    i += 1
-                    name += f"[{repr(chain[i]._key_)}]"
-                    ref = None  # composite indexed access has no clean single-line anchor
-                parts.append((name, ref))
-            elif isinstance(node, Index):
-                parts.append((f"[{repr(node._key_)}]", None))
-            elif isinstance(node, Call):
-                parts.append(("()", None))
-            elif isinstance(node, FlatVariable):
-                pass
+            match node:
+                case Attribute():
+                    name = node._attribute_name_
+                    owner = node._owner_class_
+                    ref: Optional[SourceRef] = (
+                        SourceRef(cls=owner, attribute=name) if isinstance(owner, type) else None
+                    )
+                    while i + 1 < len(chain) and isinstance(chain[i + 1], Index):
+                        i += 1
+                        name += f"[{repr(chain[i]._key_)}]"
+                        ref = None  # composite indexed access has no clean single-line anchor
+                    parts.append((name, ref))
+                case Index():
+                    parts.append((f"[{repr(node._key_)}]", None))
+                case Call():
+                    parts.append(("()", None))
+                case FlatVariable():
+                    pass
             i += 1
         return parts
 

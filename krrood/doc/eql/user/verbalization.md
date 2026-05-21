@@ -177,22 +177,70 @@ print(verbalize_expression(explanation.query_root))
 This outputs the exact query that matched and produced `inferred_object`, described in English.
 It is directly useful for displaying *why* a robot perceives something as a Drawer, a Door, etc.
 
-## Hyperlinks in Notebook Output
+## Hyperlinks to Source Code
 
-Pass a `link_resolver` to `VerbalizationPipeline.html()` and class and attribute names become
-clickable links — navigating directly to the source definition.
+Pass a `link_resolver` to any pipeline factory and class and attribute names become
+clickable links — navigating directly to the source definition.  Four built-in resolvers
+are available; pick the one that matches your editor and environment:
+
+| Resolver | URI scheme | Best for |
+|---|---|---|
+| `FileURLResolver` | `file:///path#line` | Any editor that handles `file://` URIs |
+| `JetBrainsResolver` | `jetbrains://python/navigate/reference?…` | PyCharm / IntelliJ IDEA (any OS) |
+| `VSCodeResolver` | `vscode://file/path:line` | Visual Studio Code (any OS) |
+| `AutoAPIResolver` | `https://…/autoapi/…` | Sphinx AutoAPI documentation sites |
+
+### Terminal (ANSI) — JetBrains
 
 ```{code-cell} ipython3
 from _demo_domain import Robot as LinkedRobot
 from krrood.entity_query_language.factories import variable, entity, an
 from krrood.entity_query_language.verbalization.pipeline import VerbalizationPipeline
-from krrood.entity_query_language.verbalization.rendering.source_link_resolver import FileURLResolver
+from krrood.entity_query_language.verbalization.rendering.source_link_resolver import JetBrainsResolver
 
 linked_robots = [LinkedRobot("R2D2", 95), LinkedRobot("C3PO", 20)]
 lr = variable(LinkedRobot, domain=linked_robots)
 linked_query = an(entity(lr).where(lr.battery > 50))
 
-VerbalizationPipeline.html(link_resolver=FileURLResolver()).display(linked_query)
+# Ctrl+click any class or attribute name in the terminal to jump to its definition.
+print(VerbalizationPipeline.ansi(link_resolver=JetBrainsResolver()).verbalize(linked_query))
+```
+
+### Terminal (ANSI) — VS Code
+
+```{code-cell} ipython3
+from krrood.entity_query_language.verbalization.rendering.source_link_resolver import VSCodeResolver
+
+print(VerbalizationPipeline.ansi(link_resolver=VSCodeResolver()).verbalize(linked_query))
+```
+
+### Jupyter Notebook — HTML with IDE links
+
+```{code-cell} ipython3
+from IPython.display import HTML
+
+# JetBrains: clicking a class/attribute name in the notebook opens it in PyCharm.
+VerbalizationPipeline.html(link_resolver=JetBrainsResolver()).display(linked_query)
+```
+
+### Sphinx AutoAPI documentation
+
+`AutoAPIResolver.for_package()` auto-detects the locally built Sphinx docs for a package and
+constructs the correct URL for the JetBrains IDE built-in HTTP server.
+
+```{code-cell} ipython3
+from krrood.entity_query_language.verbalization.rendering.source_link_resolver import AutoAPIResolver
+
+# Build the docs first: sphinx-build doc doc/_build/html
+resolver = AutoAPIResolver.for_package("krrood")   # port=63342 by default
+VerbalizationPipeline.html(link_resolver=resolver).display(linked_query)
+```
+
+You can also point `AutoAPIResolver` at a remote docs site by passing `base_url` directly:
+
+```{code-cell} ipython3
+resolver = AutoAPIResolver(base_url="https://cram2.github.io/cognitive_robot_abstract_machine/krrood")
+VerbalizationPipeline.html(link_resolver=resolver).display(linked_query)
 ```
 
 ## API Reference

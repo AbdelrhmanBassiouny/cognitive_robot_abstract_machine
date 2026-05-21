@@ -14,10 +14,9 @@ from krrood.entity_query_language.verbalization.rendering.renderer import (
 from krrood.entity_query_language.verbalization.rendering.source_link_resolver import (
     AutoAPIResolver,
     FileURLResolver,
-    IdeaURIResolver,
-    LocalBridgeResolver,
-    PyCharmResolver,
+    JetBrainsResolver,
     SourceLinkResolver,
+    VSCodeResolver,
 )
 
 __all__ = [
@@ -32,8 +31,7 @@ __all__ = [
     "HierarchicalRenderer",
     "SourceLinkResolver",
     "FileURLResolver",
-    "IdeaURIResolver",
-    "PyCharmResolver",
-    "LocalBridgeResolver",
+    "JetBrainsResolver",
+    "VSCodeResolver",
     "AutoAPIResolver",
 ]
