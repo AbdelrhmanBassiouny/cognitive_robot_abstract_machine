@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING
 
 from krrood.entity_query_language.core.variable import ExternallySetVariable, InstantiatedVariable, Literal, Variable
@@ -132,41 +133,45 @@ def _make_field_ref_frag(field_name: str, type_name: str, type_cls) -> VerbFragm
     ], separator=" ")
 
 
-def _verbalize_instantiated_natural(
+def _copula_and_value(
+    field_name: str,
+    child_expr,
+    ctx: VerbalizationContext,
+    delegate: EQLVerbalizer,
+) -> tuple[VerbFragment, VerbFragment]:
+    """Return (copula_frag, value_frag) choosing singular/plural based on field name."""
+    if inflect_engine.singular_noun(field_name):
+        return Copulas.ARE.as_fragment(), verbalize_plural(child_expr, ctx, delegate.build)
+    return Copulas.IS.as_fragment(), delegate.build(child_expr, ctx)
+
+
+def _build_bindings(
     expr: InstantiatedVariable,
     ctx: VerbalizationContext,
     delegate: EQLVerbalizer,
-) -> VerbFragment:
+) -> tuple[list[VerbFragment], dict[uuid.UUID, VerbFragment]]:
+    """Build all binding fragments and collect overrides without registering them.
+
+    Separating value-building from override-registration ensures no binding's value
+    is rendered under a sibling binding's override.
+    """
     type_name = getattr(expr._type_, "__name__", str(expr._type_))
-
-    if expr._id_ in ctx.seen:
-        return _phrase(Articles.THE.as_fragment(), _role(ctx.seen[expr._id_], SemanticRole.VARIABLE))
-    ctx.seen[expr._id_] = type_name
-
-    ctx.push_constraint_frame()
-
     binding_frags: list[VerbFragment] = []
+    pending_overrides: dict[uuid.UUID, VerbFragment] = {}
     for field_name, child_expr in expr._child_vars_.items():
-        field_ref_frag = _make_field_ref_frag(field_name, type_name, expr._type_)
+        field_ref = _make_field_ref_frag(field_name, type_name, expr._type_)
+        copula, value = _copula_and_value(field_name, child_expr, ctx, delegate)
+        binding_frags.append(_phrase(field_ref, copula, value))
+        pending_overrides[child_expr._id_] = field_ref
+    return binding_frags, pending_overrides
 
-        if inflect_engine.singular_noun(field_name):
-            value_frag = verbalize_plural(child_expr, ctx, delegate.build)
-            binding_frags.append(_phrase(field_ref_frag, Copulas.ARE.as_fragment(), value_frag))
-        else:
-            value_frag = delegate.build(child_expr, ctx)
-            binding_frags.append(_phrase(field_ref_frag, Copulas.IS.as_fragment(), value_frag))
 
-        # Register the override AFTER building the value so the value itself
-        # is not intercepted. The override is still active when constraints are
-        # built below (all bindings are processed before any constraint is built).
-        ctx.binding_overrides[child_expr._id_] = field_ref_frag
-
-    # Build constraints now — all binding overrides are registered, so any
-    # reference to a bound expression inside a constraint resolves to its
-    # field-reference fragment automatically via RuleEngine.build.
-    deferred = ctx.pop_constraint_frame()
-    constraint_frags = [delegate.build(e, ctx) for e in deferred]
-
+def _assemble_instantiated_phrase(
+    type_name: str,
+    expr: InstantiatedVariable,
+    binding_frags: list[VerbFragment],
+    constraint_frags: list[VerbFragment],
+) -> VerbFragment:
     result_parts: list[VerbFragment] = [
         _phrase(Articles.indefinite(type_name), RoleFragment.for_variable(type_name, expr))
     ]
@@ -181,3 +186,22 @@ def _verbalize_instantiated_natural(
             parts=[_word(","), Keywords.SUCH_THAT.as_fragment(), joined_c], separator=" "
         ))
     return PhraseFragment(parts=result_parts, separator="")
+
+
+def _verbalize_instantiated_natural(
+    expr: InstantiatedVariable,
+    ctx: VerbalizationContext,
+    delegate: EQLVerbalizer,
+) -> VerbFragment:
+    type_name = getattr(expr._type_, "__name__", str(expr._type_))
+    if expr._id_ in ctx.seen:
+        return _phrase(Articles.THE.as_fragment(), _role(ctx.seen[expr._id_], SemanticRole.VARIABLE))
+    ctx.seen[expr._id_] = type_name
+
+    ctx.push_constraint_frame()
+    binding_frags, overrides = _build_bindings(expr, ctx, delegate)
+    ctx.binding_overrides.update(overrides)
+    deferred = ctx.pop_constraint_frame()
+    constraint_frags = [delegate.build(e, ctx) for e in deferred]
+
+    return _assemble_instantiated_phrase(type_name, expr, binding_frags, constraint_frags)

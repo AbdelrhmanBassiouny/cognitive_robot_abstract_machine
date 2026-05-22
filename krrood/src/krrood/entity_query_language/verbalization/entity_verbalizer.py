@@ -154,56 +154,64 @@ class EntityVerbalizer:
     def _verbalize_query_body_(
         self, expr, ctx: VerbalizationContext, selection: VerbFragment
     ) -> VerbFragment:
-        find_header = _phrase(Keywords.FIND.as_fragment(), selection)
+        header = _phrase(Keywords.FIND.as_fragment(), selection)
+        clauses = [c for c in [
+            self._where_clause(expr, ctx),
+            self._grouped_by_clause(expr, ctx),
+            self._having_clause(expr, ctx),
+            self._ordered_by_clause(expr, ctx),
+        ] if c is not None]
+        return BlockFragment(header=header, items=clauses)
+
+    def _where_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
         where_expr = expr._where_expression_
+        if where_expr is None:
+            return None
+        return _phrase(Keywords.SUCH_THAT.as_fragment(), self._d.build(where_expr.condition, ctx))
+
+    def _grouped_by_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
         grouped_expr = expr._grouped_by_expression_
+        if grouped_expr is None or not grouped_expr.variables_to_group_by:
+            return None
+        group_key_root_ids = self._root_var_ids_(grouped_expr.variables_to_group_by)
+        group_frags = [self._d.build(v, ctx) for v in grouped_expr.variables_to_group_by]
+        groups_phrase = PhraseFragment(parts=group_frags, separator=", ")
+        aggregated_frags = self._aggregated_noun_frags_(expr, group_key_root_ids, ctx)
+        if aggregated_frags:
+            aggregated_phrase = oxford_and(aggregated_frags, Conjunctions.AND.as_fragment())
+            return _phrase(
+                Conjunctions.AND.as_fragment(),
+                Articles.THE.as_fragment(),
+                aggregated_phrase,
+                Copulas.ARE.as_fragment(),
+                Keywords.GROUPED_BY.as_fragment(),
+                groups_phrase,
+            )
+        return _phrase(Keywords.GROUPED_BY.as_fragment(), groups_phrase)
+
+    def _having_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
         having_expr = expr._having_expression_
-        clauses: list[VerbFragment] = []
+        if having_expr is None:
+            return None
+        ctx.compact_predicates = True
+        having_frag = self._d.build(having_expr.condition, ctx)
+        ctx.compact_predicates = False
+        return _phrase(Keywords.HAVING.as_fragment(), having_frag)
 
-        if where_expr is not None:
-            clauses.append(_phrase(
-                Keywords.SUCH_THAT.as_fragment(),
-                self._d.build(where_expr.condition, ctx),
-            ))
-
-        if grouped_expr is not None and grouped_expr.variables_to_group_by:
-            group_key_root_ids = self._root_var_ids_(grouped_expr.variables_to_group_by)
-            group_frags = [self._d.build(v, ctx) for v in grouped_expr.variables_to_group_by]
-            groups_phrase = PhraseFragment(parts=group_frags, separator=", ")
-            aggregated_frags = self._aggregated_noun_frags_(expr, group_key_root_ids, ctx)
-            if aggregated_frags:
-                aggregated_phrase = oxford_and(aggregated_frags, Conjunctions.AND.as_fragment())
-                clauses.append(_phrase(
-                    Conjunctions.AND.as_fragment(),
-                    Articles.THE.as_fragment(),
-                    aggregated_phrase,
-                    Copulas.ARE.as_fragment(),
-                    Keywords.GROUPED_BY.as_fragment(),
-                    groups_phrase,
-                ))
-            else:
-                clauses.append(_phrase(Keywords.GROUPED_BY.as_fragment(), groups_phrase))
-
-        if having_expr is not None:
-            ctx.compact_predicates = True
-            having_frag = self._d.build(having_expr.condition, ctx)
-            ctx.compact_predicates = False
-            clauses.append(_phrase(Keywords.HAVING.as_fragment(), having_frag))
-
+    def _ordered_by_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
         ob = expr._ordered_by_builder_
-        if ob is not None:
-            direction_frag = (
-                SortDirections.DESCENDING.as_fragment()
-                if ob.descending
-                else SortDirections.ASCENDING.as_fragment()
-            )
-            ordered_frag = self._d.build(ob.variable, ctx)
-            paren_frag = PhraseFragment(
-                parts=[_word("("), direction_frag, _word(")")], separator=""
-            )
-            clauses.append(_phrase(Keywords.ORDERED_BY.as_fragment(), ordered_frag, paren_frag))
+        if ob is None:
+            return None
+        direction_frag = (
+            SortDirections.DESCENDING.as_fragment()
+            if ob.descending
+            else SortDirections.ASCENDING.as_fragment()
+        )
+        ordered_frag = self._d.build(ob.variable, ctx)
+        paren_frag = PhraseFragment(parts=[_word("("), direction_frag, _word(")")], separator="")
+        return _phrase(Keywords.ORDERED_BY.as_fragment(), ordered_frag, paren_frag)
 
-        return BlockFragment(header=find_header, items=clauses)
+    # ── Grouping helpers ──────────────────────────────────────────────────────
 
     @staticmethod
     def _root_var_ids_(exprs) -> set:
@@ -214,21 +222,24 @@ class EntityVerbalizer:
                 ids.add(root._id_)
         return ids
 
+    @staticmethod
+    def _aggregated_expressions_(query_expr, group_key_root_ids: set) -> list:
+        selected_var = query_expr.selected_variable if isinstance(query_expr, Entity) else None
+        if isinstance(selected_var, InstantiatedVariable):
+            result = []
+            for child in selected_var._child_vars_.values():
+                root = chain_root(child)
+                if not (isinstance(root, Variable) and root._id_ in group_key_root_ids):
+                    result.append(child)
+            return result
+        if isinstance(query_expr, Query):
+            return [v for v in query_expr._selected_variables_ if v._id_ not in group_key_root_ids]
+        return []
+
     def _aggregated_noun_frags_(
         self, query_expr, group_key_root_ids: set, ctx: VerbalizationContext
     ) -> list[VerbFragment]:
-        frags: list[VerbFragment] = []
-        selected_var = query_expr.selected_variable if isinstance(query_expr, Entity) else None
-
-        if isinstance(selected_var, InstantiatedVariable):
-            for child_expr in selected_var._child_vars_.values():
-                root = chain_root(child_expr)
-                if isinstance(root, Variable) and root._id_ in group_key_root_ids:
-                    continue
-                frags.append(verbalize_plural(child_expr, ctx, self._d.build))
-        elif isinstance(query_expr, Query):
-            for var in query_expr._selected_variables_:
-                if var._id_ not in group_key_root_ids:
-                    frags.append(verbalize_plural(var, ctx, self._d.build))
-
-        return frags
+        return [
+            verbalize_plural(e, ctx, self._d.build)
+            for e in self._aggregated_expressions_(query_expr, group_key_root_ids)
+        ]
