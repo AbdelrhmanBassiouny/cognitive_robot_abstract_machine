@@ -46,6 +46,15 @@ _HTML_PAGE_TEMPLATE = """\
 </html>
 """
 
+# Inline dark wrapper for HTML cell output (Jupyter / built docs). Mirrors
+# _HTML_PAGE_TEMPLATE so the colors read correctly in both environments.
+_HTML_CELL_WRAPPER = (
+    '<div style="background:#1e1e1e;color:#d4d4d4;font-family:monospace;'
+    'font-size:14px;padding:0.75em;border-radius:0.4em;line-height:1.8;">'
+    "{body}"
+    "</div>"
+)
+
 
 def _is_ipython() -> bool:
     """Return ``True`` when running inside an IPython / Jupyter session."""
@@ -88,8 +97,14 @@ class VerbalizationPipeline:
         fragment = self._verbalizer.build(expr)
         return self.verbalize_fragment(fragment)
 
+    def _is_html_renderer(self) -> bool:
+        return isinstance(getattr(self._renderer, "_formatter", None), HTMLFormatter)
+
     def verbalize_fragment(self, fragment: VerbFragment) -> str:
-        return self._renderer.render(fragment)
+        result = self._renderer.render(fragment)
+        if self._is_html_renderer():
+            return _HTML_CELL_WRAPPER.format(body=result)
+        return result
 
     def display(self, expr) -> None:
         """Render *expr* and display it in the current environment.
@@ -105,12 +120,13 @@ class VerbalizationPipeline:
 
     def display_fragment(self, fragment: VerbFragment) -> None:
         """Display a pre-built :class:`VerbFragment` — same routing as :meth:`display`."""
-        html_body = self._renderer.render(fragment)
+        raw_html = self._renderer.render(fragment)
         if _is_ipython():
             from IPython.display import display as _ipython_display, HTML
-            _ipython_display(HTML(html_body))
+            wrapped = _HTML_CELL_WRAPPER.format(body=raw_html) if self._is_html_renderer() else raw_html
+            _ipython_display(HTML(wrapped))
             return
-        full_page = _HTML_PAGE_TEMPLATE.format(body=html_body)
+        full_page = _HTML_PAGE_TEMPLATE.format(body=raw_html)
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".html",

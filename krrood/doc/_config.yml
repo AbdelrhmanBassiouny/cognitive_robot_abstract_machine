@@ -43,6 +43,8 @@ sphinx:
     # _build/html/autoapi/verbalization_domain/ (same tree as real AutoAPI output).
     html_extra_path:
       - eql/user/api_mock
+    html_css_files:
+      - custom.css
 
 
 # Information about where the book exists on the web
