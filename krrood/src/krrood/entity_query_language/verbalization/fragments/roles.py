@@ -5,17 +5,40 @@ from typing import Optional
 
 
 class SemanticRole(Enum):
-    KEYWORD = "keyword"        # If, Then, Find, Where, Such that
-    VARIABLE = "variable"      # Robot, Employee 1
-    AGGREGATION = "aggregation"  # sum of, number of, average of
-    OPERATOR = "operator"      # is greater than, equals
-    LOGICAL = "logical"        # and, or, not, for all, there exists
-    LITERAL = "literal"        # 42, "hello", True
-    ATTRIBUTE = "attribute"    # battery, tasks, name
-    PLAIN = "plain"            # neutral connecting text
+    """
+    Semantic role attached to a
+    :class:`~krrood.entity_query_language.verbalization.fragments.base.RoleFragment`.
+
+    The role determines the colour applied by the active
+    :class:`~krrood.entity_query_language.verbalization.rendering.formatter.Formatter`
+    (see :data:`ROLE_COLORS`).
+
+    :cvar KEYWORD: EQL structure words — *If*, *Then*, *Find*, *Where*, *Such that*.
+    :cvar VARIABLE: Type and instance names — *Robot*, *Employee 1*.
+    :cvar AGGREGATION: Aggregation phrases — *sum of*, *number of*, *average of*.
+    :cvar OPERATOR: Comparator phrases — *is greater than*, *equals*.
+    :cvar LOGICAL: Logical connectives — *and*, *or*, *not*, *for all*, *there exists*.
+    :cvar LITERAL: Literal values — ``42``, ``"hello"``, ``True``.
+    :cvar ATTRIBUTE: Attribute and field names — *battery*, *tasks*, *name*.
+    :cvar PLAIN: Neutral connecting text with no special colour.
+    """
+
+    KEYWORD = "keyword"
+    VARIABLE = "variable"
+    AGGREGATION = "aggregation"
+    OPERATOR = "operator"
+    LOGICAL = "logical"
+    LITERAL = "literal"
+    ATTRIBUTE = "attribute"
+    PLAIN = "plain"
 
 
-# Hex colours taken directly from QueryGraph.ColorLegend
+#: Hex colour strings (or ``None`` for no colour) for each :class:`SemanticRole`.
+#:
+#: Colours are taken from ``QueryGraph.ColorLegend`` to keep verbalization output
+#: visually consistent with query graph visualizations.
+#:
+#: :type: dict[SemanticRole, str | None]
 ROLE_COLORS: dict[SemanticRole, Optional[str]] = {
     SemanticRole.KEYWORD:     "#eded18",        # ConclusionSelector yellow
     SemanticRole.VARIABLE:    "cornflowerblue",
@@ -51,7 +74,17 @@ _role_map: Optional[dict[type, SemanticRole]] = None
 
 
 def role_for(expr) -> SemanticRole:
-    """Return the SemanticRole for an EQL expression instance, using MRO for inheritance."""
+    """
+    Return the :class:`SemanticRole` for an EQL expression instance using MRO lookup.
+
+    Traverses the MRO of ``type(expr)`` and returns the role of the first ancestor
+    found in the role map.  Falls back to :attr:`~SemanticRole.PLAIN` when no
+    match is found (e.g. for custom expression types).
+
+    :param expr: Any EQL expression instance.
+    :returns: The most-specific matching :class:`SemanticRole`.
+    :rtype: SemanticRole
+    """
     global _role_map
     if _role_map is None:
         _role_map = _build_role_map()

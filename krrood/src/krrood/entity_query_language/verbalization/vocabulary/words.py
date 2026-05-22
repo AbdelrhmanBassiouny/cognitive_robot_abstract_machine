@@ -23,52 +23,97 @@ from krrood.entity_query_language.verbalization.fragments.roles import SemanticR
 
 @dataclass(frozen=True)
 class PlainWord:
-    """A neutral word/phrase with no semantic role — renders to WordFragment."""
+    """
+    A neutral word/phrase with no semantic role — renders to
+    :class:`~krrood.entity_query_language.verbalization.fragments.base.WordFragment`.
+
+    :ivar text: The raw English text (e.g. ``"of"``, ``"and"``, ``"the"``,
+        ``"ascending"``).
+    """
 
     text: str
 
     def as_fragment(self) -> WordFragment:
+        """
+        Convert to a :class:`~krrood.entity_query_language.verbalization.fragments.base.WordFragment`.
+
+        :returns: Neutral word fragment.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.WordFragment
+        """
         return WordFragment(text=self.text)
 
 
 @dataclass(frozen=True)
 class RoleWord:
-    """A word/phrase carrying a fixed semantic role — renders to RoleFragment.
+    """
+    A word/phrase carrying a fixed
+    :class:`~krrood.entity_query_language.verbalization.fragments.roles.SemanticRole`
+    — renders to :class:`~krrood.entity_query_language.verbalization.fragments.base.RoleFragment`.
 
-    Subclasses set _role_ as a ClassVar.  ClassVar fields are invisible to
-    @dataclass so _role_ never appears in __init__; only text does.
-    frozen=True is inherited by subclasses via the __setattr__ guard.
+    Subclasses set :attr:`_role_` as a ``ClassVar``; ``ClassVar`` fields are invisible
+    to ``@dataclass`` so ``_role_`` never appears in ``__init__``.
+
+    ``frozen=True`` is inherited by subclasses via the ``__setattr__`` guard.
+
+    :ivar text: The raw English text.
+    :cvar _role_: The semantic role for this word type (set by each subclass).
     """
 
     text: str
     _role_: ClassVar[SemanticRole]
 
     def as_fragment(self) -> RoleFragment:
+        """
+        Convert to a :class:`~krrood.entity_query_language.verbalization.fragments.base.RoleFragment`
+        carrying :attr:`_role_`.
+
+        :returns: Role-tagged fragment.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.RoleFragment
+        """
         return RoleFragment(text=self.text, role=self._role_)
 
 
 class KeywordWord(RoleWord):
+    """EQL structure keyword with :attr:`~SemanticRole.KEYWORD` role."""
+
     _role_ = SemanticRole.KEYWORD
 
 
 class LogicalWord(RoleWord):
+    """Logical connective with :attr:`~SemanticRole.LOGICAL` role."""
+
     _role_ = SemanticRole.LOGICAL
 
 
 class AggregationWord(RoleWord):
+    """Aggregation phrase with :attr:`~SemanticRole.AGGREGATION` role."""
+
     _role_ = SemanticRole.AGGREGATION
 
 
 class OperatorWord(RoleWord):
+    """Comparison operator phrase with :attr:`~SemanticRole.OPERATOR` role."""
+
     _role_ = SemanticRole.OPERATOR
 
 
 @dataclass(frozen=True)
 class OperatorPhrase:
-    """All eight phrase variants for one comparison operator, co-located.
+    """
+    All eight text variants for one comparison operator, co-located.
 
-    Flags negated / compact / temporal select among the eight fields.
-    select() returns the appropriate OperatorWord for the given flag combination.
+    The three boolean flags ``negated``, ``compact``, and ``temporal`` select
+    among the eight fields.  Use :meth:`select` to obtain the appropriate
+    :class:`OperatorWord` for a given combination.
+
+    :ivar standard: Default form (e.g. ``"is greater than"``).
+    :ivar compact: Copula-less form used in HAVING clauses (e.g. ``"greater than"``).
+    :ivar negated: Negated form (e.g. ``"is not greater than"``).
+    :ivar negated_compact: Negated copula-less form (e.g. ``"not greater than"``).
+    :ivar temporal: Temporal standard form (e.g. ``"is after"``).
+    :ivar temporal_compact: Temporal compact form (e.g. ``"after"``).
+    :ivar temporal_negated: Temporal negated form (e.g. ``"is no later than"``).
+    :ivar temporal_negated_compact: Temporal negated compact form (e.g. ``"no later than"``).
     """
 
     standard: str
@@ -83,6 +128,21 @@ class OperatorPhrase:
     def select(
         self, *, negated: bool = False, compact: bool = False, temporal: bool = False
     ) -> OperatorWord:
+        """
+        Select the appropriate :class:`OperatorWord` for the given flag combination.
+
+        Falls back to :attr:`standard` when the corresponding temporal field is empty
+        (e.g. for operators without temporal variants).
+
+        :param negated: Use the negated variant.
+        :type negated: bool
+        :param compact: Use the copula-less variant (for HAVING clauses).
+        :type compact: bool
+        :param temporal: Use the temporal variant (for datetime comparisons).
+        :type temporal: bool
+        :returns: The appropriate :class:`OperatorWord`.
+        :rtype: OperatorWord
+        """
         if temporal:
             if negated and compact:
                 text = self.temporal_negated_compact
@@ -104,15 +164,32 @@ class OperatorPhrase:
 
 
 class VocabEnum(Enum):
-    """Mixin for Enums whose values are PlainWord / RoleWord instances.
+    """
+    Enum mixin for enums whose member values are :class:`PlainWord` / :class:`RoleWord` instances.
 
-    Delegates as_fragment() and .text to the dataclass stored in .value so
-    callers never need to write .value explicitly for the common cases.
+    Delegates :meth:`as_fragment` and :attr:`text` to the dataclass stored in
+    ``.value`` so callers never need to write ``.value`` explicitly.
+
+    All namespace enums (:class:`~krrood.entity_query_language.verbalization.vocabulary.english.Keywords`,
+    :class:`~krrood.entity_query_language.verbalization.vocabulary.english.Logicals`, etc.)
+    inherit this mixin.
     """
 
     def as_fragment(self) -> VerbFragment:
+        """
+        Convert the member's value to its
+        :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`.
+
+        :returns: Fragment representing this vocabulary item.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         return self.value.as_fragment()
 
     @property
     def text(self) -> str:
+        """
+        The raw English text of this vocabulary item.
+
+        :rtype: str
+        """
         return self.value.text

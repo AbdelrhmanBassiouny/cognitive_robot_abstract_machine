@@ -36,12 +36,30 @@ def _role(text: str, role: SemanticRole, source_ref=None) -> RoleFragment:
 
 
 class VariableRule(VerbalizationRule):
+    """
+    Verbalizes :class:`~krrood.entity_query_language.core.variable.Variable` expressions
+    as *"a/an TypeName"* (first mention) or *"the TypeName"* (subsequent mention).
+
+    Uses :meth:`~krrood.entity_query_language.verbalization.context.VerbalizationContext.noun_for_parts`
+    for article selection and coreference tracking.
+    """
+
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` for :class:`~krrood.entity_query_language.core.variable.Variable` expressions."""
         return isinstance(expr, Variable)
 
     @classmethod
-    def transform(cls, expr: Variable, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "Variable", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Build *"a/an TypeName"*, *"the TypeName"*, or just *"TypeName N"* based on context.
+
+        :param expr: Variable expression.
+        :param ctx: Shared verbalization state (article selection + coreference).
+        :param delegate: Parent verbalizer (unused directly).
+        :returns: Noun phrase fragment.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         article, label = ctx.noun_for_parts(expr)
         label_frag = RoleFragment.for_variable(label, expr)
         if article == ArticleSelection.NONE:
@@ -52,55 +70,121 @@ class VariableRule(VerbalizationRule):
 
 
 class LiteralRule(VariableRule):
-    """Literal is a subclass of Variable; renders as a plain semantic-role fragment."""
+    """
+    Verbalizes :class:`~krrood.entity_query_language.core.variable.Literal` expressions
+    as a plain semantic-role fragment using :meth:`~krrood.entity_query_language.verbalization.context.VerbalizationContext.type_name_of_value`.
+
+    Takes priority over :class:`VariableRule` because Literal is a Variable subclass.
+    The known limitation is that no source link is generated for literal values.
+    """
 
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` for :class:`~krrood.entity_query_language.core.variable.Literal` expressions."""
         return isinstance(expr, Literal)
 
     @classmethod
-    def transform(cls, expr: Literal, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "Literal", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Build a LITERAL-role fragment from the Python value.
+
+        :param expr: Literal expression.
+        :param ctx: Shared verbalization state (for value rendering).
+        :param delegate: Parent verbalizer (unused).
+        :returns: Literal value fragment.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         return _role(ctx.type_name_of_value(expr._value_), SemanticRole.LITERAL)
 
 
 class ExternallySetVariableRule(VerbalizationRule):
-    """ExternallySetVariable is a sibling of Variable (both inherit CanHaveDomainSource)."""
+    """
+    Verbalizes :class:`~krrood.entity_query_language.core.variable.ExternallySetVariable`
+    as *"a/an TypeName"*.
+
+    :class:`~krrood.entity_query_language.core.variable.ExternallySetVariable` is a sibling
+    of :class:`~krrood.entity_query_language.core.variable.Variable` (both inherit
+    ``CanHaveDomainSource``) so :class:`VariableRule` does not match it.
+    """
 
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` for :class:`~krrood.entity_query_language.core.variable.ExternallySetVariable`."""
         return isinstance(expr, ExternallySetVariable)
 
     @classmethod
-    def transform(cls, expr: ExternallySetVariable, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "ExternallySetVariable", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Build *"a/an TypeName"* without coreference tracking (external variables are opaque).
+
+        :param expr: ExternallySetVariable expression.
+        :param ctx: Shared verbalization state.
+        :param delegate: Parent verbalizer (unused).
+        :returns: Noun phrase fragment.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         type_name = expr._type_.__name__ if getattr(expr, "_type_", None) else "variable"
         return _phrase(Articles.indefinite(type_name), _role(type_name, SemanticRole.VARIABLE))
 
 
 class InstantiatedVariableRule(VerbalizationRule):
-    """InstantiatedVariable natural form: 'a TypeName where the field of the TypeName is …'"""
+    """
+    Verbalizes :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`
+    in natural form: *"a TypeName where the field of the TypeName is …"*.
+
+    Delegates to :func:`_verbalize_instantiated_natural` which handles constraint
+    frames and binding overrides.
+    """
 
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` for :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`."""
         return isinstance(expr, InstantiatedVariable)
 
     @classmethod
-    def transform(cls, expr: InstantiatedVariable, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "InstantiatedVariable", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Delegate to :func:`_verbalize_instantiated_natural`.
+
+        :param expr: InstantiatedVariable expression.
+        :param ctx: Shared verbalization state.
+        :param delegate: Parent verbalizer.
+        :returns: Full natural-language binding phrase.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         return _verbalize_instantiated_natural(expr, ctx, delegate)
 
 
 class InstantiatedVerbalizableRule(InstantiatedVariableRule):
-    """InstantiatedVariable whose type provides a _verbalization_template_(); uses it directly.
+    """
+    Verbalizes :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`
+    when its type implements
+    :meth:`~krrood.entity_query_language.predicate.Verbalizable._verbalization_template_`.
 
-    Known limitation: the user-supplied format string cannot carry semantic roles,
-    so the result is a plain WordFragment.
+    Uses the user-supplied format string directly, substituting verbalized child
+    values.  Takes priority over :class:`InstantiatedVariableRule`.
+
+    .. note::
+        The format string cannot carry semantic roles, so the result is a plain
+        :class:`~krrood.entity_query_language.verbalization.fragments.base.WordFragment`.
     """
 
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` when the InstantiatedVariable type provides a verbalization template."""
         return isinstance(expr, InstantiatedVariable) and _has_verbalization_template(expr)
 
     @classmethod
-    def transform(cls, expr: InstantiatedVariable, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "InstantiatedVariable", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Apply the verbalization template, substituting verbalized child values.
+
+        :param expr: InstantiatedVariable with a Verbalizable type.
+        :param ctx: Shared verbalization state.
+        :param delegate: Parent verbalizer for verbalizing child expressions.
+        :returns: Plain word fragment from the formatted template.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         template = expr._type_._verbalization_template_()
         kwargs = {name: delegate.verbalize(child, ctx) for name, child in expr._child_vars_.items()}
         return _word(template.format(**kwargs))

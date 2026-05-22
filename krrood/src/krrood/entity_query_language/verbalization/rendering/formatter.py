@@ -13,12 +13,32 @@ _log = logging.getLogger(__name__)
 
 
 class BulletStyle(Enum):
+    """
+    Bullet character used by
+    :class:`~krrood.entity_query_language.verbalization.rendering.renderer.HierarchicalRenderer`
+    for list items.
+
+    :cvar DASH: ``"-"``
+    :cvar DOT: ``"•"``
+    :cvar ASTERISK: ``"*"``
+    """
+
     DASH = "-"
     DOT = "•"
     ASTERISK = "*"
 
 
 class IndentSize(Enum):
+    """
+    Indentation string used by
+    :class:`~krrood.entity_query_language.verbalization.rendering.renderer.HierarchicalRenderer`
+    per nesting level.
+
+    :cvar TWO_SPACES: Two-space indent (default).
+    :cvar FOUR_SPACES: Four-space indent.
+    :cvar TAB: Hard tab character.
+    """
+
     TWO_SPACES = "  "
     FOUR_SPACES = "    "
     TAB = "\t"
@@ -38,39 +58,78 @@ def _detect_osc8_support() -> bool:
 
 @dataclass
 class Formatter(ABC):
-    """Single source of truth for all format-specific characters and color markup."""
+    """
+    Single source of truth for all format-specific characters and colour markup.
+
+    Concrete subclasses determine how colours, spaces, newlines, and hyperlinks
+    are encoded in the output string.
+
+    Subclasses: :class:`PlainFormatter`, :class:`ANSIFormatter`, :class:`HTMLFormatter`.
+    """
 
     @abstractmethod
     def colorize(self, text: str, role: SemanticRole) -> str:
-        """Wrap *text* in format-specific color markup for *role*."""
+        """
+        Wrap *text* in format-specific colour markup for *role*.
+
+        :param text: Plain display text to colourize.
+        :type text: str
+        :param role: Semantic role determining the colour.
+        :type role: ~krrood.entity_query_language.verbalization.fragments.roles.SemanticRole
+        :returns: Coloured string (or *text* unchanged when no colour is defined for *role*).
+        :rtype: str
+        """
         ...
 
     @property
     @abstractmethod
     def space(self) -> str:
-        """Inline word separator character(s)."""
+        """
+        Inline word separator character(s) (e.g. ``" "`` or ``"&nbsp;"``).
+
+        :rtype: str
+        """
         ...
 
     @property
     @abstractmethod
     def newline(self) -> str:
-        """Line break character(s)."""
+        """
+        Line break character(s) (e.g. ``"\\n"`` or ``"<br>"``).
+
+        :rtype: str
+        """
         ...
 
     def wrap_link(self, text: str, url: str) -> str:
-        """Wrap already-rendered *text* with a hyperlink to *url*.
+        """
+        Wrap already-rendered *text* with a hyperlink to *url*.
 
-        The default implementation is a no-op (hyperlinks not supported).
-        Subclasses override when the output format can carry clickable links.
+        The base implementation is a no-op (hyperlinks not supported for this format).
+        Subclasses override when the output format supports clickable links.
+
+        :param text: Already-colourized display text.
+        :type text: str
+        :param url: Destination URL.
+        :type url: str
+        :returns: *text* unchanged (base); linked string (subclasses).
+        :rtype: str
         """
         return text
 
 
 @dataclass
 class PlainFormatter(Formatter):
-    """No color markup; standard ASCII space and newline."""
+    """
+    No colour markup; standard ASCII space (``" "``) and newline (``"\\n"``).
+
+    The default formatter used by
+    :class:`~krrood.entity_query_language.verbalization.rendering.renderer.ParagraphRenderer`
+    and :meth:`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline.plain`.
+    """
 
     def colorize(self, text: str, role: SemanticRole) -> str:
+        """Return *text* unchanged (no colour markup in plain mode)."""
         return text
 
     @property
@@ -87,13 +146,13 @@ class ANSIFormatter(Formatter):
     """
     True-color ANSI escape sequences (24-bit, ``\\033[38;2;R;G;Bm``).
 
-    Works in VS Code terminal, GNOME Terminal, iTerm2, Windows Terminal, and any
-    other terminal that supports the ISO-8613-3 direct-color extension.
+    Compatible with VS Code terminal, GNOME Terminal, iTerm2, Windows Terminal,
+    and any terminal supporting the ISO-8613-3 direct-color extension.
 
     OSC 8 hyperlinks are enabled automatically when the terminal is detected as
-    capable (``VTE_VERSION``, ``TERM_PROGRAM`` in {vscode, WezTerm, iTerm.app},
-    or ``TERM=xterm-kitty``).  On unsupported terminals, :meth:`wrap_link` falls
-    back to returning plain colored text.
+    capable (``VTE_VERSION``, ``TERM_PROGRAM`` in ``{vscode, WezTerm, iTerm.app}``,
+    or ``TERM=xterm-kitty``).  On unsupported terminals :meth:`wrap_link` falls
+    back to returning plain coloured text with no link markup.
     """
 
     _RESET: ClassVar[str] = "\033[0m"
@@ -134,10 +193,13 @@ class ANSIFormatter(Formatter):
 @dataclass
 class HTMLFormatter(Formatter):
     """
-    HTML output: ``<span style="color: …">`` color tags, ``&nbsp;`` spaces, ``<br>`` newlines.
+    HTML output with ``<span style="color: …">`` colour tags, ``&nbsp;`` spaces,
+    and ``<br>`` newlines.
 
     Suitable for Jupyter notebooks, GitLab Markdown, and any renderer that
     passes through inline HTML.  Hyperlinks use standard ``<a href="…">`` anchors.
+
+    Used by :meth:`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline.html`.
     """
 
     def colorize(self, text: str, role: SemanticRole) -> str:

@@ -5,7 +5,7 @@ import tempfile
 import webbrowser
 from typing import Optional, TYPE_CHECKING
 
-from krrood.entity_query_language.verbalization.fragments import VerbFragment
+from krrood.entity_query_language.verbalization.fragments.base import VerbFragment
 from krrood.entity_query_language.verbalization.rendering.formatter import (
     ANSIFormatter,
     HTMLFormatter,
@@ -67,24 +67,31 @@ def _is_ipython() -> bool:
 
 class VerbalizationPipeline:
     """
-    Combines an :class:`EQLVerbalizer` (fragment builder) with a
-    :class:`FragmentRenderer` (format + colour) to produce a final string.
+    Combines an :class:`~krrood.entity_query_language.verbalization.verbalizer.EQLVerbalizer`
+    (fragment builder) with a
+    :class:`~krrood.entity_query_language.verbalization.rendering.renderer.FragmentRenderer`
+    (format + colour) to produce a final string.
 
     Usage::
 
         pipeline = VerbalizationPipeline(HierarchicalRenderer(HTMLFormatter()))
         text = pipeline.verbalize(query)
 
-    Factory helpers cover the most common configurations:
+    Factory class methods cover the most common configurations:
 
-    * :meth:`plain`  — no colour, paragraph prose (default for :func:`verbalize_expression`)
-    * :meth:`ansi`   — ANSI true-colour terminal output, paragraph prose
-    * :meth:`html`   — HTML ``<span>`` colours, paragraph prose or hierarchical
+    * :meth:`plain` — no colour, paragraph prose (default for
+      :func:`~krrood.entity_query_language.verbalization.verbalizer.verbalize_expression`).
+    * :meth:`ansi`  — ANSI true-colour terminal output.
+    * :meth:`html`  — HTML ``<span>`` colours for Jupyter / inline HTML.
 
     All factory methods accept an optional *link_resolver* that maps class and
     attribute names to hyperlinks.  Built-in resolver:
 
-    * :class:`~krrood.entity_query_language.verbalization.rendering.source_link_resolver.AutoAPIResolver` — Sphinx AutoAPI documentation pages (local build or GitHub Pages)
+    * :class:`~krrood.entity_query_language.verbalization.rendering.source_link_resolver.AutoAPIResolver`
+      — Sphinx AutoAPI documentation pages (local build or hosted).
+
+    :param renderer: Renderer used to convert the fragment tree to a string.
+    :type renderer: ~krrood.entity_query_language.verbalization.rendering.renderer.FragmentRenderer
     """
 
     def __init__(self, renderer: FragmentRenderer = ParagraphRenderer()):
@@ -92,6 +99,13 @@ class VerbalizationPipeline:
         self._renderer = renderer
 
     def verbalize(self, expr) -> str:
+        """
+        Verbalize *expr* to a string using this pipeline's renderer.
+
+        :param expr: Any EQL expression or :class:`~krrood.entity_query_language.query.query.Query`.
+        :returns: Formatted natural-language string (plain, ANSI, or HTML depending on renderer).
+        :rtype: str
+        """
         if isinstance(expr, Query):
             expr.build()
         fragment = self._verbalizer.build(expr)
@@ -101,25 +115,45 @@ class VerbalizationPipeline:
         return isinstance(getattr(self._renderer, "_formatter", None), HTMLFormatter)
 
     def verbalize_fragment(self, fragment: VerbFragment) -> str:
+        """
+        Render a pre-built :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+        using this pipeline's renderer.
+
+        HTML pipelines wrap the result in a dark ``<div>`` suitable for Jupyter output.
+
+        :param fragment: Root of the fragment tree to render.
+        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :returns: Formatted string.
+        :rtype: str
+        """
         result = self._renderer.render(fragment)
         if self._is_html_renderer():
             return _HTML_CELL_WRAPPER.format(body=result)
         return result
 
     def display(self, expr) -> None:
-        """Render *expr* and display it in the current environment.
+        """
+        Render *expr* and display it in the current environment.
 
         * **Jupyter / IPython** — renders inline via ``IPython.display.HTML``.
         * **Elsewhere** — writes a temporary ``.html`` file and opens it in the
           default system browser.
 
-        This method is designed for use with :meth:`html` pipelines.  Calling it
-        on a plain-text or ANSI pipeline will open a browser tab with raw text.
+        Designed for use with :meth:`html` pipelines.  Calling it on a plain-text
+        or ANSI pipeline will open a browser tab with raw text.
+
+        :param expr: Any EQL expression or :class:`~krrood.entity_query_language.query.query.Query`.
         """
         self.display_fragment(self._verbalizer.build(expr))
 
     def display_fragment(self, fragment: VerbFragment) -> None:
-        """Display a pre-built :class:`VerbFragment` — same routing as :meth:`display`."""
+        """
+        Display a pre-built :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+        — same environment routing as :meth:`display`.
+
+        :param fragment: Root of the fragment tree to display.
+        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         raw_html = self._renderer.render(fragment)
         if _is_ipython():
             from IPython.display import display as _ipython_display, HTML
@@ -141,7 +175,14 @@ class VerbalizationPipeline:
 
     @classmethod
     def plain(cls) -> "VerbalizationPipeline":
-        """Plain text, paragraph prose — no colour, no links."""
+        """
+        Create a plain-text, paragraph-prose pipeline with no colour markup.
+
+        :returns: A :class:`VerbalizationPipeline` backed by
+            :class:`~krrood.entity_query_language.verbalization.rendering.renderer.ParagraphRenderer`
+            and :class:`~krrood.entity_query_language.verbalization.rendering.formatter.PlainFormatter`.
+        :rtype: VerbalizationPipeline
+        """
         return cls(ParagraphRenderer(PlainFormatter()))
 
     @classmethod
@@ -150,11 +191,22 @@ class VerbalizationPipeline:
         hierarchical: bool = False,
         link_resolver: Optional["SourceLinkResolver"] = None,
     ) -> "VerbalizationPipeline":
-        """ANSI true-colour output for terminal display.
+        """
+        Create an ANSI true-colour (24-bit) pipeline for terminal display.
 
         When *link_resolver* is provided and the terminal supports OSC 8
-        hyperlinks, class and attribute names become clickable.  On unsupported
-        terminals a warning is logged and the resolver is silently disabled.
+        hyperlinks (detected via environment variables), class and attribute names
+        become clickable.  On unsupported terminals a warning is logged and the
+        resolver is silently disabled.
+
+        :param hierarchical: When ``True`` use
+            :class:`~krrood.entity_query_language.verbalization.rendering.renderer.HierarchicalRenderer`
+            (indented bullets); otherwise use paragraph prose.
+        :type hierarchical: bool
+        :param link_resolver: Optional resolver mapping source references to URLs.
+        :type link_resolver: ~krrood.entity_query_language.verbalization.rendering.source_link_resolver.SourceLinkResolver or None
+        :returns: An ANSI-coloured :class:`VerbalizationPipeline`.
+        :rtype: VerbalizationPipeline
         """
         formatter = ANSIFormatter()
         if link_resolver is not None and not _detect_osc8_support():
@@ -177,10 +229,20 @@ class VerbalizationPipeline:
         hierarchical: bool = False,
         link_resolver: Optional["SourceLinkResolver"] = None,
     ) -> "VerbalizationPipeline":
-        """HTML ``<span>`` colour output for Jupyter / inline-HTML rendering.
+        """
+        Create an HTML ``<span>`` colour pipeline for Jupyter / inline-HTML rendering.
 
-        When *link_resolver* is provided, class and attribute names are wrapped
-        in ``<a href="…">`` anchors.
+        When *link_resolver* is provided, class and attribute names are wrapped in
+        ``<a href="…">`` anchors pointing to documentation pages.
+
+        :param hierarchical: When ``True`` use
+            :class:`~krrood.entity_query_language.verbalization.rendering.renderer.HierarchicalRenderer`
+            (indented bullets); otherwise use paragraph prose.
+        :type hierarchical: bool
+        :param link_resolver: Optional resolver mapping source references to URLs.
+        :type link_resolver: ~krrood.entity_query_language.verbalization.rendering.source_link_resolver.SourceLinkResolver or None
+        :returns: An HTML-coloured :class:`VerbalizationPipeline`.
+        :rtype: VerbalizationPipeline
         """
         formatter = HTMLFormatter()
         renderer = (

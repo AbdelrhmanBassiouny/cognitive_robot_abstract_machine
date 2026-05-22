@@ -17,6 +17,14 @@ _engine = inflect.engine()
 
 
 class AggregationStatus(Enum):
+    """
+    Indicates how a consequent binding or antecedent relates to the GROUP BY clause.
+
+    :cvar GROUP_KEY: This expression is one of the ``grouped_by`` key variables.
+    :cvar AGGREGATED: Present in the query but not a group key — should appear in plural form.
+    :cvar NONE: No grouping context in this query.
+    """
+
     GROUP_KEY = auto()   # this expression is one of the grouped_by keys
     AGGREGATED = auto()  # present but not a group key → plural in output
     NONE = auto()        # no grouping context
@@ -24,17 +32,36 @@ class AggregationStatus(Enum):
 
 @dataclass
 class AntecedentInfo:
-    """One antecedent variable in the IF clause."""
+    """
+    Descriptor for one antecedent variable in the IF clause.
+
+    :ivar root: The underlying :class:`~krrood.entity_query_language.core.variable.Variable`
+        or :class:`~krrood.entity_query_language.query.query.Entity` (unwrapped from any
+        :class:`~krrood.entity_query_language.query.quantifiers.ResultQuantifier` wrapper).
+    :ivar type_name: Human-readable Python type name of *root* (e.g. ``"Robot"``).
+    :ivar aggregation_status: Whether this antecedent is a group key, aggregated, or neither.
+    :ivar conditions: All WHERE conditions attributable to this antecedent (its own
+        WHERE clause merged with matched outer WHERE conditions).
+    """
+
     root: Any                      # Variable or Entity (unwrapped from ResultQuantifier)
     type_name: str
     aggregation_status: AggregationStatus
     conditions: List[Any] = field(default_factory=list)
-    """All conditions attributed to this antecedent (own WHERE clause + matched outer WHERE)."""
 
 
 @dataclass
 class ConsequentBinding:
-    """One field binding in the THEN clause."""
+    """
+    Descriptor for one field binding in the THEN clause.
+
+    :ivar field_name: Python attribute name on the consequent type (e.g. ``"tasks"``).
+    :ivar value_expr: EQL expression providing the value for *field_name*.
+    :ivar is_plural_field: ``True`` when *field_name* is already plural
+        (detected via ``inflect.singular_noun``).
+    :ivar aggregation_status: Whether the value is a group key, aggregated, or neither.
+    """
+
     field_name: str
     value_expr: Any                # SymbolicExpression
     is_plural_field: bool
@@ -43,6 +70,23 @@ class ConsequentBinding:
 
 @dataclass
 class RuleStructure:
+    """
+    Complete decomposition of an inference-rule Entity query.
+
+    Produced by :meth:`RuleAnalyzer.analyze` and consumed by
+    :class:`~krrood.entity_query_language.verbalization.rule_verbalizer.RuleVerbalizer`.
+
+    :ivar primary_antecedents: Antecedents with at least one condition — appear
+        as items in the IF block.
+    :ivar secondary_antecedents: Antecedents with no conditions — only registered
+        in :attr:`~krrood.entity_query_language.verbalization.context.VerbalizationContext.seen`
+        for coreference.
+    :ivar consequent_type: Python type name of the inferred variable (e.g. ``"Drawer"``).
+    :ivar consequent_bindings: Ordered list of field bindings for the THEN clause.
+    :ivar unmatched_conditions: Outer WHERE conditions not attributable to any antecedent.
+    :ivar group_key_ids: Frozen set of ``_id_`` values of the GROUP BY key variables.
+    """
+
     primary_antecedents: List[AntecedentInfo]    # have conditions → appear in IF clause
     secondary_antecedents: List[AntecedentInfo]  # no conditions → only register in ctx.seen
     consequent_type: str
@@ -83,14 +127,48 @@ def _condition_left_owner_id_(cond) -> Optional[object]:
 
 
 class RuleAnalyzer:
-    """Analyses an Entity-over-inference query and returns a RuleStructure."""
+    """
+    Analyses an :class:`~krrood.entity_query_language.query.query.Entity`-over-inference
+    query and returns a :class:`RuleStructure`.
+
+    The analyzer is stateless; a single shared instance is used by
+    :class:`~krrood.entity_query_language.verbalization.rule_verbalizer.RuleVerbalizer`.
+    """
 
     def can_handle(self, entity) -> bool:
+        """
+        Return ``True`` when *entity*'s selected variable is an
+        :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`.
+
+        :param entity: An :class:`~krrood.entity_query_language.query.query.Entity` expression.
+        :returns: ``True`` if this analyzer can decompose *entity* as an inference rule.
+        :rtype: bool
+        """
         from krrood.entity_query_language.core.variable import InstantiatedVariable
         entity.build()
         return isinstance(entity.selected_variable, InstantiatedVariable)
 
-    def analyze(self, entity) -> RuleStructure:
+    def analyze(self, entity) -> "RuleStructure":
+        """
+        Decompose *entity* into a :class:`RuleStructure`.
+
+        Algorithm:
+
+        1. Collect GROUP BY key IDs from the grouped-by expression.
+        2. Walk each field binding of the
+           :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`
+           to build :class:`ConsequentBinding` entries and discover antecedent roots.
+        3. Attribute outer WHERE conditions to antecedents by matching the left-hand
+           root variable ID.
+        4. Split antecedents into primary (have conditions) and secondary (none).
+
+        :param entity: An :class:`~krrood.entity_query_language.query.query.Entity` whose
+            selected variable is an
+            :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`.
+        :returns: Fully populated :class:`RuleStructure`.
+        :rtype: RuleStructure
+        :raises AttributeError: If *entity* has not been built or is not an inference-rule query.
+        """
         from krrood.entity_query_language.core.variable import InstantiatedVariable
 
         entity.build()

@@ -43,7 +43,27 @@ def _phrase(*parts, sep=" "):
 
 
 class ChainVerbalizer:
-    """Verbalizes MappedVariable chains into possessive or predicative VerbFragments."""
+    """
+    Verbalizes :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
+    chains into possessive or predicative
+    :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment` trees.
+
+    Handles four chain node types:
+
+    * :class:`~krrood.entity_query_language.core.mapped_variable.Attribute` — produces *"the attr of the Root"*.
+    * :class:`~krrood.entity_query_language.core.mapped_variable.Index` — subscript access, e.g. *"the first"*.
+    * :class:`~krrood.entity_query_language.core.mapped_variable.Call` — callable invocation *"()"*.
+    * :class:`~krrood.entity_query_language.core.mapped_variable.FlatVariable` — transparent unwrapper.
+
+    Boolean terminal attributes use a predicative form: *"<nav> is [not] <attr>"*.
+
+    :param delegate: The parent verbalizer for recursive sub-expression calls.
+    :type delegate: ~krrood.entity_query_language.verbalization.verbalizer.EQLVerbalizer
+    :param entity_inline_fn: Callable that verbalizes an Entity as an inline noun
+        and defers its WHERE condition (bound to
+        :meth:`~krrood.entity_query_language.verbalization.entity_verbalizer.EntityVerbalizer.as_inline_noun`).
+    :type entity_inline_fn: Callable
+    """
 
     def __init__(self, delegate, entity_inline_fn: Callable) -> None:
         self._d = delegate
@@ -51,13 +71,56 @@ class ChainVerbalizer:
 
     # ── Dispatch entry points ──────────────────────────────────────────────────
 
-    def verbalize_mapped(self, expr: MappedVariable, ctx: VerbalizationContext) -> VerbFragment:
+    def verbalize_mapped(self, expr: MappedVariable, ctx: "VerbalizationContext") -> VerbFragment:
+        """
+        Verbalize a :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
+        chain in affirmative form.
+
+        For boolean terminal attributes produces *"<nav> is <attr>"*; for all
+        others produces the possessive *"the attr of the Root"* path.
+
+        :param expr: Root node of a MappedVariable chain.
+        :type expr: ~krrood.entity_query_language.core.mapped_variable.MappedVariable
+        :param ctx: Shared verbalization state.
+        :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+        :returns: Fragment for the chain.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         return self._verbalize_mapped_chain_(expr, ctx)
 
-    def verbalize_mapped_negated(self, expr: MappedVariable, ctx: VerbalizationContext) -> VerbFragment:
+    def verbalize_mapped_negated(self, expr: MappedVariable, ctx: "VerbalizationContext") -> VerbFragment:
+        """
+        Verbalize a :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
+        chain in negated form.
+
+        Used by :class:`~krrood.entity_query_language.verbalization.rules.logical.NotBoolAttrRule`
+        to produce *"<nav> is not <attr>"* for boolean attributes.
+
+        :param expr: Root node of a MappedVariable chain.
+        :type expr: ~krrood.entity_query_language.core.mapped_variable.MappedVariable
+        :param ctx: Shared verbalization state.
+        :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+        :returns: Negated fragment for the chain.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         return self._verbalize_mapped_chain_(expr, ctx, negated=True)
 
-    def verbalize_flat(self, expr: FlatVariable, ctx: VerbalizationContext) -> VerbFragment:
+    def verbalize_flat(self, expr: FlatVariable, ctx: "VerbalizationContext") -> VerbFragment:
+        """
+        Verbalize a :class:`~krrood.entity_query_language.core.mapped_variable.FlatVariable`
+        by delegating to its child expression.
+
+        :class:`~krrood.entity_query_language.core.mapped_variable.FlatVariable` is a
+        transparent wrapper added during SetOf expansion; verbalization simply
+        unwraps it.
+
+        :param expr: The FlatVariable expression.
+        :type expr: ~krrood.entity_query_language.core.mapped_variable.FlatVariable
+        :param ctx: Shared verbalization state.
+        :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+        :returns: Fragment for the child expression.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         return self._d.build(expr._child_, ctx)
 
     # ── Internal chain logic ───────────────────────────────────────────────────
@@ -129,6 +192,17 @@ class ChainVerbalizer:
     # ── Temporal helper (used by Comparator and Not) ───────────────────────────
 
     def is_temporal(self, expr) -> bool:
+        """
+        Return ``True`` when *expr* represents a
+        :class:`datetime.datetime` value or variable.
+
+        Used by comparator rules to select temporal operator phrases
+        (*"is before"*, *"is after"*, etc.) instead of relational ones.
+
+        :param expr: Any EQL expression.
+        :returns: ``True`` when the expression is datetime-typed.
+        :rtype: bool
+        """
         from krrood.entity_query_language.core.variable import Literal, Variable
         if isinstance(expr, Literal):
             return isinstance(expr._value_, _dt.datetime)

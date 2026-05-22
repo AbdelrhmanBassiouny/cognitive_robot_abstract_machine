@@ -13,33 +13,69 @@ _log = logging.getLogger(__name__)
 
 
 class SourceLinkResolver(Protocol):
-    """Maps a :class:`SourceRef` to a URL string, or ``None`` when unavailable."""
+    """
+    Protocol: maps a
+    :class:`~krrood.entity_query_language.verbalization.fragments.source_ref.SourceRef`
+    to a URL string, or ``None`` when the class or attribute cannot be located.
+
+    Implementations are passed to
+    :class:`~krrood.entity_query_language.verbalization.rendering.renderer.FragmentRenderer`
+    and used to wrap
+    :class:`~krrood.entity_query_language.verbalization.fragments.base.RoleFragment`
+    text with hyperlinks.
+
+    Built-in implementation: :class:`AutoAPIResolver`.
+    """
 
     def resolve(self, ref: SourceRef) -> Optional[str]:
+        """
+        Resolve *ref* to a URL string.
+
+        :param ref: Source reference to resolve.
+        :type ref: ~krrood.entity_query_language.verbalization.fragments.source_ref.SourceRef
+        :returns: URL string, or ``None`` when the reference cannot be resolved.
+        :rtype: str or None
+        """
         ...
 
 
 @dataclass
 class AutoAPIResolver:
-    """Resolves source references to Sphinx AutoAPI documentation pages.
+    """
+    Resolves source references to Sphinx AutoAPI documentation pages.
 
-    *base_url* is the root of the generated docs site, e.g.
-    ``https://myproject.readthedocs.io/en/latest`` or a local
-    ``http://localhost:63342/project/doc/_build/html``.
+    :param base_url: Root URL of the generated docs site, e.g.
+        ``"https://myproject.readthedocs.io/en/latest"`` or
+        ``"http://localhost:63342/project/doc/_build/html"``.
+    :type base_url: str
+    :param html_root: Optional local path to the Sphinx HTML output directory.
+        When set, :meth:`resolve` verifies that the AutoAPI page exists on disk
+        and logs a warning if it does not.
+    :type html_root: pathlib.Path or None
 
     Use :meth:`for_package` to auto-detect the base URL for a locally installed
-    package whose docs are served via the JetBrains IDE built-in HTTP server.
-
-    When *html_root* is set (automatically populated by :meth:`for_package`),
-    :meth:`resolve` checks that the generated AutoAPI page exists on disk and
-    logs a ``WARNING`` if it does not — the class may be missing from the docs
-    because they have not been built yet or because AutoAPI excluded it.
+    package whose docs are served by the JetBrains IDE built-in HTTP server.
     """
 
     base_url: str
     html_root: Optional[Path] = None
 
     def resolve(self, ref: SourceRef) -> Optional[str]:
+        """
+        Resolve *ref* to a Sphinx AutoAPI page URL.
+
+        Constructs the URL as::
+
+            {base_url}/autoapi/{module/path}/index.html#{module.QualName[.attr]}
+
+        When :attr:`html_root` is set and the page does not exist on disk,
+        logs a ``WARNING`` suggesting the docs be rebuilt.
+
+        :param ref: Source reference to resolve.
+        :type ref: ~krrood.entity_query_language.verbalization.fragments.source_ref.SourceRef
+        :returns: AutoAPI page URL, or ``None`` when *ref.cls* has no ``__module__``.
+        :rtype: str or None
+        """
         try:
             module = ref.cls.__module__
             qualname = ref.cls.__qualname__

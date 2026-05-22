@@ -17,7 +17,21 @@ if TYPE_CHECKING:
 
 
 def walk_chain(expr) -> tuple[list, object]:
-    """Walk a MappedVariable chain outward-first; return (chain, root)."""
+    """
+    Walk a :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
+    chain outward-first and return ``(chain, root)``.
+
+    The chain is reversed so index 0 is the outermost (innermost to the call
+    site) node; the root is the first non-MappedVariable child.
+
+    Example: for ``robot.arm.joint`` the chain is
+    ``[Attribute('joint'), Attribute('arm')]`` and root is the ``robot`` Variable.
+
+    :param expr: Any expression; non-MappedVariable expressions return an
+        empty chain with *expr* as the root.
+    :returns: Tuple ``(chain, root)`` where *chain* is ordered outermost-first.
+    :rtype: tuple[list, object]
+    """
     from krrood.entity_query_language.core.mapped_variable import MappedVariable
 
     chain: list[MappedVariable] = []
@@ -30,7 +44,17 @@ def walk_chain(expr) -> tuple[list, object]:
 
 
 def chain_root(expr) -> object:
-    """Return the non-MappedVariable root of a chain (skip walking the whole list)."""
+    """
+    Return the non-:class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
+    root of *expr* without building the full chain list.
+
+    Faster than :func:`walk_chain` when only the root is needed.
+
+    :param expr: Any expression.
+    :returns: The deepest non-MappedVariable node in the chain, or *expr* itself
+        when it is not a MappedVariable.
+    :rtype: object
+    """
     from krrood.entity_query_language.core.mapped_variable import MappedVariable
 
     current = expr
@@ -39,12 +63,25 @@ def chain_root(expr) -> object:
     return current
 
 
-def build_path_parts(chain: list) -> list[tuple[str, Optional[SourceRef]]]:
+def build_path_parts(chain: list) -> list[tuple[str, Optional["SourceRef"]]]:
     """
-    Convert a walked chain into ``(display_name, SourceRef | None)`` pairs.
+    Convert a walked chain (from :func:`walk_chain`) into ``(display_name, SourceRef | None)`` pairs.
 
-    Consecutive ``Attribute → Index`` nodes are merged into ``"attr[key]"`` pairs;
-    standalone ``Index`` nodes appear as ``"[key]"`` pairs.
+    Merging rules:
+
+    * Consecutive ``Attribute → Index`` pairs are merged into ``"attr[key]"`` with ``ref=None``
+      (composite indexed access has no clean single-symbol anchor).
+    * Standalone :class:`~krrood.entity_query_language.core.mapped_variable.Index` nodes
+      appear as ``"[key]"`` with ``ref=None``.
+    * :class:`~krrood.entity_query_language.core.mapped_variable.Call` nodes appear as ``"()"``
+      with ``ref=None``.
+    * :class:`~krrood.entity_query_language.core.mapped_variable.FlatVariable` nodes are skipped.
+
+    :param chain: Outermost-first chain list from :func:`walk_chain`.
+    :type chain: list
+    :returns: Ordered list of ``(display_name, SourceRef | None)`` pairs,
+        outermost attribute first.
+    :rtype: list[tuple[str, SourceRef | None]]
     """
     from krrood.entity_query_language.core.mapped_variable import Attribute, Index, Call, FlatVariable
     from krrood.entity_query_language.verbalization.fragments.source_ref import SourceRef
@@ -72,12 +109,28 @@ def build_path_parts(chain: list) -> list[tuple[str, Optional[SourceRef]]]:
     return parts
 
 
-def verbalize_plural(expr, ctx: VerbalizationContext, build_fn: Callable) -> VerbFragment:
+def verbalize_plural(expr, ctx: "VerbalizationContext", build_fn: Callable) -> "VerbFragment":
     """
-    Return a plural :class:`VerbFragment` for *expr*.
+    Return a plural :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+    for *expr*.
 
-    *build_fn* is the main dispatcher (``EQLVerbalizer.build``) used as a
-    fallback when the expression type has no special plural form.
+    Handles three special cases with dedicated plural forms:
+
+    * :class:`~krrood.entity_query_language.core.mapped_variable.FlatVariable` — delegates to its child.
+    * :class:`~krrood.entity_query_language.core.variable.Variable` — pluralises the type name
+      (e.g. ``Robot`` → ``Robots``).
+    * Single :class:`~krrood.entity_query_language.core.mapped_variable.Attribute` on a Variable —
+      produces *"attrs of Roots"*.
+
+    Falls back to *build_fn* for all other expression types.
+
+    :param expr: EQL expression to pluralise.
+    :param ctx: Shared verbalization state.
+    :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+    :param build_fn: The top-level dispatcher (``EQLVerbalizer.build``) used as fallback.
+    :type build_fn: Callable
+    :returns: Plural fragment for *expr*.
+    :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
     """
     from krrood.entity_query_language.core.mapped_variable import Attribute, FlatVariable, MappedVariable
     from krrood.entity_query_language.core.variable import Variable

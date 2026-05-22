@@ -17,12 +17,35 @@ def _phrase(*parts: VerbFragment, sep: str = " ") -> PhraseFragment:
 
 
 class ComparatorRule(VerbalizationRule):
+    """
+    Verbalizes :class:`~krrood.entity_query_language.operators.comparator.Comparator`
+    expressions as *"<left> <operator> <right>"*.
+
+    Selects the correct operator phrase via
+    :meth:`~krrood.entity_query_language.verbalization.vocabulary.english.Operators.from_callable`
+    using the ``compact`` and ``temporal`` flags from the context.
+
+    Falls back to ``expr._name_`` as a plain operator fragment when the
+    callable is not registered in
+    :class:`~krrood.entity_query_language.verbalization.vocabulary.english.Operators`.
+    """
+
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` for :class:`~krrood.entity_query_language.operators.comparator.Comparator` expressions."""
         return isinstance(expr, Comparator)
 
     @classmethod
-    def transform(cls, expr: Comparator, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "Comparator", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Build *"<left> <operator> <right>"*.
+
+        :param expr: Comparator expression.
+        :param ctx: Shared verbalization state (``compact_predicates`` used for HAVING clauses).
+        :param delegate: Parent verbalizer for recursive calls.
+        :returns: Comparison phrase fragment.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         left = delegate.build(expr.left, ctx)
         right = delegate.build(expr.right, ctx)
         is_temporal = delegate._chain.is_temporal(expr.left) or delegate._chain.is_temporal(expr.right)

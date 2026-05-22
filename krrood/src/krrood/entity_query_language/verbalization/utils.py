@@ -12,7 +12,15 @@ if TYPE_CHECKING:
 
 
 def _str(fragment: "VerbFragment") -> str:
-    """Flatten a VerbFragment to a plain string (no colours) for internal string ops."""
+    """
+    Flatten a :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+    to a plain string (no colour markup) for internal comparisons and logging.
+
+    :param fragment: Root of the fragment tree to flatten.
+    :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+    :returns: Plain-text representation with spaces between tokens.
+    :rtype: str
+    """
     from krrood.entity_query_language.verbalization.fragments.base import (
         BlockFragment, PhraseFragment, RoleFragment, WordFragment,
     )
@@ -33,19 +41,48 @@ def _str(fragment: "VerbFragment") -> str:
 
 
 def _camel_to_words(name: str) -> str:
-    """Convert a CamelCase class name to space-separated lowercase words.
+    """
+    Convert a CamelCase class name to space-separated lowercase words.
 
-    Examples: ``"HasRole"`` → ``"has role"``, ``"IsReachable"`` → ``"is reachable"``.
+    :param name: CamelCase identifier string.
+    :type name: str
+    :returns: Space-separated lowercase words.
+    :rtype: str
+
+    Examples::
+
+        _camel_to_words("HasRole")     # → "has role"
+        _camel_to_words("IsReachable") # → "is reachable"
     """
     return re.sub(r"([A-Z])", r" \1", name).strip().lower()
 
 
 def _ordinal(n: int) -> str:
+    """
+    Convert a zero-based integer index to an ordinal word (e.g. ``0`` → ``"first"``).
+
+    Delegates to the ``inflect`` library for correct English ordinals.
+
+    :param n: Zero-based integer index.
+    :type n: int
+    :returns: English ordinal word (e.g. ``"first"``, ``"second"``, ``"third"``).
+    :rtype: str
+    """
     return inflect_engine.ordinal(inflect_engine.number_to_words(n + 1))
 
 
 def _ensure_plural(word: str) -> str:
-    """Return *word* in plural form, without double-pluralising already-plural words."""
+    """
+    Return *word* in plural form without double-pluralising already-plural words.
+
+    Uses ``inflect.singular_noun`` to detect whether *word* is already plural;
+    if so returns it unchanged.
+
+    :param word: English noun in singular or plural form.
+    :type word: str
+    :returns: Plural form of *word*.
+    :rtype: str
+    """
     return word if inflect_engine.singular_noun(word) else inflect_engine.plural(word)
 
 

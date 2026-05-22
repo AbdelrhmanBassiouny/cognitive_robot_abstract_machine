@@ -48,15 +48,42 @@ def _phrase(*parts, sep=" "):
 
 
 class EntityVerbalizer:
-    """Verbalizes Entity and SetOf query expressions."""
+    """
+    Verbalizes :class:`~krrood.entity_query_language.query.query.Entity` and
+    :class:`~krrood.entity_query_language.query.query.SetOf` query expressions.
+
+    Provides three entry forms for Entity rendering:
+
+    * :meth:`verbalize_query` — top-level *"Find X such that …"* form.
+    * :meth:`as_noun` — standalone noun phrase for nested Entity selectors.
+    * :meth:`as_inline_noun` — constraint-deferring noun used as a chain root
+      inside an :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`.
+
+    :param delegate: The parent verbalizer used for recursive sub-expression calls.
+    :type delegate: ~krrood.entity_query_language.verbalization.verbalizer.EQLVerbalizer
+    """
 
     def __init__(self, delegate) -> None:
         self._d = delegate
 
     # ── Public entry points ────────────────────────────────────────────────────
 
-    def verbalize_query(self, expr: Entity, ctx: VerbalizationContext) -> VerbFragment:
-        """Full query form: 'Find X such that …'"""
+    def verbalize_query(self, expr: "Entity", ctx: "VerbalizationContext") -> VerbFragment:
+        """
+        Full query form: *"Find X such that …"*.
+
+        Delegates to :class:`~krrood.entity_query_language.verbalization.rule_verbalizer.RuleVerbalizer`
+        when the query encodes an inference rule (selected variable is
+        :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`).
+        Otherwise assembles ``FIND + SUCH THAT + GROUPED BY + HAVING + ORDERED BY`` clauses.
+
+        :param expr: An :class:`~krrood.entity_query_language.query.query.Entity` expression.
+        :type expr: ~krrood.entity_query_language.query.query.Entity
+        :param ctx: Shared verbalization state.
+        :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+        :returns: Fragment tree for the full query.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         if expr._id_ in ctx.seen:
             return _phrase(Articles.THE.as_fragment(), _role(ctx.seen[expr._id_], SemanticRole.VARIABLE))
 
@@ -89,8 +116,21 @@ class EntityVerbalizer:
 
         return self._verbalize_query_body_(expr, ctx, selected)
 
-    def as_noun(self, expr: Entity, ctx: VerbalizationContext) -> VerbFragment:
-        """Standalone-noun form: 'a Robot where …' (for nested Entity selectors)."""
+    def as_noun(self, expr: "Entity", ctx: "VerbalizationContext") -> VerbFragment:
+        """
+        Standalone-noun form: *"a Robot where …"* (for nested Entity selectors).
+
+        Used when an :class:`~krrood.entity_query_language.query.query.Entity` is
+        itself the selected variable of an outer query.  All WHERE conditions are
+        verbalized inline rather than deferred.
+
+        :param expr: An :class:`~krrood.entity_query_language.query.query.Entity`.
+        :type expr: ~krrood.entity_query_language.query.query.Entity
+        :param ctx: Shared verbalization state.
+        :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+        :returns: A noun-phrase fragment for *expr*.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         if expr._id_ in ctx.seen:
             return _phrase(Articles.THE.as_fragment(), _role(ctx.seen[expr._id_], SemanticRole.VARIABLE))
 
@@ -120,8 +160,23 @@ class EntityVerbalizer:
             return _phrase(article_noun, Keywords.WHERE.as_fragment(), self._d.build(where_expr.condition, ctx))
         return article_noun
 
-    def as_inline_noun(self, entity: Entity, ctx: VerbalizationContext) -> VerbFragment:
-        """Inline-noun form used as chain root: defers where-condition to ctx constraints."""
+    def as_inline_noun(self, entity: "Entity", ctx: "VerbalizationContext") -> VerbFragment:
+        """
+        Inline-noun form used as a chain root inside an
+        :class:`~krrood.entity_query_language.core.variable.InstantiatedVariable`.
+
+        Defers the entity's WHERE condition to
+        :attr:`~krrood.entity_query_language.verbalization.context.VerbalizationContext.constraint_exprs`
+        so the enclosing :class:`~krrood.entity_query_language.verbalization.rules.variables.InstantiatedVariableRule`
+        can emit it as a *"such that …"* clause after all binding overrides are registered.
+
+        :param entity: An :class:`~krrood.entity_query_language.query.query.Entity` used as a chain root.
+        :type entity: ~krrood.entity_query_language.query.query.Entity
+        :param ctx: Shared verbalization state.
+        :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+        :returns: A bare noun-phrase fragment (article + type name).
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         if entity._id_ in ctx.seen:
             return _phrase(Articles.THE.as_fragment(), _role(ctx.seen[entity._id_], SemanticRole.VARIABLE))
 
@@ -139,7 +194,20 @@ class EntityVerbalizer:
 
         return _phrase(Articles.indefinite(type_name), RoleFragment.for_variable(type_name, var))
 
-    def verbalize_set_of(self, expr: SetOf, ctx: VerbalizationContext) -> VerbFragment:
+    def verbalize_set_of(self, expr: "SetOf", ctx: "VerbalizationContext") -> VerbFragment:
+        """
+        Verbalize a :class:`~krrood.entity_query_language.query.query.SetOf` query.
+
+        Produces *"Find (v1, v2, …) such that …"* using the same body-clause assembly
+        as :meth:`verbalize_query`.
+
+        :param expr: A :class:`~krrood.entity_query_language.query.query.SetOf` expression.
+        :type expr: ~krrood.entity_query_language.query.query.SetOf
+        :param ctx: Shared verbalization state.
+        :type ctx: ~krrood.entity_query_language.verbalization.context.VerbalizationContext
+        :returns: Fragment tree for the SetOf query.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         expr.build()
         var_frags = [self._d.build(v, ctx) for v in expr._selected_variables_]
         vars_phrase = PhraseFragment(parts=var_frags, separator=", ")
@@ -152,8 +220,18 @@ class EntityVerbalizer:
     # ── Query body assembly ────────────────────────────────────────────────────
 
     def _verbalize_query_body_(
-        self, expr, ctx: VerbalizationContext, selection: VerbFragment
+        self, expr, ctx: "VerbalizationContext", selection: VerbFragment
     ) -> VerbFragment:
+        """
+        Assemble the full *"Find <selection> such that … grouped by … having … ordered by …"* block.
+
+        :param expr: Entity or SetOf expression supplying the clause expressions.
+        :param ctx: Shared verbalization state.
+        :param selection: Pre-built fragment for the selected variable(s).
+        :returns: A :class:`~krrood.entity_query_language.verbalization.fragments.base.BlockFragment`
+            with the selection as header and clause items.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         header = _phrase(Keywords.FIND.as_fragment(), selection)
         clauses = [c for c in [
             self._where_clause(expr, ctx),
@@ -163,13 +241,29 @@ class EntityVerbalizer:
         ] if c is not None]
         return BlockFragment(header=header, items=clauses)
 
-    def _where_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
+    def _where_clause(self, expr, ctx: "VerbalizationContext") -> Optional[VerbFragment]:
+        """
+        Build the *"such that <condition>"* fragment, or ``None`` when no WHERE expression exists.
+
+        :param expr: Entity or SetOf expression.
+        :param ctx: Shared verbalization state.
+        :returns: Phrase fragment or ``None``.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment or None
+        """
         where_expr = expr._where_expression_
         if where_expr is None:
             return None
         return _phrase(Keywords.SUCH_THAT.as_fragment(), self._d.build(where_expr.condition, ctx))
 
-    def _grouped_by_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
+    def _grouped_by_clause(self, expr, ctx: "VerbalizationContext") -> Optional[VerbFragment]:
+        """
+        Build the *"and the <aggregated> are grouped by <keys>"* fragment, or ``None``.
+
+        :param expr: Entity or SetOf expression.
+        :param ctx: Shared verbalization state.
+        :returns: Phrase fragment or ``None``.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment or None
+        """
         grouped_expr = expr._grouped_by_expression_
         if grouped_expr is None or not grouped_expr.variables_to_group_by:
             return None
@@ -189,7 +283,18 @@ class EntityVerbalizer:
             )
         return _phrase(Keywords.GROUPED_BY.as_fragment(), groups_phrase)
 
-    def _having_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
+    def _having_clause(self, expr, ctx: "VerbalizationContext") -> Optional[VerbFragment]:
+        """
+        Build the *"having <condition>"* fragment with compact comparators, or ``None``.
+
+        Sets :attr:`~krrood.entity_query_language.verbalization.context.VerbalizationContext.compact_predicates`
+        to ``True`` while verbalizing the HAVING condition so copulas are omitted.
+
+        :param expr: Entity or SetOf expression.
+        :param ctx: Shared verbalization state.
+        :returns: Phrase fragment or ``None``.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment or None
+        """
         having_expr = expr._having_expression_
         if having_expr is None:
             return None
@@ -198,7 +303,15 @@ class EntityVerbalizer:
         ctx.compact_predicates = False
         return _phrase(Keywords.HAVING.as_fragment(), having_frag)
 
-    def _ordered_by_clause(self, expr, ctx: VerbalizationContext) -> Optional[VerbFragment]:
+    def _ordered_by_clause(self, expr, ctx: "VerbalizationContext") -> Optional[VerbFragment]:
+        """
+        Build the *"ordered by <variable> (ascending|descending)"* fragment, or ``None``.
+
+        :param expr: Entity or SetOf expression.
+        :param ctx: Shared verbalization state.
+        :returns: Phrase fragment or ``None``.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment or None
+        """
         ob = expr._ordered_by_builder_
         if ob is None:
             return None

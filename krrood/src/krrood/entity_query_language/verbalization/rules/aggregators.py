@@ -32,14 +32,30 @@ _AGGREGATION_KIND: dict[type, Aggregations] = {
 
 
 class AggregatorRule(VerbalizationRule):
-    """Handles any Aggregator subtype via _AGGREGATION_KIND lookup."""
+    """
+    Verbalizes any :class:`~krrood.entity_query_language.operators.aggregators.Aggregator`
+    subtype via the ``_AGGREGATION_KIND`` lookup table.
+
+    Produces *"<agg_phrase> <plural_child>"* (e.g. *"sum of tasks"*).
+    On second mention inserts *"the"* before the phrase for coreference consistency.
+    """
 
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` for any :class:`~krrood.entity_query_language.operators.aggregators.Aggregator`."""
         return isinstance(expr, Aggregator)
 
     @classmethod
-    def transform(cls, expr: Aggregator, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "Aggregator", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Build *"<aggregation> <plural_child>"*, or *"the <aggregation> <plural_child>"* on re-mention.
+
+        :param expr: Aggregator expression.
+        :param ctx: Shared verbalization state.
+        :param delegate: Parent verbalizer for recursive calls.
+        :returns: Aggregation phrase fragment.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         child_frag = verbalize_plural(expr._child_, ctx, delegate.build)
         agg_frag = _AGGREGATION_KIND[type(expr)].as_fragment()
         if expr._id_ in ctx.seen:
@@ -49,12 +65,27 @@ class AggregatorRule(VerbalizationRule):
 
 
 class CountAllRule(AggregatorRule):
-    """CountAll has no child; renders directly as 'the total count'."""
+    """
+    Verbalizes :class:`~krrood.entity_query_language.operators.aggregators.CountAll`
+    as *"count of all"* (no child expression).
+
+    Takes priority over :class:`AggregatorRule` for ``CountAll`` instances.
+    """
 
     @classmethod
-    def applies(cls, expr, ctx: VerbalizationContext) -> bool:
+    def applies(cls, expr, ctx: "VerbalizationContext") -> bool:
+        """Return ``True`` for :class:`~krrood.entity_query_language.operators.aggregators.CountAll`."""
         return isinstance(expr, CountAll)
 
     @classmethod
-    def transform(cls, expr: CountAll, ctx: VerbalizationContext, delegate: EQLVerbalizer) -> VerbFragment:
+    def transform(cls, expr: "CountAll", ctx: "VerbalizationContext", delegate: "EQLVerbalizer") -> VerbFragment:
+        """
+        Return the *"count of all"* aggregation fragment directly.
+
+        :param expr: CountAll expression.
+        :param ctx: Shared verbalization state (unused).
+        :param delegate: Parent verbalizer (unused).
+        :returns: ``Aggregations.COUNT_ALL.as_fragment()``.
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        """
         return Aggregations.COUNT_ALL.as_fragment()
