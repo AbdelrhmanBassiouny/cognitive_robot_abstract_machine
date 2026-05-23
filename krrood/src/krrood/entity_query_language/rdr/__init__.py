@@ -8,6 +8,7 @@ hooks rather than driving a bespoke traversal.
 """
 
 from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.interactive import IPythonExpert
 from krrood.entity_query_language.rdr.observer import (
     ConclusionObserver,
     FiredConclusion,
@@ -29,6 +30,7 @@ __all__ = [
     "FiredConclusion",
     "classify_case",
     "Expert",
+    "IPythonExpert",
     "insert_alternative",
     "insert_refinement",
     "EQLSingleClassRDR",

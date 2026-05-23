@@ -33,6 +33,14 @@ def _is_internal_frame(frame_info: inspect.FrameInfo, skip_packages) -> bool:
     filename = frame_info.filename
     if "site-packages" in filename or "dist-packages" in filename:
         return True
+    # Synthetic frames with no backing source file — e.g. the dataclass-generated
+    # __init__ ("<string>") or frozen importlib frames — are never the user's
+    # definition site. Interactive sessions ("<stdin>", "<ipython-input-...>") are
+    # genuine user code, so they are deliberately not excluded here.
+    if filename.startswith("<") and not (
+        filename.startswith("<stdin") or filename.startswith("<ipython")
+    ):
+        return True
     module = inspect.getmodule(frame_info.frame)
     module_name = module.__name__ if module else ""
     return any(

@@ -28,6 +28,10 @@ from krrood.entity_query_language.rdr.rule_tree import (
     insert_alternative,
     insert_refinement,
 )
+from krrood.entity_query_language.scope import (
+    attach_definition_scope,
+    capture_caller_scope,
+)
 
 
 @dataclass
@@ -51,6 +55,9 @@ class EQLSingleClassRDR:
         self.conclusion_variable = getattr(
             self.case_variable, self.conclusion_attribute_name
         )
+        # Snapshot the caller's namespace (where the RDR was created) so an interactive
+        # expert can be driven with the same scope, plus the EQL factories on top.
+        attach_definition_scope(self.case_variable, capture_caller_scope())
 
     def classify(self, case: Any) -> Optional[Any]:
         """:return: The inferred conclusion for ``case``, or ``None`` if no rule fires."""
