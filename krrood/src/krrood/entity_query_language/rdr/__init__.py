@@ -7,10 +7,24 @@ aspect-oriented :class:`~krrood.entity_query_language.evaluation.EvaluationObser
 hooks rather than driving a bespoke traversal.
 """
 
+from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.observer import (
     ConclusionObserver,
     FiredConclusion,
     classify_case,
 )
+from krrood.entity_query_language.rdr.rule_tree import (
+    insert_alternative,
+    insert_refinement,
+)
+from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
-__all__ = ["ConclusionObserver", "FiredConclusion", "classify_case"]
+__all__ = [
+    "ConclusionObserver",
+    "FiredConclusion",
+    "classify_case",
+    "Expert",
+    "insert_alternative",
+    "insert_refinement",
+    "EQLSingleClassRDR",
+]

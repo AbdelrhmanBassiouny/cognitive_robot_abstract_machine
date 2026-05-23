@@ -18,6 +18,8 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
 )
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
+from krrood.entity_query_language.core.variable import Literal
+from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.evaluation import (
     EvaluationContext,
     EvaluationObserver,
@@ -37,6 +39,13 @@ class FiredConclusion:
     """The conditions-root expression at which the conclusion was processed."""
     result: OperationResult
     """The full result, carrying ``bindings`` and ``satisfied_condition_ids``."""
+    anchor: Optional[SymbolicExpression] = None
+    """
+    The condition node of the rule that produced this conclusion (the firing ``Add``'s
+    parent). This is the insertion point for a refinement that overrides this conclusion.
+    """
+    add_node: Optional[Add] = None
+    """The ``Add`` conclusion node that fired."""
 
 
 class ConclusionObserver(EvaluationObserver):
@@ -59,14 +68,36 @@ class ConclusionObserver(EvaluationObserver):
     def on_conclusions_processed(
         self, expression: SymbolicExpression, result: OperationResult
     ) -> None:
-        if self.conclusion_id in result.bindings:
-            self.fired.append(
-                FiredConclusion(
-                    value=result.bindings[self.conclusion_id],
-                    conditions_root=expression,
-                    result=result,
-                )
+        if self.conclusion_id not in result.bindings:
+            return
+        value = result.bindings[self.conclusion_id]
+        add_node = self._find_firing_add(expression, value)
+        anchor = add_node._parent_ if add_node is not None else expression
+        self.fired.append(
+            FiredConclusion(
+                value=value,
+                conditions_root=expression,
+                result=result,
+                anchor=anchor,
+                add_node=add_node,
             )
+        )
+
+    def _find_firing_add(
+        self, conditions_root: SymbolicExpression, value: Any
+    ) -> Optional[Add]:
+        """
+        :return: The ``Add`` (among the conclusions that propagated to ``conditions_root``)
+            whose value matches the inferred ``value`` — i.e. the conclusion that won.
+        """
+        for conclusion in conditions_root._conclusions_:
+            if not isinstance(conclusion, Add):
+                continue
+            target = conclusion.right
+            target_value = target._value_ if isinstance(target, Literal) else target
+            if target_value == value:
+                return conclusion
+        return None
 
     @property
     def conclusion(self) -> Optional[Any]:
