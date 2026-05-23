@@ -115,8 +115,12 @@ class ReEnterableLazyIterable(Generic[T]):
         This is needed because of the weakref data we get from SymbolGraph. If we do `self.iterable = iterable` and
         weakref instances die, the iterable would have None values for them. But if we wrap it in a generator,
         they are actually removed, and the generator doesn't find them, which is the wanted behavior.
+
+        Replacing the iterable also discards any values materialized from the previous one, so re-targeting a
+        variable's domain (e.g. to classify a different case) does not leak prior values.
         """
         self.iterable = (v for v in iterable)
+        self.materialized_values = []
 
     def __iter__(self):
         """
