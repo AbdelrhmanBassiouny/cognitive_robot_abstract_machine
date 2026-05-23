@@ -17,6 +17,11 @@ from krrood.entity_query_language.rdr.rule_tree import (
     insert_alternative,
     insert_refinement,
 )
+from krrood.entity_query_language.rdr.serialization import (
+    load_rdr,
+    rdr_to_python,
+    save_rdr,
+)
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 __all__ = [
@@ -27,4 +32,7 @@ __all__ = [
     "insert_alternative",
     "insert_refinement",
     "EQLSingleClassRDR",
+    "rdr_to_python",
+    "save_rdr",
+    "load_rdr",
 ]
