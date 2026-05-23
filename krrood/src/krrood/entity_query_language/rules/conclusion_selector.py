@@ -48,21 +48,41 @@ class ConclusionSelector(TruthValueOperator, ABC):
         Each provided condition is chained with AND, and the resulting branch is
         connected via ElseIf/Next to the current node, representing an alternative/next path.
 
+        The anchor (the node the new branch attaches to) is taken from the enclosing
+        ``with`` context. For dynamic growth without a ``with`` context, use
+        :meth:`insert_at` with an explicit anchor.
+
         :param conditions: Conditions to chain with AND to create the new condition expression.
         :returns: The conditions root after attaching the new condition to the rule tree.
         """
+        return cls.insert_at(cls._get_current_context_condition(), *conditions)
+
+    @classmethod
+    def insert_at(
+        cls,
+        anchor: SymbolicExpression,
+        *conditions: ConditionType,
+    ) -> Self:
+        """
+        Attach a new branch to ``anchor`` without relying on the ``with`` context stack.
+
+        This is the explicit-anchor counterpart of :meth:`create_and_update_rule_tree`,
+        used to grow a live rule-tree DAG (e.g. when an RDR inserts a refinement or
+        alternative after observing a misclassification). Conditions are chained with
+        AND; the new branch is spliced in between ``anchor`` and its current parent.
+
+        :param anchor: The existing condition node the new branch connects to.
+        :param conditions: Conditions to chain with AND into the new branch.
+        :returns: The newly created condition node (attach conclusions to it via ``with``).
+        """
         new_condition = chained_logic(AND, *conditions)
 
-        current_context = cls._get_current_context_condition()
+        prev_parent = anchor._parent_
 
-        prev_parent = current_context._parent_
+        new_context = cls._create_between_two_expressions(anchor, new_condition)
 
-        new_context = cls._create_between_two_expressions(
-            current_context, new_condition
-        )
-
-        if new_context is not current_context:
-            prev_parent._replace_child_(current_context, new_context)
+        if new_context is not anchor and prev_parent is not None:
+            prev_parent._replace_child_(anchor, new_context)
 
         return new_condition
 
