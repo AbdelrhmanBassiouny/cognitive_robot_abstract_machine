@@ -23,7 +23,7 @@ from typing_extensions import Any, Callable, Dict, List, Optional
 from colorama import Fore, Style
 
 from krrood.entity_query_language.rdr.case_table import (
-    DEFAULT_COLUMNS,
+    DEFAULT_MIN_COLUMN_WIDTH,
     render_case_table,
 )
 from krrood.entity_query_language.rdr.interface import (
@@ -55,8 +55,8 @@ class IPythonInterface(ExpertInterface):
     shell_runner: Optional[ShellRunner] = None
     """Injectable launcher; defaults to a real embedded IPython shell. Tests pass a stub."""
 
-    case_table_columns: int = DEFAULT_COLUMNS
-    """Number of ``(attribute, value)`` pairs the case table lays out per row."""
+    min_column_width: int = DEFAULT_MIN_COLUMN_WIDTH
+    """Smallest width a case-table pair column may take; sets how many fit per row."""
 
     def _render_header(
         self,
@@ -65,7 +65,7 @@ class IPythonInterface(ExpertInterface):
         errors: Dict[str, str],
     ) -> str:
         parts: List[str] = [
-            "", render_case_table(context.case_instance, self.case_table_columns), ""
+            "", render_case_table(context.case_instance, self.min_column_width), ""
         ]
         parts.extend(self._conclusion_framing(context))
         error_block = self._format_errors(errors)
