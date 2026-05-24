@@ -7,8 +7,18 @@ aspect-oriented :class:`~krrood.entity_query_language.evaluation.EvaluationObser
 hooks rather than driving a bespoke traversal.
 """
 
+from krrood.entity_query_language.rdr.backend import (
+    GroundTruth,
+    ModelKey,
+    RDRBackend,
+    key_from_attribute,
+)
 from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.interactive import IPythonExpert
+from krrood.entity_query_language.rdr.interactive import (
+    IPythonExpert,
+    NoConclusionProvided,
+    NoConditionsProvided,
+)
 from krrood.entity_query_language.rdr.observer import (
     ConclusionObserver,
     FiredConclusion,
@@ -24,6 +34,13 @@ from krrood.entity_query_language.rdr.serialization import (
     save_rdr,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+from krrood.entity_query_language.rdr.underspecified import (
+    MultipleInferenceTargets,
+    NoInferenceTarget,
+    UnderspecifiedMatch,
+    UnsupportedInferenceTarget,
+    is_ellipsis_target,
+)
 
 __all__ = [
     "ConclusionObserver",
@@ -31,10 +48,21 @@ __all__ = [
     "classify_case",
     "Expert",
     "IPythonExpert",
+    "NoConditionsProvided",
+    "NoConclusionProvided",
     "insert_alternative",
     "insert_refinement",
     "EQLSingleClassRDR",
     "rdr_to_python",
     "save_rdr",
     "load_rdr",
+    "RDRBackend",
+    "GroundTruth",
+    "ModelKey",
+    "key_from_attribute",
+    "UnderspecifiedMatch",
+    "is_ellipsis_target",
+    "NoInferenceTarget",
+    "MultipleInferenceTargets",
+    "UnsupportedInferenceTarget",
 ]
