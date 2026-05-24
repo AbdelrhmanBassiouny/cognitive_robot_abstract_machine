@@ -10,6 +10,11 @@ error is printed inline and the **same shell stays open** rather than bailing ou
 ``exit()`` (or ``quit()``) cancels the session unconditionally, raising
 :class:`~krrood.entity_query_language.rdr.interface.ExpertAbort`.
 
+All on-screen text is composed as plain prose and coloured through a single
+:class:`Palette`, and the header is assembled from small section builders so styling lives
+in one place. Two line magics — ``%help`` and ``%show_tree`` — keep the standing header
+short while staying discoverable.
+
 The actual shell launch is injectable (``shell_runner``) so tests can play the expert's
 part without a real terminal.
 """
@@ -35,7 +40,10 @@ from krrood.entity_query_language.rdr.interface import (
     CaseContext,
     ExpertInterface,
 )
-from krrood.entity_query_language.rdr.rule_tree_view import render_rule_tree, format_condition
+from krrood.entity_query_language.rdr.rule_tree_view import (
+    format_condition,
+    render_rule_tree,
+)
 
 #: A shell runner takes ``(namespace, header)`` and must leave the expert's assignments
 #: (and any ``exit()`` flag) visible in ``namespace`` when it returns.
@@ -44,8 +52,66 @@ ShellRunner = Callable[[Dict[str, Any], str], None]
 #: The IPython line magic the expert types to redisplay the rule tree.
 SHOW_TREE_MAGIC = "show_tree"
 
+#: The IPython line magic the expert types to redisplay the how-to-answer guidance.
+HELP_MAGIC = "help"
+
 #: Private namespace key holding the zero-arg rule-tree renderer for the ``%show_tree`` magic.
 _TREE_RENDER_KEY = "__rule_tree_render__"
+
+#: Private namespace key holding the zero-arg help-text builder for the ``%help`` magic.
+_HELP_TEXT_KEY = "__expert_help__"
+
+
+@dataclass
+class Palette:
+    """Maps semantic roles to ANSI styling behind a single ``use_color`` switch.
+
+    Keeps colour out of the message text: callers write plain prose and wrap each fragment
+    in the role that fits it, so one line can mix roles without leaking or losing codes.
+    """
+
+    use_color: bool = True
+
+    def _paint(self, text: str, *codes: str) -> str:
+        if not self.use_color:
+            return text
+        return f"{''.join(codes)}{text}{Style.RESET_ALL}"
+
+    def label(self, text: str) -> str:
+        """Ordinary instruction prose."""
+        return self._paint(text, Fore.MAGENTA)
+
+    def good(self, text: str) -> str:
+        """A correct / target value."""
+        return self._paint(text, Fore.GREEN)
+
+    def wrong(self, text: str) -> str:
+        """A value that is currently wrong (no emphasis)."""
+        return self._paint(text, Fore.RED)
+
+    def strong_wrong(self, text: str) -> str:
+        """A wrong value the expert must steer away from (emphasised)."""
+        return self._paint(text, Fore.RED, Style.BRIGHT)
+
+    def neutral(self, text: str) -> str:
+        """A value with no good/bad judgement attached."""
+        return self._paint(text, Fore.WHITE)
+
+    def code(self, text: str) -> str:
+        """A name or expression the expert can type."""
+        return self._paint(text, Fore.CYAN)
+
+    def keyword(self, text: str) -> str:
+        """An emphasised term within prose (e.g. the word ``condition``)."""
+        return self._paint(text, Fore.CYAN, Style.BRIGHT)
+
+    def hint(self, text: str) -> str:
+        """A low-key pointer to a command."""
+        return self._paint(text, Fore.YELLOW)
+
+    def error(self, text: str) -> str:
+        """A validation error."""
+        return self._paint(text, Fore.RED)
 
 
 @dataclass
@@ -58,131 +124,144 @@ class IPythonInterface(ExpertInterface):
     min_column_width: int = DEFAULT_MIN_COLUMN_WIDTH
     """Smallest width a case-table pair column may take; sets how many fit per row."""
 
+    use_color: bool = True
+    """Whether the header, framing and magics emit ANSI colour."""
+
+    @property
+    def palette(self) -> Palette:
+        """The styling used for every piece of on-screen text."""
+        return Palette(self.use_color)
+
+    # ----------------------------------------------------------------- header
+
     def _render_header(
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
         errors: Dict[str, str],
     ) -> str:
-        parts: List[str] = [
-            "", render_case_table(context.case_instance, self.min_column_width), ""
-        ]
-        parts.extend(self._conclusion_framing(context))
-        error_block = self._format_errors(errors)
-        if error_block:
-            parts.append(error_block)
+        parts: List[str] = ["", self._case_table(context), ""]
+        parts.extend(self._framing_lines(context))
+        parts.append(self._hint_line())
+        if errors:
+            parts.append(self._format_errors(errors))
         parts.append("")
         return "\n".join(parts)
 
-    def _help_inspect_case(self) -> str:
-        """
-        :return: The help text for inspecting the concrete case.
-        """
-        return (
-            f"{Fore.MAGENTA}Inspect the concrete case with "
-            f"`{CASE_INSTANCE_NAME}` (e.g. {CASE_INSTANCE_NAME}.some_attr).{Style.RESET_ALL}"
+    def _case_table(self, context: CaseContext) -> str:
+        return render_case_table(
+            context.case_instance, self.min_column_width, use_color=self.use_color
         )
 
-    def _help_build_answer(self, requests: List[AnswerRequest]) -> str:
-        """
-        :param requests: The answer requests for which to provide help.
-        :return: The help text for building answers.
-        """
-        parts: List[str] = []
-        parts.append(
-            f"{Fore.YELLOW}Build your answer(s) over `{CASE_VARIABLE_NAME}` "
-            f"(the EQL variable), e.g.:{Style.RESET_ALL}"
-        )
-        for request in requests:
-            parts.append(f"  {Fore.GREEN}{request.example}{Style.RESET_ALL}")
-        return '\n'.join(parts)
+    def _framing_lines(self, context: CaseContext) -> List[str]:
+        """State the (wrong) conclusion and what condition would resolve it."""
+        p = self.palette
+        lines: List[str] = []
+        if context.has_target:
+            lines.append(
+                p.label("Ground-truth conclusion: ")
+                + p.good(repr(context.target_conclusion))
+            )
+        lines.append(self._current_conclusion_line(context, p))
+        lines.extend(self._resolution_lines(context, p))
+        return lines
 
-    def _help_submit_cancel(self) -> str:
-        """
-        :return: The help text for submitting or canceling the answer.
-        """
-        return (
-            f"{Fore.YELLOW}Press Ctrl-D to submit. "
-            f"Call {Fore.CYAN}{EXIT_NAME}(){Fore.YELLOW} to cancel.{Style.RESET_ALL}"
+    def _current_conclusion_line(self, context: CaseContext, p: Palette) -> str:
+        value = repr(context.current_conclusion)
+        if not context.has_target:
+            styled = p.neutral(value)
+        elif context.current_conclusion == context.target_conclusion:
+            styled = p.good(value)
+        else:
+            styled = p.wrong(value)
+        return p.label("Current conclusion: ") + styled
+
+    def _resolution_lines(self, context: CaseContext, p: Palette) -> List[str]:
+        """The call to action: which condition to write, and why."""
+        if context.current_conclusion is None:
+            lines = [p.label("No rule fired for this case.")]
+            if context.has_target:
+                lines.append(
+                    p.label("Write a ")
+                    + p.keyword("condition")
+                    + p.label(" that fires for it.")
+                )
+            return lines
+        if not (
+            context.has_target
+            and context.current_conclusion != context.target_conclusion
+        ):
+            return []
+        lines = []
+        if context.trace is not None:
+            lines.append(
+                p.label("Apparently, the condition ")
+                + p.code(format_condition(context.trace.firing_anchor))
+                + p.label(" satisfies both ")
+                + p.good(repr(context.target_conclusion))
+                + p.label(" and ")
+                + p.strong_wrong(repr(context.current_conclusion))
+                + p.label(".")
+            )
+        lines.append(
+            p.label("Write a ")
+            + p.keyword("condition")
+            + p.label(" that satisfies ")
+            + p.good(repr(context.target_conclusion))
+            + p.label(" and does not satisfy ")
+            + p.strong_wrong(repr(context.current_conclusion))
         )
+        return lines
+
+    def _hint_line(self) -> str:
+        """A single standing pointer to the fuller guidance behind ``%help``."""
+        return self.palette.hint(
+            f"Type %{HELP_MAGIC} for how to answer this case."
+        )
+
+    def _format_errors(self, errors: Dict[str, str]) -> str:
+        """:return: A red, one-line-per-error block (empty mapping -> empty string)."""
+        p = self.palette
+        return "\n".join(
+            p.error(f"[error] {name}: {message}") for name, message in errors.items()
+        )
+
+    # --------------------------------------------------------------- guidance
 
     def _render_tree(self, context: CaseContext) -> Optional[str]:
         """:return: The coloured rule-tree text for this case, or ``None`` if unavailable."""
         trace = context.trace
         if trace is None or trace.rule_tree_root is None:
             return None
-        return render_rule_tree(trace)
+        return render_rule_tree(trace, use_color=self.use_color)
 
-    def _tree_block(self, context: CaseContext) -> List[str]:
-        """The rule-tree visualization, shown above the instructions when a rule fired."""
-        if context.current_conclusion is None:
-            return []
-        tree = self._render_tree(context)
-        if not tree:
-            return []
-        return [
-            f"{Fore.CYAN}Current rule tree "
-            f"({Fore.GREEN}fired{Fore.CYAN} / {Fore.RED}evaluated{Fore.CYAN} / "
-            f"{Fore.LIGHTBLACK_EX}skipped{Fore.CYAN}):{Style.RESET_ALL}",
-            tree,
+    def _help_text(self, context: CaseContext, requests: List[AnswerRequest]) -> str:
+        """The how-to-answer guidance printed by ``%help`` — plain prose, one accent colour."""
+        p = self.palette
+        lines = [
+            p.label("How to answer:"),
+            f"  Inspect the case with {p.code(CASE_INSTANCE_NAME)} "
+            f"(e.g. {p.code(f'{CASE_INSTANCE_NAME}.milk')}).",
+            f"  Build your answer over {p.code(CASE_VARIABLE_NAME)} and assign it:",
         ]
-
-    def _conclusion_framing(self, context: CaseContext) -> List[str]:
-        """Instruction lines that state the (wrong) conclusion and what to do about it."""
-        lines: List[str] = []
-        current_color = Fore.WHITE
-        condition_repr = f"{Fore.CYAN}{Style.BRIGHT}condition{Style.NORMAL}{Fore.MAGENTA}"
-        if context.has_target:
-            lines.append(
-                f"{Fore.MAGENTA}Ground-truth conclusion: "
-                f"{Fore.GREEN}{context.target_conclusion!r}{Style.RESET_ALL}")
-            current_color = Fore.GREEN if context.current_conclusion == context.target_conclusion else Fore.RED
+        lines.extend(f"      {p.code(request.example)}" for request in requests)
         lines.append(
-            f"{Fore.MAGENTA}Current conclusion: "
-            f"{current_color}{context.current_conclusion!r}{Style.RESET_ALL}"
+            f"  Submit with {p.code('Ctrl-D')}; cancel with {p.code(f'{EXIT_NAME}()')}."
         )
-        if context.current_conclusion is None:
-            lines.append(
-                f"{Fore.MAGENTA}No rule fired for this case.{Style.RESET_ALL}"
-            )
-            if context.has_target:
-                lines.append(
-                    f"{Fore.MAGENTA}Write a {condition_repr} that fires for it. {Style.RESET_ALL}"
-                )
-        elif context.has_target and context.current_conclusion != context.target_conclusion:
-            if context.trace is not None:
-                lines.append(f"{Fore.MAGENTA}Apparently, the condition {Fore.CYAN}{format_condition(context.trace.firing_anchor)}{Fore.MAGENTA} "
-                             f"satisfies both {Fore.GREEN}{context.target_conclusion!r}{Fore.MAGENTA} and {Fore.RED}{Style.BRIGHT}{context.current_conclusion!r}{Style.RESET_ALL}.")
-            lines.append(
-                f"{Fore.MAGENTA}Write a {condition_repr} that satisfies "
-                f"{Fore.GREEN}{context.target_conclusion!r}{Fore.MAGENTA} "
-                f"and does not satisfy {Fore.RED}{Style.BRIGHT}{context.current_conclusion!r}{Style.RESET_ALL}"
-            )
         if self._render_tree(context):
-            lines.append(self._help_show_tree())
-        return lines
-
-    def _help_show_tree(self) -> str:
-        """:return: The help text for the ``%show_tree`` magic."""
-        return (
-            f"{Fore.YELLOW}Type {Fore.CYAN}%{SHOW_TREE_MAGIC}{Fore.YELLOW} to "
-            f"display the current rule tree state.{Style.RESET_ALL}"
-        )
+            lines.append(f"  Show the rule tree with {p.code(f'%{SHOW_TREE_MAGIC}')}.")
+        lines.append(f"  Show this help again with {p.code(f'%{HELP_MAGIC}')}.")
+        return "\n".join(lines)
 
     def _build_namespace(
         self, context: CaseContext, requests: List[AnswerRequest]
     ) -> Dict[str, Any]:
         namespace = super()._build_namespace(context, requests)
         namespace[_TREE_RENDER_KEY] = lambda: self._render_tree(context)
+        namespace[_HELP_TEXT_KEY] = lambda: self._help_text(context, requests)
         return namespace
 
-    @staticmethod
-    def _format_errors(errors: Dict[str, str]) -> str:
-        """:return: A red, one-line-per-error block, or ``""`` when there are no errors."""
-        return "\n".join(
-            f"{Fore.RED}[error] {name}: {message}{Style.RESET_ALL}"
-            for name, message in errors.items()
-        )
+    # ------------------------------------------------------------------- shell
 
     def _run(
         self,
@@ -203,6 +282,8 @@ class IPythonInterface(ExpertInterface):
     ) -> None:
         from IPython.terminal.embed import InteractiveShellEmbed
 
+        interface = self
+
         class _ValidatingEmbeddedShell(InteractiveShellEmbed):
             """Vetoes a Ctrl-D exit while the answer is invalid; ``exit()`` forces the leave."""
 
@@ -212,7 +293,7 @@ class IPythonInterface(ExpertInterface):
                     return
                 errors = validate()
                 if errors:
-                    print(IPythonInterface._format_errors(errors))
+                    print(interface._format_errors(errors))
                     return
                 super().ask_exit()
 
@@ -221,7 +302,8 @@ class IPythonInterface(ExpertInterface):
         shell.confirm_exit = False
         shell._force_exit = False
 
-        self._register_show_tree_magic(shell, namespace)
+        self._register_namespace_magic(shell, namespace, SHOW_TREE_MAGIC, _TREE_RENDER_KEY)
+        self._register_namespace_magic(shell, namespace, HELP_MAGIC, _HELP_TEXT_KEY)
 
         def _cancel() -> None:
             shell._force_exit = True
@@ -235,16 +317,16 @@ class IPythonInterface(ExpertInterface):
         shell()
 
     @staticmethod
-    def _register_show_tree_magic(shell: Any, namespace: Dict[str, Any]) -> None:
-        """Register ``%show_tree`` so the expert can redisplay the rule tree on demand."""
-        render = namespace.get(_TREE_RENDER_KEY)
+    def _register_namespace_magic(
+        shell: Any, namespace: Dict[str, Any], magic_name: str, render_key: str
+    ) -> None:
+        """Register a line magic that prints whatever the zero-arg renderer at ``render_key`` returns."""
+        render = namespace.get(render_key)
         if render is None:
             return
 
-        def show_tree(line: str) -> None:
+        def magic(line: str) -> None:
             text = render()
-            print(text if text else f"{Fore.LIGHTBLACK_EX}(no rule tree){Style.RESET_ALL}")
+            print(text if text else f"{Fore.LIGHTBLACK_EX}(nothing to show){Style.RESET_ALL}")
 
-        shell.register_magic_function(
-            show_tree, magic_kind="line", magic_name=SHOW_TREE_MAGIC
-        )
+        shell.register_magic_function(magic, magic_kind="line", magic_name=magic_name)
