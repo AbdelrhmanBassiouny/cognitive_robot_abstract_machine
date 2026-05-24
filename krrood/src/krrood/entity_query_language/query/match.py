@@ -226,6 +226,13 @@ class Match(AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     Flag indicating whether the match instance has been called with keyword arguments.
     """
 
+    domain: Optional[DomainType] = field(default=None, kw_only=True)
+    """
+    Optional domain of instances the match ranges over. When set, the created variable is
+    bound to this domain, which lets backends iterate the instances to infer/fill
+    underspecified attributes. ``None`` leaves the variable's domain unbound.
+    """
+
     def __post_init__(self):
         if self.type_ is None:
             self._initialize_type_()
@@ -376,7 +383,7 @@ class Match(AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     def create_variable(self):
         from krrood.entity_query_language.factories import variable
 
-        self.variable = variable(self.type, domain=None)
+        self.variable = variable(self.type, domain=self.domain)
 
     def evaluate(self):
         """
@@ -430,18 +437,8 @@ class MatchVariable(Match[T]):
     A class designed to create and manage a variable constrained by a defined
     domain. It provides functionality to add additional constraints via
     keyword arguments and return an expression representing the resolved
-    constraints.
+    constraints. The ``domain`` field is inherited from :class:`Match`.
     """
-
-    domain: Optional[DomainType] = field(default=None, kw_only=True)
-    """
-    The domain to use for the variable created by the match.
-    """
-
-    def create_variable(self):
-        from krrood.entity_query_language.factories import variable
-
-        self.variable = variable(self.type, domain=self.domain)
 
     def __call__(self, **kwargs) -> Union[Entity[T], T]:
         """
