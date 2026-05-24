@@ -20,24 +20,24 @@ with query:
         add(animal.species, Species.fish)
         with refinement(animal.fins == False):
             add(animal.species, Species.molusc)
+            with refinement(animal.feathers == True):
+                add(animal.species, Species.bird)
             with refinement(animal.backbone == True):
                 add(animal.species, Species.amphibian)
                 with refinement(animal.legs == 0):
                     add(animal.species, Species.reptile)
-            with refinement(animal.feathers == True):
-                add(animal.species, Species.bird)
     with alternative(animal.feathers == True):
         add(animal.species, Species.bird)
     with alternative(and_(animal.backbone == False, animal.breathes == False)):
         add(animal.species, Species.molusc)
     with alternative(animal.eggs == True):
         add(animal.species, Species.insect)
+        with refinement(animal.backbone == True):
+            add(animal.species, Species.reptile)
         with refinement(animal.breathes == True):
             add(animal.species, Species.molusc)
             with refinement(animal.legs > 4):
                 add(animal.species, Species.insect)
-        with refinement(animal.backbone == True):
-            add(animal.species, Species.reptile)
     with alternative(animal.legs > 4):
         add(animal.species, Species.molusc)
 query.build()

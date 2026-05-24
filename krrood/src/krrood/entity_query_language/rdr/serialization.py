@@ -66,16 +66,43 @@ class UnsupportedNodeForSerialization(Exception):
 # --------------------------------------------------------------------------- #
 
 
+def _orient_run(run: List[Tuple[type, Any]]) -> List[Tuple[type, Any]]:
+    """
+    Put one same-orientation run of branches into the order the loader must re-insert them.
+
+    ``Refinement`` chains grow *inward* (each new refinement re-anchors at the same fixed
+    base node), so walking ``.left`` already yields insertion order. ``Alternative`` /
+    ``Next`` chains grow *outward* (each re-anchors at the moving conditions root), so
+    walking ``.left`` yields *reverse* insertion order and must be flipped.
+    """
+    if not run:
+        return []
+    return list(run) if run[0][0] is Refinement else list(reversed(run))
+
+
 def _decompose(node) -> Tuple[Any, List[Tuple[type, Any]]]:
     """
     Flatten a left-nested chain of conclusion selectors into a base condition plus an
-    ordered list of ``(selector_type, branch_condition)`` pairs (insertion order).
+    ordered list of ``(selector_type, branch_condition)`` pairs in the order the loader
+    must re-insert them to rebuild the identical DAG.
+
+    Because refinement and alternative chains grow in opposite directions (see
+    :func:`_orient_run`), each contiguous same-orientation run is oriented independently;
+    a blanket reverse would silently swap sibling refinements on every round-trip.
     """
-    branches: List[Tuple[type, Any]] = []
+    walk: List[Tuple[type, Any]] = []
     while isinstance(node, _SELECTORS):
-        branches.append((type(node), node.right))
+        walk.append((type(node), node.right))
         node = node.left
-    branches.reverse()
+
+    branches: List[Tuple[type, Any]] = []
+    run: List[Tuple[type, Any]] = []
+    for entry in walk:
+        if run and (entry[0] is Refinement) != (run[0][0] is Refinement):
+            branches.extend(_orient_run(run))
+            run = []
+        run.append(entry)
+    branches.extend(_orient_run(run))
     return node, branches
 
 

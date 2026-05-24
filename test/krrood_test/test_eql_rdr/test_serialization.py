@@ -65,6 +65,26 @@ def _build_refinement_tree() -> EQLSingleClassRDR:
     return rdr
 
 
+def _build_sibling_refinement_tree() -> EQLSingleClassRDR:
+    """backbone->fish, then refine the *same* fish rule twice (milk->mammal, feathers->bird).
+
+    Two refinements share one anchor, so the serializer's per-selector ordering is what is
+    under test: a blanket reverse would swap these siblings on every round-trip.
+    """
+    rdr = EQLSingleClassRDR(Animal, "species")
+    expert = scripted_expert(
+        {
+            Species.fish: lambda v: v.backbone == True,
+            Species.mammal: lambda v: v.milk == True,
+            Species.bird: lambda v: v.feathers == True,
+        }
+    )
+    rdr.fit_case(first(Species.fish), Species.fish, expert)
+    rdr.fit_case(first(Species.mammal), Species.mammal, expert)
+    rdr.fit_case(first(Species.bird), Species.bird, expert)
+    return rdr
+
+
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestSerialization(unittest.TestCase):
     def test_empty_rdr_cannot_be_serialized(self):
@@ -138,6 +158,32 @@ class TestSerialization(unittest.TestCase):
                 self.assertEqual(f.read(), src1)
         for a in animals:
             self.assertEqual(loaded1.classify(a), loaded2.classify(a), a.name)
+
+    def test_sibling_refinements_emit_two_blocks(self):
+        rdr = _build_sibling_refinement_tree()
+        src = rdr_to_python(rdr)
+        self.assertEqual(src.count("with refinement("), 2)
+
+    def test_sibling_refinement_roundtrip_preserves_classifications(self):
+        rdr = _build_sibling_refinement_tree()
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "model.py")
+            save_rdr(rdr, path)
+            loaded = load_rdr(path)
+        for a in animals:
+            self.assertEqual(rdr.classify(a), loaded.classify(a), a.name)
+
+    def test_sibling_refinement_roundtrip_is_byte_stable(self):
+        # Regression: sibling refinements must not flip order on a round-trip. A blanket
+        # reverse made accuracy oscillate (101 -> 91 -> 101 ...) across save/load.
+        rdr = _build_sibling_refinement_tree()
+        with tempfile.TemporaryDirectory() as d:
+            p1 = os.path.join(d, "m1.py")
+            save_rdr(rdr, p1)
+            loaded1 = load_rdr(p1)
+            src2 = rdr_to_python(loaded1)
+            with open(p1) as f:
+                self.assertEqual(f.read(), src2)
 
 
 if __name__ == "__main__":

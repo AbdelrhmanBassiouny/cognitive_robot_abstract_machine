@@ -109,6 +109,9 @@ class TestLoadHumanFittedModel(unittest.TestCase):
 
         correct = sum(1 for value, t in zip(inferred, targets) if value == t)
         print(f"\n[loaded model] accuracy on zoo set: {correct}/{len(animals)}")
+        # The saved model must reproduce its fitted accuracy exactly: a serialization
+        # round-trip that reorders sibling rules silently degraded this (101 -> 91).
+        self.assertEqual(correct, len(animals))
 
 
 if __name__ == "__main__":
