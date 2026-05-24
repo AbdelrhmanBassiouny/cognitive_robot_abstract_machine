@@ -59,6 +59,21 @@ class EQLSingleClassRDR:
         # expert can be driven with the same scope, plus the EQL factories on top.
         attach_definition_scope(self.case_variable, capture_caller_scope())
 
+    @classmethod
+    def from_underspecified(cls, template: Any) -> "EQLSingleClassRDR":
+        """
+        Build an RDR from an underspecified ``Match`` template: the lone ``...`` attribute
+        defines what the RDR predicts.
+
+        :param template: e.g. ``underspecified(Animal)(species=...)``.
+        :return: An RDR with ``case_type`` and ``conclusion_attribute_name`` taken from the
+            template's single underspecified slot.
+        """
+        from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
+
+        statement = UnderspecifiedMatch(template)
+        return cls(statement.case_type, statement.target_attribute_name)
+
     def classify(self, case: Any) -> Optional[Any]:
         """:return: The inferred conclusion for ``case``, or ``None`` if no rule fires."""
         if self.query is None:
@@ -70,25 +85,56 @@ class EQLSingleClassRDR:
             self.query, self.case_variable, self.conclusion_variable, case
         )
 
-    def fit_case(self, case: Any, target: Any, expert: Expert) -> Any:
+    def fit_case(
+        self, case: Any, target: Optional[Any] = None, expert: Optional[Expert] = None
+    ) -> Any:
         """
-        Ensure the RDR classifies ``case`` as ``target``, asking ``expert`` for the
-        conditions of a new rule when it does not.
+        Ensure the RDR classifies ``case`` as ``target``, growing the rule tree when it does
+        not.
 
-        :return: ``target``.
+        When ``target`` is ``None`` (no ground truth) the expert supplies **both** the
+        conclusion and its conditions via :meth:`Expert.ask_for_rule`; otherwise only the
+        conditions are requested (the conclusion is the known ``target``).
+
+        :return: The conclusion now associated with ``case`` (``target`` when given, else the
+            expert's conclusion).
         """
+        if expert is None:
+            raise ValueError("fit_case requires an expert.")
+
+        observer = None if self.query is None else self._observe(case)
+        current = observer.conclusion if observer is not None else None
+
+        if target is not None and current == target:
+            return target
+
+        if target is None:
+            target, condition = expert.ask_for_rule(case, current, self.case_variable)
+            if current == target:
+                return target
+        else:
+            condition = expert.ask_for_conditions(
+                case, current, target, self.case_variable
+            )
+
+        self._insert_rule(observer, current, condition, target)
+        return target
+
+    def _insert_rule(
+        self,
+        observer: Optional[ConclusionObserver],
+        current: Optional[Any],
+        condition: SymbolicExpression,
+        target: Any,
+    ) -> None:
+        """Splice a new rule into the tree, choosing first-rule / alternative / refinement."""
         if self.query is None:
-            self._add_first_rule(case, target, expert)
-            return target
-
-        observer = self._observe(case)
-        if observer.conclusion == target:
-            return target
-
-        condition = expert.ask_for_conditions(
-            case, observer.conclusion, target, self.case_variable
-        )
-        if observer.conclusion is None:
+            # First rule: seed the tree.
+            self.query = entity(self.case_variable).where(condition)
+            with self.query:
+                add(self.conclusion_variable, target)
+            self.query.build()
+        elif current is None:
             # Nothing fired: attach an alternative at the conditions root.
             insert_alternative(
                 self.query._conditions_root_,
@@ -104,20 +150,19 @@ class EQLSingleClassRDR:
                 self.conclusion_variable,
                 target,
             )
-        return target
-
-    def _add_first_rule(self, case: Any, target: Any, expert: Expert) -> None:
-        condition = expert.ask_for_conditions(case, None, target, self.case_variable)
-        self.query = entity(self.case_variable).where(condition)
-        with self.query:
-            add(self.conclusion_variable, target)
-        self.query.build()
 
     def fit(
-        self, cases: List[Any], targets: List[Any], expert: Expert
+        self,
+        cases: List[Any],
+        targets: Optional[List[Any]] = None,
+        expert: Optional[Expert] = None,
     ) -> "EQLSingleClassRDR":
-        """Fit the RDR over parallel ``cases`` / ``targets`` lists."""
-        for case, target in zip(cases, targets):
+        """
+        Fit the RDR over ``cases``. When ``targets`` is given it is paired with ``cases``
+        (ground-truth fitting); when ``None`` the expert labels each case.
+        """
+        paired_targets = targets if targets is not None else [None] * len(cases)
+        for case, target in zip(cases, paired_targets):
             self.fit_case(case, target, expert)
         return self
 
