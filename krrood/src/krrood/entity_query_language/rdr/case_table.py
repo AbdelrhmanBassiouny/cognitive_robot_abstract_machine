@@ -6,9 +6,7 @@ The case's ``(attribute, value)`` pairs are laid out across a configurable numbe
 keeping the table short rather than one tall pair-per-row column. Any value that overflows
 its column budget is clipped with an ellipsis.
 
-Kept deliberately small and dependency-light (just ``tabulate``); the legacy
-``ripple_down_rules`` rendering is not imported because its package ``__init__`` spins up a
-QApplication and heavy imports.
+Kept deliberately small and dependency-light (just ``tabulate``);
 """
 
 from __future__ import annotations
@@ -29,7 +27,7 @@ DEFAULT_COLUMNS = 2
 _ELLIPSIS = "..."
 
 #: Floor for a value column so a clip never collapses to just the ellipsis.
-_MIN_VALUE_WIDTH = 8
+_MIN_VALUE_WIDTH = 20
 
 #: Longest attribute name rendered before clipping.
 _MAX_KEY_WIDTH = 30

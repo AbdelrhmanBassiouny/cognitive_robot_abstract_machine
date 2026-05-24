@@ -27,13 +27,21 @@ from krrood.entity_query_language.rdr.interface import (
     FunctionInterface,
 )
 from krrood.entity_query_language.rdr.observer import (
+    ClassificationTrace,
     ConclusionObserver,
     FiredConclusion,
     classify_case,
+    trace_case,
 )
 from krrood.entity_query_language.rdr.rule_tree import (
     insert_alternative,
     insert_refinement,
+)
+from krrood.entity_query_language.rdr.rule_tree_view import (
+    RuleStatus,
+    RuleView,
+    render_rule_tree,
+    walk_rules,
 )
 from krrood.entity_query_language.rdr.serialization import (
     load_rdr,
@@ -53,6 +61,12 @@ __all__ = [
     "ConclusionObserver",
     "FiredConclusion",
     "classify_case",
+    "trace_case",
+    "ClassificationTrace",
+    "RuleStatus",
+    "RuleView",
+    "walk_rules",
+    "render_rule_tree",
     "Expert",
     "ExpertInterface",
     "IPythonInterface",

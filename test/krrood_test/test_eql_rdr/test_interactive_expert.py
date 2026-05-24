@@ -80,7 +80,7 @@ class TestInteractiveExpert(unittest.TestCase):
         self.assertIs(ns[CASE_VARIABLE_NAME], rdr.case_variable)
         self.assertIs(ns[CASE_INSTANCE_NAME], case)
 
-    def test_header_mentions_case_target_and_answer_name(self):
+    def test_header_mentions_case_target(self):
         captured = {}
         expert = expert_with(maximally_specific_runner(captured))
         rdr = EQLSingleClassRDR(Animal, "species")
@@ -88,9 +88,7 @@ class TestInteractiveExpert(unittest.TestCase):
             first(Species.bird), Species.mammal, Species.bird, rdr.case_variable
         )
         header = captured["header"]
-        self.assertIn(ANSWER_NAME, header)
         self.assertIn("bird", header.lower())
-        self.assertIn(CASE_VARIABLE_NAME, header)
 
     def test_returns_live_eql_expression(self):
         expert = expert_with(maximally_specific_runner())

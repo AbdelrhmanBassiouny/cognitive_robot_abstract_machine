@@ -45,8 +45,8 @@ from .zoo_loader import load_zoo_animals
 
 animals, targets = load_zoo_animals()
 
-# RUN_INTERACTIVE = os.environ.get("EQL_RDR_INTERACTIVE") == "1"
-RUN_INTERACTIVE = True
+RUN_INTERACTIVE = os.environ.get("EQL_RDR_INTERACTIVE") == "1"
+# RUN_INTERACTIVE = True
 
 #: Where the human-authored rule tree is saved, alongside these tests.
 FITTED_MODELS_DIR = os.path.join(os.path.dirname(__file__), "fitted_models")

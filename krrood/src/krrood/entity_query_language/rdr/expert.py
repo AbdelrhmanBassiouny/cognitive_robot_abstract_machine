@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Optional, Tuple
+from typing_extensions import TYPE_CHECKING, Any, Optional, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
@@ -27,6 +27,9 @@ from krrood.entity_query_language.rdr.interface import (
     ExpertAbort,
     ExpertInterface,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.rdr.observer import ClassificationTrace
 
 #: The namespace name the expert assigns their condition expression to.
 ANSWER_NAME = "conditions"
@@ -81,12 +84,14 @@ class Expert:
         current_conclusion: Optional[Any],
         target_conclusion: Any,
         case_variable: CanBehaveLikeAVariable,
+        trace: Optional["ClassificationTrace"] = None,
     ) -> SymbolicExpression:
         """
         :param case: The case being fit (e.g. an ``Animal`` instance).
         :param current_conclusion: What the RDR currently concludes (``None`` if no rule fired).
         :param target_conclusion: The known correct conclusion.
         :param case_variable: The RDR's shared EQL variable; conditions must be built over it.
+        :param trace: The classification trace, for visualizing the rule tree to the expert.
         :return: A live EQL condition expression that holds for ``case`` and distinguishes it.
         """
         context = CaseContext(
@@ -94,6 +99,7 @@ class Expert:
             case_variable=case_variable,
             current_conclusion=current_conclusion,
             target_conclusion=target_conclusion,
+            trace=trace,
         )
         request = AnswerRequest(
             name=ANSWER_NAME,
@@ -112,6 +118,7 @@ class Expert:
         case: Any,
         current_conclusion: Optional[Any],
         case_variable: CanBehaveLikeAVariable,
+        trace: Optional["ClassificationTrace"] = None,
     ) -> Tuple[Any, SymbolicExpression]:
         """
         Ask the expert for **both** a conclusion and its conditions, for fitting when no
@@ -120,6 +127,7 @@ class Expert:
         :param case: The case being fit.
         :param current_conclusion: What the RDR currently concludes (``None`` if no rule fired).
         :param case_variable: The RDR's shared EQL variable; conditions are built over it.
+        :param trace: The classification trace, for visualizing the rule tree to the expert.
         :return: ``(conclusion, conditions)`` — the value to conclude and a live EQL
             condition expression over ``case_variable`` that justifies it.
         """
@@ -127,6 +135,7 @@ class Expert:
             case_instance=case,
             case_variable=case_variable,
             current_conclusion=current_conclusion,
+            trace=trace,
         )
         requests = [
             AnswerRequest(

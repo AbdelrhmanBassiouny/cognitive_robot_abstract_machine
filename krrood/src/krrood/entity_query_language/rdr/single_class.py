@@ -23,10 +23,20 @@ from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import add, entity, variable
 from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.observer import ConclusionObserver, classify_case
+from krrood.entity_query_language.rdr.observer import (
+    ClassificationTrace,
+    ConclusionObserver,
+    classify_case,
+    trace_case,
+)
 from krrood.entity_query_language.rdr.rule_tree import (
     insert_alternative,
     insert_refinement,
+)
+from krrood.entity_query_language.rdr.rule_tree_view import (
+    DEFAULT_HEAD,
+    DEFAULT_TAIL,
+    render_rule_tree,
 )
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
@@ -85,6 +95,38 @@ class EQLSingleClassRDR:
             self.query, self.case_variable, self.conclusion_variable, case
         )
 
+    def _trace(self, case: Any) -> ClassificationTrace:
+        return trace_case(
+            self.query,
+            self.case_variable,
+            self.conclusion_variable,
+            case,
+            self.conditions_root,
+        )
+
+    def render_tree(
+        self,
+        case: Any,
+        *,
+        head: int = DEFAULT_HEAD,
+        tail: int = DEFAULT_TAIL,
+        use_color: bool = True,
+    ) -> str:
+        """
+        Render this RDR's rule tree for ``case`` as coloured text (fired/evaluated/skipped).
+
+        :param case: The case to classify and explain.
+        :param head: Rules to show before the elision marker.
+        :param tail: Rules to show after it (ending on the firing rule).
+        :param use_color: Whether to colour rows by status.
+        :return: The rendered tree, or ``""`` when the RDR has no rules yet.
+        """
+        if self.query is None:
+            return ""
+        return render_rule_tree(
+            self._trace(case), head=head, tail=tail, use_color=use_color
+        )
+
     def fit_case(
         self, case: Any, target: Optional[Any] = None, expert: Optional[Expert] = None
     ) -> Any:
@@ -102,27 +144,29 @@ class EQLSingleClassRDR:
         if expert is None:
             raise ValueError("fit_case requires an expert.")
 
-        observer = None if self.query is None else self._observe(case)
-        current = observer.conclusion if observer is not None else None
+        trace = None if self.query is None else self._trace(case)
+        current = trace.conclusion if trace is not None else None
 
         if target is not None and current == target:
             return target
 
         if target is None:
-            target, condition = expert.ask_for_rule(case, current, self.case_variable)
+            target, condition = expert.ask_for_rule(
+                case, current, self.case_variable, trace
+            )
             if current == target:
                 return target
         else:
             condition = expert.ask_for_conditions(
-                case, current, target, self.case_variable
+                case, current, target, self.case_variable, trace
             )
 
-        self._insert_rule(observer, current, condition, target)
+        self._insert_rule(trace, current, condition, target)
         return target
 
     def _insert_rule(
         self,
-        observer: Optional[ConclusionObserver],
+        trace: Optional[ClassificationTrace],
         current: Optional[Any],
         condition: SymbolicExpression,
         target: Any,
@@ -145,7 +189,7 @@ class EQLSingleClassRDR:
         else:
             # A rule fired with the wrong value: refine it so the new condition overrides.
             insert_refinement(
-                observer.fired[-1].anchor,
+                trace.firing_anchor,
                 condition,
                 self.conclusion_variable,
                 target,

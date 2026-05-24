@@ -23,10 +23,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Any, Callable, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.scope import get_definition_scope
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.rdr.observer import ClassificationTrace
 
 #: Shell name bound to the concrete case (inspect/experiment: ``case_instance.milk``).
 CASE_INSTANCE_NAME = "case_instance"
@@ -70,6 +73,9 @@ class CaseContext:
     """What the RDR currently concludes for the case (``None`` if no rule fired)."""
     target_conclusion: Any = _UNSET
     """The known correct conclusion, or absent (sentinel) when the expert must label it."""
+    trace: Optional["ClassificationTrace"] = None
+    """The classification trace for this case, for visualizing the rule tree (``None`` when
+    the RDR is empty / no classification was run)."""
 
     @property
     def has_target(self) -> bool:
