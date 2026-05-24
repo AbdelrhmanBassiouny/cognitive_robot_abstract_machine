@@ -1,150 +1,95 @@
 """
-Interactive expert backed by an embedded IPython shell.
+Interactive :class:`ExpertInterface` backed by an embedded IPython shell.
 
-When the RDR needs a new rule it opens a shell whose namespace is the scope captured
-where the RDR was created (see :mod:`krrood.entity_query_language.scope`) plus the EQL
-factories and the shared case variable. The expert writes a **live EQL condition
-expression** and assigns it to ``conditions``; on exit that object is returned as-is —
-never a string.
+The expert is shown a coloured instruction header and the case rendered as a table, then
+authors a **live EQL condition expression** over ``case_variable`` and assigns it to
+``conditions`` (and a ``conclusion`` when no ground-truth target is known). On exit the
+elicitation loop validates the assignment; an invalid or missing answer re-opens the shell
+with an error message, while ``abort()`` cancels the session.
+
+The actual shell launch is injectable (``shell_runner``) so tests can play the expert's
+part without a real terminal.
 """
 
 from __future__ import annotations
 
-from typing_extensions import Any, Callable, Dict, Optional, Tuple
+from dataclasses import dataclass
 
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
-from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.scope import get_definition_scope
+from typing_extensions import Any, Callable, Dict, List, Optional
 
-#: The variable name the expert assigns their condition expression to.
-ANSWER_NAME = "conditions"
+from colorama import Fore, Style
 
-#: The variable name the expert assigns their conclusion to (unknown-target fitting).
-CONCLUSION_NAME = "conclusion"
+from krrood.entity_query_language.rdr.case_table import render_case_table
+from krrood.entity_query_language.rdr.interface import (
+    ABORT_NAME,
+    CASE_INSTANCE_NAME,
+    CASE_VARIABLE_NAME,
+    AnswerRequest,
+    CaseContext,
+    ExpertInterface,
+)
 
-#: A shell runner takes (namespace, header) and is expected to populate
-#: ``namespace[ANSWER_NAME]`` with the expert's live EQL condition expression.
+#: A shell runner takes ``(namespace, header)`` and must leave the expert's assignments
+#: (and any ``abort()`` flag) visible in ``namespace`` when it returns.
 ShellRunner = Callable[[Dict[str, Any], str], None]
 
 
-class NoConditionsProvided(Exception):
-    """Raised when the interactive session ended without assigning ``conditions``."""
+@dataclass
+class IPythonInterface(ExpertInterface):
+    """Elicits a rule's answers through an embedded IPython shell."""
 
+    shell_runner: Optional[ShellRunner] = None
+    """Injectable launcher; defaults to a real embedded IPython shell. Tests pass a stub."""
 
-class NoConclusionProvided(Exception):
-    """Raised when unknown-target fitting ended without assigning ``conclusion``."""
-
-
-class IPythonExpert(Expert):
-    """An :class:`Expert` that prompts a human through an embedded IPython shell."""
-
-    def __init__(self, shell_runner: Optional[ShellRunner] = None) -> None:
-        """
-        :param shell_runner: Injectable launcher (namespace, header) -> None that must
-            set ``namespace["conditions"]``. Defaults to a real embedded IPython shell;
-            tests pass a stub that simulates the expert.
-        """
-        self._run_shell = shell_runner or self._default_run_shell
-
-    def _variable_name(self, case_variable: CanBehaveLikeAVariable) -> str:
-        type_ = case_variable._type_
-        name = type_.__name__ if type_ is not None else "case"
-        return name[0].lower() + name[1:]
-
-    def _build_namespace(
-        self, case: Any, case_variable: CanBehaveLikeAVariable
-    ) -> Dict[str, Any]:
-        namespace = get_definition_scope(case_variable)
-        namespace[self._variable_name(case_variable)] = case_variable
-        namespace["case"] = case
-        namespace[ANSWER_NAME] = None
-        return namespace
-
-    def _build_header(
+    def _render_header(
         self,
-        case: Any,
-        current_conclusion: Optional[Any],
-        target_conclusion: Any,
-        variable_name: str,
+        context: CaseContext,
+        requests: List[AnswerRequest],
+        errors: Dict[str, str],
     ) -> str:
-        return (
-            "EQL RDR — provide rule conditions.\n"
-            f"  case:    {case!r}\n"
-            f"  current: {current_conclusion!r}\n"
-            f"  target:  {target_conclusion!r}\n"
-            f"Write an EQL condition over `{variable_name}` and assign it to "
-            f"`{ANSWER_NAME}`,\n"
-            f"e.g.  {ANSWER_NAME} = {variable_name}.some_attr == True\n"
-            "then exit the shell."
+        parts: List[str] = []
+        for name, message in errors.items():
+            parts.append(f"{Fore.RED}[error] {name}: {message}{Style.RESET_ALL}")
+        parts.append(
+            f"{Fore.CYAN}{Style.BRIGHT}EQL RDR — author a rule for this case."
+            f"{Style.RESET_ALL}"
         )
+        parts.append(
+            f"{Fore.MAGENTA}current conclusion: {Style.RESET_ALL}"
+            f"{Fore.WHITE}{context.current_conclusion!r}{Style.RESET_ALL}"
+        )
+        if context.has_target:
+            parts.append(
+                f"{Fore.MAGENTA}target conclusion:  {Style.RESET_ALL}"
+                f"{Fore.GREEN}{context.target_conclusion!r}{Style.RESET_ALL}"
+            )
+        parts.append(
+            f"{Fore.MAGENTA}case `{CASE_INSTANCE_NAME}` "
+            f"(concrete — inspect & experiment):{Style.RESET_ALL}"
+        )
+        parts.append(render_case_table(context.case_instance))
+        parts.append(
+            f"{Fore.YELLOW}Build your answer(s) over `{CASE_VARIABLE_NAME}` "
+            f"(the EQL variable), e.g.:{Style.RESET_ALL}"
+        )
+        for request in requests:
+            parts.append(f"  {Fore.GREEN}{request.example}{Style.RESET_ALL}")
+        parts.append(
+            f"{Fore.YELLOW}Then exit the shell (Ctrl-D). "
+            f"Call {Fore.CYAN}{ABORT_NAME}(){Fore.YELLOW} to cancel.{Style.RESET_ALL}"
+        )
+        return "\n".join(parts)
 
-    def _build_rule_header(
-        self,
-        case: Any,
-        current_conclusion: Optional[Any],
-        variable_name: str,
-    ) -> str:
-        return (
-            "EQL RDR — provide a conclusion AND its conditions (no ground truth given).\n"
-            f"  case:    {case!r}\n"
-            f"  current: {current_conclusion!r}\n"
-            f"Assign the correct conclusion to `{CONCLUSION_NAME}` and an EQL condition over "
-            f"`{variable_name}` to `{ANSWER_NAME}`,\n"
-            f"e.g.  {CONCLUSION_NAME} = SomeValue;  "
-            f"{ANSWER_NAME} = {variable_name}.some_attr == True\n"
-            "then exit the shell."
-        )
-
-    def ask_for_conditions(
-        self,
-        case: Any,
-        current_conclusion: Optional[Any],
-        target_conclusion: Any,
-        case_variable: CanBehaveLikeAVariable,
-    ) -> SymbolicExpression:
-        namespace = self._build_namespace(case, case_variable)
-        header = self._build_header(
-            case,
-            current_conclusion,
-            target_conclusion,
-            self._variable_name(case_variable),
-        )
-        self._run_shell(namespace, header)
-        return self._require(namespace, ANSWER_NAME, NoConditionsProvided, "conditions")
-
-    def ask_for_rule(
-        self,
-        case: Any,
-        current_conclusion: Optional[Any],
-        case_variable: CanBehaveLikeAVariable,
-    ) -> Tuple[Any, SymbolicExpression]:
-        namespace = self._build_namespace(case, case_variable)
-        namespace[CONCLUSION_NAME] = None
-        header = self._build_rule_header(
-            case, current_conclusion, self._variable_name(case_variable)
-        )
-        self._run_shell(namespace, header)
-        conditions = self._require(
-            namespace, ANSWER_NAME, NoConditionsProvided, "conditions"
-        )
-        conclusion = self._require(
-            namespace, CONCLUSION_NAME, NoConclusionProvided, "conclusion"
-        )
-        return conclusion, conditions
-
-    @staticmethod
-    def _require(namespace: Dict[str, Any], key: str, error: type, label: str) -> Any:
-        value = namespace.get(key)
-        if value is None:
-            raise error(f"The interactive session did not assign a `{label}`.")
-        return value
+    def _run(self, namespace: Dict[str, Any], header: str) -> None:
+        runner = self.shell_runner or self._default_run_shell
+        runner(namespace, header)
 
     @staticmethod
     def _default_run_shell(namespace: Dict[str, Any], header: str) -> None:
         from IPython.terminal.embed import InteractiveShellEmbed
 
         shell = InteractiveShellEmbed(banner1=header, user_ns=namespace)
+        shell.auto_match = True
+        # The shell shares ``namespace``, so the expert's assignments are already visible
+        # to the caller when it returns.
         shell()
-        # The shell shares ``namespace`` as its user namespace, so the expert's
-        # ``conditions = ...`` assignment is already visible to the caller.

@@ -10,6 +10,7 @@ import tempfile
 import unittest
 
 from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.serialization import (
     load_rdr,
     rdr_to_python,
@@ -27,18 +28,17 @@ def first(sp: Species) -> Animal:
     return next(a for a, t in zip(animals, targets) if t is sp)
 
 
-class Scripted(Expert):
-    def __init__(self, rules):
-        self.rules = rules
+def scripted_expert(rules) -> Expert:
+    def answer(context, requests):
+        return {"conditions": rules[context.target_conclusion](context.case_variable)}
 
-    def ask_for_conditions(self, case, cur, tgt, v):
-        return self.rules[tgt](v)
+    return Expert(interface=FunctionInterface(answer_fn=answer))
 
 
 def _build_alternative_tree() -> EQLSingleClassRDR:
     """milk->mammal ; (no milk) feathers->bird ; (no milk) fins->fish — alternatives."""
     rdr = EQLSingleClassRDR(Animal, "species")
-    expert = Scripted(
+    expert = scripted_expert(
         {
             Species.mammal: lambda v: v.milk == True,
             Species.bird: lambda v: v.feathers == True,
@@ -54,7 +54,7 @@ def _build_alternative_tree() -> EQLSingleClassRDR:
 def _build_refinement_tree() -> EQLSingleClassRDR:
     """backbone->fish (over-general) ; refine milk->mammal."""
     rdr = EQLSingleClassRDR(Animal, "species")
-    expert = Scripted(
+    expert = scripted_expert(
         {
             Species.fish: lambda v: v.backbone == True,
             Species.mammal: lambda v: v.milk == True,
@@ -115,7 +115,7 @@ class TestSerialization(unittest.TestCase):
         # A reptile (backbone, no milk/feathers/fins) does not fire yet.
         reptile = first(Species.reptile)
         self.assertIsNone(loaded.classify(reptile))
-        expert = Scripted(
+        expert = scripted_expert(
             {
                 Species.reptile: lambda v: (v.backbone == True),
             }

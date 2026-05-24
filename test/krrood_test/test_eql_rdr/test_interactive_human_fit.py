@@ -10,11 +10,12 @@ to these tests so it can be reloaded as a fitted model. It is skipped unless you
 
 ``-s`` is required so pytest does not capture stdin/stdout (the shell needs the terminal).
 
-For each animal the RDR cannot yet classify correctly, a shell opens with the case, the
-current (wrong/missing) conclusion, the target species, the ``animal`` EQL variable and the
-EQL factories in scope. Write a condition and assign it to ``conditions``, e.g.::
+For each animal the RDR cannot yet classify correctly, a shell opens with the case (as a
+table), the current (wrong/missing) conclusion, the target species, the ``case_variable``
+EQL variable, the concrete ``case_instance`` and the EQL factories in scope. Write a
+condition over ``case_variable`` and assign it to ``conditions``, e.g.::
 
-    conditions = animal.milk == True
+    conditions = case_variable.milk == True
 
 then exit the shell (Ctrl-D). Because the RDR only prompts on misclassification, good
 general rules keep the number of prompts small. The learned tree is written to
@@ -30,7 +31,8 @@ import unittest
 
 from krrood.entity_query_language.factories import underspecified
 from krrood.entity_query_language.rdr.backend import RDRBackend
-from krrood.entity_query_language.rdr.interactive import IPythonExpert
+from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.serialization import (
     load_rdr,
     rdr_to_python,
@@ -43,7 +45,8 @@ from .zoo_loader import load_zoo_animals
 
 animals, targets = load_zoo_animals()
 
-RUN_INTERACTIVE = os.environ.get("EQL_RDR_INTERACTIVE") == "1"
+# RUN_INTERACTIVE = os.environ.get("EQL_RDR_INTERACTIVE") == "1"
+RUN_INTERACTIVE = True
 
 #: Where the human-authored rule tree is saved, alongside these tests.
 FITTED_MODELS_DIR = os.path.join(os.path.dirname(__file__), "fitted_models")
@@ -70,7 +73,7 @@ class TestFitZooAsHumanExpert(unittest.TestCase):
         # Ground-truth fitting: you (the expert) supply only the conditions; the species is
         # the known target. The RDR prompts you only when it would misclassify a case.
         rdr = EQLSingleClassRDR(Animal, "species")
-        rdr.fit(animals, targets, IPythonExpert())
+        rdr.fit(animals, targets, Expert(interface=IPythonInterface()))
 
         os.makedirs(FITTED_MODELS_DIR, exist_ok=True)
         save_rdr(rdr, SAVED_MODEL_PATH)

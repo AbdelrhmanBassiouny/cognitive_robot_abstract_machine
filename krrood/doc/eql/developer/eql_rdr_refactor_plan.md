@@ -168,9 +168,74 @@ Tests: `test_zoo_loader`, `test_observer`, `test_rule_tree_growth`,
 `test_underspecified_rdr` (target discovery, ellipsis stripping, scalar guard, lazy
 infer, fill modes, fit modes, fit→save→load→infer).
 
+### Phase 8 — Expert / ExpertInterface split + interactive ergonomics
+
+Phase 4 collapsed *what* to elicit and *how* to elicit it into a single
+`IPythonExpert(Expert)`. Phase 8 separates them and ports the ergonomics of the
+legacy `ripple_down_rules` IPython shell.
+
+#### The Strategy split (composition, not inheritance)
+
+- **`Expert`** (`rdr/expert.py`) — concrete `@dataclass` holding a field
+  `interface: ExpertInterface`. It owns *policy*: conditions-only when the target
+  is known, conclusion+conditions when not (`ask_for_conditions` / `ask_for_rule`,
+  signatures unchanged so `single_class.py` call sites are untouched). It also owns
+  the **validators**: conditions must be a live `SymbolicExpression` (a plain
+  `bool` means the expert wrote over the concrete case — re-prompt); conclusion
+  must be non-`None`.
+- **`ExpertInterface`** (`rdr/interface.py`) — abstract `@dataclass`. It owns
+  *mechanism*: a template-method `elicit(context, requests) -> dict[str, Any]`
+  running the build-namespace → render → run → validate → re-prompt loop. Concrete
+  interfaces implement only `_run(namespace, header)`.
+- **`IPythonInterface`** (`rdr/interactive.py`) — the embedded-shell implementation.
+  Keeps an injectable `shell_runner` seam so tests can simulate the human without a
+  terminal. `IPythonExpert` is **removed**; callers use
+  `Expert(interface=IPythonInterface())`.
+- **`FunctionInterface`** (`rdr/interface.py`) — a programmatic, non-interactive
+  interface wrapping `(context, requests) -> dict`. The reusable test double that
+  replaces the old pattern of subclassing the `Expert` ABC.
+
+Value objects: `CaseContext` (`case_instance`, `case_variable`,
+`current_conclusion`, `target_conclusion` (sentinel-absent for `ask_for_rule`),
+`scope`) and `AnswerRequest` (`name`, `validate: Callable[[Any], Optional[str]]`
+returning an error message or `None`, `example`, `required`).
+
+#### Shell namespace naming
+
+- `case_instance` — the concrete object (experiment freely: `case_instance.milk`
+  → `True`; native Jedi completion since it is a real instance).
+- `case_variable` — the shared EQL variable wired into the rule-tree DAG; conditions
+  must be built over it (`conditions = case_variable.milk == True` → live
+  `SymbolicExpression`). It is injected as the **same object** in the tree, so it
+  cannot be rebuilt via the `variable(...)` factory inside the shell.
+- Plus the EQL factories via `get_definition_scope(case_variable)`, and each answer
+  name pre-seeded to `None`.
+
+#### Error-tolerant loop, colour, table
+
+- `elicit` re-renders a coloured error and reopens the shell on missing/invalid
+  answers (e.g. `case_instance.x == True` yields a `bool`, caught by the
+  `is SymbolicExpression` validator with a "build it over `case_variable`" hint).
+  An **explicit exit** (`exit`/`quit`/Ctrl-D) aborts → raises
+  `NoConditionsProvided` / `NoConclusionProvided`.
+- Coloured instruction header via `colorama`; case rendered as a table via
+  `rdr/case_table.py::render_case_table` (`tabulate`, terminal-width aware,
+  lowercased bools, truncation). No import from the legacy `ripple_down_rules`
+  package (its `__init__` spins up a QApplication).
+
+#### Autocomplete — core `__dir__`
+
+`CanBehaveLikeAVariable.__dir__` returns its real members unioned with the public
+attribute names of `self._type_`, read via `self.__dict__` (never `getattr`, which
+would route through `__getattr__` and never return `None`). `__getattr__` (every
+name → `MappedVariable`) is **wholly untouched**; `__dir__` only changes what
+completion offers. Benefits every interactive EQL variable, so `case_variable.<tab>`
+now offers the case type's attributes.
+
 ## Status
 - Branch `rdr_refactor`, with `inference_explanation` merged in.
 - **Phases 0–7 complete and committed.** All `test/krrood_test/test_eql_rdr/` tests
   pass; the pre-existing 8 `test_eql/test_meta_queries.py` failures are unrelated.
+- **Phase 8 in progress** (Expert/ExpertInterface split + interactive ergonomics).
 - Future: unified single-DAG evaluation (perf), `MultiClassRDR` (iterable/multi
   attributes), generative `inference(...)`, the `RDRDecorator` path.

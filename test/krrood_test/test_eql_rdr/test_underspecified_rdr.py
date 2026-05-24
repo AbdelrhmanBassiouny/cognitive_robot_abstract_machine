@@ -19,6 +19,7 @@ from krrood.entity_query_language.factories import and_, underspecified
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.rdr.backend import RDRBackend
 from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.serialization import load_rdr, save_rdr
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import (
@@ -51,20 +52,30 @@ class Bag:
     label: Optional[str] = None
 
 
-class MaximallySpecificExpert(Expert):
+def _full_feature_conditions(context):
+    v, case = context.case_variable, context.case_instance
+    return and_(*[getattr(v, f) == getattr(case, f) for f in FEATURE_FIELDS])
+
+
+def maximally_specific_expert() -> Expert:
     """Conditions = the full feature vector; guarantees convergence on the training set."""
 
-    def ask_for_conditions(self, case, current, target, v):
-        return and_(*[getattr(v, f) == getattr(case, f) for f in FEATURE_FIELDS])
+    def answer(context, requests):
+        return {"conditions": _full_feature_conditions(context)}
+
+    return Expert(interface=FunctionInterface(answer_fn=answer))
 
 
-class LabellingExpert(MaximallySpecificExpert):
+def labelling_expert() -> Expert:
     """Also supplies the conclusion (from ground truth) when no target is given."""
 
-    def ask_for_rule(self, case, current, v):
-        return target_by_name[case.name], self.ask_for_conditions(
-            case, current, None, v
-        )
+    def answer(context, requests):
+        result = {"conditions": _full_feature_conditions(context)}
+        if any(r.name == "conclusion" for r in requests):
+            result["conclusion"] = target_by_name[context.case_instance.name]
+        return result
+
+    return Expert(interface=FunctionInterface(answer_fn=answer))
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -116,7 +127,7 @@ class TestFromUnderspecified(unittest.TestCase):
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestRDRBackendInfer(unittest.TestCase):
     def _fitted_backend(self):
-        backend = RDRBackend(expert=MaximallySpecificExpert())
+        backend = RDRBackend(expert=maximally_specific_expert())
         backend.fit(
             underspecified(Animal, domain=animals)(species=...),
             ground_truth=lambda a: target_by_name[a.name],
@@ -167,7 +178,7 @@ class TestRDRBackendInfer(unittest.TestCase):
 class TestRDRBackendFitModes(unittest.TestCase):
     def test_constant_ground_truth(self):
         # Every milk-bearing animal is a mammal: a single ground-truth value for the subset.
-        backend = RDRBackend(expert=MaximallySpecificExpert())
+        backend = RDRBackend(expert=maximally_specific_expert())
         query = underspecified(Animal, domain=animals)(milk=True, species=...)
         backend.fit(query, ground_truth=Species.mammal)
         out = underspecified(Animal, domain=animals)(milk=True, species=...)
@@ -177,7 +188,7 @@ class TestRDRBackendFitModes(unittest.TestCase):
 
     def test_auto_fit_mode_without_ground_truth_uses_ask_for_rule(self):
         # Fresh backend, no model -> infer triggers fit mode; expert labels via ask_for_rule.
-        backend = RDRBackend(expert=LabellingExpert())
+        backend = RDRBackend(expert=labelling_expert())
         query = underspecified(Animal, domain=animals[:12])(species=...)
         results = list(backend.infer(query))
         for r, (a, t) in zip(results, list(zip(animals, targets))[:12]):
@@ -192,7 +203,7 @@ class TestRDRBackendFitModes(unittest.TestCase):
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestUnderspecifiedEndToEnd(unittest.TestCase):
     def test_fit_save_load_infer(self):
-        backend = RDRBackend(expert=MaximallySpecificExpert())
+        backend = RDRBackend(expert=maximally_specific_expert())
         backend.fit(
             underspecified(Animal, domain=animals)(species=...),
             ground_truth=lambda a: target_by_name[a.name],

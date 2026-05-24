@@ -13,11 +13,18 @@ from krrood.entity_query_language.rdr.backend import (
     RDRBackend,
     key_from_attribute,
 )
-from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.interactive import (
-    IPythonExpert,
+from krrood.entity_query_language.rdr.expert import (
+    Expert,
     NoConclusionProvided,
     NoConditionsProvided,
+)
+from krrood.entity_query_language.rdr.interactive import IPythonInterface
+from krrood.entity_query_language.rdr.interface import (
+    AnswerRequest,
+    CaseContext,
+    ExpertAbort,
+    ExpertInterface,
+    FunctionInterface,
 )
 from krrood.entity_query_language.rdr.observer import (
     ConclusionObserver,
@@ -47,7 +54,12 @@ __all__ = [
     "FiredConclusion",
     "classify_case",
     "Expert",
-    "IPythonExpert",
+    "ExpertInterface",
+    "IPythonInterface",
+    "FunctionInterface",
+    "CaseContext",
+    "AnswerRequest",
+    "ExpertAbort",
     "NoConditionsProvided",
     "NoConclusionProvided",
     "insert_alternative",
