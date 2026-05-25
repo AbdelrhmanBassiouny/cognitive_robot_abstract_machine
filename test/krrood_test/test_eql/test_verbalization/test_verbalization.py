@@ -518,6 +518,48 @@ def test_nested_constrained_aggregation_no_second_find():
     assert "booking_date" in text and "before" in text, f"Got: {text!r}"
 
 
+def test_nested_aggregation_source_not_numbered_on_outer_subject():
+    """The aggregation source is a population, not a numbered entity: the outer subject stays unnumbered."""
+    t1 = variable(BankTransaction, domain=None)
+    t2 = variable(BankTransaction, domain=None)
+    query = eql.the(
+        entity(t1).where(t1.amount_details.amount == an(entity(eql.max(t2.amount_details.amount))))
+    )
+    text = verbalize_expression(query)
+    assert "of the BankTransaction is the maximum amount" in text, f"Got: {text!r}"
+    assert "BankTransaction 1" not in text, f"Spurious numbering in: {text!r}"
+
+
+def test_nested_constrained_aggregation_scope_is_plural_unnumbered():
+    """A constrained aggregation scope reads 'among BankTransactions', not 'among BankTransaction 2'."""
+    t1 = variable(BankTransaction, domain=None)
+    t2 = variable(BankTransaction, domain=None)
+    query = eql.the(
+        entity(t1).where(
+            t1.amount_details.amount
+            == an(
+                entity(eql.max(t2.amount_details.amount)).where(
+                    t2.booking_date < datetime.datetime(2024, 1, 1)
+                )
+            )
+        )
+    )
+    text = verbalize_expression(query)
+    assert "among BankTransactions" in text, f"Got: {text!r}"
+    assert "BankTransaction 2" not in text, f"Spurious numbering in: {text!r}"
+
+
+def test_nested_non_aggregation_entity_keeps_numbering():
+    """A genuine (non-aggregation) entity sub-query is a specific entity and keeps its disambiguation number."""
+    t1 = variable(BankTransaction, domain=None)
+    t2 = variable(BankTransaction, domain=None)
+    query = eql.the(
+        entity(t1).where(t1 == an(entity(t2).where(t2.amount_details.amount > 100)))
+    )
+    text = verbalize_expression(query)
+    assert "BankTransaction 1" in text and "BankTransaction 2" in text, f"Got: {text!r}"
+
+
 # ── Integration: target test cases ────────────────────────────────────────────
 
 

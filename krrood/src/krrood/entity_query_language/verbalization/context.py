@@ -34,13 +34,45 @@ def _article(type_name: str) -> str:
     return _engine.a(type_name).split()[0]
 
 
+def _aggregation_source_ids(expr) -> set:
+    """
+    Return the ``_id_`` of every variable that serves as the source *population*
+    of an aggregation sub-query (e.g. the ``BankTransaction`` behind
+    ``max(t.amount_details.amount)``).
+
+    Such a variable denotes a population to aggregate over, not a specific
+    entity, so it must not consume an entity-disambiguation number — otherwise
+    the outer subject would pick up a spurious *"1"* with no matching *"2"*, and
+    a constrained aggregation scope would read *"among BankTransaction 2"* rather
+    than *"among BankTransactions"*.
+
+    :param expr: Root expression to scan.
+    :returns: Set of variable ids to exclude from numbering.
+    :rtype: set
+    """
+    from krrood.entity_query_language.query.query import Entity
+    from krrood.entity_query_language.verbalization.subquery import (
+        aggregation_source_root,
+        selected_aggregator,
+    )
+
+    ids: set = set()
+    for node in expr._all_expressions_:
+        if isinstance(node, Entity) and selected_aggregator(node) is not None:
+            root = aggregation_source_root(node)
+            if root is not None:
+                ids.add(root._id_)
+    return ids
+
+
 def _build_disambiguation_map(expr) -> Dict[uuid.UUID, str]:
     """
     Pre-scan *expr* and return a mapping of variable._id_ → display label.
 
     Types appearing once keep the plain type name; types appearing two or more
     times get "TypeName 1", "TypeName 2", … labels in encounter order.
-    Literal nodes are excluded.
+    Literal nodes are excluded, as are variables that only serve as the source
+    population of an aggregation sub-query (see :func:`_aggregation_source_ids`).
     """
     from krrood.entity_query_language.core.variable import Variable, Literal
     from krrood.entity_query_language.query.query import Query
@@ -48,11 +80,15 @@ def _build_disambiguation_map(expr) -> Dict[uuid.UUID, str]:
     if isinstance(expr, Query):
         expr.build()
 
+    suppressed = _aggregation_source_ids(expr)
+
     type_to_ids: Dict[str, List[uuid.UUID]] = defaultdict(list)
     seen_ids: set = set()
 
     for node in expr._all_expressions_:
         if isinstance(node, Variable) and not isinstance(node, Literal):
+            if node._id_ in suppressed:
+                continue
             type_name = node._type_.__name__ if getattr(node, "_type_", None) else node.__class__.__name__
             if node._id_ not in seen_ids:
                 seen_ids.add(node._id_)
