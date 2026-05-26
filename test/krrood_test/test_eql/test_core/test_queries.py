@@ -704,7 +704,7 @@ def test_equivalent_to_contains_type_using_exists():
     fb1 = FruitBox("FruitBox1", fb1_fruits)
     fb2 = FruitBox("FruitBox2", fb2_fruits)
 
-    fb = variable(FruitBox, domain=None)
+    fb = variable(FruitBox, domain=[fb1, fb2])
     fruit_box_query = an(
         entity(fb).where(
             exists(fb, HasType(flat_variable(fb.fruits), Apple)),

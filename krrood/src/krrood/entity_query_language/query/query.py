@@ -7,6 +7,7 @@ distinct handling, and quantification over symbolic expressions.
 
 from __future__ import annotations
 
+import uuid
 from abc import ABC
 from copy import copy
 from dataclasses import dataclass, field
@@ -321,7 +322,8 @@ class Query(
         if self._group_ and self._grouped_by_builder_ is None:
             self._grouped_by_builder_ = GroupedByBuilder(self)
 
-        children = []
+        children = list(self._selected_variables_existing_in_quantified_conditions_)
+
         if self._having_builder_ is not None:
             self._having_builder_.grouped_by = self._grouped_by_builder_.expression
             children.append(self._having_builder_.expression)
@@ -332,7 +334,10 @@ class Query(
 
         self._if_count_all_is_used_update_its_child_to_be_the_grouped_by_expression_()
 
-        children.extend(self._selected_variables_)
+        children.extend(
+            v for v in self._selected_variables_
+            if v._id_ not in self._selected_var_ids_in_quantified_conditions_
+        )
 
         self.update_children(*children)
 
@@ -451,6 +456,45 @@ class Query(
     def _quantifier_expression_(self) -> Optional[ResultQuantifier]:
         return (
             self._quantifier_builder_.expression if self._quantifier_builder_ else None
+        )
+
+    @cached_property
+    def _selected_var_ids_in_quantified_conditions_(self) -> set[uuid.UUID]:
+        """
+        The IDs of selected variables that are also used as quantified variables
+        in ``Exists``/``ForAll`` conditions within the Where clause.
+        """
+        from krrood.entity_query_language.operators.logical_quantifiers import (
+            QuantifiedConditional,
+        )
+
+        if self._where_builder_ is None:
+            return set()
+
+        selected_ids = {v._id_ for v in self._selected_variables_}
+        correlated = set()
+
+        for condition in self._where_builder_.conditions:
+            # Check the condition itself and all its descendants
+            for node in [condition, *condition._descendants_]:
+                if isinstance(node, QuantifiedConditional):
+                    if node.variable._id_ in selected_ids:
+                        correlated.add(node.variable._id_)
+
+        return correlated
+
+    @cached_property
+    def _selected_variables_existing_in_quantified_conditions_(
+        self,
+    ) -> Tuple[Selectable, ...]:
+        """
+        Selected variables that are also directly quantified by an ``Exists``/``ForAll``
+        in the Where clause.
+        """
+        correlated = self._selected_var_ids_in_quantified_conditions_
+        return tuple(
+            v for v in self._selected_variables_
+            if v._id_ in correlated
         )
 
     @cached_property
