@@ -912,7 +912,34 @@ def test_having_negated_comparator_compact(departments_and_employees_fixture):
     assert "not greater than" in having_part
 
 
-# ── Comparator "is" form ──────────────────────────────────────────────────────
+def test_set_of_grouped_by_no_double_find(departments_and_employees_fixture):
+    """SetOf query with grouped_by must not produce 'Find Find' or redundant restatement."""
+    _, _ = departments_and_employees_fixture
+    emp = variable(Employee, domain=None)
+    avg_salary = eql.average(emp.salary)
+    query = a(
+        set_of(emp.department, avg_salary)
+        .grouped_by(emp.department)
+        .having(avg_salary > 30000)
+    )
+    text = verbalize_expression(query)
+
+    # Must not have duplicated "Find"
+    assert text.count("Find") == 1, f"Expected one 'Find' in: {text!r}"
+
+    # "grouped by" must appear between the parenthesised selection and "having"
+    # — not before a restatement of the aggregated columns.
+    open_paren = text.index("(")
+    grouped_pos = text.index("grouped by")
+    having_pos = text.index("having")
+    assert open_paren < grouped_pos < having_pos, (
+        f"Expected (…) < grouped by < having in: {text!r}"
+    )
+    # No second copy of the selected variable names before "grouped by"
+    between_paren_and_grouped = text[text.index(")") : grouped_pos]
+    assert "department" not in between_paren_and_grouped, (
+        f"Unexpected restatement before 'grouped by' in: {text!r}"
+    )# ── Comparator "is" form ──────────────────────────────────────────────────────
 
 
 def test_verbalize_comparator_eq_uses_is():

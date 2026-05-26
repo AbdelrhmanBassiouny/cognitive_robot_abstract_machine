@@ -425,13 +425,12 @@ class EntityVerbalizer:
         try:
             var_frags = [self._d.build(v, ctx) for v in expr._selected_variables_]
             vars_phrase = PhraseFragment(parts=var_frags, separator=", ")
-            prefix = _phrase(
-                Keywords.FIND_SETS_OF.as_fragment(),
-                PhraseFragment(
-                    parts=[_word("("), vars_phrase, _word(")")], separator=""
-                ),
+            selection = PhraseFragment(
+                parts=[_word("("), vars_phrase, _word(")")], separator=""
             )
-            return self._verbalize_query_body_(expr, ctx, prefix)
+            return self._verbalize_query_body_(
+                expr, ctx, selection, find_header=Keywords.FIND_SETS_OF.as_fragment()
+            )
         finally:
             ctx.query_depth -= 1
 
@@ -474,6 +473,7 @@ class EntityVerbalizer:
         ctx: "VerbalizationContext",
         selection: VerbFragment,
         where_item=_UNSET,
+        find_header: "Optional[VerbFragment]" = None,
     ) -> VerbFragment:
         """
         Assemble the full *"Find <selection> such that … grouped by … having … ordered by …"* block.
@@ -484,11 +484,15 @@ class EntityVerbalizer:
         :param where_item: Precomputed WHERE-clause fragment (or ``None`` for no clause).
             When ``_UNSET`` (the default), the WHERE clause is built from *expr* — used by
             ``SetOf`` and the non-grouping subject paths.
+        :param find_header: The FIND prefix fragment.  Defaults to ``Keywords.FIND``.
+            Pass ``Keywords.FIND_SETS_OF`` for ``SetOf`` queries.
         :returns: A :class:`~krrood.entity_query_language.verbalization.fragments.base.BlockFragment`
             with the selection as header and clause items.
         :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
         """
-        header = _phrase(Keywords.FIND.as_fragment(), selection)
+        if find_header is None:
+            find_header = Keywords.FIND.as_fragment()
+        header = _phrase(find_header, selection)
         where = self._where_clause(expr, ctx) if where_item is _UNSET else where_item
         clauses = [
             c
@@ -540,7 +544,7 @@ class EntityVerbalizer:
         ]
         groups_phrase = PhraseFragment(parts=group_frags, separator=", ")
         aggregated_frags = self._aggregated_noun_frags_(expr, group_key_root_ids, ctx)
-        if aggregated_frags:
+        if aggregated_frags and not isinstance(expr, SetOf):
             aggregated_phrase = oxford_and(
                 aggregated_frags, Conjunctions.AND.as_fragment()
             )
