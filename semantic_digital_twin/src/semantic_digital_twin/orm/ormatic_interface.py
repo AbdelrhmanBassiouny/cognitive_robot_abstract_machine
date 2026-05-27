@@ -53,6 +53,7 @@ import semantic_digital_twin.robots.armar
 import semantic_digital_twin.robots.armar7
 import semantic_digital_twin.robots.boxy
 import semantic_digital_twin.robots.donbot
+import semantic_digital_twin.robots.garmi
 import semantic_digital_twin.robots.hsrb
 import semantic_digital_twin.robots.icub3
 import semantic_digital_twin.robots.justin
@@ -75,6 +76,7 @@ import semantic_digital_twin.semantic_annotations.semantic_annotations
 import semantic_digital_twin.spatial_computations.ik_solver
 import semantic_digital_twin.spatial_types.derivatives
 import semantic_digital_twin.spatial_types.spatial_types
+import semantic_digital_twin.utils
 import semantic_digital_twin.world
 import semantic_digital_twin.world_description.connection_properties
 import semantic_digital_twin.world_description.connections
@@ -1147,6 +1149,17 @@ class DonbotDAO_arms_association(Base, AssociationDataAccessObject):
     source_donbotdao_id: Mapped[int] = mapped_column(
         ForeignKey("DonbotDAO.database_id")
     )
+    target_armdao_id: Mapped[int] = mapped_column(ForeignKey("ArmDAO.database_id"))
+
+    target: Mapped[ArmDAO] = relationship("ArmDAO", foreign_keys=[target_armdao_id])
+
+
+class GarmiDAO_arms_association(Base, AssociationDataAccessObject):
+
+    __tablename__ = "_50446607032975877316565017614330314462576170393779802888493823"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_garmidao_id: Mapped[int] = mapped_column(ForeignKey("GarmiDAO.database_id"))
     target_armdao_id: Mapped[int] = mapped_column(ForeignKey("ArmDAO.database_id"))
 
     target: Mapped[ArmDAO] = relationship("ArmDAO", foreign_keys=[target_armdao_id])
@@ -3102,6 +3115,41 @@ class MismatchingIDsInWorldModificationDAO(
     )
 
 
+class MockedNodeClassDAO(
+    Base, DataAccessObject[semantic_digital_twin.utils.MockedNodeClass]
+):
+
+    __tablename__ = "MockedNodeClassDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+
+class MockedNodeModuleDAO(
+    Base, DataAccessObject[semantic_digital_twin.utils.MockedNodeModule]
+):
+
+    __tablename__ = "MockedNodeModuleDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    Node: Mapped[TypeType] = mapped_column(
+        TypeType, nullable=False, use_existing_column=True
+    )
+
+
+class MockedRCLPYDAO(Base, DataAccessObject[semantic_digital_twin.utils.MockedRCLPY]):
+
+    __tablename__ = "MockedRCLPYDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+
 class NPMatrix3x3DAO(
     Base,
     DataAccessObject[
@@ -4475,6 +4523,28 @@ class PoseMappingDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "PoseMappingDAO",
+        "inherit_condition": database_id == SpatialTypeDAO.database_id,
+    }
+
+
+class Pose2DMappingDAO(
+    SpatialTypeDAO, DataAccessObject[semantic_digital_twin.orm.model.Pose2DMapping]
+):
+
+    __tablename__ = "Pose2DMappingDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SpatialTypeDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    x: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    y: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    yaw: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "Pose2DMappingDAO",
         "inherit_condition": database_id == SpatialTypeDAO.database_id,
     }
 
@@ -9605,6 +9675,40 @@ class DonbotDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "DonbotDAO",
+        "inherit_condition": database_id == AbstractRobotDAO.database_id,
+    }
+
+
+class GarmiDAO(
+    AbstractRobotDAO, DataAccessObject[semantic_digital_twin.robots.garmi.Garmi]
+):
+
+    __tablename__ = "GarmiDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractRobotDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    neck_id: Mapped[int] = mapped_column(
+        ForeignKey("NeckDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    neck: Mapped[NeckDAO] = relationship(
+        "NeckDAO", uselist=False, foreign_keys=[neck_id], post_update=True
+    )
+    arms: Mapped[builtins.list[GarmiDAO_arms_association]] = relationship(
+        "GarmiDAO_arms_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[GarmiDAO_arms_association.source_garmidao_id]",
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "GarmiDAO",
         "inherit_condition": database_id == AbstractRobotDAO.database_id,
     }
 
