@@ -26,9 +26,19 @@ The entry points are:
 from krrood.entity_query_language.verbalization.verbalizer import verbalize_expression
 text = verbalize_expression(query)
 
-# Full control — choose format, colour, layout, and hyperlinks
+# Colour and layout — pass a renderer to verbalize_expression
+from krrood.entity_query_language.verbalization.rendering.formatter import HTMLFormatter, ANSIFormatter
+from krrood.entity_query_language.verbalization.rendering.renderer import HierarchicalRenderer, ParagraphRenderer
+
+# ANSI-coloured prose
+text = verbalize_expression(query, renderer=ParagraphRenderer(ANSIFormatter()))
+
+# HTML, indented bullets, with hyperlinks
+text = verbalize_expression(query, renderer=HierarchicalRenderer(HTMLFormatter(), resolver))
+
+# Full control — VerbalizationPipeline is the underlying implementation
 from krrood.entity_query_language.verbalization.pipeline import VerbalizationPipeline
-pipeline = VerbalizationPipeline.html(hierarchical=True, link_resolver=resolver)
+pipeline = VerbalizationPipeline(HierarchicalRenderer(HTMLFormatter(), resolver))
 html = pipeline.verbalize(query)
 ```
 
@@ -476,13 +486,12 @@ class MarkdownFormatter(Formatter):
         return f"[{text}]({url})"
 ```
 
-Then pass it to any `FragmentRenderer`:
+Then pass it to `verbalize_expression` or directly to any `FragmentRenderer`:
 
 ```python
 from krrood.entity_query_language.verbalization.rendering.renderer import ParagraphRenderer
-from krrood.entity_query_language.verbalization.pipeline import VerbalizationPipeline
 
-pipeline = VerbalizationPipeline(ParagraphRenderer(MarkdownFormatter()))
+text = verbalize_expression(query, renderer=ParagraphRenderer(MarkdownFormatter()))
 ```
 
 ---
@@ -492,7 +501,7 @@ pipeline = VerbalizationPipeline(ParagraphRenderer(MarkdownFormatter()))
 ### Core
 
 - {py:class}`~krrood.entity_query_language.verbalization.verbalizer.EQLVerbalizer`
-- {py:func}`~krrood.entity_query_language.verbalization.verbalizer.verbalize_expression`
+- {py:func}`~krrood.entity_query_language.verbalization.verbalizer.verbalize_expression` — unified entry point; accepts optional ``renderer`` kwarg for colour/layout
 - {py:class}`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline`
 - {py:class}`~krrood.entity_query_language.verbalization.context.VerbalizationContext`
 - {py:class}`~krrood.entity_query_language.verbalization.context.ArticleSelection`

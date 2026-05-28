@@ -23,7 +23,8 @@ Verbalization turns any EQL expression into a plain-English sentence. This is us
 
 ## The Quick API
 
-The simplest way to verbalize any EQL expression is `verbalize_expression`.
+The simplest way to verbalize any EQL expression is `verbalize_expression`. With no extra
+arguments it returns plain text. Pass a *renderer* to control color and layout.
 
 ```{code-cell} ipython3
 from dataclasses import dataclass
@@ -312,14 +313,14 @@ clause states only the grouping key without restating the full selection tuple.
 
 ## Colored Terminal Output
 
-For richer output in a terminal, use `VerbalizationPipeline.ansi()`. Each part of the sentence is
+For richer output in a terminal, pass a renderer to `verbalize_expression`. Each part of the sentence is
 color-coded by its semantic role.
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.verbalization.pipeline import VerbalizationPipeline
+from krrood.entity_query_language.verbalization.rendering.formatter import ANSIFormatter
+from krrood.entity_query_language.verbalization.rendering.renderer import ParagraphRenderer
 
-pipeline = VerbalizationPipeline.ansi()
-print(pipeline.verbalize(query))
+print(verbalize_expression(query, renderer=ParagraphRenderer(ANSIFormatter())))
 ```
 
 Color legend:
@@ -335,22 +336,24 @@ Color legend:
 
 ## HTML Output for Notebooks
 
-`VerbalizationPipeline.html()` produces `<span>` tags for direct use in Jupyter or any HTML context.
+Pass an `HTMLFormatter` renderer to produce `<span>` tags for direct use in Jupyter or any HTML context.
 
 ```{code-cell} ipython3
 from IPython.display import HTML
-from krrood.entity_query_language.verbalization.pipeline import VerbalizationPipeline
+from krrood.entity_query_language.verbalization.rendering.formatter import HTMLFormatter
+from krrood.entity_query_language.verbalization.rendering.renderer import ParagraphRenderer
 
-pipeline = VerbalizationPipeline.html()
-HTML(pipeline.verbalize(query))
+HTML(verbalize_expression(query, renderer=ParagraphRenderer(HTMLFormatter())))
 ```
 
 ### Hierarchical HTML
 
-Pass `hierarchical=True` to get an indented bullet structure — great for rule trees.
+Use `HierarchicalRenderer` to get an indented bullet structure — great for rule trees.
 
 ```{code-cell} ipython3
-HTML(VerbalizationPipeline.html(hierarchical=True).verbalize(query))
+from krrood.entity_query_language.verbalization.rendering.renderer import HierarchicalRenderer
+
+HTML(verbalize_expression(query, renderer=HierarchicalRenderer(HTMLFormatter())))
 ```
 
 ## Verbalizing Rule Trees
@@ -392,7 +395,7 @@ love_birds = variable(LoveBirds, domain=love_birds)
 bird_view = deduced_variable(BirdView)
 rule_query = an(entity(inference(StrongLoveBird)(bird=love_birds.bird_1)).where(love_birds.strong_love))
 
-HTML(VerbalizationPipeline.html(hierarchical=True).verbalize(rule_query))
+HTML(verbalize_expression(rule_query, renderer=HierarchicalRenderer(HTMLFormatter())))
 ```
 
 The hierarchical renderer shows the **If/then** structure with each condition and conclusion
@@ -441,7 +444,7 @@ drawer_rule = an(entity(inference(Drawer)(
     fc.child == h,
 ))
 
-HTML(VerbalizationPipeline.html(hierarchical=True).verbalize(drawer_rule))
+HTML(verbalize_expression(drawer_rule, renderer=HierarchicalRenderer(HTMLFormatter())))
 ```
 
 And a cabinet rule that aggregates over multiple drawers — notice the *aggregated* antecedent
@@ -460,7 +463,7 @@ cabinet_rule = an(entity(inference(Cabinet)(
     drawers=dr,
 )).where(pc.child == dr.container))
 
-HTML(VerbalizationPipeline.html(hierarchical=True).verbalize(cabinet_rule))
+HTML(verbalize_expression(cabinet_rule, renderer=HierarchicalRenderer(HTMLFormatter())))
 ```
 
 ## Verbalization as an Explanation Tool
@@ -483,7 +486,7 @@ It is directly useful for displaying *why* a robot perceives something as a Draw
 
 ## Hyperlinks to Source Code
 
-Pass `link_resolver=AutoAPIResolver(...)` to any pipeline factory and class and attribute
+Pass `link_resolver=AutoAPIResolver(...)` when constructing the renderer and class/attribute
 names become clickable links — opening the corresponding Sphinx AutoAPI documentation page.
 
 `AutoAPIResolver` works in two modes:
@@ -513,7 +516,8 @@ for _candidate in [Path("doc/eql/user"), Path("eql/user"), Path(".."), Path(".")
 ```{code-cell} ipython3
 from verbalization_domain import Robot, Mission
 from krrood.entity_query_language.factories import variable, entity, an
-from krrood.entity_query_language.verbalization.pipeline import VerbalizationPipeline
+from krrood.entity_query_language.verbalization.rendering.formatter import HTMLFormatter
+from krrood.entity_query_language.verbalization.rendering.renderer import HierarchicalRenderer
 from krrood.entity_query_language.verbalization.rendering.source_link_resolver import AutoAPIResolver
 
 vd_robots = [Robot("R2D2", 95), Robot("C3PO", 20)]
@@ -524,23 +528,25 @@ linked_query = an(entity(r).where(m.assigned_to == r, m.priority > 2))
 
 # Local — requires docs to be built first: sphinx-build doc doc/_build/html
 resolver = AutoAPIResolver.for_package("krrood")
-VerbalizationPipeline.html(link_resolver=resolver).display(linked_query)
+HTML(verbalize_expression(linked_query, renderer=HierarchicalRenderer(HTMLFormatter(), resolver)))
 ```
 
 ```{code-cell} ipython3
 # GitHub Pages — always available, no local build needed.
 resolver = AutoAPIResolver(base_url="https://cram2.github.io/cognitive_robot_abstract_machine/krrood")
-VerbalizationPipeline.html(link_resolver=resolver).display(linked_query)
+HTML(verbalize_expression(linked_query, renderer=HierarchicalRenderer(HTMLFormatter(), resolver)))
 ```
 
 ## API Reference
 
-- {py:func}`~krrood.entity_query_language.verbalization.verbalizer.verbalize_expression` — plain text, one-liner
-- {py:class}`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline` — full control over format and color
-  - `.plain()` — plain text, paragraph prose
-  - `.ansi()` — ANSI true-color terminal output
-  - `.ansi(hierarchical=True)` — indented bullet structure, ANSI
-  - `.html()` — HTML `<span>` colors, paragraph prose
-  - `.html(hierarchical=True)` — HTML, indented bullet structure
-  - `.html(link_resolver=...)` — adds clickable hyperlinks to class and attribute names
-  - `.display(expression)` — renders inline in Jupyter or opens a browser tab elsewhere
+- {py:func}`~krrood.entity_query_language.verbalization.verbalizer.verbalize_expression` — unified entry point; plain text by default, or pass ``renderer=`` for color/layout
+  - ``verbalize_expression(expr)`` — plain prose
+  - ``verbalize_expression(expr, renderer=ParagraphRenderer(ANSIFormatter()))`` — ANSI-coloured prose
+  - ``verbalize_expression(expr, renderer=HierarchicalRenderer(HTMLFormatter()))`` — HTML indented bullets
+  - ``verbalize_expression(expr, renderer=HierarchicalRenderer(HTMLFormatter(), resolver))`` — with source hyperlinks
+- {py:class}`~krrood.entity_query_language.verbalization.rendering.renderer.ParagraphRenderer` — flat prose layout
+- {py:class}`~krrood.entity_query_language.verbalization.rendering.renderer.HierarchicalRenderer` — indented bullet list layout
+- {py:class}`~krrood.entity_query_language.verbalization.rendering.formatter.PlainFormatter` — no colour markup
+- {py:class}`~krrood.entity_query_language.verbalization.rendering.formatter.ANSIFormatter` — terminal escape codes
+- {py:class}`~krrood.entity_query_language.verbalization.rendering.formatter.HTMLFormatter` — ``<span>`` tags for notebooks
+- {py:class}`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline` — lower-level pipeline (used internally by ``verbalize_expression`` when a renderer is passed)
