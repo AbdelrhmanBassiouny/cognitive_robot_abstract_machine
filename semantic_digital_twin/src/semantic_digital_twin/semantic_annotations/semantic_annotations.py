@@ -16,6 +16,8 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasDrawers,
     HasDoors,
     HasHandle,
+    HasLegs,
+    HasShelfLayers,
     HasCaseAsRootBody,
     HasHinge,
     HasSlider,
@@ -373,14 +375,14 @@ class ShelfLayer(HasSupportingSurface):
 
 
 @dataclass(eq=False)
-class Table(Furniture, HasSupportingSurface):
+class Table(Furniture, HasSupportingSurface, HasLegs):
     """
     A semantic annotation that represents a table.
     """
 
 
 @dataclass(eq=False)
-class CounterTop(Furniture, HasSupportingSurface):
+class Counter_Top(Furniture, HasSupportingSurface):
     """
     A semantic annotation that represents a counter top.
     """
@@ -404,7 +406,7 @@ class Dresser(Cabinet, HasDrawers, HasDoors): ...
 
 
 @dataclass(eq=False)
-class Cupboard(Cabinet, HasDoors): ...
+class Cupboard(Cabinet, HasDoors, HasShelfLayers): ...
 
 
 @dataclass(eq=False)
@@ -838,6 +840,13 @@ class CoffeeTable(Table):
 class DiningTable(Table):
     """
     A dining table.
+    """
+
+
+@dataclass(eq=False)
+class Leg(HasRootBody):
+    """
+    A semantic annotation representing a leg of a furniture item.
     """
 
 
