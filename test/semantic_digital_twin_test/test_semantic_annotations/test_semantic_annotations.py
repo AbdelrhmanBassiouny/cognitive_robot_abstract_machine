@@ -4,9 +4,11 @@ from numpy.ma.testutils import (
     assert_equal,
 )  # You could replace this with numpy's regular assert for better compatibility
 
-from krrood.entity_query_language.core.variable import InstantiatedVariable
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.explanation.explanation import explain_inference
 from krrood.entity_query_language.factories import entity, variable, in_, inference, an
+from krrood.entity_query_language.verbalization.rendering.renderer import HierarchicalRenderer
+from krrood.entity_query_language.verbalization.verbalizer import verbalize_expression
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
@@ -210,13 +212,40 @@ def test_explain_inferred_semantic_annotations(apartment_world_setup):
     drawer = next(ann for ann in found_semantic_annotations if isinstance(ann, Drawer))
     explanation = explain_inference(drawer)
     assert explanation is not None
-    assert isinstance(explanation.query_root, InstantiatedVariable)
+    assert isinstance(explanation.query_root, SymbolicExpression)
     assert explanation.get_satisfied_conditions_as_string() == (
-        '(FixedConnection.parent == PrismaticConnection.child)'
-        '\nAND (FixedConnection.child == Handle.root)')
+        '(Handle.root == FixedConnection.child)'
+        '\nAND (FixedConnection.parent == PrismaticConnection.child)')
     visualize = False
     if visualize:
         explanation.condition_graph().visualize(filename="drawer_explanation.pdf")
+
+
+@pytest.mark.order("fourth_to_last")
+def test_verbalize_query_that_inferred_semantic_annotations(apartment_world_setup):
+    world_reasoner = WorldReasoner(apartment_world_setup)
+    found_semantic_annotations = list(world_reasoner.infer_semantic_annotations())
+    drawer = next(ann for ann in found_semantic_annotations if isinstance(ann, Drawer))
+    explanation = explain_inference(drawer)
+    verbalization_paragraph = verbalize_expression(explanation.query_root)
+    verbalization_hierarchical = verbalize_expression(explanation.query_root, renderer=HierarchicalRenderer())
+    assert verbalization_paragraph == (
+        "If there's a FixedConnection whose parent is the child of a PrismaticConnection,"
+        " there's a Handle whose root is the child of the FixedConnection,"
+        " then there's a Drawer whose root is the parent of the FixedConnection,"
+        " whose handle is the Handle"
+    )
+    assert verbalization_hierarchical == (
+        "If\n"
+        "  there's a FixedConnection\n"
+        "    - whose parent is the child of a PrismaticConnection\n"
+        "  there's a Handle\n"
+        "    - whose root is the child of the FixedConnection\n"
+        "then\n"
+        "  there's a Drawer\n"
+        "    - whose root is the parent of the FixedConnection\n"
+        "    - whose handle is the Handle"
+    )
 
 
 def fit_rules_and_assert_semantic_annotations(

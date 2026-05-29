@@ -655,7 +655,7 @@ def node_descendants(node: SymbolicExpression) -> Iterable[SymbolicExpression]:
 
 @symbolic_function
 def node_type(node: Selectable) -> Optional[Type]:
-    return node._type_
+    return getattr(node, "_type_", None)
 
 
 @symbolic_function

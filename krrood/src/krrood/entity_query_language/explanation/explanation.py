@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import ast
+import linecache
+import os
+import textwrap
 import weakref
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -24,6 +28,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     MappedVariable,
 )
 from krrood.entity_query_language.factories import (
+    and_,
     attribute_owner_class,
     contains,
     entity,
@@ -57,6 +62,35 @@ if TYPE_CHECKING:
         Variable,
     )
     from krrood.entity_query_language.query.query import Entity, Query
+
+
+def _get_query_source(frame: StackFrame) -> Optional[str]:
+    """Return the full source statement at frame.lineno, or frame.code_snippet as fallback."""
+    if not frame or not frame.filename:
+        return None
+    lines = linecache.getlines(frame.filename)
+    if not lines:
+        return frame.code_snippet
+    try:
+        source = "".join(lines)
+        tree = ast.parse(source)
+        candidates: list = list(tree.body)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                candidates.extend(node.body)
+        best = None
+        for node in candidates:
+            start = getattr(node, "lineno", None)
+            end = getattr(node, "end_lineno", None)
+            if start is not None and end is not None and start <= frame.lineno <= end:
+                if best is None or (end - start) < (best.end_lineno - best.lineno):
+                    best = node
+        if best is not None:
+            stmt_lines = lines[best.lineno - 1 : best.end_lineno]
+            return textwrap.dedent("".join(stmt_lines)).rstrip()
+    except Exception:
+        pass
+    return frame.code_snippet
 
 
 @dataclass
@@ -191,31 +225,68 @@ class InferenceExplanation(Symbol):
             satisfied_condition_ids=self.satisfied_condition_ids,
         )
 
-    def as_string(self, focus_package: Optional[str | ModuleType] = None) -> str:
+    def as_string(self, focus_package: Optional[str | ModuleType] = None, show_trace: bool = False) -> str:
         """
         Convert an InferenceExplanation into a human-readable string.
 
-        :param focus_package: Optional package name to filter the stack further.
+        :param focus_package: Optional package name; only applies when ``show_trace=True``.
+        :param show_trace: When ``True``, append the call stack recorded at query-definition time.
         :return: A formatted string explaining the inference.
         """
-        if isinstance(focus_package, ModuleType):
-            focus_package = focus_package.__name__
-        display_stack = self.stack.filter(package=focus_package)
+        filtered_frames = self.stack.filter().frames
 
-        formatted_stack = []
-        for frame in display_stack:
-            formatted_stack.append(
-                f'  File "{frame.filename}", line {frame.lineno}, in {frame.function_name}\n'
-                f"    {frame.code_snippet if frame.code_snippet else '???'}\n"
-            )
+        def _is_krrood_internal(f: StackFrame) -> bool:
+            if f.module_name and (f.module_name == "krrood" or f.module_name.startswith("krrood.")):
+                return True
+            return "/krrood/src/krrood/" in f.filename or "\\krrood\\src\\krrood\\" in f.filename
 
-        stack_str = "".join(formatted_stack[:10])  # Limit to 10 frames
+        # Prefer frames from real source files (skip synthetic "<string>", "<frozen ...>", etc.)
+        real_user_frames = [
+            f for f in filtered_frames
+            if not f.filename.startswith("<") and not _is_krrood_internal(f)
+        ]
+        if real_user_frames:
+            source_frame = real_user_frames[0]
+        else:
+            # Notebook / eval context: fall back to innermost non-krrood frame
+            fallback = [f for f in filtered_frames if not _is_krrood_internal(f)]
+            source_frame = fallback[0] if fallback else (filtered_frames[0] if filtered_frames else None)
 
-        return (
-            f"Instance {self.instance} was created by inference variable: {self.query_node}\n"
-            f"Part of query: {self.query_root}\n"
-            f"Call stack at definition:\n{stack_str}"
+        query_source = _get_query_source(source_frame) if source_frame else None
+        if source_frame:
+            basename = os.path.basename(source_frame.filename)
+            source_context = f"({source_frame.function_name}, {basename}:{source_frame.lineno})"
+        else:
+            source_context = ""
+
+        if query_source:
+            indented_source = "\n".join(f"  {line}" for line in query_source.splitlines())
+        else:
+            indented_source = "  (unavailable)"
+
+        conditions = self.get_satisfied_conditions_and_their_bindings()
+        conds_str = "\n  AND ".join(str(c) for c in conditions) if conditions else "(none)"
+
+        result = (
+            f"Instance: {self.instance}\n"
+            f"Produced by inference variable: {self.query_node}\n"
+            f"Query source {source_context}:\n{indented_source}\n"
+            f"Satisfied conditions:\n  {conds_str}"
         )
+
+        if show_trace:
+            if isinstance(focus_package, ModuleType):
+                focus_package = focus_package.__name__
+            display_stack = self.stack.filter(package=focus_package)
+            formatted_stack = []
+            for frame in display_stack:
+                formatted_stack.append(
+                    f'  File "{frame.filename}", line {frame.lineno}, in {frame.function_name}\n'
+                    f"    {frame.code_snippet if frame.code_snippet else '???'}\n"
+                )
+            result += f"\nCall stack at definition:\n{''.join(formatted_stack[:10])}"
+
+        return result
 
     # ------------------------------------------------------------------
     # Stack query methods
@@ -277,7 +348,7 @@ class InferenceExplanation(Symbol):
         return entity(node).where(
             explanation.satisfied_condition_ids != None,
             contains(explanation.satisfied_condition_ids, node_id(node)),
-        )
+        ).distinct()
 
     def get_values_of_variable_nodes_of_given_type(
         self, type_: Type
@@ -304,7 +375,7 @@ class InferenceExplanation(Symbol):
         :return: An entity containing instances that participated in the inference of this instance.
         """
         if node_variable is None:
-            node_variable = self.create_query_node_variable()
+            node_variable = self.create_query_node_variable(self.create_explanation_variable())
         return (
             entity(node_variable)
             .where(
@@ -355,26 +426,28 @@ class InferenceExplanation(Symbol):
         condition_node = self.get_satisfied_condition_expressions_for_the_instance()
         child1 = flat_variable(node_children(condition_node))
         child2 = flat_variable(node_children(condition_node))
-        child1_descendant = self.get_variable_nodes_of_given_type(
-            type_, concatenation(child1, flat_variable(node_descendants(child1)))
-        )
-        child2_descendant = self.get_variable_nodes_of_given_type(
-            type_, concatenation(child2, flat_variable(node_descendants(child2)))
-        )
-        condition_type_filter = HasType(
-            condition_node, (Comparator, InstantiatedVariable)
-        )
+
+        def make_type_checker(child):
+            # Use exists(node, conditions) directly — avoids the _expression_/An-quantifier
+            # problem that arises when passing a built entity to exists().  When .build() is
+            # called on an entity, _expression_ is set to an An quantifier; _update_children_
+            # then passes that An to Exists.left, and An._evaluate__ ignores sources entirely.
+            node = concatenation(child, flat_variable(node_descendants(child)))
+            node_type_ = node_type(node)
+            return exists(node, and_(
+                HasType(node, Selectable),
+                node_type_ != None,
+                is_class(node_type_),
+                issubclass_(node_type_, type_),
+            ))
+
         return (
-            set_of(condition_node, child1, child2)
+            entity(condition_node)
             .where(
-                condition_type_filter,
+                HasType(condition_node, (Comparator, InstantiatedVariable)),
                 node_id(child1) != node_id(child2),
-                exists(child1_descendant, True),
-                exists(child2_descendant, True),
-                # HasType(condition_node.left, Attribute),
-                # HasType(condition_node.right, Attribute),
-                # issubclass_(attribute_owner_class(condition_node.left), type_),
-                # issubclass_(attribute_owner_class(condition_node.right), type_),
+                make_type_checker(child1),
+                make_type_checker(child2),
             )
             .distinct()
         )
@@ -398,17 +471,25 @@ class InferenceExplanation(Symbol):
         from krrood.entity_query_language.core.variable import InstantiatedVariable
 
         condition_node = self.get_satisfied_condition_expressions_for_the_instance()
-        descendant_a = self.get_variable_nodes_of_given_type(
-            type_a, flat_variable(node_descendants(condition_node))
-        )
-        descendant_b = self.get_variable_nodes_of_given_type(
-            type_b, flat_variable(node_descendants(condition_node))
-        )
+        desc_a = flat_variable(node_descendants(condition_node))
+        desc_b = flat_variable(node_descendants(condition_node))
+
+        def make_type_exists(node_var, type_):
+            node_type_ = node_type(node_var)
+            return exists(node_var, and_(
+                HasType(node_var, Selectable),
+                node_type_ != None,
+                is_class(node_type_),
+                issubclass_(node_type_, type_),
+            ))
+
         return (
             entity(condition_node)
             .where(
                 HasType(condition_node, (Comparator, InstantiatedVariable)),
-                node_id(descendant_a) != node_id(descendant_b),
+                node_id(desc_a) != node_id(desc_b),
+                make_type_exists(desc_a, type_a),
+                make_type_exists(desc_b, type_b),
             )
             .distinct(node_id(condition_node))
         )

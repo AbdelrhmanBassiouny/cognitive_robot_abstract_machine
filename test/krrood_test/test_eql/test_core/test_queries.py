@@ -707,7 +707,7 @@ def test_equivalent_to_contains_type_using_exists():
     fb = variable(FruitBox, domain=None)
     fruit_box_query = an(
         entity(fb).where(
-            exists(fb, HasType(flat_variable(fb.fruits), Apple)),
+            exists(var:=flat_variable(fb.fruits), HasType(var, Apple)),
         )
     )
 

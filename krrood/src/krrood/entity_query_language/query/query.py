@@ -498,6 +498,19 @@ class Query(
             self._grouped_by_builder_ is not None
         )
 
+    @property
+    def is_constrained(self) -> bool:
+        """
+        :return: ``True`` when this query carries a ``WHERE``, ``HAVING``, or
+            non-empty ``GROUP BY`` clause (i.e. it filters beyond its selection).
+        """
+        if self._where_expression_ is not None:
+            return True
+        if self._having_expression_ is not None:
+            return True
+        grouped = self._grouped_by_expression_
+        return grouped is not None and bool(grouped.variables_to_group_by)
+
     @cached_property
     def _aggregators_and_non_aggregators_in_selection_(
         self,
@@ -596,3 +609,12 @@ class Entity(Query[T]):
     @property
     def selected_variable(self):
         return self._selected_variables_[0] if self._selected_variables_ else None
+
+    @property
+    def selected_aggregator(self) -> "Optional[Aggregator]":
+        """
+        :return: The :class:`~krrood.entity_query_language.operators.aggregators.Aggregator`
+            this entity selects, or ``None`` when its selection is not an aggregator.
+        """
+        var = self.selected_variable
+        return var if isinstance(var, Aggregator) else None

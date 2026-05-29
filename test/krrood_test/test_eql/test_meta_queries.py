@@ -238,21 +238,19 @@ def test_cabinet_no_conditions_relating_connections(cabinet_explanation):
 
 
 def test_drawer_relates_fixed_connection_to_prismatic(drawer_explanation):
-    # Both comparators have fixed_conn + prismatic_conn in their descendant trees
-    # (see module docstring), so both are returned.
+    # FixedConnection.parent == PrismaticConnection.child
     conditions = drawer_explanation.get_conditions_that_relate_variables_of_types(
         FixedConnection, PrismaticConnection
     ).tolist()
-    assert len(conditions) == 2
+    assert len(conditions) == 1
 
 
 def test_drawer_relates_fixed_connection_to_handle(drawer_explanation):
-    # fixed_conn appears in both comparators' descendant trees; handle appears in
-    # fixed_conn.child == handle.  Both conditions are therefore returned.
+    # fixed_conn.child == handle.
     conditions = drawer_explanation.get_conditions_that_relate_variables_of_types(
         FixedConnection, Handle
     ).tolist()
-    assert len(conditions) == 2
+    assert len(conditions) == 1
 
 
 def test_cabinet_relates_prismatic_connection_to_drawer(cabinet_explanation):

@@ -56,6 +56,7 @@ def test_explain_inference_basic():
     assert explanation_obj is not None
     explanation = explanation_obj.as_string()
 
+    # function name appears in the "Query source (function_name, ...)" context line
     assert "Person" in explanation
     assert "test_explain_inference_basic" in explanation
     assert 'person_factory(name="John")' in explanation
@@ -85,11 +86,14 @@ def test_explain_inference_nested():
     assert explanation_obj is not None
     explanation = explanation_obj.as_string()
 
+    # innermost user frame is person_factory_helper — appears in query source context
     assert "Person" in explanation
-    assert "test_explain_inference_nested" in explanation
-    assert "create_person_query" in explanation
     assert "person_factory_helper" in explanation
     assert "person_inf(name=name)" in explanation
+    # calling chain only visible in stack trace
+    explanation_with_trace = explanation_obj.as_string(show_trace=True)
+    assert "test_explain_inference_nested" in explanation_with_trace
+    assert "create_person_query" in explanation_with_trace
 
 
 def test_explain_inference_multiple_instances():
@@ -115,6 +119,7 @@ def test_explain_inference_multiple_instances():
     expl_bob = expl_bob_obj.as_string()
     expl_charlie = expl_charlie_obj.as_string()
 
+    # function name appears in query source context; source code contains the call
     assert "test_explain_inference_multiple_instances" in expl_bob
     assert "test_explain_inference_multiple_instances" in expl_charlie
     assert "person_inf(name=names)" in expl_bob
@@ -151,13 +156,16 @@ def test_explain_inference_deeply_nested():
     assert explanation_obj is not None
     explanation = explanation_obj.as_string()
 
+    # innermost user frame is level_4 — appears in query source context
     assert "Person" in explanation
-    assert "test_explain_inference_deeply_nested" in explanation
-    assert "level_1" in explanation
-    assert "level_2" in explanation
-    assert "level_3" in explanation
     assert "level_4" in explanation
     assert "person_inf(name=name)" in explanation
+    # calling chain only visible in stack trace
+    explanation_with_trace = explanation_obj.as_string(show_trace=True)
+    assert "test_explain_inference_deeply_nested" in explanation_with_trace
+    assert "level_1" in explanation_with_trace
+    assert "level_2" in explanation_with_trace
+    assert "level_3" in explanation_with_trace
 
 
 def test_query_stack_tracking():
@@ -186,20 +194,14 @@ def test_explain_inference_focus_package():
     results = list(query.evaluate())
     frank = results[0]
 
-    # Full explanation
     explanation_obj = explain_inference(frank)
     assert explanation_obj is not None
+    # filename appears in the "Query source (..., test_explanation.py:N)" context line
     explanation_full = explanation_obj.as_string()
     assert "test_explanation.py" in explanation_full
-    # Assuming krrood is in the path for some internal frames if any (though here it's mostly test)
-    # But we can force a check that only contains 'test_explanation' if we filter by it
-    explanation_filtered = explanation_obj.as_string(
-        focus_package="test_explanation.py"
-    )
-
+    # focus_package only filters when show_trace=True
+    explanation_filtered = explanation_obj.as_string(show_trace=True, focus_package="test_explanation.py")
     assert "test_explanation.py" in explanation_filtered
-    # If there were other packages, they would be filtered out.
-    # Since our filter_stack already excludes site-packages, the diff might be subtle in this simple test.
 
 
 def test_variable_stack_tracking():
@@ -584,7 +586,7 @@ def test_condition_graph_pipeline_non_symbol():
 
 
 def test_query_graph_satisfaction_colors():
-    """Unsatisfied nodes and edges are faded; satisfied keep full color."""
+    """Unsatisfied nodes get red borders; satisfied nodes keep full color and no border."""
     from krrood.entity_query_language.query_graph import ColorLegend
 
     val = variable_from([6])
@@ -607,23 +609,24 @@ def test_query_graph_satisfaction_colors():
 
     for node in qg.expression_node_map.values():
         if isinstance(node.data, Comparator) and node.data._name_ == ">":
-            # val > 5 is satisfied: full color, not faded
+            # val > 5 is satisfied: full fill color retained, not faded, no red border
             assert node.color.color == original_colors[id(node.data)]
             assert not node.faded
-            assert "not satisfied" not in node.color.name.lower()
+            assert node.border_color is None
         if isinstance(node.data, Comparator) and node.data._name_ == "<":
-            # val < 10 is short-circuited (unsatisfied): faded fill, border, and flag
-            assert node.color.color != original_colors[id(node.data)]
+            # val < 10 is short-circuited (unsatisfied): fill color unchanged,
+            # faded flag set, red border applied instead of transparency
+            assert node.color.color == original_colors[id(node.data)]
             assert node.faded
-            assert "not satisfied" in node.color.name.lower()
+            assert node.border_color == "red"
 
     for node in qg.expression_node_map.values():
         if not is_condition_participant(node.data):
-            # Non-condition nodes may be faded if they are exclusive
-            # descendants of an unsatisfied node (e.g. Literal(10) under <).
-            # They may also be shared (same Variable used in both > and <).
+            # Non-condition nodes may be faded if they are exclusive descendants
+            # of an unsatisfied node (e.g. Literal(10) under <); they get red borders too.
+            # Shared nodes (Variable reachable via a satisfied path) stay unfaded.
             if not node.faded:
-                assert "not satisfied" not in node.color.name.lower()
+                assert node.border_color is None
 
 
 def test_query_graph_faded_subtree_propagation():

@@ -48,6 +48,7 @@ from krrood.entity_query_language.evaluation import (
 if TYPE_CHECKING:
     from krrood.entity_query_language.rules.conclusion import Conclusion
     from krrood.entity_query_language.core.variable import Variable
+    from krrood.entity_query_language.query.query import Query
 
 Bindings = Dict[uuid.UUID, Any]
 """
@@ -389,6 +390,20 @@ class SymbolicExpression(ABC):
         while expression._parent_ is not None:
             expression = expression._parent_
         return expression
+
+    @property
+    def _root_query_(self) -> Optional[Query]:
+        """
+        :return: The root query of the symbolic expression tree, or None if no query found.
+        """
+        from krrood.entity_query_language.query.query import Query
+        root = self._root_
+        root_query = None
+        for descendant in root._descendants_:
+            if isinstance(descendant, Query):
+                root_query = descendant
+                break
+        return root_query
 
     @property
     @abstractmethod

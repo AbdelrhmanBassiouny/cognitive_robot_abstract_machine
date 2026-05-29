@@ -1093,7 +1093,14 @@ class GraphVisualizer:
             n.color.color if n.color else ColorLegend().color for n in ordered_nodes
         ]
         edgecolors = [
-            "#cccccc" if getattr(n, "faded", False) else "black" for n in ordered_nodes
+            getattr(n, "border_color", None) or (
+                "#cccccc" if getattr(n, "faded", False) else "black"
+            )
+            for n in ordered_nodes
+        ]
+        linewidths = [
+            3.5 if getattr(n, "border_color", None) else 2.0
+            for n in ordered_nodes
         ]
         # Base node markers
         ax.scatter(
@@ -1102,7 +1109,7 @@ class GraphVisualizer:
             s=size_per_node,
             c=colors,
             edgecolors=edgecolors,
-            linewidths=2.0,
+            linewidths=linewidths,
             alpha=0.95,
             zorder=2,
         )
@@ -1174,17 +1181,23 @@ class GraphVisualizer:
                 markeredgewidth=2.5,
             )
             handles.append(enclosed_handle)
-        # Add faded-edge legend entry when any node is faded
-        any_faded = any(getattr(n, "faded", False) for n in ordered_nodes)
-        if any_faded:
-            faded_edge_handle = Line2D(
+        # Add red-border legend entry when any node has an unsatisfied/skipped marker
+        any_unsatisfied = any(
+            getattr(n, "border_color", None) is not None for n in ordered_nodes
+        )
+        if any_unsatisfied:
+            unsatisfied_handle = Line2D(
                 [0],
                 [0],
-                color="#cccccc",
-                linewidth=2.5,
-                label="Unaccessed (faded)",
+                marker="o",
+                linestyle="None",
+                label="Not satisfied (red border)",
+                markerfacecolor="none",
+                markeredgecolor="red",
+                markeredgewidth=3.5,
+                markersize=10,
             )
-            handles.append(faded_edge_handle)
+            handles.append(unsatisfied_handle)
         fw, fh = fig.get_size_inches()
         scale = 0.7 * (max(0.5, fw / 12.0) + max(0.5, fh / 9.0))
         legend_fs = float(np.clip(10.0 * scale, 8.0, 28.0))

@@ -45,9 +45,6 @@ from krrood.rustworkx_utils import (
 
 import rustworkx as rx
 
-UNSATISFIED_CONDITION_ALPHA = 0.25
-
-
 def _fade_color(color: str, alpha: float) -> str:
     """Blend a color with white to create a faded/washed-out hex version.
 
@@ -126,29 +123,41 @@ class QueryGraph:
         at least one unsatisfied condition node.  We compute this by BFS from the
         root, refusing to traverse *through* unsatisfied condition nodes, then
         marking every node the BFS did **not** reach as faded.
+
+        Exception: descendants of a *satisfied* QuantifiedConditional (Exists/ForAll)
+        are always reachable even though their internal condition IDs are not tracked
+        in the outer satisfied_condition_ids set.  The BFS carries a skip_gate flag
+        for exactly this case.
         """
+        from krrood.entity_query_language.operators.logical_quantifiers import (
+            QuantifiedConditional,
+        )
+
         root_node = self.expression_node_map.get(self.query._root_)
         if root_node is None:
             return
 
-        # BFS from root; refuse to enter unsatisfied condition nodes AND their
-        # exclusive descendants.  Nodes the BFS never reaches are faded.
-        reachable = set()
-        queue = [root_node]
+        reachable: set = set()
+        queue: list = [(root_node, False)]  # (node, skip_gate)
         while queue:
-            node = queue.pop(0)
+            node, skip_gate = queue.pop(0)
             if node.id in reachable:
                 continue
-            if _is_faded_gate(node, self.satisfied_condition_ids):
-                continue  # unsatisfied node is NOT reachable, children skipped
+            if not skip_gate and _is_faded_gate(node, self.satisfied_condition_ids):
+                continue
             reachable.add(node.id)
+            child_skip_gate = skip_gate or (
+                isinstance(node.data, QuantifiedConditional)
+                and node.data._id_ in self.satisfied_condition_ids
+            )
             for child in node.children:
                 if child.id not in reachable:
-                    queue.append(child)
+                    queue.append((child, child_skip_gate))
 
         for node in self.expression_node_map.values():
             if node.id not in reachable:
                 node.faded = True
+                node.border_color = "red"
 
     def visualize(
         self,
@@ -322,17 +331,6 @@ class ColorLegend(RXUtilsColorLegend):
             case Conclusion():
                 name = "Conclusion"
                 color = "#8cf2ff"
-
-        if satisfied_condition_ids is not None:
-            if (
-                expression._id_ not in satisfied_condition_ids
-                and is_condition_participant(expression)
-            ):
-                faded_color = _fade_color(color, UNSATISFIED_CONDITION_ALPHA)
-                return cls(
-                    name="Condition (not satisfied)",
-                    color=faded_color,
-                )
 
         return cls(name=name, color=color)
 
