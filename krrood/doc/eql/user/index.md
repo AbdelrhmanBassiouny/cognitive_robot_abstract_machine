@@ -24,6 +24,7 @@ For most users, we recommend following the documentation in this order:
 9.  **[Writing Rule Trees](writing_rule_trees.md)**: An advanced topic for building complex reasoning systems with EQL.
 10. **[Inference Explanation](inference_explanation.md)**: Understand how EQL records why an object was inferred, and query that metadata with EQL itself.
 10. **[Verbalization](verbalization.md)**: Turn any EQL expression into a human-readable English sentence — useful for debugging, explainability, and testing.
+11. **[Labelling Cases Without Ground Truth](eql_rdr_conclusion_asking.md)**: Grow an RDR from unlabelled cases — the expert is asked both the conclusion and the conditions for each new case.
 
 
 ## Developer Guide
