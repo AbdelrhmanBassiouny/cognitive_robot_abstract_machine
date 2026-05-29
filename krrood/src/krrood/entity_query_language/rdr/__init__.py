@@ -48,6 +48,10 @@ from krrood.entity_query_language.rdr.serialization import (
     rdr_to_python,
     save_rdr,
 )
+from krrood.entity_query_language.rdr.decorator import RDRWrapper, rdr
+from krrood.entity_query_language.rdr.file_store import RDRFileStore
+from krrood.entity_query_language.rdr.function_case import FunctionCase
+from krrood.entity_query_language.rdr.serialization import save_rdr_with_case
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import (
     MultipleInferenceTargets,
@@ -91,4 +95,10 @@ __all__ = [
     "NoInferenceTarget",
     "MultipleInferenceTargets",
     "UnsupportedInferenceTarget",
+    # @rdr decorator
+    "rdr",
+    "RDRWrapper",
+    "RDRFileStore",
+    "FunctionCase",
+    "save_rdr_with_case",
 ]

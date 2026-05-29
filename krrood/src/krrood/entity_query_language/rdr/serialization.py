@@ -11,6 +11,8 @@ from __future__ import annotations
 import enum
 import importlib.util
 import operator
+import sys
+import types
 import uuid
 from textwrap import indent as _indent
 
@@ -49,6 +51,34 @@ _FACTORY_IMPORT = (
     "    variable,\n    entity,\n    add,\n    refinement,\n    alternative,\n"
     "    next_rule,\n    and_,\n    or_,\n    not_,\n)"
 )
+
+
+def _class_name_to_var_name(class_name: str) -> str:
+    """Return a lower-camel-cased variable name for a CamelCase class name.
+
+    E.g. ``"Distance"`` → ``"distance"``, ``"MyDistance"`` → ``"myDistance"``.
+    Handles empty strings safely.
+    """
+    return class_name[0].lower() + class_name[1:] if class_name else class_name
+
+
+def _load_module_from_path(path: str) -> types.ModuleType:
+    """Load *path* as a fresh, uuid-named module registered in ``sys.modules``.
+
+    The uuid-based name and ``sys.modules`` pre-registration ensure that
+    Python's ``@dataclass`` annotation-resolution machinery (``dataclasses._is_type``)
+    can look up the module's globals when resolving string annotations produced
+    by ``from __future__ import annotations``.
+
+    :param path: Absolute path to a ``.py`` file.
+    :returns: The fully-executed module object.
+    """
+    module_name = f"_eql_rdr_loaded_{uuid.uuid4().hex}"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 class UnsupportedNodeForSerialization(Exception):
@@ -200,18 +230,21 @@ def _emit_rule_body(
     return "\n".join(lines)
 
 
-def rdr_to_python(rdr) -> str:
+def rdr_to_python(rdr, case_type_is_local: bool = False) -> str:
     """
     Serialize an :class:`EQLSingleClassRDR` to importable Python source.
 
     :param rdr: A fitted RDR (must have at least one rule).
+    :param case_type_is_local: When ``True``, skip emitting the import for the case type
+        itself.  Use this when ``save_rdr_with_case`` has already written the class
+        definition at the top of the same file.
     :return: Python module source that rebuilds the same rule-tree DAG on import.
     """
     if rdr.query is None:
         raise ValueError("Cannot serialize an empty RDR (no rules have been added).")
 
     case_type = rdr.case_type
-    var_name = case_type.__name__[0].lower() + case_type.__name__[1:]
+    var_name = _class_name_to_var_name(case_type.__name__)
     var_names = {rdr.case_variable._id_: var_name}
     conclusion_var_source = f"{var_name}.{rdr.conclusion_attribute_name}"
     referenced_types = {case_type}
@@ -223,8 +256,12 @@ def rdr_to_python(rdr) -> str:
     )
 
     # Group imported names by module so e.g. Animal and Species share one import line.
+    # When case_type_is_local=True the case type itself is defined in the same file
+    # (by the class-header section), so its import is omitted.
     imports_by_module: Dict[str, set] = {}
     for t in referenced_types:
+        if case_type_is_local and t is case_type:
+            continue
         imports_by_module.setdefault(t.__module__, set()).add(t.__name__)
     type_imports = "\n".join(
         f"from {module} import {', '.join(sorted(names))}"
@@ -260,15 +297,47 @@ def save_rdr(rdr, path: str) -> str:
     return source
 
 
+def save_rdr_with_case(rdr, path: str) -> str:
+    """Write a combined class-header + rule-tree file to ``path``.
+
+    When ``rdr.case_type`` is a :class:`FunctionCase` subclass the file begins
+    with the ``@dataclass`` class definition (generated from the original
+    function stored in ``case_type.function``), followed by the rule-tree
+    section which omits the case-type import (the class is already defined
+    above).  For any other case type the function falls back to plain
+    :func:`save_rdr`.
+
+    :param rdr: A fitted :class:`EQLSingleClassRDR`.
+    :param path: Destination ``.py`` file path.
+    :returns: The source written to disk.
+    """
+    from krrood.class_diagrams.code_generation_utilities import (
+        function_to_dataclass_source,
+    )
+    from krrood.entity_query_language.rdr.function_case import FunctionCase
+
+    if isinstance(rdr.case_type, type) and issubclass(rdr.case_type, FunctionCase):
+        class_source = function_to_dataclass_source(
+            rdr.case_type.function,
+            class_name=rdr.case_type.__name__,
+        )
+        rule_source = rdr_to_python(rdr, case_type_is_local=True)
+        source = class_source + "\n\n\n" + rule_source
+    else:
+        source = rdr_to_python(rdr)
+
+    with open(path, "w") as f:
+        f.write(source)
+    return source
+
+
 def load_rdr(path: str):
     """
     Load an :class:`EQLSingleClassRDR` from a module previously written by :func:`save_rdr`.
     """
     from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
-    spec = importlib.util.spec_from_file_location("_eql_rdr_loaded", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    module = _load_module_from_path(path)
 
     rdr = EQLSingleClassRDR(module.RDR_CASE_TYPE, module.RDR_CONCLUSION_ATTRIBUTE)
     rdr.case_variable = module.RDR_CASE_VARIABLE

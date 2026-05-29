@@ -44,6 +44,7 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
     DEFAULT_TAIL,
     render_rule_tree,
 )
+from krrood.entity_query_language.rdr.serialization import save_rdr_with_case
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
     capture_caller_scope,
@@ -65,6 +66,8 @@ class EQLSingleClassRDR:
     """The attribute expression the rules conclude on (``case_variable.<attr>``)."""
     query: Optional[Query] = field(init=False, default=None)
     """The root rule-tree query; ``None`` until the first rule is added."""
+    save_path: Optional[str] = field(default=None)
+    """When set, the RDR is automatically saved to this path after every rule insertion."""
 
     def __post_init__(self) -> None:
         self.case_variable = variable(self.case_type, domain=[])
@@ -201,6 +204,9 @@ class EQLSingleClassRDR:
                 self.conclusion_variable,
                 target,
             )
+
+        if self.save_path is not None:
+            save_rdr_with_case(self, self.save_path)
 
     def fit(
         self,
