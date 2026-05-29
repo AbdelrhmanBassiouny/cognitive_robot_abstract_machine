@@ -21,7 +21,7 @@ import types
 import typing
 from dataclasses import dataclass
 
-from typing_extensions import Any, Optional, Tuple, get_args, get_origin
+from typing_extensions import Any, Dict, Optional, Tuple, get_args, get_origin
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
 
@@ -67,8 +67,23 @@ class ConclusionDomain:
             return f"{name} = {self.members[0]!r}"
         return f"{name} = <{self.type_display}>"
 
+    def namespace_bindings(self) -> Dict[str, Any]:
+        """
+        Names to inject into the expert's shell so the allowable values tab-complete.
 
-def resolve_conclusion_domain(owner_type: type, attribute_name: str) -> ConclusionDomain:
+        :return: ``{EnumType.__name__: EnumType}`` for each Enum among the expected types (so
+            the expert can type ``Species.<tab>``); empty for non-enumerable / builtin domains.
+        """
+        bindings: Dict[str, Any] = {}
+        for expected in self.expected_types:
+            if inspect.isclass(expected) and issubclass(expected, enum.Enum):
+                bindings[expected.__name__] = expected
+        return bindings
+
+
+def resolve_conclusion_domain(
+    owner_type: type, attribute_name: str
+) -> ConclusionDomain:
     """
     Resolve the conclusion domain for ``owner_type.attribute_name`` from its type hint.
 
@@ -105,7 +120,9 @@ def _split_optional(annotation: Any) -> Tuple[bool, Tuple[type, ...]]:
     if _is_union(annotation):
         args = get_args(annotation)
         allows_none = _NONE_TYPE in args
-        non_none = tuple(arg for arg in args if arg is not _NONE_TYPE and isinstance(arg, type))
+        non_none = tuple(
+            arg for arg in args if arg is not _NONE_TYPE and isinstance(arg, type)
+        )
         return allows_none, non_none
     if annotation is _NONE_TYPE:
         return True, ()

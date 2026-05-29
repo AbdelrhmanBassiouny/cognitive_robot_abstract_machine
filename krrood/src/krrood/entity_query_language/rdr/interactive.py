@@ -12,8 +12,8 @@ error is printed inline and the **same shell stays open** rather than bailing ou
 
 All on-screen text is composed as plain prose and coloured through a single
 :class:`Palette`, and the header is assembled from small section builders so styling lives
-in one place. Two line magics — ``%help`` and ``%show_tree`` — keep the standing header
-short while staying discoverable.
+in one place. Line magics — ``%help``, ``%show_tree`` and (when aids are configured) ``%aid``
+— keep the standing header short while staying discoverable.
 
 The actual shell launch is injectable (``shell_runner``) so tests can play the expert's
 part without a real terminal.
@@ -55,11 +55,17 @@ SHOW_TREE_MAGIC = "show_tree"
 #: The IPython line magic the expert types to redisplay the how-to-answer guidance.
 HELP_MAGIC = "help"
 
+#: The IPython line magic the expert types to redisplay any task-specific aid output.
+AID_MAGIC = "aid"
+
 #: Private namespace key holding the zero-arg rule-tree renderer for the ``%show_tree`` magic.
 _TREE_RENDER_KEY = "__rule_tree_render__"
 
 #: Private namespace key holding the zero-arg help-text builder for the ``%help`` magic.
 _HELP_TEXT_KEY = "__expert_help__"
+
+#: Private namespace key holding the zero-arg aid-text renderer for the ``%aid`` magic.
+_AID_TEXT_KEY = "__expert_aid__"
 
 
 @dataclass
@@ -141,8 +147,11 @@ class IPythonInterface(ExpertInterface):
         errors: Dict[str, str],
     ) -> str:
         parts: List[str] = ["", self._case_table(context), ""]
+        aid_text = getattr(self, "_aid_cache", None)
+        if aid_text:
+            parts.extend([aid_text, ""])
         parts.extend(self._framing_lines(context))
-        parts.append(self._hint_line())
+        parts.append(self._hint_line(context))
         if errors:
             parts.append(self._format_errors(errors))
         parts.append("")
@@ -154,17 +163,53 @@ class IPythonInterface(ExpertInterface):
         )
 
     def _framing_lines(self, context: CaseContext) -> List[str]:
-        """State the (wrong) conclusion and what condition would resolve it."""
+        """Frame the question: labelling (no target) vs. distinguishing (known target)."""
         p = self.palette
-        lines: List[str] = []
-        if context.has_target:
-            lines.append(
-                p.label("Ground-truth conclusion: ")
-                + p.good(repr(context.target_conclusion))
-            )
+        if not context.has_target:
+            return self._labelling_lines(context, p)
+        lines = [
+            p.label("Ground-truth conclusion: ")
+            + p.good(repr(context.target_conclusion))
+        ]
         lines.append(self._current_conclusion_line(context, p))
         lines.extend(self._resolution_lines(context, p))
         return lines
+
+    def _labelling_lines(self, context: CaseContext, p: Palette) -> List[str]:
+        """The no-target call to action: decide the conclusion, then justify it."""
+        lines: List[str] = []
+        if context.has_current_conclusion:
+            lines.append(
+                p.label("The RDR currently concludes ")
+                + p.neutral(repr(context.current_conclusion))
+                + p.label(" — what SHOULD it be?")
+            )
+            if context.trace is not None and context.trace.firing_anchor is not None:
+                lines.append(
+                    p.label("It fired on ")
+                    + p.code(format_condition(context.trace.firing_anchor))
+                    + p.label(".")
+                )
+        else:
+            lines.append(p.label("No rule fired — what should this case conclude?"))
+        lines.extend(self._allowed_values_lines(context, p))
+        lines.append(
+            p.label("Set the ")
+            + p.keyword("conclusion")
+            + p.label(", then justify it with a ")
+            + p.keyword("condition")
+            + p.label(".")
+        )
+        return lines
+
+    def _allowed_values_lines(self, context: CaseContext, p: Palette) -> List[str]:
+        """List the allowable conclusion values, or the expected type when open-ended."""
+        domain = context.conclusion_domain
+        if domain is None:
+            return []
+        if domain.is_enumerable:
+            return [p.label("Choose one of: ") + p.code(domain.display())]
+        return [p.label("Conclusion type: ") + p.code(domain.type_display)]
 
     def _current_conclusion_line(self, context: CaseContext, p: Palette) -> str:
         value = repr(context.current_conclusion)
@@ -213,11 +258,12 @@ class IPythonInterface(ExpertInterface):
         )
         return lines
 
-    def _hint_line(self) -> str:
-        """A single standing pointer to the fuller guidance behind ``%help``."""
-        return self.palette.hint(
-            f"Type %{HELP_MAGIC} for how to answer this case."
-        )
+    def _hint_line(self, context: CaseContext) -> str:
+        """A single standing pointer to the fuller guidance behind ``%help`` (and ``%aid``)."""
+        magics = f"%{HELP_MAGIC}"
+        if context.aids:
+            magics += f" / %{AID_MAGIC}"
+        return self.palette.hint(f"Type {magics} for help with this case.")
 
     def _format_errors(self, errors: Dict[str, str]) -> str:
         """:return: A red, one-line-per-error block (empty mapping -> empty string)."""
@@ -235,6 +281,16 @@ class IPythonInterface(ExpertInterface):
             return None
         return render_rule_tree(trace, use_color=self.use_color)
 
+    def _aid_text(self, context: CaseContext) -> Optional[str]:
+        """:return: The combined ``present()`` output of every aid, or ``None`` if none speak.
+
+        Called once per question (memoized in :meth:`_build_namespace`) so a heavy aid does not
+        re-run on each re-prompt cycle.
+        """
+        fragments = [aid.present(context) for aid in context.aids]
+        fragments = [fragment for fragment in fragments if fragment]
+        return "\n".join(fragments) if fragments else None
+
     def _help_text(self, context: CaseContext, requests: List[AnswerRequest]) -> str:
         """The how-to-answer guidance printed by ``%help`` — plain prose, one accent colour."""
         p = self.palette
@@ -249,6 +305,8 @@ class IPythonInterface(ExpertInterface):
             f"  Submit with {p.code('Ctrl-D')}; cancel with {p.code(f'{EXIT_NAME}()')}."
         )
         lines.append(f"  Show the rule tree with {p.code(f'%{SHOW_TREE_MAGIC}')}.")
+        if context.aids:
+            lines.append(f"  Show the task aid with {p.code(f'%{AID_MAGIC}')}.")
         lines.append(f"  Show this help again with {p.code(f'%{HELP_MAGIC}')}.")
         return "\n".join(lines)
 
@@ -258,6 +316,14 @@ class IPythonInterface(ExpertInterface):
         namespace = super()._build_namespace(context, requests)
         namespace[_TREE_RENDER_KEY] = lambda: self._render_tree(context)
         namespace[_HELP_TEXT_KEY] = lambda: self._help_text(context, requests)
+        # Run each aid's present() once for this question; reuse the result in the header and
+        # the %aid magic so a heavy aid does not re-run on every re-prompt cycle.
+        self._aid_cache = self._aid_text(context)
+        if context.aids:
+            namespace[_AID_TEXT_KEY] = lambda: self._aid_cache
+        if context.conclusion_domain is not None:
+            for name, value in context.conclusion_domain.namespace_bindings().items():
+                namespace.setdefault(name, value)
         return namespace
 
     # ------------------------------------------------------------------- shell
@@ -301,8 +367,11 @@ class IPythonInterface(ExpertInterface):
         shell.confirm_exit = False
         shell._force_exit = False
 
-        self._register_namespace_magic(shell, namespace, SHOW_TREE_MAGIC, _TREE_RENDER_KEY)
+        self._register_namespace_magic(
+            shell, namespace, SHOW_TREE_MAGIC, _TREE_RENDER_KEY
+        )
         self._register_namespace_magic(shell, namespace, HELP_MAGIC, _HELP_TEXT_KEY)
+        self._register_namespace_magic(shell, namespace, AID_MAGIC, _AID_TEXT_KEY)
 
         def _cancel() -> None:
             shell._force_exit = True
@@ -326,6 +395,10 @@ class IPythonInterface(ExpertInterface):
 
         def magic(line: str) -> None:
             text = render()
-            print(text if text else f"{Fore.LIGHTBLACK_EX}(nothing to show){Style.RESET_ALL}")
+            print(
+                text
+                if text
+                else f"{Fore.LIGHTBLACK_EX}(nothing to show){Style.RESET_ALL}"
+            )
 
         shell.register_magic_function(magic, magic_kind="line", magic_name=magic_name)
