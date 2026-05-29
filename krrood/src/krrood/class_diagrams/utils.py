@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import inspect
 import sys
+import types
+import typing
 from dataclasses import dataclass
 from enum import Enum
 from functools import lru_cache
@@ -34,17 +36,26 @@ def classes_of_module(module) -> List[Type]:
 
 
 def behaves_like_a_built_in_class(
-        clazz: Type,
+    clazz: Type,
 ) -> bool:
     return (
-            is_builtin_class(clazz)
-            or clazz == UUID
-            or (inspect.isclass(clazz) and issubclass(clazz, Enum))
+        is_builtin_class(clazz)
+        or clazz == UUID
+        or (inspect.isclass(clazz) and issubclass(clazz, Enum))
     )
 
 
 def is_builtin_class(clazz: Type) -> bool:
     return clazz.__module__ == "builtins"
+
+
+def is_union_annotation(annotation: Any) -> bool:
+    """
+    :param annotation: A type annotation to inspect.
+    :return: Whether ``annotation`` is a ``typing.Union[...]`` or a ``X | Y`` union.
+    """
+    origin = get_origin(annotation)
+    return origin is typing.Union or origin is getattr(types, "UnionType", None)
 
 
 def is_external_module(module) -> bool:
@@ -177,7 +188,7 @@ class TypeHintResolutionResult:
 
 
 def get_and_resolve_generic_type_hints_of_object_using_substitutions(
-        object_: Any, substitution: Dict[TypeVar, Type]
+    object_: Any, substitution: Dict[TypeVar, Type]
 ) -> Dict[str, TypeHintResolutionResult]:
     """
     Resolve generic type hints of an object using a substitution dictionary.
@@ -191,8 +202,8 @@ def get_and_resolve_generic_type_hints_of_object_using_substitutions(
 
 
 def resolve_type(
-        type_to_resolve: Any,
-        substitution: Dict[TypeVar, Any],
+    type_to_resolve: Any,
+    substitution: Dict[TypeVar, Any],
 ) -> TypeHintResolutionResult:
     """
     Resolve type variables in a type.
@@ -222,14 +233,15 @@ def resolve_type(
                 new_params.append(param)
         subscript_param = new_params[0] if len(new_params) == 1 else tuple(new_params)
         return TypeHintResolutionResult(
-            type_to_resolve[subscript_param], resolved, type_to_resolve)
+            type_to_resolve[subscript_param], resolved, type_to_resolve
+        )
 
     return TypeHintResolutionResult(type_to_resolve, False, type_to_resolve)
 
 
 @lru_cache
 def get_type_hints_of_object(
-        object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
+    object_: Any, namespace: Tuple[Tuple[str, Any], ...] = ()
 ) -> Dict[str, Any]:
     """
     Get the type hints of an object. This is a workaround for the fact that get_type_hints() does not work with objects
@@ -263,7 +275,7 @@ def get_type_hints_of_object(
 
 
 def get_object_by_name_from_another_object_in_same_module(
-        name: str, object_: Any
+    name: str, object_: Any
 ) -> Any:
     """
     Get the object with the given name from another object in the same module.
@@ -290,5 +302,5 @@ def get_object_by_name_from_another_object_in_same_module(
         raise CouldNotResolveType(
             name,
             extra_information=f"Could not find {name} in {source_path}, could be a deprecated import statement or "
-                              f"a type defined in a module that is not imported in the source file.",
+            f"a type defined in a module that is not imported in the source file.",
         )

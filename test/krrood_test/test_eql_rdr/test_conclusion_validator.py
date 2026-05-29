@@ -102,6 +102,11 @@ class TestConclusionValidatorBool(unittest.TestCase):
         validate = make_conclusion_validator(self.domain, allow_unset=False)
         self.assertIsNotNone(validate("yes"))
 
+    def test_int_rejected_by_bool_domain(self):
+        # Regression: 1 == True in Python, so a naive membership check would accept int 1.
+        validate = make_conclusion_validator(self.domain, allow_unset=False)
+        self.assertIsNotNone(validate(1))
+
 
 class TestAnswerDefaultPlumbing(unittest.TestCase):
     def test_answer_request_default_is_none_by_default(self):

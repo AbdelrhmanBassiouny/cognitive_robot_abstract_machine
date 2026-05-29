@@ -21,7 +21,7 @@ part without a real terminal.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from typing_extensions import Any, Callable, Dict, List, Optional
 
@@ -133,6 +133,10 @@ class IPythonInterface(ExpertInterface):
     use_color: bool = True
     """Whether the header, framing and magics emit ANSI colour."""
 
+    _aid_cache: Optional[str] = field(init=False, default=None)
+    """Memoized aid ``present()`` output for the current ``interact()`` call (set once per
+    question in :meth:`_build_namespace`, reused by the header and the ``%aid`` magic)."""
+
     @property
     def palette(self) -> Palette:
         """The styling used for every piece of on-screen text."""
@@ -147,9 +151,8 @@ class IPythonInterface(ExpertInterface):
         errors: Dict[str, str],
     ) -> str:
         parts: List[str] = ["", self._case_table(context), ""]
-        aid_text = getattr(self, "_aid_cache", None)
-        if aid_text:
-            parts.extend([aid_text, ""])
+        if self._aid_cache:
+            parts.extend([self._aid_cache, ""])
         parts.extend(self._framing_lines(context))
         parts.append(self._hint_line(context))
         if errors:
@@ -212,10 +215,11 @@ class IPythonInterface(ExpertInterface):
         return [p.label("Conclusion type: ") + p.code(domain.type_display)]
 
     def _current_conclusion_line(self, context: CaseContext, p: Palette) -> str:
+        """The current-conclusion line for the known-target path (green if it matches the
+        target, red otherwise). The no-target path is handled by :meth:`_labelling_lines`.
+        """
         value = repr(context.current_conclusion)
-        if not context.has_target:
-            styled = p.neutral(value)
-        elif context.current_conclusion == context.target_conclusion:
+        if context.current_conclusion == context.target_conclusion:
             styled = p.good(value)
         else:
             styled = p.wrong(value)
@@ -287,8 +291,7 @@ class IPythonInterface(ExpertInterface):
         Called once per question (memoized in :meth:`_build_namespace`) so a heavy aid does not
         re-run on each re-prompt cycle.
         """
-        fragments = [aid.present(context) for aid in context.aids]
-        fragments = [fragment for fragment in fragments if fragment]
+        fragments = [text for aid in context.aids if (text := aid.present(context))]
         return "\n".join(fragments) if fragments else None
 
     def _help_text(self, context: CaseContext, requests: List[AnswerRequest]) -> str:

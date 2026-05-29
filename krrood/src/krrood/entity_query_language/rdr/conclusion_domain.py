@@ -17,14 +17,12 @@ from __future__ import annotations
 
 import enum
 import inspect
-import types
-import typing
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict, Optional, Tuple, get_args, get_origin
+from typing_extensions import Any, Dict, Optional, Tuple, get_args
 
 from krrood.class_diagrams.exceptions import CouldNotResolveType
-from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annotation
 
 #: The runtime type of ``None``, used to detect ``Optional`` / ``... | None`` annotations.
 _NONE_TYPE = type(None)
@@ -53,8 +51,14 @@ class ConclusionDomain:
         return " or ".join(t.__name__ for t in self.expected_types)
 
     def contains(self, value: Any) -> bool:
-        """:return: Whether ``value`` is one of the enumerable members (identity-aware)."""
-        return any(value is member or value == member for member in self.members)
+        """:return: Whether ``value`` is one of the enumerable members.
+
+        Type-aware so that an ``int`` is not accepted for a ``bool`` domain (``1 == True``).
+        """
+        return any(
+            type(value) is type(member) and (value is member or value == member)
+            for member in self.members
+        )
 
     def display(self) -> str:
         """:return: The allowable values as a prose list, or the type label when not enumerable."""
@@ -118,7 +122,7 @@ def _split_optional(annotation: Any) -> Tuple[bool, Tuple[type, ...]]:
     """:return: ``(allows_none, non_none_types)`` for a possibly-``Optional`` annotation."""
     if annotation is None:
         return False, ()
-    if _is_union(annotation):
+    if is_union_annotation(annotation):
         args = get_args(annotation)
         allows_none = _NONE_TYPE in args
         non_none = tuple(
@@ -130,12 +134,6 @@ def _split_optional(annotation: Any) -> Tuple[bool, Tuple[type, ...]]:
     if isinstance(annotation, type):
         return False, (annotation,)
     return False, ()
-
-
-def _is_union(annotation: Any) -> bool:
-    """:return: Whether ``annotation`` is a ``typing.Union`` or ``X | Y`` union."""
-    origin = get_origin(annotation)
-    return origin is typing.Union or origin is getattr(types, "UnionType", None)
 
 
 def _enumerate_members(expected_types: Tuple[type, ...]) -> Tuple[Any, ...]:

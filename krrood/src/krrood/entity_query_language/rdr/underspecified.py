@@ -17,8 +17,6 @@ an unbounded iterable (``list``/``set``/...) is rejected here and left to a futu
 
 from __future__ import annotations
 
-import types
-import typing
 from dataclasses import dataclass
 from functools import cached_property
 
@@ -31,7 +29,7 @@ from typing_extensions import (
     get_origin,
 )
 
-from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annotation
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import entity
 from krrood.entity_query_language.query.match import AttributeMatch, Match
@@ -79,14 +77,13 @@ def is_ellipsis_target(attribute_match: AttributeMatch) -> bool:
 
 def _is_unbounded_iterable(annotation: Any) -> bool:
     """:return: Whether ``annotation`` denotes a collection type (``Optional`` unwrapped)."""
-    origin = get_origin(annotation)
-    if origin is typing.Union or origin is getattr(types, "UnionType", None):
+    if is_union_annotation(annotation):
         return any(
             _is_unbounded_iterable(arg)
             for arg in get_args(annotation)
             if arg is not type(None)
         )
-    return origin in _UNBOUNDED_ITERABLE_ORIGINS
+    return get_origin(annotation) in _UNBOUNDED_ITERABLE_ORIGINS
 
 
 @dataclass

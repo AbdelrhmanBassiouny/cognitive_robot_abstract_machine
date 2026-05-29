@@ -227,10 +227,10 @@ class FunctionInterface(ExpertInterface):
     """Returns ``{name: value}`` for the requested answers. ``None`` values re-prompt
     (which, for a deterministic function, would loop) — return :func:`abort` semantics by
     raising :class:`ExpertAbort` instead."""
-
-    def __post_init__(self) -> None:
-        self._context: Optional[CaseContext] = None
-        self._requests: List[AnswerRequest] = []
+    _context: Optional[CaseContext] = field(init=False, default=None)
+    """The context of the in-flight :meth:`interact` call, threaded to :meth:`_run`."""
+    _requests: List[AnswerRequest] = field(init=False, default_factory=list)
+    """The requests of the in-flight :meth:`interact` call, threaded to :meth:`_run`."""
 
     def interact(
         self, context: CaseContext, requests: List[AnswerRequest]

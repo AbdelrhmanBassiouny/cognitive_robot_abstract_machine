@@ -101,13 +101,18 @@ class TestNoTargetSingleFitLabelsAndClassifies(unittest.TestCase):
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestAskForRuleCallCount(unittest.TestCase):
-    def test_answer_fn_invoked_twice_per_no_target_fit(self):
-        """ask_for_rule calls answer_fn exactly twice: once for conclusion, once for conditions."""
+    """One no-target fit, asserted from three angles: the answer_fn fires twice — first for
+    the conclusion, then (via ask_for_conditions) for the conditions."""
+
+    call_log: list
+
+    @classmethod
+    def setUpClass(cls):
         target_by_name = {a.name: t for a, t in zip(animals, targets)}
-        call_log = []
+        cls.call_log = []
 
         def tracking_answer(context, requests):
-            call_log.append([r.name for r in requests])
+            cls.call_log.append([r.name for r in requests])
             result = {
                 ANSWER_NAME: _full_feature_conditions(
                     context.case_variable, context.case_instance
@@ -118,56 +123,20 @@ class TestAskForRuleCallCount(unittest.TestCase):
             return result
 
         expert = Expert(interface=FunctionInterface(answer_fn=tracking_answer))
-        rdr = EQLSingleClassRDR(Animal, "species")
-        rdr.fit_case(first(Species.mammal), expert=expert)
+        EQLSingleClassRDR(Animal, "species").fit_case(
+            first(Species.mammal), expert=expert
+        )
 
-        self.assertEqual(len(call_log), 2)
+    def test_answer_fn_invoked_twice_per_no_target_fit(self):
+        self.assertEqual(len(self.call_log), 2)
 
     def test_first_call_has_only_conclusion_request(self):
-        """The first answer_fn invocation carries only the conclusion request."""
-        target_by_name = {a.name: t for a, t in zip(animals, targets)}
-        call_log = []
-
-        def tracking_answer(context, requests):
-            call_log.append([r.name for r in requests])
-            result = {
-                ANSWER_NAME: _full_feature_conditions(
-                    context.case_variable, context.case_instance
-                )
-            }
-            if any(r.name == CONCLUSION_NAME for r in requests):
-                result[CONCLUSION_NAME] = target_by_name[context.case_instance.name]
-            return result
-
-        expert = Expert(interface=FunctionInterface(answer_fn=tracking_answer))
-        rdr = EQLSingleClassRDR(Animal, "species")
-        rdr.fit_case(first(Species.mammal), expert=expert)
-
-        self.assertIn(CONCLUSION_NAME, call_log[0])
-        self.assertNotIn(ANSWER_NAME, call_log[0])
+        self.assertIn(CONCLUSION_NAME, self.call_log[0])
+        self.assertNotIn(ANSWER_NAME, self.call_log[0])
 
     def test_second_call_has_only_conditions_request(self):
-        """The second answer_fn invocation carries only the conditions request."""
-        target_by_name = {a.name: t for a, t in zip(animals, targets)}
-        call_log = []
-
-        def tracking_answer(context, requests):
-            call_log.append([r.name for r in requests])
-            result = {
-                ANSWER_NAME: _full_feature_conditions(
-                    context.case_variable, context.case_instance
-                )
-            }
-            if any(r.name == CONCLUSION_NAME for r in requests):
-                result[CONCLUSION_NAME] = target_by_name[context.case_instance.name]
-            return result
-
-        expert = Expert(interface=FunctionInterface(answer_fn=tracking_answer))
-        rdr = EQLSingleClassRDR(Animal, "species")
-        rdr.fit_case(first(Species.mammal), expert=expert)
-
-        self.assertIn(ANSWER_NAME, call_log[1])
-        self.assertNotIn(CONCLUSION_NAME, call_log[1])
+        self.assertIn(ANSWER_NAME, self.call_log[1])
+        self.assertNotIn(CONCLUSION_NAME, self.call_log[1])
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
