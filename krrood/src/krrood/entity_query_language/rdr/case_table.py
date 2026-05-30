@@ -42,8 +42,16 @@ _PAIR_BORDER = 7
 _FALLBACK_WIDTH = 100
 
 
-def _case_items(case: Any) -> List[Tuple[str, Any]]:
-    """:return: ``(public_attribute_name, value)`` pairs describing the case."""
+def case_items(case: Any) -> List[Tuple[str, Any]]:
+    """Return ``(public_attribute_name, value)`` pairs describing a case object.
+
+    Handles dataclasses (via :func:`dataclasses.fields`) and plain objects (via
+    ``__dict__``), filtering out any name that starts with ``_``.  Falls back to
+    a single ``("value", case)`` pair when neither introspection path applies.
+
+    :param case: The case object to inspect.
+    :return: An ordered list of ``(name, value)`` tuples for every public field.
+    """
     if dataclasses.is_dataclass(case) and not isinstance(case, type):
         return [
             (f.name, getattr(case, f.name))
@@ -92,7 +100,7 @@ class CaseTableRenderer:
             available width. Falls back to ``repr(case)`` when the case has no inspectable
             attributes.
         """
-        items = [(name, _format_value(value)) for name, value in _case_items(case)]
+        items = [(name, _format_value(value)) for name, value in case_items(case)]
         if not items:
             return repr(case)
         width = self.max_width or _terminal_width()

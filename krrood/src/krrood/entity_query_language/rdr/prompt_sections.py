@@ -17,6 +17,10 @@ from typing_extensions import TYPE_CHECKING, Callable, List
 
 from krrood.entity_query_language.rdr.expert import ANSWER_NAME, CONCLUSION_NAME
 from krrood.entity_query_language.rdr.interface import AnswerRequest, CaseContext
+from krrood.entity_query_language.rdr.prompt_examples import (
+    build_conclusion_example,
+    build_conditions_example,
+)
 from krrood.entity_query_language.rdr.rule_tree_view import format_condition
 
 if TYPE_CHECKING:
@@ -44,11 +48,6 @@ class RenderContext:
     case: CaseContext
     requests: List[AnswerRequest]
     palette: Palette
-
-    @property
-    def p(self) -> Palette:
-        """:return: The palette (short alias for use in section producers)."""
-        return self.palette
 
     @property
     def has_target(self) -> bool:
@@ -92,27 +91,27 @@ class PromptSection:
 
 def _ground_truth_conclusion(ctx: RenderContext) -> List[str]:
     return [
-        ctx.p.label("Ground-truth conclusion: ")
-        + ctx.p.good(repr(ctx.case.target_conclusion))
+        ctx.palette.label("Ground-truth conclusion: ")
+        + ctx.palette.good(repr(ctx.case.target_conclusion))
     ]
 
 
 def _current_conclusion_vs_target(ctx: RenderContext) -> List[str]:
     value = repr(ctx.case.current_conclusion)
     styled = (
-        ctx.p.good(value)
+        ctx.palette.good(value)
         if ctx.case.current_conclusion == ctx.case.target_conclusion
-        else ctx.p.wrong(value)
+        else ctx.palette.wrong(value)
     )
-    return [ctx.p.label("Current conclusion: ") + styled]
+    return [ctx.palette.label("Current conclusion: ") + styled]
 
 
 def _no_rule_fired_known_target(ctx: RenderContext) -> List[str]:
     return [
-        ctx.p.label("No rule fired for this case."),
-        ctx.p.label("Write a ")
-        + ctx.p.keyword("condition")
-        + ctx.p.label(" that fires for it."),
+        ctx.palette.label("No rule fired for this case."),
+        ctx.palette.label("Write a ")
+        + ctx.palette.keyword("condition")
+        + ctx.palette.label(" that fires for it."),
     ]
 
 
@@ -122,37 +121,39 @@ def _conflict_resolution(ctx: RenderContext) -> List[str]:
     lines: List[str] = []
     if ctx.case.trace is not None:
         lines.append(
-            ctx.p.label("The condition ")
-            + ctx.p.code(format_condition(ctx.case.trace.firing_anchor))
-            + ctx.p.label(" concluded ")
-            + ctx.p.strong_wrong(current)
-            + ctx.p.label(" for this case while it should be ")
-            + ctx.p.good(target)
-            + ctx.p.label(".")
+            ctx.palette.label("The condition ")
+            + ctx.palette.code(format_condition(ctx.case.trace.firing_anchor))
+            + ctx.palette.label(" concluded ")
+            + ctx.palette.strong_wrong(current)
+            + ctx.palette.label(" for this case while it should be ")
+            + ctx.palette.good(target)
+            + ctx.palette.label(".")
         )
     else:
         lines.append(
-            ctx.p.label("The RDR concluded ")
-            + ctx.p.strong_wrong(current)
-            + ctx.p.label(" while it should be ")
-            + ctx.p.good(target)
-            + ctx.p.label(".")
+            ctx.palette.label("The RDR concluded ")
+            + ctx.palette.strong_wrong(current)
+            + ctx.palette.label(" while it should be ")
+            + ctx.palette.good(target)
+            + ctx.palette.label(".")
         )
     lines.append(
-        ctx.p.label("Provide a condition that helps us detect this exceptional case")
-        + ctx.p.label(" (and similar ones) such that we conclude ")
-        + ctx.p.good(target)
-        + ctx.p.label(" instead.")
+        ctx.palette.label(
+            "Provide a condition that helps us detect this exceptional case"
+        )
+        + ctx.palette.label(" (and similar ones) such that we conclude ")
+        + ctx.palette.good(target)
+        + ctx.palette.label(" instead.")
     )
     return lines
 
 
 def _labelling_has_current(ctx: RenderContext) -> List[str]:
     return [
-        ctx.p.label("The RDR currently concludes ")
-        + ctx.p.neutral(repr(ctx.case.current_conclusion))
-        + ctx.p.label(" — is that correct?")
-        + ctx.p.label(
+        ctx.palette.label("The RDR currently concludes ")
+        + ctx.palette.neutral(repr(ctx.case.current_conclusion))
+        + ctx.palette.label(" — is that correct?")
+        + ctx.palette.label(
             " If so, skip (press CTRL+D), else provide the correct conclusion."
         )
     ]
@@ -160,41 +161,40 @@ def _labelling_has_current(ctx: RenderContext) -> List[str]:
 
 def _labelling_fired_anchor(ctx: RenderContext) -> List[str]:
     return [
-        ctx.p.label("It fired on ")
-        + ctx.p.code(format_condition(ctx.case.trace.firing_anchor))
-        + ctx.p.label(".")
+        ctx.palette.label("It fired on ")
+        + ctx.palette.code(format_condition(ctx.case.trace.firing_anchor))
+        + ctx.palette.label(".")
     ]
 
 
 def _labelling_no_rule(ctx: RenderContext) -> List[str]:
-    return [ctx.p.label("No rule fired — what should this case conclude?")]
+    return [ctx.palette.label("No rule fired — what should this case conclude?")]
 
 
 def _allowed_values(ctx: RenderContext) -> List[str]:
     domain = ctx.case.conclusion_domain
     if domain.is_enumerable:
-        return [ctx.p.label("Choose one of: ") + ctx.p.code(domain.display())]
-    return [ctx.p.label("Conclusion type: ") + ctx.p.code(domain.type_display)]
+        return [
+            ctx.palette.label("Choose one of: ") + ctx.palette.code(domain.display())
+        ]
+    return [
+        ctx.palette.label("Conclusion type: ") + ctx.palette.code(domain.type_display)
+    ]
 
 
 def _contextual_example(ctx: RenderContext) -> List[str]:
-    from krrood.entity_query_language.rdr.prompt_examples import (
-        build_conclusion_example,
-        build_conditions_example,
-    )
-
     if ctx.is_conclusion_request:
         example = build_conclusion_example(ctx)
     else:
         example = build_conditions_example(ctx)
-    return [ctx.p.hint(example)]
+    return [ctx.palette.hint(example)]
 
 
 def _help_hint(ctx: RenderContext) -> List[str]:
     magics = f"%{HELP_MAGIC}"
     if ctx.case.aids:
         magics += f" / %{AID_MAGIC}"
-    return [ctx.p.hint(f"Type {magics} for help with this case.")]
+    return [ctx.palette.hint(f"Type {magics} for help with this case.")]
 
 
 # ---------------------------------------------------------------------------

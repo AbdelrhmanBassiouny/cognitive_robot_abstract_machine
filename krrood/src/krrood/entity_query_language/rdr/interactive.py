@@ -129,7 +129,14 @@ class Palette:
 
 @dataclass
 class IPythonInterface(ExpertInterface):
-    """An interface based on an embedded IPython shell, that mediates the interaction with the expert"""
+    """An :class:`~krrood.entity_query_language.rdr.interface.ExpertInterface` backed by an
+    embedded IPython shell.
+
+    Assembles a namespace from the case definition scope, renders a colour-coded header
+    via :data:`~krrood.entity_query_language.rdr.prompt_sections.PROMPT_SECTIONS`, and
+    drives the validate-re-prompt loop.  The actual shell launch is injectable via
+    :attr:`shell_runner` so tests can run without a real terminal.
+    """
 
     shell_runner: Optional[ShellRunner] = None
     """Injectable launcher; defaults to a real embedded IPython shell. Tests pass a stub."""
@@ -209,7 +216,7 @@ class IPythonInterface(ExpertInterface):
             f"  Build your answer over {p.code(CASE_VARIABLE_NAME)} and assign it:",
         ]
         lines.extend(f"      {p.code(request.example)}" for request in requests)
-        lines.append(f"  Or use the shorthand magic (assigns and submits in one step):")
+        lines.append("  Or use the shorthand magic (assigns and submits in one step):")
         for request in requests:
             magic = (
                 CONCLUSION_MAGIC

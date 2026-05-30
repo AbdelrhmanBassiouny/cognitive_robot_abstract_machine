@@ -18,6 +18,8 @@ Every test verifies exactly one guarantee and is named to describe it precisely.
 
 from __future__ import annotations
 
+import io
+import sys
 import unittest
 from dataclasses import dataclass
 
@@ -792,6 +794,26 @@ class TestHelpHintLines(unittest.TestCase):
         self.assertIn("%help", _lines_of("help_hint", rc))
 
 
+class TestContextualExampleLines(unittest.TestCase):
+    """Section 'contextual_example' dispatches to %conclusion or %conditions depending on the request."""
+
+    def test_lines_for_conclusion_request_contain_conclusion_magic(self):
+        """lines contain '%conclusion' when the request is a conclusion (no-target) request."""
+        case = _make_animal()
+        rdr = _zoo_rdr()
+        ctx = _no_target_no_current_ctx(case, rdr)
+        rc = _make_render_context(ctx, [_conclusion_req(rdr)])
+        self.assertIn("%conclusion", _lines_of("contextual_example", rc))
+
+    def test_lines_for_conditions_request_contain_conditions_magic(self):
+        """lines contain '%conditions' when the request is a conditions (has-target) request."""
+        case = _make_animal()
+        rdr = _zoo_rdr()
+        ctx = _with_target_no_current_ctx(case, rdr)
+        rc = _make_render_context(ctx, [_conditions_req(rdr)])
+        self.assertIn("%conditions", _lines_of("contextual_example", rc))
+
+
 # ---------------------------------------------------------------------------
 # Group D — prompt_examples.py: pick_case_attribute, build_conclusion_example,
 #           build_conditions_example
@@ -1027,9 +1049,6 @@ class TestAssignExitMagic(unittest.TestCase):
         def validate():
             return {"conclusion": "bad value"}
 
-        import io
-        import sys
-
         magic = _make_assign_exit_magic(
             target_name="conclusion",
             shell=shell,
@@ -1053,8 +1072,6 @@ class TestAssignExitMagic(unittest.TestCase):
         def validate():
             return {"conclusion": "bad value"}
 
-        import io, sys
-
         magic = _make_assign_exit_magic(
             target_name="conclusion",
             shell=shell,
@@ -1062,11 +1079,12 @@ class TestAssignExitMagic(unittest.TestCase):
             validate=validate,
             palette=_make_palette(),
         )
+        old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         try:
             magic("99")
         finally:
-            sys.stdout = sys.__stdout__
+            sys.stdout = old_stdout
         self.assertFalse(shell._exit_called)
 
     def test_unevaluatable_expression_does_not_exit(self):
@@ -1076,8 +1094,6 @@ class TestAssignExitMagic(unittest.TestCase):
         def validate():
             return {}
 
-        import io, sys
-
         magic = _make_assign_exit_magic(
             target_name="conclusion",
             shell=shell,
@@ -1085,13 +1101,14 @@ class TestAssignExitMagic(unittest.TestCase):
             validate=validate,
             palette=_make_palette(),
         )
+        old_stdout = sys.stdout
         sys.stdout = io.StringIO()
         try:
             magic("this is not valid python !!!!")
         except Exception:
             pass
         finally:
-            sys.stdout = sys.__stdout__
+            sys.stdout = old_stdout
         self.assertFalse(shell._force_exit)
 
     def test_magic_can_reference_existing_namespace_names(self):

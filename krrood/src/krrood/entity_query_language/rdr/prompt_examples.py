@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from typing_extensions import TYPE_CHECKING, Any, Optional
 
-from krrood.entity_query_language.rdr.case_table import _case_items
+from krrood.entity_query_language.rdr.case_table import case_items
 from krrood.entity_query_language.rdr.interface import CASE_VARIABLE_NAME
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ def pick_case_attribute(case_instance: Any) -> Optional[AttributeRef]:
     :param case_instance: The concrete case object to inspect.
     :return: An :class:`AttributeRef`, or ``None`` if no representative field exists.
     """
-    items = _case_items(case_instance)
+    items = case_items(case_instance)
     # Pass 1 — prefer nested object with a .name attribute.
     for field_name, value in items:
         if value is not None and hasattr(value, "name") and not callable(value.name):
