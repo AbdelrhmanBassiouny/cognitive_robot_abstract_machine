@@ -12,18 +12,18 @@ from krrood.entity_query_language.factories import (
 )
 from test.krrood_test.test_eql_rdr.test_correct_drawer import RDRTestCorrectDrawer
 
-testCorrectDrawer = variable(RDRTestCorrectDrawer, domain=[])
-query = entity(testCorrectDrawer).where(testCorrectDrawer.handle.name == 'left_handle')
+rDRTestCorrectDrawer = variable(RDRTestCorrectDrawer, domain=[])
+query = entity(rDRTestCorrectDrawer).where(rDRTestCorrectDrawer.handle.name == 'left_handle')
 with query:
-    add(testCorrectDrawer.correct, True)
-    with alternative(testCorrectDrawer.handle.name != 'left_handle'):
-        add(testCorrectDrawer.correct, False)
-    with refinement(testCorrectDrawer.container.name != 'bottom_drawer'):
-        add(testCorrectDrawer.correct, False)
+    add(rDRTestCorrectDrawer.correct, True)
+    with alternative(rDRTestCorrectDrawer.handle.name != 'left_handle'):
+        add(rDRTestCorrectDrawer.correct, False)
+    with refinement(rDRTestCorrectDrawer.container.name == 'top_drawer'):
+        add(rDRTestCorrectDrawer.correct, False)
 query.build()
 
 # Stable handles for loading.
 RDR_CASE_TYPE = RDRTestCorrectDrawer
 RDR_CONCLUSION_ATTRIBUTE = "correct"
-RDR_CASE_VARIABLE = testCorrectDrawer
+RDR_CASE_VARIABLE = rDRTestCorrectDrawer
 RDR_QUERY = query
