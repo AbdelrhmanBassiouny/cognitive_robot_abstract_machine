@@ -6,6 +6,7 @@ from the original function's signature) followed by the EQL rule tree.  Both sec
 are regenerated together on every save so the file is always a self-contained,
 importable Python module.
 """
+
 from __future__ import annotations
 
 import inspect
@@ -19,6 +20,10 @@ from typing_extensions import Callable, Type
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.function_case import FunctionCase
     from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+
+#: Directory name under the function's module directory where RDR model
+#: files are stored by default.
+_RDR_MODELS_DIR: str = "_rdr_models"
 
 
 @dataclass
@@ -45,7 +50,7 @@ class RDRFileStore:
         """Return ``True`` if the model file already exists on disk."""
         return Path(self.path).is_file()
 
-    def load_case_type(self) -> "Type[FunctionCase]":
+    def load_case_type(self) -> Type[FunctionCase]:
         """Import the :class:`FunctionCase` subclass from the existing model file.
 
         The file must have been written by :meth:`save` first.  The class is
@@ -55,7 +60,9 @@ class RDRFileStore:
         :returns: The ``FunctionCase`` subclass defined in the file.
         :raises FileNotFoundError: If the model file does not exist.
         """
-        from krrood.entity_query_language.rdr.serialization import _load_module_from_path
+        from krrood.entity_query_language.rdr.serialization import (
+            _load_module_from_path,
+        )
 
         if not Path(self.path).is_file():
             raise FileNotFoundError(
@@ -65,7 +72,7 @@ class RDRFileStore:
         module = _load_module_from_path(self.path)
         return module.RDR_CASE_TYPE
 
-    def save(self, rdr: "EQLSingleClassRDR") -> None:
+    def save(self, rdr: EQLSingleClassRDR) -> None:
         """Write the model file (class header + rule tree) to :attr:`path`.
 
         Creates the parent directory if it does not exist.
@@ -89,4 +96,4 @@ class RDRFileStore:
         if Path(filename).is_absolute():
             return filename
         module_dir = Path(inspect.getfile(func)).parent
-        return str(module_dir / "_rdr_models" / filename)
+        return str(module_dir / _RDR_MODELS_DIR / filename)

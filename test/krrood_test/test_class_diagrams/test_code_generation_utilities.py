@@ -1,6 +1,6 @@
 """
 Phase 1 tests: code-generation helpers in
-``krrood.class_diagrams.code_generation_utilities``.
+``krrood.code_generation``.
 
 Each test class / function verifies exactly one behavioural guarantee of a
 public symbol.  All tests are expected to fail at import time

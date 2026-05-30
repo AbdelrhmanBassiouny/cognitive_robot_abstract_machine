@@ -8,7 +8,6 @@ from typing import List, Optional, Union
 import pytest
 
 from krrood.code_generation.utils import (
-    value_to_source,
     str_to_snake_case,
     stringify_type_hint,
     to_camel_case,

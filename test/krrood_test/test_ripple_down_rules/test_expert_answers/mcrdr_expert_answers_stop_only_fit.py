@@ -1,3 +1,4 @@
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -19,6 +20,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -40,6 +42,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -61,6 +64,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -82,6 +86,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -103,6 +108,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -124,6 +130,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -145,6 +152,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -166,6 +174,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -187,6 +196,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -208,6 +218,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -229,6 +240,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -250,6 +262,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -271,6 +284,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -292,6 +306,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -313,6 +328,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -334,6 +350,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case
@@ -355,6 +372,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
 '===New Answer==='
 
 
+from types import NoneType
 from typing_extensions import Any, Callable, List, Optional, Tuple, Type
 from test.krrood_test.test_ripple_down_rules.datasets import Habitat, Species, load_zoo_cases
 from krrood.ripple_down_rules.datastructures.case import Case

@@ -25,6 +25,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    ForwardRef,
     Iterable,
     List,
     Optional,
@@ -32,6 +33,8 @@ from typing import (
     Tuple,
     Type,
     Union,
+    get_args,
+    get_origin,
 )
 
 import typing_extensions
@@ -43,6 +46,13 @@ from krrood.exceptions import (
     NoSourceDataToParseImportsFrom,
     SubprocessExecutionError,
 )
+from krrood.class_diagrams.utils import get_type_hints_of_object
+from krrood.code_generation.generator import CodeGenerator
+from krrood.code_generation.source_extraction_utils import (
+    extract_function_or_class_file,
+    extract_function_or_class_from_source,
+    extract_imports_from,
+)
 from krrood.utils import (
     get_function_import_data,
     get_import_path_from_path,
@@ -50,11 +60,16 @@ from krrood.utils import (
     get_method_file_name,
     get_method_name,
     get_path_starting_from_latest_encounter_of,
+    get_relative_import,
     is_builtin_type,
     is_typing_type,
 )
 
 logger = logging.getLogger(__name__)
+
+_generator = CodeGenerator(
+    template_dir=os.path.join(os.path.dirname(__file__), "templates")
+)
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -163,89 +178,6 @@ def validate_annotations(func: Callable) -> None:
 # ---------------------------------------------------------------------------
 
 
-def extract_imports_from(
-    module: Optional[types.ModuleType] = None,
-    file_path: Optional[str] = None,
-    source: Optional[str] = None,
-    ast_tree: Optional[ast.AST] = None,
-    exclude_libraries: Optional[List[str]] = None,
-    convert_relative_to_absolute: bool = False,
-) -> List[str]:
-    """Extract import statements from a module, source, file path, or AST.
-
-    :param module: The module to extract imports from.
-    :param file_path: The file path to extract imports from.
-    :param source: The source code to extract imports from.
-    :param ast_tree: The ast tree to extract imports from.
-    :param exclude_libraries: A list of libraries to exclude from the imports.
-    :param convert_relative_to_absolute: Whether to convert relative imports to absolute.
-    :returns: A sorted list of import-line strings.
-    """
-    exclude_libraries = exclude_libraries or []
-    if module is None and source is None and file_path is None and ast_tree is None:
-        raise NoSourceDataToParseImportsFrom(
-            module=module, file_path=file_path, ast_tree=ast_tree
-        )
-    current_module_name = None
-    if module:
-        source = inspect.getsource(module)
-        current_module_name = module.__name__
-    elif file_path:
-        with open(file_path, "r") as f:
-            source = f.read()
-        current_module_name = os.path.splitext(os.path.basename(file_path))[0]
-    elif convert_relative_to_absolute:
-        raise ModuleNotFoundForConvertingImportsToAbsolute(
-            path=file_path, source_code=source
-        )
-
-    tree = ast_tree or ast.parse(source)
-
-    import_modules: Set[str] = set()
-    from_imports: Dict[str, Set[str]] = defaultdict(set)
-
-    for node in ast.walk(tree):
-        # import x
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                name = alias.name
-                if name in exclude_libraries:
-                    continue
-                if alias.asname:
-                    import_modules.add(f"{name} as {alias.asname}")
-                else:
-                    import_modules.add(name)
-
-        # from x import y
-        elif isinstance(node, ast.ImportFrom):
-            prefix = "." * node.level
-            module_name = node.module or ""
-            full_module = f"{prefix}{module_name}"
-
-            if convert_relative_to_absolute and node.level > 0:
-                full_module = resolve_name(full_module, current_module_name)
-
-            if node.module and node.module in exclude_libraries:
-                continue
-
-            for alias in node.names:
-                if alias.asname:
-                    from_imports[full_module].add(f"{alias.name} as {alias.asname}")
-                else:
-                    from_imports[full_module].add(alias.name)
-
-    result: Set[str] = set()
-
-    for mod in sorted(import_modules):
-        result.add(f"import {mod}")
-
-    for mod, names in sorted(from_imports.items()):
-        joined = ", ".join(sorted(names))
-        result.add(f"from {mod} import {joined}")
-
-    return sorted(result)
-
-
 def generate_relative_import(
     from_module: str, target_module: str, symbol: Optional[str] = None
 ) -> str:
@@ -345,8 +277,6 @@ def get_imports_from_types(
     :param excluded_modules: A list of modules to exclude from the imports.
     :return: A list of formatted import lines.
     """
-    from krrood.utils import get_relative_import
-
     module_to_types = get_type_names_per_module_from_types(
         type_objects, excluded_names, excluded_modules
     )
@@ -391,21 +321,19 @@ _ORIGIN_TYPE_TO_HINT: Dict[type, type] = {
 }
 
 
-def _extract_types(tp: Any, seen: Optional[Set[type]] = None) -> Set[type]:
+def _extract_types(type_hint: Any, seen: Optional[Set[type]] = None) -> Set[type]:
     """Recursively extract all base types from a type hint."""
-    from typing import ForwardRef, get_args, get_origin
-
     if seen is None:
         seen = set()
 
-    if tp in seen or isinstance(tp, str):
+    if type_hint in seen or isinstance(type_hint, str):
         return seen
 
-    if isinstance(tp, ForwardRef):
+    if isinstance(type_hint, ForwardRef):
         return seen
 
-    origin = get_origin(tp)
-    args = get_args(tp)
+    origin = get_origin(type_hint)
+    args = get_args(type_hint)
 
     if origin:
         if origin in _ORIGIN_TYPE_TO_HINT:
@@ -414,13 +342,13 @@ def _extract_types(tp: Any, seen: Optional[Set[type]] = None) -> Set[type]:
             seen.add(origin)
         for arg in args:
             _extract_types(arg, seen)
-    elif isinstance(tp, type):
-        seen.add(tp)
+    elif isinstance(type_hint, type):
+        seen.add(type_hint)
 
     return seen
 
 
-def stringify_type_hint(tp: Any) -> str:
+def stringify_type_hint(type_hint: Any) -> str:
     """Recursively convert a type hint to its string representation.
 
     Handles :class:`~typing.ForwardRef`, generic aliases (e.g. ``List[int]``),
@@ -428,31 +356,29 @@ def stringify_type_hint(tp: Any) -> str:
     for converting type hints to source-code strings — use it everywhere
     instead of manual ``t.__name__`` concatenation.
 
-    :param tp: The type hint to convert.
+    :param type_hint: The type hint to convert.
     :returns: A Python source-code string for the type.
     """
-    from typing import ForwardRef, get_args, get_origin
+    if isinstance(type_hint, str):
+        return type_hint
 
-    if isinstance(tp, str):
-        return tp
+    if isinstance(type_hint, ForwardRef):
+        return type_hint.__forward_arg__
 
-    if isinstance(tp, ForwardRef):
-        return tp.__forward_arg__
-
-    origin = get_origin(tp)
-    args = get_args(tp)
+    origin = get_origin(type_hint)
+    args = get_args(type_hint)
 
     if origin is not None:
         origin_str = getattr(origin, "__name__", str(origin)).capitalize()
         args_str = ", ".join(stringify_type_hint(arg) for arg in args)
         return f"{origin_str}[{args_str}]"
 
-    if isinstance(tp, type):
-        if tp.__module__ == "builtins":
-            return tp.__name__
-        return f"{tp.__qualname__}"
+    if isinstance(type_hint, type):
+        if type_hint.__module__ == "builtins":
+            return type_hint.__name__
+        return f"{type_hint.__qualname__}"
 
-    return str(tp)
+    return str(type_hint)
 
 
 # Backward-compatible alias for the old name
@@ -463,25 +389,17 @@ def value_to_source(value: object) -> str:
     """Convert a Python value to its source-code representation.
 
     Handles: ``None``, booleans, integers, floats, strings, enum members,
-    and type objects.  Falls back to ``repr(value)`` for unrecognised types.
+    and type objects.  Falls back to ``repr(value)`` for unrecognized types.
 
     :param value: The Python value to convert.
     :returns: A source-code string.
     """
     if value is None:
         return "None"
-    if isinstance(value, bool):
-        return "True" if value else "False"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        return repr(value)
-    if isinstance(value, str):
-        return repr(value)
     if isinstance(value, enum.Enum):
         return f"{type(value).__name__}.{value.name}"
-    if isinstance(value, type):
-        return value.__name__
+    if isinstance(value, type) or is_typing_type(value):
+        return stringify_type_hint(value)
     return repr(value)
 
 
@@ -497,8 +415,6 @@ def get_types_to_import_from_type_hints(hints: List[Type]) -> Set[Type]:
 
     to_import: Set[Type] = set()
     for tp in seen_types:
-        from typing import ForwardRef
-
         if isinstance(tp, ForwardRef) or isinstance(tp, str):
             continue
         if not is_builtin_type(tp):
@@ -513,7 +429,7 @@ def get_types_to_import_from_func_type_hints(func: Callable) -> Set[Type]:
     :param func: The function to extract type hints from.
     :returns: A set of types that need to be imported.
     """
-    hints = typing.get_type_hints(func)
+    hints = get_type_hints_of_object(func)
 
     sig = inspect.signature(func)
     all_hints = list(hints.values())
@@ -525,130 +441,6 @@ def get_types_to_import_from_func_type_hints(func: Callable) -> Set[Type]:
             all_hints.append(param.annotation)
 
     return get_types_to_import_from_type_hints(all_hints)
-
-
-# ---------------------------------------------------------------------------
-# Source extraction
-# ---------------------------------------------------------------------------
-
-
-def extract_function_or_class_file(
-    file_path: str,
-    function_names: List[str],
-    join_lines: bool = True,
-    return_line_numbers: bool = False,
-    include_signature: bool = True,
-    as_list: bool = False,
-    is_class: bool = False,
-) -> Union[
-    Dict[str, Union[str, List[str]]],
-    Tuple[Dict[str, Union[str, List[str]]], Dict[str, Tuple[int, int]]],
-]:
-    """Extract the source code of a function/class from a file.
-
-    :param file_path: The path to the file.
-    :param function_names: The names of the functions/classes to extract.
-    :param join_lines: Whether to join the lines of the function.
-    :param return_line_numbers: Whether to return the line numbers.
-    :param include_signature: Whether to include the function/class signature.
-    :param as_list: Whether to return a list of sources instead of a dict.
-    :param is_class: Whether to also look for class definitions.
-    :return: A dictionary mapping names to source code, or a tuple with line numbers.
-    """
-    with open(file_path, "r") as f:
-        source = f.read()
-
-    return extract_function_or_class_from_source(
-        source,
-        function_names,
-        join_lines=join_lines,
-        return_line_numbers=return_line_numbers,
-        include_signature=include_signature,
-        as_list=as_list,
-        is_class=is_class,
-    )
-
-
-def extract_function_or_class_from_source(
-    source: str,
-    function_names: List[str],
-    join_lines: bool = True,
-    return_line_numbers: bool = False,
-    include_signature: bool = True,
-    as_list: bool = False,
-    is_class: bool = False,
-) -> Union[
-    Dict[str, Union[str, List[str]]],
-    Tuple[Dict[str, Union[str, List[str]]], Dict[str, Tuple[int, int]]],
-]:
-    """Extract the source code of a function/class from source text.
-
-    :param source: The string containing the source code.
-    :param function_names: The names of the functions/classes to extract.
-    :param join_lines: Whether to join the lines of the function.
-    :param return_line_numbers: Whether to return the line numbers.
-    :param include_signature: Whether to include the function/class signature.
-    :param as_list: Whether to return a list of sources instead of a dict.
-    :param is_class: Whether to also look for class definitions.
-    :return: A dictionary mapping names to source code, or a tuple with line numbers.
-    """
-    # Ensure function_names is a list (avoid circular import from rdr.utils).
-    # Keep the same semantics as the original ``make_list``: strings are
-    # treated as a single element, not iterated over character-by-character.
-    if isinstance(function_names, str) or not isinstance(function_names, list):
-        try:
-            iter(function_names)
-            function_names = (
-                list(function_names)
-                if not isinstance(function_names, str)
-                else [function_names]
-            )
-        except TypeError:
-            function_names = [function_names]
-
-    tree = ast.parse(source)
-    functions_source: Dict[str, Union[str, List[str]]] = {}
-    functions_source_list: List[Union[str, List[str]]] = []
-    line_numbers: Dict[str, Tuple[int, int]] = {}
-    line_numbers_list: List[Tuple[int, int]] = []
-    look_for_type = ast.ClassDef if is_class else ast.FunctionDef
-
-    for node in tree.body:
-        if isinstance(node, look_for_type) and (
-            node.name in function_names or len(function_names) == 0
-        ):
-            lines = source.splitlines()
-            func_lines = lines[node.lineno - 1 : node.end_lineno]
-            if not include_signature:
-                func_lines = func_lines[1:]
-            if as_list:
-                line_numbers_list.append((node.lineno, node.end_lineno))
-            else:
-                line_numbers[node.name] = (node.lineno, node.end_lineno)
-            parsed_function = (
-                textwrap.dedent("\n".join(func_lines)) if join_lines else func_lines
-            )
-            if as_list:
-                functions_source_list.append(parsed_function)
-            else:
-                functions_source[node.name] = parsed_function
-            if len(function_names) > 0:
-                if len(functions_source) >= len(function_names) or len(
-                    functions_source_list
-                ) >= len(function_names):
-                    break
-    if len(functions_source) < len(function_names) and len(functions_source_list) < len(
-        function_names
-    ):
-        logger.warning(
-            f"Could not find all functions: {function_names} not found, "
-            f"functions not found: {set(function_names) - set(functions_source.keys())}"
-        )
-    if return_line_numbers:
-        return functions_source if not as_list else functions_source_list, (
-            line_numbers if not as_list else line_numbers_list
-        )
-    return functions_source if not as_list else functions_source_list
 
 
 # ---------------------------------------------------------------------------
@@ -691,7 +483,7 @@ def function_to_dataclass_source(
     # Resolve string annotations (produced by `from __future__ import annotations`
     # in the caller's module) to actual type objects before formatting.
     try:
-        type_hints: Dict[str, object] = typing.get_type_hints(func)
+        type_hints: Dict[str, object] = get_type_hints_of_object(func)
     except NameError:
         type_hints = {}
 
@@ -714,9 +506,14 @@ def function_to_dataclass_source(
     )
     type_imports_str = type_import_lines + "\n" if type_import_lines else ""
 
-    # Use centralized stringify_type_hint instead of inline _type_name helper.
-    field_lines = [
-        f"    {param_name}: {stringify_type_hint(type_hints.get(param_name, param.annotation))}"
+    # Build field data for the Jinja2 template.
+    fields = [
+        {
+            "name": param_name,
+            "type_str": stringify_type_hint(
+                type_hints.get(param_name, param.annotation)
+            ),
+        }
         for param_name, param in sig.parameters.items()
         if param_name not in ("self", "cls")
     ]
@@ -724,35 +521,18 @@ def function_to_dataclass_source(
         type_hints.get("return", sig.return_annotation)
     )
 
-    lines = [
-        "from __future__ import annotations",
-        "from dataclasses import dataclass",
-        "from typing_extensions import ClassVar, Callable",
-        f"from {base_module} import {base_class_name}",
-        type_imports_str,
-        "try:",
-        f"    {import_line}",
-        "except ImportError:",
-        "    pass",
-        "",
-        "",
-        "@dataclass",
-        f"class {class_name}({base_class_name}):",
-        f'    """FunctionCase for the `{func.__name__}` function."""',
-        *field_lines,
-        f"    _output: {return_ann_str}",
-        "",
-        "",
-        # Assign function ClassVar outside the class body so that Python's
-        # @dataclass machinery (which sees string annotations under PEP 563)
-        # never confuses it for an instance field with a default value.
-        "try:",
-        f"    {class_name}.function = {access_expr}",
-        "except NameError:",
-        "    pass",
-        "",
-    ]
-    return "\n".join(lines)
+    return _generator.render(
+        "function_case.py.jinja",
+        base_module=base_module,
+        base_class_name=base_class_name,
+        class_name=class_name,
+        func_name=func.__name__,
+        import_line=import_line,
+        access_expr=access_expr,
+        type_imports_str=type_imports_str,
+        fields=fields,
+        return_type_str=return_ann_str,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,8 @@
 import os
 from os.path import dirname
 
-from krrood.ripple_down_rules import *
+from krrood.ripple_down_rules import TrackedObjectMixin
+from krrood.ripple_down_rules.predicates import has, isA
 from krrood.ripple_down_rules.datastructures.tracked_object import X
 from .datasets import (
     Drawer,
@@ -16,6 +17,7 @@ from .datasets import (
 
 
 def test_construct_class_hierarchy():
+    TrackedObjectMixin._reset_dependency_graph()
     isA.infer()
     Drawer.to_dot(os.path.join(os.path.dirname(__file__), "dependency_graph"))
     assert len(Drawer._dependency_graph.nodes()) == 20
@@ -23,6 +25,7 @@ def test_construct_class_hierarchy():
 
 
 def test_construct_class_composition():
+    TrackedObjectMixin._reset_dependency_graph()
     isA.infer()
     has.infer()
     Drawer.to_dot(os.path.join(os.path.dirname(__file__), "dependency_graph"))
@@ -31,7 +34,6 @@ def test_construct_class_composition():
     Drawer.to_dot(os.path.join(os.path.dirname(__file__), "dependency_graph"))
 
 
-# @pytest.mark.skip("Not Implemented yet")
 def test_construct_class_composition_and_dependency():
     assert next(has(Drawer, Handle))
     assert next(has(Cabinet, Drawer))

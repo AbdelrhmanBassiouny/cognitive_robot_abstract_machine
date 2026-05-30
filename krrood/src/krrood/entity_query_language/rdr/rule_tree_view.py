@@ -278,9 +278,7 @@ def _connector(depths: List[int], index: int) -> str:
         _GUIDE if _continues_at(depths, index, level) else _GAP
         for level in range(1, depth)
     ]
-    parts.append(
-        _BRANCH_LAST if _is_last_at(depths, index, depth) else _BRANCH
-    )
+    parts.append(_BRANCH_LAST if _is_last_at(depths, index, depth) else _BRANCH)
     return "".join(parts)
 
 
@@ -345,7 +343,9 @@ class RuleTreeRenderer:
         return lines[: self.head] + [marker] + lines[tail_start : anchor + 1]
 
 
-def _fired_index(rules: List[RuleView], firing_anchor_id: Optional[UUID]) -> Optional[int]:
+def _fired_index(
+    rules: List[RuleView], firing_anchor_id: Optional[UUID]
+) -> Optional[int]:
     if firing_anchor_id is None:
         return None
     for i, rule in enumerate(rules):
@@ -377,5 +377,8 @@ def render_rule_tree(
     fired_index = _fired_index(rules, trace.firing_anchor_id)
     renderer = RuleTreeRenderer(head=head, tail=tail, use_color=use_color)
     return renderer.render(
-        rules, trace.satisfied_condition_ids, trace.evaluated_expression_ids, fired_index
+        rules,
+        trace.satisfied_condition_ids,
+        trace.evaluated_expression_ids,
+        fired_index,
     )

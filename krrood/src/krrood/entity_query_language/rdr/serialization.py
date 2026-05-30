@@ -93,18 +93,26 @@ class UnsupportedNodeForSerialization(Exception):
 # --------------------------------------------------------------------------- #
 
 
-def _orient_run(run: List[Tuple[type, Any]]) -> List[Tuple[type, Any]]:
+def _orient_run(
+    selector_run: List[Tuple[type, Any]],
+) -> List[Tuple[type, Any]]:
     """
-    Put one same-orientation run of branches into the order the loader must re-insert them.
+    Put one same-orientation run of branches into the order the loader must
+    re-insert them.
 
-    ``Refinement`` chains grow *inward* (each new refinement re-anchors at the same fixed
-    base node), so walking ``.left`` already yields insertion order. ``Alternative`` /
-    ``Next`` chains grow *outward* (each re-anchors at the moving conditions root), so
-    walking ``.left`` yields *reverse* insertion order and must be flipped.
+    ``Refinement`` chains grow *inward* (each new refinement re-anchors at the
+    same fixed base node), so walking ``.left`` already yields insertion order.
+    ``Alternative`` / ``Next`` chains grow *outward* (each re-anchors at the
+    moving conditions root), so walking ``.left`` yields *reverse* insertion
+    order and must be flipped.
     """
-    if not run:
+    if not selector_run:
         return []
-    return list(run) if run[0][0] is Refinement else list(reversed(run))
+    return (
+        list(selector_run)
+        if selector_run[0][0] is Refinement
+        else list(reversed(selector_run))
+    )
 
 
 def _decompose(node) -> Tuple[Any, List[Tuple[type, Any]]]:

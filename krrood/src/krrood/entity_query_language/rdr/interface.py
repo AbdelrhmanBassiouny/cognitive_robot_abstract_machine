@@ -76,7 +76,7 @@ class CaseContext:
     trace: Optional[ClassificationTrace] = None
     """The classification trace for this case, for visualizing the rule tree (``None`` when
     the RDR is empty / no classification was run)."""
-    conclusion_domain: Optional["ConclusionDomain"] = None
+    conclusion_domain: Optional[ConclusionDomain] = None
     """The resolved allowable-value domain of the conclusion attribute, when the expert must
     label the case (``None`` on the conditions-only path, where the conclusion is known)."""
     aids: List["ConclusionAid"] = field(default_factory=list)

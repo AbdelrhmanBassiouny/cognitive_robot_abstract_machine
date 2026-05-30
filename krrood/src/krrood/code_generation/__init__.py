@@ -9,13 +9,17 @@ Domain-specific Jinja2 templates live alongside their respective packages
 """
 
 from krrood.code_generation.generator import CodeGenerator
+from krrood.code_generation.source_extraction_utils import (
+    extract_function_or_class_file,
+    extract_function_or_class_from_source,
+    extract_imports_from,
+)
 from krrood.code_generation.utils import (
     # naming
     str_to_snake_case,
     to_camel_case,
     to_variable_name,
     # imports
-    extract_imports_from,
     generate_callable_import,
     generate_relative_import,
     get_imports_from_types,
@@ -23,7 +27,6 @@ from krrood.code_generation.utils import (
     get_types_to_import_from_func_type_hints,
     get_types_to_import_from_type_hints,
     # type-hint serialisation
-    conclusion_to_str,
     stringify_hint,
     stringify_type_hint,
     value_to_source,
@@ -31,9 +34,6 @@ from krrood.code_generation.utils import (
     function_to_dataclass_source,
     validate_annotations,
     FunctionMissingAnnotationsError,
-    # source extraction
-    extract_function_or_class_file,
-    extract_function_or_class_from_source,
     # formatting
     run_black_on_file,
     run_ruff_on_file,
@@ -53,7 +53,6 @@ __all__ = [
     "get_types_to_import_from_func_type_hints",
     "get_types_to_import_from_type_hints",
     # type-hint serialisation
-    "conclusion_to_str",
     "stringify_hint",
     "stringify_type_hint",
     "value_to_source",

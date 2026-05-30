@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import sys
 import types
 import typing
@@ -16,8 +17,9 @@ from typing_extensions import Callable, get_args, get_origin
 from typing_extensions import List, Type, Any, Dict, Tuple, Generic
 from typing_extensions import TypeVar
 
+from krrood import logger
 from krrood.class_diagrams.exceptions import CouldNotResolveType
-from krrood.utils import get_scope_from_imports
+from krrood.utils import get_scope_from_imports, get_full_class_name
 
 
 def classes_of_module(module) -> List[Type]:
@@ -270,7 +272,11 @@ def get_type_hints_of_object(
                 f"Could not get type hints for {object_} due to TypeError: {type_error}. This may be caused by a type"
                 f" hint that cannot be resolved."
             )
-            raise
+            raise CouldNotResolveType(
+                repr(object_),
+                extra_information=f"Could not get type hints for {object_} due to TypeError: {type_error}. This may be"
+                f" caused by a type hint that cannot be resolved.",
+            ) from type_error
     return type_hints
 
 
@@ -280,10 +286,10 @@ def get_object_by_name_from_another_object_in_same_module(
     """
     Get the object with the given name from another object in the same module.
 
-    :param name: The name of the type to get.
-    :param object_: The object to get the type from.
+    :param name: The name of the object to get.
+    :param object_: The object to get the object from.
     :return: The object with the given name.
-    :raises CouldNotResolveType: If the type cannot be resolved.
+    :raises CouldNotResolveType: If the object cannot be resolved.
     """
     module = inspect.getmodule(object_)
     if module is not None and hasattr(module, name):
@@ -304,3 +310,18 @@ def get_object_by_name_from_another_object_in_same_module(
             extra_information=f"Could not find {name} in {source_path}, could be a deprecated import statement or "
             f"a type defined in a module that is not imported in the source file.",
         )
+
+
+def get_class_unique_name(cls: type) -> str:
+    """
+    Returns a unique identifier for a class based on its source file and qualified name.
+
+    :param cls: The class.
+    :return: The unique name of the class
+    """
+    try:
+        source_file = os.path.abspath(inspect.getfile(cls))
+        return f"{source_file}.{cls.__qualname__}"
+    except (TypeError, OSError):
+        # Fallback for built-in classes or classes defined in the REPL
+        return get_full_class_name(cls)

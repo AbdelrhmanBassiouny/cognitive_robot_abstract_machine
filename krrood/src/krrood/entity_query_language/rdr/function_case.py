@@ -11,11 +11,7 @@ generated dataclass's ``__init__`` signature.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
-from typing_extensions import ClassVar
-
-if TYPE_CHECKING:
-    from typing_extensions import Callable
+from typing_extensions import Callable, ClassVar
 
 
 @dataclass
@@ -28,4 +24,4 @@ class FunctionCase:
     has processed the class.
     """
 
-    function: ClassVar["Callable"]
+    function: ClassVar[Callable]

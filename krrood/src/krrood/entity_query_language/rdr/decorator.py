@@ -32,6 +32,9 @@ from krrood.entity_query_language.rdr.utils import UNSET
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.expert import Expert
 
+#: Name of the dataclass field that holds the RDR prediction target.
+_OUTPUT_FIELD: str = "_output"
+
 
 def _empty_rdr_preamble(class_name: str) -> str:
     """Return the rule-tree section for a brand-new (empty) RDR file."""
@@ -125,7 +128,7 @@ class RDRWrapper:
             Path(self.store.path).parent.mkdir(parents=True, exist_ok=True)
             Path(self.store.path).write_text(source)
             case_type = self.store.load_case_type()
-            rdr = EQLSingleClassRDR(case_type, "_output")
+            rdr = EQLSingleClassRDR(case_type, _OUTPUT_FIELD)
         return case_type, rdr
 
     def _build_case(self, args: tuple, kwargs: dict, output: Any) -> FunctionCase:
