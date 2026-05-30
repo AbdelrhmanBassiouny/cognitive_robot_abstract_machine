@@ -117,24 +117,32 @@ def _no_rule_fired_known_target(ctx: RenderContext) -> List[str]:
 
 
 def _conflict_resolution(ctx: RenderContext) -> List[str]:
+    target = repr(ctx.case.target_conclusion)
+    current = repr(ctx.case.current_conclusion)
     lines: List[str] = []
     if ctx.case.trace is not None:
         lines.append(
-            ctx.p.label("Apparently, the condition ")
+            ctx.p.label("The condition ")
             + ctx.p.code(format_condition(ctx.case.trace.firing_anchor))
-            + ctx.p.label(" satisfies both ")
-            + ctx.p.good(repr(ctx.case.target_conclusion))
-            + ctx.p.label(" and ")
-            + ctx.p.strong_wrong(repr(ctx.case.current_conclusion))
+            + ctx.p.label(" concluded ")
+            + ctx.p.strong_wrong(current)
+            + ctx.p.label(" for this case while it should be ")
+            + ctx.p.good(target)
+            + ctx.p.label(".")
+        )
+    else:
+        lines.append(
+            ctx.p.label("The RDR concluded ")
+            + ctx.p.strong_wrong(current)
+            + ctx.p.label(" while it should be ")
+            + ctx.p.good(target)
             + ctx.p.label(".")
         )
     lines.append(
-        ctx.p.label("Write a ")
-        + ctx.p.keyword("condition")
-        + ctx.p.label(" that satisfies ")
-        + ctx.p.good(repr(ctx.case.target_conclusion))
-        + ctx.p.label(" and does not satisfy ")
-        + ctx.p.strong_wrong(repr(ctx.case.current_conclusion))
+        ctx.p.label("Provide a condition that helps us detect this exceptional case")
+        + ctx.p.label(" (and similar ones) such that we conclude ")
+        + ctx.p.good(target)
+        + ctx.p.label(" instead.")
     )
     return lines
 
@@ -143,7 +151,10 @@ def _labelling_has_current(ctx: RenderContext) -> List[str]:
     return [
         ctx.p.label("The RDR currently concludes ")
         + ctx.p.neutral(repr(ctx.case.current_conclusion))
-        + ctx.p.label(" — what SHOULD it be?")
+        + ctx.p.label(" — is that correct?")
+        + ctx.p.label(
+            " If so, skip (press CTRL+D), else provide the correct conclusion."
+        )
     ]
 
 
@@ -166,14 +177,17 @@ def _allowed_values(ctx: RenderContext) -> List[str]:
     return [ctx.p.label("Conclusion type: ") + ctx.p.code(domain.type_display)]
 
 
-def _set_conclusion_and_justify(ctx: RenderContext) -> List[str]:
-    return [
-        ctx.p.label("Set the ")
-        + ctx.p.keyword("conclusion")
-        + ctx.p.label(", then justify it with a ")
-        + ctx.p.keyword("condition")
-        + ctx.p.label(".")
-    ]
+def _contextual_example(ctx: RenderContext) -> List[str]:
+    from krrood.entity_query_language.rdr.prompt_examples import (
+        build_conclusion_example,
+        build_conditions_example,
+    )
+
+    if ctx.is_conclusion_request:
+        example = build_conclusion_example(ctx)
+    else:
+        example = build_conditions_example(ctx)
+    return [ctx.p.hint(example)]
 
 
 def _help_hint(ctx: RenderContext) -> List[str]:
@@ -241,9 +255,9 @@ PROMPT_SECTIONS: List[PromptSection] = [
         lines=_allowed_values,
     ),
     PromptSection(
-        name="set_conclusion_and_justify",
-        applicable=lambda ctx: not ctx.has_target,
-        lines=_set_conclusion_and_justify,
+        name="contextual_example",
+        applicable=lambda ctx: True,
+        lines=_contextual_example,
     ),
     PromptSection(
         name="help_hint",

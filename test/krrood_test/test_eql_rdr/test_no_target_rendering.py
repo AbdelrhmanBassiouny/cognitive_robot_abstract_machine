@@ -153,14 +153,16 @@ class TestNoRuleFiredNoTargetHeader(unittest.TestCase):
         self.assertIn("Species.mammal", header)
         self.assertIn("Species.molusc", header)
 
-    def test_set_conclusion_and_justify_line_present(self):
-        """Header contains 'Set the conclusion, then justify it with a condition.'"""
+    def test_no_set_the_line_in_no_conclusion_path(self):
+        """Header does NOT contain 'Set the' in the no-rule-fired, no-target path.
+
+        When only a conclusion is being requested the UI must not tell the expert
+        to also justify it with a condition (that comes in a separate interaction).
+        """
         case = _make_animal()
         rdr = _zoo_rdr()
         header = _render(_iface(), _no_rule_context(case, rdr))
-        self.assertIn("conclusion", header)
-        self.assertIn("condition", header)
-        self.assertIn("Set the", header)
+        self.assertNotIn("Set the", header)
 
 
 # ---------------------------------------------------------------------------
@@ -185,13 +187,14 @@ class TestCurrentConclusionNoTargetHeader(unittest.TestCase):
         header = _render(_iface(), context)
         self.assertIn(repr(Species.fish), header)
 
-    def test_what_should_it_be_phrase_present(self):
-        """Header contains 'what SHOULD it be?' when a rule has fired and no target."""
+    def test_is_that_correct_phrase_present(self):
+        """Header contains 'is that correct' and 'CTRL+D' when a rule has fired and no target."""
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _current_conclusion_context(case, rdr, Species.fish)
         header = _render(_iface(), context)
-        self.assertIn("what SHOULD it be?", header)
+        self.assertIn("is that correct", header)
+        self.assertIn("CTRL+D", header)
 
 
 # ---------------------------------------------------------------------------
