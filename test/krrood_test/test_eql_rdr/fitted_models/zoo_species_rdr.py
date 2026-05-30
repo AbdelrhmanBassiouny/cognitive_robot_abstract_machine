@@ -13,7 +13,7 @@ from krrood.entity_query_language.factories import (
 from test.krrood_test.test_eql_rdr.animal import Animal, Species
 
 animal = variable(Animal, domain=[])
-query = entity(animal).where(animal.milk == 1)
+query = entity(animal).where(animal.milk == True)
 with query:
     add(animal.species, Species.mammal)
     with alternative(animal.aquatic == True):
@@ -28,22 +28,20 @@ with query:
                     add(animal.species, Species.reptile)
     with alternative(animal.feathers == True):
         add(animal.species, Species.bird)
-    with alternative(and_(animal.backbone == False, animal.breathes == False)):
+    with alternative(animal.backbone == False):
         add(animal.species, Species.molusc)
-    with alternative(animal.eggs == True):
-        add(animal.species, Species.insect)
-        with refinement(animal.backbone == True):
-            add(animal.species, Species.reptile)
-        with refinement(animal.breathes == True):
-            add(animal.species, Species.molusc)
-            with refinement(animal.legs > 4):
-                add(animal.species, Species.insect)
-    with alternative(animal.legs > 4):
-        add(animal.species, Species.molusc)
+        with refinement(animal.legs >= 4):
+            add(animal.species, Species.insect)
+            with refinement(animal.eggs == False):
+                add(animal.species, Species.molusc)
+    with alternative(animal.predator == True):
+        add(animal.species, Species.reptile)
+    with alternative(animal.tail == True):
+        add(animal.species, Species.reptile)
 query.build()
 
 # Stable handles for loading.
 RDR_CASE_TYPE = Animal
-RDR_CONCLUSION_ATTRIBUTE = 'species'
+RDR_CONCLUSION_ATTRIBUTE = "species"
 RDR_CASE_VARIABLE = animal
 RDR_QUERY = query
