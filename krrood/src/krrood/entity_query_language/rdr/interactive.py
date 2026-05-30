@@ -40,23 +40,20 @@ from krrood.entity_query_language.rdr.interface import (
     CaseContext,
     ExpertInterface,
 )
-from krrood.entity_query_language.rdr.rule_tree_view import (
-    format_condition,
-    render_rule_tree,
+from krrood.entity_query_language.rdr.prompt_sections import (  # noqa: F401
+    AID_MAGIC,
+    HELP_MAGIC,
+    PROMPT_SECTIONS,
+    RenderContext,
+    SHOW_TREE_MAGIC,
 )
+from krrood.entity_query_language.rdr.rule_tree_view import render_rule_tree
 
 #: A shell runner takes ``(namespace, header)`` and must leave the expert's assignments
 #: (and any ``exit()`` flag) visible in ``namespace`` when it returns.
 ShellRunner = Callable[[Dict[str, Any], str], None]
 
-#: The IPython line magic the expert types to redisplay the rule tree.
-SHOW_TREE_MAGIC = "show_tree"
-
-#: The IPython line magic the expert types to redisplay the how-to-answer guidance.
-HELP_MAGIC = "help"
-
-#: The IPython line magic the expert types to redisplay any task-specific aid output.
-AID_MAGIC = "aid"
+# AID_MAGIC, HELP_MAGIC, SHOW_TREE_MAGIC are defined in prompt_sections and re-exported above.
 
 #: Private namespace key holding the zero-arg rule-tree renderer for the ``%show_tree`` magic.
 _TREE_RENDER_KEY = "__rule_tree_render__"
@@ -150,11 +147,13 @@ class IPythonInterface(ExpertInterface):
         requests: List[AnswerRequest],
         errors: Dict[str, str],
     ) -> str:
+        ctx = RenderContext(case=context, requests=requests, palette=self.palette)
         parts: List[str] = ["", self._case_table(context), ""]
         if self._aid_cache:
             parts.extend([self._aid_cache, ""])
-        parts.extend(self._framing_lines(context))
-        parts.append(self._hint_line(context))
+        for section in PROMPT_SECTIONS:
+            if section.applicable(ctx):
+                parts.extend(section.lines(ctx))
         if errors:
             parts.append(self._format_errors(errors))
         parts.append("")
@@ -164,110 +163,6 @@ class IPythonInterface(ExpertInterface):
         return render_case_table(
             context.case_instance, self.min_column_width, use_color=self.use_color
         )
-
-    def _framing_lines(self, context: CaseContext) -> List[str]:
-        """Frame the question: labelling (no target) vs. distinguishing (known target)."""
-        p = self.palette
-        if not context.has_target:
-            return self._labelling_lines(context, p)
-        lines = [
-            p.label("Ground-truth conclusion: ")
-            + p.good(repr(context.target_conclusion))
-        ]
-        lines.append(self._current_conclusion_line(context, p))
-        lines.extend(self._resolution_lines(context, p))
-        return lines
-
-    def _labelling_lines(self, context: CaseContext, p: Palette) -> List[str]:
-        """The no-target call to action: decide the conclusion, then justify it."""
-        lines: List[str] = []
-        if context.has_current_conclusion:
-            lines.append(
-                p.label("The RDR currently concludes ")
-                + p.neutral(repr(context.current_conclusion))
-                + p.label(" — what SHOULD it be?")
-            )
-            if context.trace is not None and context.trace.firing_anchor is not None:
-                lines.append(
-                    p.label("It fired on ")
-                    + p.code(format_condition(context.trace.firing_anchor))
-                    + p.label(".")
-                )
-        else:
-            lines.append(p.label("No rule fired — what should this case conclude?"))
-        lines.extend(self._allowed_values_lines(context, p))
-        lines.append(
-            p.label("Set the ")
-            + p.keyword("conclusion")
-            + p.label(", then justify it with a ")
-            + p.keyword("condition")
-            + p.label(".")
-        )
-        return lines
-
-    def _allowed_values_lines(self, context: CaseContext, p: Palette) -> List[str]:
-        """List the allowable conclusion values, or the expected type when open-ended."""
-        domain = context.conclusion_domain
-        if domain is None:
-            return []
-        if domain.is_enumerable:
-            return [p.label("Choose one of: ") + p.code(domain.display())]
-        return [p.label("Conclusion type: ") + p.code(domain.type_display)]
-
-    def _current_conclusion_line(self, context: CaseContext, p: Palette) -> str:
-        """The current-conclusion line for the known-target path (green if it matches the
-        target, red otherwise). The no-target path is handled by :meth:`_labelling_lines`.
-        """
-        value = repr(context.current_conclusion)
-        if context.current_conclusion == context.target_conclusion:
-            styled = p.good(value)
-        else:
-            styled = p.wrong(value)
-        return p.label("Current conclusion: ") + styled
-
-    def _resolution_lines(self, context: CaseContext, p: Palette) -> List[str]:
-        """The call to action: which condition to write, and why."""
-        if not context.has_current_conclusion:
-            lines = [p.label("No rule fired for this case.")]
-            if context.has_target:
-                lines.append(
-                    p.label("Write a ")
-                    + p.keyword("condition")
-                    + p.label(" that fires for it.")
-                )
-            return lines
-        if not (
-            context.has_target
-            and context.current_conclusion != context.target_conclusion
-        ):
-            return []
-        lines = []
-        if context.trace is not None:
-            lines.append(
-                p.label("Apparently, the condition ")
-                + p.code(format_condition(context.trace.firing_anchor))
-                + p.label(" satisfies both ")
-                + p.good(repr(context.target_conclusion))
-                + p.label(" and ")
-                + p.strong_wrong(repr(context.current_conclusion))
-                + p.label(".")
-            )
-        lines.append(
-            p.label("Write a ")
-            + p.keyword("condition")
-            + p.label(" that satisfies ")
-            + p.good(repr(context.target_conclusion))
-            + p.label(" and does not satisfy ")
-            + p.strong_wrong(repr(context.current_conclusion))
-        )
-        return lines
-
-    def _hint_line(self, context: CaseContext) -> str:
-        """A single standing pointer to the fuller guidance behind ``%help`` (and ``%aid``)."""
-        magics = f"%{HELP_MAGIC}"
-        if context.aids:
-            magics += f" / %{AID_MAGIC}"
-        return self.palette.hint(f"Type {magics} for help with this case.")
 
     def _format_errors(self, errors: Dict[str, str]) -> str:
         """:return: A red, one-line-per-error block (empty mapping -> empty string)."""
