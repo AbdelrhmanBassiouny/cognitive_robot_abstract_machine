@@ -25,6 +25,7 @@ from krrood.class_diagrams.utils import (
     get_and_resolve_generic_type_hints_of_object_using_substitutions,
     resolve_type,
 )
+from krrood.exceptions import MismatchingNumberOfGenericParametersAndResolvedTypes
 from krrood.utils import (
     get_generic_type_params,
     T,
@@ -142,10 +143,10 @@ class AbstractSubClassSafeGeneric(ABC):
                     include_specialized_generic_base=False,
                 )
                 if len(root_parameters) != len(resolved_types):
-                    raise TypeError(
-                        f"The number of generic type parameters in {base_origin} "
-                        f"({len(root_parameters)}) does not match the number of "
-                        f"provided arguments ({len(resolved_types)})."
+                    raise MismatchingNumberOfGenericParametersAndResolvedTypes(
+                        affected_class=base_origin,
+                        parameters=root_parameters,
+                        resolved_types=resolved_types,
                     )
 
                 for old_type, new_type in zip(root_parameters, resolved_types):
@@ -238,6 +239,6 @@ class SubClassSafeGeneric(Generic[T], AbstractSubClassSafeGeneric, ABC):
         :return: The type of the role taker.
         """
         generic_types = get_generic_type_params(cls, SubClassSafeGeneric)
-        for generic_type in generic_types:
-            return generic_type
-        return None
+        if not generic_types:
+            return None
+        return generic_types[0]
