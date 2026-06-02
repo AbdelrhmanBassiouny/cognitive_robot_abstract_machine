@@ -135,16 +135,28 @@ class TestCollisionRules:
         rule = AvoidCollisionBetweenGroups(
             buffer_zone_distance=0.05,
             violated_distance=0.0,
-            body_group_a=pr2.left_arm.bodies_with_collision,
-            body_group_b=pr2.right_arm.bodies_with_collision,
+            body_group_a=list(
+                set(pr2.left_arm.bodies_with_collision)
+                - set(pr2.left_arm.end_effector.bodies_with_collision)
+            ),
+            body_group_b=list(
+                set(pr2.right_arm.bodies_with_collision)
+                - set(pr2.right_arm.end_effector.bodies_with_collision)
+            ),
         )
         rule.update(pr2_world_state_reset)
         rule.apply_to_collision_matrix(collision_matrix)
         # -1 because torso is in both chains
         assert (
             len(collision_matrix.collision_checks)
-            == len(pr2.left_arm.bodies_with_collision)
-            * len(pr2.right_arm.bodies_with_collision)
+            == len(
+                set(pr2.left_arm.bodies_with_collision)
+                - set(pr2.left_arm.end_effector.bodies_with_collision)
+            )
+            * len(
+                set(pr2.right_arm.bodies_with_collision)
+                - set(pr2.right_arm.end_effector.bodies_with_collision)
+            )
             - 1
         )
 

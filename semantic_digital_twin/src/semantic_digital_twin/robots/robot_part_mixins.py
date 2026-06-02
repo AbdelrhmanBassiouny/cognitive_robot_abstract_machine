@@ -76,7 +76,7 @@ class HasTwoFingers(
 
     @property
     def finger(self) -> Union[GenericLeftFinger, GenericRightFinger]:
-        [finger, _] = self.fingers
+        [finger] = [finger for finger in self.fingers if not finger.is_thumb]
         return finger
 
 
