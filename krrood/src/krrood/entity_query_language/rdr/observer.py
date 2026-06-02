@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, List, Optional, Self
 from uuid import UUID
 
 from ordered_set import OrderedSet
@@ -189,7 +189,7 @@ class ClassificationTrace:
         observer: ConclusionObserver,
         rule_tree_root: Optional[SymbolicExpression],
         evaluated_ids: Optional[OrderedSet[UUID]],
-    ) -> "ClassificationTrace":
+    ) -> Self:
         """Build a trace from a finished :class:`ConclusionObserver` and the evaluated set."""
         fired = observer.fired[-1] if observer.fired else None
         return cls(
