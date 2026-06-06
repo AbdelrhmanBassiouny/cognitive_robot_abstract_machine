@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.aid import ConclusionAid
     from krrood.entity_query_language.rdr.conclusion_domain import ConclusionDomain
     from krrood.entity_query_language.rdr.observer import ClassificationTrace
+    from krrood.entity_query_language.rdr.progress import ProgressReporter
 
 #: Shell name bound to the concrete case (inspect/experiment: ``case_instance.milk``).
 CASE_INSTANCE_NAME = "case_instance"
@@ -196,6 +197,14 @@ class ExpertInterface(ABC):
         for name, message in errors.items():
             lines.append(f"[error] {name}: {message}")
         return "\n".join(lines)
+
+    def make_progress_reporter(self) -> Optional[ProgressReporter]:
+        """Return a :class:`ProgressReporter` for this interface, or ``None``.
+
+        Override in concrete subclasses that want to display a progress bar during
+        fitting.  The default returns ``None`` (no progress displayed).
+        """
+        return None
 
     @abstractmethod
     def _run(

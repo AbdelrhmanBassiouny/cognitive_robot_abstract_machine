@@ -18,6 +18,7 @@ tabulate
 ipython
 requests
 colorama
+tqdm
 pygments
 sqlalchemy
 pandas

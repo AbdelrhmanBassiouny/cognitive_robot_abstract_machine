@@ -16,7 +16,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Any, List, Optional, Type, Self
+from typing_extensions import Any, List, Optional, TYPE_CHECKING, Type, Self
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.rdr.progress import ProgressReporter
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
@@ -33,6 +36,8 @@ from krrood.entity_query_language.rdr.backward_inference import (
     BackwardInferenceIndex,
     ConclusionKnowledge,
 )
+
+_FITTING_DESCRIPTION = "Fitting RDR"
 from krrood.entity_query_language.rdr.observer import (
     ClassificationTrace,
     ConclusionObserver,
@@ -252,15 +257,26 @@ class EQLSingleClassRDR:
         :return: This RDR, for chaining.
         """
         paired_targets = targets if targets is not None else [UNSET] * len(cases)
-        # Indices of cases to fit on the current pass.  Starts as all of them;
-        # after convergence only the misclassified ones remain.
         pending = list(range(len(cases)))
 
-        for _ in range(max_passes):
+        progress: Optional[ProgressReporter] = None
+        if expert is not None:
+            progress = expert.interface.make_progress_reporter()
+        if progress is not None:
+            progress.start(len(pending), _FITTING_DESCRIPTION)
+
+        for pass_num in range(max_passes):
+            if pass_num > 0 and progress is not None:
+                progress.reset(len(pending))
+
             for i in pending:
                 self.fit_case(cases[i], paired_targets[i], expert)
+                if progress is not None:
+                    progress.update()
 
             if targets is None:
+                if progress is not None:
+                    progress.finish()
                 return self
 
             pending = [
@@ -271,6 +287,8 @@ class EQLSingleClassRDR:
             if not pending:
                 break
 
+        if progress is not None:
+            progress.finish()
         return self
 
     @property

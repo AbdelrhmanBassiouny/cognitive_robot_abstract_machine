@@ -13,39 +13,39 @@ from krrood.entity_query_language.factories import (
 from test.krrood_test.test_eql_rdr.animal import Animal, Species
 
 animal = variable(Animal, domain=[])
-query = entity(animal).where(animal.eggs == False)
+query = entity(animal).where(animal.milk == True)
 with query:
     add(animal.species, Species.mammal)
-    with alternative(and_(animal.aquative == True, animal.fins == True)):
+    with alternative(animal.aquatic == True):
         add(animal.species, Species.fish)
-    with alternative(and_(animal.aquatic, animal.fins)):
-        add(animal.species, Species.fish)
-    with alternative(and_(animal.feathers, animal.eggs)):
-        add(animal.species, Species.bird)
-    with alternative(and_(animal.aquatic, not_(animal.fins))):
-        add(animal.species, Species.molusc)
-        with refinement(animal.legs > 0):
-            add(animal.species, Species.amphibian)
-            with refinement(animal.legs > 0):
-                add(animal.species, Species.molusc)
-                with refinement(animal.toothed):
-                    add(animal.species, Species.amphibian)
-                with refinement(animal.milk):
-                    add(animal.species, Species.mammal)
-    with alternative(and_(not_(animal.aquatic), not_(animal.backbone))):
-        add(animal.species, Species.insect)
-        with refinement(not_(animal.backbone)):
+        with refinement(animal.fins == False):
             add(animal.species, Species.molusc)
-            with refinement(animal.legs > 0):
-                add(animal.species, Species.insect)
-    with alternative(animal.eggs):
-        add(animal.species, Species.reptile)
-    with refinement(not_(animal.milk)):
+            with refinement(animal.backbone == True):
+                add(animal.species, Species.bird)
+                with refinement(animal.feathers == False):
+                    add(animal.species, Species.amphibian)
+                    with refinement(animal.tail == True):
+                        add(animal.species, Species.reptile)
+                        with refinement(animal.aquatic == True):
+                            add(animal.species, Species.amphibian)
+                            with refinement(animal.venomous == True):
+                                add(animal.species, Species.reptile)
+    with alternative(animal.feathers == True):
+        add(animal.species, Species.bird)
+    with alternative(animal.backbone == False):
         add(animal.species, Species.molusc)
-        with refinement(animal.venomous):
-            add(animal.species, Species.reptile)
-            with refinement(not_(animal.backbone)):
+        with refinement(animal.aquatic == False):
+            add(animal.species, Species.insect)
+            with refinement(animal.eggs == False):
                 add(animal.species, Species.molusc)
+            with refinement(animal.backbone == False):
+                add(animal.species, Species.molusc)
+                with refinement(animal.eggs == True):
+                    add(animal.species, Species.insect)
+                    with refinement(animal.legs == 0):
+                        add(animal.species, Species.molusc)
+    with alternative(animal.tail == True):
+        add(animal.species, Species.reptile)
 query.build()
 
 # Stable handles for loading.

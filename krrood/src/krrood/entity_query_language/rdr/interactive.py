@@ -60,6 +60,7 @@ from krrood.entity_query_language.rdr.rule_tree_view import render_rule_tree
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+    from krrood.entity_query_language.rdr.progress import ProgressReporter
 
 #: A shell runner takes ``(namespace, header)`` and must leave the expert's assignments
 #: (and any ``exit()`` flag) visible in ``namespace`` when it returns.
@@ -166,6 +167,14 @@ class IPythonInterface(ExpertInterface):
     def palette(self) -> Palette:
         """The styling used for every piece of on-screen text."""
         return Palette(self.use_color)
+
+    def make_progress_reporter(
+        self,
+    ) -> Optional["ProgressReporter"]:
+        """Return an :class:`~krrood.entity_query_language.rdr.progress.IPythonProgressBar`."""
+        from krrood.entity_query_language.rdr.progress import IPythonProgressBar
+
+        return IPythonProgressBar(use_color=self.use_color)
 
     # ----------------------------------------------------------------- header
 
