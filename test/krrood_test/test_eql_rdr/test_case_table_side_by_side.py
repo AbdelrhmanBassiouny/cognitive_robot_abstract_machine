@@ -29,7 +29,7 @@ class DistinctFieldAnimal:
 
 
 _NEW_CASE = DistinctFieldAnimal(name="eagle", has_wings=True, leg_count=2)
-_CORNER_CASE = DistinctFieldAnimal(name="scorpion", has_wings=False, leg_count=8)
+_CORNER_CASE = DistinctFieldAnimal(name="badger", has_wings=False, leg_count=8)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ def test_render_cases_side_by_side_contains_corner_label():
 def test_render_cases_side_by_side_contains_both_case_values():
     """Both a new-case-unique value and a corner-case-unique value appear in the output.
 
-    ``_NEW_CASE.name == "eagle"`` and ``_CORNER_CASE.name == "scorpion"`` are distinct
+    ``_NEW_CASE.name == "eagle"`` and ``_CORNER_CASE.name == "badger"`` are distinct
     strings that cannot belong to the wrong side.
     """
     result = render_cases_side_by_side(
@@ -84,8 +84,8 @@ def test_render_cases_side_by_side_contains_both_case_values():
     )
     # "eagle" is a field value present only in _NEW_CASE
     assert "eagle" in result
-    # "scorpion" is a field value present only in _CORNER_CASE
-    assert "scorpion" in result
+    # "badger" is a field value present only in _CORNER_CASE
+    assert "badger" in result
 
 
 # ---------------------------------------------------------------------------

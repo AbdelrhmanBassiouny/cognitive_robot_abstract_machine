@@ -19,7 +19,7 @@ import textwrap
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, List, Optional, Tuple
+from typing_extensions import Any, Dict, List, Optional, Tuple
 
 import tabulate as _tabulate
 
@@ -40,6 +40,10 @@ _PAIR_BORDER = 7
 
 #: Width assumed when the terminal size cannot be detected.
 _FALLBACK_WIDTH = 100
+
+#: Maximum triplets per row in :func:`render_cases_side_by_side`.  Capped to keep the
+#: table narrow enough for the IPython embedded shell display area.
+_MAX_TRIPLETS_PER_ROW = 3
 
 
 def case_items(case: Any) -> List[Tuple[str, Any]]:
@@ -182,20 +186,111 @@ def render_cases_side_by_side(
     min_column_width: int = DEFAULT_MIN_COLUMN_WIDTH,
     use_color: bool = True,
 ) -> str:
-    """Render ``new_case`` and ``corner_case`` tables stacked with labelled headers.
+    """Render two cases as a single 3-column comparison table.
+
+    Columns are: **Attribute** | **corner_label** (corner-case values) |
+    **new_label** (new-case values).  Multiple attribute triplets are laid
+    side by side per row to make full use of the terminal width, following
+    the same approach as :class:`CaseTableRenderer`.
 
     :param new_case: The case currently being fitted.
     :param corner_case: The corner case of the firing rule.
-    :param new_label: Header text printed above the new-case table.
-    :param corner_label: Header text printed above the corner-case table.
-    :param min_column_width: Passed to :class:`CaseTableRenderer` for both tables.
-    :param use_color: Whether to emit ANSI colour in the tables.
-    :return: A string containing both tables separated by a blank line.
+    :param new_label: Column header for the new-case values.
+    :param corner_label: Column header for the corner-case values.
+    :param min_column_width: Minimum total width per triplet; controls how many triplets
+        fit side by side.
+    :param use_color: Whether to emit ANSI colour in the table.
+    :return: Multiple independent 3-column comparison tables stitched side by side.
     """
-    new_table = render_case_table(
-        new_case, min_column_width=min_column_width, use_color=use_color
-    )
-    corner_table = render_case_table(
-        corner_case, min_column_width=min_column_width, use_color=use_color
-    )
-    return f"{new_label}\n{new_table}\n\n{corner_label}\n{corner_table}"
+    new_items_list = case_items(new_case)
+    corner_items_list = case_items(corner_case)
+    new_items = dict(new_items_list)
+    corner_items = dict(corner_items_list)
+
+    # Preserve new-case field order, then corner-only fields appended.
+    all_attrs: List[str] = []
+    seen: set = set()
+    for attr, _ in new_items_list:
+        all_attrs.append(attr)
+        seen.add(attr)
+    for attr, _ in corner_items_list:
+        if attr not in seen:
+            all_attrs.append(attr)
+            seen.add(attr)
+
+    if not all_attrs:
+        return f"{new_label}: {new_case!r}  {corner_label}: {corner_case!r}"
+
+    width = _terminal_width()
+    key_width = min(_MAX_KEY_WIDTH, max(len(attr) for attr in all_attrs))
+
+    # Triplet overhead: │ attr │ corner │ new │  (3 cells × 4 padding/border)
+    triplet_border = 12
+    triplet_budget = max(min_column_width, key_width + triplet_border + 1)
+    triplets_per_row = max(1, min(len(all_attrs), width // triplet_budget,
+                                  _MAX_TRIPLETS_PER_ROW))
+    value_width = max(1, (width // triplets_per_row - key_width - triplet_border) // 2)
+
+    # --- style helpers -------------------------------------------------------
+
+    def _style_key(text: str) -> str:
+        if not use_color:
+            return text
+        return f"{Style.BRIGHT}{Fore.CYAN}{text}{Style.RESET_ALL}"
+
+    def _style_new_val(text: str) -> str:
+        if not use_color or not text:
+            return text
+        return f"{Fore.GREEN}{text}{Style.RESET_ALL}"
+
+    def _style_header(text: str) -> str:
+        if not use_color:
+            return text
+        return f"{Style.BRIGHT}{Fore.MAGENTA}{text}{Style.RESET_ALL}"
+
+    sentinel = object()
+
+    def _val(items: Dict[str, str], attr: str) -> str:
+        val = items.get(attr, sentinel)
+        if val is sentinel:
+            return ""
+        text = _format_value(val)
+        if not text:
+            return ""
+        return textwrap.fill(text, width=value_width)
+
+    # --- partition attributes round-robin into groups ------------------------
+
+    groups: List[List[str]] = [[] for _ in range(triplets_per_row)]
+    for idx, attr in enumerate(all_attrs):
+        groups[idx % triplets_per_row].append(attr)
+
+    # --- render each group as an independent 3-column table ------------------
+
+    space_between = "  "
+    table_strs: List[str] = []
+    for group in groups:
+        if not group:
+            continue
+        tbl_rows: List[List[str]] = [
+            [_style_header("Attribute"), _style_header(corner_label),
+             _style_header(new_label)],
+        ]
+        for attr in group:
+            tbl_rows.append([
+                _style_key(_clip(attr, key_width).ljust(key_width)),
+                _val(corner_items, attr),
+                _style_new_val(_val(new_items, attr)),
+            ])
+        table_strs.append(_tabulate.tabulate(tbl_rows, tablefmt="simple_grid"))
+
+    # --- stitch horizontally -------------------------------------------------
+
+    table_lines = [t.splitlines() for t in table_strs]
+    max_h = max(len(lines) for lines in table_lines)
+    padded = []
+    for lines in table_lines:
+        width = len(lines[0]) if lines else 0
+        padded.append(lines + [" " * width] * (max_h - len(lines)))
+    return "\n".join(space_between.join(row[i] for row in padded)
+                     for i in range(max_h))
