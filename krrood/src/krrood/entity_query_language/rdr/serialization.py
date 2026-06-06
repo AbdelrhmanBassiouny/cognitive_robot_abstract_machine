@@ -141,6 +141,32 @@ def _decompose(node) -> Tuple[Any, List[Tuple[type, Any]]]:
     return node, branches
 
 
+def walk_rules_in_emission_order(conditions_root) -> List:
+    """
+    Return condition (leaf) nodes in the same pre-order that ``_emit_rule_body`` visits.
+
+    This is the single authoritative ordering shared by the serializer (save path) and
+    the corner-case-store rebuilder (load path). Both must use this function so the two
+    orderings can never drift independently.
+
+    :param conditions_root: The root of the rule-tree condition DAG.
+    :return: Leaf condition nodes in the order the serializer emits their ``add(...)``
+        calls (i.e. the *i*-th element here corresponds to the *i*-th ``add(`` line in
+        the file written by :func:`rdr_to_python`).
+    """
+    result: List = []
+
+    def _visit(node) -> None:
+        main, branches = _decompose(node)
+        result.append(main)
+        for _, branch in branches:
+            _visit(branch)
+
+    if conditions_root is not None:
+        _visit(conditions_root)
+    return result
+
+
 def _conclusion_value(condition_node) -> Any:
     """:return: The single value concluded at ``condition_node`` (its ``Add``)."""
     for conclusion in condition_node._conclusions_:
