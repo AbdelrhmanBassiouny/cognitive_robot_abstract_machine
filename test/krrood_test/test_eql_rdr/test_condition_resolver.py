@@ -729,3 +729,207 @@ class TestTargetKnowledgeResolver:
             for r in eval_results_mammal
         )
         assert truth_mammal is False
+
+
+# ---------------------------------------------------------------------------
+# TestCornerCaseKnowledgeResolver — Phase 4 negation-path tests
+#
+# Strategy: use a single-rule EQL tree (milk==True → mammal) to derive a real
+# ConclusionKnowledge whose GuardCondition.holds_for() evaluates live EQL
+# expressions.  Tests 1 and 2 use this tree for current_knowledge; tests 3 and
+# 4 construct ConclusionKnowledge directly to isolate specific logic branches.
+# ---------------------------------------------------------------------------
+
+
+def _milk_mammal_knowledge():
+    """Build a single-rule tree ``milk==True → mammal`` and return its knowledge.
+
+    Returns ``(case_variable, current_knowledge)`` where ``current_knowledge``
+    for Species.mammal has exactly one SufficientConditionSet with one guard:
+    ``milk == True`` (negated=False).
+
+    Named pattern: MilkMammalKnowledge — a minimal current_knowledge fixture
+    that gives the resolver exactly one positive guard to negate.
+    """
+    from krrood.entity_query_language.factories import add, entity, variable
+    from krrood.entity_query_language.rdr.backward_inference import (
+        what_do_we_know_about,
+    )
+
+    animal = variable(Animal, domain=[])
+    query = entity(animal).where(animal.milk == True)
+    with query:
+        add(animal.species, Species.mammal)
+    query.build()
+    current_knowledge = what_do_we_know_about(query._conditions_root_, Species.mammal)
+    return animal, current_knowledge
+
+
+class TestCornerCaseKnowledgeResolver:
+    """CornerCaseKnowledgeResolver finds a discriminating condition by negating
+    a guard that holds for the corner case and checking it against the new case."""
+
+    def test_resolves_when_negated_guard_holds_for_new_case(self):
+        """Resolver returns CORNER_CASE_KNOWLEDGE when the negated corner-case guard holds.
+
+        Guarantee: given current_knowledge with guard ``milk==True`` (which holds for
+        the corner case — a mammal with milk=True), the resolver constructs
+        ``GuardCondition(milk_expr, negated=True)`` and checks it against the new
+        case (an animal with milk=False).  NOT(milk) holds for the non-mammal, so a
+        ResolvedCondition tagged CORNER_CASE_KNOWLEDGE is returned.
+        """
+        case_variable, current_knowledge = _milk_mammal_knowledge()
+
+        # corner_case: mammal — the condition milk==True holds for it.
+        corner_case = _make_mammal(name="mammal_corner")
+        # new_case: non-mammal animal with milk=False — NOT(milk==True) holds.
+        new_case = _make_bird(name="non_mammal_new", feathers=False, milk=False)
+
+        empty_target = ConclusionKnowledge(Species.fish, ())
+
+        resolver = CornerCaseKnowledgeResolver()
+        result = resolver.resolve(
+            case=new_case,
+            case_variable=case_variable,
+            target=Species.fish,
+            current=Species.mammal,
+            corner_case=corner_case,
+            target_knowledge=empty_target,
+            current_knowledge=current_knowledge,
+        )
+
+        assert result is not None
+        assert isinstance(result, ResolvedCondition)
+        assert result.source is ResolutionSource.CORNER_CASE_KNOWLEDGE
+
+    def test_returns_none_when_negated_guard_does_not_hold_for_new_case(self):
+        """Resolver returns None when NOT(corner-case guard) fails for the new case.
+
+        Guarantee: if the new case also satisfies the same condition as the corner
+        case (both have milk=True), then NOT(milk) does not hold for the new case
+        and no negated condition can discriminate — the resolver correctly yields None.
+        """
+        case_variable, current_knowledge = _milk_mammal_knowledge()
+
+        # Both corner case and new case have milk=True → NOT(milk) is False for both.
+        corner_case = _make_mammal(name="mammal_corner")
+        new_case = _make_mammal(name="mammal_new")
+
+        empty_target = ConclusionKnowledge(Species.mammal, ())
+
+        resolver = CornerCaseKnowledgeResolver()
+        result = resolver.resolve(
+            case=new_case,
+            case_variable=case_variable,
+            target=Species.mammal,
+            current=Species.mammal,
+            corner_case=corner_case,
+            target_knowledge=empty_target,
+            current_knowledge=current_knowledge,
+        )
+
+        assert result is None
+
+    def test_returns_none_when_current_knowledge_is_empty(self):
+        """Resolver returns None immediately when current_knowledge has no condition sets.
+
+        Guarantee: an empty ConclusionKnowledge (no rule paths for the current
+        conclusion) causes the outer loop to be a no-op and the method returns None
+        without error.
+        """
+        case_variable, _ = (
+            _milk_mammal_knowledge()
+        )  # variable needed for call signature
+
+        corner_case = _make_mammal(name="corner")
+        new_case = _make_bird(name="new")
+
+        empty_current = ConclusionKnowledge(Species.mammal, ())
+        empty_target = ConclusionKnowledge(Species.fish, ())
+
+        resolver = CornerCaseKnowledgeResolver()
+        result = resolver.resolve(
+            case=new_case,
+            case_variable=case_variable,
+            target=Species.fish,
+            current=Species.mammal,
+            corner_case=corner_case,
+            target_knowledge=empty_target,
+            current_knowledge=empty_current,
+        )
+
+        assert result is None
+
+    def test_negated_guard_in_current_knowledge_is_double_negated_correctly(self):
+        """A negated=True guard from current_knowledge is double-negated to negated=False.
+
+        Guarantee: when the corner case's guard already has ``negated=True``
+        (fires when its expression is False), applying ``not guard.negated``
+        produces a new GuardCondition with ``negated=False``.  ``_materialize``
+        with ``negated=False`` returns the raw expression directly (no ``not_``
+        wrapping), so the materialised expression evaluates to True for the new case.
+
+        Scenario: the guard is ``GuardCondition(fins==True, negated=True)``.
+        - corner_case has fins=False → negated guard holds (NOT fins is True).
+        - new_case has fins=True → double-negated condition (fins itself) is True.
+        We synthesise the guard directly so the test isolates _materialize logic
+        independent of any specific tree topology.
+        """
+        from krrood.entity_query_language.factories import variable
+        from krrood.entity_query_language.rdr.backward_inference import (
+            GuardCondition,
+            SufficientConditionSet,
+        )
+        from krrood.entity_query_language.core.base_expressions import OperationResult
+
+        # Live variable so GuardCondition.holds_for() can evaluate EQL expressions.
+        case_variable = variable(Animal, domain=[])
+        fins_expr = case_variable.fins == True  # noqa: E712
+
+        # A guard that fires when fins==False (negated=True).
+        negated_guard = GuardCondition(fins_expr, negated=True)
+
+        # corner_case: fins=False → the negated guard holds.
+        corner_case = _make_mammal(name="no_fins_corner", fins=False)
+        assert (
+            negated_guard.holds_for(case_variable, corner_case) is True
+        ), "Test pre-condition: negated guard must hold for the corner case"
+
+        # new_case: fins=True → double-negation (fins itself) holds.
+        new_case = _make_bird(name="fins_new", fins=True, feathers=False)
+
+        # Synthesise current_knowledge with only this negated guard.
+        current_knowledge = ConclusionKnowledge(
+            conclusion_value=Species.fish,
+            sufficient_condition_sets=(
+                SufficientConditionSet(conditions=(negated_guard,)),
+            ),
+        )
+        empty_target = ConclusionKnowledge(Species.reptile, ())
+
+        resolver = CornerCaseKnowledgeResolver()
+        result = resolver.resolve(
+            case=new_case,
+            case_variable=case_variable,
+            target=Species.reptile,
+            current=Species.fish,
+            corner_case=corner_case,
+            target_knowledge=empty_target,
+            current_knowledge=current_knowledge,
+        )
+
+        # The double-negation path must produce a result.
+        assert result is not None
+        assert result.source is ResolutionSource.CORNER_CASE_KNOWLEDGE
+
+        # _materialize with negated=False returns the raw expression (fins==True).
+        # Evaluating it against new_case (fins=True) must yield True.
+        case_variable._update_domain_([new_case])
+        eval_results = list(result.expression.evaluate())
+        truth = any(
+            r.is_true if isinstance(r, OperationResult) else bool(r)
+            for r in eval_results
+        )
+        assert (
+            truth is True
+        ), "Materialised double-negated expression must evaluate True for the new case"
