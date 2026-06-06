@@ -7,10 +7,12 @@ the RDR's shared case variable — the same contract the interactive shell will 
 
 import dataclasses
 import unittest
+from unittest.mock import patch
 
 from krrood.entity_query_language.factories import and_
 from krrood.entity_query_language.rdr.expert import Expert
-from krrood.entity_query_language.rdr.interface import FunctionInterface
+from krrood.entity_query_language.rdr.interface import ExpertInterface, FunctionInterface
+from krrood.entity_query_language.rdr.progress import SpyProgressReporter
 from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
@@ -85,6 +87,82 @@ def scripted_expert(rules):
         return {"conditions": rules[context.target_conclusion](context.case_variable)}
 
     return Expert(interface=FunctionInterface(answer_fn=answer)), calls
+
+
+class SpyFunctionInterface(FunctionInterface):
+    """A FunctionInterface that returns a :class:`SpyProgressReporter`.
+
+    Overrides ``make_progress_reporter`` to inject a spy that records progress bar
+    lifecycle calls without displaying anything, so the test can verify call sequences
+    from ``fit()``.
+    """
+
+    def __init__(self, answer_fn, spy=None):
+        super().__init__(answer_fn=answer_fn)
+        self._spy = spy or SpyProgressReporter()
+
+    def make_progress_reporter(self):
+        return self._spy
+
+
+def _maximally_specific_answer(context, requests):
+    """Answer function that matches the case's full feature vector.
+
+    Each distinct feature vector produces its own unique condition, memorising the
+    training set.  Same logic as :func:`maximally_specific_expert` but exposed as a
+    plain answer function for use with :class:`SpyFunctionInterface`.
+    """
+    case_variable, case = context.case_variable, context.case_instance
+    return {
+        "conditions": and_(
+            *[getattr(case_variable, f) == getattr(case, f) for f in FEATURE_FIELDS]
+        )
+    }
+
+
+def _scorpion_answer(context, requests):
+    """Answer function for the scorpion retroactive-breaking scenario.
+
+    ``targets`` path only — does not handle the no-target (``UNSET``) path.  Models the
+    same logic as the inner closure of :func:`_molusc_backbone_false_expert` so the
+    resulting RDR behaves identically.
+    """
+    case_variable = context.case_variable
+    current = context.current_conclusion
+    target = context.target_conclusion
+
+    if target == Species.mammal:
+        return {"conditions": case_variable.milk == True}
+    if target == Species.reptile:
+        return {"conditions": case_variable.venomous == True}
+    if target == Species.molusc:
+        if current == Species.reptile:
+            return {"conditions": case_variable.backbone == False}
+        return {"conditions": case_variable.milk == False}
+    return {"conditions": case_variable.milk == True}
+
+
+def _labelling_answer(target_by_name):
+    """Build an answer function for the no-target (expert-labels) path.
+
+    Returns maximally-specific conditions matching the case, and includes the
+    conclusion only when the ``conclusion`` answer is requested (the
+    ``ask_for_rule`` -> ``_ask_for_conclusion`` interact call).
+    """
+    def answer(context, requests):
+        result = {
+            "conditions": and_(
+                *[
+                    getattr(context.case_variable, f)
+                    == getattr(context.case_instance, f)
+                    for f in FEATURE_FIELDS
+                ]
+            )
+        }
+        if any(r.name == "conclusion" for r in requests):
+            result["conclusion"] = target_by_name[context.case_instance.name]
+        return result
+    return answer
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -383,6 +461,196 @@ class TestFitConvergent(unittest.TestCase):
         rdr.fit([case], [Species.mammal], expert, max_passes=3)
         # The loop exited after max_passes — assert a rule was added.
         self.assertIsNotNone(rdr.query)
+
+
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestProgressBarIntegration(unittest.TestCase):
+    """Progress reporting lifecycle during :meth:`EQLSingleClassRDR.fit`.
+
+    Each test verifies that ``fit()`` calls the correct sequence of progress-reporter
+    lifecycle methods (``start``, ``update``, ``reset``, ``finish``) by injecting a
+    :class:`SpyProgressReporter` via a custom
+    :meth:`ExpertInterface.make_progress_reporter` override.
+    """
+
+    # ------------------------------------------------------------------
+    # 1.  Happy path — single-pass convergent fit
+    # ------------------------------------------------------------------
+
+    def test_fit_calls_start_update_finish(self):
+        """A single-pass fit calls ``start(N)``, ``update()`` N times, then ``finish()``."""
+        rdr = EQLSingleClassRDR(Animal, "species")
+        subset, subset_targets = animals[:5], targets[:5]
+
+        spy = SpyProgressReporter()
+        interface = SpyFunctionInterface(
+            answer_fn=_maximally_specific_answer, spy=spy
+        )
+        expert = Expert(interface=interface)
+        rdr.fit(subset, subset_targets, expert)
+
+        assert_events = [("start", (5,), {"description": "Fitting RDR"})]
+        assert_events += [("update", (1,), {})] * 5
+        assert_events += [("finish", (), {})]
+        self.assertEqual(spy.events, assert_events)
+
+    # ------------------------------------------------------------------
+    # 2.  Two-pass convergent fit — reset between passes
+    # ------------------------------------------------------------------
+
+    def test_fit_convergent_two_passes_calls_reset(self):
+        """A convergent fit that needs two passes calls ``reset()`` between them.
+
+        The scorpion scenario (mammal, then molusc, then reptile) causes a retroactive
+        misclassification of the molusc by the reptile's rule, forcing a second pass.
+        """
+        cases, case_targets = TestFitConvergent()._make_scorpion_scenario()
+
+        spy = SpyProgressReporter()
+        interface = SpyFunctionInterface(answer_fn=_scorpion_answer, spy=spy)
+        expert = Expert(interface=interface)
+
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.fit(cases, case_targets, expert)
+
+        assert_events = [("start", (3,), {"description": "Fitting RDR"})]
+        assert_events += [("update", (1,), {})] * 3
+        assert_events += [("reset", (1,), {})]
+        assert_events += [("update", (1,), {})]
+        assert_events += [("finish", (), {})]
+        self.assertEqual(spy.events, assert_events)
+
+    # ------------------------------------------------------------------
+    # 3.  No expert — no progress reporter created
+    # ------------------------------------------------------------------
+
+    def test_fit_without_expert_does_not_create_progress(self):
+        """When ``expert`` is ``None``, ``fit()`` must not create a progress reporter.
+
+        The ``make_progress_reporter`` method should never be called, and fitting
+        already-correct cases must not crash.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        animal, target = first(Species.mammal), Species.mammal
+
+        # Seed a rule so the case is already correctly classified.
+        rdr.fit_case(animal, target, maximally_specific_expert())
+
+        with patch.object(ExpertInterface, "make_progress_reporter") as mock:
+            rdr.fit([animal], [target], expert=None)
+            mock.assert_not_called()
+
+        # Classification must be unchanged.
+        self.assertEqual(rdr.classify(animal), target)
+
+    # ------------------------------------------------------------------
+    # 4.  Default FunctionInterface — ``None`` progress reporter
+    # ------------------------------------------------------------------
+
+    def test_fit_with_default_interface_no_bar(self):
+        """A plain :class:`FunctionInterface` returns ``None`` from ``make_progress_reporter``.
+
+        ``fit()`` must handle a ``None`` progress reporter gracefully (not crash, and
+        converge cases correctly).
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        subset, subset_targets = animals[:3], targets[:3]
+
+        interface = FunctionInterface(answer_fn=_maximally_specific_answer)
+        expert = Expert(interface=interface)
+        rdr.fit(subset, subset_targets, expert)
+
+        for a, t in zip(subset, subset_targets):
+            self.assertEqual(rdr.classify(a), t)
+
+    # ------------------------------------------------------------------
+    # 5.  No-target path — single pass, no reset, finish called
+    # ------------------------------------------------------------------
+
+    def test_fit_no_targets_single_pass(self):
+        """The no-target (``targets=None``) path: single pass, no reset.
+
+        Only ``start``, ``update`` per case, and ``finish`` are expected.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        subset, subset_targets = animals[:3], targets[:3]
+        target_by_name = {a.name: t for a, t in zip(subset, subset_targets)}
+
+        spy = SpyProgressReporter()
+        interface = SpyFunctionInterface(
+            answer_fn=_labelling_answer(target_by_name), spy=spy
+        )
+        expert = Expert(interface=interface)
+        rdr.fit(subset, None, expert)
+
+        assert_events = [("start", (3,), {"description": "Fitting RDR"})]
+        assert_events += [("update", (1,), {})] * 3
+        assert_events += [("finish", (), {})]
+        self.assertEqual(spy.events, assert_events)
+
+        # All cases must be correctly classified.
+        for a, t in zip(subset, subset_targets):
+            self.assertEqual(rdr.classify(a), t)
+
+    # ------------------------------------------------------------------
+    # 6.  Max-passes exhausted — finish still called
+    # ------------------------------------------------------------------
+
+    def test_fit_max_passes_exhausted_finish_called(self):
+        """``finish()`` is always called, even when ``max_passes`` is exhausted before
+        convergence."""
+        cases, case_targets = TestFitConvergent()._make_scorpion_scenario()
+
+        spy = SpyProgressReporter()
+        interface = SpyFunctionInterface(answer_fn=_scorpion_answer, spy=spy)
+        expert = Expert(interface=interface)
+
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.fit(cases, case_targets, expert, max_passes=1)
+
+        # finish() was called.
+        self.assertEqual(spy.events[-1], ("finish", (), {}))
+        # Only one pass completed — no reset occurred.
+        self.assertNotIn(("reset", (1,), {}), spy.events)
+        # start was called (sanity check).
+        self.assertEqual(spy.events[0], ("start", (3,), {"description": "Fitting RDR"}))
+
+    # ------------------------------------------------------------------
+    # 7.  Semantic transparency — spy does not alter fitting
+    # ------------------------------------------------------------------
+
+    def test_progress_does_not_alter_fit_semantics(self):
+        """Fitting with a :class:`SpyProgressReporter` produces the same classifications
+        as fitting without one."""
+        cases, case_targets = TestFitConvergent()._make_scorpion_scenario()
+
+        # Control: fit without spy.
+        rdr_control = EQLSingleClassRDR(Animal, "species")
+        expert_control = Expert(
+            interface=FunctionInterface(answer_fn=_scorpion_answer)
+        )
+        rdr_control.fit(cases, case_targets, expert_control)
+
+        # With spy.
+        rdr_spy = EQLSingleClassRDR(Animal, "species")
+        spy = SpyProgressReporter()
+        interface = SpyFunctionInterface(answer_fn=_scorpion_answer, spy=spy)
+        expert_spy = Expert(interface=interface)
+        rdr_spy.fit(cases, case_targets, expert_spy)
+
+        # Identical classifications.
+        for c, t in zip(cases, case_targets):
+            r1 = rdr_control.classify(c)
+            r2 = rdr_spy.classify(c)
+            self.assertEqual(
+                r1,
+                r2,
+                f"Spy altered classification for {c.name}: "
+                f"without spy={r1}, with spy={r2}",
+            )
+
+        # Sanity: the spy was active.
+        self.assertGreater(len(spy.events), 0)
 
 
 if __name__ == "__main__":

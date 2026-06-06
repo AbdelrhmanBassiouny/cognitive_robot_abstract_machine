@@ -51,6 +51,10 @@ from krrood.entity_query_language.rdr.serialization import (
 from krrood.entity_query_language.rdr.decorator import RDRWrapper, rdr
 from krrood.entity_query_language.rdr.file_store import RDRFileStore
 from krrood.entity_query_language.rdr.function_case import FunctionCase
+from krrood.entity_query_language.rdr.progress import (
+    IPythonProgressBar,
+    ProgressReporter,
+)
 from krrood.entity_query_language.rdr.serialization import save_rdr_with_case
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import (
@@ -95,6 +99,9 @@ __all__ = [
     "NoInferenceTarget",
     "MultipleInferenceTargets",
     "UnsupportedInferenceTarget",
+    # progress bar
+    "ProgressReporter",
+    "IPythonProgressBar",
     # @rdr decorator
     "rdr",
     "RDRWrapper",
