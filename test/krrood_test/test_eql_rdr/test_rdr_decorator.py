@@ -376,3 +376,111 @@ class TestSavePathWiring:
     def test_rdr_save_path_is_a_string(self, distance_wrapper):
         """``wrapper.rdr.save_path`` must be a ``str``, not a ``Path`` object."""
         assert isinstance(distance_wrapper.rdr.save_path, str)
+
+
+# ---------------------------------------------------------------------------
+# Group 7 — Corner-case provenance round-trip through RDRWrapper
+# ---------------------------------------------------------------------------
+
+
+class TestRdrDecoratorCornerCaseRoundTrip:
+    """Step G: Corner cases survive the @rdr auto-save + reload cycle end-to-end.
+
+    This is a guard test: it proves that the wiring between ``RDRWrapper``,
+    ``EQLSingleClassRDR.corner_cases``, ``save_rdr_with_case``, and ``load_rdr``
+    holds for the decorator path.  No new implementation is expected — Phases 1–4
+    provide all the machinery; this test verifies the wiring stays intact.
+    """
+
+    def test_rdr_decorator_corner_cases_survive_save_reload(self, tmp_path):
+        """Corner cases recorded during fitting must be present after reloading the saved file.
+
+        The ``@rdr`` decorator auto-saves after every ``fit_case`` call (because
+        ``save_path`` is wired in ``__post_init__``).  After fitting two rules on
+        two distinct cases, the saved file's ``RDR_CORNER_CASES`` dict must be
+        non-empty.  Reloading via a fresh ``RDRWrapper`` must reconstruct a
+        ``corner_cases`` store whose ``cases`` dict has at least as many entries
+        as rules were inserted (one entry per new rule).
+        """
+        from krrood.entity_query_language.rdr.decorator import RDRWrapper, rdr
+        from krrood.entity_query_language.rdr.serialization import (
+            load_rdr,
+            walk_rules_in_emission_order,
+        )
+
+        filename = str(tmp_path / "corner_case_round_trip.py")
+
+        # ------------------------------------------------------------------ #
+        # Step 1: build the decorated function backed by the tmp_path file.
+        # ------------------------------------------------------------------ #
+
+        @rdr(filename)
+        def distance(x: float, y: float) -> float:
+            """Compute Euclidean distance."""
+            return (x**2 + y**2) ** 0.5
+
+        # ------------------------------------------------------------------ #
+        # Step 2: build two scripted experts, each producing a distinct rule.
+        #
+        # Expert A: concludes 10.0 when x > 0.
+        # Expert B: concludes 20.0 when x < 0.
+        #
+        # The two-call FunctionInterface pattern is used: the first ``interact``
+        # call answers the conclusion question; the second answers the conditions
+        # question.  Each call to ``fit_case`` inserts exactly one new rule and
+        # records one corner case.
+        # ------------------------------------------------------------------ #
+
+        def _make_scripted_expert(conclusion: float, condition_fn):
+            """Return a scripted Expert that answers conclusion then conditions."""
+
+            call_count = {"n": 0}
+
+            def answer_fn(ctx, reqs):
+                call_count["n"] += 1
+                if len(reqs) == 1 and reqs[0].name == "conclusion":
+                    return {"conclusion": conclusion}
+                return {"conditions": condition_fn(ctx)}
+
+            return Expert(interface=FunctionInterface(answer_fn=answer_fn))
+
+        expert_a = _make_scripted_expert(10.0, lambda ctx: ctx.case_variable.x > 0)
+        expert_b = _make_scripted_expert(20.0, lambda ctx: ctx.case_variable.x < 0)
+
+        # Case A: x=1.0, y=0.0 — no rule fires yet, so an alternative is added.
+        case_a = distance.case_type(x=1.0, y=0.0, _output=1.0)
+        distance.fit_case(case_a, target=UNSET, expert=expert_a)
+
+        # Case B: x=-1.0, y=0.0 — the A-rule does not fire (x < 0), so another
+        # alternative is added.
+        case_b = distance.case_type(x=-1.0, y=0.0, _output=1.0)
+        distance.fit_case(case_b, target=UNSET, expert=expert_b)
+
+        # ------------------------------------------------------------------ #
+        # Step 3: verify the in-memory store recorded exactly 2 corner cases.
+        # ------------------------------------------------------------------ #
+        original_count = len(distance.rdr.corner_cases.cases)
+        assert original_count == 2, (
+            f"Expected 2 corner cases after 2 rule insertions, got {original_count}"
+        )
+
+        # ------------------------------------------------------------------ #
+        # Step 4: reload from the same file via a fresh RDRWrapper.
+        #
+        # ``_load_or_generate`` will call ``load_rdr`` (not generate a new file)
+        # because the file already exists.  The ``RDR_CORNER_CASES`` dict written
+        # by ``rdr_to_python`` must be non-empty and must map back to 2 entries.
+        # ------------------------------------------------------------------ #
+
+        @rdr(filename)
+        def distance_reloaded(x: float, y: float) -> float:
+            """Compute Euclidean distance."""
+            return (x**2 + y**2) ** 0.5
+
+        reloaded_count = len(distance_reloaded.rdr.corner_cases.cases)
+        assert reloaded_count == original_count, (
+            f"Corner cases lost after reload: expected {original_count}, "
+            f"got {reloaded_count}.  "
+            "Check that RDR_CORNER_CASES is written to the file and that "
+            "load_rdr rebuilds CornerCaseStore.from_ordered_cases correctly."
+        )
