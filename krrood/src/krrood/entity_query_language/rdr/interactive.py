@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Callable, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from colorama import Fore, Style
 
@@ -57,6 +57,9 @@ from krrood.entity_query_language.rdr.prompt_sections import (  # noqa: F401
     SHOW_TREE_MAGIC,
 )
 from krrood.entity_query_language.rdr.rule_tree_view import render_rule_tree
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 #: A shell runner takes ``(namespace, header)`` and must leave the expert's assignments
 #: (and any ``exit()`` flag) visible in ``namespace`` when it returns.
@@ -150,7 +153,7 @@ class IPythonInterface(ExpertInterface):
     use_color: bool = True
     """Whether the header, framing and magics emit ANSI colour."""
 
-    rdr: Optional[Any] = None
+    rdr: Optional["EQLSingleClassRDR"] = None
     """The :class:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR` being fit,
     exposed for the ``%knows`` backward-inference magic. ``None`` when the interface is used
     without an RDR (no magic is registered)."""

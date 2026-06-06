@@ -7,7 +7,9 @@ the expert is given. This exercises namespace construction, scope capture, the l
 answer contract, the validate/re-prompt loop, abort handling, and integration with fit_case.
 """
 
+import contextlib
 import dataclasses
+import io
 import unittest
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -228,8 +230,6 @@ class TestKnowsMagic(unittest.TestCase):
         ns = {_KNOWLEDGE_KEY: rdr, "Species": Species, "True": True, "False": False}
         magic = _make_knowledge_magic(ns, IPythonInterface().palette)
 
-        import io
-        import contextlib
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             magic("Species.mammal")
@@ -244,8 +244,6 @@ class TestKnowsMagic(unittest.TestCase):
         ns = {_KNOWLEDGE_KEY: rdr}
         magic = _make_knowledge_magic(ns, IPythonInterface().palette)
 
-        import io
-        import contextlib
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             magic("Species.NonExistentValue")
@@ -259,8 +257,6 @@ class TestKnowsMagic(unittest.TestCase):
         ns = {_KNOWLEDGE_KEY: rdr}
         magic = _make_knowledge_magic(ns, IPythonInterface().palette)
 
-        import io
-        import contextlib
         f = io.StringIO()
         with contextlib.redirect_stdout(f):
             magic("")
