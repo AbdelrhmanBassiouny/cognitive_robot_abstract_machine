@@ -44,6 +44,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
     LogicalOperator,
     Not,
 )
+from krrood.entity_query_language.rdr.utils import _conclusions_of
 from krrood.entity_query_language.rules.conclusion import Add, Conclusion
 from krrood.entity_query_language.rules.conclusion_selector import (
     Alternative,
@@ -144,10 +145,6 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
 
     visit(conditions_root, 0, "if")
     return rules
-
-
-def _conclusions_of(node: SymbolicExpression) -> List[Add]:
-    return [c for c in node._conclusions_ if isinstance(c, Add)]
 
 
 def resolve_status(

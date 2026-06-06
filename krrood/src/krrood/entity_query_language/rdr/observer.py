@@ -21,9 +21,8 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
 )
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
-from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.enums import EvaluationContextKey
-from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.entity_query_language.rdr.utils import UNSET, _extract_value
 from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.evaluation import (
     EvaluationContext,
@@ -99,7 +98,7 @@ class ConclusionObserver(EvaluationObserver):
             if not isinstance(conclusion, Add):
                 continue
             target = conclusion.right
-            target_value = target._value_ if isinstance(target, Literal) else target
+            target_value = _extract_value(conclusion)
             if target_value == value:
                 return conclusion
         return None

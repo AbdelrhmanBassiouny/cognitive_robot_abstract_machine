@@ -29,6 +29,10 @@ from krrood.entity_query_language.rdr.conclusion_domain import (
 )
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.entity_query_language.rdr.backward_inference import (
+    BackwardInferenceIndex,
+    ConclusionKnowledge,
+)
 from krrood.entity_query_language.rdr.observer import (
     ClassificationTrace,
     ConclusionObserver,
@@ -68,6 +72,10 @@ class EQLSingleClassRDR:
     """The root rule-tree query; ``None`` until the first rule is added."""
     save_path: Optional[str] = field(default=None)
     """When set, the RDR is automatically saved to this path after every rule insertion."""
+    _backward_index: BackwardInferenceIndex = field(
+        default_factory=BackwardInferenceIndex, repr=False
+    )
+    """Lazy cache for backward-inference queries. Invalidated on every rule insertion."""
 
     def __post_init__(self) -> None:
         self.case_variable = variable(self.case_type, domain=[])
@@ -172,6 +180,7 @@ class EQLSingleClassRDR:
             )
 
         self._insert_rule(trace, current, condition, target)
+        self._backward_index.invalidate()
         return target
 
     def _insert_rule(
@@ -234,3 +243,22 @@ class EQLSingleClassRDR:
     def conclusion_domain(self) -> ConclusionDomain:
         """The allowable-value domain of the predicted attribute, resolved from its type."""
         return resolve_conclusion_domain(self.case_type, self.conclusion_attribute_name)
+
+    def what_do_we_know_about(self, conclusion_value: Any) -> ConclusionKnowledge:
+        """Return the rule-tree conditions that would produce *conclusion_value*.
+
+        This inspects the rule tree from the perspective of *conclusion_value*,
+        walking the conclusion-selector DAG backwards to enumerate every rule path
+        that could produce it. Each path yields one
+        :class:`~krrood.entity_query_language.rdr.backward_inference.SufficientConditionSet`;
+        the full result is a disjunction of all such sets (DNF).
+
+        The result is lazily cached in :attr:`_backward_index` and invalidated on
+        every tree mutation, so repeated queries after fitting are O(1).
+
+        :param conclusion_value: The conclusion value to query (e.g. ``Species.molusc``).
+        :return: The backward-inference knowledge for *conclusion_value*.
+        """
+        return self._backward_index.query(
+            self.conditions_root, conclusion_value
+        )
