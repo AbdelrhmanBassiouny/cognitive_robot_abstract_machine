@@ -14,6 +14,7 @@ from krrood.entity_query_language.factories import (
     add,
     alternative,
     entity,
+    not_,
     refinement,
     variable, and_,
 )
@@ -141,6 +142,78 @@ class TestStatusResolution(unittest.TestCase):
         _, status = self._statuses(query, animal, first(Species.insect))
         self.assertEqual(status["species = fish"], RuleStatus.EVALUATED_NOT_FIRED)
         self.assertEqual(status["species = mammal"], RuleStatus.NOT_EVALUATED)
+
+    def test_refinement_with_not_condition_parent_is_green(self):
+        """Regression: ``not_(x)`` as a refinement condition must not suppress the parent rule's green status.
+
+        ``Not._evaluate__`` previously dropped the result chain, so the parent rule's condition
+        ID was absent from ``satisfied_condition_ids`` and appeared red even though the parent
+        fired (a prerequisite for any refinement being evaluated at all).
+        """
+        # backbone → fish (base rule); except if not_(milk) → molusc (refinement).
+        # For a fish (backbone=True, milk=False): backbone fires (green), not_(milk)=True so
+        # molusc refinement also fires.  Both rules must be green.
+        animal_var = variable(Animal, domain=[])
+        query = entity(animal_var).where(animal_var.backbone == True)
+        with query:
+            add(animal_var.species, Species.fish)
+            with refinement(not_(animal_var.milk)):
+                add(animal_var.species, Species.molusc)
+        query.build()
+
+        fish_case = first(Species.fish)  # backbone=True, milk=False
+        rules = walk_rules(query._conditions_root_)
+        trace = trace_case(query, animal_var, animal_var.species, fish_case, query._conditions_root_)
+        status = {
+            format_conclusion(r.conclusions[0]): resolve_status(
+                r, trace.satisfied_condition_ids, trace.evaluated_expression_ids
+            )
+            for r in rules
+        }
+        self.assertEqual(trace.conclusion, Species.molusc)
+        # The not_(milk) refinement fired; its backbone parent must also be green.
+        self.assertEqual(status["species = molusc"], RuleStatus.FIRED)
+        self.assertEqual(status["species = fish"], RuleStatus.FIRED)
+
+    def test_no_green_child_with_red_visual_parent_in_full_zoo_model(self):
+        """Integration: every fired except-if in the zoo model has a green visual parent.
+
+        A green "except if" with a red "if/else if" immediately above it at the next
+        shallower depth would be a visual lie (Refinement can only evaluate its right
+        branch when its left branch already fired).
+        """
+        from krrood.entity_query_language.rdr.serialization import load_rdr
+        import os
+
+        model_path = os.path.join(
+            os.path.dirname(__file__), "fitted_models", "zoo_species_rdr.py"
+        )
+        if not os.path.exists(model_path):
+            self.skipTest("human-fitted zoo model not yet committed")
+
+        rdr = load_rdr(model_path)
+        for animal_case, _ in zip(animals, targets):
+            trace = rdr._trace(animal_case)
+            rules = walk_rules(trace.rule_tree_root)
+            statuses = [
+                resolve_status(r, trace.satisfied_condition_ids, trace.evaluated_expression_ids)
+                for r in rules
+            ]
+            for i, rule in enumerate(rules):
+                if rule.depth == 0 or statuses[i] != RuleStatus.FIRED:
+                    continue
+                parent_idx = next(
+                    (j for j in range(i - 1, -1, -1) if rules[j].depth == rule.depth - 1),
+                    None,
+                )
+                if parent_idx is not None:
+                    self.assertNotEqual(
+                        statuses[parent_idx],
+                        RuleStatus.EVALUATED_NOT_FIRED,
+                        f"{animal_case.name}: 'except if {format_condition(rule.condition)}' "
+                        f"is green but its visual parent "
+                        f"'{format_condition(rules[parent_idx].condition)}' is red",
+                    )
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")

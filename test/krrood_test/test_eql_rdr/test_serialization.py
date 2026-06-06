@@ -9,6 +9,7 @@ import os
 import tempfile
 import unittest
 
+from krrood.entity_query_language.factories import add, entity, not_, refinement, variable
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.serialization import (
@@ -185,6 +186,63 @@ class TestSerialization(unittest.TestCase):
             src2 = rdr_to_python(loaded1)
             with open(p1) as f:
                 self.assertEqual(f.read(), src2)
+
+
+def _build_chained_refinement_tree() -> EQLSingleClassRDR:
+    """backbone → fish; except if not_(milk) → molusc; except if venomous → reptile.
+
+    Two levels of chained refinements built directly from EQL context managers.  The outer
+    refinement uses ``not_()`` as its condition — the pattern that exposed the missing rule
+    for the scorpion (``Not._evaluate__`` previously dropped the result chain, causing
+    ``satisfied_condition_ids`` to omit the parent rule's condition ID).
+    """
+    animal_var = variable(Animal, domain=[])
+    query = entity(animal_var).where(animal_var.backbone == True)
+    with query:
+        add(animal_var.species, Species.fish)
+        with refinement(not_(animal_var.milk)):
+            add(animal_var.species, Species.molusc)
+            with refinement(animal_var.venomous):
+                add(animal_var.species, Species.reptile)
+    query.build()
+    rdr = EQLSingleClassRDR(Animal, "species")
+    rdr.case_variable = animal_var
+    rdr.conclusion_variable = animal_var.species
+    rdr.query = query
+    return rdr
+
+
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestChainedRefinement(unittest.TestCase):
+    """
+    Regression tests for chained (multi-level) refinements, especially those
+    whose conditions use ``not_()`` — the pattern that caused a missing rule
+    in the human-fitted zoo model (scorpion classified as reptile instead of molusc).
+    """
+
+    def test_chained_refinement_roundtrip_preserves_classifications(self):
+        rdr = _build_chained_refinement_tree()
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "model.py")
+            save_rdr(rdr, path)
+            loaded = load_rdr(path)
+        for a in animals:
+            self.assertEqual(rdr.classify(a), loaded.classify(a), a.name)
+
+    def test_chained_refinement_roundtrip_is_byte_stable(self):
+        rdr = _build_chained_refinement_tree()
+        with tempfile.TemporaryDirectory() as d:
+            p1 = os.path.join(d, "m1.py")
+            save_rdr(rdr, p1)
+            loaded1 = load_rdr(p1)
+            src2 = rdr_to_python(loaded1)
+            with open(p1) as f:
+                self.assertEqual(f.read(), src2)
+
+    def test_chained_refinement_emits_nested_blocks(self):
+        rdr = _build_chained_refinement_tree()
+        src = rdr_to_python(rdr)
+        self.assertGreaterEqual(src.count("with refinement("), 2)
 
 
 if __name__ == "__main__":

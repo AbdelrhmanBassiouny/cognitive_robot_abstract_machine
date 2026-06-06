@@ -44,6 +44,8 @@ with query:
         add(animal.species, Species.molusc)
         with refinement(animal.venomous):
             add(animal.species, Species.reptile)
+            with refinement(not_(animal.backbone)):
+                add(animal.species, Species.molusc)
 query.build()
 
 # Stable handles for loading.
