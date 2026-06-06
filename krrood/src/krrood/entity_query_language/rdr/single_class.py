@@ -36,6 +36,7 @@ from krrood.entity_query_language.rdr.backward_inference import (
     BackwardInferenceIndex,
     ConclusionKnowledge,
 )
+from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 
 _FITTING_DESCRIPTION = "Fitting RDR"
 from krrood.entity_query_language.rdr.observer import (
@@ -77,6 +78,8 @@ class EQLSingleClassRDR:
     """The root rule-tree query; ``None`` until the first rule is added."""
     save_path: Optional[str] = field(default=None)
     """When set, the RDR is automatically saved to this path after every rule insertion."""
+    corner_cases: CornerCaseStore = field(default_factory=CornerCaseStore)
+    """Maps each rule's condition-node id to the corner case that triggered its creation."""
     _backward_index: BackwardInferenceIndex = field(
         default_factory=BackwardInferenceIndex, repr=False
     )
@@ -186,7 +189,7 @@ class EQLSingleClassRDR:
                 case, self.case_variable, target, current, trace
             )
 
-        self._insert_rule(trace, current, condition, target)
+        self._insert_rule(trace, current, condition, target, case)
         self._backward_index.invalidate()
         return target
 
@@ -196,6 +199,7 @@ class EQLSingleClassRDR:
         current: Optional[Any],
         condition: SymbolicExpression,
         target: Any,
+        case: Any,
     ) -> None:
         """Splice a new rule into the tree, choosing first-rule / alternative / refinement."""
         if self.query is None:
@@ -204,9 +208,10 @@ class EQLSingleClassRDR:
             with self.query:
                 add(self.conclusion_variable, target)
             self.query.build()
+            new_node = self.query._conditions_root_
         elif current is UNSET:
             # Nothing fired: attach an alternative at the conditions root.
-            insert_alternative(
+            new_node = insert_alternative(
                 self.query._conditions_root_,
                 condition,
                 self.conclusion_variable,
@@ -214,12 +219,14 @@ class EQLSingleClassRDR:
             )
         else:
             # A rule fired with the wrong value: refine it so the new condition overrides.
-            insert_refinement(
+            new_node = insert_refinement(
                 trace.firing_anchor,
                 condition,
                 self.conclusion_variable,
                 target,
             )
+
+        self.corner_cases.record(new_node, case)
 
         if self.save_path is not None:
             save_rdr_with_case(self, self.save_path)
