@@ -22,7 +22,8 @@ from krrood.entity_query_language.rdr.expert import (
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.interface import (
     CASE_INSTANCE_NAME,
-    CASE_VARIABLE_NAME, )
+    CASE_VARIABLE_NAME,
+)
 from krrood.entity_query_language.rdr.magics import (
     _KNOWLEDGE_KEY,
     _make_knowledge_magic,
@@ -91,14 +92,18 @@ class TestInteractiveExpert(unittest.TestCase):
         captured = {}
         expert = expert_with(maximally_specific_runner(captured))
         rdr = EQLSingleClassRDR(Animal, "species")
-        expert.ask_for_conditions(first(Species.bird), rdr.case_variable, Species.bird, Species.mammal)
+        expert.ask_for_conditions(
+            first(Species.bird), rdr.case_variable, Species.bird, Species.mammal
+        )
         header = captured["header"]
         self.assertIn("bird", header.lower())
 
     def test_returns_live_eql_expression(self):
         expert = expert_with(maximally_specific_runner())
         rdr = EQLSingleClassRDR(Animal, "species")
-        cond = expert.ask_for_conditions(first(Species.mammal), rdr.case_variable, Species.mammal)
+        cond = expert.ask_for_conditions(
+            first(Species.mammal), rdr.case_variable, Species.mammal
+        )
         self.assertIsInstance(cond, SymbolicExpression)
         self.assertNotIsInstance(cond, str)
 
@@ -109,7 +114,9 @@ class TestInteractiveExpert(unittest.TestCase):
         expert = expert_with(run_and_abort)
         rdr = EQLSingleClassRDR(Animal, "species")
         with self.assertRaises(NoConditionsProvided):
-            expert.ask_for_conditions(first(Species.mammal), rdr.case_variable, Species.mammal)
+            expert.ask_for_conditions(
+                first(Species.mammal), rdr.case_variable, Species.mammal
+            )
 
     def test_invalid_answer_is_reprompted_then_accepted(self):
         # First attempt builds the condition over the *concrete* case (a bool — invalid);
@@ -128,7 +135,9 @@ class TestInteractiveExpert(unittest.TestCase):
 
         expert = expert_with(run)
         rdr = EQLSingleClassRDR(Animal, "species")
-        cond = expert.ask_for_conditions(first(Species.mammal), rdr.case_variable, Species.mammal)
+        cond = expert.ask_for_conditions(
+            first(Species.mammal), rdr.case_variable, Species.mammal
+        )
         self.assertEqual(calls["n"], 2)
         self.assertIsInstance(cond, SymbolicExpression)
 
@@ -137,7 +146,9 @@ class TestInteractiveExpert(unittest.TestCase):
         rdr = EQLSingleClassRDR(Animal, "species")
         captured = {}
         expert = expert_with(maximally_specific_runner(captured))
-        expert.ask_for_conditions(first(Species.mammal), rdr.case_variable, Species.mammal)
+        expert.ask_for_conditions(
+            first(Species.mammal), rdr.case_variable, Species.mammal
+        )
         self.assertEqual(
             captured["namespace"].get("interactive_sentinel"), USER_SCOPE_SENTINEL
         )
@@ -169,7 +180,9 @@ class TestKnowsMagic(unittest.TestCase):
         rdr = EQLSingleClassRDR(Animal, "species")
         interface = IPythonInterface(shell_runner=runner, rdr=rdr)
         expert = Expert(interface=interface)
-        expert.ask_for_conditions(first(Species.mammal), rdr.case_variable, Species.mammal)
+        expert.ask_for_conditions(
+            first(Species.mammal), rdr.case_variable, Species.mammal
+        )
         self.assertIs(captured["key"], rdr)
 
     def test_knowledge_key_absent_when_no_rdr(self):
@@ -185,7 +198,9 @@ class TestKnowsMagic(unittest.TestCase):
         rdr = EQLSingleClassRDR(Animal, "species")
         interface = IPythonInterface(shell_runner=runner)
         expert = Expert(interface=interface)
-        expert.ask_for_conditions(first(Species.mammal), rdr.case_variable, Species.mammal)
+        expert.ask_for_conditions(
+            first(Species.mammal), rdr.case_variable, Species.mammal
+        )
         self.assertIsNone(captured["key"])
 
     def test_knows_queries_rdr_directly(self):
@@ -267,3 +282,178 @@ class TestKnowsMagic(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — CaseContext.corner_case field and fit_case provenance wiring
+# ---------------------------------------------------------------------------
+
+import dataclasses as _dataclasses
+
+from krrood.entity_query_language.rdr.interface import FunctionInterface
+
+
+def _make_animal(
+    name: str,
+    *,
+    milk: bool = False,
+    feathers: bool = False,
+    fins: bool = False,
+    backbone: bool = True,
+    venomous: bool = False,
+) -> Animal:
+    """Pattern: DistinctAnimalCase — minimal animal with one discriminating feature.
+
+    Mirrors the helper in ``test_corner_case_population.py`` so this class is
+    self-contained.
+    """
+    return Animal(
+        name=name,
+        hair=milk,
+        feathers=feathers,
+        eggs=not milk,
+        milk=milk,
+        airborne=False,
+        aquatic=fins,
+        predator=False,
+        toothed=backbone,
+        backbone=backbone,
+        breathes=not fins,
+        venomous=venomous,
+        fins=fins,
+        legs=0 if fins else 4,
+        tail=backbone,
+        domestic=False,
+        catsize=milk,
+    )
+
+
+def _scripted_function_expert(rules: dict) -> Expert:
+    """A ``FunctionInterface``-backed expert that records every ``CaseContext`` it sees.
+
+    ``rules`` maps a target ``Species`` to a callable ``(case_variable) -> condition``.
+    The function also appends the full ``CaseContext`` to ``recorded_contexts`` (a list
+    attached to the returned expert as ``expert.recorded_contexts``) so tests can
+    inspect ``corner_case`` after fitting.
+    """
+    recorded: list = []
+
+    def answer(context, requests):
+        recorded.append(context)
+        return {"conditions": rules[context.target_conclusion](context.case_variable)}
+
+    expert = Expert(interface=FunctionInterface(answer_fn=answer))
+    expert.recorded_contexts = recorded  # type: ignore[attr-defined]
+    return expert
+
+
+class TestCaseContextCornerCase(unittest.TestCase):
+    """Phase 4 — ``CaseContext.corner_case`` field and ``fit_case`` provenance wiring."""
+
+    def test_case_context_has_corner_case_field(self):
+        """``CaseContext`` exposes a ``corner_case`` attribute that defaults to ``None``.
+
+        This tests that Phase 4 added the field to the dataclass; it fails with
+        ``AttributeError`` or ``TypeError`` until the field exists.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        case = _make_animal("mammal", milk=True)
+        from krrood.entity_query_language.rdr.interface import CaseContext
+
+        ctx = CaseContext(case_instance=case, case_variable=rdr.case_variable)
+        self.assertIsNone(ctx.corner_case)
+
+    def test_fit_case_first_rule_corner_case_is_none(self):
+        """When the very first rule is fitted (empty RDR, no prior firing) the
+        ``CaseContext`` passed to the expert has ``corner_case == None``.
+
+        No firing anchor exists for the first case, so there is no corner case to show.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        mammal = _make_animal("mammal", milk=True)
+        expert = _scripted_function_expert({Species.mammal: lambda v: v.milk == True})
+
+        rdr.fit_case(mammal, Species.mammal, expert)
+
+        self.assertEqual(len(expert.recorded_contexts), 1)
+        ctx = expert.recorded_contexts[0]
+        self.assertIsNone(ctx.corner_case)
+
+    def test_fit_case_refinement_populates_corner_case_in_context(self):
+        """When a second case triggers a refinement (wrong rule fired) the ``CaseContext``
+        passed to the expert for that second case has ``corner_case`` equal to the first
+        case's Animal instance — i.e., the corner case of the firing rule.
+
+        This is the core Phase 4 contract: the expert can see *why the original rule
+        exists* by inspecting the corner case shown alongside the new case.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        mammal = _make_animal("mammal", milk=True)
+        # fish has backbone=False so the mammal rule (milk==True) does NOT fire for it;
+        # use an over-general first rule that WILL misfire for the second case.
+        # Strategy: first rule is "backbone == True" -> mammal; second case is also
+        # backbone==True but should be classified as bird (feathers==True).
+        backbone_animal = _make_animal("backbone_mammal", milk=True, backbone=True)
+        feathered_backbone = Animal(
+            name="owl",
+            hair=False,
+            feathers=True,
+            eggs=True,
+            milk=False,
+            airborne=True,
+            aquatic=False,
+            predator=True,
+            toothed=False,
+            backbone=True,
+            breathes=True,
+            venomous=False,
+            fins=False,
+            legs=2,
+            tail=False,
+            domestic=False,
+            catsize=False,
+        )
+
+        expert = _scripted_function_expert(
+            {
+                Species.mammal: lambda v: v.backbone == True,
+                Species.bird: lambda v: v.feathers == True,
+            }
+        )
+
+        # First fit: backbone rule -> mammal (no prior firing; corner_case must be None).
+        rdr.fit_case(backbone_animal, Species.mammal, expert)
+        self.assertIsNone(expert.recorded_contexts[0].corner_case)
+
+        # Second fit: feathered bird with backbone fires the mammal rule (wrong).
+        # The refinement expert call must see corner_case == backbone_animal.
+        rdr.fit_case(feathered_backbone, Species.bird, expert)
+
+        self.assertEqual(len(expert.recorded_contexts), 2)
+        ctx_refinement = expert.recorded_contexts[1]
+        self.assertIs(ctx_refinement.corner_case, backbone_animal)
+
+    def test_fit_case_alternative_corner_case_is_none(self):
+        """When a second case does NOT fire any existing rule (alternative path) the
+        ``CaseContext`` for that second case has ``corner_case == None``.
+
+        No rule fired means no firing anchor, so no corner case to display.
+        """
+        rdr = EQLSingleClassRDR(Animal, "species")
+        mammal = _make_animal("mammal", milk=True)
+        # fish: no backbone, no milk, no feathers — will not fire the mammal rule.
+        fish = _make_animal("fish", fins=True, backbone=False)
+
+        expert = _scripted_function_expert(
+            {
+                Species.mammal: lambda v: v.milk == True,
+                Species.fish: lambda v: v.fins == True,
+            }
+        )
+
+        rdr.fit_case(mammal, Species.mammal, expert)
+        rdr.fit_case(fish, Species.fish, expert)
+
+        self.assertEqual(len(expert.recorded_contexts), 2)
+        ctx_alternative = expert.recorded_contexts[1]
+        self.assertIsNone(ctx_alternative.corner_case)
