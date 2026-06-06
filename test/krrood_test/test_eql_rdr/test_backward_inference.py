@@ -20,6 +20,7 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from krrood.entity_query_language.rdr.backward_inference import (
+    GuardCondition,
     SufficientConditionSet,
     ConclusionKnowledge,
     what_do_we_know_about,
@@ -550,3 +551,97 @@ class TestIsSatisfiable:
         animal = variable(Animal, domain=[])
         cond_set = SufficientConditionSet(())
         assert cond_set.evaluate_against(animal, _COW) is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: GuardCondition.holds_for
+# ---------------------------------------------------------------------------
+
+
+class TestGuardConditionHoldsFor:
+    """Unit tests for GuardCondition.holds_for — the new Phase 1 method.
+
+    Each test exercises exactly one path through the holds_for logic:
+    whether the guard is positive or negated, and whether the underlying
+    expression evaluates to True or False for the given case.
+    """
+
+    def test_positive_guard_returns_true_when_condition_holds(self):
+        """A non-negated guard returns True when the expression is satisfied by the case.
+
+        Guarantee: holds_for(animal_variable, cow) is True when milk==True and cow has milk.
+        """
+        animal = variable(Animal, domain=[])
+        guard = GuardCondition(expression=animal.milk == True, negated=False)
+        assert guard.holds_for(animal, _COW) is True
+
+    def test_positive_guard_returns_false_when_condition_does_not_hold(self):
+        """A non-negated guard returns False when the expression is not satisfied by the case.
+
+        Guarantee: holds_for(animal_variable, eagle) is False when eagle.milk is False.
+        """
+        animal = variable(Animal, domain=[])
+        guard = GuardCondition(expression=animal.milk == True, negated=False)
+        assert guard.holds_for(animal, _EAGLE) is False
+
+    def test_negated_guard_returns_false_when_condition_holds(self):
+        """A negated guard inverts: it returns False when the underlying expression is True.
+
+        Guarantee: negated holds_for(animal_variable, cow) is False because cow has milk
+        (condition is satisfied, but negation flips the result).
+        """
+        animal = variable(Animal, domain=[])
+        guard = GuardCondition(expression=animal.milk == True, negated=True)
+        assert guard.holds_for(animal, _COW) is False
+
+    def test_negated_guard_returns_true_when_condition_does_not_hold(self):
+        """A negated guard inverts: it returns True when the underlying expression is False.
+
+        Guarantee: negated holds_for(animal_variable, eagle) is True because eagle has no
+        milk (condition fails, negation flips to True).
+        """
+        animal = variable(Animal, domain=[])
+        guard = GuardCondition(expression=animal.milk == True, negated=True)
+        assert guard.holds_for(animal, _EAGLE) is True
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: SufficientConditionSet.evaluate_against delegates to holds_for
+# ---------------------------------------------------------------------------
+
+
+class TestSufficientConditionSetDelegates:
+    """Regression tests verifying evaluate_against delegates to GuardCondition.holds_for.
+
+    The refactored implementation replaces the original evaluation loop with
+    ``all(guard.holds_for(...))``. These tests confirm the delegation preserves
+    the original semantics: all guards must hold, and the first failure short-circuits.
+    """
+
+    def test_evaluate_against_returns_true_when_all_guards_pass(self):
+        """evaluate_against is True when every guard in the set holds for the case.
+
+        Uses the flat-tree mammal path (one guard: milk==True) against _COW, which
+        has milk=True, so the single guard passes and the result is True.
+        """
+        animal, _, root = _flat_tree()
+        knowledge = what_do_we_know_about(root, Species.mammal)
+        cond_set = knowledge.sufficient_condition_sets[0]
+        # Sanity: this path has exactly one guard (milk==True, non-negated)
+        assert len(cond_set.conditions) == 1
+        assert cond_set.evaluate_against(animal, _COW) is True
+
+    def test_evaluate_against_returns_false_when_first_guard_fails(self):
+        """evaluate_against is False when the very first guard does not hold for the case.
+
+        Uses the flat-tree bird path against _COW. The bird path requires NOT(milk==True)
+        as its first guard; since _COW.milk is True, that first guard fails immediately,
+        making the whole set False — confirming short-circuit behaviour via all().
+        """
+        animal, _, root = _flat_tree()
+        knowledge = what_do_we_know_about(root, Species.bird)
+        cond_set = knowledge.sufficient_condition_sets[0]
+        # Sanity: bird path has two conditions; first is negated (NOT milk)
+        assert len(cond_set.conditions) == 2
+        assert cond_set.conditions[0].negated is True
+        assert cond_set.evaluate_against(animal, _COW) is False

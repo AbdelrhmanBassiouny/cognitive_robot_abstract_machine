@@ -46,11 +46,33 @@ class GuardCondition:
 
     ``negated=True`` means the rule fires only when ``expression`` evaluates to False.
     The expression is the original live EQL node from the rule tree — use
-    :meth:`SufficientConditionSet.evaluate_against` to test it against a concrete case.
+    :meth:`holds_for` to test it against a concrete case.
     """
 
     expression: "SymbolicExpression"
     negated: bool = False
+
+    def holds_for(
+        self,
+        shared_variable: "CanBehaveLikeAVariable",
+        case: Any,
+    ) -> bool:
+        """Evaluate this guard against *case* bound to *shared_variable*.
+
+        Respects :attr:`negated`: a negated guard must evaluate to ``False`` for
+        the result to be ``True``.
+
+        :param shared_variable: The EQL variable the conditions range over.
+        :param case: The concrete case object to evaluate against.
+        :return: ``True`` if the guard is satisfied.
+        """
+        shared_variable._update_domain_([case])
+        results = list(self.expression.evaluate())
+        truth = any(
+            r.is_true if isinstance(r, OperationResult) else bool(r)
+            for r in results
+        )
+        return not truth if self.negated else truth
 
 
 @dataclass(frozen=True)
@@ -71,7 +93,7 @@ class SufficientConditionSet:
     ) -> bool:
         """Evaluate every condition against *case* bound to *shared_variable*.
 
-        Negated guards invert their truth value (must evaluate to False).
+        Delegates per-guard evaluation to :meth:`GuardCondition.holds_for`.
         All conditions must hold for the result to be ``True``.
 
         :param shared_variable: The EQL variable the conditions range over
@@ -79,18 +101,7 @@ class SufficientConditionSet:
         :param case: The concrete case object to evaluate against.
         :return: ``True`` if every guard condition is satisfied.
         """
-        shared_variable._update_domain_([case])
-        for guard in self.conditions:
-            results = list(guard.expression.evaluate())
-            truth = any(
-                r.is_true if isinstance(r, OperationResult) else bool(r)
-                for r in results
-            )
-            if guard.negated:
-                truth = not truth
-            if not truth:
-                return False
-        return True
+        return all(guard.holds_for(shared_variable, case) for guard in self.conditions)
 
 
 @dataclass(frozen=True)
