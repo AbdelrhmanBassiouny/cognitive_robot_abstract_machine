@@ -36,6 +36,7 @@ from krrood.entity_query_language.rdr.backward_inference import (
     BackwardInferenceIndex,
     ConclusionKnowledge,
 )
+from krrood.entity_query_language.rdr.condition_resolver import ConditionResolver
 from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 
 _FITTING_DESCRIPTION = "Fitting RDR"
@@ -84,6 +85,14 @@ class EQLSingleClassRDR:
         default_factory=BackwardInferenceIndex, repr=False
     )
     """Lazy cache for backward-inference queries. Invalidated on every rule insertion."""
+    condition_resolver: Optional[ConditionResolver] = field(default=None)
+    """Optional resolver for automatic condition derivation using backward inference.
+
+    When set, :meth:`fit_case` attempts to derive a differentiating condition automatically
+    before asking the expert. Only applies to the refinement branch (wrong rule fired).
+    Use :class:`~krrood.entity_query_language.rdr.condition_resolver.ChainConditionResolver`
+    ``.backward_inference_default()`` for the standard two-phase resolution strategy.
+    """
 
     def __post_init__(self) -> None:
         self.case_variable = variable(self.case_type, domain=[])
@@ -196,13 +205,51 @@ class EQLSingleClassRDR:
                 # The expert kept the current conclusion; nothing to insert.
                 return target
         else:
-            condition = expert.ask_for_conditions(
+            condition = self._try_auto_resolve(
+                case, target, current, corner_case
+            ) or expert.ask_for_conditions(
                 case, self.case_variable, target, current, trace, corner_case
             )
 
         self._insert_rule(trace, current, condition, target, case)
         self._backward_index.invalidate()
         return target
+
+    def _try_auto_resolve(
+        self,
+        case: Any,
+        target: Any,
+        current: Any,
+        corner_case: Optional[Any],
+    ) -> Optional[SymbolicExpression]:
+        """Attempt to derive a differentiating condition without asking the expert.
+
+        Returns a condition expression when the :attr:`condition_resolver` finds one,
+        ``None`` otherwise (which causes the caller to fall back to the expert).
+        Only active for the refinement branch: returns ``None`` immediately when
+        ``condition_resolver`` is unset, ``corner_case`` is ``None``, or ``current``
+        is ``UNSET``.
+
+        :param case: The new case being fit.
+        :param target: The correct conclusion.
+        :param current: The wrong conclusion currently returned by the firing rule.
+        :param corner_case: The case that triggered the currently-firing rule's creation.
+        :return: An auto-derived EQL condition, or ``None``.
+        """
+        if self.condition_resolver is None or corner_case is None or current is UNSET:
+            return None
+        target_knowledge = self._backward_index.query(self.conditions_root, target)
+        current_knowledge = self._backward_index.query(self.conditions_root, current)
+        result = self.condition_resolver.resolve(
+            case,
+            self.case_variable,
+            target,
+            current,
+            corner_case,
+            target_knowledge,
+            current_knowledge,
+        )
+        return result.expression if result is not None else None
 
     def _insert_rule(
         self,
