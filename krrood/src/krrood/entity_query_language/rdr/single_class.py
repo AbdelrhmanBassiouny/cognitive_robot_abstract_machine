@@ -213,16 +213,46 @@ class EQLSingleClassRDR:
         cases: List[Any],
         targets: Optional[List[Any]] = None,
         expert: Optional[Expert] = None,
+        max_passes: int = 10,
     ) -> "EQLSingleClassRDR":
         """
         Fit the RDR over ``cases``. When ``targets`` is given it is paired with ``cases``
         (ground-truth fitting); when ``None`` the expert labels each case (the no-target
         ``ask_for_rule`` path), so each case is paired with the ``UNSET`` sentinel rather than
         a literal ``None`` target.
+
+        When ground-truth ``targets`` are provided, the fit is *convergent*: after each
+        pass the model is rechecked and any cases that are now misclassified (because a
+        later rule retroactively intercepted them) are re-fitted.  Convergence stops when
+        every case is correct or ``max_passes`` is exhausted — whichever comes first.
+
+        Correctly-classified cases on re-passes are idempotent (the expert is never called
+        for them), so the overhead is one :meth:`classify` call per case per pass —
+        negligible compared to expert interaction.
+
+        When ``targets`` is ``None`` the no-target path has no ground truth to converge
+        against, so the method is a single pass (unchanged from previous behaviour).
         """
         paired_targets = targets if targets is not None else [UNSET] * len(cases)
-        for case, target in zip(cases, paired_targets):
-            self.fit_case(case, target, expert)
+        # Indices of cases to fit on the current pass.  Starts as all of them;
+        # after convergence only the misclassified ones remain.
+        pending = list(range(len(cases)))
+
+        for _ in range(max_passes):
+            for i in pending:
+                self.fit_case(cases[i], paired_targets[i], expert)
+
+            if targets is None:
+                return self
+
+            pending = [
+                i
+                for i in range(len(cases))
+                if self.classify(cases[i]) != paired_targets[i]
+            ]
+            if not pending:
+                break
+
         return self
 
     @property
