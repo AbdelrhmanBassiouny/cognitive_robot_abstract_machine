@@ -116,7 +116,9 @@ class TestResolutionSource:
 
         Guarantee: switching on source never confuses the two strategies.
         """
-        assert ResolutionSource.TARGET_KNOWLEDGE != ResolutionSource.CORNER_CASE_KNOWLEDGE
+        assert (
+            ResolutionSource.TARGET_KNOWLEDGE != ResolutionSource.CORNER_CASE_KNOWLEDGE
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -370,3 +372,360 @@ class TestConditionResolverABC:
         # _AlwaysNoneResolver implements resolve(); construction must succeed.
         resolver = _AlwaysNoneResolver()
         assert isinstance(resolver, ConditionResolver)
+
+
+# ---------------------------------------------------------------------------
+# Animal helpers shared by TestTargetKnowledgeResolver
+# ---------------------------------------------------------------------------
+
+from .animal import Animal, Species  # noqa: E402  (placed after stubs for clarity)
+from krrood.entity_query_language.rdr.single_class import (
+    EQLSingleClassRDR,
+)  # noqa: E402
+from krrood.entity_query_language.rdr.expert import Expert  # noqa: E402
+from krrood.entity_query_language.rdr.interface import FunctionInterface  # noqa: E402
+from krrood.entity_query_language.rdr.backward_inference import (
+    ConclusionKnowledge,
+)  # noqa: E402
+
+
+def _make_mammal(**overrides) -> Animal:
+    """Return a canonical mammal (milk-bearing, no feathers)."""
+    defaults = dict(
+        name="test_mammal",
+        hair=True,
+        feathers=False,
+        eggs=False,
+        milk=True,
+        airborne=False,
+        aquatic=False,
+        predator=False,
+        toothed=True,
+        backbone=True,
+        breathes=True,
+        venomous=False,
+        fins=False,
+        legs=4,
+        tail=True,
+        domestic=False,
+        catsize=True,
+    )
+    defaults.update(overrides)
+    return Animal(**defaults)
+
+
+def _make_bird(**overrides) -> Animal:
+    """Return a canonical bird (feathers, no milk)."""
+    defaults = dict(
+        name="test_bird",
+        hair=False,
+        feathers=True,
+        eggs=True,
+        milk=False,
+        airborne=True,
+        aquatic=False,
+        predator=False,
+        toothed=False,
+        backbone=True,
+        breathes=True,
+        venomous=False,
+        fins=False,
+        legs=2,
+        tail=True,
+        domestic=False,
+        catsize=False,
+    )
+    defaults.update(overrides)
+    return Animal(**defaults)
+
+
+def _two_rule_rdr():
+    """Build a minimal RDR with exactly two rules:
+
+    Rule 1 (root):      milk == True  → mammal
+    Rule 2 (alternative): feathers == True → bird
+
+    Returns ``(rdr, mammal_case, bird_case)`` where each case is the concrete
+    ``Animal`` that was used to fit the rule.
+    """
+    mammal = _make_mammal()
+    bird = _make_bird()
+
+    rdr = EQLSingleClassRDR(Animal, "species")
+
+    def answer(context, _requests):
+        v = context.case_variable
+        target = context.target_conclusion
+        if target is Species.mammal:
+            return {"conditions": v.milk == True}
+        return {"conditions": v.feathers == True}
+
+    expert = Expert(interface=FunctionInterface(answer_fn=answer))
+    rdr.fit_case(mammal, Species.mammal, expert)
+    rdr.fit_case(bird, Species.bird, expert)
+    return rdr, mammal, bird
+
+
+# ---------------------------------------------------------------------------
+# TestTargetKnowledgeResolver — Phase 3 animal-fixture tests
+# ---------------------------------------------------------------------------
+
+
+class TestTargetKnowledgeResolver:
+    """TargetKnowledgeResolver correctly discriminates using backward-inference knowledge.
+
+    The fixture uses a two-rule animal RDR:
+      - Rule 1: milk == True → mammal
+      - Rule 2: feathers == True → bird   (alternative)
+
+    Each test exercises one logical path through TargetKnowledgeResolver.resolve().
+    """
+
+    def test_resolves_when_guard_true_for_new_case_false_for_corner_case(self):
+        """Resolver returns non-None when a target-knowledge guard discriminates.
+
+        Guarantee: when a guard G in target_knowledge is True for ``case`` AND
+        False for ``corner_case``, TargetKnowledgeResolver returns a
+        ResolvedCondition whose source is TARGET_KNOWLEDGE.
+
+        Scenario: new case is a second bird (feathers=True, milk=False).
+        Corner case is the mammal (milk=True, feathers=False).
+        The bird-knowledge guard ``feathers == True`` is True for bird2, False
+        for the mammal — so it discriminates correctly.
+        """
+        rdr, mammal, _bird = _two_rule_rdr()
+        bird2 = _make_bird(name="bird2")
+
+        bird_knowledge = rdr.what_do_we_know_about(Species.bird)
+        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
+
+        resolver = TargetKnowledgeResolver()
+        result = resolver.resolve(
+            bird2,
+            rdr.case_variable,
+            Species.bird,
+            Species.mammal,
+            mammal,
+            bird_knowledge,
+            mammal_knowledge,
+        )
+
+        assert result is not None
+        assert isinstance(result, ResolvedCondition)
+        assert result.source is ResolutionSource.TARGET_KNOWLEDGE
+
+    def test_resolved_expression_evaluates_true_for_new_case(self):
+        """The resolved expression is True when evaluated against the new case.
+
+        Guarantee: _materialize(guard) produces an expression that correctly
+        identifies the new (target) case — not the corner case.
+        """
+        rdr, mammal, _bird = _two_rule_rdr()
+        bird2 = _make_bird(name="bird2")
+
+        bird_knowledge = rdr.what_do_we_know_about(Species.bird)
+        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
+
+        resolver = TargetKnowledgeResolver()
+        result = resolver.resolve(
+            bird2,
+            rdr.case_variable,
+            Species.bird,
+            Species.mammal,
+            mammal,
+            bird_knowledge,
+            mammal_knowledge,
+        )
+
+        assert result is not None
+        # Evaluate the resolved expression against the new bird case.
+        rdr.case_variable._update_domain_([bird2])
+        from krrood.entity_query_language.core.base_expressions import OperationResult
+
+        eval_results = list(result.expression.evaluate())
+        truth_for_bird2 = any(
+            r.is_true if isinstance(r, OperationResult) else bool(r)
+            for r in eval_results
+        )
+        assert truth_for_bird2 is True
+
+    def test_resolved_expression_evaluates_false_for_corner_case(self):
+        """The resolved expression is False when evaluated against the corner case.
+
+        Guarantee: the discriminating guard fails for the corner case — confirming
+        that the condition truly separates new case from corner case.
+        """
+        rdr, mammal, _bird = _two_rule_rdr()
+        bird2 = _make_bird(name="bird2")
+
+        bird_knowledge = rdr.what_do_we_know_about(Species.bird)
+        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
+
+        resolver = TargetKnowledgeResolver()
+        result = resolver.resolve(
+            bird2,
+            rdr.case_variable,
+            Species.bird,
+            Species.mammal,
+            mammal,
+            bird_knowledge,
+            mammal_knowledge,
+        )
+
+        assert result is not None
+        # Evaluate the resolved expression against the corner case (mammal).
+        rdr.case_variable._update_domain_([mammal])
+        from krrood.entity_query_language.core.base_expressions import OperationResult
+
+        eval_results = list(result.expression.evaluate())
+        truth_for_mammal = any(
+            r.is_true if isinstance(r, OperationResult) else bool(r)
+            for r in eval_results
+        )
+        assert truth_for_mammal is False
+
+    def test_returns_none_when_no_discriminating_guard_exists(self):
+        """Resolver returns None when every target-knowledge guard also holds for the corner case.
+
+        Guarantee: if the new case and corner case both satisfy every guard in
+        target_knowledge, no guard discriminates and the result is None — the
+        caller must fall back to the next resolver or the expert.
+
+        Scenario: corner case is a second bird identical to the new case
+        (feathers=True, milk=False) — the ``feathers == True`` guard holds for
+        both, so no discrimination is possible.
+        """
+        rdr, mammal, _bird = _two_rule_rdr()
+        bird_new = _make_bird(name="bird_new")
+        bird_corner = _make_bird(name="bird_corner")  # same trait signature
+
+        bird_knowledge = rdr.what_do_we_know_about(Species.bird)
+        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
+
+        resolver = TargetKnowledgeResolver()
+        result = resolver.resolve(
+            bird_new,
+            rdr.case_variable,
+            Species.bird,
+            Species.mammal,
+            bird_corner,  # corner case also satisfies feathers==True → no discrimination
+            bird_knowledge,
+            mammal_knowledge,
+        )
+
+        assert result is None
+
+    def test_returns_none_when_target_knowledge_has_no_sufficient_condition_sets(self):
+        """Resolver returns None when target_knowledge contains no sufficient condition sets.
+
+        Guarantee: an empty ConclusionKnowledge (no rules for the target) causes
+        the resolver to return None immediately — no AttributeError, no crash.
+        """
+        rdr, mammal, bird = _two_rule_rdr()
+        bird2 = _make_bird(name="bird2")
+
+        # Manually construct empty knowledge (as if the target has no rules yet).
+        empty_knowledge = ConclusionKnowledge(Species.reptile, ())
+        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
+
+        resolver = TargetKnowledgeResolver()
+        result = resolver.resolve(
+            bird2,
+            rdr.case_variable,
+            Species.reptile,
+            Species.mammal,
+            mammal,
+            empty_knowledge,
+            mammal_knowledge,
+        )
+
+        assert result is None
+
+    def test_handles_negated_guard_materialize_wraps_with_not(self):
+        """_materialize produces not_(expr) for a negated guard, yielding a correct expression.
+
+        Guarantee: when a discriminating guard in the tree has ``negated=True``
+        (meaning the rule fires when the expression is False), _materialize wraps
+        it with not_() — so the resulting expression evaluates to True when the
+        original expression is False, and False when it is True.
+
+        Scenario: We build a tree where the bird path has a negated guard:
+          backbone->fish; refine milk==True->mammal; alt NOT(milk)==True->bird is
+          equivalent to the Alternative path where the guard for the second branch
+          is NOT(milk==True).  We use the flat_tree pattern from test_backward_inference
+          where the bird path's first guard is negated (NOT milk==True).
+
+        We use the flat-tree structure directly: mammal (milk), bird (NOT milk + feathers).
+        The bird SCS has its first guard negated=True.  We feed that knowledge into the
+        resolver with a case that has milk=False (passes NOT milk) and a corner case
+        that has milk=True (fails NOT milk) — so the negated guard discriminates.
+        """
+        from krrood.entity_query_language.factories import (
+            variable,
+            entity,
+            add,
+            alternative,
+        )
+        from krrood.entity_query_language.rdr.backward_inference import (
+            what_do_we_know_about,
+        )
+
+        animal_var = variable(Animal, domain=[])
+        query = entity(animal_var).where(animal_var.milk == True)
+        with query:
+            add(animal_var.species, Species.mammal)
+            with alternative(animal_var.feathers == True):
+                add(animal_var.species, Species.bird)
+        query.build()
+
+        root = query._conditions_root_
+        bird_knowledge = what_do_we_know_about(root, Species.bird)
+        mammal_knowledge = what_do_we_know_about(root, Species.mammal)
+
+        # Confirm the first guard in the bird SCS is negated (NOT milk==True).
+        bird_scs = bird_knowledge.sufficient_condition_sets[0]
+        assert (
+            bird_scs.conditions[0].negated is True
+        ), "Test pre-condition: bird path first guard must be negated"
+
+        # New case: a bird (feathers=True, milk=False) — passes NOT(milk) guard.
+        bird_new = _make_bird(name="negated_test_bird")
+        # Corner case: a mammal (milk=True) — fails NOT(milk) guard.
+        mammal_corner = _make_mammal(name="negated_test_mammal")
+
+        resolver = TargetKnowledgeResolver()
+        result = resolver.resolve(
+            bird_new,
+            animal_var,
+            Species.bird,
+            Species.mammal,
+            mammal_corner,
+            bird_knowledge,
+            mammal_knowledge,
+        )
+
+        assert (
+            result is not None
+        ), "Resolver must find the negated guard as discriminating"
+        assert result.source is ResolutionSource.TARGET_KNOWLEDGE
+
+        # The materialized expression is not_(milk==True), i.e. milk==False.
+        # Evaluate it against the new bird (milk=False) → should be True.
+        animal_var._update_domain_([bird_new])
+        from krrood.entity_query_language.core.base_expressions import OperationResult
+
+        eval_results_bird = list(result.expression.evaluate())
+        truth_bird = any(
+            r.is_true if isinstance(r, OperationResult) else bool(r)
+            for r in eval_results_bird
+        )
+        assert truth_bird is True
+
+        # Evaluate against the corner mammal (milk=True) → should be False.
+        animal_var._update_domain_([mammal_corner])
+        eval_results_mammal = list(result.expression.evaluate())
+        truth_mammal = any(
+            r.is_true if isinstance(r, OperationResult) else bool(r)
+            for r in eval_results_mammal
+        )
+        assert truth_mammal is False
