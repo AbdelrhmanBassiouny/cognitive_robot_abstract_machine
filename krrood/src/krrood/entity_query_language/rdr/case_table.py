@@ -171,3 +171,27 @@ def render_case_table(
     return CaseTableRenderer(
         min_column_width=min_column_width, max_width=max_width, use_color=use_color
     ).render(case)
+
+
+def render_cases_side_by_side(
+    new_case: Any,
+    corner_case: Any,
+    *,
+    new_label: str = "New case",
+    corner_label: str = "Corner case",
+    min_column_width: int = DEFAULT_MIN_COLUMN_WIDTH,
+    use_color: bool = True,
+) -> str:
+    """Render ``new_case`` and ``corner_case`` tables stacked with labelled headers.
+
+    :param new_case: The case currently being fitted.
+    :param corner_case: The corner case of the firing rule.
+    :param new_label: Header text printed above the new-case table.
+    :param corner_label: Header text printed above the corner-case table.
+    :param min_column_width: Passed to :class:`CaseTableRenderer` for both tables.
+    :param use_color: Whether to emit ANSI colour in the tables.
+    :return: A string containing both tables separated by a blank line.
+    """
+    new_table = render_case_table(new_case, min_column_width=min_column_width, use_color=use_color)
+    corner_table = render_case_table(corner_case, min_column_width=min_column_width, use_color=use_color)
+    return f"{new_label}\n{new_table}\n\n{corner_label}\n{corner_table}"

@@ -83,6 +83,9 @@ class CaseContext:
     aids: List["ConclusionAid"] = field(default_factory=list)
     """Optional task-specific aids consulted while labelling the case (presentation and/or
     conclusion suggestion). Empty by default."""
+    corner_case: Optional[Any] = None
+    """The corner case of the firing rule, when a rule fired during the classification trace.
+    ``None`` when no rule fired (first rule or alternative path)."""
 
     @property
     def has_target(self) -> bool:

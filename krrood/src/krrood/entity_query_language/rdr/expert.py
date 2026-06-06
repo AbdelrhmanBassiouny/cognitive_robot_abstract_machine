@@ -141,6 +141,7 @@ class Expert:
         target_conclusion: Any,
         current_conclusion: Any = UNSET,
         trace: Optional[ClassificationTrace] = None,
+        corner_case: Optional[Any] = None,
     ) -> SymbolicExpression:
         """
         :param case: The case being fit (e.g. an ``Animal`` instance).
@@ -148,6 +149,7 @@ class Expert:
         :param target_conclusion: The known correct conclusion.
         :param current_conclusion: What the RDR currently concludes (``_UNSET`` if no rule fired).
         :param trace: The classification trace, for visualizing the rule tree to the expert.
+        :param corner_case: The corner case of the firing rule, for side-by-side display.
         :return: A live EQL condition expression that holds for ``case`` and distinguishes it.
         """
         context = CaseContext(
@@ -156,6 +158,7 @@ class Expert:
             current_conclusion=current_conclusion,
             target_conclusion=target_conclusion,
             trace=trace,
+            corner_case=corner_case,
         )
         request = AnswerRequest(
             name=ANSWER_NAME,
@@ -176,6 +179,7 @@ class Expert:
         conclusion_domain: ConclusionDomain,
         current_conclusion: Any = UNSET,
         trace: Optional[ClassificationTrace] = None,
+        corner_case: Optional[Any] = None,
     ) -> Tuple[Any, Optional[SymbolicExpression]]:
         """
         Ask the expert to label the case (no ground truth), then justify the label.
@@ -192,6 +196,7 @@ class Expert:
         :param conclusion_domain: The resolved allowable-value domain of the conclusion attribute.
         :param current_conclusion: What the RDR currently concludes (``UNSET`` if no rule fired).
         :param trace: The classification trace, for visualizing the rule tree to the expert.
+        :param corner_case: The corner case of the firing rule, for side-by-side display.
         :return: ``(conclusion, conditions)``; ``conditions`` is ``None`` when the expert kept
             the current conclusion (nothing to insert).
         """
@@ -202,12 +207,13 @@ class Expert:
             conclusion_domain=conclusion_domain,
             aids=self.aids,
             trace=trace,
+            corner_case=corner_case,
         )
         conclusion = self._ask_for_conclusion(context, conclusion_domain)
         if conclusion is UNSET or conclusion == current_conclusion:
             return current_conclusion, None
         conditions = self.ask_for_conditions(
-            case, case_variable, conclusion, current_conclusion, trace
+            case, case_variable, conclusion, current_conclusion, trace, corner_case
         )
         return conclusion, conditions
 

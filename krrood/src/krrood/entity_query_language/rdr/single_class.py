@@ -177,16 +177,20 @@ class EQLSingleClassRDR:
         if expert is None:
             raise ValueError("Expert must be supplied to fit_case")
 
+        corner_case = self.corner_cases.get(
+            trace.firing_anchor_id if trace is not None else None
+        )
+
         if target is UNSET:
             target, condition = expert.ask_for_rule(
-                case, self.case_variable, self.conclusion_domain, current, trace
+                case, self.case_variable, self.conclusion_domain, current, trace, corner_case
             )
             if condition is None:
                 # The expert kept the current conclusion; nothing to insert.
                 return target
         else:
             condition = expert.ask_for_conditions(
-                case, self.case_variable, target, current, trace
+                case, self.case_variable, target, current, trace, corner_case
             )
 
         self._insert_rule(trace, current, condition, target, case)

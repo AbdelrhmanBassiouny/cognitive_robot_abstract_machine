@@ -30,6 +30,7 @@ from colorama import Fore, Style
 from krrood.entity_query_language.rdr.case_table import (
     DEFAULT_MIN_COLUMN_WIDTH,
     render_case_table,
+    render_cases_side_by_side,
 )
 from krrood.entity_query_language.rdr.interface import (
     CASE_INSTANCE_NAME,
@@ -197,6 +198,13 @@ class IPythonInterface(ExpertInterface):
         return "\n".join(parts)
 
     def _case_table(self, context: CaseContext) -> str:
+        if context.corner_case is not None:
+            return render_cases_side_by_side(
+                context.case_instance,
+                context.corner_case,
+                min_column_width=self.min_column_width,
+                use_color=self.use_color,
+            )
         return render_case_table(
             context.case_instance, self.min_column_width, use_color=self.use_color
         )
