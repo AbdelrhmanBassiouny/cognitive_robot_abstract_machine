@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import cached_property
 
-from typing_extensions import Any, List, Optional, Type
+from typing_extensions import Any, List, Optional, Type, Self
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
@@ -144,9 +144,7 @@ class EQLSingleClassRDR:
             self._trace(case), head=head, tail=tail, use_color=use_color
         )
 
-    def fit_case(
-        self, case: Any, target: Any = UNSET, expert: Optional[Expert] = None
-    ) -> Any:
+    def fit_case(self, case: Any, target: Any = UNSET, expert: Optional[Expert] = None) -> Any:
         """
         Ensure the RDR classifies ``case`` as ``target``, growing the rule tree when it does
         not.
@@ -155,17 +153,21 @@ class EQLSingleClassRDR:
         conclusion and its conditions via :meth:`Expert.ask_for_rule`; otherwise only the
         conditions are requested (the conclusion is the known ``target``).
 
+        :param case: The case to classify.
+        :param target: The known correct conclusion, or ``UNSET`` when no ground truth is available.
+        :param expert: The expert that supplies rule conditions (and conclusion, when ``target`` is ``UNSET``).
         :return: The conclusion now associated with ``case`` (``target`` when given, else the
             expert's conclusion).
         """
-        if expert is None:
-            raise ValueError("fit_case requires an expert.")
 
         trace = None if self.query is None else self._trace(case)
         current = trace.conclusion if trace is not None else UNSET
 
         if target is not UNSET and current == target:
             return target
+
+        if expert is None:
+            raise ValueError("Expert must be supplied to fit_case")
 
         if target is UNSET:
             target, condition = expert.ask_for_rule(
@@ -222,16 +224,53 @@ class EQLSingleClassRDR:
         cases: List[Any],
         targets: Optional[List[Any]] = None,
         expert: Optional[Expert] = None,
-    ) -> "EQLSingleClassRDR":
+        max_passes: int = 10,
+    ) -> Self:
         """
         Fit the RDR over ``cases``. When ``targets`` is given it is paired with ``cases``
         (ground-truth fitting); when ``None`` the expert labels each case (the no-target
         ``ask_for_rule`` path), so each case is paired with the ``UNSET`` sentinel rather than
         a literal ``None`` target.
+
+        When ground-truth ``targets`` are provided, the fit is *convergent*: after each
+        pass the model is rechecked and any cases that are now misclassified (because a
+        later rule retroactively intercepted them) are re-fitted.  Convergence stops when
+        every case is correct or ``max_passes`` is exhausted — whichever comes first.
+
+        Correctly-classified cases on re-passes are idempotent (the expert is never called
+        for them), so the overhead is one :meth:`classify` call per case per pass —
+        negligible compared to expert interaction.
+
+        When ``targets`` is ``None`` the no-target path has no ground truth to converge
+        against, so the method is a single pass (unchanged from previous behaviour).
+
+        :param cases: The case instances to fit.
+        :param targets: Optional ground-truth conclusions paired with ``cases``.
+            ``None`` triggers the expert-labeling (``ask_for_rule``) path.
+        :param expert: The expert that supplies rule conditions.
+        :param max_passes: Maximum number of convergent passes.  Defaults to 10.
+        :return: This RDR, for chaining.
         """
         paired_targets = targets if targets is not None else [UNSET] * len(cases)
-        for case, target in zip(cases, paired_targets):
-            self.fit_case(case, target, expert)
+        # Indices of cases to fit on the current pass.  Starts as all of them;
+        # after convergence only the misclassified ones remain.
+        pending = list(range(len(cases)))
+
+        for _ in range(max_passes):
+            for i in pending:
+                self.fit_case(cases[i], paired_targets[i], expert)
+
+            if targets is None:
+                return self
+
+            pending = [
+                i
+                for i in range(len(cases))
+                if self.classify(cases[i]) != paired_targets[i]
+            ]
+            if not pending:
+                break
+
         return self
 
     @property

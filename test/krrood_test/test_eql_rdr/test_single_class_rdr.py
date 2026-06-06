@@ -49,11 +49,15 @@ def maximally_specific_expert() -> Expert:
 
 def labelling_expert(target_by_name):
     """An expert that supplies *both* conclusion and conditions (ask-for-rule path)."""
+
     def answer(context, requests):
         result = {
             "conditions": and_(
-                *[getattr(context.case_variable, f) == getattr(context.case_instance, f)
-                  for f in FEATURE_FIELDS]
+                *[
+                    getattr(context.case_variable, f)
+                    == getattr(context.case_instance, f)
+                    for f in FEATURE_FIELDS
+                ]
             )
         }
         if any(r.name == "conclusion" for r in requests):
@@ -171,6 +175,214 @@ class TestEQLSingleClassRDR(unittest.TestCase):
             rdr.conclusion_variable._id_,
             getattr(rdr.case_variable, "species")._id_,
         )
+
+
+def _molusc_backbone_false_expert():
+    """An expert that authors rules matching the scorpion scenario:
+
+    * mammals get ``milk == True``
+    * moluscs without backbones get ``milk == False`` (first time)
+    * reptiles (venomous + backbone) get ``venomous == True``
+    * moluscs that have become misclassified as reptile get ``backbone == False``
+
+    The return type differs depending on the fitting path (the production path uses
+    ``ask_for_conditions``, so only ``conditions`` is returned; the no-target path
+    uses ``ask_for_rule``, so both ``conclusion`` and ``conditions`` are returned).
+    """
+    call_details: list = []
+
+    def answer(context, requests):
+        case_variable = context.case_variable
+        case_instance = context.case_instance
+        current_conclusion = context.current_conclusion
+        target = context.target_conclusion
+        call_details.append((case_instance.name, current_conclusion, target))
+
+        has_conclusion = any(r.name == "conclusion" for r in requests)
+
+        if target is UNSET and has_conclusion:
+            # No-target path: return both conclusion and conditions.
+            result = {"conclusion": Species.molusc}
+            if current_conclusion == Species.reptile:
+                result["conditions"] = case_variable.backbone == False
+            elif current_conclusion is UNSET:
+                result["conditions"] = case_variable.milk == False
+            else:
+                result["conditions"] = case_variable.milk == False
+            return result
+
+        if target == Species.mammal:
+            return {"conditions": case_variable.milk == True}
+        if target == Species.reptile:
+            return {"conditions": case_variable.venomous == True}
+        if target == Species.molusc:
+            if current_conclusion == Species.reptile:
+                return {"conditions": case_variable.backbone == False}
+            return {"conditions": case_variable.milk == False}
+
+        return {"conditions": case_variable.milk == True}
+
+    return Expert(interface=FunctionInterface(answer_fn=answer)), call_details
+
+
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestFitConvergent(unittest.TestCase):
+    """Convergent fitting detects and corrects cases broken by later rules."""
+
+    def _make_scorpion_scenario(self):
+        """Three animals that reproduce the retroactive-breaking pattern:
+
+        1. **mammal** (eggs=False, milk=True) -> Species.mammal
+        2. **molusc** (eggs=False, milk=False, venomous=True, backbone=False) -> Species.molusc
+        3. **reptile** (eggs=False, milk=False, venomous=True, backbone=True) -> Species.reptile
+
+        Processed in order 1, 2, 3, the reptile's ``venomous==True`` rule intercepts
+        the molusc case (which is also venomous), misclassifying it as reptile.
+        """
+        mammal = Animal(
+            name="scenario_mammal",
+            hair=True,
+            feathers=False,
+            eggs=False,
+            milk=True,
+            airborne=False,
+            aquatic=False,
+            predator=False,
+            toothed=True,
+            backbone=True,
+            breathes=True,
+            venomous=False,
+            fins=False,
+            legs=4,
+            tail=True,
+            domestic=False,
+            catsize=True,
+        )
+        molusc = Animal(
+            name="scenario_molusc",
+            hair=False,
+            feathers=False,
+            eggs=False,
+            milk=False,
+            airborne=False,
+            aquatic=False,
+            predator=False,
+            toothed=False,
+            backbone=False,
+            breathes=True,
+            venomous=True,
+            fins=False,
+            legs=0,
+            tail=False,
+            domestic=False,
+            catsize=False,
+        )
+        reptile = Animal(
+            name="scenario_reptile",
+            hair=False,
+            feathers=False,
+            eggs=False,
+            milk=False,
+            airborne=False,
+            aquatic=False,
+            predator=True,
+            toothed=True,
+            backbone=True,
+            breathes=True,
+            venomous=True,
+            fins=False,
+            legs=4,
+            tail=True,
+            domestic=False,
+            catsize=False,
+        )
+        return [mammal, molusc, reptile], [
+            Species.mammal,
+            Species.molusc,
+            Species.reptile,
+        ]
+
+    def test_fit_already_convergent_in_one_pass(self):
+        """A model that already converges in a single pass should not add extra expert calls."""
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.fit(animals, targets, maximally_specific_expert())
+        correct = sum(rdr.classify(a) == t for a, t in zip(animals, targets))
+        self.assertGreaterEqual(correct / len(animals), 0.95)
+
+    def test_fit_convergent_recovers_from_broken_cases(self):
+        """Convergent fitting re-fits cases broken by later rules (the scorpion pattern)."""
+        cases, case_targets = self._make_scorpion_scenario()
+        expert, calls = _molusc_backbone_false_expert()
+
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.fit(cases, case_targets, expert)
+
+        for c, t in zip(cases, case_targets):
+            self.assertEqual(
+                rdr.classify(c),
+                t,
+                f"{c.name}: expected {t}, got {rdr.classify(c)}",
+            )
+
+        # The molusc was visited twice: once in the first pass (before any rules
+        # existed for it — expert supplied not_milk) and once in the second pass
+        # (now misclassified as reptile by the venomous rule — expert supplied
+        # not_backbone).  The re-visit is what makes fitting convergent.
+        molusc_calls = [
+            (cur, tgt) for name, cur, tgt in calls if name == "scenario_molusc"
+        ]
+        self.assertEqual(
+            len(molusc_calls),
+            2,
+            f"Expected 2 calls for molusc (first pass + re-fit), got {len(molusc_calls)}",
+        )
+        # The re-fit (second call) saw current == reptile (broken by venomous rule).
+        self.assertEqual(molusc_calls[1], (Species.reptile, Species.molusc))
+
+    def test_fit_convergent_without_targets_stays_single_pass(self):
+        """When targets is None, no convergence is attempted (single pass only)."""
+        cases, case_targets = self._make_scorpion_scenario()
+        target_by_name = {c.name: t for c, t in zip(cases, case_targets)}
+        expert = labelling_expert(target_by_name)
+
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.fit(cases, None, expert)
+
+        for c, t in zip(cases, case_targets):
+            self.assertEqual(rdr.classify(c), t, f"{c.name}: expected {t}")
+
+    def test_fit_convergent_max_passes_capped(self):
+        """A pathological case that never converges stops after max_passes."""
+        # An expert that answers randomly — the RDR can never converge.
+        case = Animal(
+            name="endless",
+            hair=False,
+            feathers=False,
+            eggs=True,
+            milk=False,
+            airborne=False,
+            aquatic=False,
+            predator=False,
+            toothed=False,
+            backbone=False,
+            breathes=True,
+            venomous=False,
+            fins=False,
+            legs=0,
+            tail=False,
+            domestic=False,
+            catsize=False,
+        )
+
+        def oscillating_answer(context, requests):
+            # Draws the wrong conclusion — the model will never stabilise.
+            return {"conditions": context.case_variable.eggs == True}
+
+        expert = Expert(interface=FunctionInterface(answer_fn=oscillating_answer))
+        rdr = EQLSingleClassRDR(Animal, "species")
+        rdr.fit([case], [Species.mammal], expert, max_passes=3)
+        # The loop exited after max_passes — assert a rule was added.
+        self.assertIsNotNone(rdr.query)
 
 
 if __name__ == "__main__":

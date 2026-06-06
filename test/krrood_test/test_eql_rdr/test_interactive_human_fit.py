@@ -60,7 +60,7 @@ def _ipython_available() -> bool:
 
 
 @unittest.skipUnless(
-    True,
+    False,
     "human-interactive: set to True and run with `pytest -s`",
 )
 @unittest.skipUnless(_ipython_available(), "IPython not installed")
