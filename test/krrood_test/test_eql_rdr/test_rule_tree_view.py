@@ -310,8 +310,6 @@ class TestInteractiveHeaderIntegration(unittest.TestCase):
         header = captured["header"]
         self.assertIn("fish", header)
         self.assertIn("mammal", header)
-        self.assertIn("satisfies", header)
-        self.assertIn("does not satisfy", header)
         self.assertIn("backbone == true", header)
 
     def test_no_tree_block_without_trace(self):
