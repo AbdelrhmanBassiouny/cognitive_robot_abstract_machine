@@ -196,7 +196,6 @@ class HasOneArm(HasArms[TGenericArm], RobotPartMixin, ABC):
 
 @dataclass(eq=False)
 class HasLeftRightArm(
-    Generic[TGenericLeftArm, TGenericRightArm],
     HasArms[TGenericLeftArm, TGenericRightArm],
     AbstractSubClassSafeGeneric,
     RobotPartMixin,
