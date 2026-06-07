@@ -71,7 +71,10 @@ from krrood.entity_query_language.rdr.condition_resolver import (
     ResolutionSource,
     TargetKnowledgeResolver,
 )
-from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+from krrood.entity_query_language.rdr.single_class import (
+    EQLSingleClassRDR,
+    RDRConvergenceWarning,
+)
 from krrood.entity_query_language.rdr.underspecified import (
     MultipleInferenceTargets,
     NoInferenceTarget,

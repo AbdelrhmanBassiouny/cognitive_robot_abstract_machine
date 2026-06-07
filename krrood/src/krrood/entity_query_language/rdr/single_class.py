@@ -13,6 +13,7 @@ Single-class means conclusions are mutually exclusive: each case resolves to one
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from functools import cached_property
 
@@ -40,6 +41,18 @@ from krrood.entity_query_language.rdr.condition_resolver import ConditionResolve
 from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 
 _FITTING_DESCRIPTION = "Fitting RDR"
+
+
+class RDRConvergenceWarning(UserWarning):
+    """Emitted when the RDR fitting loop detects oscillation and terminates early.
+
+    The pending set of misclassified cases repeated a previously seen signature,
+    meaning the tree is oscillating rather than converging. Inspect the warning
+    message for the clashing case reprs; if :attr:`EQLSingleClassRDR.save_path`
+    is set the partially fitted model is saved there for inspection.
+    """
+
+
 from krrood.entity_query_language.rdr.observer import (
     ClassificationTrace,
     ConclusionObserver,
@@ -307,7 +320,8 @@ class EQLSingleClassRDR:
         When ground-truth ``targets`` are provided, the fit is *convergent*: after each
         pass the model is rechecked and any cases that are now misclassified (because a
         later rule retroactively intercepted them) are re-fitted.  Convergence stops when
-        every case is correct or ``max_passes`` is exhausted — whichever comes first.
+        every case is correct, ``max_passes`` is exhausted, or oscillation is detected —
+        whichever comes first.  Oscillation is signalled with a :class:`RDRConvergenceWarning`.
 
         Correctly-classified cases on re-passes are idempotent (the expert is never called
         for them), so the overhead is one :meth:`classify` call per case per pass —
@@ -326,11 +340,53 @@ class EQLSingleClassRDR:
         paired_targets = targets if targets is not None else [UNSET] * len(cases)
         pending = list(range(len(cases)))
 
-        progress: Optional[ProgressReporter] = None
+        progress: Optional["ProgressReporter"] = None
         if expert is not None:
             progress = expert.interface.make_progress_reporter()
         if progress is not None:
             progress.start(len(pending), _FITTING_DESCRIPTION)
+
+        try:
+            if targets is None:
+                for i in pending:
+                    self.fit_case(cases[i], paired_targets[i], expert)
+                    if progress is not None:
+                        progress.update()
+            else:
+                self._run_convergence(
+                    cases, paired_targets, pending, expert, progress, max_passes
+                )
+        finally:
+            if progress is not None:
+                progress.finish()
+
+        return self
+
+    def _run_convergence(
+        self,
+        cases: List[Any],
+        paired_targets: List[Any],
+        pending: List[int],
+        expert: Optional[Expert],
+        progress: Optional["ProgressReporter"],
+        max_passes: int,
+    ) -> None:
+        """Run the convergent fitting loop until all cases are correct or a cycle is detected.
+
+        After each pass, recomputes the misclassified-case set and checks whether its
+        index signature (a ``frozenset``) has appeared in any previous pass.  A repeated
+        signature means the tree is oscillating rather than converging; the loop stops
+        early, saves the model if :attr:`save_path` is set, and emits a
+        :class:`RDRConvergenceWarning` naming the clashing cases.
+
+        :param cases: All case instances (full list, not just pending).
+        :param paired_targets: Target conclusions paired with ``cases``.
+        :param pending: Indices of currently misclassified cases for the first pass.
+        :param expert: The expert supplying conditions.
+        :param progress: Optional progress reporter (already started by the caller).
+        :param max_passes: Maximum number of convergence passes.
+        """
+        seen_signatures: List[frozenset] = []
 
         for pass_num in range(max_passes):
             if pass_num > 0 and progress is not None:
@@ -341,22 +397,34 @@ class EQLSingleClassRDR:
                 if progress is not None:
                     progress.update()
 
-            if targets is None:
-                if progress is not None:
-                    progress.finish()
-                return self
-
             pending = [
                 i
                 for i in range(len(cases))
                 if self.classify(cases[i]) != paired_targets[i]
             ]
-            if not pending:
-                break
 
-        if progress is not None:
-            progress.finish()
-        return self
+            if not pending:
+                return
+
+            signature = frozenset(pending)
+            if signature in seen_signatures:
+                if self.save_path is not None:
+                    save_rdr_with_case(self, self.save_path)
+                clashing = ", ".join(repr(cases[i]) for i in pending)
+                save_hint = (
+                    f" The partially fitted model has been saved to {self.save_path!r}."
+                    if self.save_path is not None
+                    else ""
+                )
+                warnings.warn(
+                    f"RDR fitting detected oscillation and stopped after {pass_num + 1} "
+                    f"pass(es). Clashing cases: {clashing}.{save_hint}",
+                    RDRConvergenceWarning,
+                    stacklevel=3,
+                )
+                return
+
+            seen_signatures.append(signature)
 
     @property
     def conditions_root(self) -> Optional[SymbolicExpression]:
