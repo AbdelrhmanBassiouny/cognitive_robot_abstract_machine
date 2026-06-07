@@ -6,16 +6,15 @@ differentiating conditions, a :class:`ConditionResolver` can attempt to derive t
 condition automatically from the rule tree's backward-inference knowledge — so the expert
 is only consulted when no automatic resolution is possible.
 
-The two built-in strategies, composed as a :class:`ChainConditionResolver`:
+The default built-in strategy, composed as a :class:`ChainConditionResolver`:
 
-* :class:`TargetKnowledgeResolver` — primary strategy: find a condition already known for
-  the target conclusion that is True for the new case and False for the corner case.
-* :class:`CornerCaseKnowledgeResolver` — secondary strategy: find a condition known for
-  the wrong (current) conclusion that is True for the corner case, then negate it; if the
-  negation is True for the new case, use it.
+* :class:`TargetKnowledgeResolver` — find a condition already known for the target
+  conclusion that is True for the new case and False for the corner case.
 
-Both strategies are gated on ``corner_case is not None`` (refinement branch only) and
-are fully silent — no expert prompt is produced when a condition is auto-resolved.
+:class:`CornerCaseKnowledgeResolver` is retained for advanced use but is **not** in the
+default chain (see its class docstring for why).
+
+All strategies are gated on ``corner_case is not None`` (refinement branch only).
 """
 
 from __future__ import annotations
@@ -136,11 +135,24 @@ class TargetKnowledgeResolver(ConditionResolver):
 
 
 class CornerCaseKnowledgeResolver(ConditionResolver):
-    """Secondary strategy resolver: use backward inference on the wrong (current) conclusion.
+    """**Experimental** resolver: use backward inference on the wrong (current) conclusion.
 
     Searches the sufficient condition sets known for ``current`` and finds a guard that
     is True for the corner case. The negation of that guard is then checked: if it is
     True for the new case, the negated condition discriminates correctly.
+
+    .. warning::
+
+        This resolver is intentionally **excluded from the default chain** returned by
+        :meth:`ChainConditionResolver.backward_inference_default`. It inspects the
+        *current* (wrong) branch — the very guards that caused the misclassification —
+        and negates them. This produces shallow, unstable refinements that cause
+        oscillation in the convergence loop (e.g. fish/amphibian ping-pong).
+
+        Principled RDR discrimination requires a condition that comes from knowledge
+        about the *target* conclusion, not from inverting the wrong rule. Use this
+        resolver only in carefully controlled custom chains where you understand its
+        limitations.
     """
 
     def resolve(
@@ -210,11 +222,15 @@ class ChainConditionResolver(ConditionResolver):
 
     @classmethod
     def backward_inference_default(cls) -> "ChainConditionResolver":
-        """Return the standard two-phase chain: TargetKnowledge → CornerCaseKnowledge.
+        """Return the standard chain: a single :class:`TargetKnowledgeResolver`.
 
-        :return: A :class:`ChainConditionResolver` with both built-in resolvers.
+        :class:`CornerCaseKnowledgeResolver` is intentionally excluded because it
+        inspects the *current* (wrong) branch and can produce unstable refinements that
+        cause the convergence loop to oscillate. See its class docstring for details.
+
+        :return: A :class:`ChainConditionResolver` with the target-knowledge resolver.
         """
-        return cls([TargetKnowledgeResolver(), CornerCaseKnowledgeResolver()])
+        return cls([TargetKnowledgeResolver()])
 
 
 __all__ = [
