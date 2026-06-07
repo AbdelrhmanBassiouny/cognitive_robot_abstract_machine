@@ -10,9 +10,8 @@ The default built-in strategy, composed as a :class:`ChainConditionResolver`:
 
 * :class:`TargetKnowledgeResolver` — find a condition already known for the target
   conclusion that is True for the new case and False for the corner case.
-
-:class:`CornerCaseKnowledgeResolver` is retained for advanced use but is **not** in the
-default chain (see its class docstring for why).
+* :class:`CornerCaseKnowledgeResolver` — search non-active paths to the wrong conclusion
+  for a positive condition that is True for the new case and False for the corner case.
 
 All strategies are gated on ``corner_case is not None`` (refinement branch only).
 """
@@ -26,14 +25,15 @@ from enum import Enum
 from typing_extensions import TYPE_CHECKING, Any, List, Optional
 
 from krrood.entity_query_language.factories import not_
-from krrood.entity_query_language.rdr.backward_inference import (
-    ConclusionKnowledge,
-    GuardCondition,
-)
+from krrood.entity_query_language.rdr.backward_inference import ConclusionKnowledge
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
     from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
+    from krrood.entity_query_language.rdr.backward_inference import (
+        GuardCondition,
+        SufficientConditionSet,
+    )
 
 
 class ResolutionMode(Enum):
@@ -85,6 +85,7 @@ class ConditionResolver(ABC):
         corner_case: Any,
         target_knowledge: "ConclusionKnowledge",
         current_knowledge: "ConclusionKnowledge",
+        firing_anchor: Optional["SymbolicExpression"] = None,
     ) -> Optional[ResolvedCondition]:
         """Attempt to auto-derive a differentiating condition.
 
@@ -95,6 +96,8 @@ class ConditionResolver(ABC):
         :param corner_case: The case that triggered the currently-firing rule's creation.
         :param target_knowledge: Backward-inference knowledge for ``target``.
         :param current_knowledge: Backward-inference knowledge for ``current``.
+        :param firing_anchor: The condition expression of the rule that fired; used by
+            resolvers to identify the active path without re-evaluating the rule tree.
         :return: A :class:`ResolvedCondition`, or ``None`` if this resolver cannot resolve.
         """
 
@@ -128,6 +131,7 @@ class TargetKnowledgeResolver(ConditionResolver):
         corner_case: Any,
         target_knowledge: "ConclusionKnowledge",
         current_knowledge: "ConclusionKnowledge",
+        firing_anchor: Optional["SymbolicExpression"] = None,
     ) -> Optional[ResolvedCondition]:
         """Search ``target_knowledge`` for a guard that discriminates ``case`` from ``corner_case``.
 
@@ -135,6 +139,7 @@ class TargetKnowledgeResolver(ConditionResolver):
         materialized as a :class:`ResolvedCondition` tagged
         :attr:`ResolutionSource.TARGET_KNOWLEDGE`.
 
+        :param firing_anchor: Unused by this resolver; accepted for interface compatibility.
         :return: A :class:`ResolvedCondition`, or ``None`` if no discriminating guard is found.
         """
         for sufficient_condition_set in target_knowledge.sufficient_condition_sets:
@@ -149,25 +154,48 @@ class TargetKnowledgeResolver(ConditionResolver):
 
 
 class CornerCaseKnowledgeResolver(ConditionResolver):
-    """**Experimental** resolver: use backward inference on the wrong (current) conclusion.
+    """Fallback resolver: search non-active paths to the wrong conclusion for a positive condition.
 
-    Searches the sufficient condition sets known for ``current`` and finds a guard that
-    is True for the corner case. The negation of that guard is then checked: if it is
-    True for the new case, the negated condition discriminates correctly.
+    For each sufficient condition set of the wrong (current) conclusion that is **not** the
+    active path (the path that caused the misclassification), searches for a guard that:
 
-    .. warning::
+    * holds for the new case — so the new exception rule fires for it, and
+    * does **not** hold for the corner case — so the original rule is left undisturbed.
 
-        This resolver is intentionally **excluded from the default chain** returned by
-        :meth:`ChainConditionResolver.backward_inference_default`. It inspects the
-        *current* (wrong) branch — the very guards that caused the misclassification —
-        and negates them. This produces shallow, unstable refinements that cause
-        oscillation in the convergence loop (e.g. fish/amphibian ping-pong).
+    The matching guard is returned without negation, producing a stable positive condition
+    grounded in a different characterisation of the wrong conclusion.
 
-        Principled RDR discrimination requires a condition that comes from knowledge
-        about the *target* conclusion, not from inverting the wrong rule. Use this
-        resolver only in carefully controlled custom chains where you understand its
-        limitations.
+    The active path is identified via the ``firing_anchor`` expression using an identity check
+    on guard expressions — no re-evaluation of the rule tree is needed.  When ``firing_anchor``
+    is ``None``, all paths are considered (safe degradation).
     """
+
+    def _active_path(
+        self,
+        firing_anchor: Optional["SymbolicExpression"],
+        current_knowledge: "ConclusionKnowledge",
+    ) -> Optional["SufficientConditionSet"]:
+        """Return the :class:`SufficientConditionSet` whose leaf guard is ``firing_anchor``.
+
+        Uses identity comparison on ``guard.expression`` and ``not guard.negated`` to
+        distinguish the active rule's positive guard from the same expression appearing as a
+        negated ancestor guard in a sibling path.
+
+        :return: The matching :class:`SufficientConditionSet`, or ``None`` if not found.
+        """
+        if firing_anchor is None:
+            return None
+        return next(
+            (
+                scs
+                for scs in current_knowledge.sufficient_condition_sets
+                if any(
+                    g.expression is firing_anchor and not g.negated
+                    for g in scs.conditions
+                )
+            ),
+            None,
+        )
 
     def resolve(
         self,
@@ -178,23 +206,27 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
         corner_case: Any,
         target_knowledge: "ConclusionKnowledge",
         current_knowledge: "ConclusionKnowledge",
+        firing_anchor: Optional["SymbolicExpression"] = None,
     ) -> Optional[ResolvedCondition]:
-        """Search ``current_knowledge`` for a guard whose negation discriminates ``case`` from ``corner_case``.
+        """Search non-active paths in ``current_knowledge`` for a positive discriminating guard.
 
-        Finds a guard that holds for ``corner_case`` and whose negation holds for ``case``,
-        then returns the negated condition tagged :attr:`ResolutionSource.CORNER_CASE_KNOWLEDGE`.
+        Skips the active path (identified via ``firing_anchor``) and returns the first guard
+        from any other path that holds for ``case`` but not for ``corner_case``, tagged
+        :attr:`ResolutionSource.CORNER_CASE_KNOWLEDGE`.
 
-        :return: A :class:`ResolvedCondition`, or ``None`` if no negated guard discriminates.
+        :return: A :class:`ResolvedCondition`, or ``None`` if no discriminating guard is found.
         """
-        for sufficient_condition_set in current_knowledge.sufficient_condition_sets:
-            for guard in sufficient_condition_set.conditions:
-                if guard.holds_for(case_variable, corner_case):
-                    negated = GuardCondition(guard.expression, not guard.negated)
-                    if negated.holds_for(case_variable, case):
-                        return ResolvedCondition(
-                            _materialize(negated),
-                            ResolutionSource.CORNER_CASE_KNOWLEDGE,
-                        )
+        active = self._active_path(firing_anchor, current_knowledge)
+        for scs in current_knowledge.sufficient_condition_sets:
+            if scs is active:
+                continue
+            for guard in scs.conditions:
+                if guard.holds_for(case_variable, case) and not guard.holds_for(
+                    case_variable, corner_case
+                ):
+                    return ResolvedCondition(
+                        _materialize(guard), ResolutionSource.CORNER_CASE_KNOWLEDGE
+                    )
         return None
 
 
@@ -214,6 +246,7 @@ class ChainConditionResolver(ConditionResolver):
         corner_case: Any,
         target_knowledge: "ConclusionKnowledge",
         current_knowledge: "ConclusionKnowledge",
+        firing_anchor: Optional["SymbolicExpression"] = None,
     ) -> Optional[ResolvedCondition]:
         """Try each resolver in :attr:`resolvers` in order, returning the first non-``None`` result.
 
@@ -229,6 +262,7 @@ class ChainConditionResolver(ConditionResolver):
                 corner_case,
                 target_knowledge,
                 current_knowledge,
+                firing_anchor,
             )
             if result is not None:
                 return result
@@ -236,15 +270,17 @@ class ChainConditionResolver(ConditionResolver):
 
     @classmethod
     def backward_inference_default(cls) -> "ChainConditionResolver":
-        """Return the standard chain: a single :class:`TargetKnowledgeResolver`.
+        """Return the standard two-resolver chain.
 
-        :class:`CornerCaseKnowledgeResolver` is intentionally excluded because it
-        inspects the *current* (wrong) branch and can produce unstable refinements that
-        cause the convergence loop to oscillate. See its class docstring for details.
+        :class:`TargetKnowledgeResolver` runs first, searching the target conclusion's
+        backward-inference paths for a positive discriminating guard.
+        :class:`CornerCaseKnowledgeResolver` runs second, searching non-active paths to the
+        wrong conclusion for a direct positive condition; it uses the firing anchor to skip the
+        active path efficiently without re-evaluating the rule tree.
 
-        :return: A :class:`ChainConditionResolver` with the target-knowledge resolver.
+        :return: A :class:`ChainConditionResolver` with both resolvers in priority order.
         """
-        return cls([TargetKnowledgeResolver()])
+        return cls([TargetKnowledgeResolver(), CornerCaseKnowledgeResolver()])
 
 
 __all__ = [

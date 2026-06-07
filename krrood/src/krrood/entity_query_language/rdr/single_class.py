@@ -229,7 +229,13 @@ class EQLSingleClassRDR:
                 # The expert kept the current conclusion; nothing to insert.
                 return target
         else:
-            resolved = self._try_auto_resolve(case, target, current, corner_case)
+            resolved = self._try_auto_resolve(
+                case,
+                target,
+                current,
+                corner_case,
+                trace.firing_anchor if trace is not None else None,
+            )
             condition = self._apply_resolution(
                 resolved, case, target, current, trace, corner_case, expert
             )
@@ -244,6 +250,7 @@ class EQLSingleClassRDR:
         target: Any,
         current: Any,
         corner_case: Optional[Any],
+        firing_anchor: Optional[SymbolicExpression] = None,
     ) -> Optional[SymbolicExpression]:
         """Attempt to derive a differentiating condition without asking the expert.
 
@@ -256,6 +263,8 @@ class EQLSingleClassRDR:
         :param target: The correct conclusion.
         :param current: The wrong conclusion currently returned by the firing rule.
         :param corner_case: The case that triggered the currently-firing rule's creation.
+        :param firing_anchor: The condition expression of the rule that fired; forwarded
+            to the resolver for efficient active-path identification.
         :return: An auto-derived EQL condition expression, or ``None`` to fall back to the expert.
         """
         if self.condition_resolver is None or corner_case is None or current is UNSET:
@@ -270,6 +279,7 @@ class EQLSingleClassRDR:
             corner_case,
             target_knowledge,
             current_knowledge,
+            firing_anchor,
         )
         return result.expression if result is not None else None
 
