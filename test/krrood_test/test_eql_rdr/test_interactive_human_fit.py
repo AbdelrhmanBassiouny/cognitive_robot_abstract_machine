@@ -30,6 +30,7 @@ import os
 import unittest
 
 from krrood.entity_query_language.factories import underspecified
+from krrood.entity_query_language.rdr import ChainConditionResolver
 from krrood.entity_query_language.rdr.backend import RDRBackend
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
@@ -69,7 +70,8 @@ class TestFitZooAsHumanExpert(unittest.TestCase):
     def test_fit_and_save(self):
         # Ground-truth fitting: you (the expert) supply only the conditions; the species is
         # the known target. The RDR prompts you only when it would misclassify a case.
-        rdr = EQLSingleClassRDR(Animal, "species")
+        resolver = ChainConditionResolver.backward_inference_default()
+        rdr = EQLSingleClassRDR(Animal, "species", condition_resolver=resolver)
         rdr.fit(animals, targets, Expert(interface=IPythonInterface(rdr=rdr)))
 
         os.makedirs(FITTED_MODELS_DIR, exist_ok=True)
