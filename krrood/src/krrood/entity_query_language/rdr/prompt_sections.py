@@ -43,11 +43,14 @@ class RenderContext:
     :param case: The case context for the current interaction.
     :param requests: The answer requests for the current interaction.
     :param palette: The colour/styling palette for the current shell.
+    :param is_first_prompt: True only on the very first :meth:`~ExpertInterface.interact`
+        call of a session; used to suppress one-time hints on subsequent prompts.
     """
 
     case: CaseContext
     requests: List[AnswerRequest]
     palette: Palette
+    is_first_prompt: bool = True
 
     @property
     def has_target(self) -> bool:
@@ -205,10 +208,11 @@ def _help_hint(ctx: RenderContext) -> List[str]:
 def _auto_resolution_hint(ctx: RenderContext) -> List[str]:
     resolved = ctx.case.suggested_condition
     return [
-        ctx.palette.hint(
+        ctx.palette.suggestion(
             f"Suggested condition (resolved by {resolved.resolver_type.__name__}): "
         )
-        + ctx.palette.code(format_condition(resolved.expression))
+        + ctx.palette.code(format_condition(resolved.expression)),
+        ctx.palette.suggestion("Press CTRL+D to accept this suggestion."),
     ]
 
 
@@ -270,18 +274,18 @@ PROMPT_SECTIONS: List[PromptSection] = [
         lines=_allowed_values,
     ),
     PromptSection(
-        name="auto_resolution_hint",
-        applicable=lambda ctx: ctx.has_suggested_condition,
-        lines=_auto_resolution_hint,
-    ),
-    PromptSection(
         name="contextual_example",
         applicable=lambda ctx: True,
         lines=_contextual_example,
     ),
     PromptSection(
         name="help_hint",
-        applicable=lambda ctx: True,
+        applicable=lambda ctx: ctx.is_first_prompt,
         lines=_help_hint,
+    ),
+    PromptSection(
+        name="auto_resolution_hint",
+        applicable=lambda ctx: ctx.has_suggested_condition,
+        lines=_auto_resolution_hint,
     ),
 ]

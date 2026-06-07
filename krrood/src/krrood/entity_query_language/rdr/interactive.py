@@ -130,6 +130,10 @@ class Palette:
         """A low-key pointer to a command."""
         return self._paint(text, Fore.YELLOW)
 
+    def suggestion(self, text: str) -> str:
+        """A suggested condition offered by the resolver."""
+        return self._paint(text, Fore.BLUE, Style.BRIGHT)
+
     def error(self, text: str) -> str:
         """A validation error."""
         return self._paint(text, Fore.RED)
@@ -164,10 +168,19 @@ class IPythonInterface(ExpertInterface):
     """Memoized aid ``present()`` output for the current ``interact()`` call (set once per
     question in :meth:`_build_namespace`, reused by the header and the ``%aid`` magic)."""
 
+    _interact_count: int = field(init=False, default=0)
+    """Number of :meth:`interact` calls so far; used to show the help hint only once."""
+
     @property
     def palette(self) -> Palette:
         """The styling used for every piece of on-screen text."""
         return Palette(self.use_color)
+
+    def interact(
+        self, context: CaseContext, requests: List[AnswerRequest]
+    ) -> Dict[str, Any]:
+        self._interact_count += 1
+        return super().interact(context, requests)
 
     def make_progress_reporter(
         self,
@@ -185,7 +198,12 @@ class IPythonInterface(ExpertInterface):
         requests: List[AnswerRequest],
         errors: Dict[str, str],
     ) -> str:
-        ctx = RenderContext(case=context, requests=requests, palette=self.palette)
+        ctx = RenderContext(
+            case=context,
+            requests=requests,
+            palette=self.palette,
+            is_first_prompt=self._interact_count == 1,
+        )
         parts: List[str] = ["", self._case_table(context), ""]
         if self._aid_cache:
             parts.extend([self._aid_cache, ""])
