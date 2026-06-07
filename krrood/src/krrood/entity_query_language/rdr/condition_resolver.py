@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 
-from typing_extensions import TYPE_CHECKING, Any, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, List, Optional, Type
 
 from krrood.entity_query_language.factories import not_
 from krrood.entity_query_language.rdr.backward_inference import ConclusionKnowledge
@@ -50,21 +50,14 @@ class ResolutionMode(Enum):
     """Auto-resolved condition is shown to the expert as a pre-seeded suggestion."""
 
 
-class ResolutionSource(Enum):
-    """Identifies which resolution strategy produced a :class:`ResolvedCondition`."""
-
-    TARGET_KNOWLEDGE = "target_knowledge"
-    CORNER_CASE_KNOWLEDGE = "corner_case_knowledge"
-
-
 @dataclass(frozen=True)
 class ResolvedCondition:
     """An automatically derived condition expression and its provenance."""
 
     expression: SymbolicExpression
     """The EQL condition expression to insert as the new rule's condition."""
-    source: ResolutionSource
-    """The resolution strategy that produced this condition."""
+    resolver_type: Type[ConditionResolver]
+    """The concrete resolver class that produced this condition."""
 
 
 class ConditionResolver(ABC):
@@ -138,9 +131,7 @@ class TargetKnowledgeResolver(ConditionResolver):
                 if guard.holds_for(case_variable, case) and not guard.holds_for(
                     case_variable, corner_case
                 ):
-                    return ResolvedCondition(
-                        _materialize(guard), ResolutionSource.TARGET_KNOWLEDGE
-                    )
+                    return ResolvedCondition(_materialize(guard), type(self))
         return None
 
 
@@ -204,10 +195,10 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
         """Search non-active paths in ``current_knowledge`` for a positive discriminating guard.
 
         Skips the active path (identified via ``firing_anchor``) and returns the first guard
-        from any other path that holds for ``case`` but not for ``corner_case``, tagged
-        :attr:`ResolutionSource.CORNER_CASE_KNOWLEDGE`.  The guard is materialized via
-        :func:`_materialize`; for the typical non-negated guard this is a no-op, but a
-        negated guard in a non-active path will be wrapped with ``not_()`` if encountered.
+        from any other path that holds for ``case`` but not for ``corner_case``.  The guard
+        is materialized via :func:`_materialize`; for the typical non-negated guard this is a
+        no-op, but a negated guard in a non-active path will be wrapped with ``not_()`` if
+        encountered.
 
         :return: A :class:`ResolvedCondition`, or ``None`` if no discriminating guard is found.
         """
@@ -219,9 +210,7 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
                 if guard.holds_for(case_variable, case) and not guard.holds_for(
                     case_variable, corner_case
                 ):
-                    return ResolvedCondition(
-                        _materialize(guard), ResolutionSource.CORNER_CASE_KNOWLEDGE
-                    )
+                    return ResolvedCondition(_materialize(guard), type(self))
         return None
 
 
@@ -276,14 +265,3 @@ class ChainConditionResolver(ConditionResolver):
         :return: A :class:`ChainConditionResolver` with both resolvers in priority order.
         """
         return cls([TargetKnowledgeResolver(), CornerCaseKnowledgeResolver()])
-
-
-__all__ = [
-    "ChainConditionResolver",
-    "ConditionResolver",
-    "CornerCaseKnowledgeResolver",
-    "ResolvedCondition",
-    "ResolutionMode",
-    "ResolutionSource",
-    "TargetKnowledgeResolver",
-]

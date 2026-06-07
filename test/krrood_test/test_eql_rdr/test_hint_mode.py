@@ -13,7 +13,7 @@ Four test classes:
 from __future__ import annotations
 
 import dataclasses
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List, Optional, Tuple
 
 import pytest
 
@@ -21,7 +21,9 @@ from .animal import Animal, Species, make_animal as _make_animal
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.condition_resolver import (
     ChainConditionResolver,
+    ResolvedCondition,
     ResolutionMode,
+    TargetKnowledgeResolver,
 )
 from krrood.entity_query_language.rdr.expert import (
     ANSWER_NAME,
@@ -259,10 +261,10 @@ class TestHintMode:
         )
 
     def test_hint_mode_request_default_equals_suggestion(self):
-        """In HINT mode, requests[0].default is the SymbolicExpression resolved by the resolver.
+        """In HINT mode, requests[0].default is the bare expression extracted from the ResolvedCondition.
 
         Guarantee: the AnswerRequest that the expert receives has its ``default`` field
-        pre-seeded with the resolved condition (a SymbolicExpression), so the expert can
+        pre-seeded with the expression (a SymbolicExpression), so the expert can
         accept it by returning an empty dict or overwrite it.
         """
         captured_default: List[Any] = []
@@ -285,16 +287,16 @@ class TestHintMode:
         )
 
     def test_hint_mode_context_suggested_condition_is_set(self):
-        """In HINT mode, context.suggested_condition is the SymbolicExpression suggestion.
+        """In HINT mode, context.suggested_condition is the full ResolvedCondition.
 
         Guarantee: CaseContext.suggested_condition is populated before the expert is
-        called so the expert shell can display the hint to the user.
+        called so the expert shell can display the hint (expression + resolver type) to the user.
         """
         captured_suggestion: List[Any] = []
 
         def _capture(context, requests):
             captured_suggestion.append(context.suggested_condition)
-            return {"conditions": context.suggested_condition}
+            return {"conditions": context.suggested_condition.expression}
 
         rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
@@ -304,16 +306,43 @@ class TestHintMode:
 
         assert len(captured_suggestion) == 1
         suggestion = captured_suggestion[0]
-        assert isinstance(suggestion, SymbolicExpression), (
-            f"context.suggested_condition must be a SymbolicExpression in HINT mode, "
+        assert isinstance(suggestion, ResolvedCondition), (
+            f"context.suggested_condition must be a ResolvedCondition in HINT mode, "
             f"got {type(suggestion).__name__!r}."
         )
 
-    def test_hint_mode_context_suggested_condition_same_object_as_request_default(self):
-        """context.suggested_condition and requests[0].default are the same expression object.
+    def test_hint_mode_context_suggested_condition_carries_resolver_type(self):
+        """context.suggested_condition.resolver_type identifies who produced the suggestion.
 
-        Guarantee: no copy or transformation is applied between setting the suggestion
-        on CaseContext and seeding it as the AnswerRequest default.
+        Guarantee: when the default chain resolves via TargetKnowledgeResolver,
+        the ResolvedCondition carries TargetKnowledgeResolver as resolver_type —
+        not an enum value or string.
+        """
+        captured_suggestion: List[Any] = []
+
+        def _capture(context, requests):
+            captured_suggestion.append(context.suggested_condition)
+            return {"conditions": context.suggested_condition.expression}
+
+        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+            resolution_mode=ResolutionMode.HINT
+        )
+        iface.answer_fn = _capture
+        rdr.fit_case(bird2, Species.bird, expert)
+
+        assert len(captured_suggestion) == 1
+        suggestion = captured_suggestion[0]
+        assert isinstance(suggestion, ResolvedCondition)
+        assert suggestion.resolver_type is TargetKnowledgeResolver, (
+            f"Expected resolver_type to be TargetKnowledgeResolver, "
+            f"got {suggestion.resolver_type!r}."
+        )
+
+    def test_hint_mode_context_suggested_condition_expression_is_request_default(self):
+        """requests[0].default is the bare expression extracted from context.suggested_condition.
+
+        Guarantee: no copy or extra transformation is applied — the expression stored on
+        the ResolvedCondition is exactly the object seeded as the AnswerRequest default.
         """
         captured: List[tuple] = []
 
@@ -329,9 +358,15 @@ class TestHintMode:
 
         assert len(captured) == 1
         ctx_suggestion, req_default = captured[0]
-        assert (
-            ctx_suggestion is req_default
-        ), "context.suggested_condition and requests[0].default must be the same object."
+        assert isinstance(ctx_suggestion, ResolvedCondition), (
+            "context.suggested_condition must be a ResolvedCondition in HINT mode."
+        )
+        assert isinstance(req_default, SymbolicExpression), (
+            "requests[0].default must be the bare SymbolicExpression from the ResolvedCondition."
+        )
+        assert req_default is ctx_suggestion.expression, (
+            "requests[0].default must be the exact expression object from context.suggested_condition."
+        )
 
     def test_hint_accept_uses_suggested_condition(self):
         """When the expert returns {} (no override), the seeded default condition is used.
@@ -450,10 +485,12 @@ class TestPromptSectionHint:
         """Return an empty RDR for building a CaseContext (provides case_variable)."""
         return EQLSingleClassRDR(Animal, "species")
 
-    def _three_rule_suggestion(self):
+    def _three_rule_suggestion(
+        self,
+    ) -> Tuple[EQLSingleClassRDR, Animal, Animal, ResolvedCondition]:
         """Build a three-rule RDR and return ``(rdr, bird2, reptile, suggestion)``.
 
-        ``suggestion`` is the auto-resolved expression for ``bird2`` (the condition
+        ``suggestion`` is the :class:`ResolvedCondition` for ``bird2`` (the condition
         the backward-inference resolver would insert silently in SILENT mode).
         """
         mammal = _make_animal("mammal", milk=True, hair=True)
@@ -481,7 +518,7 @@ class TestPromptSectionHint:
 
     def _render_ctx(
         self,
-        suggested_condition: Optional[SymbolicExpression],
+        suggested_condition: Optional[ResolvedCondition],
         rdr: Optional[EQLSingleClassRDR] = None,
         case: Optional[Animal] = None,
     ) -> RenderContext:
@@ -551,3 +588,21 @@ class TestPromptSectionHint:
         assert len(lines) >= 1, "lines() must return at least one line"
         joined = "".join(lines)
         assert joined.strip(), "The joined hint text must be non-empty"
+
+    def test_auto_resolution_hint_lines_contain_resolver_name(self):
+        """auto_resolution_hint.lines includes the resolver class name.
+
+        Guarantee: the rendered hint identifies which resolver produced the suggestion
+        so the expert knows the source of the auto-resolved condition.
+        """
+        rdr, bird2, _reptile, suggestion = self._three_rule_suggestion()
+        render_ctx = self._render_ctx(
+            suggested_condition=suggestion, rdr=rdr, case=bird2
+        )
+        section = _section("auto_resolution_hint")
+        joined = "".join(section.lines(render_ctx))
+
+        assert suggestion.resolver_type.__name__ in joined, (
+            f"Expected resolver class name {suggestion.resolver_type.__name__!r} "
+            f"to appear in hint text, got: {joined!r}."
+        )

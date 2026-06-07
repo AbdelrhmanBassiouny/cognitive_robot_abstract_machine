@@ -203,9 +203,12 @@ def _help_hint(ctx: RenderContext) -> List[str]:
 
 
 def _auto_resolution_hint(ctx: RenderContext) -> List[str]:
+    resolved = ctx.case.suggested_condition
     return [
-        ctx.palette.hint("Suggested condition (auto-resolved): ")
-        + ctx.palette.code(format_condition(ctx.case.suggested_condition))
+        ctx.palette.hint(
+            f"Suggested condition (resolved by {resolved.resolver_type.__name__}): "
+        )
+        + ctx.palette.code(format_condition(resolved.expression))
     ]
 
 

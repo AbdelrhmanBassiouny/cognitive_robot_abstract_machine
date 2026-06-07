@@ -33,6 +33,7 @@ from krrood.entity_query_language.rdr.utils import UNSET
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.aid import ConclusionAid
+    from krrood.entity_query_language.rdr.condition_resolver import ResolvedCondition
     from krrood.entity_query_language.rdr.observer import ClassificationTrace
 
 #: The namespace name the expert assigns their condition expression to.
@@ -142,7 +143,7 @@ class Expert:
         current_conclusion: Any = UNSET,
         trace: Optional[ClassificationTrace] = None,
         corner_case: Optional[Any] = None,
-        suggestion: Optional[SymbolicExpression] = None,
+        suggestion: Optional[ResolvedCondition] = None,
     ) -> SymbolicExpression:
         """
         :param case: The case being fit (e.g. an ``Animal`` instance).
@@ -151,9 +152,9 @@ class Expert:
         :param current_conclusion: What the RDR currently concludes (``_UNSET`` if no rule fired).
         :param trace: The classification trace, for visualizing the rule tree to the expert.
         :param corner_case: The corner case of the firing rule, for side-by-side display.
-        :param suggestion: Optional auto-resolved condition to pre-seed; displayed as a hint
-            and used as the namespace default so the expert can accept it by pressing CTRL+D
-            or overwrite it with any other expression.
+        :param suggestion: Optional auto-resolved condition (expression + resolver provenance)
+            to display as a hint; the bare expression is pre-seeded as the namespace default
+            so the expert can accept it by pressing Ctrl-D or overwrite it with any other expression.
         :return: A live EQL condition expression that holds for ``case`` and distinguishes it.
         """
         context = CaseContext(
@@ -169,7 +170,7 @@ class Expert:
             name=ANSWER_NAME,
             validate=_validate_conditions,
             example=f"{ANSWER_NAME} = {CASE_VARIABLE_NAME}.some_attr == True",
-            default=suggestion,
+            default=suggestion.expression if suggestion is not None else None,
         )
         try:
             return self.interface.interact(context, [request])[ANSWER_NAME]

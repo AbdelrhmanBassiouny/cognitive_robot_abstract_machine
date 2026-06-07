@@ -1,7 +1,7 @@
 """
 Tests for the auto-condition resolution system (``condition_resolver.py``):
-``ResolutionSource``, ``ResolvedCondition``, ``ConditionResolver`` ABC,
-``ChainConditionResolver``, and the two concrete strategy resolvers.
+``ResolvedCondition``, ``ConditionResolver`` ABC, ``ChainConditionResolver``,
+and the two concrete strategy resolvers.
 
 Each test class pins exactly one contract; each test method verifies one
 observable guarantee.
@@ -12,7 +12,7 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
-from typing_extensions import Any, Optional
+from typing_extensions import Any, Optional, Type
 
 from .animal import Animal, Species
 from krrood.entity_query_language.core.base_expressions import OperationResult
@@ -28,7 +28,6 @@ from krrood.entity_query_language.rdr.condition_resolver import (
     ConditionResolver,
     CornerCaseKnowledgeResolver,
     ResolvedCondition,
-    ResolutionSource,
     TargetKnowledgeResolver,
 )
 from krrood.entity_query_language.rdr.expert import Expert
@@ -52,85 +51,27 @@ class _AlwaysNoneResolver(ConditionResolver):
         return None
 
 
-class _AlwaysTargetResolver(ConditionResolver):
-    """A resolver that always returns a fixed TARGET_KNOWLEDGE result."""
+class _AlwaysSucceedingResolver(ConditionResolver):
+    """Stub base: always returns a ResolvedCondition reporting its own concrete class."""
 
     def __init__(self) -> None:
         self.call_count = 0
 
     def resolve(self, *args: Any, **kwargs: Any) -> Optional[ResolvedCondition]:
         self.call_count += 1
-        return ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.TARGET_KNOWLEDGE)
+        return ResolvedCondition(_SENTINEL_EXPR, type(self))
 
 
-class _AlwaysCornerResolver(ConditionResolver):
-    """A resolver that always returns a fixed CORNER_CASE_KNOWLEDGE result."""
+class _AlwaysTargetResolver(_AlwaysSucceedingResolver):
+    """Stub whose class identity represents the target-knowledge resolver in chain tests."""
 
-    def __init__(self) -> None:
-        self.call_count = 0
 
-    def resolve(self, *args: Any, **kwargs: Any) -> Optional[ResolvedCondition]:
-        self.call_count += 1
-        return ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.CORNER_CASE_KNOWLEDGE)
+class _AlwaysCornerResolver(_AlwaysSucceedingResolver):
+    """Stub whose class identity represents the corner-case-knowledge resolver in chain tests."""
 
 
 # Convenience: call a resolver / chain with dummy arguments.
 _DUMMY_ARGS = (None, None, None, None, None, None, None)
-
-
-# ---------------------------------------------------------------------------
-# ResolutionSource enum
-# ---------------------------------------------------------------------------
-
-
-class TestResolutionSource:
-    """ResolutionSource exposes exactly the two expected enum members."""
-
-    def test_target_knowledge_member_exists(self):
-        """ResolutionSource.TARGET_KNOWLEDGE must be a valid enum member.
-
-        Guarantee: the attribute resolves without AttributeError.
-        """
-        member = ResolutionSource.TARGET_KNOWLEDGE
-        assert isinstance(member, ResolutionSource)
-
-    def test_corner_case_knowledge_member_exists(self):
-        """ResolutionSource.CORNER_CASE_KNOWLEDGE must be a valid enum member.
-
-        Guarantee: the attribute resolves without AttributeError.
-        """
-        member = ResolutionSource.CORNER_CASE_KNOWLEDGE
-        assert isinstance(member, ResolutionSource)
-
-    def test_target_knowledge_string_value(self):
-        """ResolutionSource.TARGET_KNOWLEDGE has the value 'target_knowledge'.
-
-        Guarantee: callers that serialise the enum by value get a stable string.
-        """
-        assert ResolutionSource.TARGET_KNOWLEDGE.value == "target_knowledge"
-
-    def test_corner_case_knowledge_string_value(self):
-        """ResolutionSource.CORNER_CASE_KNOWLEDGE has the value 'corner_case_knowledge'.
-
-        Guarantee: callers that serialise the enum by value get a stable string.
-        """
-        assert ResolutionSource.CORNER_CASE_KNOWLEDGE.value == "corner_case_knowledge"
-
-    def test_two_members_total(self):
-        """Exactly two members exist — no accidental extras.
-
-        Guarantee: future additions need an explicit test update (API surface is frozen).
-        """
-        assert len(list(ResolutionSource)) == 2
-
-    def test_members_are_distinct(self):
-        """The two members are not equal to each other.
-
-        Guarantee: switching on source never confuses the two strategies.
-        """
-        assert (
-            ResolutionSource.TARGET_KNOWLEDGE != ResolutionSource.CORNER_CASE_KNOWLEDGE
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -139,23 +80,31 @@ class TestResolutionSource:
 
 
 class TestResolvedCondition:
-    """ResolvedCondition is a frozen dataclass with expression and source fields."""
+    """ResolvedCondition is a frozen dataclass with expression and resolver_type fields."""
 
     def test_construction_stores_expression(self):
         """The expression passed at construction is retrievable unchanged.
 
         Guarantee: no copy or transformation is applied to the expression.
         """
-        rc = ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.TARGET_KNOWLEDGE)
+        rc = ResolvedCondition(_SENTINEL_EXPR, TargetKnowledgeResolver)
         assert rc.expression is _SENTINEL_EXPR
 
-    def test_construction_stores_source(self):
-        """The source passed at construction is retrievable unchanged.
+    def test_construction_stores_resolver_type(self):
+        """The resolver_type passed at construction is retrievable unchanged.
 
-        Guarantee: the provenance enum value is not coerced or renamed.
+        Guarantee: the provenance class is not coerced or transformed.
         """
-        rc = ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.CORNER_CASE_KNOWLEDGE)
-        assert rc.source is ResolutionSource.CORNER_CASE_KNOWLEDGE
+        rc = ResolvedCondition(_SENTINEL_EXPR, CornerCaseKnowledgeResolver)
+        assert rc.resolver_type is CornerCaseKnowledgeResolver
+
+    def test_resolved_condition_resolver_type_field_target(self):
+        """resolver_type is TargetKnowledgeResolver when constructed with that class.
+
+        Guarantee: the field stores the exact class object, not a string or enum value.
+        """
+        rc = ResolvedCondition(_SENTINEL_EXPR, TargetKnowledgeResolver)
+        assert rc.resolver_type is TargetKnowledgeResolver
 
     def test_is_frozen_expression_field(self):
         """Mutating the expression field of a ResolvedCondition raises an error.
@@ -163,18 +112,18 @@ class TestResolvedCondition:
         Guarantee: frozen=True is in effect — callers cannot accidentally overwrite
         a resolved condition's expression after creation.
         """
-        rc = ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.TARGET_KNOWLEDGE)
+        rc = ResolvedCondition(_SENTINEL_EXPR, TargetKnowledgeResolver)
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
             rc.expression = object()  # type: ignore[misc]
 
-    def test_is_frozen_source_field(self):
-        """Mutating the source field of a ResolvedCondition raises an error.
+    def test_is_frozen_resolver_type_field(self):
+        """Mutating the resolver_type field of a ResolvedCondition raises an error.
 
         Guarantee: frozen=True applies to every field, not just expression.
         """
-        rc = ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.TARGET_KNOWLEDGE)
+        rc = ResolvedCondition(_SENTINEL_EXPR, TargetKnowledgeResolver)
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
-            rc.source = ResolutionSource.CORNER_CASE_KNOWLEDGE  # type: ignore[misc]
+            rc.resolver_type = CornerCaseKnowledgeResolver  # type: ignore[misc]
 
     def test_equality_based_on_field_values(self):
         """Two ResolvedConditions with the same fields compare as equal.
@@ -182,17 +131,17 @@ class TestResolvedCondition:
         Guarantee: frozen dataclass equality semantics are in place (structural equality).
         """
         expr = object()
-        rc1 = ResolvedCondition(expr, ResolutionSource.TARGET_KNOWLEDGE)
-        rc2 = ResolvedCondition(expr, ResolutionSource.TARGET_KNOWLEDGE)
+        rc1 = ResolvedCondition(expr, TargetKnowledgeResolver)
+        rc2 = ResolvedCondition(expr, TargetKnowledgeResolver)
         assert rc1 == rc2
 
-    def test_inequality_on_different_source(self):
-        """Two ResolvedConditions with different sources are not equal.
+    def test_inequality_on_different_resolver_type(self):
+        """Two ResolvedConditions with different resolver types are not equal.
 
-        Guarantee: source is part of the equality contract.
+        Guarantee: resolver_type is part of the equality contract.
         """
-        rc1 = ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.TARGET_KNOWLEDGE)
-        rc2 = ResolvedCondition(_SENTINEL_EXPR, ResolutionSource.CORNER_CASE_KNOWLEDGE)
+        rc1 = ResolvedCondition(_SENTINEL_EXPR, TargetKnowledgeResolver)
+        rc2 = ResolvedCondition(_SENTINEL_EXPR, CornerCaseKnowledgeResolver)
         assert rc1 != rc2
 
 
@@ -218,7 +167,7 @@ class TestChainConditionResolver:
 
         assert result is not None
         assert isinstance(result, ResolvedCondition)
-        assert result.source is ResolutionSource.TARGET_KNOWLEDGE
+        assert result.resolver_type is _AlwaysTargetResolver
 
     def test_short_circuits_when_first_resolver_returns_non_none(self):
         """When the first resolver returns a result, the second is never called.
@@ -233,7 +182,7 @@ class TestChainConditionResolver:
         result = chain.resolve(*_DUMMY_ARGS)
 
         assert result is not None
-        assert result.source is ResolutionSource.TARGET_KNOWLEDGE
+        assert result.resolver_type is _AlwaysTargetResolver
         assert second.call_count == 0
 
     def test_returns_none_when_all_resolvers_return_none(self):
@@ -325,9 +274,9 @@ class TestChainConditionResolver:
 
         result = chain.resolve(*_DUMMY_ARGS)
 
-        # The first resolver returned TARGET_KNOWLEDGE; that must be what we get back.
+        # The first resolver returned its own type; that must be what we get back.
         assert result is not None
-        assert result.source is ResolutionSource.TARGET_KNOWLEDGE
+        assert result.resolver_type is _AlwaysTargetResolver
 
     def test_all_resolvers_are_tried_when_none_succeed(self):
         """Every resolver is invoked when none of them return a result.
@@ -503,7 +452,7 @@ class TestTargetKnowledgeResolver:
 
         Guarantee: when a guard G in target_knowledge is True for ``case`` AND
         False for ``corner_case``, TargetKnowledgeResolver returns a
-        ResolvedCondition whose source is TARGET_KNOWLEDGE.
+        ResolvedCondition whose resolver_type is TargetKnowledgeResolver.
 
         Scenario: new case is a second bird (feathers=True, milk=False).
         Corner case is the mammal (milk=True, feathers=False).
@@ -529,7 +478,7 @@ class TestTargetKnowledgeResolver:
 
         assert result is not None
         assert isinstance(result, ResolvedCondition)
-        assert result.source is ResolutionSource.TARGET_KNOWLEDGE
+        assert result.resolver_type is TargetKnowledgeResolver
 
     def test_resolved_expression_evaluates_true_for_new_case(self):
         """The resolved expression is True when evaluated against the new case.
@@ -698,7 +647,7 @@ class TestTargetKnowledgeResolver:
         assert (
             result is not None
         ), "Resolver must find the negated guard as discriminating"
-        assert result.source is ResolutionSource.TARGET_KNOWLEDGE
+        assert result.resolver_type is TargetKnowledgeResolver
 
         # The materialized expression is not_(milk==True), i.e. milk==False.
         # Evaluate it against the new bird (milk=False) → should be True.
@@ -778,7 +727,7 @@ class TestCornerCaseKnowledgeResolver:
         Guarantee: given two SCSs for the wrong conclusion, where the active path's
         guard expression equals firing_anchor, the resolver finds a guard in the
         non-active path that is True for the new case and False for the corner case
-        and returns a ResolvedCondition tagged CORNER_CASE_KNOWLEDGE.
+        and returns a ResolvedCondition whose resolver_type is CornerCaseKnowledgeResolver.
 
         Scenario:
           Active path:     fins == True   (firing_anchor)
@@ -811,7 +760,7 @@ class TestCornerCaseKnowledgeResolver:
 
         assert result is not None
         assert isinstance(result, ResolvedCondition)
-        assert result.source is ResolutionSource.CORNER_CASE_KNOWLEDGE
+        assert result.resolver_type is CornerCaseKnowledgeResolver
 
     def test_active_path_guard_never_returned(self):
         """A guard that exists only in the active path is never returned.
@@ -1008,7 +957,7 @@ class TestCornerCaseKnowledgeResolver:
         )
 
         assert result is not None
-        assert result.source is ResolutionSource.CORNER_CASE_KNOWLEDGE
+        assert result.resolver_type is CornerCaseKnowledgeResolver
 
     def test_no_negation_applied_to_returned_expression(self):
         """The returned expression is the raw guard expression — not wrapped in not_().
