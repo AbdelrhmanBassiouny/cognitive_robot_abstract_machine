@@ -263,15 +263,16 @@ class TestChainConditionResolver:
 
         assert isinstance(result, ChainConditionResolver)
 
-    def test_backward_inference_default_has_two_resolvers(self):
-        """backward_inference_default() installs exactly two resolvers.
+    def test_backward_inference_default_has_one_resolver(self):
+        """backward_inference_default() installs exactly one resolver.
 
-        Guarantee: the standard chain has the precise arity implied by the two-phase
-        algorithm design (Phase 1 + Phase 2).
+        Guarantee: the default chain contains only a single strategy —
+        CornerCaseKnowledgeResolver is intentionally excluded from the default because
+        it inspects the current (wrong) branch and can cause oscillation.
         """
         chain = ChainConditionResolver.backward_inference_default()
 
-        assert len(chain.resolvers) == 2
+        assert len(chain.resolvers) == 1
 
     def test_backward_inference_default_first_resolver_is_target_knowledge(self):
         """backward_inference_default() places TargetKnowledgeResolver first.
@@ -283,15 +284,17 @@ class TestChainConditionResolver:
 
         assert isinstance(chain.resolvers[0], TargetKnowledgeResolver)
 
-    def test_backward_inference_default_second_resolver_is_corner_case_knowledge(self):
-        """backward_inference_default() places CornerCaseKnowledgeResolver second.
+    def test_backward_inference_default_only_resolver_is_target_knowledge(self):
+        """backward_inference_default() installs exactly one TargetKnowledgeResolver.
 
-        Guarantee: Phase 2 (corner-case knowledge) is the fallback strategy when
-        Phase 1 finds nothing.
+        Guarantee: the default chain contains only the target-knowledge strategy —
+        CornerCaseKnowledgeResolver is intentionally excluded because it inspects the
+        current (wrong) branch and can cause oscillation.
         """
         chain = ChainConditionResolver.backward_inference_default()
 
-        assert isinstance(chain.resolvers[1], CornerCaseKnowledgeResolver)
+        assert len(chain.resolvers) == 1
+        assert isinstance(chain.resolvers[0], TargetKnowledgeResolver)
 
     def test_chain_returns_first_resolver_result_not_second(self):
         """The result value comes from the first non-None resolver, not a later one.
