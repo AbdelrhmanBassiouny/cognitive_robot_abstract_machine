@@ -175,11 +175,13 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
         firing_anchor: Optional["SymbolicExpression"],
         current_knowledge: "ConclusionKnowledge",
     ) -> Optional["SufficientConditionSet"]:
-        """Return the :class:`SufficientConditionSet` whose leaf guard is ``firing_anchor``.
+        """Return the :class:`SufficientConditionSet` that contains ``firing_anchor``
+        as a positive (non-negated) guard expression.
 
-        Uses identity comparison on ``guard.expression`` and ``not guard.negated`` to
-        distinguish the active rule's positive guard from the same expression appearing as a
-        negated ancestor guard in a sibling path.
+        Searches every guard in every sufficient condition set using an identity check
+        on ``guard.expression``.  The ``not guard.negated`` clause excludes paths where
+        the same expression node appears as a negated ancestor guard in a sibling path —
+        only the sufficient condition set in which the anchor fires positively is considered active.
 
         :return: The matching :class:`SufficientConditionSet`, or ``None`` if not found.
         """
@@ -187,11 +189,11 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
             return None
         return next(
             (
-                scs
-                for scs in current_knowledge.sufficient_condition_sets
+                sufficient_condition_set
+                for sufficient_condition_set in current_knowledge.sufficient_condition_sets
                 if any(
-                    g.expression is firing_anchor and not g.negated
-                    for g in scs.conditions
+                    guard.expression is firing_anchor and not guard.negated
+                    for guard in sufficient_condition_set.conditions
                 )
             ),
             None,
@@ -212,15 +214,17 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
 
         Skips the active path (identified via ``firing_anchor``) and returns the first guard
         from any other path that holds for ``case`` but not for ``corner_case``, tagged
-        :attr:`ResolutionSource.CORNER_CASE_KNOWLEDGE`.
+        :attr:`ResolutionSource.CORNER_CASE_KNOWLEDGE`.  The guard is materialized via
+        :func:`_materialize`; for the typical non-negated guard this is a no-op, but a
+        negated guard in a non-active path will be wrapped with ``not_()`` if encountered.
 
         :return: A :class:`ResolvedCondition`, or ``None`` if no discriminating guard is found.
         """
         active = self._active_path(firing_anchor, current_knowledge)
-        for scs in current_knowledge.sufficient_condition_sets:
-            if scs is active:
+        for sufficient_condition_set in current_knowledge.sufficient_condition_sets:
+            if sufficient_condition_set is active:
                 continue
-            for guard in scs.conditions:
+            for guard in sufficient_condition_set.conditions:
                 if guard.holds_for(case_variable, case) and not guard.holds_for(
                     case_variable, corner_case
                 ):

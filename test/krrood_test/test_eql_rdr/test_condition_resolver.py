@@ -15,7 +15,14 @@ import pytest
 from typing_extensions import Any, Optional
 
 from .animal import Animal, Species
-from krrood.entity_query_language.rdr.backward_inference import ConclusionKnowledge
+from krrood.entity_query_language.core.base_expressions import OperationResult
+from krrood.entity_query_language.factories import add, alternative, entity, variable
+from krrood.entity_query_language.rdr.backward_inference import (
+    ConclusionKnowledge,
+    GuardCondition,
+    SufficientConditionSet,
+    what_do_we_know_about,
+)
 from krrood.entity_query_language.rdr.condition_resolver import (
     ChainConditionResolver,
     ConditionResolver,
@@ -277,8 +284,8 @@ class TestChainConditionResolver:
     def test_backward_inference_default_first_resolver_is_target_knowledge(self):
         """backward_inference_default() places TargetKnowledgeResolver first.
 
-        Guarantee: Phase 1 (target knowledge) is always tried before Phase 2
-        (corner-case knowledge) — the ordering is part of the public contract.
+        Guarantee: the target-knowledge resolver is always tried before the
+        corner-case-knowledge resolver — the ordering is part of the public contract.
         """
         chain = ChainConditionResolver.backward_inference_default()
 
@@ -477,7 +484,7 @@ def _two_rule_rdr():
 
 
 # ---------------------------------------------------------------------------
-# TestTargetKnowledgeResolver — Phase 3 animal-fixture tests
+# TestTargetKnowledgeResolver — live animal-fixture discrimination tests
 # ---------------------------------------------------------------------------
 
 
@@ -549,15 +556,7 @@ class TestTargetKnowledgeResolver:
 
         assert result is not None
         # Evaluate the resolved expression against the new bird case.
-        rdr.case_variable._update_domain_([bird2])
-        from krrood.entity_query_language.core.base_expressions import OperationResult
-
-        eval_results = list(result.expression.evaluate())
-        truth_for_bird2 = any(
-            r.is_true if isinstance(r, OperationResult) else bool(r)
-            for r in eval_results
-        )
-        assert truth_for_bird2 is True
+        assert _eval_expr(result.expression, rdr.case_variable, bird2) is True
 
     def test_resolved_expression_evaluates_false_for_corner_case(self):
         """The resolved expression is False when evaluated against the corner case.
@@ -584,15 +583,7 @@ class TestTargetKnowledgeResolver:
 
         assert result is not None
         # Evaluate the resolved expression against the corner case (mammal).
-        rdr.case_variable._update_domain_([mammal])
-        from krrood.entity_query_language.core.base_expressions import OperationResult
-
-        eval_results = list(result.expression.evaluate())
-        truth_for_mammal = any(
-            r.is_true if isinstance(r, OperationResult) else bool(r)
-            for r in eval_results
-        )
-        assert truth_for_mammal is False
+        assert _eval_expr(result.expression, rdr.case_variable, mammal) is False
 
     def test_returns_none_when_no_discriminating_guard_exists(self):
         """Resolver returns None when every target-knowledge guard also holds for the corner case.
@@ -670,16 +661,6 @@ class TestTargetKnowledgeResolver:
         resolver with a case that has milk=False (passes NOT milk) and a corner case
         that has milk=True (fails NOT milk) — so the negated guard discriminates.
         """
-        from krrood.entity_query_language.factories import (
-            variable,
-            entity,
-            add,
-            alternative,
-        )
-        from krrood.entity_query_language.rdr.backward_inference import (
-            what_do_we_know_about,
-        )
-
         animal_var = variable(Animal, domain=[])
         query = entity(animal_var).where(animal_var.milk == True)
         with query:
@@ -721,59 +702,41 @@ class TestTargetKnowledgeResolver:
 
         # The materialized expression is not_(milk==True), i.e. milk==False.
         # Evaluate it against the new bird (milk=False) → should be True.
-        animal_var._update_domain_([bird_new])
-        from krrood.entity_query_language.core.base_expressions import OperationResult
-
-        eval_results_bird = list(result.expression.evaluate())
-        truth_bird = any(
-            r.is_true if isinstance(r, OperationResult) else bool(r)
-            for r in eval_results_bird
-        )
-        assert truth_bird is True
+        assert _eval_expr(result.expression, animal_var, bird_new) is True
 
         # Evaluate against the corner mammal (milk=True) → should be False.
-        animal_var._update_domain_([mammal_corner])
-        eval_results_mammal = list(result.expression.evaluate())
-        truth_mammal = any(
-            r.is_true if isinstance(r, OperationResult) else bool(r)
-            for r in eval_results_mammal
-        )
-        assert truth_mammal is False
+        assert _eval_expr(result.expression, animal_var, mammal_corner) is False
 
 
 # ---------------------------------------------------------------------------
-# TestCornerCaseKnowledgeResolver — Phase 2 positive-condition semantics tests
+# TestCornerCaseKnowledgeResolver — positive-condition, non-active-path semantics tests
 #
-# The new algorithm searches non-active paths to the wrong conclusion for a
+# The algorithm searches non-active paths to the wrong conclusion for a
 # POSITIVE guard (no negation) that holds for the new case and does not hold
-# for the corner case.  The active path is the SCS whose guard expression is
-# identical (by identity) to firing_anchor.
+# for the corner case.  The active path is the sufficient condition set whose
+# guard expression is identical (by identity) to firing_anchor.
 #
 # Strategy: synthesize ConclusionKnowledge directly with two SufficientConditionSets
 # built from live EQL variable expressions so GuardCondition.holds_for() evaluates
-# correctly.  SCS-0 is designated the "active" path by providing its guard expression
-# as firing_anchor; SCS-1 is the non-active path searched for a discriminating guard.
+# correctly.
+#   Active path:     fins == True   (guard expression serves as firing_anchor)
+#   Non-active path: aquatic == True (the search target)
 # ---------------------------------------------------------------------------
 
 
 def _two_path_wrong_knowledge():
-    """Build live ConclusionKnowledge with two independent SCSs for Species.fish.
+    """Build live ConclusionKnowledge with two independent sufficient condition sets for Species.fish.
 
-    SCS-0 (active path):  fins == True   (negated=False)
-    SCS-1 (non-active):   aquatic == True (negated=False)
+    Active path (fins guard):     fins == True   (negated=False)
+    Non-active path (aquatic guard): aquatic == True (negated=False)
 
     Returns ``(case_variable, fins_expr, aquatic_expr, current_knowledge)`` so
-    callers can supply ``fins_expr`` as ``firing_anchor`` to mark SCS-0 as active
-    and leave SCS-1 as the search target.
+    callers can supply ``fins_expr`` as ``firing_anchor`` to mark the fins-guard path
+    as active and leave the aquatic-guard path as the search target.
 
-    Named pattern: TwoPathWrongKnowledge — a minimal two-SCS ConclusionKnowledge
+    Named pattern: TwoPathWrongKnowledge — a minimal two-path ConclusionKnowledge
     fixture that provides the resolver exactly one non-active path to search.
     """
-    from krrood.entity_query_language.factories import variable
-    from krrood.entity_query_language.rdr.backward_inference import (
-        GuardCondition,
-        SufficientConditionSet,
-    )
 
     case_variable = variable(Animal, domain=[])
     fins_expr = case_variable.fins == True  # noqa: E712
@@ -798,8 +761,6 @@ def _eval_expr(expr, case_variable, case):
     Binds *case_variable* to [*case*] then collects all OperationResult/bool values
     from expr.evaluate(), returning True only when at least one is true.
     """
-    from krrood.entity_query_language.core.base_expressions import OperationResult
-
     case_variable._update_domain_([case])
     results = list(expr.evaluate())
     return any(
@@ -892,35 +853,20 @@ class TestCornerCaseKnowledgeResolver:
         assert result is None
 
     def test_active_path_identified_by_firing_anchor(self):
-        """_active_path() returns the SCS whose guard expression is firing_anchor.
+        """_active_path() returns the sufficient condition set whose guard expression is firing_anchor.
 
-        Guarantee: identity comparison on guard.expression selects precisely the SCS
-        that contains the firing anchor and excludes the sibling SCS.
+        Guarantee: identity comparison on guard.expression selects precisely the sufficient
+        condition set that contains the firing anchor and excludes the sibling set.
 
-        The active SCS contains fins_expr as its guard.expression; the non-active SCS
-        contains aquatic_expr.  _active_path(fins_expr, ...) must return the fins SCS
-        and not the aquatic SCS.
+        The fins-guard path contains fins_expr as its guard.expression; the aquatic-guard path
+        contains aquatic_expr.  _active_path(fins_expr, ...) must return the fins-guard path
+        and not the aquatic-guard path.
         """
-        from krrood.entity_query_language.rdr.backward_inference import (
-            GuardCondition,
-            SufficientConditionSet,
+        case_variable, fins_expr, _aquatic_expr, current_knowledge = (
+            _two_path_wrong_knowledge()
         )
-        from krrood.entity_query_language.factories import variable
-
-        case_variable = variable(Animal, domain=[])
-        fins_expr = case_variable.fins == True  # noqa: E712
-        aquatic_expr = case_variable.aquatic == True  # noqa: E712
-
-        scs_fins = SufficientConditionSet(
-            conditions=(GuardCondition(fins_expr, negated=False),)
-        )
-        scs_aquatic = SufficientConditionSet(
-            conditions=(GuardCondition(aquatic_expr, negated=False),)
-        )
-        current_knowledge = ConclusionKnowledge(
-            conclusion_value=Species.fish,
-            sufficient_condition_sets=(scs_fins, scs_aquatic),
-        )
+        scs_fins = current_knowledge.sufficient_condition_sets[0]
+        scs_aquatic = current_knowledge.sufficient_condition_sets[1]
 
         resolver = CornerCaseKnowledgeResolver()
         active = resolver._active_path(fins_expr, current_knowledge)
@@ -970,10 +916,7 @@ class TestCornerCaseKnowledgeResolver:
         Guarantee: an empty ConclusionKnowledge causes the outer loop to be a no-op
         and the resolver returns None without error — no AttributeError or crash.
         """
-        from krrood.entity_query_language.factories import variable
-
         case_variable = variable(Animal, domain=[])
-        fins_expr = case_variable.fins == True  # noqa: E712
 
         empty_current = ConclusionKnowledge(Species.fish, ())
         empty_target = ConclusionKnowledge(Species.bird, ())
@@ -990,23 +933,17 @@ class TestCornerCaseKnowledgeResolver:
             corner_case=corner_case,
             target_knowledge=empty_target,
             current_knowledge=empty_current,
-            firing_anchor=fins_expr,
+            firing_anchor=None,
         )
 
         assert result is None
 
     def test_returns_none_when_only_active_path_exists(self):
-        """Resolver returns None when the only SCS is the active path.
+        """Resolver returns None when the only sufficient condition set is the active path.
 
-        Guarantee: with a single SCS that is excluded as the active path,
+        Guarantee: with a single sufficient condition set that is excluded as the active path,
         the non-active loop body never executes and the result is None.
         """
-        from krrood.entity_query_language.factories import variable
-        from krrood.entity_query_language.rdr.backward_inference import (
-            GuardCondition,
-            SufficientConditionSet,
-        )
-
         case_variable = variable(Animal, domain=[])
         fins_expr = case_variable.fins == True  # noqa: E712
 
