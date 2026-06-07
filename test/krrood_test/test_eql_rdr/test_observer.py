@@ -113,5 +113,54 @@ class TestConclusionObserver(unittest.TestCase):
         )
 
 
+class TestAttributeConditionTruthiness(unittest.TestCase):
+    """Regression: a plain Attribute condition must respect its value's truthiness.
+
+    Before the fix, ``entity(a).where(a.milk)`` fired even when ``milk=False``
+    because ``_evaluate_conclusions_and_update_bindings_`` checked ``is_false``
+    (always False for Attributes) instead of the value itself.
+    """
+
+    def setUp(self):
+        from .animal import make_animal
+
+        self.milky = make_animal("aardvark", milk=True)
+        self.non_milky = make_animal("bass", milk=False)
+
+    def _build_attribute_query(self):
+        animal = variable(Animal, domain=[])
+        query = entity(animal).where(animal.milk)  # plain Attribute, no == True
+        with query:
+            add(animal.species, Species.mammal)
+        return animal, animal.species, query
+
+    def _build_comparator_query(self):
+        animal = variable(Animal, domain=[])
+        query = entity(animal).where(animal.milk == True)
+        with query:
+            add(animal.species, Species.mammal)
+        return animal, animal.species, query
+
+    def test_attribute_condition_fires_when_true(self):
+        animal, species, query = self._build_attribute_query()
+        obs = classify_case(query, animal, species, self.milky)
+        self.assertEqual(obs.conclusion, Species.mammal)
+
+    def test_attribute_condition_does_not_fire_when_false(self):
+        animal, species, query = self._build_attribute_query()
+        obs = classify_case(query, animal, species, self.non_milky)
+        self.assertIs(obs.conclusion, UNSET)
+
+    def test_comparator_condition_fires_when_true(self):
+        animal, species, query = self._build_comparator_query()
+        obs = classify_case(query, animal, species, self.milky)
+        self.assertEqual(obs.conclusion, Species.mammal)
+
+    def test_comparator_condition_does_not_fire_when_false(self):
+        animal, species, query = self._build_comparator_query()
+        obs = classify_case(query, animal, species, self.non_milky)
+        self.assertIs(obs.conclusion, UNSET)
+
+
 if __name__ == "__main__":
     unittest.main()

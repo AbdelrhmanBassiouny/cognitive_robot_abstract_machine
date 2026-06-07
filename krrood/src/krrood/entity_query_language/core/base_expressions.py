@@ -305,7 +305,7 @@ class SymbolicExpression(ABC):
         """
         # Only evaluate the conclusions at the root condition expression (i.e. after all conditions have been evaluated)
         # and when the result truth value is True.
-        if not (self._conditions_root_ is self) or current_result.is_false:
+        if not (self._conditions_root_ is self) or current_result.is_condition_false:
             return current_result
         for conclusion in self._conclusions_:
             current_result.bindings = next(
@@ -610,12 +610,9 @@ class TruthValueOperator(SymbolicExpression, ABC):
         """
         for result in child._evaluate_(sources):
             if result.has_value:
-                value = result.value
-                is_false = not (
-                    len(value) > 0 if is_iterable(value) else bool(value)
-                )
                 yield OperationResult(
-                    result.bindings, is_false, result.operand, result.previous_operation_result
+                    result.bindings, result.is_condition_false,
+                    result.operand, result.previous_operation_result,
                 )
             else:
                 yield result
@@ -723,6 +720,21 @@ class OperationResult:
     @property
     def has_value(self) -> bool:
         return self.operand is not None and self.operand._id_ in self.bindings
+
+    @property
+    def is_condition_false(self) -> bool:
+        """Canonical condition-truth rule used by :meth:`~krrood.entity_query_language.core.base_expressions.TruthValueOperator._evaluate_child_as_condition_`
+        and :meth:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression._evaluate_conclusions_and_update_bindings_`.
+
+        For expressions that bind a direct value (``Attribute``, ``Comparator``, ``Variable``, …)
+        truth is derived from the value's boolean content.  For logical operators
+        that manage their own ``is_false`` flag (``NOT``, ``AND``, ``OR``, …) and produce no
+        direct value, the flag is used as-is.
+        """
+        if self.has_value:
+            v = self.value
+            return not (len(v) > 0 if is_iterable(v) else bool(v))
+        return self.is_false
 
     @property
     def is_true(self) -> bool:
