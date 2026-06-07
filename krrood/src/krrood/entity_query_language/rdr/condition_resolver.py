@@ -61,7 +61,7 @@ class ResolutionSource(Enum):
 class ResolvedCondition:
     """An automatically derived condition expression and its provenance."""
 
-    expression: "SymbolicExpression"
+    expression: SymbolicExpression
     """The EQL condition expression to insert as the new rule's condition."""
     source: ResolutionSource
     """The resolution strategy that produced this condition."""
