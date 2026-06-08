@@ -51,19 +51,23 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class GuardCondition:
-    """A path guard that must hold for a rule to fire.
+    """A condition that must hold for a rule to fire.
 
-    ``negated=True`` means the rule fires only when ``expression`` evaluates to False.
-    The expression is the original live EQL node from the rule tree — use
-    :meth:`holds_for` to test it against a concrete case.
+    Each guard is one leaf-level predicate extracted from the rule tree's
+    conclusion selectors.  ``negated=True`` means the rule fires only when the
+    condition is False (i.e. the expression must evaluate to False).
+
+    ``expression`` is always a leaf-level EQL node (e.g. a ``Comparator``),
+    never a ``ConclusionSelector`` — ``_flatten_guard`` decomposes selectors
+    before they reach ``GuardCondition``.
     """
 
-    expression: "SymbolicExpression"
+    expression: SymbolicExpression
     negated: bool = False
 
     def holds_for(
         self,
-        shared_variable: "CanBehaveLikeAVariable",
+        shared_variable: CanBehaveLikeAVariable,
         case: Any,
     ) -> bool:
         """Evaluate this guard against *case* bound to *shared_variable*.
@@ -96,7 +100,7 @@ class SufficientConditionSet:
 
     def evaluate_against(
         self,
-        shared_variable: "CanBehaveLikeAVariable",
+        shared_variable: CanBehaveLikeAVariable,
         case: Any,
     ) -> bool:
         """Evaluate every condition against *case* bound to *shared_variable*.
@@ -142,23 +146,38 @@ class _RulePath:
 
 
 def _flatten_guard(
-    expr: "SymbolicExpression",
+    expr: SymbolicExpression,
     negated: bool,
 ) -> List[GuardCondition]:
-    """Decompose a ConclusionSelector guard into leaf GuardConditions.
+    """Decompose a ConclusionSelector into leaf-level branch-choice predicates.
 
-    RDR control-flow operators (Alternative, Refinement) encode branch choice
-    semantics. When they appear as guard expressions they should be decomposed
-    into their constituent leaf conditions for readability — the guard's
-    semantic meaning is just the sibling's immediate condition truth, not the
-    entire subtree.
+    This is NOT tree traversal — it is predicate decomposition.  It answers the
+    question: "when this ``ConclusionSelector`` appears as a path guard (i.e. a
+    competing sibling branch), what are the minimal leaf conditions that capture
+    whether that sibling's branch was taken?"
 
-    Semantics:
-    * ``Alternative(A, B)`` when negated → ``NOT(A), NOT(B)``  (De Morgan on OR)
-    * ``Refinement(A, B)`` → ``A``  (truth equals left's truth)
-    * ``NOT(Refinement(A, B))`` → ``NOT(A)``
-    * ``Next`` → flattened children
-    * ``NOT(ConclusionSelector)`` → inverted negation propagated inwards
+    The result is always leaf-level ``GuardCondition`` objects (never
+    ``ConclusionSelectors``), so guards remain human-readable and semantically
+    precise.
+
+    Decomposition rules (each explained in terms of "the sibling's branch was
+    taken"):
+
+    * ``Alternative(A, B)`` — the sibling's branch was taken if A OR B passed.
+      When negated: NOT(A) AND NOT(B) (De Morgan).
+      Both children contribute because Alternative is a simple OR.
+
+    * ``Refinement(A, B)`` — the sibling's refinement branch was taken if A
+      passed.  B (the parent default fallback) is a separate rule subtree,
+      not a condition on the refinement being taken.  It is ignored.
+      When negated: NOT(A).
+
+    * ``Next(...)`` — each child is an independent disjunct at the same depth.
+      Propagate the predicate to each child independently.
+
+    * ``Not(ConclusionSelector)`` — push negation inward so that
+      NOT(Refinement(A, B)) → NOT(A), and
+      NOT(Alternative(A, B)) → NOT(A) AND NOT(B).
 
     :param expr: The expression to decompose into leaf guards.
     :param negated: Whether the guard polarity is negated.
@@ -186,7 +205,7 @@ def _flatten_guard(
 
 
 def _collect_rule_paths(
-    node: "SymbolicExpression",
+    node: SymbolicExpression,
     guard: List[GuardCondition],
 ) -> Iterator[_RulePath]:
     """Recursively walk the selector DAG, yielding a path for every leaf rule.
@@ -236,9 +255,13 @@ def _collect_rule_paths(
 
 
 def _build_full_index(
-    conditions_root: "SymbolicExpression",
+    conditions_root: SymbolicExpression,
 ) -> Dict[Any, ConclusionKnowledge]:
-    """One full traversal of the rule tree; buckets every conclusion value once."""
+    """One full traversal of the rule tree; buckets every conclusion value once.
+
+    :param conditions_root: The root of the rule tree's condition DAG.
+    :return: A dict mapping each conclusion value to its :class:`ConclusionKnowledge`.
+    """
     buckets: Dict[Any, List[SufficientConditionSet]] = defaultdict(list)
     for path in _collect_rule_paths(conditions_root, []):
         seen: Set[Any] = set()
@@ -260,6 +283,9 @@ class BackwardInferenceIndex:
     """
 
     _cache: Optional[Dict[Any, ConclusionKnowledge]] = field(default=None, init=False)
+    """
+    The full index of all conclusion values, or ``None`` if the index is not built.
+    """
 
     def invalidate(self) -> None:
         """:return: None. Marks the cache stale so the next query rebuilds."""
@@ -267,10 +293,14 @@ class BackwardInferenceIndex:
 
     def query(
         self,
-        conditions_root: Optional["SymbolicExpression"],
+        conditions_root: Optional[SymbolicExpression],
         conclusion_value: Any,
     ) -> ConclusionKnowledge:
-        """:return: The backward-inference knowledge for *conclusion_value*."""
+        """
+        :param conditions_root: The root of the rule tree's condition DAG, or ``None`` for an empty tree.
+        :param conclusion_value: The target value to search for.
+        :return: The backward-inference knowledge for *conclusion_value*.
+        """
         if conditions_root is None:
             return ConclusionKnowledge(conclusion_value, ())
         if self._cache is None:
@@ -295,7 +325,7 @@ __all__ = [
 
 
 def what_do_we_know_about(
-    conditions_root: Optional["SymbolicExpression"],
+    conditions_root: Optional[SymbolicExpression],
     conclusion_value: Any,
 ) -> ConclusionKnowledge:
     """Inspect the rule tree for every rule path that produces *conclusion_value*.
