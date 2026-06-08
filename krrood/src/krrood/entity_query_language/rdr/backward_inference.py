@@ -154,14 +154,34 @@ def _flatten_guard(
     entire subtree.
 
     Semantics:
-    * ``NOT(Alternative(A, B))`` → ``NOT(A), NOT(B)``  (De Morgan on OR)
-    * ``Refinement(A, B)`` → ``A``  (truth equals left's truth for bool check)
+    * ``Alternative(A, B)`` when negated → ``NOT(A), NOT(B)``  (De Morgan on OR)
+    * ``Refinement(A, B)`` → ``A``  (truth equals left's truth)
     * ``NOT(Refinement(A, B))`` → ``NOT(A)``
+    * ``Next`` → flattened children
+    * ``NOT(ConclusionSelector)`` → inverted negation propagated inwards
+
+    :param expr: The expression to decompose into leaf guards.
+    :param negated: Whether the guard polarity is negated.
+    :return: The flat list of leaf :class:`GuardCondition` objects.
     """
-    if isinstance(expr, Alternative) and negated:
-        return _flatten_guard(expr.left, True) + _flatten_guard(expr.right, True)
+    from krrood.entity_query_language.operators.core_logical_operators import Not
+
+    if isinstance(expr, Alternative):
+        if negated:
+            # NOT(A OR B) == NOT(A) AND NOT(B)
+            return _flatten_guard(expr.left, True) + _flatten_guard(expr.right, True)
+        # A OR (NOT(A) AND B) — flattened to both sides as leaf conditions
+        return _flatten_guard(expr.left, False) + _flatten_guard(expr.right, False)
     if isinstance(expr, Refinement):
         return _flatten_guard(expr.left, negated)
+    if isinstance(expr, Next):
+        result: List[GuardCondition] = []
+        for child in expr._operation_children_:
+            result.extend(_flatten_guard(child, negated))
+        return result
+    if isinstance(expr, Not) and isinstance(expr._child_, ConclusionSelector):
+        # Push negation through the selector — refines NOT(Refinement), NOT(Alternative), NOT(Next)
+        return _flatten_guard(expr._child_, not negated)
     return [GuardCondition(expr, negated)]
 
 

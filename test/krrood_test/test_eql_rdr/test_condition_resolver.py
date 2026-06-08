@@ -32,7 +32,11 @@ from krrood.entity_query_language.rdr.condition_resolver import (
 )
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
+from krrood.entity_query_language.rdr.rule_tree import (
+    insert_refinement,
+)
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+from krrood.entity_query_language.rules.conclusion_selector import ConclusionSelector
 
 # ---------------------------------------------------------------------------
 # Minimal stub helpers — named after the pattern they exercise, not "Mock"
@@ -994,3 +998,89 @@ class TestCornerCaseKnowledgeResolver:
         # The expression must evaluate True for case (aquatic=True) — positive, not negated.
         truth_for_case = _eval_expr(result.expression, case_variable, case)
         assert truth_for_case is True
+
+
+# ---------------------------------------------------------------------------
+# TestResolverWithAlternativeGuard
+# (Test 5: resolver must never return a ConclusionSelector expression)
+# ---------------------------------------------------------------------------
+
+
+def _alt_refinement_tree_for_resolver():
+    """Build ``Refinement(Alternative(milk->mammal, feathers->bird), fins->fish)``.
+
+    This is the minimal tree whose ``Refinement`` right-path guard is a positive
+    ``Alternative``, making it the smallest tree that exercises the resolver's
+    interaction with the ``_positive_guards_dnf`` expansion.
+
+    Returns ``(animal_variable, conditions_root)``.
+    """
+    animal = variable(Animal, domain=[])
+    query = entity(animal).where(animal.milk == True)
+    with query:
+        add(animal.species, Species.mammal)
+        with alternative(animal.feathers == True):
+            add(animal.species, Species.bird)
+    query.build()
+    insert_refinement(
+        query._conditions_root_,
+        animal.fins == True,
+        animal.species,
+        Species.fish,
+    )
+    return animal, query._conditions_root_
+
+
+class TestResolverWithAlternativeGuard:
+    """TargetKnowledgeResolver must never return a ConclusionSelector as its expression.
+
+    When ``_positive_guards_dnf`` expands a positive ``Alternative`` into plain-comparator
+    conjunctions, no ``ConclusionSelector`` node ever appears as a guard expression in the
+    ``SufficientConditionSet``, so the resolver can never select and return one.
+    """
+
+    def test_resolver_never_returns_conclusion_selector_expression(self):
+        """TargetKnowledgeResolver.resolve returns None or a non-ConclusionSelector expression.
+
+        Guarantee: the ``expression`` field of any ``ResolvedCondition`` returned by
+        ``TargetKnowledgeResolver`` is never an instance of ``ConclusionSelector``.
+        Inserting a ``ConclusionSelector`` as a rule condition creates a DAG cycle and
+        produces increasingly nested suggestions — it must never happen.
+
+        Scenario:
+          Tree:  Refinement(Alternative(milk->mammal, feathers->bird), fins->fish)
+          new case:    milk=True,  feathers=False, fins=True
+          corner_case: milk=False, feathers=False, fins=True
+        """
+        animal, root = _alt_refinement_tree_for_resolver()
+
+        fish_knowledge = what_do_we_know_about(root, Species.fish)
+        mammal_knowledge = what_do_we_know_about(root, Species.mammal)
+
+        # new case: milk=True (Alternative fires), fins=True (refinement fires)
+        new_case = _make_mammal(
+            name="milk_and_fins", milk=True, feathers=False, fins=True
+        )
+        # corner case: milk=False, feathers=False (Alternative does NOT fire), fins=True
+        corner_case = _make_mammal(
+            name="no_milk_no_feathers", milk=False, feathers=False, fins=True
+        )
+
+        resolver = TargetKnowledgeResolver()
+        result = resolver.resolve(
+            new_case,
+            animal,
+            Species.fish,
+            Species.mammal,
+            corner_case,
+            fish_knowledge,
+            mammal_knowledge,
+        )
+
+        # The result is either None (no discrimination found — acceptable after fix)
+        # or a ResolvedCondition whose expression is NOT a ConclusionSelector.
+        if result is not None:
+            assert not isinstance(result.expression, ConclusionSelector), (
+                f"Resolver must not return a ConclusionSelector expression; "
+                f"got {type(result.expression).__name__}: {result.expression!r}"
+            )

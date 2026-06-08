@@ -24,11 +24,13 @@ from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.observer import trace_case
 from krrood.entity_query_language.rdr.serialization import load_rdr
-from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.entity_query_language.rdr.utils import UNSET, _conclusions_of
+from krrood.entity_query_language.rules.conclusion_selector import Alternative
 from krrood.entity_query_language.rdr.rule_tree_view import (
     RuleStatus,
     RuleTreeRenderer,
     RuleView,
+    enforce_parent_consistency,
     format_condition,
     format_conclusion,
     render_rule_tree,
@@ -109,6 +111,113 @@ class TestFormatting(unittest.TestCase):
         rules = walk_rules(query._conditions_root_)
         self.assertEqual(format_conclusion(rules[0].conclusions[0]), "species = fish")
         self.assertEqual(format_conclusion(rules[1].conclusions[0]), "species = mammal")
+
+
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestConclusionDeduplication(unittest.TestCase):
+    """Phase 1: semantic equality on Conclusion prevents duplicates in _conclusions_ sets."""
+
+    def test_same_attribute_same_value_deduplicates(self):
+        """Same cached Attribute in two branches → only one Add in _conclusions_."""
+        animal = variable(Animal, domain=[])
+        query = entity(animal).where(animal.milk == True)
+        with query:
+            add(animal.species, Species.mammal)
+            with alternative(animal.feathers):
+                add(animal.species, Species.bird)
+            with alternative(animal.feathers):
+                add(animal.species, Species.bird)
+        query.build()
+
+        # Both alternatives use the same cached feathers node → _conclusions_of should
+        # return exactly one Add per semantic conclusion.
+        rules = walk_rules(query._conditions_root_)
+        for r in rules:
+            self.assertEqual(
+                len(r.conclusions),
+                1,
+                f"{format_condition(r.condition)} has {len(r.conclusions)} conclusions: "
+                f"{[format_conclusion(c) for c in r.conclusions]}",
+            )
+
+    def test_same_node_clone_branches(self):
+        """Simulate a node appearing as both a refinement and an alternative
+        (shared node scenario). The clone should have distinct Add objects, but
+        _conclusions_of on the original node should have only one Add if the same
+        conclusion was added twice to it."""
+        animal = variable(Animal, domain=[])
+        feathers = animal.feathers  # Same cached node
+        tree = entity(animal).where(animal.milk == True)
+        with tree:
+            add(animal.species, Species.mammal)
+            with alternative(feathers == True):
+                add(animal.species, Species.bird)
+        tree.build()
+
+        rules = walk_rules(tree._conditions_root_)
+        for r in rules:
+            self.assertEqual(
+                len(r.conclusions),
+                1,
+                f"{format_condition(r.condition)} has {len(r.conclusions)} conclusions",
+            )
+
+
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestInsertAtCloning(unittest.TestCase):
+    """Phase 2: ``insert_at`` clones parented condition nodes to prevent node-sharing."""
+
+    def test_fresh_expression_clones_with_new_id_and_no_parent(self):
+        from krrood.entity_query_language.rules.conclusion_selector import _fresh_expression
+
+        animal = variable(Animal, domain=[])
+        cond = animal.milk == True
+        original_id = cond._id_
+
+        clone = _fresh_expression(cond)
+        self.assertNotEqual(clone._id_, original_id)
+        self.assertIsNone(clone._parent_)
+        # Children are shared shallowly (same object references)
+        self.assertIs(clone.left, cond.left)
+        self.assertIs(clone.right, cond.right)
+
+    def test_insert_at_clones_condition_that_already_has_parent(self):
+        """insert_at clones the *condition* (not anchor) when it already lives in the tree."""
+        animal = variable(Animal, domain=[])
+
+        # Build: milk → mammal ; alternative(feathers) → bird
+        query = entity(animal).where(animal.milk == True)
+        with query:
+            add(animal.species, Species.mammal)
+            with alternative(animal.feathers == True):
+                add(animal.species, Species.bird)
+        query.build()
+
+        rules = walk_rules(query._conditions_root_)
+        milk = [r for r in rules if 'milk' in format_condition(r.condition)][0].condition
+        feathers = [r for r in rules if 'feathers' in format_condition(r.condition)][0].condition
+
+        # The feathers condition is a non-root tree node — it has a parent.
+        original_id = feathers._id_
+        original_parent = feathers._parent_
+        self.assertIsNotNone(original_parent)
+
+        # insert_at with milk as anchor, feathers as the "resolver-suggested" condition.
+        # feathers has a parent → should be cloned.
+        new_cond = Alternative.insert_at(milk, feathers)
+
+        # The original feathers node must be untouched (the clone is what's used).
+        self.assertEqual(feathers._id_, original_id)
+        self.assertIs(feathers._parent_, original_parent)
+
+        # The returned condition is the clone — different identity.
+        self.assertNotEqual(new_cond._id_, original_id)
+
+        # walk_rules must not contain duplicate condition IDs.
+        rules = walk_rules(query._conditions_root_)
+        ids = [r.condition._id_ for r in rules]
+        self.assertEqual(len(ids), len(set(ids)),
+                         f"duplicate condition IDs: {ids}")
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -200,6 +309,9 @@ class TestStatusResolution(unittest.TestCase):
                 )
                 for r in rules
             ]
+            # Phase 3: correct display for shared-node models — a refinement whose
+            # visual parent didn't fire is shown as NOT_EVALUATED.
+            statuses = enforce_parent_consistency(statuses, rules)
             for i, rule in enumerate(rules):
                 if rule.depth == 0 or statuses[i] != RuleStatus.FIRED:
                     continue

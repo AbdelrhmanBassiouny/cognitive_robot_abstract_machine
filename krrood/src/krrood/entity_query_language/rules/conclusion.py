@@ -19,7 +19,12 @@ from krrood.entity_query_language.core.base_expressions import (
     Selectable,
     BinaryExpression,
 )
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.variable import Literal, Variable
+
+
+def _unwrap(value: Any) -> Any:
+    """Unwrap a :class:`Literal` wrapper to get the raw value."""
+    return value._value_ if isinstance(value, Literal) else value
 
 
 @dataclass(eq=False)
@@ -50,6 +55,16 @@ class Conclusion(BinaryExpression, ABC):
     @property
     def variable(self) -> Selectable:
         return self.left
+
+    def __eq__(self, other):
+        if not isinstance(other, Conclusion):
+            return NotImplemented
+        if self.left._id_ != other.left._id_:
+            return False
+        return _unwrap(self.right) == _unwrap(other.right)
+
+    def __hash__(self):
+        return hash((self.left._id_, _unwrap(self.right)))
 
     @property
     def value(self) -> Any:

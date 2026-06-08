@@ -7,7 +7,9 @@ Alternative, and Next.
 
 from __future__ import annotations
 
+import uuid
 from abc import ABC, abstractmethod
+from copy import copy
 from dataclasses import dataclass
 from typing_extensions import Iterable, TYPE_CHECKING, Self, Optional
 
@@ -29,6 +31,36 @@ from krrood.entity_query_language.core.base_expressions import (
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
+
+
+def _fresh_expression(expr: SymbolicExpression) -> SymbolicExpression:
+    """Clone *expr* so it can be reused in a new tree position without parent corruption.
+
+    Creates a shallow copy with a new identity and no parent. Children are shared
+    (not deep-copied) — only the node itself gets a fresh ``_id_``.
+
+    This prevents :class:`BinaryExpression.__post_init__` from overwriting the
+    original's ``_parent_`` while the old parent still holds a reference, which
+    would create a node shared between two positions.
+
+    .. note::
+       :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
+       nodes (e.g. ``Attribute``) are shared identity singletons — they are returned
+       as-is rather than cloned. Only expression nodes (``Comparator``, ``Not``,
+       logical operators) carry evaluation state that needs a fresh identity.
+    """
+    from krrood.entity_query_language.core.mapped_variable import MappedVariable
+
+    if isinstance(expr, MappedVariable):
+        return expr
+
+    clone = copy(expr)
+    clone._id_ = uuid.uuid4()
+    clone._parent_ = None
+    # :meth:`_update_children_` returns ``v._expression_`` for each child, so the
+    # clone must point to itself — otherwise the ORIGINAL node gets wired in.
+    clone._expression_ = clone
+    return clone
 
 
 @dataclass(eq=False)
@@ -71,11 +103,26 @@ class ConclusionSelector(TruthValueOperator, ABC):
         alternative after observing a misclassification). Conditions are chained with
         AND; the new branch is spliced in between ``anchor`` and its current parent.
 
+        Any condition that is already part of a tree (has a ``_parent_``) is cloned
+        to prevent node-sharing corruption — when :class:`BinaryExpression.__post_init__`
+        overwrites ``_parent_``, the old parent still holds a reference, creating a node
+        shared between two positions.
+
         :param anchor: The existing condition node the new branch connects to.
         :param conditions: Conditions to chain with AND into the new branch.
         :returns: The newly created condition node (attach conclusions to it via ``with``).
         """
-        new_condition = chained_logic(AND, *conditions)
+        cleaned = []
+        for c in conditions:
+            if isinstance(c, SymbolicExpression) and c._parent_ is not None:
+                c = _fresh_expression(c)
+            cleaned.append(c)
+        new_condition = chained_logic(AND, *cleaned)
+        # Single conditions returned directly by chained_logic may still carry a parent
+        # from the pre-cleaning step (e.g. one condition that was the only element).
+        # Clone again if needed — the idempotent clone is harmless.
+        if isinstance(new_condition, SymbolicExpression) and new_condition._parent_ is not None:
+            new_condition = _fresh_expression(new_condition)
 
         prev_parent = anchor._parent_
 

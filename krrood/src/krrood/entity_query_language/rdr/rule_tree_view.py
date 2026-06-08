@@ -168,6 +168,37 @@ def resolve_status(
     return RuleStatus.NOT_EVALUATED
 
 
+def enforce_parent_consistency(
+    statuses: List[RuleStatus],
+    rules: List[RuleView],
+) -> List[RuleStatus]:
+    """Downgrade refinement FIRED status to NOT_EVALUATED when its visual parent didn't fire.
+
+    A refinement (except-if) at depth > 0 can only truly fire when its visual parent
+    (the nearest preceding rule at depth-1) also fired — the refinement's selector
+    evaluates its right branch only when the left side was satisfied.  A FIRED status
+    on the refinement when the parent is not FIRED indicates a node-sharing issue in
+    the rule tree (e.g. the same cached condition node appearing in two branches).
+    This function corrects the display to avoid a visually nonsensical "green child
+    under a red parent".
+
+    :param statuses: Per-rule statuses from :func:`resolve_status`.
+    :param rules: The rules in display order (from :func:`walk_rules`).
+    :return: Corrected statuses with the invariant enforced.
+    """
+    result = list(statuses)
+    for i, (rule, status) in enumerate(zip(rules, result)):
+        if rule.depth == 0 or status != RuleStatus.FIRED:
+            continue
+        parent_idx = next(
+            (j for j in range(i - 1, -1, -1) if rules[j].depth == rule.depth - 1),
+            None,
+        )
+        if parent_idx is not None and result[parent_idx] != RuleStatus.FIRED:
+            result[i] = RuleStatus.NOT_EVALUATED
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Compact symbolic formatting of conditions and conclusions.
 # ---------------------------------------------------------------------------
@@ -329,8 +360,12 @@ class RuleTreeRenderer:
         if not rules:
             return ""
         depths = [r.depth for r in rules]
+        statuses = [
+            resolve_status(r, satisfied_ids, evaluated_ids) for r in rules
+        ]
+        statuses = enforce_parent_consistency(statuses, rules)
         lines = [
-            self._render_row(rule, _connector(depths, i), satisfied_ids, evaluated_ids)
+            self._render_row(rule, _connector(depths, i), statuses[i])
             for i, rule in enumerate(rules)
         ]
         return "\n".join(self._elide(lines, len(rules), fired_index))
@@ -339,10 +374,8 @@ class RuleTreeRenderer:
         self,
         rule: RuleView,
         connector: str,
-        satisfied_ids: Optional[OrderedSet[UUID]],
-        evaluated_ids: Optional[OrderedSet[UUID]],
+        status: RuleStatus,
     ) -> str:
-        status = resolve_status(rule, satisfied_ids, evaluated_ids)
         text = f"{rule.kind} {format_condition(rule.condition)}  →  {_format_conclusions(rule)}"
         if self.use_color:
             text = f"{status.color}{text}{Style.RESET_ALL}"

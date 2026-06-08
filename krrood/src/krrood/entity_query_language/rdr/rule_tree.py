@@ -18,6 +18,7 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 from krrood.entity_query_language.factories import add
 from krrood.entity_query_language.rules.conclusion_selector import (
     Alternative,
+    ConclusionSelector,
     Refinement,
 )
 
@@ -29,6 +30,23 @@ def _insert_rule(
     conclusion_variable: CanBehaveLikeAVariable,
     conclusion_value: Any,
 ) -> SymbolicExpression:
+    """Splice a new rule into the tree at *anchor* using *selector*.
+
+    :param selector: A :class:`ConclusionSelector` class used as a factory
+        (``Refinement`` or ``Alternative``).
+    :param anchor: The existing conditions node to splice at.
+    :param condition: The new condition expression. Must not itself be a
+        :class:`ConclusionSelector` — structural tree nodes cannot be inserted as
+        conditions without creating a DAG cycle.
+    :param conclusion_variable: The attribute the conclusion sets.
+    :param conclusion_value: The value to conclude.
+    :return: The newly created condition node.
+    :raises ValueError: If *condition* is a :class:`ConclusionSelector`.
+    """
+    if isinstance(condition, ConclusionSelector):
+        raise ValueError(
+            f"A ConclusionSelector cannot be used as a rule condition: {condition!r}"
+        )
     new_condition = selector.insert_at(anchor, condition)
     with new_condition:
         add(conclusion_variable, conclusion_value)

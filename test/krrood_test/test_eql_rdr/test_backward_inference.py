@@ -627,6 +627,48 @@ class TestGuardFlattening:
                 assert "_conclusions_=" not in rendered
                 assert "right_yielded" not in rendered
 
+    def test_no_guard_is_ever_a_conclusion_selector_deeply_nested_alternative(self):
+        """Even deeply nested Alternative trees produce leaf-only guard expressions."""
+        animal = variable(Animal, domain=[])
+        # Build: backbone → fish ; alternative(milk → mammal) ; alternative(feathers → bird)
+        # Tests Alternative(Alternative(A, B), C) guard decomposition.
+        query = entity(animal).where(animal.backbone == True)
+        with query:
+            add(animal.species, Species.fish)
+            with alternative(animal.milk == True):
+                add(animal.species, Species.mammal)
+            with alternative(animal.feathers == True):
+                add(animal.species, Species.bird)
+        query.build()
+
+        # backbone-fish should have two guard paths: NOT(milk) AND NOT(feathers)
+        for value in (Species.fish, Species.mammal, Species.bird):
+            knowledge = what_do_we_know_about(query._conditions_root_, value)
+            for scs in knowledge.sufficient_condition_sets:
+                for gc in scs.conditions:
+                    assert not isinstance(
+                        gc.expression, ConclusionSelector
+                    ), f"Guard for {value} is unflattened: {gc.expression}"
+
+    def test_not_conclusion_selector_decomposes_in_guard_flattening(self):
+        """``Not(ConclusionSelector)`` is decomposed, never stored as a guard expression."""
+        from krrood.entity_query_language.rdr.backward_inference import _flatten_guard
+        from krrood.entity_query_language.operators.core_logical_operators import Not
+        from krrood.entity_query_language.rules.conclusion_selector import Refinement
+
+        animal = variable(Animal, domain=[])
+        # Build Refinement(aquatic, fins==False) directly (no `with` context needed).
+        refinement_cond = Refinement(animal.aquatic, animal.fins == False)
+        # _flatten_guard on Not(Refinement) should push negation inward
+        guards = _flatten_guard(Not(refinement_cond), negated=False)
+        for gc in guards:
+            assert not isinstance(
+                gc.expression, ConclusionSelector
+            ), f"Not(Refinement) guard leaked selector: {gc.expression}"
+            assert not isinstance(
+                gc.expression, Not
+            ), f"Not was not pushed through; guard wraps Not(Refinement): {gc.expression}"
+
 
 def _tree_name(root):
     """Helper to identify which test tree we're in."""
