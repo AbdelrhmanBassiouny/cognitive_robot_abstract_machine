@@ -1,11 +1,13 @@
 from __future__ import annotations
+
 from abc import ABC
+from copy import deepcopy
 from dataclasses import dataclass
 
 import numpy as np
-import math
 import trimesh.boolean
 from trimesh.collision import CollisionManager
+from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
 from krrood.entity_query_language.predicate import (
     Predicate,
@@ -13,11 +15,6 @@ from krrood.entity_query_language.predicate import (
     symbolic_function,
 )
 from random_events.interval import Interval
-from typing_extensions import List, TYPE_CHECKING, Iterable, Type
-
-from semantic_digital_twin.collision_checking.trimesh_collision_detector import (
-    FCLCollisionDetector,
-)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.spatial_computations.ik_solver import (
@@ -30,7 +27,6 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,
 )
-from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import BoundingBox
 from semantic_digital_twin.world_description.world_entity import (
@@ -40,7 +36,8 @@ from semantic_digital_twin.world_description.world_entity import (
 )
 
 if TYPE_CHECKING:
-    from semantic_digital_twin.robots.abstract_robot import (
+    from semantic_digital_twin.world import World
+    from semantic_digital_twin.robots.robot_parts import (
         Camera,
     )
 
@@ -136,9 +133,10 @@ def occluding_bodies(camera: Camera, body: Body) -> List[Body]:
     )
 
     # create a world only containing the target body
-    world_without_occlusion = World()
+    world_without_occlusion = deepcopy(body._world)
     root = Body(name=PrefixedName("root"))
     with world_without_occlusion.modify_world():
+        world_without_occlusion.clear()
         world_without_occlusion.add_body(root)
         copied_body = Body.from_json(body.to_json())
         root_T_body = body.global_transform
@@ -184,7 +182,7 @@ def occluding_bodies(camera: Camera, body: Body) -> List[Body]:
 @symbolic_function
 def reachable(pose: HomogeneousTransformationMatrix, root: Body, tip: Body) -> bool:
     """
-    Checks if a manipulator can reach a given position.
+    Checks if a end_effector can reach a given position.
     This is determined by inverse kinematics.
 
     :param pose: The pose to reach
@@ -379,7 +377,7 @@ class PointSpatialRelation(Symbol, ABC):
 @dataclass
 class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
 
-    point_of_semantic_annotation: HomogeneousTransformationMatrix
+    point_of_view: HomogeneousTransformationMatrix
     """
     The reference spot from where to look at the bodies.
     """
@@ -402,14 +400,14 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
             the spatial relation is computed.
         :return: The signed distance between the first and the second points along the given direction.
         """
-        ref_np = self.point_of_semantic_annotation.to_np()
+        ref_np = self.point_of_view.to_np()
         front_world = ref_np[:3, index]
         front_norm = front_world / (np.linalg.norm(front_world) + self.eps)
         front_norm = Vector3(
             x=front_norm[0],
             y=front_norm[1],
             z=front_norm[2],
-            reference_frame=self.point_of_semantic_annotation.reference_frame,
+            reference_frame=self.point_of_view.reference_frame,
         )
 
         s_body = front_norm.dot(self.point.to_vector3())

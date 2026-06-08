@@ -13,7 +13,7 @@ from pycram.utils import collision_check
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
 )
-from semantic_digital_twin.robots.abstract_robot import AbstractRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -62,7 +62,7 @@ class Location(Iterable[Pose]):
 
     def __iter__(self) -> Iterator[Pose]:
         test_world = deepcopy(self.world)
-        test_robot = self.robot.__class__.from_world(test_world)
+        test_robot = test_world.get_semantic_annotations_by_type(type(self.robot))[0]
         for validator in self.validators:
             validator.world = test_world
             validator.robot = test_robot

@@ -19,6 +19,7 @@ from pycram.plans.plan_node import PlanNode
 from pycram.robot_plans import MoveToolCenterPointMotion
 from pycram.view_manager import ViewManager
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
@@ -161,7 +162,11 @@ class ReachabilitySequenceValidator(PoseValidator):
         else:
             root = (
                 self.robot.root
-                if not self.robot.full_body_controlled
+                if not (
+                    self.robot.mobile_base.full_body_controlled
+                    if isinstance(self.robot, HasMobileBase)
+                    else False
+                )
                 else self.world.root
             )
             sequence = [

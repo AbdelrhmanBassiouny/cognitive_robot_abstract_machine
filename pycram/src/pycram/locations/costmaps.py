@@ -14,7 +14,7 @@ from skimage.measure import label
 from typing_extensions import Tuple, List, Optional, Iterator, Callable, TYPE_CHECKING
 
 from pycram.locations.base import PoseGeneratorBackend
-from semantic_digital_twin.robots.abstract_robot import AbstractRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_computations.raytracer import RayTracer
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -483,7 +483,7 @@ class OccupancyCostmap(Costmap):
         ) * self.resolution + np.array(origin_position[:2])
 
         # base height of the robot plus a safty offset
-        base_height = self.robot_view.base.bounding_box.height + 0.1
+        base_height = self.robot_view.mobile_base.bounding_box.height + 0.1
         # Add the z-coordinate to the grid, which is either 0 or 10
         indices_0 = np.pad(
             indices, (0, 1), mode="constant", constant_values=base_height
@@ -575,7 +575,7 @@ class OccupancyCostmap(Costmap):
         ground_pose = deepcopy(target)
         ground_pose.z = 0
 
-        base_bb = context.robot.base.bounding_box
+        base_bb = context.robot.mobile_base.bounding_box
 
         return OccupancyCostmap(
             resolution=0.02,
@@ -822,7 +822,7 @@ class GaussianCostmap(Costmap):
         cut_dist = int(0.05 * self.mean)
         center = int(self.mean / 2)
         # Cuts out the middle 5% of the gaussian to avoid the robot being too close to the target since this is usually
-        # bad for reaching the target with a manipulator. 15% is a magic number that might need some tuning in the future
+        # bad for reaching the target with a end_effector. 15% is a magic number that might need some tuning in the future
         self.map[
             center - cut_dist : center + cut_dist, center - cut_dist : center + cut_dist
         ] = 0

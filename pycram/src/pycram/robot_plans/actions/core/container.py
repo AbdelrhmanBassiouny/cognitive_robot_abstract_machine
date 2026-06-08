@@ -26,6 +26,8 @@ from pycram.robot_plans.motions.gripper import MoveGripperMotion
 from pycram.view_manager import ViewManager
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.reasoning.robot_predicates import is_body_in_gripper
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -51,12 +53,12 @@ class OpenAction(ActionDescription):
 
     def execute(self) -> None:
         arm = ViewManager.get_arm_view(self.arm, self.robot)
-        manipulator = arm.manipulator
+        end_effector = arm.end_effector
 
         grasp_description = GraspDescription(
             ApproachDirection.FRONT,
             VerticalAlignment.NoAlignment,
-            manipulator,
+            end_effector,
         )
 
         self.add_subplan(
@@ -78,16 +80,21 @@ class OpenAction(ActionDescription):
         """
         The gripper with which to open the container has to be free and the handle has to be reachable.
         """
-        manipulator = ViewManager.get_end_effector_view(variables["arm"], context.robot)
         test_world = deepcopy(context.world)
+        test_robot: AbstractRobot = test_world.get_semantic_annotation_by_id(
+            context.robot.id
+        )
+        end_effector = ViewManager.get_end_effector_view(variables["arm"], test_robot)
 
         return and_(
-            GripperIsFree(manipulator),
+            GripperIsFree(end_effector),
             ReachabilityValidator(
                 world=test_world,
-                robot=context.robot.from_world(test_world),
+                robot=test_world.get_semantic_annotations_by_type(type(context.robot))[
+                    0
+                ],
                 pose=kwargs["object_designator"].global_pose,
-                tip_link=manipulator.tool_frame,
+                tip_link=end_effector.tool_frame,
             ),
         )
 
@@ -98,12 +105,12 @@ class OpenAction(ActionDescription):
         """
         The handle has to be in the gripper of the robot and the container has to be open.
         """
-        manipulator = ViewManager.get_end_effector_view(kwargs["arm"], context.robot)
+        end_effector = ViewManager.get_end_effector_view(kwargs["arm"], context.robot)
         parent_connection = kwargs[
             "object_designator"
         ].get_first_parent_connection_of_type(ActiveConnection1DOF)
         return (
-            is_body_in_gripper(kwargs["object_designator"], manipulator) > 0.9
+            is_body_in_gripper(kwargs["object_designator"], end_effector) > 0.9
             or np.allclose(
                 kwargs["object_designator"].global_pose.to_position(),
                 ViewManager.get_end_effector_view(
@@ -135,12 +142,12 @@ class CloseAction(ActionDescription):
 
     def execute(self) -> None:
         arm = ViewManager.get_arm_view(self.arm, self.robot)
-        manipulator = arm.manipulator
+        end_effector = arm.end_effector
 
         grasp_description = GraspDescription(
             ApproachDirection.FRONT,
             VerticalAlignment.NoAlignment,
-            manipulator,
+            end_effector,
         )
 
         self.add_subplan(

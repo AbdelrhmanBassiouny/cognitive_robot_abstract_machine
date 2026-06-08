@@ -25,7 +25,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AllowCollisionRule,
     AllowCollisionBetweenGroups,
 )
-from semantic_digital_twin.robots.abstract_robot import AbstractRobot, Manipulator
+from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
@@ -73,7 +73,7 @@ class GiskardLocationBackend(PoseGeneratorBackend):
         ground_pose = deepcopy(pose)
         ground_pose.z = 0.0
 
-        base_bb = self.robot.base.bounding_box
+        base_bb = self.robot.mobile_base.bounding_box
 
         occupancy_map = OccupancyCostmap(
             resolution=0.02,
@@ -102,7 +102,7 @@ class GiskardLocationBackend(PoseGeneratorBackend):
         pose_sequence: List[Pose],
         world: World,
         robot_view: AbstractRobot,
-        end_effector: Manipulator,
+        end_effector: EndEffector,
     ) -> Executor:
         """
         Setup the Giskard executor for a specific pose sequence and a given world.

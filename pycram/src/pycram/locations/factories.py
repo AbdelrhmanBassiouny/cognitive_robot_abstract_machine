@@ -14,7 +14,7 @@ from pycram.locations.pose_validator import (
     VisibilityValidator,
 )
 from pycram.view_manager import ViewManager
-from semantic_digital_twin.robots.abstract_robot import AbstractRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Cabinet,
     Drawer,
