@@ -196,7 +196,7 @@ def main():
         ),
         Repository(
             "https://github.com/maltehue/ros2_robotiq_gripper.git",
-            "main",
+            "iai_dualarm",
             "ros2_robotiq_gripper",
             [
                 "robotiq_controllers",

@@ -277,9 +277,6 @@ class TestJointGoals:
         msc.add_node(EndMotion.when_true(joint_goal))
         state_version = giskard.api.world.state.version
         giskard.api.execute(msc)
-
-        # State might change multiple times. Waiting for state to not change to continue
-        last_state_change = 0
         for i in range(1000):
             try:
                 np.testing.assert_almost_equal(
@@ -293,7 +290,6 @@ class TestJointGoals:
             sleep(0.01)
         else:
             assert False
-
 
 class TestCartGoals:
     def test_move_base(self, giskard: HSRTester):
