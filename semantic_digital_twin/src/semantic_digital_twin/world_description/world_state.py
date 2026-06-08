@@ -122,9 +122,9 @@ class WorldState(MutableMapping[UUID, WorldStateEntryView]):
         If you have changed the state of the world, call this function to trigger necessary events and increase
         the state version.
         """
+        self.version += 1
         for callback in self.state_change_callbacks:
             callback.notify(**kwargs)
-        self.version += 1
 
     def clear(self):
         with self.world_lock:

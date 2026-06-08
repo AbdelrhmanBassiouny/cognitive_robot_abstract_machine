@@ -334,9 +334,9 @@ class WorldModelManager:
         and forward kinematics expressions while also triggering registered callbacks
         for model changes.
         """
+        self.version += 1
         for callback in self.model_change_callbacks:
             callback.notify(**kwargs)
-        self.version += 1
 
 
 _LRU_CACHE_SIZE: int = 2048
