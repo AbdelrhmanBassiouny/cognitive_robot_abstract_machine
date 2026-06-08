@@ -24,6 +24,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Optional
 
+from krrood.entity_query_language.rdr import expert
 from krrood.entity_query_language.rdr.aid import ConclusionAid
 from krrood.entity_query_language.rdr.conclusion_domain import resolve_conclusion_domain
 from krrood.entity_query_language.rdr.expert import (
@@ -82,7 +83,7 @@ def _zoo_rdr() -> EQLSingleClassRDR:
     return EQLSingleClassRDR(Animal, "species")
 
 
-def _iface() -> IPythonInterface:
+def ipython_interface() -> IPythonInterface:
     """Return a plain (no-color) IPythonInterface."""
     return IPythonInterface(use_color=False)
 
@@ -120,14 +121,14 @@ def _current_conclusion_context(case, rdr, current, trace=None, aids=None):
     )
 
 
-def _render(iface, context, requests=None, errors=None):
+def _render(expert_interface, context, requests=None, errors=None):
     """Call _build_namespace then _render_header and return the header string."""
     if requests is None:
         requests = [_conclusion_request(context.conclusion_domain)]
     if errors is None:
         errors = {}
-    iface._build_namespace(context, requests)
-    return iface._render_header(context, requests, errors)
+    expert_interface._build_namespace(context, requests)
+    return expert_interface._render_header(context, requests, errors)
 
 
 # ---------------------------------------------------------------------------
@@ -140,7 +141,7 @@ class TestNoRuleFiredNoTargetHeader(unittest.TestCase):
         """Header contains 'No rule fired — what should this case conclude?' when no rule fired."""
         case = _make_animal()
         rdr = _zoo_rdr()
-        header = _render(_iface(), _no_rule_context(case, rdr))
+        header = _render(ipython_interface(), _no_rule_context(case, rdr))
         self.assertIn("No rule fired", header)
         self.assertIn("what should this case conclude", header)
 
@@ -148,7 +149,7 @@ class TestNoRuleFiredNoTargetHeader(unittest.TestCase):
         """Header contains 'Choose one of:' and lists Species members for enumerable domain."""
         case = _make_animal()
         rdr = _zoo_rdr()
-        header = _render(_iface(), _no_rule_context(case, rdr))
+        header = _render(ipython_interface(), _no_rule_context(case, rdr))
         self.assertIn("Choose one of:", header)
         self.assertIn("Species.mammal", header)
         self.assertIn("Species.molusc", header)
@@ -161,7 +162,7 @@ class TestNoRuleFiredNoTargetHeader(unittest.TestCase):
         """
         case = _make_animal()
         rdr = _zoo_rdr()
-        header = _render(_iface(), _no_rule_context(case, rdr))
+        header = _render(ipython_interface(), _no_rule_context(case, rdr))
         self.assertNotIn("Set the", header)
 
 
@@ -176,7 +177,7 @@ class TestCurrentConclusionNoTargetHeader(unittest.TestCase):
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _current_conclusion_context(case, rdr, Species.fish)
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertIn("currently concludes", header)
 
     def test_current_conclusion_repr_present(self):
@@ -184,7 +185,7 @@ class TestCurrentConclusionNoTargetHeader(unittest.TestCase):
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _current_conclusion_context(case, rdr, Species.fish)
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertIn(repr(Species.fish), header)
 
     def test_is_that_correct_phrase_present(self):
@@ -192,7 +193,7 @@ class TestCurrentConclusionNoTargetHeader(unittest.TestCase):
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _current_conclusion_context(case, rdr, Species.fish)
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertIn("is that correct", header)
         self.assertIn("CTRL+D", header)
 
@@ -210,7 +211,7 @@ class TestFiredOnLineWithTrace(unittest.TestCase):
         context = _current_conclusion_context(
             case, rdr, current=Species.fish, trace=None
         )
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertNotIn("It fired on", header)
 
     def test_fired_on_line_present_when_trace_has_anchor(self):
@@ -255,7 +256,7 @@ class TestFiredOnLineWithTrace(unittest.TestCase):
         context = _current_conclusion_context(
             case, rdr, current=trace.conclusion, trace=trace
         )
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertIn("It fired on", header)
 
     def test_fired_on_line_absent_when_firing_anchor_is_none(self):
@@ -275,7 +276,7 @@ class TestFiredOnLineWithTrace(unittest.TestCase):
         context = _current_conclusion_context(
             case, rdr, current=Species.fish, trace=trace
         )
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertNotIn("It fired on", header)
 
 
@@ -289,14 +290,14 @@ class TestAllowedValuesLines(unittest.TestCase):
         """Enumerable domain (Species) → header contains 'Choose one of:'."""
         case = _make_animal()
         rdr = _zoo_rdr()
-        header = _render(_iface(), _no_rule_context(case, rdr))
+        header = _render(ipython_interface(), _no_rule_context(case, rdr))
         self.assertIn("Choose one of:", header)
 
     def test_enumerable_domain_lists_all_members(self):
         """Enumerable domain → header lists every Species member."""
         case = _make_animal()
         rdr = _zoo_rdr()
-        header = _render(_iface(), _no_rule_context(case, rdr))
+        header = _render(ipython_interface(), _no_rule_context(case, rdr))
         for member in Species:
             self.assertIn(repr(member), header)
 
@@ -316,7 +317,7 @@ class TestAllowedValuesLines(unittest.TestCase):
             conclusion_domain=domain,
         )
         request = _conclusion_request(domain)
-        iface = _iface()
+        iface = ipython_interface()
         iface._build_namespace(context, [request])
         header = iface._render_header(context, [request], {})
         self.assertIn("Conclusion type:", header)
@@ -333,7 +334,7 @@ class TestAllowedValuesLines(unittest.TestCase):
             conclusion_domain=domain,
         )
         request = _conclusion_request(domain)
-        iface = _iface()
+        iface = ipython_interface()
         iface._build_namespace(context, [request])
         header = iface._render_header(context, [request], {})
         self.assertNotIn("Choose one of:", header)
@@ -349,7 +350,7 @@ class TestHintLineAlwaysContainsHelp(unittest.TestCase):
         """Hint line always contains '%help'."""
         case = _make_animal()
         rdr = _zoo_rdr()
-        header = _render(_iface(), _no_rule_context(case, rdr))
+        header = _render(ipython_interface(), _no_rule_context(case, rdr))
         self.assertIn(f"%{HELP_MAGIC}", header)
 
 
@@ -369,7 +370,7 @@ class TestHintLineAidPresence(unittest.TestCase):
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[DummyAid()])
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertIn(f"%{AID_MAGIC}", header)
 
     def test_hint_does_not_contain_percent_aid_when_no_aids(self):
@@ -377,7 +378,7 @@ class TestHintLineAidPresence(unittest.TestCase):
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[])
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertNotIn(f"%{AID_MAGIC}", header)
 
 
@@ -397,7 +398,7 @@ class TestAidFolding(unittest.TestCase):
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[StaticAid()])
-        header = _render(_iface(), context)
+        header = _render(ipython_interface(), context)
         self.assertIn("PIXELS-HERE", header)
 
     def test_aid_present_called_once_regardless_of_render_calls(self):
@@ -413,7 +414,7 @@ class TestAidFolding(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[CountingAid()])
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         # _build_namespace triggers present(); subsequent _render_header calls reuse cache.
         iface._build_namespace(context, requests)
         iface._render_header(context, requests, {})
@@ -434,7 +435,7 @@ class TestNamespaceInjection(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         ns = iface._build_namespace(context, requests)
         self.assertIn("Species", ns)
         self.assertIs(ns["Species"], Species)
@@ -469,7 +470,7 @@ class TestAidTextKeyInNamespace(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[MinimalAid()])
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         ns = iface._build_namespace(context, requests)
         self.assertIn(_AID_TEXT_KEY, ns)
 
@@ -479,7 +480,7 @@ class TestAidTextKeyInNamespace(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[])
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         ns = iface._build_namespace(context, requests)
         self.assertNotIn(_AID_TEXT_KEY, ns)
 
@@ -511,7 +512,7 @@ class TestGroundTruthPathUnchanged(unittest.TestCase):
             validate=_validate_conditions,
             example=f"conditions = case_variable.some_attr == True",
         )
-        iface = _iface()
+        iface = ipython_interface()
         iface._build_namespace(context, [request])
         header = iface._render_header(context, [request], {})
         self.assertIn("Ground-truth conclusion:", header)
@@ -537,7 +538,7 @@ class TestGroundTruthPathUnchanged(unittest.TestCase):
             validate=_validate_conditions,
             example="conditions = case_variable.some_attr == True",
         )
-        iface = _iface()
+        iface = ipython_interface()
         iface._build_namespace(context, [request])
         header = iface._render_header(context, [request], {})
         self.assertIn("bird", header)
@@ -563,7 +564,7 @@ class TestGroundTruthPathUnchanged(unittest.TestCase):
             validate=_validate_conditions,
             example="conditions = case_variable.some_attr == True",
         )
-        iface = _iface()
+        iface = ipython_interface()
         iface._build_namespace(context, [request])
         header = iface._render_header(context, [request], {})
         self.assertNotIn("No rule fired — what should this case conclude?", header)
@@ -582,7 +583,7 @@ class TestHelpText(unittest.TestCase):
         domain = rdr.conclusion_domain
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(domain)]
-        iface = _iface()
+        iface = ipython_interface()
         text = iface._help_text(context, requests)
         # The example is derived from the domain (e.g. "conclusion = Species.<member>")
         self.assertIn("conclusion = Species.", text)
@@ -598,7 +599,7 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[DummyAid()])
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         text = iface._help_text(context, requests)
         self.assertIn(f"%{AID_MAGIC}", text)
 
@@ -608,7 +609,7 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, aids=[])
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         text = iface._help_text(context, requests)
         self.assertNotIn(f"%{AID_MAGIC}", text)
 
@@ -618,7 +619,7 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         text = iface._help_text(context, requests)
         self.assertIn("%show_tree", text)
 
@@ -628,7 +629,7 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = _iface()
+        iface = ipython_interface()
         text = iface._help_text(context, requests)
         self.assertIn(f"%{HELP_MAGIC}", text)
 

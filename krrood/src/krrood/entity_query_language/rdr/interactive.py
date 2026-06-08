@@ -202,7 +202,7 @@ class IPythonInterface(ExpertInterface):
             case=context,
             requests=requests,
             palette=self.palette,
-            is_first_prompt=self._interact_count == 1,
+            is_first_prompt=self._interact_count == 0,
         )
         parts: List[str] = ["", self._case_table(context), ""]
         if self._aid_cache:

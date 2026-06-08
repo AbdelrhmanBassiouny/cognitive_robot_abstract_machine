@@ -20,6 +20,8 @@ from krrood.entity_query_language.rdr.rule_tree import (
 )
 from krrood.entity_query_language.rdr.utils import UNSET
 
+from krrood.entity_query_language.rules.conclusion_selector import _fresh_expression
+
 from .animal import Animal, Species
 from .zoo_loader import load_zoo_animals
 
@@ -178,6 +180,62 @@ class TestRuleTreeGrowth(unittest.TestCase):
                 query, animal, animal.species, first(Species.fish)
             ).conclusion,
             Species.fish,
+        )
+
+
+    def test_fresh_expression_does_not_corrupt_original_parents(self):
+        """
+        Regression test: _fresh_expression must NOT mutate the original expression's
+        ``_parents_`` list.  The bug was that ``copy(expr)`` does a shallow copy, so
+        ``clone._parents_`` was the **same list** as ``expr._parents_``.  Then
+        ``clone._parent_ = None`` (the old code) would go through the setter and
+        wrench ``expr._parent__`` out of the **shared** ``_parents_`` list, leaving
+        the original with an inconsistent ``_parent__`` that wasn't tracked in
+        ``_parents_``.  Later ``_remove_parent_`` would crash with ``ValueError``.
+        """
+        animal = variable(Animal, domain=[])
+        query = entity(animal).where(animal.milk == True)
+        with query:
+            add(animal.species, Species.mammal)
+        query.build()
+
+        # Create a Comparator and insert it as a refinement (giving it a parent).
+        condition = animal.backbone == False
+        insert_refinement(
+            query._conditions_root_,
+            condition,
+            animal.species,
+            Species.reptile,
+        )
+
+        # condition now has a parent (the Refinement node).
+        assert condition._parent__ is not None
+        orig_parent = condition._parent__
+        orig_parents_before = list(condition._parents_)
+
+        # Clone via _fresh_expression — the path that used to corrupt.
+        clone = _fresh_expression(condition)
+
+        # The original must be untouched.
+        self.assertIs(
+            condition._parent__, orig_parent,
+            "Original _parent__ must not change",
+        )
+        self.assertEqual(
+            condition._parents_, orig_parents_before,
+            "Original _parents_ must not change",
+        )
+        # Clone must have its own independent lists and no parent.
+        self.assertIsNone(clone._parent__, "Clone must not have a parent")
+        self.assertEqual(len(clone._parents_), 0, "Clone must have empty _parents_")
+        self.assertEqual(len(clone._children_), 0, "Clone must have empty _children_")
+        self.assertIsNot(
+            clone._parents_, condition._parents_,
+            "Clone must NOT share _parents_ list with original",
+        )
+        self.assertIsNot(
+            clone._children_, condition._children_,
+            "Clone must NOT share _children_ list with original",
         )
 
 

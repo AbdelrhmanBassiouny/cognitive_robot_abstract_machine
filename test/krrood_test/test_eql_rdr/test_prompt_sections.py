@@ -70,7 +70,7 @@ from .test_correct_drawer import (
 from .test_no_target_rendering import (
     _make_animal,
     _zoo_rdr,
-    _iface,
+    ipython_interface,
     _conclusion_request,
     _no_rule_context,
     _current_conclusion_context,
