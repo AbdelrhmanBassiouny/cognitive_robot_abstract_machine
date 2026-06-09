@@ -1430,6 +1430,14 @@ def test_inference_planner_decomposes_rule_without_rendering(
     assert by_field["container"] == AggregationStatus.GROUP_KEY
     assert by_field["drawers"] == AggregationStatus.AGGREGATED
 
+    # The *whose*-foldability of each antecedent condition is decided here (not in the
+    # assembler): the single-hop attribute equality folds, recording its attribute name.
+    planned = [
+        pc for antecedent in plan.primary_antecedents for pc in antecedent.conditions
+    ]
+    assert planned, "expected at least one attributed antecedent condition"
+    assert any(pc.whose_attr == "child" for pc in planned)
+
 
 def test_plural_field_binding_uses_are(handles_and_containers_world):
     """A plural field name in an InstantiatedVariable binding uses 'are <Plural>' not 'is <Article> <Singular>'."""

@@ -22,6 +22,7 @@ from enum import Enum, auto
 
 from typing_extensions import Any, FrozenSet, List, Optional, Tuple
 
+from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
 from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import AND
@@ -47,6 +48,23 @@ class AggregationStatus(Enum):
 
 
 @dataclass
+class PlannedCondition:
+    """One antecedent WHERE condition, with the foldability decided up front.
+
+    ``whose_attr`` is the (singular) attribute name when the condition is a single-hop
+    attribute equality that folds into a *"whose <attr> is …"* modifier, else ``None``
+    (render the condition normally).  Deciding this here keeps the assembler free of
+    analysis.
+    """
+
+    expression: Any
+    """The raw EQL condition expression."""
+
+    whose_attr: Optional[str]
+    """Singular attribute name when foldable to *whose*, else ``None``."""
+
+
+@dataclass
 class AntecedentInfo:
     """Descriptor for one antecedent variable in the IF clause."""
 
@@ -59,8 +77,8 @@ class AntecedentInfo:
     aggregation_status: AggregationStatus
     """Whether this antecedent is a group key, aggregated, or neither."""
 
-    conditions: List[Any] = field(default_factory=list)
-    """All WHERE conditions attributable to this antecedent."""
+    conditions: List[PlannedCondition] = field(default_factory=list)
+    """All WHERE conditions attributable to this antecedent (foldability pre-decided)."""
 
 
 @dataclass
@@ -219,7 +237,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
         for condition in extra_conditions:
             owner_id = self._condition_left_owner_id(condition)
             if owner_id is not None and owner_id in id_to_antecedent:
-                id_to_antecedent[owner_id].conditions.append(condition)
+                id_to_antecedent[owner_id].conditions.append(self._planned(condition))
             else:
                 unmatched.append(condition)
         return unmatched
@@ -252,7 +270,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
             return current
         return None
 
-    def _extract_root_info(self, root) -> Tuple[str, List[Any]]:
+    def _extract_root_info(self, root) -> Tuple[str, List[PlannedCondition]]:
         """Return ``(type_name, own_conditions)`` for a root Variable or Entity."""
         if isinstance(root, Entity):
             root.build()
@@ -262,9 +280,12 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
                 if var and getattr(var, "_type_", None)
                 else "entity"
             )
-            conditions = []
+            conditions: List[PlannedCondition] = []
             if root._where_expression_ is not None:
-                conditions = self._flatten_and(root._where_expression_.condition)
+                conditions = [
+                    self._planned(e)
+                    for e in self._flatten_and(root._where_expression_.condition)
+                ]
             return type_name, conditions
         if isinstance(root, Variable):
             type_name = (
@@ -280,3 +301,37 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
                 expression.right
             )
         return [expression]
+
+    # ── condition foldability (the *whose* analysis — decided here, not in assembly) ──
+
+    def _planned(self, condition) -> PlannedCondition:
+        """Wrap a raw condition with its pre-decided *whose*-foldability."""
+        return PlannedCondition(
+            expression=condition, whose_attr=self._whose_attr(condition)
+        )
+
+    def _whose_attr(self, condition) -> Optional[str]:
+        """Singular attribute name when *condition* folds to *"whose <attr> is …"*, else ``None``.
+
+        Foldable iff it is an attribute equality (``Attribute == value``); the modifier
+        attribute is the last hop of the attribute chain.
+        """
+        if (
+            not isinstance(condition, Comparator)
+            or condition.operation is not operator.eq
+        ):
+            return None
+        if not isinstance(condition.left, Attribute):
+            return None
+        attr_names = self._extract_attr_names(condition.left)
+        return attr_names[-1] if attr_names else None
+
+    def _extract_attr_names(self, left) -> List[str]:
+        """The attribute names along a MappedVariable chain, outermost last."""
+        attr_names: List[str] = []
+        current = left
+        while isinstance(current, MappedVariable):
+            if isinstance(current, Attribute):
+                attr_names.append(current._attribute_name_)
+            current = current._child_
+        return attr_names
