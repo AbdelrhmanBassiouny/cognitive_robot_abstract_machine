@@ -14,7 +14,7 @@ import dataclasses
 import pytest
 from typing_extensions import Any, Optional, Type
 
-from .animal import Animal, Species
+from .animal import Animal, Species, make_animal
 from krrood.entity_query_language.core.base_expressions import OperationResult
 from krrood.entity_query_language.factories import add, alternative, entity, variable
 from krrood.entity_query_language.rdr.backward_inference import (
@@ -28,6 +28,7 @@ from krrood.entity_query_language.rdr.condition_resolver import (
     ConditionResolver,
     CornerCaseKnowledgeResolver,
     ResolvedCondition,
+    ResolutionMode,
     TargetKnowledgeResolver,
 )
 from krrood.entity_query_language.rdr.expert import Expert
@@ -1084,3 +1085,93 @@ class TestResolverWithAlternativeGuard:
                 f"Resolver must not return a ConclusionSelector expression; "
                 f"got {type(result.expression).__name__}: {result.expression!r}"
             )
+
+
+class TestSharedAnchorDoesNotCorruptSiblingCondition:
+    """Regression test for the shared-MappedVariable anchor corruption bug.
+
+    Scenario that triggered the bug during interactive zoo fitting:
+
+      1. ``backbone`` → mammal           (first rule, backbone is conditions root)
+      2. ``eggs``     → fish             (refinement at backbone)
+      3. ``backbone == False`` → molusc  (alternative — SAME backbone singleton in Comparator)
+      4. ``venomous`` → reptile          (refinement at eggs)
+      5. Fit a reptile case where backbone fires (eggs=False):
+         TargetKnowledgeResolver finds ``venomous`` from reptile knowledge and calls
+         ``insert_refinement(backbone_anchor, venomous, ..., reptile)``.
+         Before the fix: ``backbone._parent_`` pointed to the molusc Comparator, so
+         ``_replace_child_`` corrupted it to ``(backbone except if venomous) == False``.
+         After the fix: ``insert_at`` scans ``backbone._parents_`` for the most recent
+         ConclusionSelector and uses the correct Refinement instead.
+    """
+
+    def test_target_knowledge_resolver_does_not_corrupt_sibling_condition_after_insertion(
+        self,
+    ):
+        """Inserting a resolver-suggested condition at a shared anchor must not
+        corrupt the sibling alternative condition that also uses that anchor.
+
+        Guarantee: after TargetKnowledgeResolver inserts a refinement at the
+        backbone anchor, ``what_do_we_know_about(molusc)`` must contain no
+        ConclusionSelector guard expressions, and molusc cases must still
+        classify correctly.
+        """
+        mammal_case = make_animal("mammal", backbone=True, eggs=False, venomous=False, milk=True)
+        fish_case = make_animal("fish", backbone=True, eggs=True, fins=True, venomous=False)
+        molusc_case = make_animal("molusc", backbone=False, eggs=True)
+        reptile_via_eggs = make_animal("reptile_eggs", backbone=True, eggs=True, venomous=True)
+        # backbone=True, eggs=False: backbone fires (mammal), target=reptile → resolver triggers
+        reptile_no_eggs = make_animal("reptile_no_eggs", backbone=True, eggs=False, venomous=True)
+
+        conditions_map = {
+            Species.mammal: lambda v: v.backbone,
+            Species.fish: lambda v: v.eggs,
+            Species.molusc: lambda v: v.backbone == False,
+            Species.reptile: lambda v: v.venomous,
+        }
+
+        def answer(context, _requests):
+            fn = conditions_map[context.target_conclusion]
+            return {"conditions": fn(context.case_variable)}
+
+        resolver = ChainConditionResolver.backward_inference_default()
+        rdr = EQLSingleClassRDR(
+            Animal,
+            "species",
+            condition_resolver=resolver,
+            resolution_mode=ResolutionMode.SILENT,
+        )
+        expert = Expert(interface=FunctionInterface(answer_fn=answer))
+
+        # Steps 1–4: build the base tree via explicit expert answers.
+        rdr.fit_case(mammal_case, Species.mammal, expert)   # backbone → mammal
+        rdr.fit_case(fish_case, Species.fish, expert)       # eggs → fish (refinement at backbone)
+        rdr.fit_case(molusc_case, Species.molusc, expert)  # backbone==False → molusc (alternative)
+        rdr.fit_case(reptile_via_eggs, Species.reptile, expert)  # venomous → reptile (refinement at eggs)
+
+        # Step 5: backbone fires for reptile_no_eggs (eggs=False, so eggs rule doesn't apply).
+        # TargetKnowledgeResolver finds 'venomous' from reptile backward-inference knowledge
+        # (holds for reptile_no_eggs, not for the mammal corner case) and calls
+        # insert_refinement(backbone_anchor, venomous_clone, ..., reptile).
+        # This is the insertion that previously corrupted the molusc condition.
+        rdr.fit_case(reptile_no_eggs, Species.reptile, expert)
+
+        # --- Invariant 1: no ConclusionSelector embedded in molusc backward-inference ---
+        molusc_knowledge = rdr.what_do_we_know_about(Species.molusc)
+        assert molusc_knowledge.is_satisfiable(), "molusc knowledge must be satisfiable"
+        for scs in molusc_knowledge.sufficient_condition_sets:
+            for guard in scs.conditions:
+                assert not isinstance(guard.expression, ConclusionSelector), (
+                    f"molusc guard expression must not be a ConclusionSelector; "
+                    f"got {type(guard.expression).__name__}: {guard.expression!r}"
+                )
+
+        # --- Invariant 2: molusc case is still classified correctly ---
+        assert rdr.classify(molusc_case) is Species.molusc, (
+            "molusc case must still classify as molusc after the backbone refinement"
+        )
+
+        # --- Invariant 3: the resolver-triggered reptile rule fires correctly ---
+        assert rdr.classify(reptile_no_eggs) is Species.reptile, (
+            "reptile case must now classify as reptile"
+        )

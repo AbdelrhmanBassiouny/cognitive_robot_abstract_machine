@@ -66,6 +66,9 @@ def _fresh_expression(expr: SymbolicExpression) -> SymbolicExpression:
     # :meth:`_update_children_` returns ``v._expression_`` for each child, so the
     # clone must point to itself — otherwise the ORIGINAL node gets wired in.
     clone._expression_ = clone
+    # Shallow copy shares the same set object; reset so conclusions added via
+    # `with clone: add(...)` don't leak back into the original's _conclusions_.
+    clone._conclusions_ = set()
     return clone
 
 
@@ -130,7 +133,29 @@ class ConclusionSelector(TruthValueOperator, ABC):
         if isinstance(new_condition, SymbolicExpression) and new_condition._parent_ is not None:
             new_condition = _fresh_expression(new_condition)
 
-        prev_parent = anchor._parent_
+        # anchor._parent_ tracks only the LAST parent set.  A MappedVariable singleton
+        # (e.g. ``backbone``) used both as a rule-tree anchor inside a Refinement AND as
+        # a sub-expression inside another condition (e.g. ``backbone == False`` for a
+        # sibling alternative) will have its _parent_ overwritten by the expression node
+        # (Comparator) when the user creates that second condition.  Using that wrong
+        # parent in _replace_child_ would corrupt the sibling condition instead of
+        # correctly updating the rule-tree Refinement.
+        # _parents_ (a list) records every parent ever set, so we can recover the most
+        # recently added ConclusionSelector — which is always the correct structural node.
+        selector_parent = next(
+            (p for p in reversed(anchor._parents_) if isinstance(p, ConclusionSelector)),
+            None,
+        )
+        prev_parent = selector_parent if selector_parent is not None else anchor._parent_
+
+        # Only raise when the anchor is already established in a rule tree (has parents).
+        # A freshly-created anchor with no parents indicates _conditions_root_ returned the
+        # wrong node (e.g. _parent_ was clobbered by a Comparator created from the same
+        # MappedVariable), which is a different underlying issue — not the self-referential
+        # insertion bug we guard against here.
+        if new_condition is anchor and anchor._parents_:
+            from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
+            raise SelfReferentialInsertionError(anchor=anchor)
 
         new_context = cls._create_between_two_expressions(anchor, new_condition)
 

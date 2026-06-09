@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, Any, Callable, List, Optional, Tuple
+from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
@@ -144,6 +144,7 @@ class Expert:
         trace: Optional[ClassificationTrace] = None,
         corner_case: Optional[Any] = None,
         suggestion: Optional[ResolvedCondition] = None,
+        prior_errors: Optional[Dict[str, str]] = None,
     ) -> SymbolicExpression:
         """
         :param case: The case being fit (e.g. an ``Animal`` instance).
@@ -155,6 +156,9 @@ class Expert:
         :param suggestion: Optional auto-resolved condition (expression + resolver provenance)
             to display as a hint; the bare expression is pre-seeded as the namespace default
             so the expert can accept it by pressing Ctrl-D or overwrite it with any other expression.
+        :param prior_errors: Errors from a previous attempt (e.g. a
+            :class:`~krrood.entity_query_language.exceptions.SelfReferentialInsertionError`)
+            to display on the first render of the re-prompt shell.
         :return: A live EQL condition expression that holds for ``case`` and distinguishes it.
         """
         context = CaseContext(
@@ -173,7 +177,7 @@ class Expert:
             default=suggestion.expression if suggestion is not None else None,
         )
         try:
-            return self.interface.interact(context, [request])[ANSWER_NAME]
+            return self.interface.interact(context, [request], initial_errors=prior_errors)[ANSWER_NAME]
         except ExpertAbort:
             raise NoConditionsProvided(
                 "The expert cancelled without supplying conditions."

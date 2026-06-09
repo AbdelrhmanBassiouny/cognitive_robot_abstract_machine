@@ -588,6 +588,21 @@ class NoneWrappedFieldError(ClassDiagramError):
 
 
 @dataclass
+class SelfReferentialInsertionError(DataclassException):
+    """Raised when insert_at would create a self-referential selector node."""
+
+    anchor: "SymbolicExpression" = field(kw_only=True)
+
+    def __post_init__(self):
+        self.message = (
+            f"The new condition is the same node as the anchor {self.anchor!r} — "
+            "this would create a self-referential Refinement/Alternative and corrupt "
+            "the anchor's conclusions. Provide a different condition."
+        )
+        super().__post_init__()
+
+
+@dataclass
 class NoChildToReplace(DataclassException):
     """
     Raised when trying to replace a child of an expression that has no children.

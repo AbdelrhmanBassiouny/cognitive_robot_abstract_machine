@@ -235,6 +235,8 @@ class EQLSingleClassRDR:
             trace.firing_anchor_id if trace is not None else None
         )
 
+        from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
+
         if target is UNSET:
             target, condition = expert.ask_for_rule(
                 case,
@@ -259,7 +261,23 @@ class EQLSingleClassRDR:
                 resolved, case, target, current, trace, corner_case, expert
             )
 
-        self._insert_rule(trace, current, condition, target, case)
+        while True:
+            try:
+                self._insert_rule(trace, current, condition, target, case)
+                break
+            except SelfReferentialInsertionError as e:
+                if self.resolution_mode is ResolutionMode.SILENT:
+                    raise
+                condition = expert.ask_for_conditions(
+                    case,
+                    self.case_variable,
+                    target,
+                    current,
+                    trace,
+                    corner_case,
+                    prior_errors={"conditions": e.message},
+                )
+
         self._backward_index.invalidate()
         return target
 

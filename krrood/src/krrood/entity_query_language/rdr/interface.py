@@ -148,7 +148,10 @@ class ExpertInterface(ABC):
             self.on_save()
 
     def interact(
-        self, context: CaseContext, requests: List[AnswerRequest]
+        self,
+        context: CaseContext,
+        requests: List[AnswerRequest],
+        initial_errors: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Drive the request loop until every required answer validates.
@@ -158,6 +161,8 @@ class ExpertInterface(ABC):
         step, validates, and re-prompts with an error summary on failure. An explicit
         ``exit()`` raises :class:`ExpertAbort`.
 
+        :param initial_errors: Errors from a previous interaction cycle to display on the
+            first render (e.g. a post-submission validation failure from the caller).
         :return: ``{request.name: value}`` for every request, all validated.
         """
         namespace = self._build_namespace(context, requests)
@@ -165,7 +170,7 @@ class ExpertInterface(ABC):
         def validate() -> Dict[str, str]:
             return self._validate(namespace, requests)
 
-        errors: Dict[str, str] = {}
+        errors: Dict[str, str] = initial_errors or {}
         while True:
             header = self._render_header(context, requests, errors)
             self._run(namespace, header, validate)
@@ -271,11 +276,14 @@ class FunctionInterface(ExpertInterface):
     """The requests of the in-flight :meth:`interact` call, threaded to :meth:`_run`."""
 
     def interact(
-        self, context: CaseContext, requests: List[AnswerRequest]
+        self,
+        context: CaseContext,
+        requests: List[AnswerRequest],
+        initial_errors: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         self._context = context
         self._requests = requests
-        return super().interact(context, requests)
+        return super().interact(context, requests, initial_errors=initial_errors)
 
     def _run(
         self,

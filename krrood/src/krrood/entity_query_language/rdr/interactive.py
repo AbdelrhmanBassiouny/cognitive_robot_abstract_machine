@@ -179,10 +179,13 @@ class IPythonInterface(ExpertInterface):
         return Palette(self.use_color)
 
     def interact(
-        self, context: CaseContext, requests: List[AnswerRequest]
+        self,
+        context: CaseContext,
+        requests: List[AnswerRequest],
+        initial_errors: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         self._interact_count += 1
-        return super().interact(context, requests)
+        return super().interact(context, requests, initial_errors=initial_errors)
 
     def make_progress_reporter(
         self,

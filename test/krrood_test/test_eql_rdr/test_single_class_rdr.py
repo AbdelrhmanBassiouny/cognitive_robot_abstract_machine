@@ -703,10 +703,10 @@ class CountingFunctionInterface(FunctionInterface):
     ask_for_conditions_count: int = dataclasses.field(default=0, init=False)
     """Number of times :meth:`interact` has been called."""
 
-    def interact(self, context, requests):
+    def interact(self, context, requests, initial_errors=None):
         """Forward to the parent and record the call."""
         self.ask_for_conditions_count += 1
-        return super().interact(context, requests)
+        return super().interact(context, requests, initial_errors=initial_errors)
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")

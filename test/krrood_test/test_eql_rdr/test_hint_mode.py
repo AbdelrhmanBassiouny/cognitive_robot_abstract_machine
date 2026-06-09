@@ -131,11 +131,14 @@ class CountingFunctionInterface(FunctionInterface):
     interact_count: int = dataclasses.field(default=0, init=False)
 
     def interact(
-        self, context: CaseContext, requests: List[AnswerRequest]
+        self,
+        context: CaseContext,
+        requests: List[AnswerRequest],
+        initial_errors: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Forward to the parent and record the call."""
         self.interact_count += 1
-        return super().interact(context, requests)
+        return super().interact(context, requests, initial_errors=initial_errors)
 
 
 # ---------------------------------------------------------------------------
