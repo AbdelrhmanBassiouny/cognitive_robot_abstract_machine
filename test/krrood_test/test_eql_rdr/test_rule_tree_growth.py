@@ -379,5 +379,101 @@ class TestRuleTreeGrowth(unittest.TestCase):
         )
 
 
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestBareAttributeWhereCondition(unittest.TestCase):
+    """Regression: alternative/refinement DSL when WHERE condition is a bare MappedVariable.
+
+    When ``entity(v).where(v.attr)`` is used (bare attribute, not a Comparator),
+    Python evaluates ``alternative(v.attr == X)`` by creating ``Comparator(attr, X)``
+    BEFORE calling ``alternative()``.  That creation overwrites ``attr._parent_`` from
+    ``Where`` to ``Comparator``.  The subsequent ``_conditions_root_`` traversal used to
+    follow the clobbered ``_parent_`` up to ``Comparator`` (which has no Filter ancestor),
+    returning ``Comparator`` as the anchor instead of ``attr``.  The resulting
+    ``Alternative(Comparator, Comparator)`` was never connected to ``Where``, leaving
+    ``Where._child_ = attr`` (bare) and all conclusions unreachable → UNSET for every case.
+    """
+
+    def test_alternative_with_bare_attr_where_condition(self):
+        """DSL: where(backbone) then alternative(backbone == False) must connect to Where."""
+        from krrood.entity_query_language.query.operations import Where
+        from krrood.entity_query_language.rules.conclusion_selector import Alternative
+
+        animal_var = variable(Animal, domain=[])
+        query = entity(animal_var).where(animal_var.backbone)
+        with query:
+            add(animal_var.species, Species.mammal)
+            with alternative(animal_var.backbone == False):
+                add(animal_var.species, Species.molusc)
+        query.build()
+
+        where_node = next(
+            (e for e in query._root_._all_expressions_ if isinstance(e, Where)), None
+        )
+        self.assertIsNotNone(where_node)
+        self.assertIsInstance(
+            where_node.condition,
+            Alternative,
+            "Where._child_ must be Alternative, not the bare backbone MappedVariable",
+        )
+
+        vertebrate = first(Species.mammal)
+        invertebrate = first(Species.molusc)
+        self.assertEqual(
+            classify_case(query, animal_var, animal_var.species, vertebrate).conclusion,
+            Species.mammal,
+        )
+        self.assertEqual(
+            classify_case(query, animal_var, animal_var.species, invertebrate).conclusion,
+            Species.molusc,
+        )
+
+    def test_refinement_with_bare_attr_where_condition(self):
+        """Regression: refinement(bare_attr == X) when bare_attr IS the WHERE condition.
+
+        Before the fix, evaluating ``backbone == False`` clobbered ``backbone._parent_``
+        from ``Where`` to the newly-created ``Comparator``.  ``insert_at`` then called
+        ``Comparator._replace_child_`` instead of ``Where._replace_child_``, corrupting
+        the molusc condition and leaving ``Where._child_ = backbone`` (bare, disconnected
+        from the Refinement sub-tree).
+        """
+        from krrood.entity_query_language.factories import refinement
+        from krrood.entity_query_language.query.operations import Where
+        from krrood.entity_query_language.rules.conclusion_selector import (
+            Refinement as RefinementClass,
+        )
+
+        animal_var = variable(Animal, domain=[])
+        query = entity(animal_var).where(animal_var.backbone)
+        with query:
+            add(animal_var.species, Species.mammal)
+            with refinement(animal_var.backbone == False):
+                add(animal_var.species, Species.molusc)
+        query.build()
+
+        where_node = next(
+            (e for e in query._root_._all_expressions_ if isinstance(e, Where)), None
+        )
+        self.assertIsNotNone(where_node)
+        self.assertIsInstance(
+            where_node.condition,
+            RefinementClass,
+            "Where._child_ must be Refinement, not the bare backbone MappedVariable",
+        )
+        # The Refinement's left operand must still be the bare backbone MappedVariable
+        # (not the Comparator, which the old code would splice in by mistake).
+        self.assertIs(
+            where_node.condition.left,
+            animal_var.backbone,
+            "Refinement.left must be backbone, not a corrupted Comparator",
+        )
+
+        # backbone=True + (backbone==False is False) → right not yielded → mammal
+        vertebrate = first(Species.mammal)
+        self.assertEqual(
+            classify_case(query, animal_var, animal_var.species, vertebrate).conclusion,
+            Species.mammal,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

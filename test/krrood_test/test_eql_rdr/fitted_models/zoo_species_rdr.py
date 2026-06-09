@@ -38,7 +38,7 @@ with query:
                     add(animal.species, Species.bird)
                 with refinement(animal.toothed == False):
                     add(animal.species, Species.mammal)
-                    with refinement(animal.aquatic == False):
+                    with refinement(animal.milk == False):
                         add(animal.species, Species.reptile)
             with refinement(not_(animal.feathers)):
                 add(animal.species, Species.reptile)
@@ -46,9 +46,9 @@ with query:
                     add(animal.species, Species.amphibian)
         with refinement(animal.venomous):
             add(animal.species, Species.reptile)
-            with refinement(not_(animal.aquatic == False)):
+            with refinement(not_(animal.fins == False)):
                 add(animal.species, Species.fish)
-        with refinement(animal.aquatic == False):
+        with refinement(animal.fins == False):
             add(animal.species, Species.reptile)
     with refinement(not_(animal.legs > 0)):
         add(animal.species, Species.reptile)

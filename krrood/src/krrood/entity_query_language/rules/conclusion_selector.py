@@ -24,6 +24,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
+    Filter,
     OperationResult,
     SymbolicExpression,
     TruthValueOperator,
@@ -77,6 +78,26 @@ class ConclusionSelector(TruthValueOperator, ABC):
     """
     Base class for operators that selects the conclusions to pass through from it's operands' conclusions.
     """
+
+    @classmethod
+    def _conditions_root_via_parents_(
+        cls, current_context: SymbolicExpression
+    ) -> SymbolicExpression:
+        """Return the conditions root, using ``_parents_`` to survive ``_parent_`` clobbering.
+
+        When the context node is a bare :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
+        used both as the WHERE condition and as a sub-expression inside an
+        ``alternative``/``next_rule`` condition (e.g. ``backbone`` in
+        ``where(backbone)`` and ``backbone == False``), Python evaluates the
+        argument expression before calling ``alternative()``, which overwrites
+        ``_parent_`` from the ``Filter`` to the new ``Comparator``.
+        ``_parents_`` (the full history list) still contains the ``Filter``, so
+        we can recover the correct anchor from there.
+        """
+        for parent in reversed(current_context._parents_):
+            if isinstance(parent, Filter):
+                return parent.condition
+        return current_context._conditions_root_
 
     @classmethod
     def create_and_update_rule_tree(
@@ -133,20 +154,24 @@ class ConclusionSelector(TruthValueOperator, ABC):
         if isinstance(new_condition, SymbolicExpression) and new_condition._parent_ is not None:
             new_condition = _fresh_expression(new_condition)
 
-        # anchor._parent_ tracks only the LAST parent set.  A MappedVariable singleton
-        # (e.g. ``backbone``) used both as a rule-tree anchor inside a Refinement AND as
-        # a sub-expression inside another condition (e.g. ``backbone == False`` for a
-        # sibling alternative) will have its _parent_ overwritten by the expression node
-        # (Comparator) when the user creates that second condition.  Using that wrong
-        # parent in _replace_child_ would corrupt the sibling condition instead of
-        # correctly updating the rule-tree Refinement.
-        # _parents_ (a list) records every parent ever set, so we can recover the most
-        # recently added ConclusionSelector — which is always the correct structural node.
-        selector_parent = next(
-            (p for p in reversed(anchor._parents_) if isinstance(p, ConclusionSelector)),
-            None,
+        # anchor._parent_ tracks only the LAST parent set, so it can be wrong when a
+        # MappedVariable singleton (e.g. ``backbone``) is used both as the WHERE
+        # condition and as a sub-expression inside a sibling condition (e.g.
+        # ``backbone == False``): evaluating that sibling expression overwrites
+        # ``_parent_`` from the ``Filter``/``ConclusionSelector`` to the new
+        # ``Comparator`` before ``insert_at`` even runs.
+        # ``_parents_`` (a list) records every parent ever set; the most recently
+        # added structural parent — a ``ConclusionSelector`` for nodes already in a
+        # rule tree, or a ``Filter`` for nodes that are the direct WHERE condition —
+        # is always the correct splice target.
+        prev_parent = next(
+            (
+                p
+                for p in reversed(anchor._parents_)
+                if isinstance(p, (ConclusionSelector, Filter))
+            ),
+            anchor._parent_,
         )
-        prev_parent = selector_parent if selector_parent is not None else anchor._parent_
 
         # Only raise when the anchor is already established in a rule tree (has parents).
         # A freshly-created anchor with no parents indicates _conditions_root_ returned the
@@ -295,7 +320,7 @@ class Alternative(OR, ConclusionSelector):
             and current_context is current_context_parent.right
         ):
             return current_context
-        return current_context._conditions_root_
+        return cls._conditions_root_via_parents_(current_context)
 
     @classmethod
     def _create_between_two_expressions(
@@ -329,7 +354,7 @@ class Next(EQLUnion, ConclusionSelector):
         cls,
     ) -> ConditionType:
         current_context = SymbolicExpression._current_parent_in_context_stack_()
-        return current_context._conditions_root_
+        return cls._conditions_root_via_parents_(current_context)
 
     @classmethod
     def _create_between_two_expressions(
