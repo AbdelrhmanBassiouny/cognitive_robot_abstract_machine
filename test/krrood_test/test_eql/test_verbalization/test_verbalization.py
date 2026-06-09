@@ -1469,6 +1469,23 @@ def test_query_planner_decomposes_subject_restriction_without_rendering():
     ]
 
 
+def test_instantiated_planner_decomposes_bindings_without_rendering(
+    handles_and_containers_world,
+):
+    """The InstantiatedPlanner records type + per-field number as pure data — no fragments."""
+    from krrood.entity_query_language.verbalization.grammar.planning.instantiated import (
+        InstantiatedPlanner,
+    )
+
+    drawer = variable(Drawer, handles_and_containers_world.views)
+    instantiated = inference(Cabinet)(drawers=drawer)
+    plan = InstantiatedPlanner(instantiated).plan()
+
+    assert plan.type_name == "Cabinet"
+    # "drawers" is a plural field name → plural copula/value at realisation time.
+    assert [(b.field_name, b.is_plural) for b in plan.bindings] == [("drawers", True)]
+
+
 def test_plural_field_binding_uses_are(handles_and_containers_world):
     """A plural field name in an InstantiatedVariable binding uses 'are <Plural>' not 'is <Article> <Singular>'."""
     drawer = variable(Drawer, handles_and_containers_world.views)

@@ -79,9 +79,8 @@ from krrood.entity_query_language.verbalization.operator_phrase import (
     comparator_operator,
     comparator_phrase,
 )
-from krrood.entity_query_language.verbalization.rules.chains import (
-    verbalize_chain,
-    verbalize_possessive_chain,
+from krrood.entity_query_language.verbalization.grammar.assembly.chains import (
+    ChainAssembler,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Aggregations,
@@ -114,9 +113,11 @@ from krrood.entity_query_language.verbalization.grammar.planning.inference impor
 from krrood.entity_query_language.verbalization.grammar.planning.query import (
     QueryPlanner,
 )
-from krrood.entity_query_language.verbalization.rules.variables import (
-    _has_verbalization_template,
-    _verbalize_instantiated_natural,
+from krrood.entity_query_language.verbalization.grammar.assembly.instantiated import (
+    InstantiatedAssembler,
+)
+from krrood.entity_query_language.verbalization.grammar.planning.instantiated import (
+    InstantiatedPlanner,
 )
 
 
@@ -311,9 +312,7 @@ class NotBoolAttrRule(PhraseRule):
         return _is_bool_attr_chain(node._child_)
 
     def build(self, node, ctx: Ctx):
-        return verbalize_chain(
-            node._child_, ctx.context, _FoldVerbalizer(ctx), negated=True
-        )
+        return ChainAssembler(ctx).chain(node._child_, negated=True)
 
 
 # ── chains (MappedVariable) ──────────────────────────────────────────────────
@@ -326,7 +325,7 @@ class MappedVariableRule(PhraseRule):
     name = "mapped-variable"
 
     def build(self, node, ctx: Ctx):
-        return verbalize_chain(node, ctx.context, _FoldVerbalizer(ctx))
+        return ChainAssembler(ctx).chain(node)
 
 
 class PronominalChainRule(PhraseRule):
@@ -348,9 +347,7 @@ class PronominalChainRule(PhraseRule):
 
     def build(self, node, ctx: Ctx):
         root = chain_root(node)
-        return verbalize_possessive_chain(
-            node, ctx.context, ctx.refer.pronoun_for(root)
-        )
+        return ChainAssembler(ctx).possessive(node, ctx.refer.pronoun_for(root))
 
 
 class FlatVariableRule(PhraseRule):
@@ -553,7 +550,9 @@ class InstantiatedVariableRule(PhraseRule):
     name = "instantiated-variable"
 
     def build(self, node, ctx: Ctx):
-        return _verbalize_instantiated_natural(node, ctx.context, _FoldVerbalizer(ctx))
+        return InstantiatedAssembler(ctx).assemble(
+            node, InstantiatedPlanner(node).plan()
+        )
 
 
 class InstantiatedVerbalizableRule(PhraseRule):
@@ -563,13 +562,12 @@ class InstantiatedVerbalizableRule(PhraseRule):
     name = "instantiated-verbalizable"
 
     def when(self, node, ctx: Ctx):
-        return _has_verbalization_template(node)
+        return InstantiatedPlanner.has_template(node)
 
     def build(self, node, ctx: Ctx):
-        verbalizer = _FoldVerbalizer(ctx)
         template = node._type_._verbalization_template_()
         kwargs = {
-            name: verbalizer.verbalize(child)
+            name: flatten_fragment_to_plain_text(ctx.child(child))
             for name, child in node._child_vars_.items()
         }
         return word(template.format(**kwargs))

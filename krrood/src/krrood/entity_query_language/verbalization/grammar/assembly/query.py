@@ -397,39 +397,38 @@ class QueryAssembler(Assembler[QueryPlan]):
         group_frags = [self.ctx.child(variable) for variable in variables]
         return PhraseFragment(parts=group_frags, separator=", ")
 
+    def inline_noun(self, entity) -> VerbFragment:
+        """
+        Inline-noun form used as a chain root inside an InstantiatedVariable.
+
+        Defers the entity's WHERE condition to the binding scope so the enclosing rule
+        can emit it as a *"such that …"* clause after all binding overrides are
+        registered.  Used by the chain assembler for Entity-rooted chains.
+        """
+        seen = self.ctx.context.seen_reference(entity)
+        if seen is not None:
+            return seen
+
+        entity.build()
+        var = entity.selected_variable
+        variable_type = getattr(var, "_type_", None)
+        type_name = (
+            variable_type.__name__ if variable_type else FallbackNouns.ENTITY.text
+        )
+
+        self.ctx.context.seen[entity._id_] = type_name
+        self.ctx.context.seen[var._id_] = type_name
+
+        where_expression = entity._where_expression_
+        if where_expression is not None:
+            self.ctx.context.defer_constraint(where_expression.condition)
+
+        return phrase(
+            Articles.indefinite(type_name), RoleFragment.for_variable(type_name, var)
+        )
+
     # ── recursion adapter ──────────────────────────────────────────────────────
 
     def _render_plural(self, expression, _context=None) -> VerbFragment:
         """``build_fn`` adapter for :func:`verbalize_plural` — recurses via the fold."""
         return self.ctx.child(expression)
-
-
-def as_inline_noun(entity, context, verbalizer=None) -> VerbFragment:
-    """
-    Inline-noun form used as a chain root inside an InstantiatedVariable.
-
-    Defers the entity's WHERE condition to the binding scope so the enclosing rule can
-    emit it as a *"such that …"* clause after all binding overrides are registered.
-
-    Transitional free function (legacy ``verbalizer`` argument unused) shared with the
-    chain rules; folded into the chain assembler in B3.
-    """
-    seen = context.seen_reference(entity)
-    if seen is not None:
-        return seen
-
-    entity.build()
-    var = entity.selected_variable
-    variable_type = getattr(var, "_type_", None)
-    type_name = variable_type.__name__ if variable_type else FallbackNouns.ENTITY.text
-
-    context.seen[entity._id_] = type_name
-    context.seen[var._id_] = type_name
-
-    where_expression = entity._where_expression_
-    if where_expression is not None:
-        context.defer_constraint(where_expression.condition)
-
-    return phrase(
-        Articles.indefinite(type_name), RoleFragment.for_variable(type_name, var)
-    )
