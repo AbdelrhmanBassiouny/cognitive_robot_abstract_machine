@@ -22,7 +22,7 @@ from enum import Enum, auto
 
 from typing_extensions import Any, FrozenSet, List, Optional, Tuple
 
-from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
+from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import AND
@@ -30,6 +30,9 @@ from krrood.entity_query_language.query.quantifiers import ResultQuantifier
 from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.chain_utils import chain_root
+from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    attribute_names,
+)
 from krrood.entity_query_language.verbalization.grammar.planning.base import Planner
 
 
@@ -323,15 +326,5 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
             return None
         if not isinstance(condition.left, Attribute):
             return None
-        attr_names = self._extract_attr_names(condition.left)
+        attr_names = attribute_names(condition.left)
         return attr_names[-1] if attr_names else None
-
-    def _extract_attr_names(self, left) -> List[str]:
-        """The attribute names along a MappedVariable chain, outermost last."""
-        attr_names: List[str] = []
-        current = left
-        while isinstance(current, MappedVariable):
-            if isinstance(current, Attribute):
-                attr_names.append(current._attribute_name_)
-            current = current._child_
-        return attr_names

@@ -19,7 +19,6 @@ from __future__ import annotations
 from typing_extensions import List, Optional, Tuple
 
 from krrood.entity_query_language.core.mapped_variable import (
-    Attribute,
     Index,
     MappedVariable,
 )
@@ -41,6 +40,9 @@ from krrood.entity_query_language.verbalization.fragments.source_ref import Sour
 from krrood.entity_query_language.verbalization.grammar.assembly.base import Assembler
 from krrood.entity_query_language.verbalization.grammar.assembly.query import (
     QueryAssembler,
+)
+from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    is_bool_attr_chain,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
@@ -67,8 +69,7 @@ class ChainAssembler(Assembler[MappedVariable, None]):
     ) -> VerbFragment:
         """Boolean terminal → predicative *"<nav> is [not] <attr>"*; else possessive path."""
         chain, leaf = walk_chain(expression)
-        terminal = chain[-1]
-        if isinstance(terminal, Attribute) and terminal._type_ is bool:
+        if is_bool_attr_chain(expression):
             return self._bool_predicative(chain, leaf, negated)
         root_fragment = self._chain_root(leaf)
         return self._possessive_path(build_path_parts(chain), root_fragment)

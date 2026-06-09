@@ -21,18 +21,17 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING
 from typing_extensions import Optional, Type
 
-from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.operators.comparator import Comparator
-from krrood.entity_query_language.verbalization.chain_utils import (
-    chain_root,
-    walk_chain,
-)
 from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
     VerbFragment,
+)
+from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    references,
+    single_hop_attr,
 )
 from krrood.entity_query_language.verbalization.grammar.phrase_rule import Ctx
 from krrood.entity_query_language.verbalization.grammar.selection import SpecificityRule
@@ -47,32 +46,6 @@ from krrood.entity_query_language.verbalization.subquery import aggregation_sour
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.context import VerbalizationContext
-
-
-# ── chain helpers ────────────────────────────────────────────────────────────
-
-
-def _single_hop_attr(expression, subject_variable):
-    """The :class:`Attribute` node when *expression* is exactly ``subject_variable.<attr>``, else ``None``."""
-    if subject_variable is None or not isinstance(expression, MappedVariable):
-        return None
-    chain, root = walk_chain(expression)
-    if not (isinstance(root, Variable) and root._id_ == subject_variable._id_):
-        return None
-    if len(chain) != 1 or not isinstance(chain[0], Attribute):
-        return None
-    return chain[0]
-
-
-def _references(expression, subject_variable) -> bool:
-    """``True`` when *expression* mentions *subject_variable* (so it is not a clean RHS value)."""
-    try:
-        return any(
-            getattr(variable, "_id_", None) == subject_variable._id_
-            for variable in expression._unique_variables_
-        )
-    except AttributeError:
-        return chain_root(expression) is subject_variable
 
 
 # ── restriction rules (groupable conjunct → bare predicate) ──────────────────
@@ -105,12 +78,12 @@ class RangeRestrictionRule(RestrictionRule):
     def applies(cls, item, subject_variable, context: "VerbalizationContext") -> bool:
         return (
             isinstance(item, RangeFold)
-            and _single_hop_attr(item.chain_expression, subject_variable) is not None
+            and single_hop_attr(item.chain_expression, subject_variable) is not None
         )
 
     @classmethod
     def render(cls, item, subject_variable, ctx: Ctx) -> VerbFragment:
-        attr = _single_hop_attr(item.chain_expression, subject_variable)
+        attr = single_hop_attr(item.chain_expression, subject_variable)
         left = RoleFragment.for_attribute(attr._owner_class_, attr._attribute_name_)
         return build_between(
             left,
@@ -130,14 +103,14 @@ class AttributePredicateRestrictionRule(RestrictionRule):
     def applies(cls, item, subject_variable, context: "VerbalizationContext") -> bool:
         if not isinstance(item, Comparator):
             return False
-        attr = _single_hop_attr(item.left, subject_variable)
+        attr = single_hop_attr(item.left, subject_variable)
         if attr is None or attr._type_ is bool:
             return False
-        return not _references(item.right, subject_variable)
+        return not references(item.right, subject_variable)
 
     @classmethod
     def render(cls, item, subject_variable, ctx: Ctx) -> VerbFragment:
-        attr = _single_hop_attr(item.left, subject_variable)
+        attr = single_hop_attr(item.left, subject_variable)
         attribute_fragment = RoleFragment.for_attribute(
             attr._owner_class_, attr._attribute_name_
         )

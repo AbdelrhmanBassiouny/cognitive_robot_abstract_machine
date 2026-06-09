@@ -60,6 +60,9 @@ from krrood.entity_query_language.verbalization.fragments.factory import (
     word,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    is_bool_attr_chain,
+)
 from krrood.entity_query_language.verbalization.grammar.phrase_rule import (
     Ctx,
     PhraseRule,
@@ -118,15 +121,6 @@ from krrood.entity_query_language.verbalization.grammar.assembly.instantiated im
 from krrood.entity_query_language.verbalization.grammar.planning.instantiated import (
     InstantiatedPlanner,
 )
-
-
-def _is_bool_attr_chain(expression) -> bool:
-    """``True`` when *expression* is a MappedVariable chain ending in a bool-typed Attribute."""
-    if not isinstance(expression, MappedVariable):
-        return False
-    chain, _ = walk_chain(expression)
-    return bool(chain) and isinstance(chain[-1], Attribute) and chain[-1]._type_ is bool
-
 
 # ── comparator ───────────────────────────────────────────────────────────────
 
@@ -288,7 +282,7 @@ class NotBoolAttrRule(PhraseRule):
     name = "not-bool-attr"
 
     def when(self, node, ctx: Ctx):
-        return _is_bool_attr_chain(node._child_)
+        return is_bool_attr_chain(node._child_)
 
     def build(self, node, ctx: Ctx):
         return ChainAssembler(ctx).chain(node._child_, negated=True)
