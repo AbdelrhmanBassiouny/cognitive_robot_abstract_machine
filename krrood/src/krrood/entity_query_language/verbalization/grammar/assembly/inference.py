@@ -29,9 +29,11 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     VerbFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.factory import phrase, role
-from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+from krrood.entity_query_language.verbalization.fragments.factory import phrase
 from krrood.entity_query_language.verbalization.grammar.assembly.base import Assembler
+from krrood.entity_query_language.verbalization.grammar.conditions.verbalizer import (
+    ConditionVerbalizer,
+)
 from krrood.entity_query_language.verbalization.grammar.planning.inference import (
     AggregationStatus,
     AntecedentInfo,
@@ -42,7 +44,6 @@ from krrood.entity_query_language.verbalization.grammar.planning.inference impor
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
-    Copulas,
     ExistentialPhrase,
     FallbackNouns,
     GroupKeyPhrases,
@@ -73,13 +74,6 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
     def _number(antecedent: AntecedentInfo) -> Number:
         """The grammatical number of an antecedent — plural iff aggregated."""
         return Number.of(antecedent.aggregation_status == AggregationStatus.AGGREGATED)
-
-    def _noun(
-        self, name: str, number: Number, semantic_role: SemanticRole
-    ) -> VerbFragment:
-        """A role-tagged noun inflected for *number* (pluralised when plural)."""
-        text = morphology.ensure_plural(name) if number is Number.PLURAL else name
-        return role(text, semantic_role)
 
     # ── IF clause ───────────────────────────────────────────────────────────────
 
@@ -127,11 +121,9 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
         if pc.whose_attr is None:
             return self.ctx.child(pc.expression)
         number = self._number(antecedent)
-        return phrase(
-            Keywords.WHOSE.as_fragment(),
-            self._noun(pc.whose_attr, number, SemanticRole.ATTRIBUTE),
-            Copulas.for_number(number).as_fragment(),
-            self._value(pc.expression.right, number),
+        value = self._value(pc.expression.right, number)
+        return ConditionVerbalizer(self.ctx).whose_attribute(
+            pc.whose_attr, number, value
         )
 
     def _value(self, expression, number: Number) -> VerbFragment:
@@ -153,11 +145,8 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
 
     def _binding_frag(self, binding: ConsequentBinding) -> VerbFragment:
         number = Number.of(binding.is_plural_field)
-        return phrase(
-            Keywords.WHOSE.as_fragment(),
-            self._noun(binding.field_name, number, SemanticRole.ATTRIBUTE),
-            Copulas.for_number(number).as_fragment(),
-            self._binding_value(binding),
+        return ConditionVerbalizer(self.ctx).whose_attribute(
+            binding.field_name, number, self._binding_value(binding)
         )
 
     def _binding_value(self, binding: ConsequentBinding) -> VerbFragment:

@@ -21,12 +21,14 @@ from __future__ import annotations
 
 from typing_extensions import Any
 
+from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
     VerbFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.factory import phrase
+from krrood.entity_query_language.verbalization.fragments.factory import phrase, role
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.grammar.assembly.base import Assembler
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     single_hop_attr,
@@ -37,6 +39,11 @@ from krrood.entity_query_language.verbalization.microplanning.coordination impor
 from krrood.entity_query_language.verbalization.operator_phrase import (
     comparator_operator,
 )
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Copulas,
+    Keywords,
+)
+from krrood.entity_query_language.verbalization.vocabulary.words import Number
 
 
 class ConditionVerbalizer(Assembler[Any, None]):
@@ -76,3 +83,23 @@ class ConditionVerbalizer(Assembler[Any, None]):
             self.ctx.child(rangefold.upper_expression),
             compact=False,
         )
+
+    def whose_attribute(
+        self, attr_name: str, number: Number, value: VerbFragment
+    ) -> VerbFragment:
+        """Full *"whose <attr> <copula> <value>"* modifier, agreeing with *number*.
+
+        The *value* fragment is supplied by the caller (it may itself be number-folded);
+        the attribute noun and copula agree with *number*.
+        """
+        return phrase(
+            Keywords.WHOSE.as_fragment(),
+            self._attr_noun(attr_name, number),
+            Copulas.for_number(number).as_fragment(),
+            value,
+        )
+
+    def _attr_noun(self, name: str, number: Number) -> VerbFragment:
+        """A role-tagged attribute noun inflected for *number*."""
+        text = morphology.ensure_plural(name) if number is Number.PLURAL else name
+        return role(text, SemanticRole.ATTRIBUTE)
