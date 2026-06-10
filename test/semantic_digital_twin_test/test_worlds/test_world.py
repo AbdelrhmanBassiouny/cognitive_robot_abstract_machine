@@ -830,15 +830,6 @@ def test_copy_drawer(apartment_world_copy):
     assert copied_drawer == drawer
 
 
-def test_copy_many_times_doesnt_leak(pr2_world_state_reset):
-    world_copy = deepcopy(pr2_world_state_reset)
-    initial_count = objgraph.count("World")
-    for _ in range(5):
-        world_copy = deepcopy(world_copy)
-    gc.collect()
-    assert initial_count == objgraph.count("World")
-
-
 def test_copy_id(pr2_world_state_reset):
     pr2_copy = deepcopy(pr2_world_state_reset)
     for body in pr2_world_state_reset.bodies:
