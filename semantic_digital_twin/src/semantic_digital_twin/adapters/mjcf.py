@@ -445,7 +445,7 @@ class MJCFParser:
                 connection.simulator_additional_properties.append(
                     MujocoJoint(
                         stiffness=(
-                            mujoco_joint.stiffness
+                            [mujoco_joint.stiffness]
                             if mujoco.mj_version() < 3007000
                             else mujoco_joint.stiffness.tolist()
                         ),
@@ -657,7 +657,7 @@ class MJCFParser:
                     actuator_force_range=tendon.actfrcrange.tolist(),
                     armature=tendon.armature,
                     damping=(
-                        tendon.damping
+                        [tendon.damping]
                         if mujoco.mj_version() < 3007000
                         else tendon.damping.tolist()
                     ),
@@ -674,7 +674,7 @@ class MJCFParser:
                     solver_reference_limit=tendon.solref_limit.tolist(),
                     spring_length=tendon.springlength.tolist(),
                     stiffness=(
-                        tendon.stiffness
+                        [tendon.stiffness]
                         if mujoco.mj_version() < 3007000
                         else tendon.stiffness.tolist()
                     ),

@@ -922,7 +922,7 @@ class MujocoTendon(SimulatorAdditionalProperty):
     Inertia associated with changes in tendon length.
     """
 
-    damping: Union[float, List[float]] = 0.0
+    damping: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """
     Damping coefficient. A positive value generates a damping force (linear in velocity) acting along the tendon.
     """
@@ -992,7 +992,7 @@ class MujocoTendon(SimulatorAdditionalProperty):
     Spring resting position, can take either one or two values. If one value is given, it corresponds to the length of the tendon at rest.
     """
 
-    stiffness: Union[float, List[float]] = 0.0
+    stiffness: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """
     Stiffness coefficient. A positive value generates a spring force (linear in position) acting along the tendon.
     """
@@ -1044,7 +1044,7 @@ class MujocoJoint(SimulatorAdditionalProperty):
     An additional property declaring that a Connection is a MujocoJoint.
     """
 
-    stiffness: Union[float, List[float]] = 0.0
+    stiffness: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """
     The stiffness of the joint.
     """
