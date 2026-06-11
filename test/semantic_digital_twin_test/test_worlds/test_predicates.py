@@ -588,23 +588,24 @@ def test_empty_gripper_is_not_holding_something():
     assert is_gripper_holding_something(gripper) is False
 
 
+@dataclass(eq=False)
+class ReviewCamera(Camera):
+    """Minimal concrete Camera for predicate tests."""
+
+    def setup_hardware_interfaces(self):
+        pass
+
+    def setup_joint_states(self) -> List[JointState]:
+        return []
+
+    @classmethod
+    def setup_default_configuration_in_world_below_robot_root(
+        cls, robot_root: KinematicStructureEntity
+    ):
+        raise NotImplementedError
+
+
 def test_nothing_occludes_a_body_in_clear_line_of_sight():
-
-    @dataclass(eq=False)
-    class ReviewCamera(Camera):
-        """Minimal concrete Camera for predicate tests."""
-
-        def setup_hardware_interfaces(self):
-            pass
-
-        def setup_joint_states(self) -> List[JointState]:
-            return []
-
-        @classmethod
-        def setup_default_configuration_in_world_below_robot_root(
-            cls, robot_root: KinematicStructureEntity
-        ):
-            raise NotImplementedError
 
     world = World()
     root = Body(name=PrefixedName("root", prefix="review"))

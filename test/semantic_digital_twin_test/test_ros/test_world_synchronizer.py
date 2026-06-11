@@ -33,6 +33,7 @@ from semantic_digital_twin.exceptions import (
     MismatchingPublishChangesAttribute,
     ApplyMissedMessagesWhileWorldIsBeingModifiedError,
     StateUpdateContainsUnknownDegreesOfFreedomError,
+    BrokenWorldModificationHistoryError,
 )
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -1112,7 +1113,7 @@ def test_nested_modify_world_publish_changes_true_false(rclpy_node):
 
     assert len(w1.kinematic_structure_entities) == len(w2.kinematic_structure_entities)
 
-    with pytest.raises(MismatchingPublishChangesAttribute):
+    with pytest.raises(BrokenWorldModificationHistoryError):
         with w1.modify_world():
             handle = Handle.create_with_new_body_in_world(PrefixedName("handle"), w1)
 
@@ -1121,7 +1122,7 @@ def test_nested_modify_world_publish_changes_true_false(rclpy_node):
                     PrefixedName("handle"), w1
                 )
 
-    with pytest.raises(MismatchingPublishChangesAttribute):
+    with pytest.raises(BrokenWorldModificationHistoryError):
         with w1.modify_world(publish_changes=False):
             handle = Handle.create_with_new_body_in_world(PrefixedName("handle"), w1)
 

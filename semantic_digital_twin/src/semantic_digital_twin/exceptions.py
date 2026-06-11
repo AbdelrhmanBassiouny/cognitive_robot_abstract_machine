@@ -225,15 +225,22 @@ class WorldIsNotATreeError(WorldValidationError):
         )
 
 
+@dataclass
 class BrokenWorldModificationHistoryError(WorldValidationError):
     """
     Raised when the world's modification history was detected to be broken.
+    """
+
+    potential_cause: Optional[DataclassException] = None
+    """
+    The exception that was thrown and caused the world's modification history to be broken.
     """
 
     def __post_init__(self):
         self.message = (
             f"The world's modification history was detected to be broken. "
             f"The world is {self.world}"
+            f" Potential cause: {self.potential_cause}"
         )
 
 

@@ -32,6 +32,7 @@ def test_world_reasoner_reason_returns_dicts():
         os.path.dirname(os.path.abspath(__file__)),
         "..",
         "..",
+        "..",
         "semantic_digital_twin",
         "resources",
         "urdf",

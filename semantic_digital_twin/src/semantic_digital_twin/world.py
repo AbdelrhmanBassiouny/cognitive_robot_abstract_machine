@@ -216,7 +216,9 @@ class WorldModelUpdateContextManager:
                 clear_memoization_cache(self.world)
                 if not model_manager._active_world_model_update_context_manager_ids:
                     if len(model_manager.current_model_modification_block):
-                        raise BrokenWorldModificationHistoryError(world=self.world)
+                        raise BrokenWorldModificationHistoryError(
+                            world=self.world, potential_cause=exc_val
+                        )
                     model_manager.current_model_modification_block = (
                         WorldModelModificationBlock()
                     )
