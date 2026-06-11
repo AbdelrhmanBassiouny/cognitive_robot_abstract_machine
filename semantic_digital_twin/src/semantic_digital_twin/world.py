@@ -54,6 +54,7 @@ from semantic_digital_twin.exceptions import (
     WorldValidationError,
     WorldIsNotATreeError,
     WorldContainsOrphanedDegreeOfFreedom,
+    BrokenWorldModificationHistoryError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
@@ -214,13 +215,8 @@ class WorldModelUpdateContextManager:
                 # so cached queries must be invalidated
                 clear_memoization_cache(self.world)
                 if not model_manager._active_world_model_update_context_manager_ids:
-                    # commit the partially applied modifications to the history,
-                    # otherwise replay-based operations (deepcopy, synchronization)
-                    # would produce a different world than the actual one
                     if len(model_manager.current_model_modification_block):
-                        model_manager.model_modification_blocks.append(
-                            model_manager.current_model_modification_block
-                        )
+                        raise BrokenWorldModificationHistoryError(world=self.world)
                     model_manager.current_model_modification_block = (
                         WorldModelModificationBlock()
                     )

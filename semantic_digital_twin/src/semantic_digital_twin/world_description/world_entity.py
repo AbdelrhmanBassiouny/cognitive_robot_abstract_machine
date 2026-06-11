@@ -625,6 +625,10 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
         return set(n.lower() for n in camel_case_split(cls.__name__))
 
     def __hash__(self):
+        return self.__cached_hash__
+
+    @cached_property
+    def __cached_hash__(self):
         introspector = DataclassOnlyIntrospector()
         result = [self.__class__]
         for field_ in introspector.discover(self.__class__):
@@ -860,6 +864,9 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer):
         result["parent_T_connection_expression"] = to_json(
             self.parent_T_connection_expression
         )
+        result["connection_T_child_expression"] = to_json(
+            self.connection_T_child_expression
+        )
         return result
 
     @classmethod
@@ -873,6 +880,9 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer):
             child=child,
             parent_T_connection_expression=from_json(
                 data["parent_T_connection_expression"], **kwargs
+            ),
+            connection_T_child_expression=from_json(
+                data["connection_T_child_expression"], **kwargs
             ),
         )
 

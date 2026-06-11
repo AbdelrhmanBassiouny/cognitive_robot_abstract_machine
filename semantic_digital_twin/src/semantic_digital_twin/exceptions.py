@@ -206,16 +206,16 @@ class WorldValidationError(LogicalError):
     Raised when the world fails validation, e.g., when the kinematic structure is not a tree.
     """
 
+    world: World
+    """
+    The world that failed validation.
+    """
+
 
 @dataclass
 class WorldIsNotATreeError(WorldValidationError):
     """
     Raised when the kinematic structure of the world is not a tree during validation.
-    """
-
-    world: World
-    """
-    The world that failed validation.
     """
 
     def __post_init__(self):
@@ -225,15 +225,22 @@ class WorldIsNotATreeError(WorldValidationError):
         )
 
 
+class BrokenWorldModificationHistoryError(WorldValidationError):
+    """
+    Raised when the world's modification history was detected to be broken.
+    """
+
+    def __post_init__(self):
+        self.message = (
+            f"The world's modification history was detected to be broken. "
+            f"The world is {self.world}"
+        )
+
+
 @dataclass
 class WorldContainsOrphanedDegreeOfFreedom(WorldValidationError):
     """
     Raised when the kinematic structure of the world contains orphaned degrees of freedom during validation.
-    """
-
-    world: World
-    """
-    The world that failed validation.
     """
 
     actual_dofs: Set[DegreeOfFreedom]

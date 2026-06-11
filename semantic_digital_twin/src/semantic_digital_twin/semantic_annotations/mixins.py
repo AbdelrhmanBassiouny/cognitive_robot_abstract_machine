@@ -113,6 +113,9 @@ class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
         max = Point3.from_iterable(self.root.combined_mesh.bounds[1])
         return min, max
 
+    def __hash__(self):
+        return hash((self.__class__, self.root))
+
     @classproperty
     def _parent_connection_type(self) -> Type[Connection]:
         """
@@ -775,9 +778,13 @@ class HasSupportingSurface(HasStorageSpace, ABC):
                 supporting_body=self.root,
             )
         )
-        objects = an(entity(
-            semantic_annotation := variable(HasRootBody, domain=self._world.semantic_annotations)
-        ).where(semantic_annotation.root == body)).evaluate()
+        objects = an(
+            entity(
+                semantic_annotation := variable(
+                    HasRootBody, domain=self._world.semantic_annotations
+                )
+            ).where(semantic_annotation.root == body)
+        ).evaluate()
         for obj in objects:
             if obj in self.objects:
                 continue
@@ -938,7 +945,8 @@ class HasSupportingSurface(HasStorageSpace, ABC):
         surface_circuit_root = SumUnit(probabilistic_circuit=surface_circuit)
 
         objects_of_interest_variable = Symbolic(
-            name="objects_of_interest", domain=EventSet.from_iterable(objects_of_interest)
+            name="objects_of_interest",
+            domain=EventSet.from_iterable(objects_of_interest),
         )
 
         for object_of_interest in objects_of_interest:
