@@ -44,7 +44,10 @@ def build_cram_class_sets() -> Tuple[Set[Type], List[Type], dict]:
     )
     classes = set(classes)
 
-    alternative_mappings += [am for am in recursive_subclasses(AlternativeMapping)]
+    alternative_mappings += [
+        alternative_mapping
+        for alternative_mapping in recursive_subclasses(AlternativeMapping)
+    ]
     alternative_mappings = list(set(alternative_mappings))
     classes = {
         c for c in classes if is_dataclass(c) and not issubclass(c, AlternativeMapping)
@@ -152,6 +155,17 @@ def _ormatic_scalability_experiment(
     alternative_mappings: List[Type],
     type_mappings: dict,
 ) -> ORMaticScalabilityExperimentResult:
+    """
+    Inner implementation of a single ORMatic generation pass without logger suppression.
+
+    Measures three sequential phases: ClassDiagram construction, ORMatic table reasoning
+    (``make_all_tables``), and writing the generated SQLAlchemy file to a temp file.
+
+    :param filtered_classes: The exact set of classes to map in this run.
+    :param alternative_mappings: AlternativeMapping subclasses to register with ORMatic.
+    :param type_mappings: Custom type-to-column mappings forwarded to :class:`TypeDict`.
+    :return: Timing breakdown and class-diagram statistics for this single run.
+    """
     begin = time.perf_counter()
 
     class_diagram = ClassDiagram(
@@ -220,7 +234,10 @@ def run_scalability_experiment(
         filtered_classes = {
             c for c in classes if random.uniform(0, 1) > class_drop_probability
         }
-        filtered_classes |= {am.original_class() for am in alternative_mappings}
+        filtered_classes |= {
+            alternative_mapping.original_class()
+            for alternative_mapping in alternative_mappings
+        }
         filtered_classes |= pinned
         results.append(
             ormatic_scalability_experiment(
