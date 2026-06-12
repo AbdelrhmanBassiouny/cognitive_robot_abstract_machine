@@ -18,7 +18,7 @@ from typing import Iterable, Optional
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.rendering.coreference_processor import (
     CoreferenceProcessor,
@@ -40,9 +40,9 @@ _ORTHOGRAPHY = OrthographyProcessor()
 
 
 def realize_tree(
-    fragment: VerbFragment,
+    fragment: Fragment,
     already_seen: Optional[Iterable[uuid.UUID]] = None,
-) -> VerbFragment:
+) -> Fragment:
     """Run the ordered realisation passes over *fragment*: coreference resolution → DP lowering
     → morphology → orthography (punctuation spacing).  *already_seen* carries referents
     introduced by prior builds on a shared context (see :meth:`CoreferenceProcessor.process`).
@@ -52,7 +52,7 @@ def realize_tree(
     return _ORTHOGRAPHY.process(inflected)
 
 
-def realize_subtree(fragment: VerbFragment) -> str:
+def realize_subtree(fragment: Fragment) -> str:
     """
     Fully realise a sub-tree to plain text — the realisation passes, then flatten.
 

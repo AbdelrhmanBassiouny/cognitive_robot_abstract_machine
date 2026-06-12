@@ -20,7 +20,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
     SubjectScope,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
@@ -53,7 +53,7 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
 
     planner = QueryPlanner
 
-    def realize(self, node, plan: QueryPlan) -> VerbFragment:
+    def realize(self, node, plan: QueryPlan) -> Fragment:
         """*"the <aggregation> <leaf>"*, optionally scoped *"among <source> …"* — runs inside
         the query scope pushed by ``NestedEntityRule.enters_query_scope``."""
         aggregation_data = plan.aggregation_data
@@ -78,7 +78,7 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
             return aggregate
         return self._scope(node, plan, aggregate)
 
-    def _scope(self, node, plan: QueryPlan, aggregate) -> VerbFragment:
+    def _scope(self, node, plan: QueryPlan, aggregate) -> Fragment:
         """*"<aggregate> among <plural source> [whose …] [such that … their …] [having …]"*.
 
         The plural source population is the scope's discourse subject (a plural
@@ -91,7 +91,7 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
             if source is not None
             else FallbackNouns.ENTITY.plural_fragment()
         )
-        parts: List[VerbFragment] = [
+        parts: List[Fragment] = [
             aggregate,
             Prepositions.AMONG.as_fragment(),
             source_frag,

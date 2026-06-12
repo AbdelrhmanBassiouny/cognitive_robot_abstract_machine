@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing_extensions import Any, Callable, ClassVar, Optional, Sequence
 
-from krrood.entity_query_language.verbalization.fragments.base import VerbFragment
+from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.fragments.features import Number
 from krrood.entity_query_language.verbalization.grammar.selection import most_specific
 
@@ -58,7 +58,7 @@ class Ctx:
     reaches for cross-cutting state directly.
     """
 
-    child: Callable[..., VerbFragment]
+    child: Callable[..., Fragment]
     """Recurse on a sub-expression — the fold continuation bound to this pass.  Accepts an
     optional ``number=`` to request a plural realisation of the child (consumed by that
     child's rule, not inherited further down)."""
@@ -130,7 +130,7 @@ class PhraseRule(ABC):
         return True
 
     @abstractmethod
-    def build(self, node, ctx: Ctx) -> VerbFragment:
+    def build(self, node, ctx: Ctx) -> Fragment:
         """
         Build the fragment for *node*, delegating recursion to ``ctx.child`` and
         cross-cutting decisions to ``ctx`` services / morphology / coordination /
@@ -139,7 +139,7 @@ class PhraseRule(ABC):
         :param node: The EQL expression to verbalize.
         :param ctx: The per-node context (recursion + services).
         :return: The fragment for *node*.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
 
 

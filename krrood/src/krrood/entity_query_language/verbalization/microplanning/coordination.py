@@ -41,7 +41,7 @@ from krrood.entity_query_language.verbalization.chain_utils import walk_chain
 from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_and,
     PhraseFragment,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
@@ -153,12 +153,12 @@ def has_pair(conjuncts: List) -> bool:
 
 
 def build_between(
-    left_fragment: VerbFragment,
-    lower_fragment: VerbFragment,
-    upper_fragment: VerbFragment,
+    left_fragment: Fragment,
+    lower_fragment: Fragment,
+    upper_fragment: Fragment,
     *,
     compact: bool,
-) -> VerbFragment:
+) -> Fragment:
     """
     Build *"<left> is between <lo> and <hi>"* (or copula-less *"<left> between …"* when *compact*).
 
@@ -170,7 +170,7 @@ def build_between(
     :param upper_fragment: Rendered upper-bound value.
     :param compact: Drop the copula (for HAVING / post-nominal contexts).
     :return: The range phrase fragment.
-    :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+    :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
     """
     op = (RangePhrases.BETWEEN if compact else RangePhrases.IS_BETWEEN).as_fragment()
     bounds = oxford_and(

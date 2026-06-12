@@ -36,7 +36,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     PossessiveChain,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -65,15 +65,13 @@ class ChainAssembler(Assembler[MappedVariable, None]):
     form, so there is no plan — :meth:`realize` ignores it.
     """
 
-    def realize(self, node, plan: None = None) -> VerbFragment:
+    def realize(self, node, plan: None = None) -> Fragment:
         """Default chain rendering (the :class:`Assembler` entry point)."""
         return self.chain(node)
 
     # ── entry forms ──────────────────────────────────────────────────────────
 
-    def chain(
-        self, expression: MappedVariable, *, negated: bool = False
-    ) -> VerbFragment:
+    def chain(self, expression: MappedVariable, *, negated: bool = False) -> Fragment:
         """Boolean terminal → predicative *"<nav> is [not] <attr>"*; else possessive path.
 
         When a plural is requested (``ctx.number``) and this is a single attribute on a
@@ -98,7 +96,7 @@ class ChainAssembler(Assembler[MappedVariable, None]):
             )
         return possessive_path(analysis.parts, root_fragment)
 
-    def _plural_attribute(self, analysis: ChainAnalysis) -> Optional[VerbFragment]:
+    def _plural_attribute(self, analysis: ChainAnalysis) -> Optional[Fragment]:
         """*"attrs of Roots"* when the chain is a single ``Attribute`` on a ``Variable``,
         else ``None`` (caller falls through to the singular rendering).  Tags both leaves
         plural for the morphology pass; marks the root introduced for cross-build seeding.
@@ -127,7 +125,7 @@ class ChainAssembler(Assembler[MappedVariable, None]):
             modifiers=[Prepositions.OF.as_fragment(), root_np],
         )
 
-    def _chain_root(self, leaf: object) -> VerbFragment:
+    def _chain_root(self, leaf: object) -> Fragment:
         """Noun phrase for the chain root — inline-noun for Entity roots, else recurse."""
         inner = leaf
         while isinstance(inner, ResultQuantifier):
@@ -136,7 +134,7 @@ class ChainAssembler(Assembler[MappedVariable, None]):
             return QueryAssembler(self.ctx).inline_noun(inner)
         return self.ctx.child(leaf)
 
-    def _bool_predicative(self, analysis: ChainAnalysis, negated: bool) -> VerbFragment:
+    def _bool_predicative(self, analysis: ChainAnalysis, negated: bool) -> Fragment:
         """*"<nav> is [not] <attr>"* — chains ending in an int Index get ordinal navigation."""
         chain = analysis.chain
         root_fragment = self._chain_root(analysis.root)

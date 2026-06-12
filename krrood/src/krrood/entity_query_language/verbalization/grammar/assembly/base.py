@@ -27,7 +27,7 @@ from dataclasses import dataclass
 
 from typing_extensions import ClassVar, Generic, Optional, Type, TypeVar
 
-from krrood.entity_query_language.verbalization.fragments.base import VerbFragment
+from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.grammar.phrase_rule import Ctx
 from krrood.entity_query_language.verbalization.grammar.planning.base import Planner
 
@@ -42,7 +42,7 @@ P = TypeVar("P")
 class Assembler(ABC, Generic[N, P]):
     """
     Realise an EQL *node* into a
-    :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`,
+    :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment`,
     planning it first via the paired :attr:`planner`.
 
     Holds the :class:`~krrood.entity_query_language.verbalization.grammar.phrase_rule.Ctx`
@@ -59,10 +59,10 @@ class Assembler(ABC, Generic[N, P]):
         """Run the paired planner on *node* (or ``None`` when there is nothing to plan)."""
         return self.planner(node).plan() if self.planner is not None else None
 
-    def assemble(self, node: N) -> VerbFragment:
+    def assemble(self, node: N) -> Fragment:
         """Plan *node*, then realise the plan — the single public entry point."""
         return self.realize(node, self.plan(node))
 
     @abstractmethod
-    def realize(self, node: N, plan: P) -> VerbFragment:
+    def realize(self, node: N, plan: P) -> Fragment:
         """Build the fragment for *node* from its *plan*, recursing via ``self.ctx.child``."""

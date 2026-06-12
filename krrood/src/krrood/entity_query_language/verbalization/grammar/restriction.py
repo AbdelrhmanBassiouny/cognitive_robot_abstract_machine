@@ -25,7 +25,7 @@ from typing_extensions import ClassVar, Optional, Type
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.operators.comparator import Comparator
-from krrood.entity_query_language.verbalization.fragments.base import VerbFragment
+from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     references,
     single_hop_attr,
@@ -83,7 +83,7 @@ class RestrictionRule(SpecificityRule):
 
     @classmethod
     @abstractmethod
-    def render(cls, item, subject_variable, ctx: Ctx) -> VerbFragment:
+    def render(cls, item, subject_variable, ctx: Ctx) -> Fragment:
         """Render *item* as the fragment for its :attr:`placement` (recurses via ``ctx.child``)."""
 
 
@@ -100,7 +100,7 @@ class RangeRestrictionRule(RestrictionRule):
         )
 
     @classmethod
-    def render(cls, item, subject_variable, ctx: Ctx) -> VerbFragment:
+    def render(cls, item, subject_variable, ctx: Ctx) -> Fragment:
         return ConditionVerbalizer(ctx).range_modifier(item, subject_variable)
 
 
@@ -122,7 +122,7 @@ class AttributePredicateRestrictionRule(RestrictionRule):
         return not references(item.right, subject_variable)
 
     @classmethod
-    def render(cls, item, subject_variable, ctx: Ctx) -> VerbFragment:
+    def render(cls, item, subject_variable, ctx: Ctx) -> Fragment:
         return ConditionVerbalizer(ctx).attribute_modifier(item, subject_variable)
 
 
@@ -142,7 +142,7 @@ class SuperlativeRestrictionRule(RestrictionRule):
         return superlative_aggregation(item, subject_variable) is not None
 
     @classmethod
-    def render(cls, item, subject_variable, ctx: Ctx) -> VerbFragment:
+    def render(cls, item, subject_variable, ctx: Ctx) -> Fragment:
         return ConditionVerbalizer(ctx).superlative_modifier(item, subject_variable)
 
 

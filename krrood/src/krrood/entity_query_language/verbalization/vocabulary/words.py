@@ -15,7 +15,7 @@ from typing_extensions import ClassVar
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (  # noqa: F401  (re-export)
@@ -237,13 +237,13 @@ class VocabEnum(Enum):
     inherit this mixin.
     """
 
-    def as_fragment(self) -> VerbFragment:
+    def as_fragment(self) -> Fragment:
         """
         Convert the member's value to its
-        :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`.
+        :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment`.
 
         :return: Fragment representing this vocabulary item.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         return self.value.as_fragment()
 

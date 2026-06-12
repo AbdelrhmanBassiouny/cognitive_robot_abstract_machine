@@ -28,7 +28,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
@@ -492,7 +492,7 @@ def test_pipeline_ansi_with_resolver_no_osc8_logs_warning_and_no_osc8():
 # ── Verbalizer source_ref propagation ─────────────────────────────────────────
 
 
-def _collect_source_refs(fragment: VerbFragment) -> list[SourceRef]:
+def _collect_source_refs(fragment: Fragment) -> list[SourceRef]:
     """Recursively collect all non-None SourceRef values from a fragment tree."""
     match fragment:
         case RoleFragment(source_ref=ref) if ref is not None:

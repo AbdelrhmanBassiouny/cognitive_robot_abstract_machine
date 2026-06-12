@@ -23,7 +23,7 @@ from typing_extensions import List
 from krrood.entity_query_language.verbalization.fragments.base import (
     map_structural_children,
     PhraseFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Glue
@@ -32,7 +32,7 @@ from krrood.entity_query_language.verbalization.fragments.features import Glue
 class OrthographyProcessor:
     """Remove the space adjacent to glued punctuation in every ``PhraseFragment`` (idempotent)."""
 
-    def process(self, fragment: VerbFragment) -> VerbFragment:
+    def process(self, fragment: Fragment) -> Fragment:
         """Return a new tree with punctuation spacing fixed."""
         rebuilt = map_structural_children(fragment, self.process)
         node = rebuilt if rebuilt is not None else fragment
@@ -42,13 +42,13 @@ class OrthographyProcessor:
             )
         return node
 
-    def _apply_glue(self, parts: List[VerbFragment]) -> List[VerbFragment]:
+    def _apply_glue(self, parts: List[Fragment]) -> List[Fragment]:
         """Regroup *parts* so a ``LEFT`` token hugs the previous part and a ``RIGHT`` token the
         next — each merge is a zero-separator subgroup, so the surrounding separator is dropped.
         """
-        out: List[VerbFragment] = []
+        out: List[Fragment] = []
         # A RIGHT token (e.g. "(") held until its following part arrives, to attach to it.
-        pending_right: List[VerbFragment] = []
+        pending_right: List[Fragment] = []
         for part in parts:
             glue = part.glue if isinstance(part, WordFragment) else Glue.NONE
             if pending_right:  # attach the held "(" to this part
@@ -66,7 +66,7 @@ class OrthographyProcessor:
         return out
 
     @staticmethod
-    def _merge(items: List[VerbFragment]) -> VerbFragment:
+    def _merge(items: List[Fragment]) -> Fragment:
         """A zero-separator group of *items* (the single item itself when there is only one)."""
         return (
             items[0] if len(items) == 1 else PhraseFragment(parts=items, separator="")

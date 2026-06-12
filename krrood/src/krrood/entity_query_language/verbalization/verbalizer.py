@@ -3,7 +3,7 @@ EQL verbalizer — the internal fragment **builder**.
 
 :class:`EQLVerbalizer` dispatches an EQL expression tree through the grammar
 :func:`~krrood.entity_query_language.verbalization.engine.fold` and runs the realisation passes,
-returning a :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment` tree.
+returning a :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment` tree.
 It is used by the
 :class:`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline`, which is the
 public entry point (and exposes the plain-text shortcut
@@ -20,7 +20,7 @@ from typing_extensions import Optional
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.verbalization.context import VerbalizationContext
 from krrood.entity_query_language.verbalization.engine import fold
-from krrood.entity_query_language.verbalization.fragments.base import VerbFragment
+from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.grammar.english import RULES
 from krrood.entity_query_language.verbalization.rendering.realization import (
     realize_tree,
@@ -30,7 +30,7 @@ from krrood.entity_query_language.verbalization.rendering.realization import (
 @dataclass
 class EQLVerbalizer:
     """
-    Builds a :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment` tree
+    Builds a :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment` tree
     from an EQL expression — the fragment-producing core behind
     :class:`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline`.
 
@@ -44,9 +44,9 @@ class EQLVerbalizer:
         self,
         expression: SymbolicExpression,
         context: Optional[VerbalizationContext] = None,
-    ) -> VerbFragment:
+    ) -> Fragment:
         """
-        Translate *expression* into a :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment` tree
+        Translate *expression* into a :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment` tree
         via the grammar :func:`~krrood.entity_query_language.verbalization.engine.fold`, then run
         the realisation passes.
 
@@ -58,7 +58,7 @@ class EQLVerbalizer:
         :param context: Shared verbalization state; created automatically when omitted.
         :type context: ~krrood.entity_query_language.verbalization.context.VerbalizationContext or None
         :return: Root of the fragment tree representing *expression* in natural language.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         if context is None:
             context = VerbalizationContext.from_expression(expression)

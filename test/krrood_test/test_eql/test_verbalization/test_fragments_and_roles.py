@@ -1,7 +1,7 @@
 """
 Fragment-structure tests.
 
-These tests verify that verbalization produces properly typed VerbFragment trees —
+These tests verify that verbalization produces properly typed Fragment trees —
 specifically that semantic roles (VARIABLE, ATTRIBUTE, KEYWORD, …) are preserved
 inside constraint clauses, binding phrases, grouped-by, ordered-by, and set_of
 output.  They complement the plain-text regression tests in test_verbalization.py.
@@ -29,7 +29,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
@@ -48,18 +48,14 @@ from ...dataset.department_and_employee import Department, Employee
 # ── Fragment-tree helpers ──────────────────────────────────────────────────────
 
 
-def _collect_role_fragments(
-    frag: VerbFragment, role: SemanticRole
-) -> list[RoleFragment]:
+def _collect_role_fragments(frag: Fragment, role: SemanticRole) -> list[RoleFragment]:
     """Recursively collect all RoleFragments with the given role."""
     found: list[RoleFragment] = []
     _walk(frag, role, found)
     return found
 
 
-def _walk(
-    frag: VerbFragment, role: SemanticRole, accumulator: list[RoleFragment]
-) -> None:
+def _walk(frag: Fragment, role: SemanticRole, accumulator: list[RoleFragment]) -> None:
     if isinstance(frag, RoleFragment) and frag.role == role:
         accumulator.append(frag)
     elif isinstance(frag, PhraseFragment):
@@ -72,14 +68,14 @@ def _walk(
             _walk(item, role, accumulator)
 
 
-def _all_texts(frag: VerbFragment) -> list[str]:
+def _all_texts(frag: Fragment) -> list[str]:
     """Collect all leaf text values from a fragment tree."""
     texts: list[str] = []
     _walk_texts(frag, texts)
     return texts
 
 
-def _walk_texts(frag: VerbFragment, accumulator: list[str]) -> None:
+def _walk_texts(frag: Fragment, accumulator: list[str]) -> None:
     if isinstance(frag, (WordFragment, RoleFragment)):
         accumulator.append(frag.text)
     elif isinstance(frag, PhraseFragment):
@@ -253,7 +249,7 @@ def test_ordered_by_direction_fragment(handles_and_containers_world):
     ), f"'descending' should be a standalone leaf fragment, got: {word_leaf_texts!r}"
 
 
-def _collect_word_leaves(frag: VerbFragment, accumulator: list[str]) -> None:
+def _collect_word_leaves(frag: Fragment, accumulator: list[str]) -> None:
     if isinstance(frag, (WordFragment, RoleFragment)):
         accumulator.append(frag.text)
     elif isinstance(frag, PhraseFragment):

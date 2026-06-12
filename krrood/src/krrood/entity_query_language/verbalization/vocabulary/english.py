@@ -30,7 +30,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
@@ -62,7 +62,7 @@ class SingularExistential(PlainWord):
     ``inflect`` library.
     """
 
-    def build_phrase(self, type_name: str, referent_id=None) -> VerbFragment:
+    def build_phrase(self, type_name: str, referent_id=None) -> Fragment:
         """
         Build *"there's a/an <type_name>"* as a
         :class:`~krrood.entity_query_language.verbalization.fragments.base.PhraseFragment`.
@@ -73,7 +73,7 @@ class SingularExistential(PlainWord):
             entity (so the coreference pass marks it introduced and reduces later mentions to
             *"the <type>"*); the indefinite article is then chosen by the determiner concord.
         :return: Phrase fragment with the correct indefinite article.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         if referent_id is not None:
             return PhraseFragment(
@@ -100,7 +100,7 @@ class PluralExistential(PlainWord):
     Parameterised existential phrase: *"there are TypeNames"*.
     """
 
-    def build_phrase(self, type_name: str) -> VerbFragment:
+    def build_phrase(self, type_name: str) -> Fragment:
         """
         Build *"there are <plural_type_name>"* as a
         :class:`~krrood.entity_query_language.verbalization.fragments.base.PhraseFragment`.
@@ -108,7 +108,7 @@ class PluralExistential(PlainWord):
         :param type_name: English noun in singular form; pluralised automatically.
         :type type_name: str
         :return: Phrase fragment with pluralised type name.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         return PhraseFragment(
             parts=[
@@ -149,7 +149,7 @@ class CommonGroupKeyWord(PlainWord):
     Used in the THEN clause when a consequent binding refers to a GROUP BY key.
     """
 
-    def build_phrase(self, field_name: str, root: str) -> VerbFragment:
+    def build_phrase(self, field_name: str, root: str) -> Fragment:
         """
         Build *"the common <field_name> of the <plural root>"*.
 
@@ -162,7 +162,7 @@ class CommonGroupKeyWord(PlainWord):
             pluralises the tagged root leaf.
         :type root: str
         :return: Phrase fragment.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         return PhraseFragment(
             parts=[
@@ -324,7 +324,7 @@ class ExistentialPhrase(VocabEnum):
         """The existential frame agreeing with *number*: ``THERE_ARE`` / ``THERE_IS_A``."""
         return cls.THERE_ARE if number is Number.PLURAL else cls.THERE_IS_A
 
-    def build_phrase(self, type_name: str, referent_id=None) -> VerbFragment:
+    def build_phrase(self, type_name: str, referent_id=None) -> Fragment:
         """
         Delegate to the underlying :class:`SingularExistential` or :class:`PluralExistential`.
 
@@ -333,7 +333,7 @@ class ExistentialPhrase(VocabEnum):
         :param referent_id: Optional referent for coreference (singular only; see
             :meth:`SingularExistential.build_phrase`).
         :return: Existential phrase fragment.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         if referent_id is not None and self is ExistentialPhrase.THERE_IS_A:
             return self.value.build_phrase(type_name, referent_id=referent_id)
@@ -365,7 +365,7 @@ class GroupKeyPhrases(VocabEnum):
 
     COMMON_OF = CommonGroupKeyWord("the common")
 
-    def build_phrase(self, field_name: str, plural_root: str) -> VerbFragment:
+    def build_phrase(self, field_name: str, plural_root: str) -> Fragment:
         """
         Delegate to :meth:`CommonGroupKeyWord.build_phrase`.
 
@@ -374,7 +374,7 @@ class GroupKeyPhrases(VocabEnum):
         :param plural_root: Plural root type name.
         :type plural_root: str
         :return: Group-key phrase fragment.
-        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         return self.value.build_phrase(field_name, plural_root)
 

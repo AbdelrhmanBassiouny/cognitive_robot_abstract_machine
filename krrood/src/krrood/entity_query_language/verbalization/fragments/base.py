@@ -34,7 +34,7 @@ _T = TypeVar("_T")
 
 
 @dataclass
-class VerbFragment:
+class Fragment:
     """
     Abstract base for all verbalized output fragments.
 
@@ -49,7 +49,7 @@ class VerbFragment:
 
 
 @dataclass
-class WordFragment(VerbFragment):
+class WordFragment(Fragment):
     """Plain neutral text with no semantic role: articles, connectives, punctuation.
 
     May also carry a noun rendered role-lessly (e.g. a group-key root); such a leaf can be
@@ -68,7 +68,7 @@ class WordFragment(VerbFragment):
 
 
 @dataclass
-class RoleFragment(VerbFragment):
+class RoleFragment(Fragment):
     """
     Text carrying a :class:`~krrood.entity_query_language.verbalization.fragments.roles.SemanticRole`
     — drives colour markup and optional source hyperlinking.
@@ -152,10 +152,10 @@ class RoleFragment(VerbFragment):
 
 
 @dataclass
-class PhraseFragment(VerbFragment):
+class PhraseFragment(Fragment):
     """An inline sequence of fragments joined by a separator."""
 
-    parts: list[VerbFragment]
+    parts: list[Fragment]
     """Ordered list of child fragments."""
 
     separator: str = " "
@@ -163,7 +163,7 @@ class PhraseFragment(VerbFragment):
 
 
 @dataclass
-class NounPhrase(VerbFragment):
+class NounPhrase(Fragment):
     """
     A **noun-phrase specification** (a determiner phrase / DP) — carries the grammatical
     features of a noun phrase, *not* its surface determiner.
@@ -179,7 +179,7 @@ class NounPhrase(VerbFragment):
     number / definiteness features, realised by a downstream processor).
     """
 
-    head: VerbFragment
+    head: Fragment
     """The noun leaf/sub-phrase the determiner attaches to (e.g. a ``VARIABLE``-role noun)."""
 
     number: Number = Number.SINGULAR
@@ -188,7 +188,7 @@ class NounPhrase(VerbFragment):
     definiteness: Definiteness = Definiteness.INDEFINITE
     """Determiner-system feature — selects *"a/an"* / *"the"* / no determiner."""
 
-    modifiers: List[VerbFragment] = field(default_factory=list)
+    modifiers: List[Fragment] = field(default_factory=list)
     """Post-modifiers following the head (e.g. *"of the Root"*, *"where … such that …"*)."""
 
     modifier_separator: str = " "
@@ -205,7 +205,7 @@ class NounPhrase(VerbFragment):
 
 
 @dataclass
-class SubjectScope(VerbFragment):
+class SubjectScope(Fragment):
     """
     Marks the region in which :attr:`subject_id` is the pronoun-eligible discourse subject.
 
@@ -221,7 +221,7 @@ class SubjectScope(VerbFragment):
     """The subject's referent id, or ``None`` for a scope with no single subject (e.g. ``SetOf``),
     which suppresses pronominalisation."""
 
-    child: VerbFragment
+    child: Fragment
     """The wrapped fragment the scope applies to."""
 
     subject_number: Number = Number.SINGULAR
@@ -231,7 +231,7 @@ class SubjectScope(VerbFragment):
 
 
 @dataclass
-class PossessiveChain(VerbFragment):
+class PossessiveChain(Fragment):
     """
     A navigation chain whose **pronominal-vs-possessive** surface form is decided by coreference.
 
@@ -249,7 +249,7 @@ class PossessiveChain(VerbFragment):
     """The chain's ``(attr_name, source_ref)`` path, innermost-last (the same shape the
     possessive/pronominal builders consume)."""
 
-    root_fragment: VerbFragment
+    root_fragment: Fragment
     """The referring noun phrase for the chain root, used by the *possessive* rendering (and
     resolved for first/subsequent mention by the same pass)."""
 
@@ -259,7 +259,7 @@ class PossessiveChain(VerbFragment):
 
 
 @dataclass
-class BlockFragment(VerbFragment):
+class BlockFragment(Fragment):
     """
     A named structural block with an optional header and a list of sub-items.
 
@@ -269,10 +269,10 @@ class BlockFragment(VerbFragment):
       renders the header on one line, then each item as a bullet at the next indent level.
     """
 
-    header: Optional[VerbFragment]
+    header: Optional[Fragment]
     """Optional lead fragment (e.g. ``"Find Robot"`` or ``"If"``)."""
 
-    items: list[VerbFragment] = field(default_factory=list)
+    items: list[Fragment] = field(default_factory=list)
     """Ordered list of sub-item fragments."""
 
 
@@ -280,7 +280,7 @@ class BlockFragment(VerbFragment):
 
 
 def fold_fragment(
-    fragment: VerbFragment,
+    fragment: Fragment,
     *,
     word: Callable[[str], _T],
     role: Callable[[str, SemanticRole, Optional[SourceRef]], _T],
@@ -288,7 +288,7 @@ def fold_fragment(
     block: Callable[[BlockFragment], _T],
 ) -> _T:
     """
-    Fold a :class:`VerbFragment` tree into a value of type ``_T`` by supplying one
+    Fold a :class:`Fragment` tree into a value of type ``_T`` by supplying one
     handler per node kind — the single, shared structural recursion over the IR.
 
     This is the *catamorphism* (the unique homomorphism from the fragment tree into
@@ -345,8 +345,8 @@ def fold_fragment(
 
 
 def map_structural_children(
-    fragment: VerbFragment, recurse: Callable[[VerbFragment], VerbFragment]
-) -> Optional[VerbFragment]:
+    fragment: Fragment, recurse: Callable[[Fragment], Fragment]
+) -> Optional[Fragment]:
     """
     Rebuild a **structural container** (the nodes that merely hold children —
     :class:`PhraseFragment`, :class:`BlockFragment`, :class:`SubjectScope`) by applying *recurse*
@@ -386,11 +386,9 @@ def map_structural_children(
             return None
 
 
-def map_fragment(
-    fragment: VerbFragment, leaf: Callable[[VerbFragment], VerbFragment]
-) -> VerbFragment:
+def map_fragment(fragment: Fragment, leaf: Callable[[Fragment], Fragment]) -> Fragment:
     """
-    Rebuild a :class:`VerbFragment` tree, replacing each **leaf** (``WordFragment`` /
+    Rebuild a :class:`Fragment` tree, replacing each **leaf** (``WordFragment`` /
     ``RoleFragment``) by ``leaf(node)`` and reconstructing the structural containers
     (:func:`map_structural_children`) around the transformed children.
 
@@ -403,7 +401,7 @@ def map_fragment(
     :param fragment: Root of the tree to transform.
     :param leaf: Transform applied to each leaf fragment (identity for unaffected leaves).
     :return: The rebuilt tree.
-    :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+    :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
     """
     rebuilt = map_structural_children(fragment, lambda f: map_fragment(f, leaf))
     return rebuilt if rebuilt is not None else leaf(fragment)
@@ -412,15 +410,15 @@ def map_fragment(
 # ── Fragment flattening ────────────────────────────────────────────────────────
 
 
-def flatten_fragment_to_plain_text(fragment: VerbFragment) -> str:
+def flatten_fragment_to_plain_text(fragment: Fragment) -> str:
     """
-    Flatten a :class:`VerbFragment` tree to a plain string (no colour markup).
+    Flatten a :class:`Fragment` tree to a plain string (no colour markup).
 
     Used for internal comparisons, logging, and plain-text verbalization output.
     Expressed as a :func:`fold_fragment` over the plain-text algebra.
 
     :param fragment: Root of the fragment tree to flatten.
-    :type fragment: VerbFragment
+    :type fragment: Fragment
     :return: Plain-text representation with spaces between tokens.
     :rtype: str
     """
@@ -444,16 +442,16 @@ def flatten_fragment_to_plain_text(fragment: VerbFragment) -> str:
 # ── Fragment joining utilities ─────────────────────────────────────────────────
 
 
-def oxford_and(parts: list[VerbFragment], conjunction: VerbFragment) -> VerbFragment:
+def oxford_and(parts: list[Fragment], conjunction: Fragment) -> Fragment:
     """
     Join *parts* with Oxford-comma style: ``f1, f2, conj f3``.
 
     :param parts: Fragments to join.
-    :type parts: list[VerbFragment]
+    :type parts: list[Fragment]
     :param conjunction: Conjunction fragment (e.g. *"and"*, *"or"*).
-    :type conjunction: VerbFragment
+    :type conjunction: Fragment
     :return: A single fragment representing the joined sequence.
-    :rtype: VerbFragment
+    :rtype: Fragment
     """
     if not parts:
         return WordFragment(text="")
@@ -461,7 +459,7 @@ def oxford_and(parts: list[VerbFragment], conjunction: VerbFragment) -> VerbFrag
         return parts[0]
     head = parts[:-1]
     tail = parts[-1]
-    result: list[VerbFragment] = []
+    result: list[Fragment] = []
     for fragment in head:
         result.append(fragment)
         result.append(WordFragment(text=", "))

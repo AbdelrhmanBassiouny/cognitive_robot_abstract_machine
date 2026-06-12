@@ -19,7 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from typing_extensions import Optional, Sequence
 
-from krrood.entity_query_language.verbalization.fragments.base import VerbFragment
+from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.fragments.features import Number
 from krrood.entity_query_language.verbalization.grammar.phrase_rule import (
     Ctx,
@@ -47,7 +47,7 @@ def fold(
     context: "VerbalizationContext",
     rules: Optional[Sequence[PhraseRule]] = None,
     number: Number = Number.SINGULAR,
-) -> VerbFragment:
+) -> Fragment:
     """
     Verbalize *node* by dispatching to the matching grammar rule and recursing.
 
@@ -65,7 +65,7 @@ def fold(
     :param context: The verbalization context (services + render config).
     :param rules: Grammar to dispatch over; defaults to ``RULES``.
     :return: The fragment for *node*.
-    :rtype: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+    :rtype: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
     :raises UnverbalizableExpressionError: when no grammar rule covers *node*.
     """
     rules = RULES if rules is None else rules

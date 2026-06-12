@@ -24,7 +24,7 @@ from typing_extensions import Any
 from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.grammar.aggregation_kinds import (
@@ -53,11 +53,11 @@ from krrood.entity_query_language.verbalization.vocabulary.words import Number
 class ConditionVerbalizer(Assembler[Any, None]):
     """Render a condition in a requested surface form (predicate / modifier / …)."""
 
-    def realize(self, node, plan: None = None) -> VerbFragment:
+    def realize(self, node, plan: None = None) -> Fragment:
         """Default form — a standalone predicate (the :class:`Assembler` entry point)."""
         return self.predicate(node)
 
-    def predicate(self, comparator, *, negated: bool = False) -> VerbFragment:
+    def predicate(self, comparator, *, negated: bool = False) -> Fragment:
         """*"<left> <operator> <right>"* — the standalone comparator form."""
         return PhraseFragment(
             parts=[
@@ -67,7 +67,7 @@ class ConditionVerbalizer(Assembler[Any, None]):
             ]
         )
 
-    def attribute_modifier(self, comparator, subject) -> VerbFragment:
+    def attribute_modifier(self, comparator, subject) -> Fragment:
         """Bare *"<attr> <operator> <value>"* on *subject*'s single-hop attribute — the
         grouped predicate a *"whose …"* envelope wraps."""
         attr = single_hop_attr(comparator.left, subject)
@@ -79,7 +79,7 @@ class ConditionVerbalizer(Assembler[Any, None]):
             ]
         )
 
-    def superlative_modifier(self, comparator, subject) -> VerbFragment:
+    def superlative_modifier(self, comparator, subject) -> Fragment:
         """*"with the maximum <leaf>"* / *"with the minimum <leaf>"* — a subject restriction
         ``subject.<chain> == max/min(over all <Type>.<chain>)`` folded to its superlative
         (recognised by :func:`superlative_aggregation`)."""
@@ -94,7 +94,7 @@ class ConditionVerbalizer(Assembler[Any, None]):
             ]
         )
 
-    def range_modifier(self, rangefold, subject) -> VerbFragment:
+    def range_modifier(self, rangefold, subject) -> Fragment:
         """*"<attr> is between lo and hi"* on *subject*'s single-hop attribute."""
         attr = single_hop_attr(rangefold.chain_expression, subject)
         left = RoleFragment.for_attribute(attr._owner_class_, attr._attribute_name_)
@@ -106,8 +106,8 @@ class ConditionVerbalizer(Assembler[Any, None]):
         )
 
     def whose_attribute(
-        self, attr_name: str, number: Number, value: VerbFragment
-    ) -> VerbFragment:
+        self, attr_name: str, number: Number, value: Fragment
+    ) -> Fragment:
         """Full *"whose <attr> <copula> <value>"* modifier, agreeing with *number*.
 
         The *value* fragment is supplied by the caller (it may itself be number-folded);
@@ -122,6 +122,6 @@ class ConditionVerbalizer(Assembler[Any, None]):
             ]
         )
 
-    def _attr_noun(self, name: str, number: Number) -> VerbFragment:
+    def _attr_noun(self, name: str, number: Number) -> Fragment:
         """A role-tagged attribute noun tagged with *number* (the pass inflects it)."""
         return RoleFragment(text=name, role=SemanticRole.ATTRIBUTE, number=number)

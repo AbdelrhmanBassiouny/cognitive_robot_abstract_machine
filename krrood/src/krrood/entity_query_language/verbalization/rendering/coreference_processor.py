@@ -30,7 +30,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PossessiveChain,
     SubjectScope,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
@@ -48,9 +48,9 @@ class CoreferenceProcessor:
 
     def process(
         self,
-        fragment: VerbFragment,
+        fragment: Fragment,
         already_seen: Optional[Iterable[uuid.UUID]] = None,
-    ) -> VerbFragment:
+    ) -> Fragment:
         """
         Return a new tree with referring NPs resolved and ``SubjectScope`` markers stripped.
 
@@ -63,7 +63,7 @@ class CoreferenceProcessor:
         self._subject_stack: List[Tuple[Optional[uuid.UUID], Number]] = []
         return self._walk(fragment)
 
-    def _walk(self, fragment: VerbFragment) -> VerbFragment:
+    def _walk(self, fragment: Fragment) -> Fragment:
         """Document-order rebuild, threading the accumulating discourse state.
 
         Only the two coreference-relevant nodes are handled here — a ``SubjectScope`` pushes its
@@ -89,7 +89,7 @@ class CoreferenceProcessor:
                 rebuilt = map_structural_children(fragment, self._walk)
                 return rebuilt if rebuilt is not None else fragment
 
-    def _possessive_chain(self, pc: PossessiveChain) -> VerbFragment:
+    def _possessive_chain(self, pc: PossessiveChain) -> Fragment:
         """Render a chain as *"its/their …"* when its root is the current subject (the pronoun
         agreeing with the subject's number — *"their"* for a plural population), else as the
         possessive *"the … of <root>"* (resolving the root NP for first/subsequent mention).
@@ -114,7 +114,7 @@ class CoreferenceProcessor:
             and pc.root_fragment.definiteness is Definiteness.BARE
         )
 
-    def _noun_phrase(self, np: NounPhrase) -> VerbFragment:
+    def _noun_phrase(self, np: NounPhrase) -> Fragment:
         """Resolve a referring NP (first / repeat) in document order; recurse otherwise.
 
         Every mention (singular or plural) marks its referent introduced.  Only a **repeat

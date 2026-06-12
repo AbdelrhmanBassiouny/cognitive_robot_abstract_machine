@@ -30,7 +30,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
@@ -72,7 +72,7 @@ class _Task:
 # ── Fragment helpers ───────────────────────────────────────────────────────────
 
 
-def _collect_roles(fragment: VerbFragment) -> list[SemanticRole]:
+def _collect_roles(fragment: Fragment) -> list[SemanticRole]:
     """Recursively collect all SemanticRole values from a fragment tree."""
     match fragment:
         case RoleFragment(role=role):
@@ -86,7 +86,7 @@ def _collect_roles(fragment: VerbFragment) -> list[SemanticRole]:
             return []
 
 
-def _collect_role_texts(fragment: VerbFragment, role: SemanticRole) -> list[str]:
+def _collect_role_texts(fragment: Fragment, role: SemanticRole) -> list[str]:
     """Return all text values in the tree that carry *role*."""
     match fragment:
         case RoleFragment(text=text, role=r) if r == role:
@@ -589,9 +589,7 @@ def test_hierarchical_plain_rule_structure(doors_and_drawers_world):
 # ── Rule fragment structure tests ─────────────────────────────────────────────
 
 
-def _find_block_with_keyword(
-    fragment: VerbFragment, keyword: str
-) -> BlockFragment | None:
+def _find_block_with_keyword(fragment: Fragment, keyword: str) -> BlockFragment | None:
     """Return the first BlockFragment whose header text contains keyword."""
     if not isinstance(fragment, BlockFragment):
         return None
@@ -606,7 +604,7 @@ def _find_block_with_keyword(
     return None
 
 
-def _drawer_rule_fragment(doors_and_drawers_world) -> VerbFragment:
+def _drawer_rule_fragment(doors_and_drawers_world) -> Fragment:
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     pc = variable(PrismaticConnection, world.connections)

@@ -33,7 +33,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
     SubjectScope,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Definiteness
 from krrood.entity_query_language.verbalization.grammar.assembly.aggregation_value import (
@@ -73,7 +73,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     # ── entry points ─────────────────────────────────────────────────────────
 
-    def realize(self, node, plan: QueryPlan) -> VerbFragment:
+    def realize(self, node, plan: QueryPlan) -> Fragment:
         """Top-level imperative form *"Find X such that …"*, dispatched on the selection shape
         (a closed enum → handler table; ``SET_OF`` enters via :meth:`assemble_set_of`).
 
@@ -87,14 +87,14 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         }
         return handlers[plan.kind](node, plan)
 
-    def _realize_entity_selector(self, node, plan: QueryPlan) -> VerbFragment:
+    def _realize_entity_selector(self, node, plan: QueryPlan) -> Fragment:
         """*"Find <a Robot where …> such that …"* — the selected variable is itself an Entity."""
         selection = self._as_noun(node.selected_variable)
         return self._query_body(
             node, plan, selection, where_item=self._where_clause(plan)
         )
 
-    def _realize_empty(self, node, plan: QueryPlan) -> VerbFragment:
+    def _realize_empty(self, node, plan: QueryPlan) -> Fragment:
         """*"Find entities such that …"* — no selected variable (the fallback form)."""
         return self._query_body(
             node,
@@ -103,14 +103,14 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             where_item=self._where_clause(plan),
         )
 
-    def assemble_nested(self, node) -> VerbFragment:
+    def assemble_nested(self, node) -> Fragment:
         """Noun-phrase form for a nested Entity (never emits *"Find …"*)."""
         plan = self.plan(node)
         if plan.is_aggregation_subquery:
             return AggregationValueAssembler(self.ctx).realize(node, plan)
         return self._as_noun(node)
 
-    def assemble_set_of(self, node) -> VerbFragment:
+    def assemble_set_of(self, node) -> Fragment:
         """*"Find sets of (v1, v2, …) such that …"* for a SetOf query (in the query scope,
         pushed by ``SetOfRule.enters_query_scope``)."""
         plan = self.plan(node)
@@ -138,7 +138,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     # ── subject selection ──────────────────────────────────────────────────────
 
-    def _assemble_subject(self, node, plan: QueryPlan) -> VerbFragment:
+    def _assemble_subject(self, node, plan: QueryPlan) -> Fragment:
         """*"Find a Robot whose battery is high, such that … [clauses]"* — the plain-variable
         selection with its WHERE woven in."""
         var = node.selected_variable
@@ -148,7 +148,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         # Mark the subject region so the coreference pass pronominalises chains rooted at it.
         return SubjectScope(subject_id=_subject_id(var), child=body)
 
-    def _build_selection(self, node, var, plan: QueryPlan) -> VerbFragment:
+    def _build_selection(self, node, var, plan: QueryPlan) -> Fragment:
         """*"the unique Robot"* (``eql.the``) or *"a Robot"* — the selection's referring NP."""
         if plan.is_the:
             # "the unique <type>" first mention; the coreference pass reduces a repeat to
@@ -162,8 +162,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         return self.ctx.child(var)
 
     def _apply_subject_restrictions(
-        self, plan: QueryPlan, selected: VerbFragment
-    ) -> Tuple[VerbFragment, Optional[VerbFragment]]:
+        self, plan: QueryPlan, selected: Fragment
+    ) -> Tuple[Fragment, Optional[Fragment]]:
         """Weave the WHERE into the selection: *"<selected> whose <grouped>"* plus a separate
         *"such that <residual>"* clause item (``None`` when absent)."""
         restriction = plan.subject_restriction
@@ -182,7 +182,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     # ── noun forms ───────────────────────────────────────────────────────────
 
-    def _as_noun(self, entity) -> VerbFragment:
+    def _as_noun(self, entity) -> Fragment:
         """Standalone-noun form: *"a Robot where …"* (for nested Entity selectors).
 
         A referring NP — *"a/the unique <type>"* first mention with the restrictions as
@@ -193,7 +193,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         var = entity.selected_variable
         definiteness = Definiteness.UNIQUE if plan.is_the else Definiteness.INDEFINITE
 
-        modifiers: List[VerbFragment] = []
+        modifiers: List[Fragment] = []
         if plan.subject_restriction is not None:
             r = RestrictionAssembler(self.ctx).render(
                 plan.subject_restriction, plan.subject
@@ -222,10 +222,10 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         self,
         node,
         plan: QueryPlan,
-        selection: VerbFragment,
-        where_item: Optional[VerbFragment],
-        find_header: Optional[VerbFragment] = None,
-    ) -> VerbFragment:
+        selection: Fragment,
+        where_item: Optional[Fragment],
+        find_header: Optional[Fragment] = None,
+    ) -> Fragment:
         """*"Find <selection>"* + the present clauses (*such that … grouped by … having …
         ordered by …*) as block items — absent clauses (``None``) are simply skipped."""
         if find_header is None:
@@ -238,7 +238,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         ]
         return BlockFragment(header=header, items=clauses)
 
-    def _trailing_clauses(self, node) -> List[Optional[VerbFragment]]:
+    def _trailing_clauses(self, node) -> List[Optional[Fragment]]:
         """The post-selection clauses, in canonical reading order, each rendered by its
         own component (``None`` when absent)."""
         return [
@@ -247,7 +247,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             OrderedByAssembler(self.ctx).clause(node),
         ]
 
-    def _where_clause(self, plan: QueryPlan) -> Optional[VerbFragment]:
+    def _where_clause(self, plan: QueryPlan) -> Optional[Fragment]:
         """*"such that <condition>"*, or ``None`` when the query has no WHERE."""
         if plan.where_condition is None:
             return None
@@ -258,7 +258,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             ]
         )
 
-    def inline_noun(self, entity) -> VerbFragment:
+    def inline_noun(self, entity) -> Fragment:
         """
         Inline-noun form used as a chain root inside an InstantiatedVariable.
 

@@ -25,7 +25,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_and,
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.fragments.source_ref import SourceRef
@@ -53,7 +53,7 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
 
     planner = InstantiatedPlanner
 
-    def realize(self, node, plan: InstantiatedPlan) -> VerbFragment:
+    def realize(self, node, plan: InstantiatedPlan) -> Fragment:
         """*"a TypeName, where the <field> of the TypeName is <value> …, such that <deferred>"*.
 
         A referring NP (referent_id below) — the CoreferenceProcessor reduces a repeat
@@ -71,9 +71,9 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
 
     def _bindings(
         self, plan: InstantiatedPlan, type_cls
-    ) -> Tuple[List[VerbFragment], Dict]:
+    ) -> Tuple[List[Fragment], Dict]:
         """Build every binding fragment and collect overrides (registered together after)."""
-        binding_frags: List[VerbFragment] = []
+        binding_frags: List[Fragment] = []
         overrides: Dict = {}
         for binding in plan.bindings:
             field_ref = self._field_ref(binding.field_name, plan.type_name, type_cls)
@@ -85,7 +85,7 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
             overrides[binding.value._id_] = field_ref
         return binding_frags, overrides
 
-    def _field_ref(self, field_name: str, type_name: str, type_cls) -> VerbFragment:
+    def _field_ref(self, field_name: str, type_name: str, type_cls) -> Fragment:
         """*"the <field> of the <Type>"* — a single-hop possessive, built by the shared
         :func:`~krrood.entity_query_language.verbalization.microplanning.possessive.possessive_path`
         so the genitive structure lives in exactly one place."""
@@ -105,11 +105,11 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         )
         return possessive_path([(field_name, None)], type_root)
 
-    def _copula(self, binding: BindingPlan) -> VerbFragment:
+    def _copula(self, binding: BindingPlan) -> Fragment:
         """*"is"* / *"are"* agreeing with the binding's plurality (inflected by morphology)."""
         return Copulas.for_number(Number.of(binding.is_plural))
 
-    def _value(self, binding: BindingPlan) -> VerbFragment:
+    def _value(self, binding: BindingPlan) -> Fragment:
         """The binding's value expression, rendered in the binding's number."""
         return self.ctx.child(binding.value, number=Number.of(binding.is_plural))
 
@@ -119,12 +119,12 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         self,
         node,
         type_name: str,
-        binding_frags: List[VerbFragment],
-        constraint_frags: List[VerbFragment],
-    ) -> VerbFragment:
+        binding_frags: List[Fragment],
+        constraint_frags: List[Fragment],
+    ) -> Fragment:
         """*"a <type>, where <bindings>, such that <constraints>"* — the referring NP with
         its appositive clauses as droppable modifiers."""
-        modifiers: List[VerbFragment] = []
+        modifiers: List[Fragment] = []
         if binding_frags:
             joined = oxford_and(binding_frags, Conjunctions.AND.as_fragment())
             modifiers.append(

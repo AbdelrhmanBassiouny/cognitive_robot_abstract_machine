@@ -23,7 +23,7 @@ from typing_extensions import Dict, List, Optional
 from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_and,
     PhraseFragment,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.grammar.phrase_rule import Ctx
 from krrood.entity_query_language.verbalization.grammar.planning.query import (
@@ -44,13 +44,13 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 class RestrictionFragments:
     """The rendered pieces of a subject restriction, each placed by the caller."""
 
-    superlatives: List[VerbFragment] = field(default_factory=list)
+    superlatives: List[Fragment] = field(default_factory=list)
     """Selection PP modifiers, e.g. *"with the maximum amount"* (attach right after the noun)."""
 
-    whose: Optional[VerbFragment] = None
+    whose: Optional[Fragment] = None
     """The appositive *"whose <grouped>"* modifier, or ``None``."""
 
-    residual: Optional[VerbFragment] = None
+    residual: Optional[Fragment] = None
     """The residual condition for a *"such that …"* / *"where …"* clause, or ``None``."""
 
 
@@ -64,7 +64,7 @@ class RestrictionAssembler:
     def render(self, restriction: RestrictionPlan, subject) -> RestrictionFragments:
         """Render each matched conjunct via its rule and place it by the rule's
         :class:`Placement`; then build the residual condition."""
-        by_placement: Dict[Placement, List[VerbFragment]] = defaultdict(list)
+        by_placement: Dict[Placement, List[Fragment]] = defaultdict(list)
         for rule, item in restriction.matched:
             by_placement[rule.placement].append(rule.render(item, subject, self.ctx))
 
@@ -95,7 +95,7 @@ class RestrictionAssembler:
             superlatives=superlatives, whose=whose, residual=residual
         )
 
-    def _residual(self, items) -> VerbFragment:
+    def _residual(self, items) -> Fragment:
         """The residual conjuncts (raw expressions / folded ranges) joined into one condition."""
         parts: list = []
         for item in items:

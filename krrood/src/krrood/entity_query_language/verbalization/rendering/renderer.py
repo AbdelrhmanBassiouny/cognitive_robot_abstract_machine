@@ -1,5 +1,5 @@
 """
-Fragment renderers — convert a :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+Fragment renderers — convert a :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment`
 tree into a string.
 
 * :class:`ParagraphRenderer` — flattens everything into one prose line.
@@ -21,7 +21,7 @@ from typing_extensions import Optional
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     fold_fragment,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.rendering.formatter import (
     BulletStyle,
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 class FragmentRenderer(ABC):
     """
     Abstract base that converts a
-    :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+    :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment`
     tree into a string.
 
     Subclasses differ in how they handle
@@ -59,13 +59,13 @@ class FragmentRenderer(ABC):
     """Optional resolver that maps SourceRef instances to URL strings."""
 
     @abstractmethod
-    def render(self, fragment: VerbFragment) -> str:
+    def render(self, fragment: Fragment) -> str:
         """
-        Render a :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+        Render a :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment`
         tree into a string.
 
         :param fragment: Root of the fragment tree to render.
-        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         :return: Formatted string representation.
         :rtype: str
         """
@@ -106,12 +106,12 @@ class ParagraphRenderer(FragmentRenderer):
     and :meth:`~krrood.entity_query_language.verbalization.pipeline.VerbalizationPipeline.plain`.
     """
 
-    def render(self, fragment: VerbFragment) -> str:
+    def render(self, fragment: Fragment) -> str:
         """
         Render *fragment* and all descendants into a flat prose string.
 
         :param fragment: Root of the fragment tree.
-        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         :return: Plain or coloured prose string (no newlines or bullets).
         :rtype: str
         """
@@ -160,12 +160,12 @@ class HierarchicalRenderer(FragmentRenderer):
     bullet: BulletStyle = field(default=BulletStyle.DASH)
     """Bullet character prepended to each list item."""
 
-    def render(self, fragment: VerbFragment, depth: int = 0) -> str:
+    def render(self, fragment: Fragment, depth: int = 0) -> str:
         """
         Render *fragment* with indented bullet structure.
 
         :param fragment: Root of the fragment tree.
-        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         :param depth: Current indentation depth (incremented for each BlockFragment level).
         :type depth: int
         :return: Multi-line string with bullets and indentation.
@@ -188,7 +188,7 @@ class HierarchicalRenderer(FragmentRenderer):
         """The indentation string, with spaces replaced by the formatter's space character."""
         return self.indent_size.value.replace(" ", self._formatter.space)
 
-    def _render_item(self, fragment: VerbFragment, depth: int) -> str:
+    def _render_item(self, fragment: Fragment, depth: int) -> str:
         """Render one item, prepending the bullet at its indentation level."""
         match fragment:
             case BlockFragment():
@@ -201,7 +201,7 @@ class HierarchicalRenderer(FragmentRenderer):
                 )
                 return prefix + self._inline(fragment)
 
-    def _inline(self, fragment: VerbFragment) -> str:
+    def _inline(self, fragment: Fragment) -> str:
         """Render a non-block fragment as a flat inline string.
 
         Expressed as a :func:`~krrood.entity_query_language.verbalization.fragments.base.fold_fragment`;

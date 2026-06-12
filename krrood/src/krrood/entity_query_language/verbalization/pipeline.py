@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 from typing_extensions import Optional
 
 from krrood.entity_query_language.verbalization.context import VerbalizationContext
-from krrood.entity_query_language.verbalization.fragments.base import VerbFragment
+from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.rendering.formatter import (
     ANSIFormatter,
     HTMLFormatter,
@@ -143,15 +143,15 @@ class VerbalizationPipeline:
         """Return ``True`` when this pipeline's renderer uses :class:`HTMLFormatter`."""
         return isinstance(getattr(self.renderer, "_formatter", None), HTMLFormatter)
 
-    def verbalize_fragment(self, fragment: VerbFragment) -> str:
+    def verbalize_fragment(self, fragment: Fragment) -> str:
         """
-        Render a pre-built :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+        Render a pre-built :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment`
         using this pipeline's renderer.
 
         HTML pipelines wrap the result in a dark ``<div>`` suitable for Jupyter output.
 
         :param fragment: Root of the fragment tree to render.
-        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         :return: Formatted string.
         :rtype: str
         """
@@ -175,13 +175,13 @@ class VerbalizationPipeline:
         """
         self.display_fragment(self._verbalizer.build(expression))
 
-    def display_fragment(self, fragment: VerbFragment) -> None:
+    def display_fragment(self, fragment: Fragment) -> None:
         """
-        Display a pre-built :class:`~krrood.entity_query_language.verbalization.fragments.base.VerbFragment`
+        Display a pre-built :class:`~krrood.entity_query_language.verbalization.fragments.base.Fragment`
         — same environment routing as :meth:`display`.
 
         :param fragment: Root of the fragment tree to display.
-        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.VerbFragment
+        :type fragment: ~krrood.entity_query_language.verbalization.fragments.base.Fragment
         """
         raw_html = self.renderer.render(fragment)
         if _is_ipython():

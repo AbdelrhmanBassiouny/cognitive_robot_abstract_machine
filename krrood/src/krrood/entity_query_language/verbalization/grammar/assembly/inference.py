@@ -28,7 +28,7 @@ from krrood.entity_query_language.verbalization.chain_utils import (
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     PhraseFragment,
-    VerbFragment,
+    Fragment,
 )
 from krrood.entity_query_language.verbalization.grammar.assembly.base import Assembler
 from krrood.entity_query_language.verbalization.grammar.conditions.verbalizer import (
@@ -57,7 +57,7 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
 
     planner = InferencePlanner
 
-    def realize(self, node, plan: RuleStructure) -> VerbFragment:
+    def realize(self, node, plan: RuleStructure) -> Fragment:
         """*"If <antecedents…>, then <consequent…>"* — the two-block IF/THEN form."""
         return BlockFragment(
             header=None,
@@ -78,13 +78,13 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
 
     # ── IF clause ───────────────────────────────────────────────────────────────
 
-    def _if_items(self, s: RuleStructure) -> List[VerbFragment]:
+    def _if_items(self, s: RuleStructure) -> List[Fragment]:
         """One item per antecedent — *"there's a <Type> [whose …]"* — plus any unmatched
         conditions; *"true"* when there are none."""
         for antecedent in s.secondary_antecedents:
             self._register_antecedent(antecedent)
 
-        items: List[VerbFragment] = []
+        items: List[Fragment] = []
         for antecedent in s.primary_antecedents:
             intro = self._antecedent_intro(antecedent)
             self._register_antecedent(antecedent)
@@ -98,7 +98,7 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
 
         return items or [Keywords.TRUE.as_fragment()]
 
-    def _antecedent_intro(self, antecedent: AntecedentInfo) -> VerbFragment:
+    def _antecedent_intro(self, antecedent: AntecedentInfo) -> Fragment:
         """*"there's a <Type>"* / *"there are <Types>"* — the antecedent's existential intro.
 
         Passes the antecedent's referent so the coreference pass marks it introduced — a later
@@ -132,13 +132,13 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
 
     def _condition_frags(
         self, conditions: List[ConditionPlan], antecedent: AntecedentInfo
-    ) -> List[VerbFragment]:
+    ) -> List[Fragment]:
         """One fragment per antecedent condition (see :meth:`_condition_frag`)."""
         return [self._condition_frag(pc, antecedent) for pc in conditions]
 
     def _condition_frag(
         self, pc: ConditionPlan, antecedent: AntecedentInfo
-    ) -> VerbFragment:
+    ) -> Fragment:
         """Render one condition: a *"whose <attr> is …"* modifier when foldable, else recurse."""
         if pc.whose_attr is None:
             return self.ctx.child(pc.expression)
@@ -148,30 +148,30 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
             pc.whose_attr, number, value
         )
 
-    def _value(self, expression, number: Number) -> VerbFragment:
+    def _value(self, expression, number: Number) -> Fragment:
         """Render a value expression agreeing with *number* (plural folds the chain)."""
         return self.ctx.child(expression, number=number)
 
     # ── THEN clause ───────────────────────────────────────────────────────────
 
-    def _then_items(self, s: RuleStructure) -> List[VerbFragment]:
+    def _then_items(self, s: RuleStructure) -> List[Fragment]:
         """*"there's a <Consequent> [whose <field> is <value> …]"* — the THEN-clause block."""
-        intro: VerbFragment = ExistentialPhrase.for_number(
-            Number.SINGULAR
-        ).build_phrase(s.consequent_type)
+        intro: Fragment = ExistentialPhrase.for_number(Number.SINGULAR).build_phrase(
+            s.consequent_type
+        )
         binding_frags = [self._binding_frag(b) for b in s.consequent_bindings]
         if not binding_frags:
             return [intro]
         return [BlockFragment(header=intro, items=binding_frags)]
 
-    def _binding_frag(self, binding: ConsequentBinding) -> VerbFragment:
+    def _binding_frag(self, binding: ConsequentBinding) -> Fragment:
         """*"whose <field> is/are <value>"* — one consequent field binding."""
         number = Number.of(binding.is_plural_field)
         return ConditionVerbalizer(self.ctx).whose_attribute(
             binding.field_name, number, self._binding_value(binding)
         )
 
-    def _binding_value(self, binding: ConsequentBinding) -> VerbFragment:
+    def _binding_value(self, binding: ConsequentBinding) -> Fragment:
         """The binding's value: *"the <plural chain>"* (aggregated), bare plural, the group-key
         *"common …"* phrase, or the plain rendering."""
         if (
@@ -190,7 +190,7 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
             return self._group_key_value(binding.value_expression)
         return self.ctx.child(binding.value_expression)
 
-    def _group_key_value(self, expression) -> VerbFragment:
+    def _group_key_value(self, expression) -> Fragment:
         """*"the common <field> of the <Roots>"* — a binding that refers to a GROUP BY key."""
         chain, current = walk_chain(expression)
         if not chain or not isinstance(current, Variable):

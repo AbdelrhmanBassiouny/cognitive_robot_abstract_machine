@@ -44,7 +44,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_and,
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -217,7 +217,7 @@ class RangeConjunctionRule(PhraseRule):
         return has_pair(flatten_operands(node, AND))
 
     def build(self, node, ctx: Ctx):
-        parts: List[VerbFragment] = []
+        parts: List[Fragment] = []
         for item in fold_range_pairs(flatten_operands(node, AND)):
             if isinstance(item, RangeFold):
                 parts.append(

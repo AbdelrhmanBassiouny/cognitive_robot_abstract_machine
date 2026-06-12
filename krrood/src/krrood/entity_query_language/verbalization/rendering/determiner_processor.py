@@ -39,7 +39,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PhraseFragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -52,15 +52,15 @@ from krrood.entity_query_language.verbalization.vocabulary.english import Articl
 class DeterminerProcessor:
     """Lower every :class:`NounPhrase` to a determiner-bearing :class:`PhraseFragment`."""
 
-    def process(self, fragment: VerbFragment) -> VerbFragment:
+    def process(self, fragment: Fragment) -> Fragment:
         """Return a new tree with every ``NounPhrase`` lowered (idempotent on NP-free trees)."""
         return map_fragment(fragment, self._lower_if_noun_phrase)
 
-    def _lower_if_noun_phrase(self, leaf: VerbFragment) -> VerbFragment:
+    def _lower_if_noun_phrase(self, leaf: Fragment) -> Fragment:
         """``map_fragment`` leaf hook — a ``NounPhrase`` is a leaf to be lowered, else identity."""
         return self._lower_noun_phrase(leaf) if isinstance(leaf, NounPhrase) else leaf
 
-    def _lower_noun_phrase(self, np: NounPhrase) -> VerbFragment:
+    def _lower_noun_phrase(self, np: NounPhrase) -> Fragment:
         head = self._tag_number(self.process(np.head), np.number)
         determiner = self._determiner(np.definiteness, np.number, head)
         head_group_parts = [*([determiner] if determiner is not None else []), head]
@@ -77,14 +77,14 @@ class DeterminerProcessor:
         )
 
     @staticmethod
-    def _tag_number(head: VerbFragment, number: Number) -> VerbFragment:
+    def _tag_number(head: Fragment, number: Number) -> Fragment:
         """Tag the head leaf with the phrase's number (the morphology pass inflects it)."""
         if isinstance(head, (WordFragment, RoleFragment)):
             return replace(head, number=number)
         return head
 
     @staticmethod
-    def _determiner(definiteness: Definiteness, number: Number, head: VerbFragment):
+    def _determiner(definiteness: Definiteness, number: Number, head: Fragment):
         """The determiner fragment for *(definiteness, number)*, or ``None`` (bare)."""
         if definiteness is Definiteness.UNIQUE:
             return Articles.THE_UNIQUE.as_fragment()

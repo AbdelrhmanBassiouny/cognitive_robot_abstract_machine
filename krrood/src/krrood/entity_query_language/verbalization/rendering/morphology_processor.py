@@ -25,7 +25,7 @@ from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     map_fragment,
     RoleFragment,
-    VerbFragment,
+    Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Number
@@ -42,12 +42,12 @@ _COPULA_PLURAL = {
 class MorphologyProcessor:
     """Realise grammatical number on every leaf tagged :attr:`Number.PLURAL`."""
 
-    def process(self, fragment: VerbFragment) -> VerbFragment:
+    def process(self, fragment: Fragment) -> Fragment:
         """Return a new tree with all plural-tagged leaves agreed/inflected (idempotent)."""
         return map_fragment(fragment, self._inflect)
 
     @staticmethod
-    def _inflect(leaf: VerbFragment) -> VerbFragment:
+    def _inflect(leaf: Fragment) -> Fragment:
         if not isinstance(leaf, (WordFragment, RoleFragment)):
             return leaf
         if leaf.number is not Number.PLURAL:
