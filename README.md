@@ -98,8 +98,11 @@ const val GETATTR: String = "__getattr__"
 `ROLE_QUALIFIED_NAME` is a fast, precise match. When it doesn't match, the plugin falls back
 to a *structural* check — any base class that defines a `__getattr__` method is treated as a
 role. That fallback is what lets the bundled `sample/roles_demo.py` work without
-configuration. The taker type always comes from the `Role[…]` generic argument, so roles can
-keep their taker in any domain-named field.
+configuration. The taker type is read from **either** the `Role[…]` generic argument **or**
+the field declared with `role_taker_field()` (krrood's own primary signal), so roles can keep
+their taker in any domain-named field, with or without a generic argument. A `Role[T]`
+parameterised by a bounded `TypeVar` (`T = TypeVar("T", bound=Person)`) resolves to the
+bound.
 
 ---
 
@@ -143,7 +146,9 @@ The algorithm (see `RoleMembersProvider.kt`):
 
 1. Skip class objects (`Teacher.x`); only **instances** delegate.
 2. Find the taker(s): scan the role class **and its ancestors** for `Role[X]` base
-   expressions, resolving `X` to a `PyClass`. (handles *direct* + *transitive* roles)
+   expressions *and* for fields declared with `role_taker_field()`, resolving the taker `X`
+   to a `PyClass` (a bounded `TypeVar` resolves to its bound). (handles *direct* +
+   *transitive* roles, with or without a generic argument)
 3. For each taker, walk its **full MRO** — minus `Role`, `object`, `Generic` — collecting
    class-level fields, instance attributes, and methods. (handles *inherited* members)
 4. If a taker is itself a role, recurse into it. (handles *nested* roles)
@@ -194,4 +199,4 @@ then add `bundledPlugin("PythonCore")` to its `intellijPlatform { … }` depende
 
 ## License
 
-Provided as-is, no warranty. Adapt freely.
+MIT.

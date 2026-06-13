@@ -63,19 +63,19 @@ class Department(Role[Teacher]):
 
 def demo() -> None:
     teacher = Teacher(role_taker=Person(id=1, name="Ahmed", age=20), courses=["Math"])
-    print(teacher.name)         # from Person            -> str
-    print(teacher.age)          # from Person            -> int
-    print(teacher.id)           # inherited from Entity  -> int
-    print(teacher.describe())   # inherited method
-    print(teacher.courses)      # the role's own field
+    print(teacher.name)  # from Person            -> str
+    print(teacher.age)  # from Person            -> int
+    print(teacher.id)  # inherited from Entity  -> int
+    print(teacher.describe())  # inherited method
+    print(teacher.courses)  # the role's own field
 
     senior = SeniorTeacher(role_taker=Person(id=2, name="Sara", age=35), tenure_years=8)
-    print(senior.name)          # transitive: resolved through Teacher -> Role[Person]
+    print(senior.name)  # transitive: resolved through Teacher -> Role[Person]
     print(senior.tenure_years)
 
     dept = Department(role_taker=teacher, budget=1_000.0)
-    print(dept.courses)         # nested: Department -> Role[Teacher] (Teacher's own field)
-    print(dept.name)            # nested + delegated: Teacher -> Role[Person] -> Person
+    print(dept.courses)  # nested: Department -> Role[Teacher] (Teacher's own field)
+    print(dept.name)  # nested + delegated: Teacher -> Role[Person] -> Person
 
 
 if __name__ == "__main__":

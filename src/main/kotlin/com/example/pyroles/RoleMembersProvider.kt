@@ -3,10 +3,12 @@ package com.example.pyroles
 import com.intellij.psi.PsiElement
 import com.jetbrains.python.psi.types.PyClassMembersProviderBase
 import com.jetbrains.python.codeInsight.PyCustomMember
+import com.jetbrains.python.psi.PyCallExpression
 import com.jetbrains.python.psi.PyClass
 import com.jetbrains.python.psi.PyExpression
 import com.jetbrains.python.psi.PyReferenceExpression
 import com.jetbrains.python.psi.PySubscriptionExpression
+import com.jetbrains.python.psi.PyTargetExpression
 import com.jetbrains.python.psi.types.PyClassType
 import com.jetbrains.python.psi.types.TypeEvalContext
 
@@ -38,8 +40,9 @@ import com.jetbrains.python.psi.types.TypeEvalContext
  * ```
  *
  * Because the access goes through `__getattr__`, PyCharm's static engine normally sees
- * nothing on `teacher` except its own fields. This provider reads the taker type from the
- * `Role[...]` base's generic argument and injects the taker's members onto the role's *type*.
+ * nothing on `teacher` except its own fields. This provider reads the taker type — from the
+ * `Role[...]` base's generic argument or from the field declared with `role_taker_field()` —
+ * and injects the taker's members onto the role's *type*.
  *
  * ### Why one hook is enough
  * Each injected [PyCustomMember] resolves to the **real** declaration inside the taker
@@ -73,6 +76,17 @@ class RoleMembersProvider : PyClassMembersProviderBase() {
 
         /** Dunder used to detect a delegating base in the structural fallback. */
         const val GETATTR: String = "__getattr__"
+
+        /**
+         * Name of the krrood factory that declares a role's taker field
+         * (`taker: Taker = role_taker_field()`). Its presence on a class attribute is the
+         * second, krrood-native way to discover the taker — independent of the `Role[X]`
+         * generic argument, and matching how `Role.get_role_taker_type` resolves it at runtime.
+         */
+        const val ROLE_TAKER_FIELD_FACTORY: String = "role_taker_field"
+
+        /** The `typing.TypeVar` factory; used to read a `TypeVar(..., bound=...)` annotation. */
+        const val TYPE_VAR: String = "TypeVar"
 
         /** Bases whose members are framework / builtin noise and must not be delegated. */
         val SKIPPED_TAKER_QNAMES: Set<String> = setOf(ROLE_QUALIFIED_NAME, "object", "typing.Generic")
@@ -124,18 +138,28 @@ class RoleMembersProvider : PyClassMembersProviderBase() {
     }
 
     /**
-     * Returns the taker classes of [roleClass]: the `X` in every `Role[X]` declared on the
-     * class itself or anywhere in its ancestry (so a subclass of a role still resolves the
-     * taker declared on its parent).
+     * Returns the taker classes of [roleClass], discovered two complementary ways across the
+     * class itself and its whole ancestry (so a subclass of a role still resolves the taker
+     * declared on its parent):
+     *
+     * 1. the `X` in every `Role[X]` base expression, and
+     * 2. the annotation of every field declared with [ROLE_TAKER_FIELD_FACTORY]
+     *    (`taker: X = role_taker_field()`), krrood's own primary taker signal.
+     *
+     * The field source is consulted only on classes that are themselves roles, and both
+     * sources are de-duplicated (a krrood role usually declares the taker both ways).
      */
     private fun findTakers(roleClass: PyClass, context: TypeEvalContext): List<PyClass> {
-        val takers = ArrayList<PyClass>()
+        val takers = LinkedHashSet<PyClass>()
         for (cls in selfAndAncestors(roleClass, context)) {
             for (superExpr in cls.superClassExpressions) {
                 extractTaker(superExpr, context)?.let(takers::add)
             }
+            if (isRoleBase(cls, context)) {
+                extractTakerFromField(cls, context)?.let(takers::add)
+            }
         }
-        return takers
+        return takers.toList()
     }
 
     /** If [superExpr] is a `Role[X]` base expression, resolves and returns `X`. */
@@ -144,6 +168,26 @@ class RoleMembersProvider : PyClassMembersProviderBase() {
         val base = resolveClass(subscription.operand, context) ?: return null
         if (!isRoleBase(base, context)) return null
         return resolveClass(subscription.indexExpression, context)
+    }
+
+    /**
+     * Resolves the taker from a `taker: X = role_taker_field()` declaration on [cls], if any:
+     * the first class attribute whose assigned value calls [ROLE_TAKER_FIELD_FACTORY], read
+     * from that attribute's type annotation `X`.
+     */
+    private fun extractTakerFromField(cls: PyClass, context: TypeEvalContext): PyClass? {
+        for (attribute in cls.classAttributes) {
+            if (!isRoleTakerField(attribute)) continue
+            val annotation = attribute.annotation?.value ?: continue
+            resolveClass(annotation, context)?.let { return it }
+        }
+        return null
+    }
+
+    /** True when [attribute] is assigned a `role_taker_field(...)` call. */
+    private fun isRoleTakerField(attribute: PyTargetExpression): Boolean {
+        val call = attribute.findAssignedValue() as? PyCallExpression ?: return false
+        return (call.callee as? PyReferenceExpression)?.referencedName == ROLE_TAKER_FIELD_FACTORY
     }
 
     /**
@@ -163,16 +207,33 @@ class RoleMembersProvider : PyClassMembersProviderBase() {
     }
 
     /**
-     * Best-effort resolution of a type expression (a bare class name, or an alias) to a
-     * [PyClass]. Tries reference resolution first, then evaluates the expression's type.
+     * Best-effort resolution of a type expression (a bare class name, an alias, or a bounded
+     * `TypeVar`) to a [PyClass]. Tries reference resolution first — falling back to a
+     * `TypeVar`'s bound when the reference is a type variable rather than a class — then
+     * evaluates the expression's type.
      */
     private fun resolveClass(expr: PyExpression?, context: TypeEvalContext): PyClass? {
         if (expr == null) return null
         if (expr is PyReferenceExpression) {
-            (expr.reference.resolve() as? PyClass)?.let { return it }
+            val resolved = expr.reference.resolve()
+            (resolved as? PyClass)?.let { return it }
+            resolveTypeVarBound(resolved, context)?.let { return it }
         }
         val type = context.getType(expr)
         return if (type is PyClassType && type.isDefinition) type.pyClass else null
+    }
+
+    /**
+     * If [resolved] is a `T = TypeVar("T", bound=X)` target, resolves and returns the bound `X`.
+     * krrood parameterises roles by such bounded type variables (`Role[TPerson]`), so the taker
+     * is the bound rather than the type variable itself.
+     */
+    private fun resolveTypeVarBound(resolved: PsiElement?, context: TypeEvalContext): PyClass? {
+        val target = resolved as? PyTargetExpression ?: return null
+        val call = target.findAssignedValue() as? PyCallExpression ?: return null
+        if ((call.callee as? PyReferenceExpression)?.referencedName != TYPE_VAR) return null
+        val bound = call.getKeywordArgument("bound") ?: return null
+        return resolveClass(bound, context)
     }
 
     /** [cls] followed by its full MRO, excluding `Role`, `object` and `Generic`. */
