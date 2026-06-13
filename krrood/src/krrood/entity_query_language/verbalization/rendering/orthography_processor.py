@@ -9,7 +9,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
-    Glue,
+    Spacing,
     Separator,
 )
 
@@ -18,7 +18,7 @@ class OrthographyProcessor:
     """
     Remove the space adjacent to glued punctuation in every ``PhraseFragment`` (idempotent).
 
-    Rules emit punctuation as ordinary, normally-separated tokens carrying a glue feature (``,``
+    Rules emit punctuation as ordinary, normally-separated tokens carrying a spacing feature (``,``
     / ``)`` hug the preceding token; ``(`` hugs the following one). This pass walks each phrase
     and regroups its parts so a glued token has no adjacent separator, yielding *"(x)"* from
     ``[OPEN_PAREN, x, CLOSE_PAREN]``.
@@ -51,14 +51,14 @@ class OrthographyProcessor:
         # A RIGHT token (e.g. "(") held until its following part arrives, to attach to it.
         pending_right: List[Fragment] = []
         for part in parts:
-            glue = part.glue if isinstance(part, WordFragment) else Glue.NONE
+            spacing = part.spacing if isinstance(part, WordFragment) else Spacing.NONE
             if pending_right:  # attach the held "(" to this part
                 part = self._merge(pending_right + [part])
                 pending_right = []
-            if glue is Glue.RIGHT:
+            if spacing is Spacing.RIGHT:
                 pending_right = [part]
                 continue
-            if glue is Glue.LEFT and out:  # hug the preceding part
+            if spacing is Spacing.LEFT and out:  # hug the preceding part
                 out[-1] = self._merge([out[-1], part])
             else:
                 out.append(part)

@@ -13,7 +13,7 @@ class Separator(StrEnum):
     SPACE = " "
     """A single space between words (the default)."""
     NONE = ""
-    """No separator — parts abut directly (glue / the orthography pass owns the spacing)."""
+    """No separator — parts abut directly (the orthography pass owns the spacing)."""
     COMMA = ", "
     """A comma and space for inline coordinated lists (*"a, b, or c"*) and tuple selections."""
 
@@ -48,7 +48,7 @@ class Definiteness(StrEnum):
     """A uniqueness-quantified first mention — *"the unique Robot"*."""
 
 
-class Glue(StrEnum):
+class Spacing(StrEnum):
     """Orthographic spacing of a token relative to its neighbours."""
 
     NONE = "none"

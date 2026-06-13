@@ -7,7 +7,7 @@ from typing_extensions import Callable, List, Optional, TypeVar
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
-    Glue,
+    Spacing,
     Number,
     Separator,
 )
@@ -57,7 +57,7 @@ class WordFragment(HasText, HasNumber, Fragment):
     grammatical ``number`` for inflection.
     """
 
-    glue: Glue = Glue.NONE
+    spacing: Spacing = Spacing.NONE
     """Orthographic spacing of this token relative to its neighbours."""
 
 

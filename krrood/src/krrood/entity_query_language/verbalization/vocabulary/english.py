@@ -19,7 +19,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
-from krrood.entity_query_language.verbalization.fragments.features import Glue
+from krrood.entity_query_language.verbalization.fragments.features import Spacing
 from krrood.entity_query_language.verbalization.vocabulary.words import (
     AggregationWord,
     ChildForm,
@@ -215,9 +215,9 @@ class Punctuation(VocabEnum):
     """Structural punctuation tokens — role-less, like the brackets around a tuple (*"(v1, v2)"*)
     and the comma in a coordinated list (*"a, b, or c"*)."""
 
-    COMMA = PunctuationWord(",", glue=Glue.LEFT)
-    OPEN_PAREN = PunctuationWord("(", glue=Glue.RIGHT)
-    CLOSE_PAREN = PunctuationWord(")", glue=Glue.LEFT)
+    COMMA = PunctuationWord(",", spacing=Spacing.LEFT)
+    OPEN_PAREN = PunctuationWord("(", spacing=Spacing.RIGHT)
+    CLOSE_PAREN = PunctuationWord(")", spacing=Spacing.LEFT)
 
 
 class Pronouns(VocabEnum):
