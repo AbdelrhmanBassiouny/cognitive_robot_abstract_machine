@@ -13,7 +13,6 @@ from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.chain_utils import (
     build_path_parts,
-    ChainAnalysis,
 )
 from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
@@ -31,6 +30,10 @@ from krrood.entity_query_language.verbalization.grammar.assembly.base import Ass
 from krrood.entity_query_language.verbalization.grammar.assembly.query import (
     QueryAssembler,
 )
+from krrood.entity_query_language.verbalization.grammar.planning.chains import (
+    ChainPlan,
+    ChainPlanner,
+)
 from krrood.entity_query_language.verbalization.microplanning.possessive import (
     possessive_path,
 )
@@ -44,70 +47,84 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 )
 
 
-class ChainAssembler(Assembler[MappedVariable, None]):
+class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
     """Realise a ``MappedVariable`` chain (possessive / predicative / pronominal forms).
 
-    Realisation-only (``planner = None``): a chain has no content to decide, only a surface form
-    to render — a boolean terminal attribute → predicative *"<navigation> is [not] <attribute>"*;
-    anything else → the possessive path *"the attribute of the Root"*, optionally pronominalised
-    to *"its …"* when the root is the current coreference subject.
+    The :class:`ChainPlanner` decides the chain's content — its root, display path-parts, and
+    whether it ends in a boolean attribute — and this assembler renders that plan: a boolean
+    terminal → predicative *"<navigation> is [not] <attribute>"*; anything else → the possessive
+    path *"the attribute of the Root"*, optionally pronominalised to *"its …"* when the root is the
+    current coreference subject.
 
     Reference: Gatt & Reiter (2009), SimpleNLG — surface realisation.
     """
 
-    def realize(self, node: MappedVariable, plan: None = None) -> Fragment:
+    planner = ChainPlanner
+
+    def realize(self, node: MappedVariable, plan: ChainPlan) -> Fragment:
         """
         :param node: The chain to render.
-        :param plan: Unused (this assembler has no plan).
-        :return: The default chain rendering.
+        :param plan: The chain plan computed for *node*.
+        :return: The default (non-negated) chain rendering.
         """
-        return self.chain(node)
+        return self._render(plan, negated=False)
 
     # ── entry forms ──────────────────────────────────────────────────────────
 
     def chain(self, expression: MappedVariable, *, negated: bool = False) -> Fragment:
         """
-        When a plural is requested and this is a single attribute on a variable, build the bare
-        plural *"attrs of Roots"*; otherwise render singular.
+        Plan *expression* and render it, threading the caller-supplied negation (which comes from a
+        surrounding ``Not``, not from the chain itself).
 
         :param expression: The chain to render.
         :param negated: Whether to negate a boolean-terminal predicative.
         :return: A boolean terminal → predicative *"<navigation> is [not] <attribute>"*; else the
             possessive path *"the attribute of the Root"*.
         """
-        analysis = ChainAnalysis.of(expression)
+        return self._render(self.plan(expression), negated=negated)
+
+    def _render(self, plan: ChainPlan, negated: bool) -> Fragment:
+        """
+        When a plural is requested and this is a single attribute on a variable, build the bare
+        plural *"attrs of Roots"*; otherwise render singular.
+
+        :param plan: The analysed chain.
+        :param negated: Whether to negate a boolean-terminal predicative.
+        :return: A boolean terminal → predicative *"<navigation> is [not] <attribute>"*; else the
+            possessive path *"the attribute of the Root"*.
+        """
         if self.context.number is Number.PLURAL:
-            plural = self._plural_attribute(analysis)
+            plural = self._plural_attribute(plan)
             if plural is not None:
                 return plural
-        if analysis.is_boolean_terminal:
-            return self._boolean_predicative(analysis, negated)
-        root_fragment = self._chain_root(analysis.root)
-        if isinstance(analysis.root, Variable):
+        if plan.is_boolean_terminal:
+            return self._boolean_predicative(plan, negated)
+        root_fragment = self._chain_root(plan.root)
+        if isinstance(plan.root, Variable):
             # Defer the pronominal-vs-possessive choice to the coreference pass: it knows
             # whether the root is the current discourse subject.
             return PossessiveChain(
-                parts=analysis.parts,
+                parts=plan.parts,
                 root_fragment=root_fragment,
-                root_referent_id=analysis.root._id_,
+                root_referent_id=plan.root._id_,
             )
-        return possessive_path(analysis.parts, root_fragment)
+        return possessive_path(plan.parts, root_fragment)
 
-    def _plural_attribute(self, analysis: ChainAnalysis) -> Optional[Fragment]:
+    def _plural_attribute(self, plan: ChainPlan) -> Optional[Fragment]:
         """
-        :param analysis: The analysed chain.
+        :param plan: The analysed chain.
         :return: *"attributes of Roots"* when the chain is a single attribute on a variable, else
             ``None``.
         """
-        root = analysis.root
+        root = plan.root
         if not (
             isinstance(root, Variable)
-            and len(analysis.chain) == 1
-            and isinstance(analysis.chain[0], Attribute)
+            and len(plan.chain) == 1
+            and isinstance(plan.chain[0], Attribute)
         ):
             return None
         numbered = self.context.refer.numbered_label(root)
-        attribute = analysis.chain[0]
+        attribute = plan.chain[0]
         root_noun_phrase = NounPhrase(
             head=RoleFragment.for_variable(numbered.text, root),
             number=Number.SINGULAR if numbered.is_numbered else Number.PLURAL,
@@ -135,16 +152,16 @@ class ChainAssembler(Assembler[MappedVariable, None]):
             return QueryAssembler(self.context).inline_noun(inner)
         return self.context.child(root)
 
-    def _boolean_predicative(self, analysis: ChainAnalysis, negated: bool) -> Fragment:
+    def _boolean_predicative(self, plan: ChainPlan, negated: bool) -> Fragment:
         """
         Chains ending in an integer index get ordinal navigation.
 
-        :param analysis: The analysed chain.
+        :param plan: The analysed chain.
         :param negated: Whether to negate the predicative.
         :return: The predicative *"<navigation> is [not] <attribute>"*.
         """
-        chain = analysis.chain
-        root_fragment = self._chain_root(analysis.root)
+        chain = plan.chain
+        root_fragment = self._chain_root(plan.root)
         navigation_chain = chain[:-1]
 
         if not navigation_chain:

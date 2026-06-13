@@ -22,8 +22,8 @@ class Assembler(ABC, Generic[N, P]):
     Realise an EQL *node* into a fragment, planning it first via the paired planner.
 
     An assembler owns its paired planner: ``assemble`` plans the node, then realises the plan
-    into a fragment. A realisation-only construct (e.g. a chain, which has nothing to decide)
-    sets ``planner = None`` and receives ``plan=None``.
+    into a fragment. A realisation-only construct (e.g. an ORDER BY / HAVING clause, which has
+    nothing to decide) sets ``planner = None`` and receives ``plan=None``.
 
     Reference: Gatt, A. & Reiter, E. (2009), "SimpleNLG: A realisation engine for practical
     applications", ENLG — surface realisation as a dedicated stage.

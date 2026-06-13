@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional
+from typing_extensions import Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import (
@@ -132,37 +132,3 @@ def build_path_parts(chain: list[MappedVariable]) -> list[PathStep]:
             pass
         i += 1
     return parts
-
-
-@dataclass(frozen=True)
-class ChainAnalysis:
-    """
-    A ``MappedVariable`` chain analysed once into the values its rendering needs: the walked
-    chain, its root, the display path-parts, and whether it ends in a boolean attribute.
-    """
-
-    chain: List[MappedVariable]
-    """The access path, root-adjacent first."""
-
-    root: SymbolicExpression
-    """The chain root (first non-``MappedVariable`` node)."""
-
-    parts: List[PathStep]
-    """The display path-parts."""
-
-    is_boolean_terminal: bool
-    """``True`` when the chain ends in a ``bool``-typed attribute (predicative form)."""
-
-    @classmethod
-    def of(cls, expression: SymbolicExpression) -> ChainAnalysis:
-        """
-        :param expression: A ``MappedVariable`` chain, or any root expression.
-        :return: The chain analysis of *expression*.
-        """
-        chain, root = walk_chain(expression)
-        return cls(
-            chain=chain,
-            root=root,
-            parts=build_path_parts(chain),
-            is_boolean_terminal=chain_ends_in_boolean_attribute(chain),
-        )
