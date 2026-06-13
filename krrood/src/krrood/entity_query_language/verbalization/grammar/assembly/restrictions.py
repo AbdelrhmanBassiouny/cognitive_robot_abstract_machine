@@ -8,7 +8,7 @@ from typing_extensions import Dict, List, Optional, Union
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.verbalization.fragments.base import (
-    oxford_and,
+    oxford_comma,
     PhraseFragment,
     Fragment,
 )
@@ -87,7 +87,7 @@ class RestrictionAssembler:
             PhraseFragment(
                 parts=[
                     Keywords.WHOSE.as_fragment(),
-                    oxford_and(grouped, Conjunctions.AND.as_fragment()),
+                    oxford_comma(grouped, Conjunctions.AND.as_fragment()),
                 ]
             )
             if grouped
@@ -115,4 +115,4 @@ class RestrictionAssembler:
         ]
         if len(parts) == 1:
             return parts[0]
-        return oxford_and(parts, Conjunctions.AND.as_fragment())
+        return oxford_comma(parts, Conjunctions.AND.as_fragment())

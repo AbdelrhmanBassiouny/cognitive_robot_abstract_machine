@@ -25,7 +25,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 from krrood.entity_query_language.operators.logical_quantifiers import Exists, ForAll
 from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
-    oxford_and,
+    oxford_comma,
     PhraseFragment,
     RoleFragment,
     Fragment,
@@ -188,7 +188,7 @@ class AndRule(PhraseRule):
         parts = [context.child(conjunct) for conjunct in flatten_operands(node, AND)]
         if len(parts) == 1:
             return parts[0]
-        return oxford_and(parts, Conjunctions.AND.as_fragment())
+        return oxford_comma(parts, Conjunctions.AND.as_fragment())
 
 
 class RangeConjunctionRule(PhraseRule):
@@ -209,7 +209,7 @@ class RangeConjunctionRule(PhraseRule):
         ]
         if len(parts) == 1:
             return parts[0]
-        return oxford_and(parts, Conjunctions.AND.as_fragment())
+        return oxford_comma(parts, Conjunctions.AND.as_fragment())
 
 
 class OrRule(PhraseRule):

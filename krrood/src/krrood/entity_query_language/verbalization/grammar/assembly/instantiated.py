@@ -9,7 +9,7 @@ from krrood.entity_query_language.verbalization.chain_utils import PathStep
 from krrood.entity_query_language.verbalization.fragments.features import Separator
 from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
-    oxford_and,
+    oxford_comma,
     PhraseFragment,
     RoleFragment,
     Fragment,
@@ -129,7 +129,7 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         phrase with its appositive clauses as droppable modifiers."""
         modifiers: List[Fragment] = []
         if binding_fragments:
-            joined = oxford_and(binding_fragments, Conjunctions.AND.as_fragment())
+            joined = oxford_comma(binding_fragments, Conjunctions.AND.as_fragment())
             modifiers.append(
                 PhraseFragment(
                     parts=[
@@ -140,7 +140,7 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
                 )
             )
         if constraint_fragments:
-            joined_constraints = oxford_and(
+            joined_constraints = oxford_comma(
                 constraint_fragments, Conjunctions.AND.as_fragment()
             )
             modifiers.append(

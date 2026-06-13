@@ -358,7 +358,7 @@ def flatten_fragment_to_plain_text(fragment: Fragment) -> str:
 # ── Fragment joining utilities ─────────────────────────────────────────────────
 
 
-def oxford_and(parts: list[Fragment], conjunction: Fragment) -> Fragment:
+def oxford_comma(parts: list[Fragment], conjunction: Fragment) -> Fragment:
     """
     Join *parts* with Oxford-comma style: ``f1, f2, conj f3``.
 
@@ -375,6 +375,6 @@ def oxford_and(parts: list[Fragment], conjunction: Fragment) -> Fragment:
     result: list[Fragment] = []
     for fragment in head:
         result.append(fragment)
-        result.append(WordFragment(text=", "))
+        result.append(WordFragment(text=Separator.COMMA))
     result.append(PhraseFragment(parts=[conjunction, tail]))
     return PhraseFragment(parts=result, separator=Separator.NONE)

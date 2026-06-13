@@ -18,7 +18,7 @@ from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.verbalization.chain_utils import walk_chain
 from krrood.entity_query_language.verbalization.fragments.base import (
-    oxford_and,
+    oxford_comma,
     PhraseFragment,
     Fragment,
 )
@@ -189,7 +189,7 @@ def build_between(
     :return: The range phrase fragment.
     """
     op = (RangePhrases.BETWEEN if compact else RangePhrases.IS_BETWEEN).as_fragment()
-    bounds = oxford_and(
+    bounds = oxford_comma(
         [lower_fragment, upper_fragment], Conjunctions.AND.as_fragment()
     )
     return PhraseFragment(parts=[left_fragment, op, bounds])

@@ -7,7 +7,7 @@ from krrood.entity_query_language.query.builders import OrderedByBuilder
 from krrood.entity_query_language.query.operations import GroupedBy, OrderedBy
 from krrood.entity_query_language.query.query import Query, SetOf
 from krrood.entity_query_language.verbalization.fragments.base import (
-    oxford_and,
+    oxford_comma,
     PhraseFragment,
     Fragment,
 )
@@ -55,7 +55,7 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
             for expression in plan.aggregated
         ]
         if aggregated_fragments and not isinstance(node, SetOf):
-            aggregated_phrase = oxford_and(
+            aggregated_phrase = oxford_comma(
                 aggregated_fragments, Conjunctions.AND.as_fragment()
             )
             return PhraseFragment(
