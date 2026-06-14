@@ -77,7 +77,14 @@ class RestrictionRule(SpecificityRule):
 
 
 class RangeRestrictionRule(RestrictionRule):
-    """A range fold on a single-hop subject attribute → *"<attribute> is between low and high"*."""
+    """A range fold on a single-hop subject attribute → *"<attribute> is between low and high"*.
+
+    >>> employee = variable(Employee, [])
+    >>> verbalize_expression(
+    ...     an(entity(employee).where(and_(employee.salary > 100, employee.salary < 200)))
+    ... )
+    'Find an Employee whose salary is between 100, and 200'
+    """
 
     placement = Placement.WHOSE_GROUP
 
@@ -102,6 +109,10 @@ class AttributePredicateRestrictionRule(RestrictionRule):
     """
     A single-hop, non-boolean subject-attribute comparator whose right-hand side does not reference the
     subject → *"<attribute> is greater than 100"* / *"<attribute> is equal to <calc>"*.
+
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))
+    'Find a Robot whose battery is greater than 50'
     """
 
     placement = Placement.WHOSE_GROUP
@@ -130,6 +141,15 @@ class SuperlativeRestrictionRule(RestrictionRule):
     """
     ``subject.<chain> == max/min(over all <same-type>.<same chain>)`` → the superlative selection
     modifier *"with the maximum/minimum <leaf>"*.
+
+    >>> t1 = variable(BankTransaction, domain=None)
+    >>> t2 = variable(BankTransaction, domain=None)
+    >>> verbalize_expression(
+    ...     the(entity(t1).where(
+    ...         t1.amount_details.amount == an(entity(max(t2.amount_details.amount)))
+    ...     ))
+    ... )
+    'Find the unique BankTransaction with the maximum amount'
     """
 
     placement = Placement.SELECTION_MODIFIER

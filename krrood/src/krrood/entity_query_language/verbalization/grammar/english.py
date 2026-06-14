@@ -272,7 +272,11 @@ class NotComparatorRule(PhraseRule):
 
 
 class NotBooleanAttributeRule(PhraseRule):
-    """Negated boolean attribute chain *"<nav> is not <attribute>"* (Not over a bool-attribute chain)."""
+    """Negated boolean attribute chain *"<nav> is not <attribute>"* (Not over a bool-attribute chain).
+
+    >>> verbalize_expression(Not(variable(Task, []).completed))
+    'a Task is not completed'
+    """
 
     construct = Not
     name = "not-bool-attribute"
@@ -295,7 +299,11 @@ class NotBooleanAttributeRule(PhraseRule):
 
 
 class PluralChainAttributeRule(PhraseRule):
-    """Plural single-attribute chain → bare plural *"attributes of Roots"*."""
+    """Plural single-attribute chain → bare plural *"attributes of Roots"*.
+
+    >>> verbalize_expression(sum(variable(Robot, []).battery))
+    'the sum of batteries of Robots'
+    """
 
     construct = MappedVariable
     name = "chain-plural-attribute"
@@ -309,7 +317,11 @@ class PluralChainAttributeRule(PhraseRule):
 
 class BooleanAttributeChainRule(PhraseRule):
     """Boolean-terminal chain → predicative *"<navigation> is <attribute>"* (unless the bare-plural
-    attribute form takes precedence)."""
+    attribute form takes precedence).
+
+    >>> verbalize_expression(variable(Task, []).completed)
+    'a Task is completed'
+    """
 
     construct = MappedVariable
     name = "chain-boolean-attribute"
@@ -326,7 +338,11 @@ class BooleanAttributeChainRule(PhraseRule):
 
 class PossessiveChainRule(PhraseRule):
     """Any attribute / index / call chain → possessive path *"the attribute of the Root"*
-    (the unguarded fallback form)."""
+    (the unguarded fallback form).
+
+    >>> verbalize_expression(variable(Task, []).name)
+    'the name of a Task'
+    """
 
     construct = MappedVariable
     name = "chain-possessive"

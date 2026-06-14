@@ -92,7 +92,11 @@ class NavigationForm(SpecificityRule):
 
 
 class EmptyNavigation(NavigationForm):
-    """No navigation (the boolean attribute sits on the root) — the root itself navigates."""
+    """No navigation (the boolean attribute sits on the root) — the root itself navigates.
+
+    >>> verbalize_expression(variable(Task, []).completed)
+    'a Task is completed'
+    """
 
     @classmethod
     def applies(cls, navigation_chain: List[MappedVariable]) -> bool:
@@ -106,7 +110,11 @@ class EmptyNavigation(NavigationForm):
 
 
 class OrdinalIndexNavigation(NavigationForm):
-    """Navigation ending in an integer index → ordinal *"the 1st of <prefix>"*."""
+    """Navigation ending in an integer index → ordinal *"the 1st of <prefix>"*.
+
+    >>> verbalize_expression(variable(Worker, []).tasks[0].completed)
+    'the first of the tasks of a Worker is completed'
+    """
 
     @classmethod
     def applies(cls, navigation_chain: List[MappedVariable]) -> bool:
@@ -131,7 +139,11 @@ class OrdinalIndexNavigation(NavigationForm):
 
 
 class PossessiveNavigation(NavigationForm):
-    """Any other navigation → the possessive path *"the a of the b of …"*."""
+    """Any other navigation → the possessive path *"the a of the b of …"*.
+
+    >>> verbalize_expression(variable(Mission, []).assigned_to.operational)
+    'the assigned_to of a Mission is operational'
+    """
 
     @classmethod
     def applies(cls, navigation_chain: List[MappedVariable]) -> bool:
