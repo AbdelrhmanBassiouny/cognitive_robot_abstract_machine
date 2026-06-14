@@ -188,7 +188,7 @@ class NotBooleanAttributeRule(PhraseRule):
         return is_boolean_attribute_chain(node._child_)
 
     def build(self, node: Not, context: RuleContext) -> Fragment:
-        plan = ChainPlanner(node._child_).plan()
+        plan = context.microplan.plan_for(node._child_, ChainPlanner)
         return ChainAssembler(context).boolean_predicative(plan, negated=True)
 
 

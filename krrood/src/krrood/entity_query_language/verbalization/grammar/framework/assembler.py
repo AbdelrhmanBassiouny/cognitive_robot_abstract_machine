@@ -38,9 +38,12 @@ class Assembler(ABC, Generic[TSymbolicExpression, TPlan]):
     def plan(self, node: TSymbolicExpression) -> Optional[TPlan]:
         """
         :param node: The node to plan.
-        :return: The plan from the paired planner, or ``None`` when there is nothing to plan.
+        :return: The plan from the paired planner via the shared read model (computed once per
+            node), or ``None`` when there is nothing to plan.
         """
-        return self.planner(node).plan() if self.planner is not None else None
+        if self.planner is None:
+            return None
+        return self.context.microplan.plan_for(node, self.planner)
 
     def assemble(self, node: TSymbolicExpression) -> Fragment:
         """

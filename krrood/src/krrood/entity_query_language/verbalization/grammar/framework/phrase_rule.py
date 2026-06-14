@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.microplanning.config import (
         RenderConfiguration,
     )
+    from krrood.entity_query_language.verbalization.microplanning.microplan import (
+        Microplan,
+    )
     from krrood.entity_query_language.verbalization.microplanning.referring import (
         ReferringExpressions,
     )
@@ -59,6 +62,11 @@ class RuleContext:
     def configuration(self) -> RenderConfiguration:
         """:return: The render-mode flags (query depth, compact predicates)."""
         return self.services.configuration
+
+    @property
+    def microplan(self) -> Microplan:
+        """:return: The plan read model (each node's plan computed once and shared)."""
+        return self.services.microplan
 
 
 class PhraseRule(ABC):

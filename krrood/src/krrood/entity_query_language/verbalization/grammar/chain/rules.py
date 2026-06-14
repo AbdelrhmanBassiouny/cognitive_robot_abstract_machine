@@ -29,10 +29,12 @@ class PluralChainAttributeRule(PhraseRule):
     name = "chain-plural-attribute"
 
     def when(self, node: MappedVariable, context: RuleContext) -> bool:
-        return ChainPlanner(node).plan().renders_as_plural_attribute(context.number)
+        plan = context.microplan.plan_for(node, ChainPlanner)
+        return plan.renders_as_plural_attribute(context.number)
 
     def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
-        return ChainAssembler(context).plural_attribute(ChainPlanner(node).plan())
+        plan = context.microplan.plan_for(node, ChainPlanner)
+        return ChainAssembler(context).plural_attribute(plan)
 
 
 class BooleanAttributeChainRule(PhraseRule):
@@ -47,13 +49,14 @@ class BooleanAttributeChainRule(PhraseRule):
     name = "chain-boolean-attribute"
 
     def when(self, node: MappedVariable, context: RuleContext) -> bool:
-        plan = ChainPlanner(node).plan()
+        plan = context.microplan.plan_for(node, ChainPlanner)
         return plan.is_boolean_terminal and not plan.renders_as_plural_attribute(
             context.number
         )
 
     def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
-        return ChainAssembler(context).boolean_predicative(ChainPlanner(node).plan())
+        plan = context.microplan.plan_for(node, ChainPlanner)
+        return ChainAssembler(context).boolean_predicative(plan)
 
 
 class PossessiveChainRule(PhraseRule):
@@ -68,4 +71,5 @@ class PossessiveChainRule(PhraseRule):
     name = "chain-possessive"
 
     def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
-        return ChainAssembler(context).possessive(ChainPlanner(node).plan())
+        plan = context.microplan.plan_for(node, ChainPlanner)
+        return ChainAssembler(context).possessive(plan)

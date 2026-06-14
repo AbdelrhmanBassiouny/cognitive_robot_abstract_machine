@@ -12,6 +12,9 @@ from krrood.entity_query_language.verbalization.microplanning.binding_scope impo
 from krrood.entity_query_language.verbalization.microplanning.config import (
     RenderConfiguration,
 )
+from krrood.entity_query_language.verbalization.microplanning.microplan import (
+    Microplan,
+)
 from krrood.entity_query_language.verbalization.microplanning.referring import (
     ReferringExpressions,
 )
@@ -36,6 +39,9 @@ class MicroplanningServices:
 
     configuration: RenderConfiguration = field(default_factory=RenderConfiguration)
     """Render-mode flags (query depth, compact predicates)."""
+
+    microplan: Microplan = field(default_factory=Microplan)
+    """The plan read model — each node's plan computed once and shared (lazy / memoised)."""
 
     @classmethod
     def from_expression(cls, expression: SymbolicExpression) -> MicroplanningServices:
