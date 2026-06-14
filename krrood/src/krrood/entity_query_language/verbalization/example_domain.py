@@ -38,6 +38,9 @@ class Robot:
     battery: int
     """Charge level from 0 to 100."""
 
+    operational: bool
+    """Whether the robot is operational (a boolean terminal for predicative chains)."""
+
 
 @dataclass
 class Mission:

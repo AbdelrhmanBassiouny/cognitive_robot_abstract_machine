@@ -103,7 +103,11 @@ from krrood.entity_query_language.verbalization.grammar.planning.instantiated im
 
 
 class ComparatorRule(PhraseRule):
-    """``<left> <operator> <right>`` — e.g. *"is greater than 50"*."""
+    """``<left> <operator> <right>`` — e.g. *"is greater than 50"*.
+
+    >>> verbalize_expression(variable(Robot, []).battery > 50)
+    'the battery of a Robot is greater than 50'
+    """
 
     construct = Comparator
     name = "comparator"
@@ -116,7 +120,11 @@ class ComparatorRule(PhraseRule):
 
 
 class VariableRule(PhraseRule):
-    """*"a/an Robot"* (first mention), *"the Robot"* (subsequent), or *"Robot N"* (numbered)."""
+    """*"a/an Robot"* (first mention), *"the Robot"* (subsequent), or *"Robot N"* (numbered).
+
+    >>> verbalize_expression(variable(Robot, []))
+    'a Robot'
+    """
 
     construct = Variable
     name = "variable"
@@ -182,7 +190,12 @@ class ExternalVariableRule(PhraseRule):
 
 
 class AndRule(PhraseRule):
-    """Conjunction *"a, b, and c"* (Oxford comma); flattens nested ANDs."""
+    """Conjunction *"a, b, and c"* (Oxford comma); flattens nested ANDs.
+
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(and_(robot.battery > 50, robot.name == 'x'))
+    "the battery of a Robot is greater than 50, and the name of the Robot is 'x'"
+    """
 
     construct = AND
     name = "and"
@@ -195,7 +208,12 @@ class AndRule(PhraseRule):
 
 
 class RangeConjunctionRule(PhraseRule):
-    """A conjunction containing a low/high pair on one chain → *"… is between low and high"*."""
+    """A conjunction containing a low/high pair on one chain → *"… is between low and high"*.
+
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(and_(robot.battery > 10, robot.battery < 90))
+    'the battery of a Robot is between 10, and 90'
+    """
 
     construct = AND
     name = "and-range"
@@ -216,7 +234,12 @@ class RangeConjunctionRule(PhraseRule):
 
 
 class OrRule(PhraseRule):
-    """Disjunction *"either a, b, or c"*; flattens nested ORs."""
+    """Disjunction *"either a, b, or c"*; flattens nested ORs.
+
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(or_(robot.battery > 50, robot.battery < 10))
+    'either the battery of a Robot is greater than 50, or the battery of the Robot is less than 10'
+    """
 
     construct = OR
     name = "or"
@@ -240,7 +263,11 @@ class OrRule(PhraseRule):
 
 
 class NotRule(PhraseRule):
-    """Generic negation *"not (<child>)"* (specialised by the guarded Not rules below)."""
+    """Generic negation *"not (<child>)"* (specialised by the guarded Not rules below).
+
+    >>> verbalize_expression(Not(IsReachable(variable(Location, []))))
+    'not (a Location is reachable)'
+    """
 
     construct = Not
     name = "not"
@@ -259,7 +286,11 @@ class NotRule(PhraseRule):
 
 
 class NotComparatorRule(PhraseRule):
-    """Inline negated comparator *"a is not greater than b"* (Not over a Comparator)."""
+    """Inline negated comparator *"a is not greater than b"* (Not over a Comparator).
+
+    >>> verbalize_expression(Not(variable(Robot, []).battery > 50))
+    'the battery of a Robot is not greater than 50'
+    """
 
     construct = Not
     name = "not-comparator"
@@ -272,7 +303,11 @@ class NotComparatorRule(PhraseRule):
 
 
 class NotBooleanAttributeRule(PhraseRule):
-    """Negated boolean attribute chain *"<nav> is not <attribute>"* (Not over a bool-attribute chain)."""
+    """Negated boolean attribute chain *"<nav> is not <attribute>"* (Not over a bool-attribute chain).
+
+    >>> verbalize_expression(Not(variable(Task, []).completed))
+    'a Task is not completed'
+    """
 
     construct = Not
     name = "not-bool-attribute"
@@ -295,7 +330,11 @@ class NotBooleanAttributeRule(PhraseRule):
 
 
 class PluralChainAttributeRule(PhraseRule):
-    """Plural single-attribute chain → bare plural *"attributes of Roots"*."""
+    """Plural single-attribute chain → bare plural *"attributes of Roots"*.
+
+    >>> verbalize_expression(sum(variable(Robot, []).battery))
+    'the sum of batteries of Robots'
+    """
 
     construct = MappedVariable
     name = "chain-plural-attribute"
@@ -309,7 +348,11 @@ class PluralChainAttributeRule(PhraseRule):
 
 class BooleanAttributeChainRule(PhraseRule):
     """Boolean-terminal chain → predicative *"<navigation> is <attribute>"* (unless the bare-plural
-    attribute form takes precedence)."""
+    attribute form takes precedence).
+
+    >>> verbalize_expression(variable(Task, []).completed)
+    'a Task is completed'
+    """
 
     construct = MappedVariable
     name = "chain-boolean-attribute"
@@ -326,7 +369,11 @@ class BooleanAttributeChainRule(PhraseRule):
 
 class PossessiveChainRule(PhraseRule):
     """Any attribute / index / call chain → possessive path *"the attribute of the Root"*
-    (the unguarded fallback form)."""
+    (the unguarded fallback form).
+
+    >>> verbalize_expression(variable(Task, []).name)
+    'the name of a Task'
+    """
 
     construct = MappedVariable
     name = "chain-possessive"
@@ -349,7 +396,11 @@ class FlatVariableRule(PhraseRule):
 
 
 class AggregatorRule(PhraseRule):
-    """*"the <aggregation> <plural child>"* (or *"the <aggregation> of <child>"*)."""
+    """*"the <aggregation> <plural child>"* (or *"the <aggregation> of <child>"*).
+
+    >>> verbalize_expression(max(variable(Robot, []).battery))
+    'the maximum of the battery of a Robot'
+    """
 
     construct = Aggregator
     name = "aggregator"
@@ -378,7 +429,12 @@ class AggregatorRule(PhraseRule):
 
 
 class ForAllRule(PhraseRule):
-    """*"for all <plural var>, <condition>"*."""
+    """*"for all <plural var>, <condition>"*.
+
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(for_all(robot, robot.battery > 0))
+    'for all Robots, the battery of the Robot is greater than 0'
+    """
 
     construct = ForAll
     name = "for-all"
@@ -397,7 +453,12 @@ class ForAllRule(PhraseRule):
 
 
 class ExistsRule(PhraseRule):
-    """*"there exists <variable> such that <condition>"*."""
+    """*"there exists <variable> such that <condition>"*.
+
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(exists(robot, robot.battery > 0))
+    'there exists a Robot such that the battery of the Robot is greater than 0'
+    """
 
     construct = Exists
     name = "exists"
@@ -420,7 +481,11 @@ class ExistsRule(PhraseRule):
 
 
 class TopLevelEntityRule(PhraseRule):
-    """Top-level Entity → imperative *"Find …"* (only at query_depth 0)."""
+    """Top-level Entity → imperative *"Find …"* (only at query_depth 0).
+
+    >>> verbalize_expression(an(entity(variable(Robot, []))))
+    'Find a Robot'
+    """
 
     construct = Entity
     name = "top-level-entity"
@@ -434,7 +499,14 @@ class TopLevelEntityRule(PhraseRule):
 
 
 class NestedEntityRule(PhraseRule):
-    """Nested Entity → noun phrase (query_depth > 0); never emits *"Find"*."""
+    """Nested Entity → noun phrase (query_depth > 0); never emits *"Find"*.
+
+    >>> worker = variable(Worker, [])
+    >>> verbalize_expression(
+    ...     an(entity(worker).where(contains(worker.tasks, an(entity(variable(Task, []))))))
+    ... )
+    'Find a Worker whose tasks contains a Task'
+    """
 
     construct = Entity
     name = "nested-entity"
@@ -466,7 +538,11 @@ class InferenceRuleRule(TopLevelEntityRule):
 
 
 class SetOfRule(PhraseRule):
-    """SetOf → *"Find (v1, v2, …) such that …"*."""
+    """SetOf → *"Find (v1, v2, …) such that …"*.
+
+    >>> verbalize_expression(an(set_of(variable(Robot, []), variable(Task, []))))
+    'Find sets of (a Robot, a Task)'
+    """
 
     construct = SetOf
     name = "set-of"
@@ -497,7 +573,14 @@ class FilterRule(PhraseRule):
 
 
 class GroupedByRule(PhraseRule):
-    """GroupedBy → *"grouped by <key1>, <key2>, …"* (or *"grouped"* when keyless)."""
+    """GroupedBy → *"grouped by <key1>, <key2>, …"* (or *"grouped"* when keyless).
+
+    >>> employee = variable(Employee, [])
+    >>> verbalize_expression(
+    ...     a(set_of(employee.department, sum(employee.salary)).grouped_by(employee.department))
+    ... )
+    'Find sets of (the department of an Employee, the sum of salaries of Employees) grouped by the department of the Employee'
+    """
 
     construct = GroupedBy
     name = "grouped-by"
@@ -507,7 +590,12 @@ class GroupedByRule(PhraseRule):
 
 
 class OrderedByRule(PhraseRule):
-    """OrderedBy → *"ordered by <variable> (ascending|descending)"*."""
+    """OrderedBy → *"ordered by <variable> (ascending|descending)"*.
+
+    >>> employee = variable(Employee, [])
+    >>> verbalize_expression(a(set_of(employee).ordered_by(employee.salary, descending=True)))
+    'Find sets of (an Employee) ordered by the salary of the Employee (descending)'
+    """
 
     construct = OrderedBy
     name = "ordered-by"
