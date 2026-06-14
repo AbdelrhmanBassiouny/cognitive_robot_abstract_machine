@@ -54,15 +54,6 @@ def is_calculation_value(expression: SymbolicExpression) -> bool:
     return False
 
 
-def is_constrained_query(entity: Entity) -> bool:
-    """
-    :param entity: An entity query.
-    :return: ``True`` when *entity* carries a ``WHERE``, ``HAVING``, or non-empty ``GROUP BY``
-        clause.
-    """
-    return entity.is_constrained
-
-
 def is_collapsible_aggregation_subquery(entity: SymbolicExpression) -> bool:
     """
     :param entity: Candidate expression.
@@ -70,7 +61,9 @@ def is_collapsible_aggregation_subquery(entity: SymbolicExpression) -> bool:
         collapsed to a compact aggregate noun phrase because it adds no filtering beyond the
         aggregation itself.
     """
-    return is_aggregation_subquery(entity) and not is_constrained_query(entity)
+    # ``is_aggregation_subquery`` already guarantees an ``Entity`` here, so the core
+    # ``Query.is_constrained`` is safe to read.
+    return is_aggregation_subquery(entity) and not entity.is_constrained
 
 
 def aggregation_leaf_attribute(entity: SymbolicExpression) -> Optional[Attribute]:

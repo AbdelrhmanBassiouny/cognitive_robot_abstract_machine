@@ -12,8 +12,9 @@ consumer (evaluation, optimization, verbalization, …), and they delegate to th
 from __future__ import annotations
 
 import datetime
+import uuid
 
-from typing_extensions import List, Tuple
+from typing_extensions import Iterable, List, Set, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
@@ -51,6 +52,20 @@ def chain_root(expression: SymbolicExpression) -> SymbolicExpression:
         if isinstance(expression, MappedVariable)
         else expression
     )
+
+
+def root_variable_ids(expressions: Iterable[SymbolicExpression]) -> Set[uuid.UUID]:
+    """
+    :param expressions: Any expressions.
+    :return: The ids of the distinct ``Variable`` chain-roots among *expressions* (e.g. for
+        ``employee.department`` the root is the ``employee`` variable). Expressions whose root is
+        not a ``Variable`` contribute nothing.
+    """
+    return {
+        root._id_
+        for root in (chain_root(expression) for expression in expressions)
+        if isinstance(root, Variable)
+    }
 
 
 def chain_ends_in_boolean_attribute(chain: List[MappedVariable]) -> bool:

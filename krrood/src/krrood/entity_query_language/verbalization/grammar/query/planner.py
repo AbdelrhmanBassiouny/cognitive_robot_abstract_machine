@@ -29,7 +29,6 @@ from krrood.entity_query_language.verbalization.subquery import (
     aggregation_leaf_attribute,
     aggregation_source_root,
     is_aggregation_subquery,
-    is_constrained_query,
     selected_aggregator,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import FallbackNouns
@@ -225,6 +224,6 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         return AggregationData(
             aggregator=selected_aggregator(self.node),
             leaf=aggregation_leaf_attribute(self.node),
-            is_constrained=is_constrained_query(self.node),
+            is_constrained=self.node.is_constrained,
             source=aggregation_source_root(self.node),
         )

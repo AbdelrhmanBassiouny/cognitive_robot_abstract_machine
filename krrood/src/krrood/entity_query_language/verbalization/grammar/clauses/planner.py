@@ -2,15 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import uuid
-
-from typing_extensions import List, Optional, Set, Union
+from typing_extensions import List, Optional, Union
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
 from krrood.entity_query_language.query.operations import GroupedBy
-from krrood.entity_query_language.query.query import Entity, Query
-from krrood.entity_query_language.core.expression_structure import chain_root
+from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 
 
@@ -36,6 +32,10 @@ class GroupedByPlanner(Planner[Union[Query, GroupedBy], GroupPlan]):
     """
     Decompose the GROUP BY of *node* (a query or a bare grouped-by node) into a ``GroupPlan``.
 
+    The query-algebra facts — which keys group the results and which selections are aggregated over
+    them — are owned by the EQL expressions (``GroupedBy.group_key_root_ids`` and
+    ``Query.aggregated_selections``); this planner only packages them into the verbalization plan.
+
     Reference: Reiter & Dale (2000) — content/structure determination (microplanning).
 
     >>> employee = variable(Employee, [])
@@ -50,50 +50,16 @@ class GroupedByPlanner(Planner[Union[Query, GroupedBy], GroupPlan]):
         grouped = self._grouped_by()
         if grouped is None or not grouped.variables_to_group_by:
             return GroupPlan(keys=[], aggregated=[])
-        keys = list(grouped.variables_to_group_by)
-        return GroupPlan(
-            keys=keys, aggregated=self._aggregated(self._root_variable_ids(keys))
+        aggregated = (
+            self.node.aggregated_selections(grouped.group_key_root_ids)
+            if isinstance(self.node, Query)
+            else []
         )
+        return GroupPlan(keys=list(grouped.variables_to_group_by), aggregated=aggregated)
 
     def _grouped_by(self) -> Optional[GroupedBy]:
+        """:return: The GROUP BY of *node* — *node* itself when it is a bare ``GroupedBy``, else
+        the query's grouped-by expression (``None`` when the query is ungrouped)."""
         if isinstance(self.node, GroupedBy):
             return self.node
-        return getattr(self.node, "_grouped_by_expression_", None)
-
-    @staticmethod
-    def _root_variable_ids(
-        expressions: List[SymbolicExpression],
-    ) -> Set[uuid.UUID]:
-        ids: Set[uuid.UUID] = set()
-        for expression in expressions:
-            root = chain_root(expression)
-            if isinstance(root, Variable):
-                ids.add(root._id_)
-        return ids
-
-    def _aggregated(
-        self, group_key_root_ids: Set[uuid.UUID]
-    ) -> List[SymbolicExpression]:
-        """
-        :param group_key_root_ids: Root variable ids of the group-by keys.
-        :return: Selected expressions that are aggregated (not group keys); ``[]`` off a query.
-        """
-        selected = (
-            self.node.selected_variable if isinstance(self.node, Entity) else None
-        )
-        if isinstance(selected, InstantiatedVariable):
-            return [
-                child
-                for child in selected._child_vars_.values()
-                if not (
-                    isinstance(chain_root(child), Variable)
-                    and chain_root(child)._id_ in group_key_root_ids
-                )
-            ]
-        if isinstance(self.node, Query):
-            return [
-                variable
-                for variable in self.node._selected_variables_
-                if variable._id_ not in group_key_root_ids
-            ]
-        return []
+        return self.node._grouped_by_expression_
