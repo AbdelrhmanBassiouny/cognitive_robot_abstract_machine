@@ -22,13 +22,8 @@ from krrood.entity_query_language.verbalization.grammar.aggregation.assembler im
     AggregationValueAssembler,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.assembler import Assembler
-from krrood.entity_query_language.verbalization.grammar.clauses.assembler import (
-    GroupedByAssembler,
-    HavingAssembler,
-    OrderedByAssembler,
-)
-from krrood.entity_query_language.verbalization.grammar.conditions.restriction_assembler import (
-    RestrictionAssembler,
+from krrood.entity_query_language.verbalization.grammar.clauses.composer import (
+    ClauseComposer,
 )
 from krrood.entity_query_language.verbalization.grammar.query.planner import (
     QueryPlan,
@@ -170,10 +165,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
     ) -> Tuple[Fragment, Optional[Fragment]]:
         """:return: The WHERE woven into the selection — *"<selected> whose <grouped>"* plus a
         separate *"such that <residual>"* clause item (``None`` when absent)."""
-        restriction = plan.subject_restriction
-        if restriction is None:
+        rendered = ClauseComposer(self.context).restriction(plan)
+        if rendered is None:
             return selected, None
-        rendered = RestrictionAssembler(self.context).render(restriction, plan.subject)
         modifiers = [*rendered.superlatives] + (
             [rendered.whose] if rendered.whose is not None else []
         )
@@ -201,10 +195,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         definiteness = Definiteness.UNIQUE if plan.is_the else Definiteness.INDEFINITE
 
         modifiers: List[Fragment] = []
-        if plan.subject_restriction is not None:
-            rendered = RestrictionAssembler(self.context).render(
-                plan.subject_restriction, plan.subject
-            )
+        rendered = ClauseComposer(self.context).restriction(plan)
+        if rendered is not None:
             modifiers.extend(rendered.superlatives)
             if rendered.whose is not None:
                 modifiers.append(rendered.whose)
@@ -249,10 +241,11 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _trailing_clauses(self, node: Query) -> List[Optional[Fragment]]:
         """:return: The post-selection clauses, in canonical reading order (``None`` when absent)."""
+        composer = ClauseComposer(self.context)
         return [
-            GroupedByAssembler(self.context).clause(node),
-            HavingAssembler(self.context).clause(node),
-            OrderedByAssembler(self.context).clause(node),
+            composer.grouped_by(node),
+            composer.having(node),
+            composer.ordered_by(node),
         ]
 
     def _where_clause(self, plan: QueryPlan) -> Optional[Fragment]:

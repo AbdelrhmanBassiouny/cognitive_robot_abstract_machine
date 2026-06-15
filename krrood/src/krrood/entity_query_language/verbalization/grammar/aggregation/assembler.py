@@ -17,11 +17,8 @@ from krrood.entity_query_language.verbalization.grammar.aggregation.kinds import
     AGGREGATION_KIND,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.assembler import Assembler
-from krrood.entity_query_language.verbalization.grammar.clauses.assembler import (
-    HavingAssembler,
-)
-from krrood.entity_query_language.verbalization.grammar.conditions.restriction_assembler import (
-    RestrictionAssembler,
+from krrood.entity_query_language.verbalization.grammar.clauses.composer import (
+    ClauseComposer,
 )
 from krrood.entity_query_language.verbalization.grammar.query.planner import (
     QueryPlan,
@@ -74,13 +71,17 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
 
         if not aggregation_data.is_constrained:
             return aggregate
-        return self._scope(node, plan, aggregate)
+        return self._among_population(node, plan, aggregate)
 
-    def _scope(self, node: Query, plan: QueryPlan, aggregate: Fragment) -> Fragment:
+    def _among_population(
+        self, node: Query, plan: QueryPlan, aggregate: Fragment
+    ) -> Fragment:
         """
-        Build the *"among …"* scope of a constrained aggregation — the source population followed
-        by its restrictions and any HAVING clause. (Whether chains rooted at the population
-        pronominalise is the coreference pass's concern, read from this query's provenance.)
+        Build the *"among <population> …"* scope of a constrained aggregation — the source
+        population followed by its restriction and any HAVING clause. The clauses are rendered by
+        the shared :class:`ClauseComposer`; this method only places them inline. (Whether chains
+        rooted at the population pronominalise is the coreference pass's concern, read from this
+        query's provenance.)
 
         :param node: The aggregation value-subquery.
         :param plan: The query plan.
@@ -99,17 +100,16 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
             source_fragment,
         ]
 
-        if plan.subject_restriction is not None:
-            rendered = RestrictionAssembler(self.context).render(
-                plan.subject_restriction, plan.subject
-            )
+        composer = ClauseComposer(self.context)
+        rendered = composer.restriction(plan)
+        if rendered is not None:
             parts.extend(rendered.superlatives)
             if rendered.whose is not None:
                 parts.append(rendered.whose)
             if rendered.residual is not None:
                 parts += [Keywords.SUCH_THAT.as_fragment(), rendered.residual]
 
-        having = HavingAssembler(self.context).clause(node)
+        having = composer.having(node)
         if having is not None:
             parts.append(having)
 
