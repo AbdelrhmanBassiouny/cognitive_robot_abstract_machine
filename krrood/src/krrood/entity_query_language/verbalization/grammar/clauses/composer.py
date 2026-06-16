@@ -40,7 +40,7 @@ class ClauseComposer:
         if plan.subject_restriction is None:
             return None
         return place_restriction(
-            plan.subject_restriction.folded, plan.subject, self.context
+            plan.subject_restriction.conditions, plan.subject, self.context
         )
 
     def grouped_by(self, node: Query) -> Optional[Fragment]:

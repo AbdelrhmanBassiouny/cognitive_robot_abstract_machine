@@ -29,6 +29,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.specificity im
     SpecificityRule,
 )
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
+    fold_range_pairs,
     RangeFold,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
@@ -249,18 +250,22 @@ class RestrictionFragments:
 
 
 def place_restriction(
-    folded: List[Union[SymbolicExpression, RangeFold]],
+    conditions: List[SymbolicExpression],
     subject: Variable,
     context: RuleContext,
     number: Number = Number.SINGULAR,
 ) -> RestrictionFragments:
     """
-    Place every folded conjunct of a subject's WHERE via :func:`place`, then bucket the results by
-    slot into the pieces a caller positions: superlative noun modifiers, the shared *"whose"* group,
-    and the standalone residual. This is the list form of :func:`place` — the one place a subject's
-    restriction is turned into placed surface pieces.
+    Place a subject's WHERE conjuncts and bucket the results by slot into the pieces a caller
+    positions: superlative noun modifiers, the shared *"whose"* group, and the standalone residual.
+    This is the list form of :func:`place`, and the one place a subject's restriction is turned into
+    placed surface pieces.
 
-    :param folded: The subject's range-folded WHERE conjuncts.
+    The conjuncts are range-folded here first (a complementary lower/upper bound pair on one chain
+    becomes a single *"… is between …"*), so the caller hands over the raw conditions and never
+    invokes the fold itself — the same reduction :meth:`ConditionAssembler.verbalize` applies.
+
+    :param conditions: The subject's WHERE conjuncts (an ``AND`` already flattened to a list).
     :param subject: The variable the restriction is on.
     :param context: The per-node context (recursion and services).
     :param number: The number the subject agrees with — singular for a query selection, plural for
@@ -269,7 +274,7 @@ def place_restriction(
     """
     placed = [
         place(Placement(item=item, subject=subject, number=number), context)
-        for item in folded
+        for item in fold_range_pairs(list(conditions))
     ]
     grouped = [item.fragment for item in placed if item.slot is Slot.WHOSE]
     whose = (

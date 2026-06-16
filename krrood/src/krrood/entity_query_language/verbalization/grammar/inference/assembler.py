@@ -32,9 +32,6 @@ from krrood.entity_query_language.verbalization.grammar.inference.planner import
     InferencePlanner,
     RuleStructure,
 )
-from krrood.entity_query_language.verbalization.microplanning.coordination import (
-    fold_range_pairs,
-)
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
     Conjunctions,
@@ -104,7 +101,7 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
         if not antecedent.conditions or antecedent.variable is None:
             return intro
         restriction = place_restriction(
-            fold_range_pairs(antecedent.conditions),
+            antecedent.conditions,
             antecedent.variable,
             self.context,
             self._number(antecedent),
