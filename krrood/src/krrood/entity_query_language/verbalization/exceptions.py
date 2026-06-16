@@ -11,14 +11,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from typing_extensions import List
-
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
     from krrood.entity_query_language.verbalization.fragments.base import Fragment
-    from krrood.entity_query_language.verbalization.grammar.conditions.restriction import Placement
 
 
 @dataclass
@@ -55,22 +52,5 @@ class UnloweredFragmentError(DataclassException):
             f"fold_fragment received a {type(self.fragment).__name__}; "
             "NounPhrase / PossessiveChain nodes must be lowered by the realisation "
             "passes (realize_tree) before a renderer folds the tree."
-        )
-        super().__post_init__()
-
-
-@dataclass
-class UnplacedRestrictionError(DataclassException):
-    """
-    A restriction rule declared a placement that no ``RestrictionFragments`` slot surfaces.
-    """
-
-    placements: List["Placement"]
-    """The leftover placement(s) the assembler does not surface."""
-
-    def __post_init__(self):
-        self.message = (
-            "Restriction placement(s) with no RestrictionFragments slot: "
-            f"{[placement.name for placement in self.placements]}."
         )
         super().__post_init__()

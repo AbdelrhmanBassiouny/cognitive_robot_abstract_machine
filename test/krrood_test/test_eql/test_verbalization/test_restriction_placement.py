@@ -1,69 +1,80 @@
 """
-Unit tests for the restriction *placement* taxonomy — the open-closed seam that lets a new
-fold target an existing surface slot with one rule class, and fails *loudly* (rather than
-silently dropping fragments) when a rule declares a slot the assembler does not surface.
+Unit tests for the condition-form registry — the open-closed seam that maps a folded WHERE
+conjunct to its surface form and :class:`Slot`. The registry is *total*: a standalone fallback
+catches anything no specific form fits, so selection never returns ``None`` and there is no
+residual special case.
 """
 
 from __future__ import annotations
 
-import pytest
+from dataclasses import dataclass
 
-from krrood.entity_query_language.verbalization.context import MicroplanningServices
-from krrood.entity_query_language.verbalization.fragments.base import WordFragment
-from krrood.entity_query_language.verbalization.grammar.conditions.restriction_assembler import (
-    RestrictionAssembler,
-)
-from krrood.entity_query_language.verbalization.exceptions import (
-    UnplacedRestrictionError,
-)
-from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import RuleContext
-from krrood.entity_query_language.verbalization.grammar.query.planner import (
-    MatchedRestriction,
-    RestrictionPlan,
-)
-from krrood.entity_query_language.verbalization.grammar.conditions.restriction import (
-    AttributePredicateRestrictionRule,
+from krrood.entity_query_language.factories import variable
+from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+    ConditionForm,
     Placement,
-    RangeRestrictionRule,
-    RestrictionRule,
-    SuperlativeRestrictionRule,
+    Slot,
+    StandaloneForm,
+    SuperlativeForm,
+    WhosePredicateForm,
+    WhoseRangeForm,
+)
+from krrood.entity_query_language.verbalization.microplanning.coordination import (
+    fold_range_pairs,
 )
 
 
-def _rule_context() -> RuleContext:
-    return RuleContext(
-        child=lambda node, number=None: node, services=MicroplanningServices()
+@dataclass
+class _Thing:
+    battery: int
+    salary: int
+    other: int
+
+
+def test_each_form_declares_its_slot():
+    """Every form fixes where its output lands — the assembler buckets by this slot."""
+    assert SuperlativeForm.slot is Slot.SELECTION_MODIFIER
+    assert WhoseRangeForm.slot is Slot.WHOSE
+    assert WhosePredicateForm.slot is Slot.WHOSE
+    assert StandaloneForm.slot is Slot.STANDALONE
+
+
+def test_attribute_predicate_selects_the_whose_form():
+    """A single-hop, non-boolean attribute comparator → the whose-predicate form (slot WHOSE)."""
+    thing = variable(_Thing, [])
+    form = ConditionForm.most_applicable(
+        Placement(item=thing.battery > 50, subject=thing)
     )
+    assert form is WhosePredicateForm
+    assert form.slot is Slot.WHOSE
 
 
-def test_every_restriction_rule_declares_a_placement():
-    """Each self-registered rule fixes where its output lands — the assembler relies on it."""
-    expected = {
-        RangeRestrictionRule: Placement.WHOSE_GROUP,
-        AttributePredicateRestrictionRule: Placement.WHOSE_GROUP,
-        SuperlativeRestrictionRule: Placement.SELECTION_MODIFIER,
-    }
-    for rule in RestrictionRule.alternatives():
-        assert rule.placement is expected[rule]
+def test_range_fold_selects_the_whose_range_form():
+    """A folded lower/upper bound pair on a subject attribute → the whose-range form (slot WHOSE)."""
+    thing = variable(_Thing, [])
+    (folded,) = fold_range_pairs([thing.salary > 100, thing.salary < 200])
+    form = ConditionForm.most_applicable(Placement(item=folded, subject=thing))
+    assert form is WhoseRangeForm
+    assert form.slot is Slot.WHOSE
 
 
-def test_unhandled_placement_raises_loudly():
-    """A rule declaring a placement no RestrictionFragments slot surfaces must raise, not drop —
-    so adding a Placement member without surfacing it fails fast at the assembler boundary.
+def test_non_foldable_conjunct_falls_back_to_standalone():
+    """A conjunct that fits no specific form (here: its right side references the subject) falls to
+    the standalone fallback — the registry's totality, no ``None``, no residual special case.
     """
+    thing = variable(_Thing, [])
+    form = ConditionForm.most_applicable(
+        Placement(item=thing.battery > thing.salary, subject=thing)
+    )
+    assert form is StandaloneForm
+    assert form.slot is Slot.STANDALONE
 
-    class _MysteryPlacement:  # a hashable placement the assembler does not surface
-        name = "MYSTERY"
 
-    # A plain duck-typed rule (NOT a RestrictionRule subclass, so it doesn't self-register and
-    # pollute the real registry) — the assembler only reads .placement and calls .render.
-    class _MysteryRule:
-        placement = _MysteryPlacement()
-
-        @classmethod
-        def render(cls, item, subject_variable, context):
-            return WordFragment(text="x")
-
-    plan = RestrictionPlan(matched=[MatchedRestriction(_MysteryRule, object())])
-    with pytest.raises(UnplacedRestrictionError, match="MYSTERY"):
-        RestrictionAssembler(_rule_context()).render(plan, subject=None)
+def test_selection_is_total():
+    """Even an unrelated comparator selects a form (the standalone fallback) — never ``None``."""
+    thing = variable(_Thing, [])
+    other = variable(_Thing, [])
+    form = ConditionForm.most_applicable(
+        Placement(item=other.battery > 1, subject=thing)
+    )
+    assert form is StandaloneForm

@@ -1581,15 +1581,18 @@ def test_inference_planner_decomposes_rule_without_rendering(
     assert any(plan.whose_attribute_name == "child" for plan in planned)
 
 
-def test_query_planner_decomposes_subject_restriction_without_rendering():
-    """The QueryPlanner partitions the WHERE into grouped/residual as pure data — no fragments."""
+def test_query_planner_folds_subject_restriction_without_placing():
+    """The QueryPlanner only range-folds the WHERE into conjuncts — choosing each conjunct's
+    surface form/slot is the condition-form registry's concern, not the plan's."""
     from krrood.entity_query_language.verbalization.grammar.query.planner import (
         QueryPlanner,
         SelectionKind,
     )
-    from krrood.entity_query_language.verbalization.grammar.conditions.restriction import (
-        AttributePredicateRestrictionRule,
+    from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+        ConditionForm,
         Placement,
+        Slot,
+        WhosePredicateForm,
     )
 
     r = variable(_Robot, [])
@@ -1602,14 +1605,16 @@ def test_query_planner_decomposes_subject_restriction_without_rendering():
     assert plan.subject is not None
     assert plan.is_aggregation_subquery is False
 
-    # "battery > 50" is a single-hop, non-boolean attribute predicate → matched (foldable
-    # to "whose battery is greater than 50"); nothing is residual.
+    # The plan carries only the folded conjuncts — no placement decision.
     assert plan.subject_restriction is not None
-    assert plan.subject_restriction.residual == []
-    assert [matched.rule for matched in plan.subject_restriction.matched] == [
-        AttributePredicateRestrictionRule
-    ]
-    assert AttributePredicateRestrictionRule.placement is Placement.WHOSE_GROUP
+    assert len(plan.subject_restriction.folded) == 1
+    conjunct = plan.subject_restriction.folded[0]
+
+    # "battery > 50" is a single-hop, non-boolean attribute predicate → the registry selects the
+    # whose-predicate form (slot WHOSE: "whose battery is greater than 50").
+    form = ConditionForm.most_applicable(Placement(item=conjunct, subject=plan.subject))
+    assert form is WhosePredicateForm
+    assert form.slot is Slot.WHOSE
 
 
 def test_instantiated_planner_decomposes_bindings_without_rendering(

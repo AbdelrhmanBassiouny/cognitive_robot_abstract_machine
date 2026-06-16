@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from typing_extensions import List, Optional, Type, Union
+from typing_extensions import List, Optional, Union
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
@@ -17,8 +17,6 @@ from krrood.entity_query_language.query.quantifiers import The
 from krrood.entity_query_language.query.query import Entity, Query, SetOf
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 from krrood.entity_query_language.verbalization.grammar.conditions.restriction import (
-    RestrictionRule,
-    match_restriction,
     restriction_subject,
 )
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
@@ -48,36 +46,16 @@ class SelectionKind(Enum):
 
 
 @dataclass(frozen=True)
-class MatchedRestriction:
-    """A WHERE conjunct recognised as a restriction: the rule that matched it and the folded item
-    the rule renders (its :attr:`~RestrictionRule.placement` decides where the rendering lands).
+class RestrictionPlan:
+    """A subject's WHERE condition, range-folded into conjuncts — the *content* of the restriction.
+
+    Choosing each conjunct's surface form and slot (a *"whose"* predicate, a superlative selection
+    modifier, or a standalone residual clause) is the assembler's concern via the condition-form
+    registry, so the plan carries only the folded conjuncts, not a pre-decided placement.
     """
 
-    rule: Type[RestrictionRule]
-    """The restriction rule that recognised the conjunct."""
-
-    item: Union[SymbolicExpression, RangeFold]
-    """The folded conjunct (``RangeFold`` or raw expression) the rule renders."""
-
-
-@dataclass(frozen=True)
-class RestrictionPlan:
-    """Partition of a subject's WHERE condition into rule-matched conjuncts vs. the residual.
-
-    A matched conjunct carries the restriction rule that recognised it, whose placement decides
-    where its rendering lands.  An unmatched conjunct is residual and stays in a *"such that …"*
-    clause."""
-
-    matched: List[MatchedRestriction] = field(default_factory=list)
-    """The recognised restrictions — each rule renders its item into the rule's declared placement."""
-
-    residual: List[Union[SymbolicExpression, RangeFold]] = field(default_factory=list)
-    """Folded items (``RangeFold`` or raw expression) for the residual *"such that …"*."""
-
-    @property
-    def has_residual(self) -> bool:
-        """:return: ``True`` when at least one conjunct stayed residual."""
-        return bool(self.residual)
+    folded: List[Union[SymbolicExpression, RangeFold]] = field(default_factory=list)
+    """The range-folded WHERE conjuncts (each a ``RangeFold`` or a raw expression)."""
 
 
 @dataclass(frozen=True)
@@ -114,7 +92,7 @@ class QueryPlan:
     """The variable the WHERE restricts, or ``None`` when there is no groupable subject."""
 
     subject_restriction: Optional[RestrictionPlan]
-    """Partition of the subject's WHERE into rule-matched restrictions and the residual."""
+    """The subject's WHERE, range-folded into conjuncts for the assembler to place, or ``None``."""
 
     where_condition: Optional[SymbolicExpression]
     """The query's raw WHERE condition, or ``None``."""
@@ -188,27 +166,15 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         return restriction_subject(self.node, self._selected)
 
     def _subject_restriction(self) -> Optional[RestrictionPlan]:
+        """:return: The subject's WHERE range-folded into conjuncts (placement is the assembler's
+        concern), or ``None`` when there is no groupable subject or no WHERE."""
         condition = self._where_condition()
         subject = self._subject()
         if condition is None or subject is None:
             return None
-        return self._partition(subject, condition)
-
-    def _partition(
-        self, subject: Variable, condition: SymbolicExpression
-    ) -> RestrictionPlan:
-        """:return: The WHERE folded into range pairs and split per conjunct into a rule-matched
-        restriction (the rule's placement decides its slot) or the residual *"such that …"*
-        clause."""
-        matched: List[MatchedRestriction] = []
-        residual: List[Union[SymbolicExpression, RangeFold]] = []
-        for item in fold_range_pairs(flatten_operands(condition, AND)):
-            rule = match_restriction(item, subject)
-            if rule is None:
-                residual.append(item)
-            else:
-                matched.append(MatchedRestriction(rule, item))
-        return RestrictionPlan(matched=matched, residual=residual)
+        return RestrictionPlan(
+            folded=fold_range_pairs(flatten_operands(condition, AND))
+        )
 
     # ── clauses ──────────────────────────────────────────────────────────────
 
