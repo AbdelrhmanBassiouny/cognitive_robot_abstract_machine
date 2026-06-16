@@ -1357,6 +1357,29 @@ def test_move_branch_preserves_connection_type_and_pose():
     assert np.allclose(free_child.global_transform, free_child_pose)
 
 
+def test_memoization_clears_only_last_modification_block():
+    world = World()
+    b1 = Body(name=PrefixedName("b1"))
+    with world.modify_world():
+        world.add_body(b1)
+
+    b2 = Body(name=PrefixedName("b2"))
+    b1_C_b2 = FixedConnection(parent=b2, child=b1)
+
+    with world.modify_world():
+
+        assert world.root == b1
+
+        with world.modify_world():
+            world.add_body(b2)
+
+        assert world.root == b1
+
+        world.add_connection(b1_C_b2)
+
+    assert world.root == b2
+
+
 def test_move_branch_offline_preserves_connection_type_and_pose():
     """
     The offline (enable_unsafe_inside_world_block) path of move_branch must, like the online

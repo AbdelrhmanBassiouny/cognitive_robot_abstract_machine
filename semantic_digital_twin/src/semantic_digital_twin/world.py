@@ -229,15 +229,16 @@ class WorldModelUpdateContextManager:
                 raise exc_val
 
             self.world.delete_orphaned_dofs()
-            clear_memoization_cache(self.world)
             model_manager = self.world._model_manager
             model_manager._active_world_model_update_context_manager_ids.remove(
                 self._id
             )
-
             # if there are still open context managers dont publish yet
             if model_manager._active_world_model_update_context_manager_ids:
                 return
+
+            # only clean up caches in the last modification block
+            clear_memoization_cache(self.world)
 
             model_manager.model_modification_blocks.append(
                 model_manager.current_model_modification_block
