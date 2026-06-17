@@ -221,4 +221,8 @@ class GraspPoseGenerator(PoseGeneratorBackend):
 
     def __iter__(self) -> Iterable[GraspPose]:
         for pose_candidate in self.generator:
-            yield pose_candidate
+            yield GraspPose(
+                pose=pose_candidate,
+                arm=self.arm,
+                grasp_description=self.grasp_description,
+            )

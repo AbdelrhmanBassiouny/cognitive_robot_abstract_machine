@@ -68,7 +68,7 @@ def immutable_simple_pr2_holding_world(simple_pr2_world_setup):
 
 
 def test_grasp_pose_structure():
-    grasp_pose = GraspPose()
+    grasp_pose = GraspPose(pose=Pose())
     assert grasp_pose.x == 0.0
     assert grasp_pose.y == 0.0
     assert grasp_pose.z == 0.0

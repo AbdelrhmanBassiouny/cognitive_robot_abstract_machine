@@ -17,6 +17,7 @@ from coraplex.plans.plan import (
 )
 from coraplex.plans.plan_node import PlanNode
 from semantic_digital_twin.orm.model import PoseMapping
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -83,9 +84,11 @@ class GrasPoseMapping(PoseMapping, AlternativeMapping[GraspPose]):
 
     def to_domain_object(self) -> T:
         return GraspPose(
-            position=self.position,
-            orientation=self.orientation,
-            reference_frame=self.reference_frame,
+            pose=Pose(
+                position=self.position,
+                orientation=self.orientation,
+                reference_frame=self.reference_frame,
+            ),
             grasp_description=self.grasp_description,
             arm=self.arm,
         )

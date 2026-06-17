@@ -8,6 +8,7 @@ from typing import Tuple
 import numpy as np
 from typing_extensions import Optional, Union, List
 
+from krrood.patterns.role import Role, role_taker_field
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
@@ -15,10 +16,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Vector3,
     Quaternion,
 )
-from semantic_digital_twin.world_description.world_entity import (
-    Body,
-    KinematicStructureEntity,
-)
+from semantic_digital_twin.world_description.world_entity import Body
 from coraplex.datastructures.rotations import Rotations
 from coraplex.datastructures.enums import (
     AxisIdentifier,
@@ -424,12 +422,16 @@ class PreferredGraspAlignment:
     """
 
 
-@dataclass(eq=False, init=False)
-class GraspPose(Pose):
+@dataclass(eq=False)
+class GraspPose(Role[Pose]):
     """
     A pose from which a grasp can be performed along with the respective arm and grasp description.
     """
 
+    pose: Pose = role_taker_field()
+    """
+    The pose of the grasp.
+    """
     arm: Optional[Arms] = None
     """
     Arm corresponding to the grasp pose.
@@ -438,30 +440,3 @@ class GraspPose(Pose):
     """
     Grasp description corresponding to the grasp pose.
     """
-
-    def __init__(
-        self,
-        position: Optional[Point3] = None,
-        orientation: Optional[Quaternion] = None,
-        reference_frame: Optional[KinematicStructureEntity] = None,
-        arm: Optional[Arms] = None,
-        grasp_description: Optional[GraspDescription] = None,
-    ):
-        super().__init__(position, orientation, reference_frame)
-        self.arm = arm
-        self.grasp_description = grasp_description
-
-    @classmethod
-    def from_pose(
-        cls,
-        pose: Pose,
-        arm: Arms,
-        grasp_description: GraspDescription,
-    ) -> GraspPose:
-        return cls(
-            position=pose.to_position(),
-            orientation=pose.to_quaternion(),
-            reference_frame=pose.reference_frame,
-            arm=arm,
-            grasp_description=grasp_description,
-        )
