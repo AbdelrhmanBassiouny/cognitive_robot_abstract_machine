@@ -202,8 +202,10 @@ class AbstractCompositeSet(CPPWrapper, SubclassJSONSerializer, ABC):
         dramatically faster when self is a small bounded set (e.g. a search box)
         and other has many pieces.
 
-        Precondition: self must be a disjoint union (the invariant is maintained
-        throughout the subtraction).
+        .. note::
+
+            Self must be a disjoint union (the invariant is maintained
+            throughout the subtraction).
 
         :param other: The set to subtract.
         :return: The difference as a disjoint composite set.

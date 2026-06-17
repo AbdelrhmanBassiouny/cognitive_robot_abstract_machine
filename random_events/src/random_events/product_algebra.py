@@ -419,7 +419,11 @@ class Event(AbstractCompositeSet):
 
     cpp_object: rl.Event = field(default_factory=lambda: rl.Event(set()))
     simple_set_example: SimpleEvent = field(init=False)
+
     _variables: Optional[SortedSet] = field(init=False, default=None)
+    """
+    Cache for the variables of the event.
+    """
 
     @classmethod
     def from_simple_sets(cls, *simple_sets: SimpleEvent):
@@ -435,7 +439,9 @@ class Event(AbstractCompositeSet):
             return instance
 
         # Compute the union of all variables from Python-side inputs — no C++ round-trip.
-        all_variables = SortedSet(variable for simple_set in simple_sets for variable in simple_set.variables)
+        all_variables = SortedSet(
+            variable for simple_set in simple_sets for variable in simple_set.variables
+        )
 
         # Fill missing variables in each input SimpleEvent before building the C++ Event,
         # so every cpp_object is up-to-date when we pass it to rl.Event.
@@ -468,7 +474,11 @@ class Event(AbstractCompositeSet):
         if self._variables is not None:
             return self._variables
         # Fallback: materialise from C++ and cache (edge cases / legacy callers).
-        variables_set = SortedSet(variable for simple_set in self.simple_sets for variable in simple_set.variables)
+        variables_set = SortedSet(
+            variable
+            for simple_set in self.simple_sets
+            for variable in simple_set.variables
+        )
         self._variables = variables_set
         return variables_set
 
@@ -494,7 +504,9 @@ class Event(AbstractCompositeSet):
         Use this whenever the simple sets change in-place
         """
         simple_sets = self.simple_sets
-        self.simple_set_example = simple_sets[0] if simple_sets else SimpleEvent.from_data()
+        self.simple_set_example = (
+            simple_sets[0] if simple_sets else SimpleEvent.from_data()
+        )
 
     def fill_missing_variables(self, variables: Optional[Iterable[Variable]] = None):
         """
@@ -549,7 +561,11 @@ class Event(AbstractCompositeSet):
         """
         result = self._from_cpp(self.cpp_object.union_with(other.cpp_object))
         # If the two events have different variable sets, update _variables to the union.
-        if other._variables is not None and self._variables is not None and other._variables != self._variables:
+        if (
+            other._variables is not None
+            and self._variables is not None
+            and other._variables != self._variables
+        ):
             result._variables = self._variables | other._variables
         return result
 
