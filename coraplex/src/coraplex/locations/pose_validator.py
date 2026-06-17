@@ -137,8 +137,7 @@ class IsReachableBy(PoseValidator):
         return AreReachableBy(
             pose_sequence=[self.pose],
             tip_link=self.tip_link,
-            robot=self.robot,
-            world=self.world,
+            context=self.context,
             grasp_description=self.grasp_description,
         ).__call__()
 
@@ -171,7 +170,7 @@ class AreReachableBy(PoseValidator):
         if there are alternative motion mappings for moving the end effector to the given pose.
         """
         alternative_motion = AlternativeMotion.check_for_alternative(
-            self.robot, MoveToolCenterPointMotion
+            self.alternative_motion_mappings, self.robot, MoveToolCenterPointMotion
         )
         if alternative_motion:
             correct_arm = None
@@ -194,7 +193,13 @@ class AreReachableBy(PoseValidator):
                 )
                 node = PlanNode()
                 # Imagine a plan for the motion node
-                plan = Plan(Context(self.world, self.robot))
+                plan = Plan(
+                    Context(
+                        self.world,
+                        self.robot,
+                        alternative_motion_mappings=self.alternative_motion_mappings,
+                    )
+                )
                 plan.add_node(node)
                 motion.plan_node = node
                 sequence.append(motion._motion_chart)

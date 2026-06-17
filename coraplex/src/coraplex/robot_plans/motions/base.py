@@ -58,7 +58,9 @@ class BaseMotion(Designator):
         pass
 
     def get_alternative_motion(self) -> Optional[Type[AlternativeMotion]]:
-        return AlternativeMotion.check_for_alternative(self.robot, self.__class__)
+        return AlternativeMotion.check_for_alternative(
+            self.context.alternative_motion_mappings, self.robot, self.__class__
+        )
 
 
 MotionType = TypeVar("MotionType", bound=BaseMotion)

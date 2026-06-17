@@ -40,23 +40,12 @@ class StretchMoveToolCenterPoint(MoveToolCenterPointMotion, AlternativeMotion[St
         goal_point.z = 0
         return Sequence(
             [
-                Parallel(
-                    [
-                        Pointing(
-                            root_link=self.world.root,
-                            tip_link=self.robot.root,
-                            goal_point=goal_point,
-                            pointing_axis=Vector3(
-                                0, -1, 0, reference_frame=self.robot.root
-                            ),
-                            binding_policy=GoalBindingPolicy.Bind_at_build,
-                        ),
-                        JointPositionList(
-                            goal_state=JointState.from_str_dict(
-                                {"joint_wrist_yaw": 0.0}, world=self.world
-                            )
-                        ),
-                    ]
+                Pointing(
+                    root_link=self.world.root,
+                    tip_link=self.robot.root,
+                    goal_point=goal_point,
+                    pointing_axis=Vector3(0, -1, 0, reference_frame=self.robot.root),
+                    binding_policy=GoalBindingPolicy.Bind_at_build,
                 ),
                 CartesianPose(
                     root_link=self.world.root,

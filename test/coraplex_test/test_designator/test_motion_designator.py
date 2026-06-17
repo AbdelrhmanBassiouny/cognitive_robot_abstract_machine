@@ -98,6 +98,7 @@ def test_move_motion_chart(immutable_model_world):
 @pytest.mark.skipIf(skip_tests, "Alternative motion mappings not available")
 def test_alternative_mapping(hsr_apartment_world):
     world, view, context = hsr_apartment_world
+    context.alternative_motion_mappings = [HSRBMoveMotion]
     move_motion = MoveMotion(
         Pose(Point3.from_iterable([1, 1, 1]), reference_frame=world.root)
     )
