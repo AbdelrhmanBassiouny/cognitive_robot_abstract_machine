@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from typing_extensions import Any
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.verbalization.field_metadata import (
+    FieldMetadataRegistry,
+)
 from krrood.entity_query_language.verbalization.microplanning.binding_scope import (
     BindingScope,
 )
@@ -42,6 +45,11 @@ class MicroplanningServices:
 
     microplan: Microplan = field(default_factory=Microplan)
     """The plan read model — each node's plan computed once and shared (lazy / memoised)."""
+
+    field_metadata: FieldMetadataRegistry = field(default_factory=FieldMetadataRegistry)
+    """Per-field display-name overrides consulted by the realisation pass. Empty by default — a
+    populated registry is loaded from the committed artifact (or built in tests) and assigned by
+    the caller; an empty one reproduces the raw-identifier behaviour exactly."""
 
     @classmethod
     def from_expression(cls, expression: SymbolicExpression) -> MicroplanningServices:

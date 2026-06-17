@@ -67,7 +67,12 @@ class EQLVerbalizer:
         # The discourse focus per query scope, projected once from the shared plan read model; the
         # coreference pass consults it instead of rule-emitted subject markers.
         discourse = DiscourseModel.from_expression(scan_target, services.microplan)
-        return realize_tree(fragment, already_seen=already_seen, discourse=discourse)
+        return realize_tree(
+            fragment,
+            already_seen=already_seen,
+            discourse=discourse,
+            field_metadata=services.field_metadata,
+        )
 
     @staticmethod
     def _match_context(services: MicroplanningServices) -> RuleContext:
