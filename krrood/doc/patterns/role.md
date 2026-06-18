@@ -162,6 +162,12 @@ attribute — much like navigating an inheritance hierarchy.
 - Install from your IDE: open **Settings → Plugins → Marketplace** and search for
   *Python Role Lens* (plugin id `io.github.abdelrhmanbassiouny.pyroles`).
 
+<iframe width="384px" height="319px" src="https://plugins.jetbrains.com/embeddable/card/32276" frameborder="0"></iframe>
+
+<iframe width="245px" height="48px" src="https://plugins.jetbrains.com/embeddable/install/32276" frameborder="0"></iframe>
+
+A short demo of the plugin in action:
+
 <iframe width="560" height="315" src="https://www.youtube.com/embed/qoPctQ9Z5Eo" frameborder="0" allowfullscreen></iframe>
 
 ## Querying Roles
