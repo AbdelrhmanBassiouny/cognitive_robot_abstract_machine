@@ -60,8 +60,10 @@ from the **marginal** of the probabilistic model — no restriction is applied. 
 you genuinely have no prior knowledge about a field.
 
 ```{important}
-`...` can only be used on **primitive (leaf) fields** such as `float`, `int`, `str`, or `bool`.
-Do not set a structured/nested field to `...`; nest another `underspecified(...)` call instead.
+`...` can only be used on fields whose Python type appears in
+{py:data}`random_events.variable.compatible_types` — currently `int`, `float`, `bool`, and
+`enum.Enum` subclasses.  For structured/nested fields, nest another `underspecified(...)` call
+instead of using `...`.
 ```
 
 ### Concrete literal — conditioning assignment
@@ -233,6 +235,59 @@ query = underspecified(NestedAction)(
 
 ---
 
+## Using a Custom Model Registry (e.g. a Learned JPT)
+
+By default, `ProbabilisticBackend` uses a
+{py:class}`~krrood.parametrization.model_registries.FullyFactorizedRegistry` that returns an
+independent (fully-factorized) model over the free variables.  For realistic robot tasks you
+usually want a **learned** model that captures correlations between fields — for example a
+*Joint Probability Tree* (JPT) trained on recorded execution data.
+
+You can inject any {py:class}`~probabilistic_model.probabilistic_model.ProbabilisticModel` via a
+{py:class}`~krrood.parametrization.model_registries.DictRegistry`, which maps each target class to
+its own model:
+
+```python
+from krrood.entity_query_language.backends import ProbabilisticBackend
+from krrood.entity_query_language.factories import underspecified
+from krrood.parametrization.feature_extractor import FeatureExtractor
+from krrood.parametrization.model_registries import DictRegistry
+from krrood.parametrization.parameterizer import UnderspecifiedParameters
+from krrood.ormatic.data_access_objects.helper import to_dao
+from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
+from probabilistic_model.probabilistic_circuit.relational.learn_rspn import learn_probabilistic_circuit
+
+# 1. Collect training data as DAOs
+training_actions = [...]   # list of NestedAction instances recorded from the robot
+training_daos = [to_dao(a) for a in training_actions]
+
+# 2. Learn a circuit from the data
+learned_model = learn_probabilistic_circuit(training_daos)
+
+# 3. Register the model for the target class
+registry = DictRegistry({NestedAction: learned_model})
+
+# 4. Build the underspecified query as usual
+query = underspecified(NestedAction)(
+    obj=Body(name="mug"),
+    pose=underspecified(KRROODPose)(
+        position=underspecified(KRROODPosition)(x=..., y=..., z=...),
+        orientation=underspecified(KRROODOrientation)(x=..., y=..., z=..., w=...),
+    ),
+)
+
+# 5. Pass the registry to the backend
+backend = ProbabilisticBackend(registry, number_of_samples=10)
+samples = list(backend.evaluate(query))
+```
+
+The backend calls `registry.get_model(parameters)` to retrieve the model before conditioning and
+sampling, so swapping in a JPT or any other
+{py:class}`~probabilistic_model.probabilistic_model.ProbabilisticModel` requires no changes to the
+query itself.
+
+---
+
 ## API Reference
 
 - {py:func}`~krrood.entity_query_language.factories.underspecified`
@@ -240,3 +295,6 @@ query = underspecified(NestedAction)(
 - {py:class}`~krrood.entity_query_language.query.match.Match`
 - {py:class}`~krrood.entity_query_language.backends.ProbabilisticBackend`
 - {py:class}`~krrood.parametrization.parameterizer.UnderspecifiedParameters`
+- {py:class}`~krrood.parametrization.model_registries.ModelRegistry`
+- {py:class}`~krrood.parametrization.model_registries.DictRegistry`
+- {py:data}`~random_events.variable.compatible_types`
