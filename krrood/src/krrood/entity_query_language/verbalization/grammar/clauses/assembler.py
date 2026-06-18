@@ -5,7 +5,7 @@ from typing_extensions import List, Optional, Union
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.query.builders import OrderedByBuilder
 from krrood.entity_query_language.query.operations import GroupedBy, OrderedBy
-from krrood.entity_query_language.query.query import Query, SetOf
+from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_comma,
     PhraseFragment,
@@ -56,13 +56,13 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
         if not plan.has_keys:
             return Keywords.GROUPED.as_fragment()
         groups_phrase = self._keys_phrase(plan.keys)
-        aggregated_fragments = [
-            self.context.child(expression, number=Number.PLURAL)
-            for expression in plan.aggregated
-        ]
-        if aggregated_fragments and not isinstance(node, SetOf):
+        if plan.aggregated and plan.weaves_aggregated:
             aggregated_phrase = oxford_comma(
-                aggregated_fragments, Conjunctions.AND.as_fragment()
+                [
+                    self.context.child(expression, number=Number.PLURAL)
+                    for expression in plan.aggregated
+                ],
+                Conjunctions.AND.as_fragment(),
             )
             return PhraseFragment(
                 parts=[

@@ -22,6 +22,7 @@ from krrood.entity_query_language.verbalization.rendering.renderer import (
     ParagraphRenderer,
 )
 from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Query
 
 if TYPE_CHECKING:
@@ -104,7 +105,9 @@ class VerbalizationPipeline:
             same services across calls so repeated mentions corefer (a Robot … the Robot).
         :return: Formatted natural-language string (plain, ANSI, or HTML, per the renderer).
         """
-        if isinstance(expression, Query):
+        if isinstance(expression, Match):
+            expression.expression.build()
+        elif isinstance(expression, Query):
             expression.build()
         fragment = self._verbalizer.build(expression, services)
         return self.verbalize_fragment(fragment)

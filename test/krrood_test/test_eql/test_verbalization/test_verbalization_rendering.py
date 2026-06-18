@@ -635,37 +635,33 @@ def test_attribute_chain_owner_carries_variable_role(doors_and_drawers_world):
     assert any("FixedConnection" in t for t in variable_texts)
 
 
-def test_rule_if_antecedent_is_block_fragment(doors_and_drawers_world):
+def test_rule_if_antecedent_uses_one_whose_envelope(doors_and_drawers_world):
+    """An antecedent renders as one phrase — the existential intro woven with its conditions under a
+    single shared *"whose …, and …"* envelope (the query restriction form), not per-condition
+    sub-items."""
     frag = _drawer_rule_fragment(doors_and_drawers_world)
     if_block = _find_block_with_keyword(frag, "If")
     assert if_block is not None
-    antecedent_blocks = [
-        item for item in if_block.items if isinstance(item, BlockFragment)
-    ]
-    assert (
-        antecedent_blocks
-    ), "IF clause must contain at least one antecedent BlockFragment"
-    for block in antecedent_blocks:
-        assert isinstance(
-            block.header, PhraseFragment
-        ), "antecedent intro must be a PhraseFragment"
-        assert block.items, "antecedent block must have condition items"
+    assert if_block.items, "IF clause must contain at least one antecedent"
+    texts = [flatten_fragment_to_plain_text(item) for item in if_block.items]
+    antecedent = next(t for t in texts if "FixedConnection" in t)
+    assert antecedent.startswith("there's a FixedConnection whose")
+    assert ", and " in antecedent
+    # one shared "whose" envelope, not a "whose" per condition
+    assert antecedent.count("whose") == 1
 
 
-def test_rule_then_consequent_is_block_fragment(doors_and_drawers_world):
+def test_rule_then_consequent_uses_one_whose_envelope(doors_and_drawers_world):
+    """The THEN clause is a single consequent phrase: the existential intro with its field bindings
+    gathered under one *"whose …, and …"* envelope."""
     frag = _drawer_rule_fragment(doors_and_drawers_world)
     then_block = _find_block_with_keyword(frag, "then")
     assert then_block is not None
-    assert (
-        len(then_block.items) == 1
-    ), "THEN clause must contain exactly one consequent BlockFragment"
-    consequent = then_block.items[0]
-    assert isinstance(consequent, BlockFragment), "THEN item must be a BlockFragment"
-    assert isinstance(
-        consequent.header, PhraseFragment
-    ), "consequent intro must be a PhraseFragment"
-    assert "Drawer" in flatten_fragment_to_plain_text(consequent.header)
-    assert consequent.items, "consequent block must have binding items"
+    assert len(then_block.items) == 1
+    text = flatten_fragment_to_plain_text(then_block.items[0])
+    assert text.startswith("there's a Drawer whose")
+    assert ", and " in text
+    assert text.count("whose") == 1
 
 
 # ── VerbalizationPipeline factories ───────────────────────────────────────────

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import operator
+
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -11,7 +13,9 @@ from krrood.entity_query_language.verbalization.fragments.roles import SemanticR
 from krrood.entity_query_language.verbalization.grammar.aggregation.kinds import (
     AGGREGATION_KIND,
 )
-from krrood.entity_query_language.verbalization.grammar.framework.assembler import Assembler
+from krrood.entity_query_language.verbalization.grammar.framework.assembler import (
+    Assembler,
+)
 from krrood.entity_query_language.verbalization.grammar.conditions.operator_phrase import (
     comparator_operator,
 )
@@ -20,13 +24,15 @@ from krrood.entity_query_language.verbalization.grammar.conditions.recognition i
     superlative_aggregation,
 )
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
+    fold_range_pairs,
     RangeFold,
     build_between,
 )
+from typing_extensions import List
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
     Copulas,
-    Keywords,
     Prepositions,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import Number
@@ -67,21 +73,51 @@ class ConditionAssembler(Assembler[Comparator, None]):
             ]
         )
 
-    def attribute_modifier(self, comparator: Comparator, subject: Variable) -> Fragment:
+    def as_statements(self, conditions: List[SymbolicExpression]) -> List[Fragment]:
+        """
+        Say a list of conditions as standalone statements — the entry a caller uses when the
+        conditions stand on their own (an ``AND``'s operands, a ``where`` block), as opposed to
+        attaching to a subject noun (:func:`as_subject_restrictions`). The verbalizer decides
+        everything inside: it reduces the conjuncts (a complementary lower/upper bound pair on one
+        chain becomes one *"… is between …"*) and says each resulting condition.
+
+        The caller only knows it has conditions and that this says them; it never sees the folding,
+        nor chooses among the per-form methods below.
+
+        :param conditions: The conditions to say, in order.
+        :return: One standalone-statement fragment per condition (after reduction), in order.
+        """
+        return [self.context.child(item) for item in fold_range_pairs(list(conditions))]
+
+    def attribute_modifier(
+        self,
+        comparator: Comparator,
+        subject: Variable,
+        number: Number = Number.SINGULAR,
+    ) -> Fragment:
         """
         :param comparator: The comparator on *subject*'s single-hop attribute.
         :param subject: The subject variable.
+        :param number: The number the attribute noun, operator, and value agree with — singular for
+            a query subject; plural for an aggregated inference antecedent (*"whose children are …"*).
         :return: The bare *"<attribute> <operator> <value>"* grouped predicate a *"whose …"* envelope
-            wraps.
+            wraps. An equality reads as a copula agreeing with *number* (so a plural subject gives
+            *"are"*); any other operator keeps its comparator phrase (singular).
         """
         attribute = single_hop_attribute(comparator.left, subject)
+        if comparator.operation is operator.eq and number is Number.PLURAL:
+            operator_fragment = Copulas.for_number(number)
+        else:
+            operator_fragment = comparator_operator(
+                comparator, self.context.services, compact=False
+            )
         return PhraseFragment(
             parts=[
                 RoleFragment.for_attribute(
-                    attribute._owner_class_, attribute._attribute_name_
+                    attribute._owner_class_, attribute._attribute_name_, number=number
                 ),
-                comparator_operator(comparator, self.context.services, compact=False),
-                self.context.child(comparator.right),
+                operator_fragment,
+                self.context.child(comparator.right, number=number),
             ]
         )
 
@@ -122,20 +158,22 @@ class ConditionAssembler(Assembler[Comparator, None]):
             compact=False,
         )
 
-    def whose_attribute(
+    def attribute_predicate(
         self, attribute_name: str, number: Number, value: Fragment
     ) -> Fragment:
         """
-        The attribute noun and copula agree with *number*.
+        The bare *"<attribute> <copula> <value>"* predicate (the noun and copula agree with
+        *number*), with no source link on the noun — for a field binding whose owner is implicit.
+        The caller gathers these under a shared *"whose …, and …"* envelope, exactly as a query
+        subject restriction does.
 
-        :param attribute_name: The attribute's name.
+        :param attribute_name: The attribute / field's name.
         :param number: The grammatical number the noun and copula agree with.
         :param value: The value fragment (supplied by the caller; it may itself be number-folded).
-        :return: The full *"whose <attribute> <copula> <value>"* modifier.
+        :return: The bare predicate *"<attribute> <copula> <value>"*.
         """
         return PhraseFragment(
             parts=[
-                Keywords.WHOSE.as_fragment(),
                 self._attribute_noun(attribute_name, number),
                 Copulas.for_number(number),
                 value,

@@ -149,13 +149,29 @@ class Keywords(VocabEnum):
     FIND = KeyWord("Find")
     FIND_SETS_OF = KeyWord("Find sets of")
     SUCH_THAT = KeyWord("such that")
+    GIVEN_THAT = KeyWord("given that")
     WHERE = KeyWord("where")
     WHOSE = KeyWord("whose")
     GROUPED_BY = KeyWord("grouped by")
     GROUPED = KeyWord("grouped")
     HAVING = KeyWord("having")
     ORDERED_BY = KeyWord("ordered by")
+    PREDICT = KeyWord("predict")
+    RESPECTIVELY = KeyWord("respectively")
     TRUE = KeyWord("true")
+
+
+class Directive(VocabEnum):
+    """The imperative verb that opens a request: *"Find"* a match in the domain, or *"Generate"*
+    an underspecified one."""
+
+    FIND = KeyWord("Find")
+    GENERATE = KeyWord("Generate")
+
+    @classmethod
+    def for_underspecified(cls, underspecified: bool) -> "Directive":
+        """:return: ``GENERATE`` for an underspecified (generative) request, else ``FIND``."""
+        return cls.GENERATE if underspecified else cls.FIND
 
 
 class Logicals(VocabEnum):
@@ -274,6 +290,24 @@ class SortDirections(VocabEnum):
 
     ASCENDING = PlainWord("ascending")
     DESCENDING = PlainWord("descending")
+
+
+class RankingWords(VocabEnum):
+    """The qualifier words a ``limit`` (+ ordering) puts on the selection — *"the first two"*,
+    *"the top three"*, *"the lowest"*, *"… by salary"*."""
+
+    FIRST = PlainWord("first")
+    """No ordering — the first *n* in natural order."""
+    TOP = PlainWord("top")
+    """Descending order, *n > 1* (*"the top three …"*)."""
+    BOTTOM = PlainWord("bottom")
+    """Ascending order, *n > 1* (*"the bottom three …"*)."""
+    HIGHEST = PlainWord("highest")
+    """Descending order, *n = 1* (*"the highest …"* / *"with the highest …"*)."""
+    LOWEST = PlainWord("lowest")
+    """Ascending order, *n = 1* (*"the lowest …"* / *"with the lowest …"*)."""
+    BY = PlainWord("by")
+    """Introduces the order key for a plural attribute ranking (*"… by salary"*)."""
 
 
 class Articles(VocabEnum):

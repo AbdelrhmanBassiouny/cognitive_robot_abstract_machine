@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from typing_extensions import List, Optional, Type, Union
+from typing_extensions import List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator
@@ -17,13 +18,7 @@ from krrood.entity_query_language.query.quantifiers import The
 from krrood.entity_query_language.query.query import Entity, Query, SetOf
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 from krrood.entity_query_language.verbalization.grammar.conditions.restriction import (
-    RestrictionRule,
-    match_restriction,
     restriction_subject,
-)
-from krrood.entity_query_language.verbalization.microplanning.coordination import (
-    RangeFold,
-    fold_range_pairs,
 )
 from krrood.entity_query_language.verbalization.subquery import (
     aggregation_leaf_attribute,
@@ -47,37 +42,59 @@ class SelectionKind(Enum):
     """A tuple selection over several variables."""
 
 
+class RankingDirection(Enum):
+    """The ordering direction a ``limit`` selects over, if any."""
+
+    NONE = auto()
+    """A ``limit`` with no ``ordered_by`` — the first *n* in natural order."""
+    ASCENDING = auto()
+    """``ordered_by(…, descending=False)`` — the lowest / bottom *n*."""
+    DESCENDING = auto()
+    """``ordered_by(…, descending=True)`` — the highest / top *n*."""
+
+
+class RankingKeyRelation(Enum):
+    """How the order key relates to the selected variable — it changes the surface form."""
+
+    SELF = auto()
+    """The order key *is* the selected variable (*"the highest int"*)."""
+    ATTRIBUTE = auto()
+    """The order key is an attribute chain of the selection (*"… with the highest salary"*)."""
+    OTHER = auto()
+    """The order key roots at a different variable — no clean noun-relative form."""
+
+
 @dataclass(frozen=True)
-class MatchedRestriction:
-    """A WHERE conjunct recognised as a restriction: the rule that matched it and the folded item
-    the rule renders (its :attr:`~RestrictionRule.placement` decides where the rendering lands).
+class RankingPlan:
+    """The *what to say* decomposition of a query's ``limit`` (with optional ordering): how many,
+    in which direction, and how the order key relates to the selection. Present only when the query
+    has a ``limit``; the surface form is the ranking registry's concern at render time.
     """
 
-    rule: Type[RestrictionRule]
-    """The restriction rule that recognised the conjunct."""
+    n: int
+    """The limit (always ``>= 1``)."""
 
-    item: Union[SymbolicExpression, RangeFold]
-    """The folded conjunct (``RangeFold`` or raw expression) the rule renders."""
+    direction: RankingDirection
+    """The ordering direction, or ``NONE`` for a bare ``limit``."""
+
+    relation: RankingKeyRelation
+    """How the order key relates to the selection (``SELF`` when there is no ordering)."""
+
+    order_key: Optional[SymbolicExpression]
+    """The ``ordered_by`` key expression, or ``None`` for a bare ``limit``."""
 
 
 @dataclass(frozen=True)
 class RestrictionPlan:
-    """Partition of a subject's WHERE condition into rule-matched conjuncts vs. the residual.
+    """A subject's WHERE condition decomposed into its conjuncts — the *content* of the restriction.
 
-    A matched conjunct carries the restriction rule that recognised it, whose placement decides
-    where its rendering lands.  An unmatched conjunct is residual and stays in a *"such that …"*
-    clause."""
+    Everything downstream of the raw conjuncts (range-folding a bound pair, choosing each conjunct's
+    surface form and slot) is the placement registry's concern at render time, so the plan carries
+    only the flattened conjuncts, neither folded nor placed.
+    """
 
-    matched: List[MatchedRestriction] = field(default_factory=list)
-    """The recognised restrictions — each rule renders its item into the rule's declared placement."""
-
-    residual: List[Union[SymbolicExpression, RangeFold]] = field(default_factory=list)
-    """Folded items (``RangeFold`` or raw expression) for the residual *"such that …"*."""
-
-    @property
-    def has_residual(self) -> bool:
-        """:return: ``True`` when at least one conjunct stayed residual."""
-        return bool(self.residual)
+    conditions: List[SymbolicExpression] = field(default_factory=list)
+    """The subject's WHERE conjuncts (an ``AND`` flattened to a list, not range-folded)."""
 
 
 @dataclass(frozen=True)
@@ -114,7 +131,7 @@ class QueryPlan:
     """The variable the WHERE restricts, or ``None`` when there is no groupable subject."""
 
     subject_restriction: Optional[RestrictionPlan]
-    """Partition of the subject's WHERE into rule-matched restrictions and the residual."""
+    """The subject's WHERE, range-folded into conjuncts for the assembler to place, or ``None``."""
 
     where_condition: Optional[SymbolicExpression]
     """The query's raw WHERE condition, or ``None``."""
@@ -124,6 +141,9 @@ class QueryPlan:
 
     aggregation_data: Optional[AggregationData]
     """The collapsed aggregation details when this is an aggregation subquery, else ``None``."""
+
+    ranking: Optional[RankingPlan]
+    """The ``limit`` (+ ordering) decomposition, or ``None`` when the query has no ``limit``."""
 
 
 @dataclass
@@ -152,6 +172,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             where_condition=self._where_condition(),
             is_aggregation_subquery=is_aggregation_subquery(self.node),
             aggregation_data=self._aggregation_data(),
+            ranking=self._ranking(),
         )
 
     # ── selection shape ──────────────────────────────────────────────────────
@@ -188,27 +209,14 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         return restriction_subject(self.node, self._selected)
 
     def _subject_restriction(self) -> Optional[RestrictionPlan]:
+        """:return: The subject's WHERE flattened into conjuncts (folding and placement are the
+        registry's concern), or ``None`` when there is no groupable subject or no WHERE.
+        """
         condition = self._where_condition()
         subject = self._subject()
         if condition is None or subject is None:
             return None
-        return self._partition(subject, condition)
-
-    def _partition(
-        self, subject: Variable, condition: SymbolicExpression
-    ) -> RestrictionPlan:
-        """:return: The WHERE folded into range pairs and split per conjunct into a rule-matched
-        restriction (the rule's placement decides its slot) or the residual *"such that …"*
-        clause."""
-        matched: List[MatchedRestriction] = []
-        residual: List[Union[SymbolicExpression, RangeFold]] = []
-        for item in fold_range_pairs(flatten_operands(condition, AND)):
-            rule = match_restriction(item, subject)
-            if rule is None:
-                residual.append(item)
-            else:
-                matched.append(MatchedRestriction(rule, item))
-        return RestrictionPlan(matched=matched, residual=residual)
+        return RestrictionPlan(conditions=flatten_operands(condition, AND))
 
     # ── clauses ──────────────────────────────────────────────────────────────
 
@@ -227,3 +235,41 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             is_constrained_or_grouped=self.node.is_constrained_or_grouped,
             source=aggregation_source_root(self.node),
         )
+
+    # ── ranking (limit + ordering) ───────────────────────────────────────────
+
+    def _ranking(self) -> Optional[RankingPlan]:
+        """:return: The ``limit`` (+ ordering) decomposition, or ``None`` when the query has no
+        ``limit`` (ordering without a limit keeps the standalone *"ordered by …"* clause).
+        """
+        limit = getattr(self.node, "_limit_", None)
+        if limit is None:
+            return None
+        builder = getattr(self.node, "_ordered_by_builder_", None)
+        if builder is None:
+            return RankingPlan(
+                n=limit,
+                direction=RankingDirection.NONE,
+                relation=RankingKeyRelation.SELF,
+                order_key=None,
+            )
+        direction = (
+            RankingDirection.DESCENDING
+            if builder.descending
+            else RankingDirection.ASCENDING
+        )
+        return RankingPlan(
+            n=limit,
+            direction=direction,
+            relation=self._key_relation(builder.variable),
+            order_key=builder.variable,
+        )
+
+    def _key_relation(self, order_key: SymbolicExpression) -> RankingKeyRelation:
+        """:return: How *order_key* relates to the selected variable — ``SELF`` (the key is the
+        selection), ``ATTRIBUTE`` (a chain on it), or ``OTHER`` (a different root)."""
+        chain, root = walk_chain(order_key)
+        selected_id = getattr(self._selected, "_id_", None)
+        if selected_id is None or getattr(root, "_id_", None) != selected_id:
+            return RankingKeyRelation.OTHER
+        return RankingKeyRelation.ATTRIBUTE if chain else RankingKeyRelation.SELF

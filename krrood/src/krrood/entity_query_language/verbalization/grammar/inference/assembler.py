@@ -16,20 +16,25 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     Fragment,
 )
-from krrood.entity_query_language.verbalization.grammar.framework.assembler import Assembler
+from krrood.entity_query_language.verbalization.grammar.framework.assembler import (
+    Assembler,
+)
 from krrood.entity_query_language.verbalization.grammar.conditions.assembler import (
     ConditionAssembler,
+)
+from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+    as_subject_restrictions,
 )
 from krrood.entity_query_language.verbalization.grammar.inference.planner import (
     AggregationStatus,
     AntecedentInformation,
     ConsequentBinding,
     InferencePlanner,
-    ConditionPlan,
     RuleStructure,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
+    Conjunctions,
     ExistentialPhrase,
     FallbackNouns,
     GroupKeyPhrases,
@@ -74,25 +79,50 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
 
     def _if_items(self, structure: RuleStructure) -> List[Fragment]:
         """
-        :return: One item per antecedent — *"there's a <Type> [whose …]"* — plus any unmatched
+        :return: One item per antecedent — *"there's a <Type> whose …, and …"* — plus any unmatched
             conditions; *"true"* when there are none.
         """
-        items: List[Fragment] = []
-        for antecedent in structure.primary_antecedents:
-            intro = self._antecedent_intro(antecedent)
-            condition_fragments = self._condition_fragments(
-                antecedent.conditions, antecedent
-            )
-            items.append(
-                BlockFragment(header=intro, items=condition_fragments)
-                if condition_fragments
-                else intro
-            )
-
-        for condition in structure.unmatched_conditions:
-            items.append(self.context.child(condition))
-
+        items: List[Fragment] = [
+            self._antecedent(antecedent) for antecedent in structure.primary_antecedents
+        ]
+        items += [
+            self.context.child(condition)
+            for condition in structure.unmatched_conditions
+        ]
         return items or [Keywords.TRUE.as_fragment()]
+
+    def _antecedent(self, antecedent: AntecedentInformation) -> Fragment:
+        """:return: The antecedent as a bulleted list entry whose conditions hang beneath it — the
+        existential intro woven with its conditions by the shared restriction machinery (the same
+        *"whose"* group / *"such that …"* form a query selection uses). Inline / in paragraph this
+        reads *"there's a <Type> whose a, and b"*; in hierarchical the conditions are sub-points.
+        """
+        intro = self._antecedent_intro(antecedent)
+        if not antecedent.conditions or antecedent.variable is None:
+            return intro
+        restriction = as_subject_restrictions(
+            antecedent.conditions,
+            antecedent.variable,
+            self.context,
+            self._number(antecedent),
+        )
+        header = (
+            PhraseFragment(parts=[intro, *restriction.inline_modifiers])
+            if restriction.inline_modifiers
+            else intro
+        )
+        items: List[Fragment] = []
+        if restriction.whose is not None:
+            items.append(restriction.whose)
+        if restriction.residual is not None:
+            items.append(
+                PhraseFragment(
+                    parts=[Keywords.SUCH_THAT.as_fragment(), restriction.residual]
+                )
+            )
+        if not items:
+            return header
+        return BlockFragment(header=header, items=items, bulleted_header=True)
 
     def _antecedent_intro(self, antecedent: AntecedentInformation) -> Fragment:
         """:return: *"there's a <Type>"* / *"there are <Types>"* — the antecedent's existential intro."""
@@ -114,50 +144,34 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
             return getattr(root.selected_variable, "_id_", None)
         return getattr(root, "_id_", None)
 
-    def _condition_fragments(
-        self, conditions: List[ConditionPlan], antecedent: AntecedentInformation
-    ) -> List[Fragment]:
-        """:return: One fragment per antecedent condition."""
-        return [
-            self._condition_fragment(condition_plan, antecedent)
-            for condition_plan in conditions
-        ]
-
-    def _condition_fragment(
-        self, condition_plan: ConditionPlan, antecedent: AntecedentInformation
-    ) -> Fragment:
-        """:return: One rendered condition — a *"whose <attribute> is …"* modifier when foldable, else
-        the recursive rendering."""
-        if condition_plan.whose_attribute_name is None:
-            return self.context.child(condition_plan.expression)
-        number = self._number(antecedent)
-        value = self._value(condition_plan.expression.right, number)
-        return ConditionAssembler(self.context).whose_attribute(
-            condition_plan.whose_attribute_name, number, value
-        )
-
-    def _value(self, expression: SymbolicExpression, number: Number) -> Fragment:
-        """:return: *expression* rendered agreeing with *number* (plural folds the chain)."""
-        return self.context.child(expression, number=number)
-
     # ── THEN clause ───────────────────────────────────────────────────────────
 
     def _then_items(self, structure: RuleStructure) -> List[Fragment]:
-        """:return: *"there's a <Consequent> [whose <field> is <value> …]"* — the THEN-clause block."""
+        """:return: The consequent as a single bulleted entry — *"there's a <Consequent>"* with its
+        field bindings under one *"whose"* group (the same form a query subject restriction uses):
+        *"whose <field> is <value>, and …"* inline / in paragraph, sub-points in hierarchical.
+        """
         intro: Fragment = ExistentialPhrase.for_number(Number.SINGULAR).build_phrase(
             structure.consequent_type
         )
-        binding_fragments = [
-            self._binding_fragment(binding) for binding in structure.consequent_bindings
+        bindings = [
+            self._binding_predicate(binding)
+            for binding in structure.consequent_bindings
         ]
-        if not binding_fragments:
+        if not bindings:
             return [intro]
-        return [BlockFragment(header=intro, items=binding_fragments)]
+        whose = BlockFragment(
+            header=Keywords.WHOSE.as_fragment(),
+            items=bindings,
+            conjunction=Conjunctions.AND.as_fragment(),
+        )
+        return [BlockFragment(header=intro, items=[whose], bulleted_header=True)]
 
-    def _binding_fragment(self, binding: ConsequentBinding) -> Fragment:
-        """:return: *"whose <field> is/are <value>"* — one consequent field binding."""
+    def _binding_predicate(self, binding: ConsequentBinding) -> Fragment:
+        """:return: The bare *"<field> is/are <value>"* predicate for one consequent binding (the
+        shared *"whose"* envelope is added once by :meth:`_then_items`)."""
         number = Number.of(binding.is_plural_field)
-        return ConditionAssembler(self.context).whose_attribute(
+        return ConditionAssembler(self.context).attribute_predicate(
             binding.field_name, number, self._binding_value(binding)
         )
 

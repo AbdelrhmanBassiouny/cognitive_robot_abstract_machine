@@ -6,7 +6,7 @@ from typing_extensions import List, Optional, Union
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.query.operations import GroupedBy
-from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.query.query import Query, SetOf
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 
 
@@ -20,6 +20,12 @@ class GroupPlan:
     aggregated: List[SymbolicExpression]
     """Selected expressions aggregated (not group keys) — rendered plural; empty for a bare
     grouped-by node."""
+
+    weaves_aggregated: bool = False
+    """``True`` when the query weaves its aggregated selections into the clause
+    (*"and the <aggregated> are grouped by …"*) — an entity query. A set-of renders its selections
+    in the tuple, so it does not. This is the *what to say* decision the assembler used to take by
+    reading the query type (``isinstance(node, SetOf)``) at render time."""
 
     @property
     def has_keys(self) -> bool:
@@ -55,7 +61,11 @@ class GroupedByPlanner(Planner[Union[Query, GroupedBy], GroupPlan]):
             if isinstance(self.node, Query)
             else []
         )
-        return GroupPlan(keys=list(grouped.variables_to_group_by), aggregated=aggregated)
+        return GroupPlan(
+            keys=list(grouped.variables_to_group_by),
+            aggregated=aggregated,
+            weaves_aggregated=not isinstance(self.node, SetOf),
+        )
 
     def _grouped_by(self) -> Optional[GroupedBy]:
         """:return: The GROUP BY of *node* — *node* itself when it is a bare ``GroupedBy``, else

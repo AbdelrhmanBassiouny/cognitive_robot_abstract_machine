@@ -105,7 +105,9 @@ class BankTransaction:
 def test_all_rules_registry_is_populated():
     """RULES must be non-empty after import — otherwise every expression falls back to
     its name string and verbalization is silently broken."""
-    from krrood.entity_query_language.verbalization.grammar.framework.registry import RULES
+    from krrood.entity_query_language.verbalization.grammar.framework.registry import (
+        RULES,
+    )
 
     assert len(RULES) > 0, (
         "RULES is empty — the grammar was not imported, so every expression would "
@@ -918,14 +920,14 @@ def test_verbalize_nested_rule(doors_and_drawers_world):
     assert (
         "there's a FixedConnection" in text
     ), f"Expected 'there's a FixedConnection' in: {text!r}"
-    # IF clause describes its bindings as "whose" clauses
+    # IF clause describes its conditions under one shared "whose …, and …" envelope
     assert "whose parent is the child of a PrismaticConnection" in text
-    assert "whose child is a Handle" in text
+    assert "and child is a Handle" in text
     # THEN clause introduces the Drawer
     assert "there's a Drawer" in text, f"Expected 'there's a Drawer' in: {text!r}"
-    # THEN clause uses "whose" for each binding
+    # THEN clause gathers its bindings under one "whose …, and …" envelope
     assert "whose container is the parent of the FixedConnection" in text
-    assert "whose handle is the child of the FixedConnection" in text
+    assert "and handle is the child of the FixedConnection" in text
 
 
 def test_verbalize_inference_rule_golden(doors_and_drawers_world):
@@ -943,9 +945,9 @@ def test_verbalize_inference_rule_golden(doors_and_drawers_world):
     )
     assert verbalize_expression(entity(drawer_var)) == (
         "If there's a FixedConnection whose parent is the child of a PrismaticConnection, "
-        "whose child is a Handle, "
+        "and child is a Handle, "
         "then there's a Drawer whose container is the parent of the FixedConnection, "
-        "whose handle is the child of the FixedConnection"
+        "and handle is the child of the FixedConnection"
     )
 
 
@@ -1530,10 +1532,10 @@ def test_cabinet_rule_verbalization(handles_and_containers_world):
     assert (
         "whose container is the common parent of the PrismaticConnections" in text
     ), f"Expected 'whose container is the common parent of the PrismaticConnections' in: {text!r}"
-    # aggregated plural binding
+    # aggregated plural binding (second in the shared "whose …, and …" envelope)
     assert (
-        "whose drawers are the Drawers" in text
-    ), f"Expected 'whose drawers are the Drawers' in: {text!r}"
+        "and drawers are the Drawers" in text
+    ), f"Expected 'and drawers are the Drawers' in: {text!r}"
 
 
 def test_inference_planner_decomposes_rule_without_rendering(
@@ -1572,24 +1574,40 @@ def test_inference_planner_decomposes_rule_without_rendering(
     assert by_field["container"] == AggregationStatus.GROUP_KEY
     assert by_field["drawers"] == AggregationStatus.AGGREGATED
 
-    # The *whose*-foldability of each antecedent condition is decided here (not in the
-    # assembler): the single-hop attribute equality folds, recording its attribute name.
-    planned = [
-        pc for antecedent in plan.primary_antecedents for pc in antecedent.conditions
+    # The planner only collects each antecedent's raw conditions; choosing the surface form
+    # (whose / standalone) is the condition-form registry's concern at render time.
+    from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+        ConditionForm,
+        Placement,
+        Slot,
+    )
+
+    conditions = [
+        condition
+        for antecedent in plan.primary_antecedents
+        for condition in antecedent.conditions
     ]
-    assert planned, "expected at least one attributed antecedent condition"
-    assert any(plan.whose_attribute_name == "child" for plan in planned)
+    assert conditions, "expected at least one attributed antecedent condition"
+    antecedent = plan.primary_antecedents[0]
+    form = ConditionForm.most_applicable(
+        Placement(item=antecedent.conditions[0], subject=antecedent.variable)
+    )
+    assert form.slot is Slot.WHOSE
 
 
-def test_query_planner_decomposes_subject_restriction_without_rendering():
-    """The QueryPlanner partitions the WHERE into grouped/residual as pure data — no fragments."""
+def test_query_planner_collects_subject_restriction_without_placing():
+    """The QueryPlanner only flattens the WHERE into conjuncts — range-folding and choosing each
+    conjunct's surface form/slot are the condition-form registry's concern, not the plan's.
+    """
     from krrood.entity_query_language.verbalization.grammar.query.planner import (
         QueryPlanner,
         SelectionKind,
     )
-    from krrood.entity_query_language.verbalization.grammar.conditions.restriction import (
-        AttributePredicateRestrictionRule,
+    from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+        ConditionForm,
         Placement,
+        Slot,
+        WhosePredicateForm,
     )
 
     r = variable(_Robot, [])
@@ -1602,14 +1620,16 @@ def test_query_planner_decomposes_subject_restriction_without_rendering():
     assert plan.subject is not None
     assert plan.is_aggregation_subquery is False
 
-    # "battery > 50" is a single-hop, non-boolean attribute predicate → matched (foldable
-    # to "whose battery is greater than 50"); nothing is residual.
+    # The plan carries only the raw conjuncts — no folding, no placement decision.
     assert plan.subject_restriction is not None
-    assert plan.subject_restriction.residual == []
-    assert [matched.rule for matched in plan.subject_restriction.matched] == [
-        AttributePredicateRestrictionRule
-    ]
-    assert AttributePredicateRestrictionRule.placement is Placement.WHOSE_GROUP
+    assert len(plan.subject_restriction.conditions) == 1
+    conjunct = plan.subject_restriction.conditions[0]
+
+    # "battery > 50" is a single-hop, non-boolean attribute predicate → the registry selects the
+    # whose-predicate form (slot WHOSE: "whose battery is greater than 50").
+    form = ConditionForm.most_applicable(Placement(item=conjunct, subject=plan.subject))
+    assert form is WhosePredicateForm
+    assert form.slot is Slot.WHOSE
 
 
 def test_instantiated_planner_decomposes_bindings_without_rendering(

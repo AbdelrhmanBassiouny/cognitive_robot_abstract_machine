@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing_extensions import Callable, List, Optional, TypeVar
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -178,6 +178,10 @@ class NounPhrase(HasNumber, Fragment):
     """When set, this noun phrase is a referring expression for that entity, and its
     definiteness holds the first-mention form."""
 
+    pre_head: Optional[Fragment] = None
+    """A qualifier placed between the determiner and the head (*"the [first two] Robots"*), e.g. a
+    ``limit`` ranking phrase. Pre-nominal, so distinct from the post-nominal :attr:`modifiers`."""
+
 
 @dataclass
 class PossessiveChain(Fragment):
@@ -209,6 +213,16 @@ class BlockFragment(Fragment):
 
     items: list[Fragment] = field(default_factory=list)
     """Ordered list of sub-item fragments."""
+
+    conjunction: Optional[Fragment] = None
+    """When set, the items are coordinated by this conjunction: paragraph rendering joins them
+    Oxford-style (*"a, b, and c"*) and hierarchical rendering prefixes the last bullet with it
+    (*"… and c"*). ``None`` ⇒ the items are an uncoordinated list (comma-joined / plain bullets)."""
+
+    bulleted_header: bool = False
+    """When this block is itself a list item, ``True`` renders its header *as a bullet* (a list
+    entry that owns a nested sub-list — e.g. an inference antecedent), while ``False`` renders the
+    header as a plain label above its items (e.g. a *"whose"* / *"given that"* section)."""
 
 
 # ── Fragment catamorphism ──────────────────────────────────────────────────────
@@ -280,12 +294,13 @@ def map_structural_children(
     :return: The rebuilt container, or ``None`` when *fragment* is not a structural container.
     """
     match fragment:
-        case PhraseFragment(parts=parts, separator=separator):
-            return PhraseFragment(
-                parts=[recurse(p) for p in parts], separator=separator
-            )
+        case PhraseFragment(parts=parts):
+            # replace() preserves the separator (and any future fields); only children change.
+            return replace(fragment, parts=[recurse(p) for p in parts])
         case BlockFragment(header=header, items=items):
-            return BlockFragment(
+            # replace() preserves conjunction / bulleted_header (and source); only children change.
+            return replace(
+                fragment,
                 header=None if header is None else recurse(header),
                 items=[recurse(i) for i in items],
             )
@@ -321,7 +336,11 @@ def flatten_fragment_to_plain_text(fragment: Fragment) -> str:
     """
 
     def _block(b: BlockFragment) -> str:
-        items = ", ".join(flatten_fragment_to_plain_text(i) for i in b.items)
+        rendered = [flatten_fragment_to_plain_text(i) for i in b.items]
+        if b.conjunction is not None and len(rendered) > 1:
+            conjunction = flatten_fragment_to_plain_text(b.conjunction)
+            rendered[-1] = f"{conjunction} {rendered[-1]}"
+        items = ", ".join(rendered)
         if b.header is None:
             return items
         header = flatten_fragment_to_plain_text(b.header)

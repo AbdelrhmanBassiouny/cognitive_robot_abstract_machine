@@ -8,7 +8,6 @@ from enum import Enum, auto
 from typing_extensions import Dict, FrozenSet, List, Optional, Tuple, Union
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import InstantiatedVariable, Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import (
@@ -18,9 +17,6 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.core.expression_structure import chain_root
-from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
-    attribute_names,
-)
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 from krrood.entity_query_language.verbalization.subquery import (
     unwrap_result_quantifiers,
@@ -42,26 +38,15 @@ class AggregationStatus(Enum):
 
 
 @dataclass
-class ConditionPlan:
-    """One antecedent WHERE condition, with its foldability decided up front.
-
-    ``whose_attribute_name`` is the singular attribute name when the condition is a single-hop
-    attribute equality that folds into a *"whose <attribute> is …"* modifier, else ``None``.
-    """
-
-    expression: SymbolicExpression
-    """The raw EQL condition expression."""
-
-    whose_attribute_name: Optional[str]
-    """Singular attribute name when foldable to *whose*, else ``None``."""
-
-
-@dataclass
 class AntecedentInformation:
     """Descriptor for one antecedent variable in the IF clause."""
 
     root: Union[Variable, Entity]
     """The underlying Variable/Entity (unwrapped from any ResultQuantifier)."""
+
+    variable: Optional[Variable]
+    """The antecedent's restriction subject — the variable its conditions attach to (``root`` for a
+    Variable root, the selected variable for an Entity root)."""
 
     type_name: str
     """Human-readable Python type name of *root* (e.g. ``"Robot"``)."""
@@ -69,8 +54,9 @@ class AntecedentInformation:
     aggregation_status: AggregationStatus
     """Whether this antecedent is a group key, aggregated, or neither."""
 
-    conditions: List[ConditionPlan] = field(default_factory=list)
-    """All WHERE conditions attributable to this antecedent (foldability pre-decided)."""
+    conditions: List[SymbolicExpression] = field(default_factory=list)
+    """The raw WHERE conditions attributable to this antecedent; their surface form/slot is the
+    condition-form registry's concern at render time, not the plan's."""
 
 
 @dataclass
@@ -217,11 +203,22 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
             type_name, own_conditions = self._extract_root_info(root)
             antecedents_by_root_id[root._id_] = AntecedentInformation(
                 root=root,
+                variable=self._root_variable(root),
                 type_name=type_name,
                 aggregation_status=self._aggregation_status(root._id_, group_key_ids),
                 conditions=own_conditions,
             )
         return list(antecedents_by_root_id.values())
+
+    @staticmethod
+    def _root_variable(root: Union[Variable, Entity]) -> Optional[Variable]:
+        """:return: The restriction subject of an antecedent root — the selected variable for an
+        Entity root, the root itself for a Variable root."""
+        if isinstance(root, Entity):
+            root.build()
+            selected = root.selected_variable
+            return selected if isinstance(selected, Variable) else None
+        return root if isinstance(root, Variable) else None
 
     def _outer_conditions(self) -> List[SymbolicExpression]:
         where = self.node._where_expression_
@@ -244,7 +241,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
         for condition in extra_conditions:
             owner_id = self._condition_left_owner_id(condition)
             if owner_id is not None and owner_id in id_to_antecedent:
-                id_to_antecedent[owner_id].conditions.append(self._planned(condition))
+                id_to_antecedent[owner_id].conditions.append(condition)
             else:
                 unmatched.append(condition)
         return unmatched
@@ -282,7 +279,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
 
     def _extract_root_info(
         self, root: Union[Variable, Entity]
-    ) -> Tuple[str, List[ConditionPlan]]:
+    ) -> Tuple[str, List[SymbolicExpression]]:
         """:return: ``(type_name, own_conditions)`` for a root variable or entity."""
         if isinstance(root, Entity):
             root.build()
@@ -292,14 +289,9 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
                 if selected and getattr(selected, "_type_", None)
                 else FallbackNouns.ENTITY.text
             )
-            conditions: List[ConditionPlan] = []
+            conditions: List[SymbolicExpression] = []
             if root._where_expression_ is not None:
-                conditions = [
-                    self._planned(conjunct)
-                    for conjunct in flatten_operands(
-                        root._where_expression_.condition, AND
-                    )
-                ]
+                conditions = flatten_operands(root._where_expression_.condition, AND)
             return type_name, conditions
         if isinstance(root, Variable):
             type_name = (
@@ -309,29 +301,3 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
             )
             return type_name, []
         return FallbackNouns.ENTITY.text, []
-
-    # ── condition foldability (the *whose* analysis — decided here, not in assembly) ──
-
-    def _planned(self, condition: SymbolicExpression) -> ConditionPlan:
-        """:return: *condition* wrapped with its pre-decided *whose*-foldability."""
-        return ConditionPlan(
-            expression=condition,
-            whose_attribute_name=self._whose_attribute_name(condition),
-        )
-
-    def _whose_attribute_name(self, condition: SymbolicExpression) -> Optional[str]:
-        """Foldable if and only if it is an attribute equality (``Attribute == value``); the modifier
-        attribute is the last hop of the attribute chain.
-
-        :return: The singular attribute name when *condition* folds to *"whose <attribute> is …"*,
-            else ``None``.
-        """
-        if (
-            not isinstance(condition, Comparator)
-            or condition.operation is not operator.eq
-        ):
-            return None
-        if not isinstance(condition.left, Attribute):
-            return None
-        names_along_chain = attribute_names(condition.left)
-        return names_along_chain[-1] if names_along_chain else None
