@@ -2501,30 +2501,6 @@ class DegreeOfFreedomLimitsDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    lower_id: Mapped[int] = mapped_column(
-        ForeignKey("DerivativeMap_floatDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    upper_id: Mapped[int] = mapped_column(
-        ForeignKey("DerivativeMap_floatDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    lower: Mapped[DerivativeMap_floatDAO] = relationship(
-        "DerivativeMap_floatDAO",
-        uselist=False,
-        foreign_keys=[lower_id],
-        post_update=True,
-    )
-    upper: Mapped[DerivativeMap_floatDAO] = relationship(
-        "DerivativeMap_floatDAO",
-        uselist=False,
-        foreign_keys=[upper_id],
-        post_update=True,
-    )
-
 
 class DerivativeMapDAO(
     Base,
@@ -2535,49 +2511,6 @@ class DerivativeMapDAO(
     database_id: Mapped[builtins.int] = mapped_column(
         Integer, primary_key=True, use_existing_column=True
     )
-
-    polymorphic_type: Mapped[str] = mapped_column(
-        String(255), nullable=False, use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_on": "polymorphic_type",
-        "polymorphic_identity": "DerivativeMapDAO",
-    }
-
-
-class DerivativeMap_floatDAO(
-    DerivativeMapDAO,
-    DataAccessObject[
-        semantic_digital_twin.spatial_types.derivatives.DerivativeMap[float]
-    ],
-):
-    __tablename__ = "DerivativeMap_floatDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(DerivativeMapDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    position: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-    velocity: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-    acceleration: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-    jerk: Mapped[typing.Optional[builtins.float]] = mapped_column(
-        use_existing_column=True
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "DerivativeMap_floatDAO",
-        "inherit_condition": database_id == DerivativeMapDAO.database_id,
-        "polymorphic_load": "selectin",
-    }
 
 
 class DofNotInWorldStateErrorDAO(
@@ -8213,20 +8146,9 @@ class InvalidConnectionLimitsDAO(
         nullable=True,
         use_existing_column=True,
     )
-    limits_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomLimitsDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
 
     name: Mapped[PrefixedNameDAO] = relationship(
         "PrefixedNameDAO", uselist=False, foreign_keys=[name_id], post_update=True
-    )
-    limits: Mapped[DegreeOfFreedomLimitsDAO] = relationship(
-        "DegreeOfFreedomLimitsDAO",
-        uselist=False,
-        foreign_keys=[limits_id],
-        post_update=True,
     )
 
     __mapper_args__ = {
@@ -9655,19 +9577,6 @@ class DegreeOfFreedomDAO(
 
     has_hardware_interface: Mapped[builtins.bool] = mapped_column(
         use_existing_column=True
-    )
-
-    limits_id: Mapped[int] = mapped_column(
-        ForeignKey("DegreeOfFreedomLimitsDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    limits: Mapped[DegreeOfFreedomLimitsDAO] = relationship(
-        "DegreeOfFreedomLimitsDAO",
-        uselist=False,
-        foreign_keys=[limits_id],
-        post_update=True,
     )
 
     __mapper_args__ = {

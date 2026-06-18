@@ -767,14 +767,14 @@ class IntegralStrategy(EnforcementStrategy):
 
     .. math::
 
-        target - f = \\Delta t \\sum_{k=0}^{N-1} J_{f} * sp_k
+        target - f = \\Delta t \\  \\sum_{k=0}^{N-3} J_{f} + \\Delta t \\epsilon
 
     ::
 
-        |   t1   |   t2   |   t1   |   t2   |   t1   |   t2   | prediction horizon
-        |v1 v2 v3|v1 v2 v3|j1 j2 j3|j1 j2 j3|s1 s2 s3|s1 s2 s3| free variables / slack
-        |-----------------------------------------------------|
-        |  J1*sp |  J1*sp |  J3*sp | J3*sp  | sp     | sp     |
+        |   k1   |   k2   |   k1   |   k2   |   k1   |   k2   | prediction horizon
+        |v1 v2 v3|v1 v2 v3|j1 j2 j3|j1 j2 j3|   eps  |   eps  | free variables / slack
+        |--------+--------+--------+--------+--------+--------|
+        |  J1*dt |  J1*dt |  J3*dt | J3*dt  |   dt   |   dt   |
         |-----------------------------------------------------|
     """
 
@@ -907,18 +907,18 @@ class VelocityStrategy(EnforcementStrategy):
 
     .. math::
 
-        target - f = \\Delta t \\sum_{k=0}^{N-1} J_{f} * sp_k
+        target - f = \\Delta t \\ \\sum_{k=0}^{N-1} J_{f}
 
     ::
 
         |   t1   |   t2   |   t3   |   t1   |   t2   |   t3   |   t1   |   t2   |   t3   | prediction horizon
         |v1 v2 v3|v1 v2 v3|v1 v2 v3|a1 a2 a3|a1 a2 a3|a1 a2 a3|j1 j2 j3|j1 j2 j3|j1 j2 j3| free variables
         |--------------------------------------------------------------------------------|
-        |  Jv*sp |        |        |  Ja*sp |        |        |  Jj*sp |        |        |
-        |  Jv*sp |        |        |  Ja*sp |        |        |  Jj*sp |        |        |
+        |  Jv*dt |        |        |  Ja*dt |        |        |  Jj*dt |        |        |
+        |  Jv*dt |        |        |  Ja*dt |        |        |  Jj*dt |        |        |
         |--------------------------------------------------------------------------------|
-        |        |  Jv*sp |        |        |  Ja*sp |        |        |  Jj*sp |        |
-        |        |  Jv*sp |        |        |  Ja*sp |        |        |  Jj*sp |        |
+        |        |  Jv*dt |        |        |  Ja*dt |        |        |  Jj*dt |        |
+        |        |  Jv*dt |        |        |  Ja*dt |        |        |  Jj*dt |        |
         |--------------------------------------------------------------------------------|
     """
 
@@ -1030,15 +1030,15 @@ class SystemDynamicsStrategy(EnforcementStrategy):
 
     Where v, a and j are velocity, acceleration and jerk, respectively, and k is the time step.
     Acceleration variables are removed using substitution.
-    The first two row links the MPC to the current state:
+    The first two rows links the MPC to the current state:
 
     .. math::
 
-        -v_{current} - a_{current} \\, \\Delta t = -v_0 + j_0 \\, \\Delta t^2
+        -v_{c} - a_{c} \\, \\Delta t = -v_0 + j_0 \\, \\Delta t^2
 
-        v_{current} = - v_1 + 2 v_0 + j_1 \\, \\Delta t^2
+        v_{c} = - v_1 + 2 v_0 + j_1 \\, \\Delta t^2
 
-    Row from 2 until k-2 have this form:
+    Rows from 2 until k-2 have this form:
 
     .. math::
 
@@ -1064,6 +1064,9 @@ class SystemDynamicsStrategy(EnforcementStrategy):
         |        0         |   |     | -1  |  2  |     |     |     |  1  |     |   | j_2*dt**2 |
         |        0         |   |     |     | -1  |     |     |     |     |  1  |   | j_3*dt**2 |
         |------------------|   |-----------------------------------------------|   | j_4*dt**2 |
+
+    This means that the QP does not optimize jerk, but jerk :math:`*\\Delta t^2`, this improves the conditioning of the
+    constraint matrix, which helps some solvers.
     """
 
     def create_matrix(self) -> Matrix:
