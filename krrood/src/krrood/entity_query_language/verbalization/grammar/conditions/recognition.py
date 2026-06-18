@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import dataclasses
 import operator
 from dataclasses import dataclass
 
 from typing_extensions import List, Optional
 
+from krrood.symbol_graph.symbol_graph import Symbol
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator, Extreme
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.query.query import Entity
@@ -55,6 +57,47 @@ def single_hop_attribute(
     if len(chain) != 1 or not isinstance(chain[0], Attribute):
         return None
     return chain[0]
+
+
+def is_none_literal(expression: SymbolicExpression) -> bool:
+    """
+    :param expression: Candidate expression (typically a comparator's right side).
+    :return: ``True`` when *expression* is a literal whose value is ``None`` — the marker for an
+        absence comparison (``<chain> == None``) rendered as *"has no <attribute>"* / *"does not
+        exist"* rather than a value predicate.
+    """
+    return isinstance(expression, Literal) and expression._value_ is None
+
+
+def is_concrete_object_literal(expression: SymbolicExpression) -> bool:
+    """
+    :param expression: Candidate expression.
+    :return: ``True`` when *expression* is a literal holding a concrete domain-object instance (a
+        dataclass or :class:`Symbol` instance) — rendered by identity (*"a specific Body"*) rather
+        than its (possibly huge) ``repr``. A class object, primitive, ``enum`` member, ``datetime``,
+        or ``None`` is not.
+    """
+    if not isinstance(expression, Literal):
+        return False
+    value = expression._value_
+    if isinstance(value, type):
+        return False
+    return dataclasses.is_dataclass(value) or isinstance(value, Symbol)
+
+
+def is_atomic_value(expression: SymbolicExpression) -> bool:
+    """
+    :param expression: Candidate value expression (a comparator right side / assignment value).
+    :return: ``True`` when the value renders as a single short token — a plain scalar / ``enum`` /
+        type-object literal — so it may sit in a *"… are X, Y, and Z respectively"* coordination.
+        A concrete-object literal (*"a specific Body"*), a domain-listing variable (*"one of …"*), a
+        sub-query, or a range each renders as a phrase and is *not* atomic, so it is said on its own.
+    """
+    if not isinstance(expression, Literal):
+        return False
+    if expression._value_ is None:
+        return False
+    return not is_concrete_object_literal(expression)
 
 
 def references(expression: SymbolicExpression, subject_variable: Variable) -> bool:

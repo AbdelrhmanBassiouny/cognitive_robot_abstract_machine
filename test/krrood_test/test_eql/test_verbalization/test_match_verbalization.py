@@ -11,9 +11,14 @@ is a value to generate → folded into the header (*"… and predict its x, y, a
 
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass
 
-from krrood.entity_query_language.factories import match_variable, underspecified
+from krrood.entity_query_language.factories import (
+    match_variable,
+    underspecified,
+    variable,
+)
 from krrood.entity_query_language.verbalization.pipeline import (
     VerbalizationPipeline,
     verbalize_expression,
@@ -152,7 +157,7 @@ def test_where_folds_a_range_pair_into_one_between_point():
     match.resolve()
     match.where(match.variable.x > 0.0, match.variable.x < 5.0)
     text = _hierarchical(match)
-    assert text == "Generate a Position\n  where\n    - its x is between 0.0, and 5.0"
+    assert text == "Generate a Position\n  where\n    - its x is between 0.0 and 5.0"
 
 
 # ── nested matches: per-sub-object grouping ──────────────────────────────────
@@ -191,5 +196,139 @@ def test_nested_predict_with_where_range_on_sub_object():
         "  and predict\n"
         "    - x, y, and z of its position\n"
         "  where\n"
-        "    - the x of its position is between 0.0, and 5.0"
+        "    - the x of its position is between 0.0 and 5.0"
     )
+
+
+# ── leaf-value rendering: None, domains, concrete objects ────────────────────
+
+
+class _Color(enum.Enum):
+    RED = "red"
+    GREEN = "green"
+    BLUE = "blue"
+
+
+@dataclass
+class _Widget:
+    color: _Color
+    size: int
+    owner: object
+
+
+def test_none_assignment_reads_as_has_no_separate_from_group():
+    """An attribute set to ``None`` is a *"<object> has no <attr>"* point, pulled out of the
+    *"… respectively"* group of the present attributes — never the raw ``None`` value.
+    """
+    text = verbalize_expression(
+        underspecified(Pose)(position=underspecified(Position)(x=0.1), orientation=None)
+    )
+    assert "the Pose has no orientation" in text
+    assert "None" not in text
+
+
+def test_multiple_none_assignments_coordinate_under_has_no():
+    """Several ``None`` attributes of one object coordinate under a single *"has no"*."""
+    text = verbalize_expression(
+        underspecified(_Widget)(color=None, size=None, owner=object())
+    )
+    assert "has no color and size" in text
+
+
+def test_domain_value_variable_lists_candidates():
+    """A bounded enum-domain variable assigned to an attribute lists its candidates."""
+    text = verbalize_expression(
+        underspecified(_Widget)(
+            color=variable(_Color, [_Color.RED, _Color.GREEN, _Color.BLUE])
+        )
+    )
+    assert "one of RED, GREEN, or BLUE" in text
+
+
+def test_concrete_object_reads_as_a_specific_type():
+    """A concrete object assignment reads *"a specific <Type>"* — identity, not its repr."""
+    text = verbalize_expression(
+        underspecified(_Widget)(owner=Position(x=1.0, y=2.0, z=3.0))
+    )
+    assert "a specific Position" in text
+    assert "Position(" not in text  # no repr leak
+
+
+# ── object identity: identifying field qualifies "a specific <Type>" ──────────
+
+
+@dataclass
+class _NamedThing:
+    name: str
+    payload: object
+
+
+@dataclass
+class _Coded:
+    serial: int
+    name: str
+
+    @classmethod
+    def _identifying_attributes_(cls):
+        return ("serial",)
+
+
+def test_concrete_object_qualified_by_conventional_name_field():
+    """A concrete object with a conventional ``name`` field reads *"a specific X with name '…'"*."""
+    text = verbalize_expression(
+        underspecified(_Widget)(owner=_NamedThing(name="door", payload=object()))
+    )
+    assert "a specific _NamedThing with name 'door'" in text
+
+
+def test_concrete_object_uses_declared_identifying_attributes():
+    """A class declaring ``_identifying_attributes_`` controls which field identifies it."""
+    text = verbalize_expression(
+        underspecified(_Widget)(owner=_Coded(serial=7, name="x"))
+    )
+    assert "a specific _Coded with serial 7" in text
+    assert (
+        "name" not in text.split("specific _Coded")[1]
+    )  # declared field wins over 'name'
+
+
+# ── "respectively" grouping: atomic scalars only, capped ─────────────────────
+
+
+@dataclass
+class _Trio:
+    a: float
+    b: float
+    c: float
+
+
+@dataclass
+class _Quint:
+    a: int
+    b: int
+    c: int
+    d: int
+    e: int
+
+
+def test_atomic_scalars_group_under_respectively():
+    """Up to three atomic scalar values coordinate under one *"… respectively"* point."""
+    text = verbalize_expression(underspecified(_Trio)(a=1.0, b=2.0, c=3.0))
+    assert "a, b, and c of the _Trio are 1.0, 2.0, and 3.0 respectively" in text
+
+
+def test_over_cap_scalars_are_said_separately():
+    """Beyond the cap, each assignment is its own point — no unreadable many-way zip."""
+    text = verbalize_expression(underspecified(_Quint)(a=1, b=2, c=3, d=4, e=5))
+    assert "respectively" not in text
+    assert "a of the _Quint is 1" in text
+    assert "e of the _Quint is 5" in text
+
+
+def test_compound_value_pulled_out_of_respectively_group():
+    """A phrase-valued assignment (*"one of …"*) is said on its own; atomic ones still group."""
+    text = verbalize_expression(
+        underspecified(_Trio)(a=1.0, b=2.0, c=variable(float, [7.0, 8.0]))
+    )
+    assert "a and b of the _Trio are 1.0 and 2.0 respectively" in text
+    assert "c of the _Trio is one of 7.0 or 8.0" in text

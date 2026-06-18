@@ -178,6 +178,22 @@ def test_verbalize_literal_plain_value():
     assert "42" in verbalize_expression(literal_value)
 
 
+def test_type_name_of_value_none_is_nothing():
+    assert MicroplanningServices().type_name_of_value(None) == "nothing"
+
+
+def test_type_name_of_value_enum_uses_member_name():
+    import enum
+
+    class _Choice(enum.Enum):
+        FIRST_OPTION = "first"
+
+    assert (
+        MicroplanningServices().type_name_of_value(_Choice.FIRST_OPTION)
+        == "FIRST_OPTION"
+    )
+
+
 def test_verbalize_literal_type_object():
     literal_value = Literal(_value_=Apple)
     assert verbalize_expression(literal_value) == "Apple"
@@ -216,7 +232,7 @@ def test_verbalize_attribute_uses_of_form_all_hops():
     assert " of " in text
 
 
-def test_verbalize_index_access_merged_into_attribute():
+def test_verbalize_index_access_rendered_as_ordinal():
     @dataclass
     class Robot:
         tasks: list
@@ -225,7 +241,24 @@ def test_verbalize_index_access_merged_into_attribute():
     text = verbalize_expression(r.tasks[0])
     assert "Robot" in text
     assert "tasks" in text
-    assert "[0]" in text
+    # An integer index reads as an ordinal ("the first of the tasks"), not a raw subscript leak.
+    assert "first" in text
+    assert "[0]" not in text
+
+
+def test_verbalize_index_then_attribute_is_ordinal_chain():
+    @dataclass
+    class Task:
+        name: str
+
+    @dataclass
+    class Robot:
+        tasks: list
+
+    r = variable(Robot, [])
+    text = verbalize_expression(r.tasks[0].name)
+    assert text == "the name of the first of the tasks of a Robot"
+    assert "[0]" not in text
 
 
 def test_verbalize_bool_attribute_predicative():
@@ -1730,7 +1763,7 @@ def test_example_sum_between_full_sentence():
     assert verbalize_expression(query) == (
         "Find a BankTransaction such that the amount of its amount_details is equal to "
         "the sum of amounts among BankTransactions whose booking_date is between "
-        "May 15, 2026, and May 30, 2026"
+        "May 15, 2026 and May 30, 2026"
     )
 
 
@@ -1827,7 +1860,7 @@ def test_whose_grouping_top_level_between():
         )
     )
     assert verbalize_expression(query) == (
-        "Find a BankTransaction whose booking_date is between May 15, 2026, and May 30, 2026"
+        "Find a BankTransaction whose booking_date is between May 15, 2026 and May 30, 2026"
     )
 
 
@@ -1851,7 +1884,7 @@ def test_whose_grouping_mixed_groupable_and_residual():
     )
     text = verbalize_expression(query)
     assert (
-        "whose booking_date is between May 15, 2026, and May 30, 2026" in text
+        "whose booking_date is between May 15, 2026 and May 30, 2026" in text
     ), f"Got: {text!r}"
     assert (
         "such that the amount of its amount_details is equal to the maximum amount"
@@ -1883,7 +1916,7 @@ def test_top_level_aggregation_average_between_whose():
     )
     assert verbalize_expression(query) == (
         "Find the average of the amount of the amount_details of a BankTransaction "
-        "whose booking_date is between May 15, 2026, and May 27, 2026"
+        "whose booking_date is between May 15, 2026 and May 27, 2026"
     )
 
 
@@ -1963,7 +1996,7 @@ def test_range_fold_without_subject_has_no_whose():
             bank_transaction.booking_date <= upper_bound,
         )
     )
-    assert "is between May 15, 2026, and May 30, 2026" in text, f"Got: {text!r}"
+    assert "is between May 15, 2026 and May 30, 2026" in text, f"Got: {text!r}"
     assert "whose" not in text, f"Got: {text!r}"
     assert "booking_date of" in text, f"Expected full chain in: {text!r}"
 
@@ -1986,7 +2019,7 @@ def test_second_domain_whose_between():
         entity(employee).where(employee.salary >= 30000, employee.salary <= 60000)
     )
     assert verbalize_expression(query) == (
-        "Find an Employee whose salary is between 30000, and 60000"
+        "Find an Employee whose salary is between 30000 and 60000"
     )
 
 
@@ -2080,7 +2113,7 @@ def test_pr_example():
     )
 
     assert verbalize_expression(query) == (
-        "Find a BankTransaction whose amount is greater than 1000, and booking_date is between May 1, 2026,"
+        "Find a BankTransaction whose amount is greater than 1000, and booking_date is between May 1, 2026"
         " and May 30, 2026"
     )
 

@@ -11,6 +11,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     Index,
     MappedVariable,
 )
+from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
     SourceReference,
 )
@@ -36,39 +37,35 @@ def build_path_parts(chain: List[MappedVariable]) -> List[PathStep]:
     """
     Convert a walked chain into :class:`PathStep` hops.
 
-    Merging rules:
+    Hop rules:
 
-    * Consecutive ``Attribute → Index`` pairs are merged into ``"attribute[key]"`` with no source
-      reference (composite indexed access has no clean single-symbol anchor).
-    * Standalone ``Index`` nodes appear as ``"[key]"`` with no source reference.
+    * ``Attribute`` nodes appear as the attribute name, linked to their source reference.
+    * Integer ``Index`` nodes appear as their ordinal word (``0`` → ``"first"``) with no source
+      reference, so the possessive path reads *"the first of the tasks of …"* rather than leaking a
+      raw subscript (``"tasks[0]"``). Non-integer keys keep the ``"[key]"`` bracket form.
     * ``Call`` nodes appear as ``"()"`` with no source reference.
     * ``FlatVariable`` nodes are skipped.
 
-    :param chain: Outermost-first chain list.
-    :return: Ordered list of :class:`PathStep`, outermost attribute first.
+    :param chain: Innermost-first chain list (nearest the root first).
+    :return: Ordered list of :class:`PathStep`, innermost hop first.
     """
     parts: List[PathStep] = []
-    i = 0
-    while i < len(chain):
-        node = chain[i]
+    for node in chain:
         if isinstance(node, Attribute):
-            name = node._attribute_name_
             owner = node._owner_class_
-            reference: Optional[SourceReference] = SourceReference.for_attribute(
-                owner, name
-            )
-            while i + 1 < len(chain) and isinstance(chain[i + 1], Index):
-                i += 1
-                name += f"[{repr(chain[i]._key_)}]"
-                reference = (
-                    None  # composite indexed access has no clean single-line anchor
-                )
-            parts.append(PathStep(name, reference))
+            name = node._attribute_name_
+            parts.append(PathStep(name, SourceReference.for_attribute(owner, name)))
         elif isinstance(node, Index):
-            parts.append(PathStep(f"[{repr(node._key_)}]", None))
+            parts.append(_index_step(node._key_))
         elif isinstance(node, Call):
             parts.append(PathStep("()", None))
         elif isinstance(node, FlatVariable):
             pass
-        i += 1
     return parts
+
+
+def _index_step(key: object) -> PathStep:
+    """:return: An ordinal hop (*"first"*) for an integer *key*, else the bracketed *"[key]"* form."""
+    if isinstance(key, int) and not isinstance(key, bool):
+        return PathStep(morphology.ordinal(key), None)
+    return PathStep(f"[{repr(key)}]", None)

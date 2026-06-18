@@ -56,15 +56,20 @@ class DeterminerProcessor:
 
     def _lower_noun_phrase(self, noun_phrase: NounPhrase) -> Fragment:
         head = self._tag_number(self.process(noun_phrase.head), noun_phrase.number)
-        determiner = self._determiner(
-            noun_phrase.definiteness, noun_phrase.number, head
-        )
-        # A pre-head qualifier sits between the determiner and the head: "the [first two] Robots".
-        pre_head = (
-            [self.process(noun_phrase.pre_head)]
+        # A pre-head qualifier sits between the determiner and the head: "the [first two] Robots" /
+        # "a [specific] Body". The indefinite article agrees with the first surface word, so it is
+        # chosen from the pre-head when there is one, else the head ("a specific Body", not "an …").
+        pre_head_fragment = (
+            self.process(noun_phrase.pre_head)
             if noun_phrase.pre_head is not None
-            else []
+            else None
         )
+        determiner = self._determiner(
+            noun_phrase.definiteness,
+            noun_phrase.number,
+            pre_head_fragment if pre_head_fragment is not None else head,
+        )
+        pre_head = [pre_head_fragment] if pre_head_fragment is not None else []
         head_group_parts = [
             *([determiner] if determiner is not None else []),
             *pre_head,
@@ -91,13 +96,15 @@ class DeterminerProcessor:
 
     @staticmethod
     def _determiner(
-        definiteness: Definiteness, number: Number, head: Fragment
+        definiteness: Definiteness, number: Number, article_anchor: Fragment
     ) -> Optional[Fragment]:
-        """:return: The determiner fragment for *(definiteness, number)*, or ``None`` (bare)."""
+        """:return: The determiner fragment for *(definiteness, number)*, or ``None`` (bare). The
+        indefinite *a/an* agrees phonologically with *article_anchor* (the first surface word —
+        the pre-head when present, else the head)."""
         if definiteness is Definiteness.UNIQUE:
             return Articles.THE_UNIQUE.as_fragment()
         if definiteness is Definiteness.DEFINITE:
             return Articles.THE.as_fragment()
         if definiteness is Definiteness.INDEFINITE and number is Number.SINGULAR:
-            return Articles.indefinite(flatten_fragment_to_plain_text(head))
+            return Articles.indefinite(flatten_fragment_to_plain_text(article_anchor))
         return None  # BARE, or INDEFINITE + PLURAL → the determiner-drop

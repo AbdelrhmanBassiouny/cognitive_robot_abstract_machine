@@ -15,6 +15,10 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.grammar.conditions.assembler import (
     ConditionAssembler,
 )
+from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    is_atomic_value,
+    is_none_literal,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.assembler import (
     Assembler,
 )
@@ -24,6 +28,7 @@ from krrood.entity_query_language.verbalization.grammar.match.planner import (
     MatchPlanner,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Absence,
     Conjunctions,
     Copulas,
     Directive,
@@ -31,6 +36,10 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Prepositions,
     Pronouns,
 )
+
+#: The most attribute values coordinated under one *"… are 1, 2, and 3 respectively"* point before
+#: each is said separately — beyond this the reader can no longer reliably zip attributes to values.
+_MAX_RESPECTIVELY = 3
 
 
 class MatchAssembler(Assembler[Match, MatchPlan]):
@@ -141,18 +150,59 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
     def _given_that_block(self, plan: MatchPlan) -> Optional[Fragment]:
         """:return: The *"given that"* block — one point per attribute group (concrete assignments)
         and per non-grouping condition — or ``None`` when there is nothing to give."""
-        points: List[Fragment] = [
-            self._group_point(group) for group in plan.groups if group.concrete
-        ]
+        points: List[Fragment] = []
+        for group in plan.groups:
+            if group.concrete:
+                points += self._concrete_points(group)
         points += ConditionAssembler(self.context).as_statements(plan.other_conditions)
         if not points:
             return None
         return BlockFragment(header=Keywords.GIVEN_THAT.as_fragment(), items=points)
 
-    def _group_point(self, group: AttributeGroup) -> Fragment:
+    def _concrete_points(self, group: AttributeGroup) -> List[Fragment]:
+        """:return: The given-that points for a group's concrete assignments. Atomic scalar values
+        coordinate under one *"x, y, and z of the <object> are 1, 2, and 3 respectively"* point — but
+        only up to :data:`_MAX_RESPECTIVELY` of them, since the reader must zip attributes to values
+        in order. A value that renders as a phrase (*"one of …"*, *"a specific …"*, a sub-query), or
+        any assignment once the cap is exceeded, gets its own *"x of the <object> is …"* point; and
+        ``None`` assignments their own *"the <object> has no <attrs>"* point (an absence flips
+        subject/object and cannot fold into the coordination)."""
+        present = [a for a in group.concrete if not is_none_literal(a.value)]
+        absent = [a for a in group.concrete if is_none_literal(a.value)]
+        grouped, singles = self._split_groupable(present)
+        points: List[Fragment] = []
+        if grouped:
+            points.append(self._group_point(group, grouped))
+        points += [self._group_point(group, [a]) for a in singles]
+        if absent:
+            points.append(self._absence_point(group, absent))
+        return points
+
+    @staticmethod
+    def _split_groupable(present: List) -> tuple:
+        """:return: ``(grouped, singles)`` — the atomic-scalar assignments to coordinate under one
+        *"respectively"* point, and the assignments to say each on their own. Grouping applies only
+        when 2..:data:`_MAX_RESPECTIVELY` atomic values are present; otherwise every assignment stands
+        alone (a lone value needs no *"respectively"*, and too many would be unreadable to zip).
+        """
+        atomic = [a for a in present if is_atomic_value(a.value)]
+        if 2 <= len(atomic) <= _MAX_RESPECTIVELY:
+            return atomic, [a for a in present if not is_atomic_value(a.value)]
+        return [], present
+
+    def _absence_point(self, group: AttributeGroup, absent: List) -> Fragment:
+        """:return: *"the <object> has no <attrs>"* for attributes assigned ``None``."""
+        return PhraseFragment(
+            parts=[
+                self.context.child(group.object),
+                Absence.HAS_NO.as_fragment(),
+                self._attribute_list([a.attribute for a in absent]),
+            ]
+        )
+
+    def _group_point(self, group: AttributeGroup, concrete: List) -> Fragment:
         """:return: *"x, y, and z of the <object> are 1, 2, and 3 respectively"* for several
         attributes, or *"x of the <object> is 1"* for one."""
-        concrete = group.concrete
         attribute_list = self._attribute_list([a.attribute for a in concrete])
         object_phrase = self.context.child(group.object)
         parts: List[Fragment] = [
@@ -161,10 +211,13 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             object_phrase,
         ]
         if len(concrete) == 1:
-            parts += [Copulas.IS.as_fragment(), self.context.child(concrete[0].value)]
+            parts += [
+                Copulas.IS.as_fragment(),
+                self.context.child(concrete[0].value, as_value=True),
+            ]
         else:
             value_list = oxford_comma(
-                [self.context.child(a.value) for a in concrete],
+                [self.context.child(a.value, as_value=True) for a in concrete],
                 Conjunctions.AND.as_fragment(),
             )
             parts += [

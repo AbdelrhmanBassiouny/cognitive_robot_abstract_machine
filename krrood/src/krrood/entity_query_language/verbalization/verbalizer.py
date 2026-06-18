@@ -77,8 +77,13 @@ class EQLVerbalizer:
             recurses its selection / values / conditions through the standard grammar.
         """
         return RuleContext(
-            child=lambda child_node, number=Number.SINGULAR, inline=False: fold(
-                child_node, services, RULES, number=number, inline=inline
+            child=lambda child_node, number=Number.SINGULAR, inline=False, as_value=False: fold(
+                child_node,
+                services,
+                RULES,
+                number=number,
+                inline=inline,
+                as_value=as_value,
             ),
             services=services,
         )

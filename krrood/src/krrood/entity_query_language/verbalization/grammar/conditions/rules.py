@@ -13,6 +13,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     Fragment,
     oxford_comma,
     PhraseFragment,
+    RoleFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Number,
@@ -27,6 +28,9 @@ from krrood.entity_query_language.verbalization.grammar.chain.planner import (
 from krrood.entity_query_language.verbalization.grammar.conditions.assembler import (
     ConditionAssembler,
 )
+from krrood.entity_query_language.verbalization.grammar.conditions.operator_phrase import (
+    coindexed_operator,
+)
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     is_boolean_attribute_chain,
 )
@@ -36,12 +40,17 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
 )
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
     build_between,
+    coindexed_natural_parts,
+    CoindexedFold,
     RangeFold,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Articles,
+    CoindexedPhrases,
     Conjunctions,
     Keywords,
     Logicals,
+    Prepositions,
     Punctuation,
 )
 
@@ -69,7 +78,7 @@ class AndRule(PhraseRule):
     >>> verbalize_expression(and_(robot.battery > 50, robot.name == 'x'))
     "the battery of a Robot is greater than 50, and the name of the Robot is 'x'"
     >>> verbalize_expression(and_(robot.battery > 10, robot.battery < 90))
-    'the battery of a Robot is between 10, and 90'
+    'the battery of a Robot is between 10 and 90'
     """
 
     construct = AND
@@ -79,7 +88,8 @@ class AndRule(PhraseRule):
         parts = ConditionAssembler(context).as_statements(flatten_operands(node, AND))
         if len(parts) == 1:
             return parts[0]
-        return oxford_comma(parts, Conjunctions.AND.as_fragment())
+        # Conjuncts are independent clauses, so a two-clause coordination keeps its comma.
+        return oxford_comma(parts, Conjunctions.AND.as_fragment(), pair_comma=True)
 
 
 class RangeFoldRule(PhraseRule):
@@ -101,6 +111,62 @@ class RangeFoldRule(PhraseRule):
             context.child(node.upper_expression),
             compact=context.configuration.compact_predicates,
         )
+
+
+class CoindexedFoldRule(PhraseRule):
+    """A group of co-indexed comparators (``p.begin.X == p.end.X`` for several ``X``) reduced by
+    :func:`fold_coindexed_groups` → one factored clause that says the shared structure once.
+
+    Two surface forms, chosen here (recognition stays pure):
+
+    * **natural** — a pure-equality fold over *sibling* prefixes (``p.begin`` / ``p.end``) reads
+      *"the begin and end of its period have the same month and year"*;
+    * **faithful** — every other foldable case (a non-equality operator, or prefixes that are not
+      siblings) reads *"the month and year of the begin of its period are equal to those of the
+      end of its period"*.
+    """
+
+    construct = CoindexedFold
+    name = "coindexed-fold"
+
+    def build(self, node: CoindexedFold, context: RuleContext) -> Fragment:
+        terminals = oxford_comma(
+            [self._attribute(pair) for pair in node.terminals],
+            Conjunctions.AND.as_fragment(),
+        )
+        natural = coindexed_natural_parts(node)
+        if natural is not None:
+            hops = oxford_comma(
+                [self._attribute(natural.left_hop), self._attribute(natural.right_hop)],
+                Conjunctions.AND.as_fragment(),
+            )
+            return PhraseFragment(
+                parts=[
+                    Articles.THE.as_fragment(),
+                    hops,
+                    Prepositions.OF.as_fragment(),
+                    context.child(natural.shared_prefix_expression),
+                    CoindexedPhrases.HAVE_THE_SAME.as_fragment(),
+                    terminals,
+                ]
+            )
+        return PhraseFragment(
+            parts=[
+                Articles.THE.as_fragment(),
+                terminals,
+                Prepositions.OF.as_fragment(),
+                context.child(node.left_prefix_expression),
+                coindexed_operator(node.operation),
+                CoindexedPhrases.THOSE_OF.as_fragment(),
+                context.child(node.right_prefix_expression),
+            ]
+        )
+
+    @staticmethod
+    def _attribute(pair: tuple) -> RoleFragment:
+        """:return: The role-tagged attribute fragment for a ``(name, owner)`` hop."""
+        name, owner = pair
+        return RoleFragment.for_attribute(owner, name)
 
 
 class OrRule(PhraseRule):

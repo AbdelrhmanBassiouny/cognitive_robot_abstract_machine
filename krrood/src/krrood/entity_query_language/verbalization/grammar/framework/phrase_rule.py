@@ -53,6 +53,12 @@ class RuleContext:
     an inline noun rather than a *"Find …"* / nested phrase.  Per-fold (like ``number``): it
     applies to this node only, resetting for its children."""
 
+    as_value: bool = False
+    """``True`` when this node is being folded in *value* position (a comparator's right side, a
+    match assignment's value), so a domain-constrained value-type ``Variable`` renders as its
+    candidate set (*"one of A, B, or C"*) rather than as a subject noun (*"an int"*).  Per-fold
+    (like ``inline``): it applies to this node only, resetting for its children."""
+
     @property
     def refer(self) -> ReferringExpressions:
         """:return: The referring-expression service (articles, coreference, pronouns)."""
