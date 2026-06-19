@@ -16,7 +16,8 @@ from krrood.class_diagrams.method_classifier import (
     is_factory_method,
 )
 from krrood.class_diagrams.utils import classes_of_module, T
-from krrood.patterns.role import DelegatedFactoryMethodError, Role, role_taker_field
+from krrood.patterns.exceptions import DelegatedFactoryMethodError
+from krrood.patterns.role import Role, role_taker_field
 from krrood.patterns.role_predicates import IsSameEntity
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from ..dataset.role_and_ontology import (

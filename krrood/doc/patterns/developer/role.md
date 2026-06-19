@@ -176,17 +176,18 @@ a plain dataclass without graph integration.
 role-native attributes (those declared as dataclass fields on the role class) are read from the
 role directly and never reach the taker.
 
-There is no `__setattr__` override: assignments use the default behaviour and therefore always set
-the attribute on the role itself, never on the role taker. Reads are delegated but writes are not,
-so writing through a role cannot mutate the shared entity as a side effect; if the assigned name
-also exists on the taker, the role's own value shadows it on subsequent reads through the role.
-Code that needs to modify the taker does so explicitly through `role.role_taker` (or
-`role.root_persistent_entity`).
+`__setattr__` always sets attributes on the role itself, never on the role taker. Only the role's
+own declared fields and private (underscore-prefixed) attributes may be assigned; any other name
+raises `RoleAttributeNotDeclaredError`. Reads are delegated but writes are not, so writing through a
+role cannot mutate the shared entity as a side effect, and the rejection of undeclared names keeps a
+write from silently shadowing a role-taker attribute. Code that needs to modify the taker does so
+explicitly through `role.role_taker` (or `role.root_persistent_entity`).
 
 ## Source References
 
-- `krrood/src/krrood/patterns/role.py` — `Role`, `role_taker_field`, `HasRoleTaker`,
-  `RoleTakerFieldNotFound`
+- `krrood/src/krrood/patterns/role.py` — `Role`, `role_taker_field`, `HasRoleTaker`
+- `krrood/src/krrood/patterns/exceptions.py` — `RoleTakerFieldNotFound`,
+  `DelegatedFactoryMethodError`, `RoleAttributeNotDeclaredError`
 - `krrood/src/krrood/patterns/subclass_safe_generic.py` — `SubClassSafeGeneric`,
   `AbstractSubClassSafeGeneric`
 - `krrood/src/krrood/class_diagrams/utils.py` — `ROLE_TAKER_METADATA_KEY`

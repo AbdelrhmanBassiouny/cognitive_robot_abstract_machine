@@ -17,7 +17,11 @@ from krrood.class_diagrams.exceptions import ClassIsUnMappedInClassDiagram
 from krrood.class_diagrams.method_classifier import factory_method, is_factory_method
 from krrood.class_diagrams.utils import ROLE_TAKER_METADATA_KEY, T
 from krrood.class_diagrams.wrapped_field import WrappedField
-from krrood.exceptions import DataclassException
+from krrood.patterns.exceptions import (
+    DelegatedFactoryMethodError,
+    RoleAttributeNotDeclaredError,
+    RoleTakerFieldNotFound,
+)
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from krrood.symbol_graph.symbol_graph import (
     PredicateClassRelation,
@@ -25,65 +29,6 @@ from krrood.symbol_graph.symbol_graph import (
     SymbolGraph,
 )
 from krrood.utils import get_generic_type_params
-
-
-@dataclass
-class RoleTakerFieldNotFound(DataclassException):
-    """
-    Raised when a role class has no field declared as its role taker.
-    """
-
-    role_type: Type
-    """
-    The role class that is missing a role-taker field.
-    """
-
-    def __post_init__(self):
-        self.message = (
-            f"{self.role_type.__name__} declares no role-taker field. A role must mark "
-            f"exactly one field with role_taker_field()."
-        )
-        super().__post_init__()
-
-
-@dataclass
-class DelegatedFactoryMethodError(DataclassException):
-    """
-    Raised when a role-taker factory method is invoked through a role.
-
-    A factory classmethod constructs an instance of the role taker, so delegating it through a
-    role would return a bare role taker and silently drop the role. The call is refused to keep
-    that mistake loud instead of quiet.
-    """
-
-    role_type: Type
-    """
-    The role type the factory method was accessed through.
-    """
-
-    taker_type: Type
-    """
-    The role-taker type that declares the factory method.
-    """
-
-    method_name: str
-    """
-    The name of the delegated factory method.
-    """
-
-    def error_message(self) -> str:
-        return (
-            f"{self.taker_type.__name__}.{self.method_name}() is a factory method; calling it "
-            f"through {self.role_type.__name__} would build a bare {self.taker_type.__name__} and "
-            f"drop the role."
-        )
-
-    def suggest_correction(self) -> str:
-        return (
-            f"Either override {self.method_name}() on {self.role_type.__name__} to return a "
-            f"proper role, or call it on the role taker explicitly via .role_taker or "
-            f".root_persistent_entity."
-        )
 
 
 def role_taker_field(*, kw_only: bool = True, **kwargs: Any) -> Any:
@@ -123,8 +68,11 @@ class Role(Symbol, SubClassSafeGeneric[T]):
 
     **Attribute access.** Reading an attribute that is not declared on the role is delegated
     to the role taker via ``__getattr__`` (role-native attributes are resolved first).
-    Assignments always set the attribute on the role itself and never modify the role taker;
-    to change the role taker, assign through ``role.role_taker``.
+    Assignments always set the attribute on the role itself and never modify the role taker:
+    only the role's own declared fields may be assigned, and any other name raises
+    :class:`RoleAttributeNotDeclaredError
+    <krrood.patterns.exceptions.RoleAttributeNotDeclaredError>`. To change the role taker,
+    assign through ``role.role_taker``.
 
     **Distinct identity.** A role is a distinct object from its role taker: they do not
     compare equal and do not share a hash, so multiple roles (even of the same type) on one
@@ -266,6 +214,32 @@ class Role(Symbol, SubClassSafeGeneric[T]):
 
         guard.__name__ = item
         return guard
+
+    @classmethod
+    @lru_cache
+    def _declared_field_names(cls) -> Tuple[str, ...]:
+        """
+        :return: The names of the dataclass fields declared on the role class.
+        """
+        return tuple(declared_field.name for declared_field in fields(cls))
+
+    def __setattr__(self, key: str, value: Any) -> None:
+        """
+        Set an attribute on the role itself; assignment never modifies the role taker.
+
+        Only the role's own declared fields and private (underscore-prefixed) attributes may be
+        assigned. Any other name raises :class:`RoleAttributeNotDeclaredError`, so a write cannot
+        silently shadow a role-taker attribute. To change the role taker, assign through
+        :attr:`role_taker`.
+
+        :param key: The attribute name being set.
+        :param value: The value to set.
+        :raises RoleAttributeNotDeclaredError: If *key* is neither a declared field nor private.
+        """
+        if key.startswith("_") or key in type(self)._declared_field_names():
+            super().__setattr__(key, value)
+            return
+        raise RoleAttributeNotDeclaredError(role_type=type(self), attribute_name=key)
 
     @classmethod
     def from_role_taker(cls, role_taker: T) -> Role[T]:

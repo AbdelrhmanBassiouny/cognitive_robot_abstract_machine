@@ -132,18 +132,22 @@ Reading an attribute that is not declared on the role is delegated to the role t
 `__getattr__`, so you can read role-taker attributes through the role as if they were declared
 there.
 
-Assignments behave differently: they always set the attribute on the role itself and never modify
-the role taker. If the name also exists on the taker, the role's own value then takes precedence
-when read through the role. To change the taker, assign through `role.role_taker`.
+Assignments behave differently: they always target the role itself, never the role taker, and only
+the role's own declared fields may be assigned. Assigning any other name raises
+`RoleAttributeNotDeclaredError`, so a write can never silently shadow a role-taker attribute. To
+change the role taker, assign through `role.role_taker`.
 
 ```{code-cell} ipython3
+from krrood.patterns.exceptions import RoleAttributeNotDeclaredError
+
 # Reading a role-taker attribute through the role delegates to the taker
 print("ceo.name:", ceo.name)
 
-# Assigning through the role sets the attribute on the role; the taker is left unchanged
-ceo.name = "Acting CEO"
-print("ceo.name:", ceo.name)
-print("alice.name (unchanged):", alice.name)
+# Assigning a name the role does not declare is rejected (it would shadow a taker attribute)
+try:
+    ceo.name = "Acting CEO"
+except RoleAttributeNotDeclaredError as error:
+    print("rejected:", error)
 
 # To change the taker, assign through its reference explicitly
 ceo.role_taker.name = "Alicia"
@@ -152,7 +156,7 @@ print("alice.name after writing through role_taker:", alice.name)
 # Restore the original name
 ceo.role_taker.name = "Alice"
 
-# Role-native attributes live on the role, not the taker
+# Role-native fields are read from the role, not the taker
 print("ceo.head_of:", ceo.head_of)
 print("hasattr(alice, 'head_of'):", hasattr(alice, "head_of"))
 ```
