@@ -7,9 +7,6 @@ from krrood.entity_query_language.factories import (
     underspecified,
 )
 from krrood.ormatic.data_access_objects.helper import to_dao
-from krrood.parametrization.feature_extraction.exceptions import (
-    MissingBaseClassForClassWithExchangeableParts,
-)
 from krrood.parametrization.feature_extraction.feature_extractor import FeatureExtractor
 from krrood.parametrization.model_registries import DictRegistry
 from krrood.parametrization.parameterizer import UnderspecifiedParameters

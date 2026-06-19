@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 
-from typing import Dict, Tuple, Type, List, Any, Optional
+from typing_extensions import Any, Optional, Type
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
@@ -22,7 +22,7 @@ class AggregationRegistry:
     created exclusively through the ``@aggregation_for`` decorator.
     """
 
-    _registry: Dict[Tuple[Type, str], Type[AggregationStatistic]] = {}
+    _registry: dict[tuple[Type, str], Type[AggregationStatistic]] = {}
     """
     The registry mapping ``(owner_class, attribute_name)`` pairs to their
     ``AggregationStatistic`` subclass.
@@ -61,7 +61,7 @@ class AggregationRegistry:
         return cls._registry[key]
 
     @classmethod
-    def get_fields_for(cls, owner: Type) -> List[str]:
+    def get_fields_for(cls, owner: Type) -> list[str]:
         """
         Returns the names of all fields on ``owner`` that have a registered aggregation class.
 
@@ -71,7 +71,7 @@ class AggregationRegistry:
         return [attr for (owner_cls, attr) in cls._registry if owner_cls is owner]
 
 
-def aggregation_for(*owner_attribute_pairs: Tuple[Type, str]):
+def aggregation_for(*owner_attribute_pairs: tuple[Type, str]):
     """
     Class decorator that registers an ``AggregationStatistic`` subclass in the
     ``AggregationRegistry`` for one or more ``(owner, attribute_name)`` pairs.
@@ -99,7 +99,7 @@ class AggregationStatistic(ABC):
     returns a scalar value.
     """
 
-    objects_to_aggregate_on: List[Any]
+    objects_to_aggregate_on: list[Any]
     """
     The items over which statistics are to be computed.
     """
@@ -116,7 +116,7 @@ class AggregationStatistic(ABC):
         """
 
     @property
-    def symbolic_aggregation_features(self) -> List[MappedVariable]:
+    def symbolic_aggregation_features(self) -> list[MappedVariable]:
         """
         Symbolic variables corresponding to each aggregation statistic method.
 
@@ -131,7 +131,7 @@ class AggregationStatistic(ABC):
         return symbolic_aggregations
 
     @property
-    def aggregation_features(self) -> List[Any]:
+    def aggregation_features(self) -> list[Any]:
         """
         All public, non-base statistic methods defined on the concrete subclass.
 
@@ -158,7 +158,7 @@ class AggregationStatistic(ABC):
             )
         return aggregations
 
-    def apply_mapping(self) -> List:
+    def apply_mapping(self) -> list:
         """
         Evaluates every symbolic aggregation feature against this instance.
 

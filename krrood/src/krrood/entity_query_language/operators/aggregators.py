@@ -165,7 +165,7 @@ class CountRange(Count[T]):
         self, child_result: OperationResult
     ) -> Iterator[Bindings]:
         values = child_result.value
-        ellipsis_in_result = sum(1 for v in values if v is ...)
+        ellipsis_in_result = sum(1 for value in values if value is ...)
 
         if ellipsis_in_result > 0:
             concrete_count = len(values) - ellipsis_in_result

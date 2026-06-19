@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass, field
-from typing import List, Type, Optional, Match, Dict, Any, Tuple
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import rustworkx
 from sortedcontainers import SortedSet
+from typing_extensions import TYPE_CHECKING, Any, Optional, Type
 
+from krrood.entity_query_language.query.match import AbstractMatchExpression
 from krrood.ormatic.data_access_objects.dao import DataAccessObject
 from krrood.ormatic.data_access_objects.from_dao import FromDataAccessObjectState
 from krrood.ormatic.data_access_objects.helper import to_dao
@@ -16,6 +16,9 @@ from krrood.parametrization.feature_extraction.feature_extractor import (
     FeatureExtractor,
     EntityCompositionDescriptor,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.query.match import Match
 from probabilistic_model.learning.jpt.jpt import JointProbabilityTree
 from probabilistic_model.learning.jpt.variables import infer_variables_from_dataframe
 from probabilistic_model.probabilistic_circuit.relational.helper import (
@@ -31,7 +34,7 @@ from random_events.variable import Variable
 def _rename_variables_with_part_prefix(
     circuit: ProbabilisticCircuit,
     prefix: str,
-    excluded_variables: List[Variable],
+    excluded_variables: list[Variable],
 ) -> None:
     """
     Rename each variable in the circuit to include ``prefix`` as a namespace.
@@ -66,14 +69,14 @@ class ExchangeableDistributionTemplate:
     The fitted ``RelationalProbabilisticCircuit`` representing the child distribution.
     """
 
-    latent_variables: List[Variable] = field(default_factory=list)
+    latent_variables: list[Variable] = field(default_factory=list)
     """
     Variables shared between the parent and child circuits that are used for
     conditioning but are not part of the final grounded distribution.
     """
 
     def _ground_part_circuit(
-        self, part, aggregation_statistics: Dict[Variable, Any], index: int = 0
+        self, part, aggregation_statistics: dict[Variable, Any], index: int = 0
     ) -> ProbabilisticCircuit:
         """
         Ground and prepare the circuit for a single exchangeable part.
@@ -100,14 +103,18 @@ class ExchangeableDistributionTemplate:
             if variable not in self.latent_variables
         ]
         part_circuit.marginal_in_place(non_latent_variables)
-        prefix = str(part.variable) if hasattr(part, "variable") else str(index)
+        prefix = (
+            str(part.variable)
+            if isinstance(part, AbstractMatchExpression)
+            else str(index)
+        )
         _rename_variables_with_part_prefix(part_circuit, prefix, self.latent_variables)
         if len(part_circuit.nodes()) == 0:
             raise ValueError("The grounding of the part failed.")
         return part_circuit
 
     def ground(
-        self, parts_to_ground: List, aggregation_statistics: Dict[Variable, Any]
+        self, parts_to_ground: list, aggregation_statistics: dict[Variable, Any]
     ) -> ProbabilisticCircuit:
         """
         Build a product circuit by grounding each exchangeable part independently.
@@ -145,7 +152,7 @@ class RelationalProbabilisticCircuit:
     statistics, populated by ``fit``.
     """
 
-    exchangeable_distribution_templates: Dict[str, ExchangeableDistributionTemplate] = (
+    exchangeable_distribution_templates: dict[str, ExchangeableDistributionTemplate] = (
         field(default_factory=dict)
     )
     """
@@ -168,7 +175,7 @@ class RelationalProbabilisticCircuit:
     @staticmethod
     def _build_class_dataframe(
         feature_extractor: FeatureExtractor,
-        instances: List[DataAccessObject],
+        instances: list[DataAccessObject],
         dataframe_from_parent: Optional[pd.DataFrame],
     ) -> pd.DataFrame:
         """
@@ -188,9 +195,9 @@ class RelationalProbabilisticCircuit:
     def _build_child_joint_dataframe(
         self,
         exchangeable_part: str,
-        instances: List[DataAccessObject],
-        aggregation_indices: List[int],
-        aggregation_names: List[str],
+        instances: list[DataAccessObject],
+        aggregation_indices: list[int],
+        aggregation_names: list[str],
         child_feature_extractor: FeatureExtractor,
         child_class_prefix: str,
     ) -> pd.DataFrame:
@@ -234,7 +241,7 @@ class RelationalProbabilisticCircuit:
     def _fit_exchangeable_part(
         self,
         exchangeable_part: str,
-        instances: List[DataAccessObject],
+        instances: list[DataAccessObject],
     ) -> ExchangeableDistributionTemplate:
         """
         Fit an ``ExchangeableDistributionTemplate`` for one exchangeable part.
@@ -297,7 +304,7 @@ class RelationalProbabilisticCircuit:
 
     def fit(
         self,
-        instances: List[DataAccessObject],
+        instances: list[DataAccessObject],
         dataframe_from_parent: Optional[pd.DataFrame] = None,
     ):
         """
@@ -336,7 +343,7 @@ class RelationalProbabilisticCircuit:
         queryable_object,
         exchangeable_part_name: str,
         template: ExchangeableDistributionTemplate,
-    ) -> Dict[Variable, Any]:
+    ) -> dict[Variable, Any]:
         """
         Compute aggregation statistics from the query for conditioning.
 
@@ -383,9 +390,9 @@ class RelationalProbabilisticCircuit:
     def _condition_class_circuit(
         self,
         circuit: ProbabilisticCircuit,
-        aggregation_statistics: Dict[Variable, Any],
-        latent_variables: List[Variable],
-    ) -> Tuple[ProbabilisticCircuit, List[ProductUnit]]:
+        aggregation_statistics: dict[Variable, Any],
+        latent_variables: list[Variable],
+    ) -> tuple[ProbabilisticCircuit, list[ProductUnit]]:
         """
         Condition the class circuit on aggregation statistics.
 
@@ -428,11 +435,7 @@ class RelationalProbabilisticCircuit:
             by the query.
         """
         circuit = self.class_probabilistic_circuit.__deepcopy__()
-        instance = (
-            query.construct_instance()
-            if hasattr(query, "construct_instance")
-            else query
-        )
+        instance = query.construct_instance()
         queryable_object = to_dao(instance)
         for (
             exchangeable_part_name,

@@ -3,19 +3,12 @@ from __future__ import annotations
 import enum
 import itertools
 from collections import defaultdict, deque
-from dataclasses import field
-from typing import Type
+from dataclasses import dataclass, field
 
 import pandas as pd
 import sqlalchemy
 from sqlalchemy.orm import MANYTOONE, ONETOMANY
-from typing_extensions import TYPE_CHECKING
-from dataclasses import dataclass
-from typing import (
-    Any,
-    Dict,
-    List,
-)
+from typing_extensions import TYPE_CHECKING, Any, Optional, Type
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import variable
@@ -23,9 +16,6 @@ from krrood.ormatic.data_access_objects.from_dao import FromDataAccessObjectStat
 from krrood.ormatic.utils import get_python_type_from_sqlalchemy_column, is_data_column
 from krrood.parametrization.feature_extraction.aggregations import (
     HasExchangeablePartAggregations,
-)
-from krrood.parametrization.feature_extraction.exceptions import (
-    MissingBaseClassForClassWithExchangeableParts,
 )
 from random_events.variable import compatible_types
 
@@ -43,12 +33,12 @@ class FeatureExtractor:
     constructor is for cases where the feature list is already known.
     """
 
-    features: List[MappedVariable]
+    features: list[MappedVariable]
     """
     Symbolic variables representing every extractable feature, in traversal order.
     """
 
-    exchangeable_features: Dict[str, List[MappedVariable]] = field(
+    exchangeable_features: dict[str, list[MappedVariable]] = field(
         default_factory=lambda: defaultdict(list), init=False
     )
     """
@@ -62,25 +52,40 @@ class FeatureExtractor:
             )
 
     @classmethod
-    def from_instances(cls, instances: List[DataAccessObject]) -> FeatureExtractor:
+    def from_instances(
+        cls, instances: list[DataAccessObject]
+    ) -> Optional[FeatureExtractor]:
         """
         Create a new feature extractor from the given instances.
+
+        Returns ``None`` when the root domain class has exchangeable parts but does
+        not inherit from :class:`HasExchangeablePartAggregations`.
+
         :param instances: The instances to create the feature extractor from.
-        :return: A new feature extractor.
+        :return: A new feature extractor, or ``None`` if the class is not compatible.
         """
         if not instances:
             raise ValueError("No instances provided")
 
         dao_state = FromDataAccessObjectState()
-        root = variable(type(instances[0].from_dao(dao_state)), [])
+        first_instance = instances[0]
+        domain_object = first_instance.from_dao(dao_state)
+        composition = EntityCompositionDescriptor(type(first_instance))
+
+        if composition.exchangeable_parts and not isinstance(
+            domain_object, HasExchangeablePartAggregations
+        ):
+            return None
+
+        root = variable(type(domain_object), [])
         extractor = cls.__new__(cls)
         extractor.exchangeable_features = defaultdict(list)
-        extractor.features = extractor._extract_features(instances[0], root)
+        extractor.features = extractor._extract_features(first_instance, root)
         return extractor
 
     def _extract_features(
         self, example_instance: DataAccessObject, symbolic_root: Variable
-    ) -> List[MappedVariable]:
+    ) -> list[MappedVariable]:
         """
         Traverses the DAO object graph breadth-first and collects all features.
 
@@ -130,8 +135,8 @@ class FeatureExtractor:
     def _process_attributes(
         instance: DataAccessObject,
         symbolic_root: Variable,
-        attributes: List[sqlalchemy.Column],
-    ) -> List[MappedVariable]:
+        attributes: list[sqlalchemy.Column],
+    ) -> list[MappedVariable]:
         """
         Collects symbolic variables for all scalar data columns of ``instance``.
 
@@ -159,7 +164,7 @@ class FeatureExtractor:
     def _process_unique_parts(
         instance: DataAccessObject,
         symbolic_root: Variable,
-        unique_parts: List[str],
+        unique_parts: list[str],
     ) -> deque[Any]:
         """
         Enqueues non-null unique-part (many-to-one) relations for further traversal.
@@ -205,7 +210,7 @@ class FeatureExtractor:
 
         return result
 
-    def apply_mapping(self, instance: DataAccessObject) -> List:
+    def apply_mapping(self, instance: DataAccessObject) -> list:
         """
         Extracts the mapped values for each feature from the given instance.
         :param instance: The instance to extract features from.
@@ -231,7 +236,7 @@ class FeatureExtractor:
                 result.append(feature.apply_mapping_on_external_root(instance))
         return result
 
-    def create_dataframe(self, instances: List[DataAccessObject]) -> pd.DataFrame:
+    def create_dataframe(self, instances: list[DataAccessObject]) -> pd.DataFrame:
         """
         Create a dataframe from the given instances.
         :param instances: The instances to create the dataframe from.
@@ -273,11 +278,22 @@ class EntityCompositionDescriptor:
     The DAO class whose SQLAlchemy mapper is inspected.
     """
 
-    def __post_init__(self):
-        self.attributes = []
-        self.unique_parts = []
-        self.exchangeable_parts = []
+    attributes: list[sqlalchemy.Column] = field(init=False, default_factory=list)
+    """
+    Scalar data columns of the DAO class.
+    """
 
+    unique_parts: list[str] = field(init=False, default_factory=list)
+    """
+    Field names of many-to-one (unique-part) relations.
+    """
+
+    exchangeable_parts: list[str] = field(init=False, default_factory=list)
+    """
+    Field names of one-to-many (exchangeable-part) relations.
+    """
+
+    def __post_init__(self):
         mapper = sqlalchemy.inspection.inspect(self.dao_class)
 
         for relationship in mapper.relationships:

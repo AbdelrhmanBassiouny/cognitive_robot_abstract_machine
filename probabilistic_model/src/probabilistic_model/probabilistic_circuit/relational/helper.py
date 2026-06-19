@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import List, Set
-
 import rustworkx
 from sortedcontainers import SortedSet
 
@@ -14,7 +12,7 @@ from random_events.variable import Variable
 
 def find_lowest_product_nodes_that_model_variables(
     circuit: ProbabilisticCircuit, variables: SortedSet[Variable]
-) -> List[ProductUnit]:
+) -> list[ProductUnit]:
     """Find the lowest product nodes in the circuit that model all given variables.
 
     Traverses the circuit layer by layer from the leaves upward.  A product node
@@ -29,8 +27,8 @@ def find_lowest_product_nodes_that_model_variables(
     :return: The lowest-level product nodes that jointly cover all of ``variables``,
         with no node being an ancestor of another in the result.
     """
-    found_nodes: List[ProductUnit] = []
-    ancestor_indices: Set[int] = set()
+    found_nodes: list[ProductUnit] = []
+    ancestor_indices: set[int] = set()
     for layer in reversed(circuit.layers):
         for node in layer:
             if not isinstance(node, ProductUnit):

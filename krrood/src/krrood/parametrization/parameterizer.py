@@ -4,10 +4,9 @@ from dataclasses import dataclass, field
 from enum import EnumType
 from functools import cached_property
 from types import UnionType, EllipsisType
-from typing import Dict, Optional, Tuple, List, Iterable, Union
 
 import numpy as np
-from typing_extensions import Any, get_args
+from typing_extensions import Any, Iterable, Optional, Union, get_args
 from krrood.parametrization.exceptions import EmptyVariableDomain, InvalidEllipsis
 import random_events.variable
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -62,22 +61,22 @@ class UnderspecifiedParameters:
     Only exists if the statement has a where condition.
     """
 
-    conditioning_assignments_from_literal_values: Dict[
+    conditioning_assignments_from_literal_values: dict[
         random_events.variable.Variable, Any
     ] = field(init=False, default_factory=dict)
     """
     Dictionary of events that are created from literal values, e.g. actual values. These are the assignments, that the probabilistic model is *conditioned* on.
     """
 
-    truncation_assignments_from_krrood_variables: List[Event] = field(
+    truncation_assignments_from_krrood_variables: list[Event] = field(
         init=False, default_factory=list
     )
     """
     List of events that are created from symbolic expressions, e.g. variable assignments. These are the assignments, that the probabilistic model is *truncated* on. They may contain literals in their domains, however, the difference to `_events_from_literal_values` is, that these events are not directly used for conditioning, but rather for truncation. This means, that the events of this list do not change the weights of sum nodes in probabilistic circuits.
     """
 
-    _symbolic_expression_event_cache: Dict[
-        SymbolicExpression, Tuple[Event, Dict[str, random_events.variable.Variable]]
+    _symbolic_expression_event_cache: dict[
+        SymbolicExpression, tuple[Event, dict[str, random_events.variable.Variable]]
     ] = field(init=False, default_factory=dict)
     """
     A cache for events that are created from symbolic expressions.
@@ -95,7 +94,7 @@ class UnderspecifiedParameters:
         _ = self.variables  # make variables available
 
     @cached_property
-    def variables(self) -> Dict[str, random_events.variable.Variable]:
+    def variables(self) -> dict[str, random_events.variable.Variable]:
         """
         :return: A dictionary that maps variable names to random events variables that appear in
         the `where` or `Match` statement.
@@ -112,7 +111,7 @@ class UnderspecifiedParameters:
 
     def _extract_variables_from_attribute_match(
         self, attribute_match: AttributeMatch
-    ) -> Dict[str, random_events.variable.Variable]:
+    ) -> dict[str, random_events.variable.Variable]:
         """
         Extract variables from an attribute match by dispatching to specific handlers.
 
@@ -131,7 +130,7 @@ class UnderspecifiedParameters:
 
     def _handle_literal_attribute_match(
         self, attribute_match: AttributeMatch
-    ) -> Dict[str, random_events.variable.Variable]:
+    ) -> dict[str, random_events.variable.Variable]:
         """
         Handle attribute matches where the assigned value is a literal.
 
@@ -190,7 +189,7 @@ class UnderspecifiedParameters:
 
     def _extract_variables_from_iterable_literal(
         self, name: str, value: Union[list, tuple]
-    ) -> Dict[str, random_events.variable.Variable]:
+    ) -> dict[str, random_events.variable.Variable]:
         """
         Extract variables from an iterable literal by processing each element with an
         indexed name prefix (e.g. ``walls[0].height``, ``walls[1].start_point.x``).
@@ -243,7 +242,7 @@ class UnderspecifiedParameters:
 
     def _extract_variables_from_non_primitive_literal(
         self, attribute_match: AttributeMatch
-    ) -> Dict[str, random_events.variable.Variable]:
+    ) -> dict[str, random_events.variable.Variable]:
         """
         Extract variables from a literal value that is not a primitive type.
 
@@ -265,7 +264,7 @@ class UnderspecifiedParameters:
 
     def _handle_variable_attribute_match(
         self, attribute_match: AttributeMatch
-    ) -> Dict[str, random_events.variable.Variable]:
+    ) -> dict[str, random_events.variable.Variable]:
         """
         Handle attribute matches where the assigned value is a KRROOD variable.
 
@@ -295,8 +294,8 @@ class UnderspecifiedParameters:
         )
 
     def _extract_variables_from_primitive_krrood_variable(
-        self, attribute_match: AttributeMatch, domain_objects: List[Any]
-    ) -> Dict[str, random_events.variable.Variable]:
+        self, attribute_match: AttributeMatch, domain_objects: list[Any]
+    ) -> dict[str, random_events.variable.Variable]:
         """
         Extract variables from a KRROOD variable with a primitive type.
 
@@ -326,8 +325,8 @@ class UnderspecifiedParameters:
         return result
 
     def _extract_variables_from_non_primitive_krrood_variable(
-        self, attribute_match: AttributeMatch, domain_objects: List[Any]
-    ) -> Dict[str, random_events.variable.Variable]:
+        self, attribute_match: AttributeMatch, domain_objects: list[Any]
+    ) -> dict[str, random_events.variable.Variable]:
         """
         Extract variables from a KRROOD variable with a non-primitive type.
 
@@ -384,7 +383,7 @@ class UnderspecifiedParameters:
         self,
         variables: Iterable[random_events.variable.Variable],
         sample: np.ndarray,
-    ) -> Dict[random_events.variable.Variable, Any]:
+    ) -> dict[random_events.variable.Variable, Any]:
         """
         Construct an instance from a sample of a probabilistic model.
 
@@ -439,7 +438,7 @@ class UnderspecifiedParameters:
         self,
         attribute_match: AttributeMatch,
         attribute: Attribute,
-        result: Dict[str, random_events.variable.Variable],
+        result: dict[str, random_events.variable.Variable],
     ):
         """
         Register a conditioning event for a literal attribute match.
