@@ -723,11 +723,17 @@ def get_object_by_name_from_another_object_in_same_module(
     scope = _cached_scope_from_imports(source_path)
     if name in scope:
         return scope[name]
-    elif name in builtins.__dict__:
+    if name in builtins.__dict__:
         return builtins.__dict__[name]
-    else:
-        raise CouldNotResolveType(
-            name,
-            extra_information=f"Could not find {name} in {source_path}, could be a deprecated import statement or "
-            f"a type defined in a module that is not imported in the source file.",
-        )
+    # The cached scope can be incomplete if it was first built while a dependency was only partially
+    # initialized (a circular import during module load), which makes a TYPE_CHECKING import such as
+    # ``World`` silently unresolvable and that absence gets cached. Recompute the scope without the
+    # cache now that imports may have completed before giving up.
+    fresh_scope = get_scope_from_imports(file_path=source_path)
+    if name in fresh_scope:
+        return fresh_scope[name]
+    raise CouldNotResolveType(
+        name,
+        extra_information=f"Could not find {name} in {source_path}, could be a deprecated import statement or "
+        f"a type defined in a module that is not imported in the source file.",
+    )

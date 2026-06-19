@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Tuple
 
 import numpy as np
-from typing_extensions import Optional, Union, List
+from typing_extensions import Optional, Union, List, TYPE_CHECKING
 
 from krrood.patterns.role import Role, role_taker_field
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -26,6 +26,9 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.tf_transformations import quaternion_multiply
 from coraplex.utils import translate_pose_along_local_axis
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.robots.robot_parts import EndEffector
 
 
 @dataclass
