@@ -217,7 +217,6 @@ def test_infer_apartment_semantic_annotation(
     update_existing_semantic_annotations,
     scenario,
     expected_number,
-    apartment_world_setup,
     apartment_world_copy,
 ):
     fit_rules_and_assert_semantic_annotations(
