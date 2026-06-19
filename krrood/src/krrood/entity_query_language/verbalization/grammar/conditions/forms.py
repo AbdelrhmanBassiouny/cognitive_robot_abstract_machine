@@ -11,6 +11,9 @@ from typing_extensions import ClassVar, List, Optional, Union
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.verbalization.exceptions import (
+    UndeclaredFormSlotError,
+)
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     Fragment,
@@ -108,10 +111,8 @@ class ConditionForm(SpecificityRule):
         :attr:`slot` (otherwise the omission is a silent ``AttributeError`` deep in :func:`place`).
         """
         super().__init_subclass__(**kwargs)
-        if not inspect.isabstract(cls) and "slot" not in {
-            key for base in cls.__mro__ for key in vars(base)
-        }:
-            raise TypeError(f"{cls.__name__} must declare the `slot` class variable")
+        if not inspect.isabstract(cls) and not hasattr(cls, "slot"):
+            raise UndeclaredFormSlotError(form=cls)
 
     @classmethod
     @abstractmethod

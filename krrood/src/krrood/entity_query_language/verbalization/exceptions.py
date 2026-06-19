@@ -16,6 +16,9 @@ from krrood.exceptions import DataclassException
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
     from krrood.entity_query_language.verbalization.fragments.base import Fragment
+    from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+        ConditionForm,
+    )
 
 
 @dataclass
@@ -52,5 +55,24 @@ class UnloweredFragmentError(DataclassException):
             f"fold_fragment received a {type(self.fragment).__name__}; "
             "NounPhrase / PossessiveChain nodes must be lowered by the realisation "
             "passes (realize_tree) before a renderer folds the tree."
+        )
+        super().__post_init__()
+
+
+@dataclass
+class UndeclaredFormSlotError(DataclassException):
+    """
+    A concrete :class:`~krrood.entity_query_language.verbalization.grammar.conditions.forms.ConditionForm`
+    subclass did not declare its ``slot`` class variable — caught at class-definition time rather
+    than as a silent ``AttributeError`` deep in ``place``.
+    """
+
+    form: "type[ConditionForm]"
+    """The condition-form subclass missing its ``slot``."""
+
+    def __post_init__(self):
+        self.message = (
+            f"{self.form.__name__!r} must declare the `slot` class variable "
+            "(e.g. `slot = Slot.WHOSE`) — it sets where the form's output attaches."
         )
         super().__post_init__()
