@@ -26,6 +26,7 @@ from krrood.entity_query_language.verbalization.fragments.roles import SemanticR
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     is_concrete_object_literal,
 )
+from krrood.entity_query_language.verbalization.value_lexicon import value_phrase
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     PhraseRule,
     RuleContext,
@@ -105,7 +106,7 @@ class VariableRule(PhraseRule):
             return None
         fragments: List[Fragment] = [
             RoleFragment(
-                text=context.services.type_name_of_value(value),
+                text=value_phrase(value),
                 role=SemanticRole.LITERAL,
             )
             for value in values
@@ -150,7 +151,7 @@ class LiteralRule(PhraseRule):
         if is_concrete_object_literal(node):
             return self._concrete_object(node, context)
         return RoleFragment(
-            text=context.services.type_name_of_value(node._value_),
+            text=value_phrase(node._value_),
             role=SemanticRole.LITERAL,
         )
 
@@ -166,7 +167,7 @@ class LiteralRule(PhraseRule):
                 parts=[
                     RoleFragment(text=name, role=SemanticRole.ATTRIBUTE),
                     RoleFragment(
-                        text=context.services.type_name_of_value(field_value),
+                        text=value_phrase(field_value),
                         role=SemanticRole.LITERAL,
                     ),
                 ]

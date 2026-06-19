@@ -178,20 +178,21 @@ def test_verbalize_literal_plain_value():
     assert "42" in verbalize_expression(literal_value)
 
 
-def test_type_name_of_value_none_is_nothing():
-    assert MicroplanningServices().type_name_of_value(None) == "nothing"
+def test_value_phrase_none_is_nothing():
+    from krrood.entity_query_language.verbalization.value_lexicon import value_phrase
+
+    assert value_phrase(None) == "nothing"
 
 
-def test_type_name_of_value_enum_uses_member_name():
+def test_value_phrase_enum_uses_member_name():
     import enum
+
+    from krrood.entity_query_language.verbalization.value_lexicon import value_phrase
 
     class _Choice(enum.Enum):
         FIRST_OPTION = "first"
 
-    assert (
-        MicroplanningServices().type_name_of_value(_Choice.FIRST_OPTION)
-        == "FIRST_OPTION"
-    )
+    assert value_phrase(_Choice.FIRST_OPTION) == "FIRST_OPTION"
 
 
 def test_verbalize_literal_type_object():

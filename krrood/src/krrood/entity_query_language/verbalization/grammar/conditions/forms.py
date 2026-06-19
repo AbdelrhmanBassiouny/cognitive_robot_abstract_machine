@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import operator
 from abc import abstractmethod
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ from krrood.entity_query_language.verbalization.grammar.conditions.assembler imp
     ConditionAssembler,
 )
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    is_boolean_attribute_chain,
     is_none_literal,
     references,
     single_hop_attribute,
@@ -97,6 +99,16 @@ class ConditionForm(SpecificityRule):
 
     slot: ClassVar[Slot]
     """The surface slot this form's output occupies."""
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        """Fail fast at class-definition time when a concrete form forgets to declare its
+        :attr:`slot` (otherwise the omission is a silent ``AttributeError`` deep in :func:`place`).
+        """
+        super().__init_subclass__(**kwargs)
+        if not inspect.isabstract(cls) and "slot" not in {
+            key for base in cls.__mro__ for key in vars(base)
+        }:
+            raise TypeError(f"{cls.__name__} must declare the `slot` class variable")
 
     @classmethod
     @abstractmethod
@@ -202,8 +214,8 @@ class WhosePredicateForm(StandaloneForm):
         if not isinstance(item, Comparator):
             return False
         attribute = single_hop_attribute(item.left, subject)
-        if attribute is None or attribute._type_ is bool:
-            return False
+        if attribute is None or is_boolean_attribute_chain(item.left):
+            return False  # a boolean attribute uses the predicative form, not "whose"
         if is_none_literal(item.right):
             return False  # an absence comparison is AbsenceForm's (standalone, not "whose")
         if superlative_aggregation(item, subject) is not None:
