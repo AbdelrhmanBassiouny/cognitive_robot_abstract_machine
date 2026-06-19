@@ -9,8 +9,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-import krrood.symbolic_math.symbolic_math as sm
 import numpy as np
+from typing_extensions import Callable
+
+import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.qp.constraint import (
     GiskardConstraint,
     GiskardEqualityConstraint,
@@ -21,7 +23,6 @@ from giskardpy.qp.dof_limits import DirectLimits
 from giskardpy.qp.exceptions import ConstraintTypeMismatchError
 from krrood.symbolic_math.symbolic_math import Vector, Matrix, Scalar
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-from typing_extensions import Callable
 
 if TYPE_CHECKING:
     from giskardpy.qp.qp_controller_config import QPControllerConfig
@@ -143,7 +144,7 @@ class ExpressionEnforcementStrategy(EnforcementStrategy, ABC):
 
     @abstractmethod
     def create_bounds(
-        self, bounds_getter: Callable[GiskardConstraint, Scalar]
+        self, bounds_getter: Callable[[GiskardConstraint], Scalar]
     ) -> Vector:
         """
         Builds the constraint bounds, reading the relevant bound of each constraint via the getter.
@@ -297,7 +298,7 @@ class IntegralStrategy(ExpressionEnforcementStrategy):
         )
 
     def create_bounds(
-        self, bounds_getter: Callable[GiskardConstraint, Scalar]
+        self, bounds_getter: Callable[[GiskardConstraint], Scalar]
     ) -> Vector:
         """
         Builds the capped bounds, one per constraint.
@@ -424,7 +425,7 @@ class VelocityStrategy(ExpressionEnforcementStrategy):
         )
 
     def create_bounds(
-        self, bounds_getter: Callable[GiskardConstraint, Scalar]
+        self, bounds_getter: Callable[[GiskardConstraint], Scalar]
     ) -> Vector:
         """
         Builds the bounds, one per constraint and control step.

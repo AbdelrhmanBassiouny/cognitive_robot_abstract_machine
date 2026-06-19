@@ -8,89 +8,15 @@ from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, JointState
 from giskardpy.qp.dof_limits import DofLimits
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.robots.minimal_robot import MinimalRobot
-from semantic_digital_twin.spatial_types import Vector3
-from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import PrismaticConnection
-from semantic_digital_twin.world_description.degree_of_freedom import (
-    DegreeOfFreedom,
-    DegreeOfFreedomLimits,
-)
-from semantic_digital_twin.world_description.world_entity import Body
 
 TARGET_FREQUENCY = 20
 PREDICTION_HORIZON = 10
 DT = 1 / TARGET_FREQUENCY
 NUMBER_OF_VELOCITY_STEPS = PREDICTION_HORIZON - 2
 EXPECTED_JERK_LIMIT = DT
-POSITION_LOWER_LIMIT = -1.0
 POSITION_UPPER_LIMIT = 1.0
 VELOCITY_LIMIT = 1.0
-
-
-@pytest.fixture()
-def prismatic_world():
-    world = World()
-    with world.modify_world():
-        map_body = Body(name=PrefixedName("map"))
-        robot = Body(name=PrefixedName("robot"))
-        dof = DegreeOfFreedom(
-            limits=DegreeOfFreedomLimits(
-                lower=DerivativeMap(
-                    position=POSITION_LOWER_LIMIT,
-                    velocity=-VELOCITY_LIMIT,
-                    acceleration=None,
-                    jerk=None,
-                ),
-                upper=DerivativeMap(
-                    position=POSITION_UPPER_LIMIT,
-                    velocity=VELOCITY_LIMIT,
-                    acceleration=None,
-                    jerk=None,
-                ),
-            ),
-            has_hardware_interface=True,
-        )
-        world.add_degree_of_freedom(dof)
-        world.add_connection(
-            PrismaticConnection(
-                parent=map_body, child=robot, dof_id=dof.id, axis=Vector3.Z()
-            )
-        )
-    MinimalRobot.from_world(world)
-    return world
-
-
-@pytest.fixture()
-def prismatic_world_no_position_limits():
-    world = World()
-    with world.modify_world():
-        map_body = Body(name=PrefixedName("map"))
-        robot = Body(name=PrefixedName("robot"))
-        dof = DegreeOfFreedom(
-            limits=DegreeOfFreedomLimits(
-                lower=DerivativeMap(
-                    position=None,
-                    velocity=-VELOCITY_LIMIT,
-                    acceleration=None,
-                    jerk=None,
-                ),
-                upper=DerivativeMap(
-                    position=None, velocity=VELOCITY_LIMIT, acceleration=None, jerk=None
-                ),
-            ),
-            has_hardware_interface=True,
-        )
-        world.add_degree_of_freedom(dof)
-        world.add_connection(
-            PrismaticConnection(
-                parent=map_body, child=robot, dof_id=dof.id, axis=Vector3.Z()
-            )
-        )
-    MinimalRobot.from_world(world)
-    return world
 
 
 def test_joint_goal_inside_limits_reached(pr2_world_state_reset):
@@ -266,10 +192,10 @@ def _connection(world: World):
     return world.controlled_connections[0]
 
 
-def test_dof_limits_joint_in_center(prismatic_world):
-    _connection(prismatic_world).position = 0.0
+def test_dof_limits_joint_in_center(prismatic_bot):
+    _connection(prismatic_bot).position = 0.0
 
-    limits = _compute_limits(prismatic_world)
+    limits = _compute_limits(prismatic_bot)
     upper_vel = limits.upper_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
     lower_vel = limits.lower_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
 
@@ -277,10 +203,10 @@ def test_dof_limits_joint_in_center(prismatic_world):
     assert np.allclose(lower_vel, -VELOCITY_LIMIT, atol=1e-3)
 
 
-def test_dof_limits_joint_near_upper_limit(prismatic_world):
-    _connection(prismatic_world).position = 0.9
+def test_dof_limits_joint_near_upper_limit(prismatic_bot):
+    _connection(prismatic_bot).position = 0.9
 
-    limits = _compute_limits(prismatic_world)
+    limits = _compute_limits(prismatic_bot)
     upper_vel = limits.upper_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
     lower_vel = limits.lower_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
 
@@ -292,10 +218,10 @@ def test_dof_limits_joint_near_upper_limit(prismatic_world):
     ), "Lower velocity is unconstrained going away from the limit"
 
 
-def test_dof_limits_joint_near_lower_limit(prismatic_world):
-    _connection(prismatic_world).position = -0.9
+def test_dof_limits_joint_near_lower_limit(prismatic_bot):
+    _connection(prismatic_bot).position = -0.9
 
-    limits = _compute_limits(prismatic_world)
+    limits = _compute_limits(prismatic_bot)
     upper_vel = limits.upper_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
     lower_vel = limits.lower_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
 
@@ -307,10 +233,10 @@ def test_dof_limits_joint_near_lower_limit(prismatic_world):
     ), "Upper velocity is unconstrained going away from the limit"
 
 
-def test_dof_limits_joint_above_upper_limit(prismatic_world):
-    _connection(prismatic_world).position = 1.2
+def test_dof_limits_joint_above_upper_limit(prismatic_bot):
+    _connection(prismatic_bot).position = 1.2
 
-    limits = _compute_limits(prismatic_world)
+    limits = _compute_limits(prismatic_bot)
     upper_vel = limits.upper_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
 
     assert (
@@ -318,10 +244,10 @@ def test_dof_limits_joint_above_upper_limit(prismatic_world):
     ), "Upper velocity must be non-positive when joint is above the upper limit"
 
 
-def test_dof_limits_joint_below_lower_limit(prismatic_world):
-    _connection(prismatic_world).position = -1.2
+def test_dof_limits_joint_below_lower_limit(prismatic_bot):
+    _connection(prismatic_bot).position = -1.2
 
-    limits = _compute_limits(prismatic_world)
+    limits = _compute_limits(prismatic_bot)
     lower_vel = limits.lower_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
 
     assert (
@@ -330,14 +256,14 @@ def test_dof_limits_joint_below_lower_limit(prismatic_world):
 
 
 def test_dof_limits_integrating_upper_velocity_bounds_stays_within_position_limit(
-    prismatic_world,
+    prismatic_bot,
 ):
     initial_position = 0.5
-    connection = _connection(prismatic_world)
+    connection = _connection(prismatic_bot)
     connection.position = initial_position
     connection.velocity = 0.9
 
-    limits = _compute_limits(prismatic_world)
+    limits = _compute_limits(prismatic_bot)
     upper_vel_bounds = limits.upper_bounds.evaluate()[:NUMBER_OF_VELOCITY_STEPS]
 
     final_position = initial_position + DT * np.sum(upper_vel_bounds)
@@ -346,12 +272,12 @@ def test_dof_limits_integrating_upper_velocity_bounds_stays_within_position_limi
     ), "Integrating the upper velocity bounds must not overshoot the upper position limit"
 
 
-def test_dof_limits_jerk_is_relaxed_when_braking_is_insufficient(prismatic_world):
-    connection = _connection(prismatic_world)
+def test_dof_limits_jerk_is_relaxed_when_braking_is_insufficient(prismatic_bot):
+    connection = _connection(prismatic_bot)
     connection.position = 0.9
     connection.velocity = 0.9
 
-    limits = _compute_limits(prismatic_world)
+    limits = _compute_limits(prismatic_bot)
     jerk_upper_at_t0 = limits.upper_bounds.evaluate()[NUMBER_OF_VELOCITY_STEPS]
 
     assert (

@@ -259,3 +259,30 @@ def prismatic_bot2():
         )
     MinimalRobot.from_world(world)
     return world
+
+
+@pytest.fixture()
+def prismatic_world_no_position_limits():
+    world = World()
+    with world.modify_world():
+        map = Body(name=PrefixedName("map"))
+        robot = Body(name=PrefixedName("robot"))
+        dof = DegreeOfFreedom(
+            limits=DegreeOfFreedomLimits(
+                lower=DerivativeMap(
+                    position=None, velocity=-1, acceleration=None, jerk=None
+                ),
+                upper=DerivativeMap(
+                    position=None, velocity=1, acceleration=None, jerk=None
+                ),
+            ),
+            has_hardware_interface=True,
+        )
+        world.add_degree_of_freedom(dof)
+        world.add_connection(
+            PrismaticConnection(
+                parent=map, child=robot, dof_id=dof.id, axis=Vector3.Z()
+            )
+        )
+    MinimalRobot.from_world(world)
+    return world

@@ -58,7 +58,7 @@ class QuadraticProgramDebugger:
     def __post_init__(self):
         self.update(self.current_solution)
 
-    def update(self, current_solution: np.ndarray) -> None:
+    def update(self, current_solution: np.ndarray | None) -> None:
         """
         Updates the debugger with a new solution.
         """
@@ -169,19 +169,10 @@ class QuadraticProgramDebugger:
     @property
     def degree_of_freedom_names(self) -> list[str]:
         """
-        Returns the names of all degrees of freedom.
+        Returns the names of the degree-of-freedom decision variables, excluding slack variables, in
+        the same column order that :class:`DofLimits` uses to build the QP matrices.
         """
-        names = []
-        for derivative in ["vel", "jerk"]:
-            for k in range(self.qp_data_symbolic.config.prediction_horizon):
-                if (
-                    derivative == "vel"
-                    and k > self.qp_data_symbolic.config.prediction_horizon - 3
-                ):
-                    continue
-                for dof in self.qp_data_symbolic.degrees_of_freedom:
-                    names.append(f"{dof.name}_{derivative}_k_{k}")
-        return names
+        return self.free_variable_names[: self.qp_data_symbolic.num_non_slack_variables]
 
     @property
     def equality_constr_names(self) -> list[str]:

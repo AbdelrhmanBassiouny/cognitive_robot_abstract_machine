@@ -37,5 +37,5 @@ class MaxManipulability(Task):
             name=self.name,
         )
 
-        artifacts.observation_expression = sm.abs(self.m_threshold - m) <= 0.01
+        artifacts.observation = sm.abs(self.m_threshold - m) <= 0.01
         return artifacts

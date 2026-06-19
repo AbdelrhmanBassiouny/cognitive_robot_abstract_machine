@@ -416,10 +416,23 @@ class CartesianPositionStraight(CartesianTask):
         trans_error = tip_V_error.norm()
         tip_V_intermediate_error = tip_V_error.safe_division(trans_error)
 
-        # Create orthogonal y and z axes
-        tip_V_intermediate_y = Vector3.from_iterable(np.random.random((3,)))
-        tip_V_intermediate_y.scale(1)
-        y = tip_V_intermediate_error.cross(tip_V_intermediate_y)
+        # Create orthogonal y and z axes. Crossing the path direction with a world axis degenerates
+        # when the two are parallel, so deterministically pick whichever of the X/Y axes yields the
+        # better-conditioned (longer) cross product instead of sampling a random helper vector.
+        tip_V_cross_x = tip_V_intermediate_error.cross(Vector3.X())
+        tip_V_cross_y = tip_V_intermediate_error.cross(Vector3.Y())
+        tip_V_helper = Vector3.from_iterable(
+            [
+                sm.if_greater(
+                    tip_V_cross_x.norm(),
+                    tip_V_cross_y.norm(),
+                    tip_V_cross_x[i],
+                    tip_V_cross_y[i],
+                )
+                for i in range(3)
+            ]
+        )
+        y = tip_V_intermediate_error.cross(tip_V_helper)
         z = tip_V_intermediate_error.cross(y)
         tip_R_aligned = RotationMatrix.from_vectors(
             x=tip_V_intermediate_error, y=-z, z=y
@@ -543,11 +556,12 @@ class CartesianPose(CartesianTask):
         return self.goal_pose.reference_frame
 
     def build(self, context: MotionStatechartContext) -> NodeArtifacts:
-        artifacts = super().build(context)
-
-        # Use world root if no root link specified
+        # Use world root if no root link specified. This must happen before super().build(), which
+        # already dereferences self.root_link to set up the forward-kinematics binding.
         if self.root_link is None:
             self.root_link = context.world.root
+
+        artifacts = super().build(context)
 
         # Extract position and orientation from goal pose
         goal_reference_frame_R_goal_orientation = self.goal_pose.to_rotation_matrix()

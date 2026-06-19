@@ -36,6 +36,15 @@ from krrood.symbolic_math.symbolic_math import (
     Vector,
 )
 from semantic_digital_twin.spatial_types.derivatives import Derivatives
+from semantic_digital_twin.world import World
+
+
+def _world_state_matrix(world: World) -> np.ndarray:
+    """Public-API equivalent of the raw world-state buffer expected by ``factory.evaluate``."""
+    state = world.state
+    return np.vstack(
+        [state.positions, state.velocities, state.accelerations, state.jerks]
+    )
 
 
 def test_direct_limits_rejects_mismatched_lengths():
@@ -234,7 +243,6 @@ def test_integral_strategy_with_equality_constraints(prismatic_bot2):
     number_of_variables = len(prismatic_bot2.active_degrees_of_freedom)
     constraints = ConstraintCollection()
     dof1 = prismatic_bot2.active_degrees_of_freedom[0]
-    dof2 = prismatic_bot2.active_degrees_of_freedom[0]
     constraints.add_equality_constraint(
         task_expression=dof1.variables.position,
         equality_bound=1,
@@ -268,7 +276,6 @@ def test_integral_strategy_with_inequality_constraints(prismatic_bot2):
     number_of_variables = len(prismatic_bot2.active_degrees_of_freedom)
     constraints = ConstraintCollection()
     dof1 = prismatic_bot2.active_degrees_of_freedom[0]
-    dof2 = prismatic_bot2.active_degrees_of_freedom[0]
     constraints.add_inequality_constraint(
         task_expression=dof1.variables.position,
         lower_error=0,
@@ -375,7 +382,7 @@ def test_system_dynamics_strategy_is_not_an_expression_strategy(prismatic_bot2):
 def test_qp_data_symbolic(prismatic_bot2):
     constraints = ConstraintCollection()
     dof1 = prismatic_bot2.active_degrees_of_freedom[0]
-    dof2 = prismatic_bot2.active_degrees_of_freedom[0]
+    dof2 = prismatic_bot2.active_degrees_of_freedom[1]
     constraints.add_equality_constraint(
         task_expression=dof1.variables.position,
         equality_bound=1,
@@ -410,7 +417,7 @@ def test_qp_data_symbolic(prismatic_bot2):
         float_variables=[],
     )
     qp_data = adapter.evaluate(
-        world_state=prismatic_bot2.state._data,
+        world_state=_world_state_matrix(prismatic_bot2),
         life_cycle_state=np.array([]),
         float_variables=np.array([]),
     )
@@ -457,7 +464,7 @@ def test_two_sided_factory_evaluate_returns_fresh_object(prismatic_bot2):
         float_variables=[],
     )
     qp_data = factory.evaluate(
-        world_state=prismatic_bot2.state._data,
+        world_state=_world_state_matrix(prismatic_bot2),
         life_cycle_state=np.array([]),
         float_variables=np.array([]),
     )

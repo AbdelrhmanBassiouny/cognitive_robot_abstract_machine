@@ -21,6 +21,35 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class QPVariableAccumulator:
+    """
+    Collects the per-block cost weights, box bounds, and variable names of all decision and slack
+    variables while the QP is assembled, so the assembly logic stays free of hidden side effects.
+    """
+
+    quadratic_weights: List[Vector] = field(default_factory=list)
+    """
+    The quadratic cost blocks, one per registered variable block.
+    """
+    linear_weights: List[Vector] = field(default_factory=list)
+    """
+    The linear cost blocks, one per registered variable block.
+    """
+    box_lower_constraints: List[Vector] = field(default_factory=list)
+    """
+    The lower box-bound blocks, one per registered variable block.
+    """
+    box_upper_constraints: List[Vector] = field(default_factory=list)
+    """
+    The upper box-bound blocks, one per registered variable block.
+    """
+    free_variable_names: List[str] = field(default_factory=list)
+    """
+    The names of all registered variables, in column order.
+    """
+
+
+@dataclass
 class QPDataSymbolic:
     """
     Takes free variables and constraints and converts them to a QP problem in the following format, depending on the
@@ -34,34 +63,107 @@ class QPDataSymbolic:
     """
 
     degrees_of_freedom: List[DegreeOfFreedom]
+    """
+    The degrees of freedom whose decision variables make up the non-slack part of the QP.
+    """
     constraint_collection: ConstraintCollection
+    """
+    The equality and inequality constraints to encode into the QP.
+    """
     config: QPControllerConfig
+    """
+    Controller configuration, e.g. prediction horizon and time step.
+    """
 
     quadratic_weights: Vector = field(init=False)
+    """
+    Diagonal of the QP cost matrix H, for all decision and slack variables.
+    """
     linear_weights: Vector = field(init=False)
+    """
+    The linear cost vector g, for all decision and slack variables.
+    """
 
     box_lower_constraints: Vector = field(init=False)
+    """
+    Lower box bounds lb for all decision and slack variables.
+    """
     box_upper_constraints: Vector = field(init=False)
+    """
+    Upper box bounds ub for all decision and slack variables.
+    """
 
     free_variable_names: list[str] = field(init=False)
+    """
+    Names of all decision and slack variables, in column order.
+    """
 
     eq_matrix_dofs: Matrix = field(init=False)
+    """
+    Equality constraint matrix block acting on the degree-of-freedom variables.
+    """
     eq_matrix_slack: Matrix = field(init=False)
+    """
+    Equality constraint matrix block acting on the equality slack variables.
+    """
     eq_bounds: Vector = field(init=False)
+    """
+    Right-hand side bounds of the equality constraints.
+    """
     eq_constraint_names: list[str] = field(init=False)
+    """
+    Names of the equality constraints, in row order.
+    """
 
     neq_matrix_dofs: Matrix = field(init=False)
+    """
+    Inequality constraint matrix block acting on the degree-of-freedom variables.
+    """
     neq_matrix_slack: Matrix = field(init=False)
+    """
+    Inequality constraint matrix block acting on the inequality slack variables.
+    """
     neq_lower_bounds: Vector = field(init=False)
+    """
+    Lower bounds of the inequality constraints.
+    """
     neq_upper_bounds: Vector = field(init=False)
+    """
+    Upper bounds of the inequality constraints.
+    """
     neq_constraint_names: list[str] = field(init=False)
+    """
+    Names of the inequality constraints, in row order.
+    """
+
+    @staticmethod
+    def _append_slack_block(
+        strategy: EnforcementStrategy,
+        constraint_names: List[str],
+        accumulator: QPVariableAccumulator,
+    ) -> tuple[Matrix, Matrix]:
+        """
+        Appends the strategy's slack weights, box bounds, and names to the accumulator and the given
+        constraint-name list, and returns its constraint matrix and slack matrix.
+        """
+        slack_variables = strategy.create_slack_variables()
+        accumulator.quadratic_weights.append(slack_variables.quadratic_weights)
+        accumulator.linear_weights.append(slack_variables.linear_weights)
+        accumulator.box_lower_constraints.append(slack_variables.lower_bounds)
+        accumulator.box_upper_constraints.append(slack_variables.upper_bounds)
+        constraint_names.extend(strategy.create_names())
+        accumulator.free_variable_names.extend(slack_variables.names)
+        return strategy.create_matrix(), strategy.create_slack_matrix()
 
     def __post_init__(self):
         direct_limits = DofLimits.create(self.degrees_of_freedom, self.config)
-        quadratic_weights = [direct_limits.quadratic_weights]
-        linear_weights = [direct_limits.linear_weights]
-        box_lower_constraints = [direct_limits.lower_bounds]
-        box_upper_constraints = [direct_limits.upper_bounds]
+        accumulator = QPVariableAccumulator(
+            quadratic_weights=[direct_limits.quadratic_weights],
+            linear_weights=[direct_limits.linear_weights],
+            box_lower_constraints=[direct_limits.lower_bounds],
+            box_upper_constraints=[direct_limits.upper_bounds],
+            free_variable_names=list(direct_limits.names),
+        )
 
         ineq_matrix_dofs = []
         ineq_matrix_slack = []
@@ -73,23 +175,6 @@ class QPDataSymbolic:
         eq_matrix_slack = []
         eq_bounds = []
         self.eq_constraint_names = []
-        self.free_variable_names = direct_limits.names
-
-        def register_slack_block(
-            strategy: EnforcementStrategy, constraint_names: list[str]
-        ) -> tuple[Matrix, Matrix]:
-            """
-            Appends the strategy's slack weights, box bounds, and names to the shared lists and
-            returns its constraint matrix and slack matrix.
-            """
-            slack_variables = strategy.create_slack_variables()
-            quadratic_weights.append(slack_variables.quadratic_weights)
-            linear_weights.append(slack_variables.linear_weights)
-            box_lower_constraints.append(slack_variables.lower_bounds)
-            box_upper_constraints.append(slack_variables.upper_bounds)
-            constraint_names.extend(strategy.create_names())
-            self.free_variable_names.extend(slack_variables.names)
-            return strategy.create_matrix(), strategy.create_slack_matrix()
 
         system_dynamics_strategy = SystemDynamicsStrategy(
             degrees_of_freedom=self.degrees_of_freedom,
@@ -110,8 +195,8 @@ class QPDataSymbolic:
                 config=self.config,
                 constraints=constraints,
             )
-            matrix, slack_matrix = register_slack_block(
-                strategy, self.eq_constraint_names
+            matrix, slack_matrix = self._append_slack_block(
+                strategy, self.eq_constraint_names, accumulator
             )
             eq_matrix_dofs.append(matrix)
             eq_matrix_slack.append(slack_matrix)
@@ -126,18 +211,19 @@ class QPDataSymbolic:
                 config=self.config,
                 constraints=constraints,
             )
-            matrix, slack_matrix = register_slack_block(
-                strategy, self.neq_constraint_names
+            matrix, slack_matrix = self._append_slack_block(
+                strategy, self.neq_constraint_names, accumulator
             )
             ineq_matrix_dofs.append(matrix)
             ineq_matrix_slack.append(slack_matrix)
             lower_bounds.append(strategy.create_lower_bounds())
             upper_bounds.append(strategy.create_upper_bounds())
 
-        self.quadratic_weights = sm.concatenate(*quadratic_weights)
-        self.linear_weights = sm.concatenate(*linear_weights)
-        self.box_lower_constraints = sm.concatenate(*box_lower_constraints)
-        self.box_upper_constraints = sm.concatenate(*box_upper_constraints)
+        self.free_variable_names = accumulator.free_variable_names
+        self.quadratic_weights = sm.concatenate(*accumulator.quadratic_weights)
+        self.linear_weights = sm.concatenate(*accumulator.linear_weights)
+        self.box_lower_constraints = sm.concatenate(*accumulator.box_lower_constraints)
+        self.box_upper_constraints = sm.concatenate(*accumulator.box_upper_constraints)
         self.eq_matrix_dofs = sm.vstack(eq_matrix_dofs)
         self.eq_matrix_slack = sm.diag_stack(eq_matrix_slack)
         self.eq_bounds = sm.concatenate(*eq_bounds)

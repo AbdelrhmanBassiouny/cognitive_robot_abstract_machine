@@ -1703,21 +1703,23 @@ class TestMaxManipulability:
         root = pr2_world_state_reset.get_body_by_name("base_footprint")
         tip = pr2_world_state_reset.get_body_by_name("r_gripper_tool_frame")
 
-        msc = MotionStatechart()
-        msc.add_nodes(
-            [
-                cart_goal := CartesianPose(
-                    root_link=pr2_world_state_reset.root,
-                    tip_link=tip,
-                    goal_pose=Pose.from_xyz_rpy(
-                        x=0.8, y=-0.3, z=1.0, reference_frame=pr2_world_state_reset.root
-                    ),
-                ),
-                maxi := MaxManipulability(root_link=root, tip_link=tip),
-            ]
+        goal_pose = Pose.from_xyz_rpy(
+            x=0.8, y=-0.3, z=1.0, reference_frame=pr2_world_state_reset.root
         )
+        msc = MotionStatechart()
+        cart_goal = CartesianPose(
+            root_link=pr2_world_state_reset.root,
+            tip_link=tip,
+            goal_pose=goal_pose,
+        )
+        msc.add_nodes([cart_goal, MaxManipulability(root_link=root, tip_link=tip)])
         msc.add_node(EndMotion.when_true(cart_goal))
 
         kin_sim = Executor(MotionStatechartContext(world=pr2_world_state_reset))
         kin_sim.compile(motion_statechart=msc)
         kin_sim.tick_until_end()
+
+        fk = pr2_world_state_reset.compute_forward_kinematics_np(
+            pr2_world_state_reset.root, tip
+        )
+        assert np.allclose(fk, goal_pose.to_np(), atol=cart_goal.threshold)

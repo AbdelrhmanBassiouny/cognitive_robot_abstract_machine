@@ -31,11 +31,22 @@ if TYPE_CHECKING:
 
 @dataclass
 class ConstraintCollection:
+    """
+    Holds the equality and inequality constraints of a motion task and groups them by the
+    enforcement strategy that turns them into the rows of the final quadratic program.
+    """
+
     _constraints: list[GiskardConstraint] = field(default_factory=list, init=False)
+    """
+    The constraints collected so far, in insertion order.
+    """
 
     def get_equality_constraint_blocks(
         self,
     ) -> dict[type[EnforcementStrategy], list[GiskardEqualityConstraint]]:
+        """
+        Groups the equality constraints by their enforcement strategy.
+        """
         result = defaultdict(list)
         for c in self._constraints:
             if isinstance(c, GiskardEqualityConstraint):
@@ -45,6 +56,9 @@ class ConstraintCollection:
     def get_inequality_constraint_blocks(
         self,
     ) -> dict[type[EnforcementStrategy], list[GiskardInequalityConstraint]]:
+        """
+        Groups the inequality constraints by their enforcement strategy.
+        """
         result = defaultdict(list)
         for c in self._constraints:
             if isinstance(c, GiskardInequalityConstraint):
@@ -53,23 +67,37 @@ class ConstraintCollection:
 
     @property
     def equality_constraints(self) -> list[GiskardEqualityConstraint]:
+        """
+        All collected equality constraints.
+        """
         return [
             c for c in self._constraints if isinstance(c, GiskardEqualityConstraint)
         ]
 
     @property
     def inequality_constraints(self) -> list[GiskardInequalityConstraint]:
+        """
+        All collected inequality constraints.
+        """
         return [
             c for c in self._constraints if isinstance(c, GiskardInequalityConstraint)
         ]
 
     def merge(self, name_prefix: str, other: ConstraintCollection) -> None:
+        """
+        Adds the constraints of another collection, prefixing their names to keep them unique.
+        """
         for constraint in other._constraints:
             constraint.name = f"{name_prefix}/{constraint.name}"
         self._constraints.extend(other._constraints)
         self._are_names_unique()
 
     def add_constraint(self, constraint: GiskardConstraint) -> None:
+        """
+        Appends a constraint, assigning it an index-based name if it has none.
+
+        :raises DuplicateNameException: if a constraint with the same name already exists.
+        """
         constraint.name = constraint.name or f"{len(self._constraints)}"
         existing_names = {c.name for c in self._constraints}
         if constraint.name in existing_names:
@@ -79,6 +107,11 @@ class ConstraintCollection:
         self._constraints.append(constraint)
 
     def _are_names_unique(self) -> None:
+        """
+        Verifies that all collected constraint names are unique.
+
+        :raises DuplicateNameException: if two constraints share a name.
+        """
         names = set()
         for c in self._constraints:
             if c.name in names:
@@ -88,11 +121,17 @@ class ConstraintCollection:
             names.add(c.name)
 
     def get_all_float_variable_names(self) -> set[str]:
+        """
+        The names of all free variables appearing in any constraint expression.
+        """
         return {
             v.name for c in self._constraints for v in c.expression.free_variables()
         }
 
     def link_to_motion_statechart_node(self, node: MotionStatechartNode) -> None:
+        """
+        Scales every constraint weight so it is only active while the given node is running.
+        """
         for constraint in self._constraints:
             is_running = sm.if_eq(
                 node.life_cycle_variable,

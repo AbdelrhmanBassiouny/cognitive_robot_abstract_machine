@@ -580,6 +580,9 @@ class World(HasSimulatorProperties):
 
     @property
     def active_degrees_of_freedom(self) -> list[DegreeOfFreedom]:
+        """
+        The deduplicated, order-preserving list of active degrees of freedom across all connections.
+        """
         return list(
             dict.fromkeys(
                 dof for connection in self.connections for dof in connection.active_dofs
@@ -588,6 +591,9 @@ class World(HasSimulatorProperties):
 
     @property
     def passive_degrees_of_freedom(self) -> list[DegreeOfFreedom]:
+        """
+        The deduplicated, order-preserving list of passive degrees of freedom across all connections.
+        """
         return list(
             dict.fromkeys(
                 dof

@@ -1,22 +1,14 @@
 from copy import copy
 
 import numpy as np
-from semantic_digital_twin.world_description.degree_of_freedom import (
-    DegreeOfFreedomLimits,
-)
 from typing_extensions import Tuple, List
 
-import giskardpy.utils.math as gm
 import krrood.symbolic_math.symbolic_math as sm
-
-from giskardpy.utils.decorators import memoize
 from krrood.symbolic_math.symbolic_math import (
-    FloatVariable,
     Scalar,
     Vector,
     substitution_cache,
 )
-from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 
 
 def shifted_velocity_profile(

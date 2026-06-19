@@ -14,7 +14,13 @@ from giskardpy.utils.math import fast_sparse_diagonal
 @dataclass
 class QPSolverPIQP(QPSolver[QPDataExplicit]):
     solver: piqp.SparseSolver = field(default_factory=piqp.SparseSolver)
-    big_ball_mode: bool = False
+    ignore_solver_failures: bool = False
+    """
+    If the QP is known to be feasible, ignore non-SOLVED solver statuses and return the (possibly
+    suboptimal) solution instead of raising.
+    .. warning:: This might lead to instability if the QP was actually infeasible. Only enable it
+        when you are certain the problem is feasible.
+    """
 
     def __post_init__(self):
         self.solver.settings.eps_abs = 1e-6
@@ -49,7 +55,7 @@ class QPSolverPIQP(QPSolver[QPDataExplicit]):
             )
 
         status = self.solver.solve()
-        if status.value != piqp.PIQP_SOLVED and not self.big_ball_mode:
+        if status.value != piqp.PIQP_SOLVED and not self.ignore_solver_failures:
             raise InfeasibleException(f"Solver status: {status.value}")
         return self.solver.result.x
 
