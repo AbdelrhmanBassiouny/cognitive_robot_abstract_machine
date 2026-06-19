@@ -134,9 +134,11 @@ def test_load_successful_grasps_from_dataset(tmp_path):
     test_uuid = body.id
 
     grasp = GraspPose(
-        position=Point3(1.0, 2.0, 3.0),
-        orientation=Quaternion(),
-        reference_frame=body,
+        pose=Pose(
+            position=Point3(1.0, 2.0, 3.0),
+            orientation=Quaternion(),
+            reference_frame=body,
+        ),
     )
 
     with Session(engine) as session:
