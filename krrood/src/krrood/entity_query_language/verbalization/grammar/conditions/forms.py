@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+import operator
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -9,6 +11,9 @@ from typing_extensions import ClassVar, List, Optional, Union
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.verbalization.exceptions import (
+    UndeclaredFormSlotError,
+)
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     Fragment,
@@ -18,9 +23,14 @@ from krrood.entity_query_language.verbalization.grammar.conditions.assembler imp
     ConditionAssembler,
 )
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    is_boolean_attribute_chain,
+    is_none_literal,
     references,
     single_hop_attribute,
     superlative_aggregation,
+)
+from krrood.entity_query_language.verbalization.grammar.conditions.transforms import (
+    render_absence,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RuleContext,
@@ -29,7 +39,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.specificity im
     SpecificityRule,
 )
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
-    fold_range_pairs,
+    reduce_conjuncts,
     RangeFold,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
@@ -95,6 +105,14 @@ class ConditionForm(SpecificityRule):
 
     slot: ClassVar[Slot]
     """The surface slot this form's output occupies."""
+
+    def __init_subclass__(cls, **kwargs: object) -> None:
+        """Fail fast at class-definition time when a concrete form forgets to declare its
+        :attr:`slot` (otherwise the omission is a silent ``AttributeError`` deep in :func:`place`).
+        """
+        super().__init_subclass__(**kwargs)
+        if not inspect.isabstract(cls) and not hasattr(cls, "slot"):
+            raise UndeclaredFormSlotError(form=cls)
 
     @classmethod
     @abstractmethod
@@ -165,7 +183,7 @@ class WhoseRangeForm(StandaloneForm):
     >>> verbalize_expression(
     ...     an(entity(employee).where(and_(employee.salary > 100, employee.salary < 200)))
     ... )
-    'Find an Employee whose salary is between 100, and 200'
+    'Find an Employee whose salary is between 100 and 200'
     """
 
     slot = Slot.WHOSE
@@ -200,8 +218,10 @@ class WhosePredicateForm(StandaloneForm):
         if not isinstance(item, Comparator):
             return False
         attribute = single_hop_attribute(item.left, subject)
-        if attribute is None or attribute._type_ is bool:
-            return False
+        if attribute is None or is_boolean_attribute_chain(item.left):
+            return False  # a boolean attribute uses the predicative form, not "whose"
+        if is_none_literal(item.right):
+            return False  # an absence comparison is AbsenceForm's (standalone, not "whose")
         if superlative_aggregation(item, subject) is not None:
             return False  # a superlative comparator is SuperlativeForm's
         return not references(item.right, subject)
@@ -211,6 +231,33 @@ class WhosePredicateForm(StandaloneForm):
         return ConditionAssembler(context).attribute_modifier(
             request.item, request.subject, request.number
         )
+
+
+class AbsenceForm(StandaloneForm):
+    """A non-negated ``<chain> == None`` comparison → the absence predicate *"<owner> has no
+    <attribute>"* (an owned attribute) or *"<subject> does not exist"* (a bare variable), said as
+    its own clause rather than folded onto the subject noun (the subject/object flip cannot sit in a
+    *"whose …"* coordination).
+
+    >>> mission = variable(Mission, [])
+    >>> verbalize_expression(an(entity(mission).where(mission.assigned_to == None)))
+    'Find a Mission such that the Mission has no assigned_to'
+    """
+
+    slot = Slot.STANDALONE
+
+    @classmethod
+    def applies(cls, request: Placement) -> bool:
+        item = request.item
+        return (
+            isinstance(item, Comparator)
+            and item.operation is operator.eq
+            and is_none_literal(item.right)
+        )
+
+    @classmethod
+    def render(cls, request: Placement, context: RuleContext) -> Fragment:
+        return render_absence(request.item, context, number=request.number)
 
 
 def place(request: Placement, context: RuleContext) -> Placed:
@@ -262,9 +309,10 @@ def as_subject_restrictions(
     caller positions: superlative noun modifiers, the shared *"whose"* group, and the standalone
     residual. This is the list form of :func:`place`.
 
-    The conjuncts are range-folded here first (a complementary lower/upper bound pair on one chain
-    becomes a single *"… is between …"*), so the caller hands over the raw conditions and never
-    invokes the fold itself — the same reduction :meth:`ConditionAssembler.as_statements` applies.
+    The conjuncts are reduced here first (a complementary lower/upper bound pair on one chain
+    becomes a single *"… is between …"*; co-indexed comparisons across two prefixes fold into one
+    *"… have the same …"*), so the caller hands over the raw conditions and never invokes the fold
+    itself — the same reduction :meth:`ConditionAssembler.as_statements` applies.
 
     :param conditions: The subject's WHERE conjuncts (an ``AND`` already flattened to a list).
     :param subject: The variable the restriction is on.
@@ -275,7 +323,7 @@ def as_subject_restrictions(
     """
     placed = [
         place(Placement(item=item, subject=subject, number=number), context)
-        for item in fold_range_pairs(list(conditions))
+        for item in reduce_conjuncts(list(conditions))
     ]
     grouped = [item.fragment for item in placed if item.slot is Slot.WHOSE]
     whose = (
@@ -304,4 +352,5 @@ def _join_residual(fragments: List[Fragment]) -> Optional[Fragment]:
         return None
     if len(fragments) == 1:
         return fragments[0]
-    return oxford_comma(fragments, Conjunctions.AND.as_fragment())
+    # Residual conjuncts are independent clauses, so a two-clause pair keeps its comma.
+    return oxford_comma(fragments, Conjunctions.AND.as_fragment(), pair_comma=True)

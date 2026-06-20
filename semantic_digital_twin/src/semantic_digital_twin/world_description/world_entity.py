@@ -112,7 +112,10 @@ class WorldEntity(Symbol):
 
     def __eq__(self, other):
         if not isinstance(other, type(self)):
-            return False
+            # NotImplemented (instead of False) lets Python fall back to the
+            # other operand's __eq__, so base_instance == subclass_instance
+            # still works when the subclass's strict type check fails
+            return NotImplemented
         return hash(self) == hash(other)
 
     def add_to_world(self, world: World):
@@ -494,7 +497,16 @@ class Body(KinematicStructureEntity):
         :param surface_threshold: Ignore simple geometry shapes with a surface area less than this (in m^2)
         :return: True if collision geometry is mesh or simple shape exceeding thresholds
         """
-        return len(self.collision) > 0
+        for shape in self.collision:
+            if isinstance(shape, Mesh):
+                return True
+            shape_mesh = shape.mesh
+            if (
+                shape_mesh.volume > volume_threshold
+                or shape_mesh.area > surface_threshold
+            ):
+                return True
+        return False
 
     def get_semantic_annotations_by_type(
         self, type_: Type[GenericSemanticAnnotation]
@@ -514,6 +526,7 @@ class Body(KinematicStructureEntity):
             id=self.id,
             visual=self.visual.copy_for_world(new_world),
             collision=self.collision.copy_for_world(new_world),
+            inertial=deepcopy(self.inertial),
         )
 
 
@@ -612,6 +625,10 @@ class SemanticAnnotation(WorldEntityWithSimulatorProperties):
         return set(n.lower() for n in camel_case_split(cls.__name__))
 
     def __hash__(self):
+        return self.__cached_hash__
+
+    @cached_property
+    def __cached_hash__(self):
         introspector = DataclassOnlyIntrospector()
         result = [self.__class__]
         for field_ in introspector.discover(self.__class__):
@@ -826,14 +843,18 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer):
             and self.parent_T_connection_expression.reference_frame != self.parent
         ):
             raise ReferenceFrameMismatchError(
-                self.parent, self.parent_T_connection_expression.reference_frame
+                expected_frame=self.parent,
+                actual_frame=self.parent_T_connection_expression.reference_frame,
+                context=f"parent_T_connection_expression of connection '{self.name}'",
             )
         if (
             self.connection_T_child_expression.child_frame is not None
             and self.connection_T_child_expression.child_frame != self.child
         ):
             raise ReferenceFrameMismatchError(
-                self.parent, self.connection_T_child_expression.child_frame
+                expected_frame=self.child,
+                actual_frame=self.connection_T_child_expression.child_frame,
+                context=f"child frame of connection_T_child_expression of connection '{self.name}'",
             )
 
         self.parent_T_connection_expression.reference_frame = self.parent
@@ -846,6 +867,9 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer):
         result["child_id"] = to_json(self.child.id)
         result["parent_T_connection_expression"] = to_json(
             self.parent_T_connection_expression
+        )
+        result["connection_T_child_expression"] = to_json(
+            self.connection_T_child_expression
         )
         return result
 
@@ -860,6 +884,9 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer):
             child=child,
             parent_T_connection_expression=from_json(
                 data["parent_T_connection_expression"], **kwargs
+            ),
+            connection_T_child_expression=from_json(
+                data["connection_T_child_expression"], **kwargs
             ),
         )
 
@@ -1007,6 +1034,24 @@ class Connection(WorldEntity, HasSimulatorProperties, SubclassJSONSerializer):
             parent_T_connection_expression=parent_T_connection_expression,
             connection_T_child_expression=connection_T_child_expression,
             name=PrefixedName(self.name.name, prefix=self.name.prefix),
+        )
+
+    def copy_with_new_parent(
+        self,
+        new_parent: KinematicStructureEntity,
+        parent_T_connection_expression: HomogeneousTransformationMatrix,
+    ) -> Self:
+        """
+        Create a copy of this connection re-parented under ``new_parent``, using
+        ``parent_T_connection_expression`` as the new parent offset and keeping the same child and
+        ``connection_T_child_expression``. Subclasses carrying extra state (e.g. an active degree of
+        freedom) override this to preserve it. Used to move a branch without collapsing its connection.
+        """
+        return self.__class__(
+            parent=new_parent,
+            child=self.child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=self.connection_T_child_expression,
         )
 
     def update_references_for_world(self, world: World):

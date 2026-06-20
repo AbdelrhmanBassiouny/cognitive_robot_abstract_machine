@@ -329,8 +329,7 @@ class GroupedBy(MultiArityExpressionThatPerformsACartesianProduct):
     def group_key_root_ids(self) -> Set[uuid.UUID]:
         """
         :return: The ids of the distinct ``Variable`` chain-roots of the group-by keys (e.g. for a
-            key ``employee.department`` the root is the ``employee`` variable). Distinct from
-            :attr:`ids_of_variables_to_group_by`, which holds the keys' own ids.
+            key ``employee.department`` the root is the ``employee`` variable).
         """
         return root_variable_ids(self.variables_to_group_by)
 

@@ -23,8 +23,11 @@ from krrood.entity_query_language.verbalization.grammar.conditions.recognition i
     single_hop_attribute,
     superlative_aggregation,
 )
+from krrood.entity_query_language.verbalization.grammar.conditions.transforms import (
+    PredicateTransform,
+)
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
-    fold_range_pairs,
+    reduce_conjuncts,
     RangeFold,
     build_between,
 )
@@ -63,15 +66,13 @@ class ConditionAssembler(Assembler[Comparator, None]):
         """
         :param comparator: The comparator to render.
         :param negated: Whether an outer negation applies.
-        :return: The standalone comparator form *"<left> <operator> <right>"*.
+        :return: The standalone predicate — dispatched over the :class:`PredicateTransform` registry,
+            so the generic *"<left> <operator> <right>"* is one transform alongside the absence
+            (*"has no …"* / *"does not exist"*) and boolean-polarity (*"is [not] <attr>"*) forms; the
+            most-specific applicable one wins, and adding a new one is a new subclass.
         """
-        return PhraseFragment(
-            parts=[
-                self.context.child(comparator.left),
-                comparator_operator(comparator, self.context.services, negated=negated),
-                self.context.child(comparator.right),
-            ]
-        )
+        transform = PredicateTransform.most_applicable(comparator, negated)
+        return transform.render(comparator, self.context, negated)
 
     def as_statements(self, conditions: List[SymbolicExpression]) -> List[Fragment]:
         """
@@ -79,7 +80,8 @@ class ConditionAssembler(Assembler[Comparator, None]):
         conditions stand on their own (an ``AND``'s operands, a ``where`` block), as opposed to
         attaching to a subject noun (:func:`as_subject_restrictions`). The verbalizer decides
         everything inside: it reduces the conjuncts (a complementary lower/upper bound pair on one
-        chain becomes one *"… is between …"*) and says each resulting condition.
+        chain becomes one *"… is between …"*; co-indexed comparisons across two prefixes fold into
+        one *"… have the same …"*) and says each resulting condition.
 
         The caller only knows it has conditions and that this says them; it never sees the folding,
         nor chooses among the per-form methods below.
@@ -87,7 +89,7 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param conditions: The conditions to say, in order.
         :return: One standalone-statement fragment per condition (after reduction), in order.
         """
-        return [self.context.child(item) for item in fold_range_pairs(list(conditions))]
+        return [self.context.child(item) for item in reduce_conjuncts(list(conditions))]
 
     def attribute_modifier(
         self,
@@ -117,7 +119,7 @@ class ConditionAssembler(Assembler[Comparator, None]):
                     attribute._owner_class_, attribute._attribute_name_, number=number
                 ),
                 operator_fragment,
-                self.context.child(comparator.right, number=number),
+                self.context.child(comparator.right, number=number, as_value=True),
             ]
         )
 

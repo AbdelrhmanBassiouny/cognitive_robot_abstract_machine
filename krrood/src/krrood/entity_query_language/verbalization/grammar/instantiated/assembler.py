@@ -18,7 +18,9 @@ from krrood.entity_query_language.verbalization.fragments.roles import SemanticR
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
     SourceReference,
 )
-from krrood.entity_query_language.verbalization.grammar.framework.assembler import Assembler
+from krrood.entity_query_language.verbalization.grammar.framework.assembler import (
+    Assembler,
+)
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     BindingPlan,
     InstantiatedPlan,
@@ -131,7 +133,10 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         phrase with its appositive clauses as droppable modifiers."""
         modifiers: List[Fragment] = []
         if binding_fragments:
-            joined = oxford_comma(binding_fragments, Conjunctions.AND.as_fragment())
+            # Bindings and constraints are independent clauses → a two-clause pair keeps its comma.
+            joined = oxford_comma(
+                binding_fragments, Conjunctions.AND.as_fragment(), pair_comma=True
+            )
             modifiers.append(
                 PhraseFragment(
                     parts=[
@@ -143,7 +148,7 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
             )
         if constraint_fragments:
             joined_constraints = oxford_comma(
-                constraint_fragments, Conjunctions.AND.as_fragment()
+                constraint_fragments, Conjunctions.AND.as_fragment(), pair_comma=True
             )
             modifiers.append(
                 PhraseFragment(

@@ -62,8 +62,8 @@ def is_collapsible_aggregation_subquery(entity: SymbolicExpression) -> bool:
         aggregation itself.
     """
     # ``is_aggregation_subquery`` already guarantees an ``Entity`` here, so the core
-    # ``Query.is_constrained`` is safe to read.
-    return is_aggregation_subquery(entity) and not entity.is_constrained
+    # ``Query.is_constrained_or_grouped`` is safe to read.
+    return is_aggregation_subquery(entity) and not entity.is_constrained_or_grouped
 
 
 def aggregation_leaf_attribute(entity: SymbolicExpression) -> Optional[Attribute]:

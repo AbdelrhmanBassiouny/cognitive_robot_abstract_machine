@@ -10,6 +10,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.subquery import is_calculation_value
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    CoindexedOperators,
     Logicals,
     Operators,
 )
@@ -17,6 +18,25 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 if TYPE_CHECKING:
     from krrood.entity_query_language.operators.comparator import Comparator
     from krrood.entity_query_language.verbalization.context import MicroplanningServices
+
+
+#: Map a foldable comparison operator to its plural co-indexed phrase (*"are equal to"*, …).
+_COINDEXED_OPERATOR_MAP = {
+    operator.eq: CoindexedOperators.EQ,
+    operator.gt: CoindexedOperators.GT,
+    operator.lt: CoindexedOperators.LT,
+    operator.ge: CoindexedOperators.GE,
+    operator.le: CoindexedOperators.LE,
+}
+
+
+def coindexed_operator(operation) -> Fragment:
+    """
+    :param operation: A foldable comparison operator (see ``COINDEXED_OPERATORS``).
+    :return: The plural copular operator fragment for the faithful co-indexed form — *"are equal
+        to"* for ``eq``, *"are greater than"* for ``gt``, etc.
+    """
+    return _COINDEXED_OPERATOR_MAP[operation].as_fragment()
 
 
 def comparator_operator(

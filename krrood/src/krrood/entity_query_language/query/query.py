@@ -502,10 +502,10 @@ class Query(
         )
 
     @property
-    def is_constrained(self) -> bool:
+    def is_constrained_or_grouped(self) -> bool:
         """
         :return: ``True`` when this query carries a ``WHERE``, ``HAVING``, or
-            non-empty ``GROUP BY`` clause (i.e. it filters beyond its selection).
+            non-empty ``GROUP BY`` clause (i.e. it filters beyond its selection or groups results).
         """
         if self._where_expression_ is not None:
             return True

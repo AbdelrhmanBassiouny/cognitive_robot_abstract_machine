@@ -13,7 +13,7 @@ authors = [{ name = "AICOR Institute", email = "you@example.com" }]
 # Add dependencies on all workspace members by their distribution names
 # uv will resolve these to editable installs via [tool.uv.sources]
 dependencies = [
-  "pycram-robotics",
+  "coraplex",
   "giskardpy",
   "semantic_digital_twin",
   "krrood",
@@ -23,12 +23,48 @@ dependencies = [
   "physics_simulators",
   "experiments",
   "ipykernel>=7.2.0",
-  "lark-parser>=0.12.0",
+  "lark-parser>=0.12.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0,<8.0.0",
+    "pytest-asyncio>=0.23.0,<0.24.0",
+    "pytest-xdist",
+    "objgraph",
+
+]
+
+# Requirements for building the documentation of all sub-packages.
+# Collected from the doc/requirements.txt files of the workspace members
+# (coraplex, krrood, probabilistic_model, random_events, semantic_digital_twin).
+# Workspace packages (e.g. random-events) are omitted since they are core dependencies.
+doc = [
+    "jupyter-book<2.0.0",
+    "jupyter",
+    "ghp-import",
+    "nbconvert",
+    "jupytext",
+    "jupyterquiz",
+    "sphinx-autoapi",
+    "sphinx-proof",
+    "sphinxcontrib-plantuml",
+    "sphinxcontrib-mermaid",
+    "Pygments>=2.15.0",
+    "pylint",
+    "matplotlib",
+    "numpy",
+    "scipy",
+    "pillow",
+    "graphviz",
+    "polytope",
+    "ortools",
+    "cvxopt"
 ]
 
 [tool.uv.workspace]
 members = [
-  "pycram",
+  "coraplex",
   "giskardpy",
   "semantic_digital_twin",
   "krrood",
@@ -40,7 +76,7 @@ members = [
 ]
 
 [tool.uv.sources]
-pycram-robotics       = { workspace = true }
+coraplex       = { workspace = true }
 giskardpy             = { workspace = true }
 semantic_digital_twin = { workspace = true }
 krrood                = { workspace = true }
@@ -54,7 +90,7 @@ experiments           = { workspace = true }
 package-mode = false
 
 [tool.poetry.dependencies]
-pycram-robotics = { path = "pycram", develop = true }
+coraplex = { path = "coraplex", develop = true }
 giskardpy = { path = "giskardpy", develop = true }
 semantic_digital_twin = { path = "semantic_digital_twin", develop = true }
 krrood = { path = "krrood", develop = true }
@@ -66,3 +102,8 @@ experiments = { path = "experiments", develop = true }
 
 [tool.setuptools]
 packages = []
+
+[tool.docformatter]
+make-summary-multi-line = true
+pre-summary-newline = true
+close-quotes-on-newline = true

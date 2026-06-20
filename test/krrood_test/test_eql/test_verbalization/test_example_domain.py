@@ -40,7 +40,8 @@ _GITHUB_PAGES_BASE = "https://cram2.github.io/cognitive_robot_abstract_machine/k
 _MODULE = "krrood.entity_query_language.verbalization.example_domain"
 _MODULE_PATH = _MODULE.replace(".", "/")
 
-# Every example class the user guide uses, so a rename/removal trips this test.
+# Every example class the user guide uses, so a rename/removal trips this test. Mirrors the
+# canonical grouped list in the ``example_domain`` module docstring — keep the two in sync.
 _EXAMPLE_CLASSES = [
     "Robot",
     "Mission",

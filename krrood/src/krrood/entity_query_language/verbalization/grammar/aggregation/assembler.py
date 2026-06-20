@@ -74,7 +74,7 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
             modifiers=[leaf_fragment],
         )
 
-        if not aggregation_data.is_constrained:
+        if not aggregation_data.is_constrained_or_grouped:
             return aggregate
         return self._among_population(node, plan, aggregate)
 

@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import inspect
 import os
-import shutil
+from typing import Tuple
+
 import time
 import trimesh
 from abc import ABC, abstractmethod
@@ -22,7 +23,6 @@ from physics_simulators.base_simulator import (
     SimulatorConstraints,
 )
 from krrood.utils import recursive_subclasses
-from krrood.exceptions import DataclassException
 from scipy.spatial.transform import Rotation
 from trimesh.visual import TextureVisuals
 
@@ -31,6 +31,10 @@ from semantic_digital_twin.callbacks.callback import (
     StateChangeCallback,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import (
+    QuaternionConversionError,
+    MujocoEntityNotFoundError,
+)
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -44,6 +48,8 @@ from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     FixedConnection,
     Connection6DoF,
+    OmniDrive,
+    DifferentialDrive,
 )
 from semantic_digital_twin.world_description.geometry import (
     Box,
@@ -84,8 +90,7 @@ def cas_pose_to_list(pose: HomogeneousTransformationMatrix) -> List[float]:
     try:
         quat = Rotation.from_matrix(rotation_matrix).as_quat(scalar_first=True)
     except Exception as e:
-        error_msg = f"Error converting rotation matrix to quaternion. Rotation matrix:\n{rotation_matrix}\nError message: {str(e)}"
-        raise MultiSimError(error_msg)
+        raise QuaternionConversionError(rotation_matrix, str(e))
     return [pos[0], pos[1], pos[2], quat[0], quat[1], quat[2], quat[3]]
 
 
@@ -131,11 +136,6 @@ class GeomVisibilityAndCollisionType(IntEnum):
     """
     Undefined geometry type (variant 2).
     """
-
-
-@dataclass
-class MultiSimError(DataclassException):
-    """Base class for all MultiSim-related exceptions."""
 
 
 @dataclass(eq=False)
@@ -296,8 +296,9 @@ class KinematicStructureEntityConverter(EntityConverter, ABC):
         """
 
         kinematic_structure_entity_props = EntityConverter._convert(self, entity)
-        t = entity.parent_connection.parent_T_connection_expression @ entity.parent_connection.connection_T_child_expression
-        px, py, pz, qw, qx, qy, qz = cas_pose_to_list(t)
+        [px, py, pz, qx, qy, qz, qw] = (
+            entity.parent_connection.origin_as_position_quaternion().evaluate()[0]
+        )
         kinematic_structure_entity_pos = [px, py, pz]
         kinematic_structure_entity_quat = [qw, qx, qy, qz]
         kinematic_structure_entity_props.update(
@@ -674,26 +675,6 @@ class CameraConverter(EntityConverter, ABC):
         return camera_props
 
 
-class MujocoError(MultiSimError):
-    """
-    Base class for all MuJoCo-related exceptions.
-    """
-
-
-class MujocoEntityNotFoundError(MujocoError):
-    """
-    Raised when a MuJoCo entity of a given type and name cannot be found.
-    """
-
-    entity_name: str
-    entity_type: mujoco.mjtObj
-    action: str = "find"
-
-    def __post_init__(self):
-        self.message = f"Failed to {self.action}: type={self.entity_type}, name='{self.entity_name}'"
-        super().__post_init__()
-
-
 @dataclass
 class MujocoActuator(SimulatorAdditionalProperty):
     """
@@ -917,7 +898,7 @@ class MujocoTendon(SimulatorAdditionalProperty):
     Inertia associated with changes in tendon length.
     """
 
-    damping: float = 0.0
+    damping: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """
     Damping coefficient. A positive value generates a damping force (linear in velocity) acting along the tendon.
     """
@@ -987,7 +968,7 @@ class MujocoTendon(SimulatorAdditionalProperty):
     Spring resting position, can take either one or two values. If one value is given, it corresponds to the length of the tendon at rest.
     """
 
-    stiffness: float = 0.0
+    stiffness: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """
     Stiffness coefficient. A positive value generates a spring force (linear in position) acting along the tendon.
     """
@@ -1039,7 +1020,7 @@ class MujocoJoint(SimulatorAdditionalProperty):
     An additional property declaring that a Connection is a MujocoJoint.
     """
 
-    stiffness: float = 0.0
+    stiffness: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     """
     The stiffness of the joint.
     """
@@ -1197,9 +1178,13 @@ class MujocoMeshConverter(MujocoGeomConverter, MeshConverter):
             if not os.path.isfile(texture_file_path):
                 texture_file_path = entity.mesh.visual.material.image.filename
             if not os.path.isfile(texture_file_path):
-                texture_file_path = entity.mesh.visual.material.image.info.get("file_path", "")
+                texture_file_path = entity.mesh.visual.material.image.info.get(
+                    "file_path", ""
+                )
             if not os.path.isfile(texture_file_path):
-                raise FileNotFoundError(f"Texture file not found for mesh. Checked paths: '{entity.mesh.visual.material.name}', '{entity.mesh.visual.material.image.filename}', '{entity.mesh.visual.material.image.info.get('file_path', '')}'")
+                raise FileNotFoundError(
+                    f"Texture file not found for mesh. Checked paths: '{entity.mesh.visual.material.name}', '{entity.mesh.visual.material.image.filename}', '{entity.mesh.visual.material.image.info.get('file_path', '')}'"
+                )
             shape_props["texture_file_path"] = texture_file_path
         return shape_props
 
@@ -1303,7 +1288,11 @@ class MujocoCameraConverter(CameraConverter, ABC):
     ) -> Dict[str, Any]:
         camera_props["mode"] = entity.mode
         if mujoco.mj_version() >= 3005000:
-            camera_props["proj"] = mujoco.mjtProjection.mjPROJ_ORTHOGRAPHIC if entity.orthographic else mujoco.mjtProjection.mjPROJ_PERSPECTIVE
+            camera_props["proj"] = (
+                mujoco.mjtProjection.mjPROJ_ORTHOGRAPHIC
+                if entity.orthographic
+                else mujoco.mjtProjection.mjPROJ_PERSPECTIVE
+            )
         else:
             camera_props["orthographic"] = entity.orthographic
         camera_props["fovy"] = entity.fovy
@@ -1328,6 +1317,17 @@ class MultiSimBuilder(ABC):
     _world: Optional[World] = None
     """
     The world to be built.
+    """
+
+    _ignore_connection_types: ClassVar[Tuple[Type, ...]] = (
+        FixedConnection,
+        OmniDrive,
+        DifferentialDrive,
+    )
+    """
+    A list of connection types to ignore when building connections in the simulator.
+    FixedConnection is ignored because in MuJoCo, all bodies that are not connected by a joint are implicitly fixed to the parent body.
+    OmniDrive and DifferentialDrive are ignored because in MuJoCo, those are controlled by the degree of freedom of the freejoints.
     """
 
     def build_world(self, world: World, file_path: str):
@@ -1562,9 +1562,16 @@ class MujocoBuilder(MultiSimBuilder):
         qpos = []
         for body in self.world.bodies:
             parent_connection = body.parent_connection
-            if isinstance(parent_connection, FixedConnection) or parent_connection is None:
+            if (
+                isinstance(parent_connection, self._ignore_connection_types)
+                or parent_connection is None
+            ):
                 continue
-            qpos += [self.world.state[dof.id].position for dof in parent_connection.active_dofs + parent_connection.passive_dofs]
+            qpos += [
+                self.world.state[dof.id].position
+                for dof in parent_connection.active_dofs
+                + parent_connection.passive_dofs
+            ]
         key_element.set("qpos", " ".join(map(str, qpos)))
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
 
@@ -1696,7 +1703,7 @@ class MujocoBuilder(MultiSimBuilder):
         return True
 
     def _build_connection(self, connection: Connection):
-        if isinstance(connection, FixedConnection):
+        if isinstance(connection, self._ignore_connection_types):
             return
         joint_props = MujocoJointConverter.convert(connection)
         if "equality_joint" in joint_props:
@@ -1709,7 +1716,11 @@ class MujocoBuilder(MultiSimBuilder):
             equality.data = equality_joint["data"]
         for mujoco_joint in connection.simulator_additional_properties:
             if isinstance(mujoco_joint, MujocoJoint):
-                joint_props["stiffness"] = mujoco_joint.stiffness
+                joint_props["stiffness"] = (
+                    mujoco_joint.stiffness[0]
+                    if mujoco.mj_version() < 3007000
+                    else mujoco_joint.stiffness
+                )
                 joint_props["actfrcrange"] = mujoco_joint.actuator_force_range
                 break
 
@@ -1841,7 +1852,11 @@ class MujocoBuilder(MultiSimBuilder):
                 tendon.actfrclimited = mujoco_tendon.actuator_force_limited
                 tendon.actfrcrange = mujoco_tendon.actuator_force_range
                 tendon.armature = mujoco_tendon.armature
-                tendon.damping = mujoco_tendon.damping
+                tendon.damping = (
+                    mujoco_tendon.damping[0]
+                    if mujoco.mj_version() < 3007000
+                    else mujoco_tendon.damping
+                )
                 tendon.frictionloss = mujoco_tendon.frictionloss
                 tendon.group = mujoco_tendon.group
                 tendon.limited = mujoco_tendon.limited
@@ -1854,7 +1869,11 @@ class MujocoBuilder(MultiSimBuilder):
                 tendon.solref_friction = mujoco_tendon.solver_reference_friction
                 tendon.solref_limit = mujoco_tendon.solver_reference_limit
                 tendon.springlength = mujoco_tendon.spring_length
-                tendon.stiffness = mujoco_tendon.stiffness
+                tendon.stiffness = (
+                    mujoco_tendon.stiffness[0]
+                    if mujoco.mj_version() < 3007000
+                    else mujoco_tendon.stiffness
+                )
                 tendon.width = mujoco_tendon.width
                 for joint_name, joint_coef in mujoco_tendon.joints.items():
                     tendon.wrap_joint(joint_name, joint_coef)
@@ -2531,9 +2550,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         quat_xyzw = Rotation.from_matrix(pose[:3, :3]).as_quat()
         return xyz, quat_xyzw
 
-    def _read_6dof_from_qpos(
-        self, connection: Connection6DoF, qpos_adr: int
-    ) -> None:
+    def _read_6dof_from_qpos(self, connection: Connection6DoF, qpos_adr: int) -> None:
         """
         Copy a 6DoF MuJoCo free-joint qpos block into ``world.state`` for
         ``connection``.
@@ -2653,9 +2670,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             ).as_matrix(),
         )
         parent_T_conn = connection.parent_T_connection_expression.to_np()
-        mj_xyz, mj_quat_xyzw = self._decompose_pose_matrix(
-            parent_T_conn @ conn_T_child
-        )
+        mj_xyz, mj_quat_xyzw = self._decompose_pose_matrix(parent_T_conn @ conn_T_child)
 
         mj_data = self.simulator._mj_data
         mj_data.qpos[qpos_adr + 0] = mj_xyz[0]

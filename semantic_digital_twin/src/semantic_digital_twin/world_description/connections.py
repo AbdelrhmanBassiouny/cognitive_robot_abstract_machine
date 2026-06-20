@@ -314,6 +314,24 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
             dof_id=self.dof_id,
         )
 
+    def copy_with_new_parent(
+        self,
+        new_parent: KinematicStructureEntity,
+        parent_T_connection_expression: HomogeneousTransformationMatrix,
+    ) -> Self:
+        # Reuse the same degree of freedom so the joint state is kept.
+        return self.__class__(
+            parent=new_parent,
+            child=self.child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=self.connection_T_child_expression,
+            axis=self.axis,
+            multiplier=self.multiplier,
+            offset=self.offset,
+            dof_id=self.dof_id,
+            dynamics=self.dynamics,
+        )
+
 
 @dataclass(eq=False)
 class PrismaticConnection(ActiveConnection1DOF):
@@ -759,16 +777,16 @@ class OmniDrive(WheeledDrive):
         x_vel = DegreeOfFreedom(
             name=PrefixedName("x_vel", stringified_name),
             limits=DegreeOfFreedomLimits(
-                lower=lower_rotation_limits,
-                upper=upper_rotation_limits,
+                lower=lower_translation_limits,
+                upper=upper_translation_limits,
             ),
         )
         world.add_degree_of_freedom(x_vel)
         y_vel = DegreeOfFreedom(
             name=PrefixedName("y_vel", stringified_name),
             limits=DegreeOfFreedomLimits(
-                lower=lower_rotation_limits,
-                upper=upper_rotation_limits,
+                lower=lower_translation_limits,
+                upper=upper_translation_limits,
             ),
         )
         world.add_degree_of_freedom(y_vel)

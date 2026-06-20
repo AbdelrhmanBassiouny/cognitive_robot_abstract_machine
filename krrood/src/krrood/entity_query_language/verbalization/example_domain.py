@@ -13,7 +13,20 @@ pages — both on the published GitHub Pages site and in a locally built docs tr
 with no hand-maintained mock API.
 
 They are illustrative only: not used by the verbalization engine itself, and safe
-to import without side effects.  Group them by the doc section that uses them.
+to import without side effects.  Grouped by the doc section that uses them.
+
+Canonical class list (the single source of truth;
+``test_example_domain.py::_EXAMPLE_CLASSES`` enforces that this stays in sync):
+
+* Robots & missions — ``Robot``, ``Mission``
+* Boolean & list attributes — ``Task``, ``Worker``
+* Money (aggregation / nested / dates) — ``AmountDetails``, ``BankTransaction``
+* Employees (disambiguation / grouping / having) — ``Employee``
+* Custom predicates — ``Location``, ``IsReachable``, ``Department``, ``StaffMember``, ``WorksIn``
+* Birds (rule-tree / inference) — ``Bird``, ``LoveBirds``, ``BirdView``, ``StrongLoveBird``,
+  ``WeakLoveBird``
+* Containers (deep-nesting rule trees) — ``Handle``, ``Container``, ``FixedConnection``,
+  ``PrismaticConnection``, ``Drawer``, ``Cabinet``
 """
 
 from __future__ import annotations

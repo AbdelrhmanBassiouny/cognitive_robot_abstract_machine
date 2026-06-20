@@ -7,9 +7,8 @@ from typing_extensions import Optional
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
-from krrood.entity_query_language.verbalization.engine import fold
+from krrood.entity_query_language.verbalization.engine import fold, root_context
 from krrood.entity_query_language.verbalization.fragments.base import Fragment
-from krrood.entity_query_language.verbalization.fragments.features import Number
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RuleContext,
 )
@@ -81,9 +80,4 @@ class EQLVerbalizer:
         :return: A root context whose ``child`` is the fold continuation, so the match assembler
             recurses its selection / values / conditions through the standard grammar.
         """
-        return RuleContext(
-            child=lambda child_node, number=Number.SINGULAR, inline=False: fold(
-                child_node, services, RULES, number=number, inline=inline
-            ),
-            services=services,
-        )
+        return root_context(services, RULES)
