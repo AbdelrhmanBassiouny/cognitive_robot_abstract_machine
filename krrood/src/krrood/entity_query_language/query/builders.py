@@ -14,7 +14,14 @@ from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 
 from ordered_set import OrderedSet
-from typing_extensions import Tuple, List, Type, Optional, Callable, TYPE_CHECKING
+from typing_extensions import (
+    Tuple,
+    List,
+    Type,
+    Optional,
+    Callable,
+    TYPE_CHECKING,
+)
 
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
@@ -85,8 +92,43 @@ class ExpressionBuilder(ABC):
         :return: The expression that is built from the metadata.
         """
 
+    def reset(self) -> None:
+        """
+        Discard the cached built expression and any memoized metadata so the next access to
+        :attr:`expression` recomputes from the current spec.
+
+        The query calls this whenever it rebuilds, because a modifier may have been mutated in
+        place since the last build (for example extra ``where``/``having`` conditions appended),
+        which would otherwise be hidden behind stale caches.
+        """
+        self._built_expression = None
+        for klass in type(self).__mro__:
+            for name, value in vars(klass).items():
+                if isinstance(value, cached_property):
+                    self.__dict__.pop(name, None)
+
     def __hash__(self) -> int:
         return hash((self.__class__, self.query))
+
+
+@dataclass(eq=False)
+class WrappingModifier(ExpressionBuilder, ABC):
+    """
+    A modifier that wraps the whole compiled query expression in an outer node, such as ordering
+    or quantification.
+
+    The query applies wrapping modifiers around its current compiled expression (rather than the
+    bare query node) and keeps the produced wrapper across rebuilds, so a reference captured by an
+    expression derived from the query stays valid. ``OrderedBy`` nests inside ``ResultQuantifier``.
+    """
+
+    @abstractmethod
+    def wrap(self, child: SymbolicExpression) -> SymbolicExpression:
+        """
+        :param child: The current compiled expression to wrap.
+        :return: A new expression wrapping ``child``.
+        """
+        ...
 
 
 @dataclass(eq=False)
@@ -371,9 +413,10 @@ class GroupedByBuilder(ExpressionBuilder):
 
 
 @dataclass(eq=False)
-class QuantifierBuilder(ExpressionBuilder):
+class QuantifierBuilder(WrappingModifier):
     """
-    Builds a result quantifier (An/The) of the specified type with the given child and quantification constraint.
+    Wraps the compiled query in a result quantifier (An/The) of the specified type with the given
+    quantification constraint. It is the outermost wrapper.
     """
 
     type: Type[ResultQuantifier] = An
@@ -384,26 +427,25 @@ class QuantifierBuilder(ExpressionBuilder):
     """
     The quantification constraint that must be satisfied by the result quantifier if present.
     """
-    child: Optional[Selectable] = None
-    """
-    The child expression of the quantifier.
-    """
 
-    def build(self) -> ResultQuantifier:
+    def wrap(self, child: SymbolicExpression) -> ResultQuantifier:
         """
-        Builds a result quantifier of the specified type with the given child and quantification constraint.
+        Wrap ``child`` in a result quantifier of the specified type and quantification constraint.
         """
         if self.type is An:
             return self.type(
-                self.child,
+                child,
                 _quantification_constraint_=self.quantification_constraint,
             )
-        else:
-            return self.type(self.child)
+        return self.type(child)
 
 
 @dataclass(eq=False)
-class OrderedByBuilder(ExpressionBuilder):
+class OrderedByBuilder(WrappingModifier):
+    """
+    Wraps the compiled query in an ``OrderedBy`` clause. It nests inside the quantifier.
+    """
+
     variable: Selectable
     """
     The variable to order by.
@@ -416,10 +458,6 @@ class OrderedByBuilder(ExpressionBuilder):
     """
     A function to extract the key from the variable value.
     """
-    data_source: Optional[SymbolicExpression] = None
-    """
-    The data source that generates the results to be ordered.
-    """
 
-    def build(self) -> OrderedBy:
-        return OrderedBy(self.data_source, self.variable, self.descending, self.key)
+    def wrap(self, child: SymbolicExpression) -> OrderedBy:
+        return OrderedBy(child, self.variable, self.descending, self.key)

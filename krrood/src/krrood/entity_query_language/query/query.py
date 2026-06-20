@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC
 from copy import copy
 from dataclasses import dataclass, field
-from functools import cached_property, wraps
+from functools import cached_property
 
 from typing_extensions import (
     Iterable,
@@ -65,7 +65,6 @@ from krrood.entity_query_language.core.variable import (
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import (
     UnsupportedNegation,
-    TryingToModifyAnAlreadyBuiltQuery,
     NonPositiveLimitValue,
 )
 from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
@@ -137,20 +136,36 @@ class Query(
     The builder for the `ResultQuantifier` expression of the query. The default quantifier is `An`
      which yields all results.
     """
-    _built_: bool = field(default=False, init=False)
+    _dirty_: bool = field(default=True, init=False)
     """
-    Whether the query has built the query (wired the query operations) or not. If built already, it
-    cannot be modified further and an error will be raised if a user tries to modify the query.
+    Whether anything needs (re)building. Any modifier method marks the query dirty; :meth:`build`
+    is a no-op while clean and otherwise applies only the parts flagged below. The query is never
+    frozen, so it can always be modified, even after being built or embedded as a child.
     """
-    _update_ordered_by_: bool = field(default=True, init=False)
+    _inner_dirty_: bool = field(default=True, init=False)
     """
-    Whether the query has updated the ordered by expression or not. If updated already, it
-    cannot be modified further and an error will be raised if a user tries to modify the query.
+    Whether the data-source chain (Where / GroupedBy / Having + selected variables) needs rewiring,
+    set by :meth:`where`, :meth:`having` and :meth:`grouped_by`.
     """
-    _update_quantifier_: bool = field(default=True, init=False)
+    _ordered_by_dirty_: bool = field(default=True, init=False)
     """
-    Whether the query has updated the quantifier expression or not. If updated already, it
-    cannot be modified further and an error will be raised if a user tries to modify the query.
+    Whether the ``OrderedBy`` wrapper needs (re)applying, set by :meth:`ordered_by`.
+    """
+    _quantifier_dirty_: bool = field(default=True, init=False)
+    """
+    Whether the ``ResultQuantifier`` wrapper needs (re)applying, set by :meth:`_quantify_`.
+    """
+    _building_: bool = field(default=False, init=False)
+    """
+    Re-entrancy guard set while :meth:`build` wires the wrapper layers, so that parenting the query
+    to its own wrappers does not recursively trigger another build.
+    """
+    _compiled_inner_head_: Optional[SymbolicExpression] = field(
+        default=None, init=False
+    )
+    """
+    The data-source head (Where / GroupedBy / Having) wired by the last build, tracked so it can be
+    detached cleanly when the chain is rewired.
     """
 
     def __post_init__(self):
@@ -162,20 +177,14 @@ class Query(
 
         self._quantifier_builder_ = QuantifierBuilder(self)
 
-    @staticmethod
-    def modifies_query_structure(method):
+    def _mark_dirty_(self) -> None:
         """
-        A decorator to mark methods that modify the structure of the query. If the query is already
-        built, an error will be raised when trying to call any of these methods.
+        Flag the compiled expression as stale and drop caches that depend on modifier state, so the
+        next :meth:`build` recomputes them. Called by every modifier method.
         """
-
-        @wraps(method)
-        def wrapper(self, *args, **kwargs):
-            if self._built_:
-                raise TryingToModifyAnAlreadyBuiltQuery(self)
-            return method(self, *args, **kwargs)
-
-        return wrapper
+        self._dirty_ = True
+        self.__dict__.pop("_group_", None)
+        self.__dict__.pop("_distinct_on_ids_", None)
 
     def evaluate(self) -> Iterator:
         """
@@ -188,7 +197,6 @@ class Query(
         else:
             return MultiArityExpressionThatPerformsACartesianProduct.evaluate(self)
 
-    @modifies_query_structure
     def where(self, *conditions: ConditionType) -> Self:
         """
         Set the conditions that describe the query object. The conditions are chained using AND.
@@ -200,9 +208,10 @@ class Query(
             self._where_builder_ = WhereBuilder(conditions=conditions, query=self)
         else:
             self._where_builder_.conditions += conditions
+        self._inner_dirty_ = True
+        self._mark_dirty_()
         return self
 
-    @modifies_query_structure
     def having(self, *conditions: ConditionType) -> Self:
         """
         Set the conditions that describe the query object. The conditions are chained using AND.
@@ -214,6 +223,8 @@ class Query(
             self._having_builder_ = HavingBuilder(conditions=conditions, query=self)
         else:
             self._having_builder_.conditions += conditions
+        self._inner_dirty_ = True
+        self._mark_dirty_()
         return self
 
     def ordered_by(
@@ -232,7 +243,8 @@ class Query(
         self._ordered_by_builder_ = OrderedByBuilder(
             self, variable, descending=descending, key=key
         )
-        self._update_ordered_by_ = True
+        self._ordered_by_dirty_ = True
+        self._mark_dirty_()
         return self
 
     def distinct(
@@ -246,11 +258,11 @@ class Query(
         :return: This query.
         """
         self._distinct_on = on if on else self._selected_variables_
+        self._mark_dirty_()
         self._seen_results = SeenSet(keys=self._distinct_on_ids_)
         self._results_mapping.append(self._get_distinct_results_)
         return self
 
-    @modifies_query_structure
     def grouped_by(
         self, *variables_to_group_by: TypingUnion[Selectable, Any]
     ) -> TypingUnion[Self, T]:
@@ -261,6 +273,8 @@ class Query(
         :return: This query.
         """
         self._grouped_by_builder_ = GroupedByBuilder(self, variables_to_group_by)
+        self._inner_dirty_ = True
+        self._mark_dirty_()
         return self
 
     def limit(self, n: int) -> Self:
@@ -273,7 +287,9 @@ class Query(
         self._limit_ = n
         if not isinstance(self._limit_, int) or self._limit_ <= 0:
             raise NonPositiveLimitValue(self._limit_)
-        if self._built_:
+        # The quantifier wrapper keeps its identity across rebuilds, so update it in place when it
+        # already exists; otherwise the first build picks the limit up.
+        if isinstance(self._expression_, ResultQuantifier):
             self._expression_._limit_ = self._limit_
         return self
 
@@ -292,7 +308,8 @@ class Query(
         self._quantifier_builder_ = QuantifierBuilder(
             self, quantifier_type, quantification_constraint
         )
-        self._update_quantifier_ = True
+        self._quantifier_dirty_ = True
+        self._mark_dirty_()
         return self
 
     def __enter__(self):
@@ -306,41 +323,115 @@ class Query(
 
     def build(self) -> Self:
         """
-        Build the query by wiring the nodes together in the correct order of evaluation.
+        Build (or rebuild) the query by wiring the nodes together in the correct order of
+        evaluation, and cache the compiled expression.
+
+        The query is never frozen: any modifier marks it dirty and flags exactly which part changed
+        (data-source chain, ordering, quantification), so it can always be modified — even after it
+        has been built or embedded as a child of another expression. Building only re-does the
+        flagged parts; the ordering and quantification wrappers are applied *around* the current
+        compiled expression and keep their identity across rebuilds, so an expression derived from
+        the query (e.g. ``query.ordered_by(query.name)``) stays consistent with what it ordered.
 
         :return: This query.
         """
-        if self._built_:
-            # TODO: This is a temporary fix, a coming PR will clean it up.
-            self._update_ordered_by_expression_()
-            self._update_quantifier_expression_()
+        if not self._dirty_:
             return self
 
-        self._built_ = True
+        self._building_ = True
 
-        if self._group_ and self._grouped_by_builder_ is None:
-            self._grouped_by_builder_ = GroupedByBuilder(self)
+        if self._inner_dirty_:
+            self._rewire_data_source_chain_()
+            self._inner_dirty_ = False
 
-        children = []
-        if self._having_builder_ is not None:
-            self._having_builder_.grouped_by = self._grouped_by_builder_.expression
-            children.append(self._having_builder_.expression)
-        elif self._grouped_by_builder_ is not None:
-            children.append(self._grouped_by_builder_.expression)
-        elif self._where_builder_ is not None:
-            children.append(self._where_builder_.expression)
+        self._update_ordered_by_expression_()
+        self._update_quantifier_expression_()
+
+        self._dirty_ = False
+        self._building_ = False
+        return self
+
+    def _rewire_data_source_chain_(self) -> None:
+        """
+        (Re)wire the data-source chain (Where / GroupedBy / Having) and the selected variables as the
+        children of this query node. Safe to call repeatedly: the previous chain head is detached and
+        modifier caches discarded so a fresh head reflecting the current conditions is built. The
+        ordering/quantification wrappers keep pointing at this query node, so they pick up the change.
+        """
+        # Detach the head built last time and discard cached metadata on the chain modifiers, which
+        # may have been mutated in place (e.g. extra ``where``/``having`` conditions appended).
+        if self._compiled_inner_head_ is not None:
+            self._compiled_inner_head_._parent_ = None
+            self._compiled_inner_head_ = None
+        for modifier in (
+            self._where_builder_,
+            self._grouped_by_builder_,
+            self._having_builder_,
+        ):
+            if modifier is not None:
+                modifier.reset()
+
+        children = self._data_source_chain_head_()
+        self._compiled_inner_head_ = children[0] if children else None
 
         self._if_count_all_is_used_update_its_child_to_be_the_grouped_by_expression_()
 
         children.extend(self._selected_variables_)
-
         self.update_children(*children)
 
-        self._update_ordered_by_expression_()
+    def _data_source_chain_head_(self) -> List[SymbolicExpression]:
+        """
+        Build the head of the data-source chain that feeds the selected variables. At most one of
+        Having / GroupedBy / Where heads the chain, with precedence ``Having > GroupedBy > Where``
+        since each already incorporates the previous one.
 
-        self._update_quantifier_expression_()
+        :return: A list containing the chain head, or empty if the query is unfiltered/ungrouped.
+        """
+        if self._group_ and self._grouped_by_builder_ is None:
+            self._grouped_by_builder_ = GroupedByBuilder(self)
 
-        return self
+        if self._having_builder_ is not None:
+            self._having_builder_.grouped_by = self._grouped_by_builder_.expression
+            return [self._having_builder_.expression]
+        if self._grouped_by_builder_ is not None:
+            return [self._grouped_by_builder_.expression]
+        if self._where_builder_ is not None:
+            return [self._where_builder_.expression]
+        return []
+
+    def _update_ordered_by_expression_(self) -> None:
+        """
+        Apply (or replace) the ``OrderedBy`` wrapper around the current compiled expression. Wrapping
+        the current expression — rather than the bare query node — keeps any reference captured by an
+        order-by expression derived from the query valid.
+        """
+        if not self._ordered_by_dirty_ or self._ordered_by_builder_ is None:
+            self._ordered_by_dirty_ = False
+            return
+        child = self._expression_
+        if isinstance(child, OrderedBy):
+            wrapper = child
+            child = wrapper._original_expression_
+            child._remove_parent_(wrapper)
+        self._expression_ = self._ordered_by_builder_.wrap(child)
+        self._ordered_by_dirty_ = False
+
+    def _update_quantifier_expression_(self) -> None:
+        """
+        Apply (or replace) the ``ResultQuantifier`` wrapper around the current compiled expression,
+        and propagate the result limit to it.
+        """
+        if not self._quantifier_dirty_ or self._quantifier_builder_ is None:
+            self._quantifier_dirty_ = False
+            return
+        child = self._expression_
+        if isinstance(child, ResultQuantifier):
+            wrapper = child
+            child = wrapper._child_
+            child._remove_parent_(wrapper)
+        self._expression_ = self._quantifier_builder_.wrap(child)
+        self._expression_._limit_ = self._limit_
+        self._quantifier_dirty_ = False
 
     def _if_count_all_is_used_update_its_child_to_be_the_grouped_by_expression_(
         self,
@@ -365,33 +456,6 @@ class Query(
         count_all._replace_child_(
             count_all._child_, self._grouped_by_builder_.expression
         )
-
-    # TODO: This is a temporary fix, a coming PR will clean it up.
-    def _update_ordered_by_expression_(self):
-        if (self._ordered_by_builder_ is None) or not self._update_ordered_by_:
-            return self
-        og_child = self._expression_
-        if isinstance(self._expression_, OrderedBy):
-            og_child = self._expression_._child_
-            self._remove_parent_(self._expression_)
-        self._update_ordered_by_ = False
-        self._ordered_by_builder_.data_source = og_child
-        self._expression_ = self._ordered_by_builder_.expression
-        return self
-
-    # TODO: This is a temporary fix, a coming PR will clean it up.
-    def _update_quantifier_expression_(self):
-        if (self._quantifier_builder_ is None) or not self._update_quantifier_:
-            return self
-        og_child = self._expression_
-        if isinstance(self._expression_, ResultQuantifier):
-            og_child = self._expression_._child_
-            self._remove_parent_(self._expression_)
-        self._update_quantifier_ = False
-        self._quantifier_builder_.child = og_child
-        self._expression_ = self._quantifier_builder_.expression
-        self._expression_._limit_ = self._limit_
-        return self
 
     def _evaluate__(
         self,
@@ -449,8 +513,14 @@ class Query(
 
     @property
     def _quantifier_expression_(self) -> Optional[ResultQuantifier]:
+        """
+        :return: The compiled result quantifier at the root of the built expression, if any.
+        """
+        self.build()
         return (
-            self._quantifier_builder_.expression if self._quantifier_builder_ else None
+            self._expression_
+            if isinstance(self._expression_, ResultQuantifier)
+            else None
         )
 
     @cached_property
@@ -547,10 +617,11 @@ class Query(
     @UnaryExpression._parent_.setter
     def _parent_(self, parent: SymbolicExpression):
         """
-        Make sure to set the parent of the built expression of the query instead of the query itself.
+        Route parenting to the compiled expression of the query (its outer wrapper) rather than to
+        the query node itself, building the snapshot first. The ``_building_`` re-entrancy guard
+        prevents recursion while the query is wiring its own wrapper layers during :meth:`build`.
         """
-        # TODO: A hot fix for now, will be cleaned in a coming PR.
-        if not isinstance(parent, (ResultQuantifier, OrderedBy)):
+        if not self._building_:
             self.build()
         if self._expression_ is not self:
             self._expression_._parent_ = parent

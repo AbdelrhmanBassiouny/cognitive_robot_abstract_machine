@@ -153,26 +153,6 @@ class UsageError(DataclassException):
 
 
 @dataclass
-class TryingToModifyAnAlreadyBuiltQuery(UsageError):
-    """
-    Raised when trying to build an already built `Query`.
-
-    Check how to write queries correctly in :doc:`/krrood/doc/eql/writing_queries`.
-    """
-
-    query: Query
-    """
-    The query that has already been built.
-    """
-
-    def error_message(self) -> str:
-        return f"{self.query} was already built."
-
-    def suggest_correction(self) -> str:
-        return ""
-
-
-@dataclass
 class UnsupportedExpressionTypeForDistinct(UsageError):
     """
     Raised when an expression type is not supported for distinct operation.

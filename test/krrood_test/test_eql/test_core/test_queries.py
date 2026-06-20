@@ -14,7 +14,6 @@ from krrood.entity_query_language.exceptions import (
     NonPositiveLimitValue,
     LiteralConditionError,
     UnsupportedExpressionTypeForDistinct,
-    TryingToModifyAnAlreadyBuiltQuery,
 )
 from krrood.entity_query_language.factories import (
     entity,
@@ -1157,12 +1156,16 @@ def test_recalling_where_statement_with_quantification(handles_and_containers_wo
     assert len(list(query.evaluate())) == 1
 
 
-def test_modifying_built_query_raises_error(handles_and_containers_world):
+def test_modifying_built_query_rebuilds(handles_and_containers_world):
     body = variable(Body, domain=handles_and_containers_world.bodies)
     query = entity(body).where(contains(body.name, "Handle"))
-    query.evaluate()
-    with pytest.raises(TryingToModifyAnAlreadyBuiltQuery):
-        query.where(contains(body.name, "1"))
+    results_before = list(query.evaluate())
+    # The query is no longer frozen after being built/evaluated: modifying it marks the compiled
+    # expression dirty and the next evaluation rebuilds it, reflecting the extra condition.
+    query.where(contains(body.name, "1"))
+    results_after = list(query.evaluate())
+    assert len(results_after) == 1
+    assert len(results_after) <= len(results_before)
 
 
 def test_chain_evaluate_variables():
