@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass, field, fields
+from dataclasses import Field, dataclass, field, fields
 from functools import lru_cache
 
 from typing_extensions import (
@@ -15,7 +15,7 @@ from typing_extensions import (
 )
 
 from krrood.class_diagrams.method_classifier import factory_method, is_factory_method
-from krrood.class_diagrams.utils import RoleTakerField, T
+from krrood.class_diagrams.utils import T
 from krrood.patterns.exceptions import (
     DelegatedFactoryMethodError,
     RoleAttributeNotDeclaredError,
@@ -27,13 +27,27 @@ from krrood.symbol_graph.symbol_graph import Symbol
 from krrood.utils import get_generic_type_params
 
 
+class RoleTakerField(Field):
+    """
+    Dataclass field that marks the role taker of a role.
+
+    Subclasses :class:`dataclasses.Field` as a type-level marker: the role pattern and the
+    class-diagram detection identify the role taker by ``isinstance`` against this type rather
+    than by inspecting field metadata. It adds no state, so it declares empty ``__slots__`` to
+    keep its memory layout identical to :class:`dataclasses.Field`; this lets
+    :func:`role_taker_field` produce one by reassigning the ``__class__`` of a field built by
+    :func:`dataclasses.field`.
+    """
+
+    __slots__ = ()
+
+
 def role_taker_field(*, kw_only: bool = True, **kwargs: Any) -> Any:
     """
     Declare the dataclass field that stores a role's role taker.
 
-    A thin wrapper around :func:`dataclasses.field` that produces a :class:`RoleTakerField
-    <krrood.class_diagrams.utils.RoleTakerField>` so both the role pattern and the class diagram
-    recognise it as the role taker.
+    A thin wrapper around :func:`dataclasses.field` that produces a :class:`RoleTakerField` so
+    both the role pattern and the class diagram recognise it as the role taker.
 
     :param kw_only: Whether the role-taker field is keyword-only in the generated constructor.
     :param kwargs: Any other keyword arguments accepted by :func:`dataclasses.field`.

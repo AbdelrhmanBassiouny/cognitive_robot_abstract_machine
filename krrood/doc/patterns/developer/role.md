@@ -147,13 +147,12 @@ explicitly through `role.role_taker` (or `role.root_persistent_entity`).
 
 ## Source References
 
-- `krrood/src/krrood/patterns/role.py` — `Role`, `role_taker_field`
+- `krrood/src/krrood/patterns/role.py` — `Role`, `role_taker_field`, `RoleTakerField`
 - `krrood/src/krrood/patterns/role_registry.py` — `RoleRegistry`
 - `krrood/src/krrood/patterns/exceptions.py` — `RoleTakerFieldNotFound`,
   `DelegatedFactoryMethodError`, `RoleAttributeNotDeclaredError`
 - `krrood/src/krrood/patterns/subclass_safe_generic.py` — `SubClassSafeGeneric`,
   `AbstractSubClassSafeGeneric`
-- `krrood/src/krrood/class_diagrams/utils.py` — `RoleTakerField`
 - `krrood/src/krrood/symbol_graph/symbol_graph.py` — `Symbol`
 - `test/krrood_test/test_patterns/test_role.py` — behavioural tests for the role pattern
 - `test/krrood_test/dataset/role_and_ontology/university_ontology_like_classes_without_descriptors.py`
