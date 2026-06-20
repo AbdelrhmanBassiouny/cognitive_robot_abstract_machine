@@ -87,6 +87,41 @@ def test_from_json_loads_committed_artifact():
     assert registry.display_name(GraspConfig, "rotate_gripper") == "gripper rotation"
 
 
+def test_relation_verb_phrase_lookup_and_mro():
+    @dataclass
+    class Base:
+        owner: float
+
+    @dataclass
+    class Sub(Base):
+        pass
+
+    registry = FieldMetadataRegistry.from_mapping(
+        {(Base, "owner"): FieldMetadata(relation_verb_phrase="owned by")}
+    )
+    assert registry.relation_verb_phrase(Base, "owner") == "owned by"
+    assert registry.relation_verb_phrase(Sub, "owner") == "owned by"  # resolved via MRO
+    assert registry.relation_verb_phrase(Base, "missing") is None
+    assert FieldMetadataRegistry().relation_verb_phrase(Base, "owner") is None
+
+
+def test_from_json_loads_relation_verb_phrase(tmp_path):
+    artifact = tmp_path / "field_metadata.json"
+    artifact.write_text(
+        '{"Car": {"owner": {"relation_verb_phrase": "owned by"},'
+        ' "begin": {"display_name": "beginning"}}}'
+    )
+    registry = FieldMetadataRegistry.from_json(artifact)
+
+    @dataclass
+    class Car:
+        owner: int
+        begin: int
+
+    assert registry.relation_verb_phrase(Car, "owner") == "owned by"
+    assert registry.display_name(Car, "begin") == "beginning"
+
+
 # ── deterministic runtime override ───────────────────────────────────────────────
 
 
@@ -107,6 +142,31 @@ def test_committed_artifact_overrides_real_dataset_field():
     expression = variable(GraspConfig, []).rotate_gripper
     assert "gripper rotation" in _verbalize(expression, registry)
     assert "rotate_gripper" not in _verbalize(expression, registry)
+
+
+@dataclass
+class _Owner:
+    pass
+
+
+@dataclass
+class _Vehicle:
+    keeper: _Owner  # a plain noun — the name heuristic cannot tell it is a relation
+
+
+def test_metadata_makes_a_noun_field_render_as_relational_absence():
+    """A relation the name heuristic cannot detect (a noun-named field) reads as a passive absence
+    once metadata supplies the verb phrase — *"<owner> has not been <phrase> any <Type>"* — while an
+    empty registry keeps the plain *"has no <field>"*."""
+    vehicle = variable(_Vehicle, [])
+    absence = vehicle.keeper == None
+
+    assert _verbalize(absence, FieldMetadataRegistry()) == "a _Vehicle has no keeper"
+
+    registry = FieldMetadataRegistry.from_mapping(
+        {(_Vehicle, "keeper"): FieldMetadata(relation_verb_phrase="kept by")}
+    )
+    assert _verbalize(absence, registry) == "a _Vehicle has not been kept by any _Owner"
 
 
 # ── offline generator: pure pipeline (no LLM / SDK) ──────────────────────────────
@@ -131,6 +191,20 @@ def test_build_runtime_artifact_keeps_only_real_overrides():
     artifact = gen.build_runtime_artifact(suggestions)
     assert artifact == {
         "GraspConfig": {"rotate_gripper": {"display_name": "gripper rotation"}}
+    }
+
+
+def test_build_runtime_artifact_includes_relation_verb_phrase():
+    """A field annotated with a relational verb phrase is emitted (with or without a display name);
+    a plain noun field is omitted."""
+    suggestions = {
+        "Car": [
+            gen.FieldSuggestion("owner", "owner", relation_verb_phrase="owned by"),
+            gen.FieldSuggestion("color", "color"),  # plain noun → omitted
+        ]
+    }
+    assert gen.build_runtime_artifact(suggestions) == {
+        "Car": {"owner": {"relation_verb_phrase": "owned by"}}
     }
 
 

@@ -4,22 +4,29 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Dict, Mapping, Optional, Tuple, Union
+from typing_extensions import Callable, Dict, Mapping, Optional, Tuple, Union
 
 
 @dataclass(frozen=True)
 class FieldMetadata:
     """
-    The linguistic metadata for one ``(owner type, attribute)`` pair.
+    The linguistic metadata for one ``(owner type, attribute)`` pair, consumed at runtime.
 
-    Only :attr:`display_name` is consumed at runtime — it overrides the surface word used for an
-    attribute (e.g. the field ``begin`` renders as *"beginning"*). Richer, advisory output (a
-    suggested *source* rename, rationale) lives in the human-readable report the offline generator
-    writes, not here.
+    Two overrides are read by the verbalizer (richer, advisory output — a suggested *source* rename,
+    rationale — lives in the human-readable report the offline generator writes, not here):
     """
 
     display_name: Optional[str] = None
-    """The preferred surface word for the attribute, or ``None`` to keep the raw identifier."""
+    """The preferred surface word for the attribute, or ``None`` to keep the raw identifier
+    (e.g. the field ``begin`` renders as *"beginning"*)."""
+
+    relation_verb_phrase: Optional[str] = None
+    """The passive verb phrase for a *relational* field, or ``None`` for a plain noun attribute.
+    When set, an ``attribute == None`` absence reads *"<owner> has not been <phrase> any <Type>"*
+    (e.g. ``owner`` → *"owned by"* gives *"has not been owned by any Person"*). This is the metadata
+    override of the runtime heuristic
+    (:func:`~…grammar.conditions.recognition.relational_verb_phrase`), so it covers relations the
+    name-based heuristic cannot detect (irregular or non-participle namings, present-tense verbs)."""
 
 
 _Key = Tuple[str, str]
@@ -45,26 +52,47 @@ class FieldMetadataRegistry:
     by_key: Dict[_Key, FieldMetadata] = field(default_factory=dict)
     """The metadata indexed by ``(owner_type_name, attribute_name)``."""
 
-    def display_name(self, owner: type, attribute: str) -> Optional[str]:
+    def _resolve(
+        self,
+        owner: type,
+        attribute: str,
+        select: Callable[[FieldMetadata], Optional[str]],
+    ) -> Optional[str]:
         """
-        Resolve the preferred surface word for *owner*.*attribute*.
-
-        The owner's MRO is walked by name so an attribute declared on a base class resolves when it
-        is accessed through a subclass (and vice versa, since the generator records every dataclass
-        in the hierarchy).
+        Walk *owner*'s MRO by name and return the first non-``None`` value *select* reads from a
+        matching entry — so an attribute declared on a base class resolves when accessed through a
+        subclass (and vice versa, since the generator records every dataclass in the hierarchy).
 
         :param owner: The class that owns the attribute.
         :param attribute: The canonical attribute name.
-        :return: The display name override, or ``None`` when no entry applies.
+        :param select: Reads the wanted field off a matched :class:`FieldMetadata`.
+        :return: The first non-``None`` value found along the MRO, or ``None``.
         """
         for klass in getattr(owner, "__mro__", (owner,)):
             name = getattr(klass, "__name__", None)
             if name is None:
                 continue
             meta = self.by_key.get((name, attribute))
-            if meta is not None and meta.display_name is not None:
-                return meta.display_name
+            if meta is not None and select(meta) is not None:
+                return select(meta)
         return None
+
+    def display_name(self, owner: type, attribute: str) -> Optional[str]:
+        """
+        :param owner: The class that owns the attribute.
+        :param attribute: The canonical attribute name.
+        :return: The display-name override for *owner*.*attribute*, or ``None`` when no entry applies.
+        """
+        return self._resolve(owner, attribute, lambda meta: meta.display_name)
+
+    def relation_verb_phrase(self, owner: type, attribute: str) -> Optional[str]:
+        """
+        :param owner: The class that owns the attribute.
+        :param attribute: The canonical attribute name.
+        :return: The passive verb phrase override for *owner*.*attribute* (*"owned by"*), or ``None``
+            when the field is not annotated as relational.
+        """
+        return self._resolve(owner, attribute, lambda meta: meta.relation_verb_phrase)
 
     @classmethod
     def from_mapping(
@@ -88,9 +116,9 @@ class FieldMetadataRegistry:
         """
         Load a registry from a committed JSON artifact.
 
-        The artifact is nested ``{"TypeName": {"attribute": {"display_name": "…"}, …}, …}`` (a
-        bare string value is also accepted as shorthand for ``display_name``), matching what the
-        offline generator writes.
+        The artifact is nested ``{"TypeName": {"attribute": {"display_name": "…",
+        "relation_verb_phrase": "…"}, …}, …}`` (a bare string value is also accepted as shorthand for
+        ``display_name``), matching what the offline generator writes.
 
         :param path: Path to the JSON artifact.
         :return: The loaded registry (empty when the file holds an empty object).
@@ -99,8 +127,12 @@ class FieldMetadataRegistry:
         by_key: Dict[_Key, FieldMetadata] = {}
         for type_name, fields_ in data.items():
             for attribute, entry in fields_.items():
-                display = (
-                    entry.get("display_name") if isinstance(entry, dict) else entry
-                )
-                by_key[(type_name, attribute)] = FieldMetadata(display_name=display)
+                if isinstance(entry, dict):
+                    meta = FieldMetadata(
+                        display_name=entry.get("display_name"),
+                        relation_verb_phrase=entry.get("relation_verb_phrase"),
+                    )
+                else:
+                    meta = FieldMetadata(display_name=entry)
+                by_key[(type_name, attribute)] = meta
         return cls(by_key=by_key)

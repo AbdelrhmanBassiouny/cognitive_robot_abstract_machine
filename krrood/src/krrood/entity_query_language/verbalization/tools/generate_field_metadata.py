@@ -45,6 +45,10 @@ class FieldSuggestion:
     display_name: str
     """The preferred surface word for verbalization (may equal *field_name* when already good)."""
 
+    relation_verb_phrase: Optional[str] = None
+    """The passive verb phrase when the field names a *relation* as a verb (``assigned_to`` →
+    *"assigned to"*), else ``None`` — drives the absence form *"has not been <phrase> any <Type>"*."""
+
     suggested_rename: Optional[str] = None
     """A genuinely better *source* identifier, or ``None`` — advisory only, never auto-applied."""
 
@@ -86,19 +90,26 @@ def build_runtime_artifact(
     suggestions_by_type: Dict[str, List[FieldSuggestion]],
 ) -> Dict[str, Dict[str, Dict[str, str]]]:
     """
-    Build the runtime JSON artifact, keeping only the entries that actually change a surface word.
+    Build the runtime JSON artifact, keeping only the entries that actually carry an override.
+
+    A field is emitted when its display name differs from the raw identifier, or it is annotated
+    with a relational verb phrase (or both).
 
     :param suggestions_by_type: The per-type suggestions.
-    :return: ``{TypeName: {field: {"display_name": …}}}`` containing only fields whose display name
-        differs from the raw identifier (types with no such field are omitted).
+    :return: ``{TypeName: {field: {"display_name"?: …, "relation_verb_phrase"?: …}}}`` (types with
+        no override are omitted).
     """
     artifact: Dict[str, Dict[str, Dict[str, str]]] = {}
     for type_name, suggestions in suggestions_by_type.items():
-        overrides = {
-            s.field_name: {"display_name": s.display_name}
-            for s in suggestions
-            if s.display_name and s.display_name != s.field_name
-        }
+        overrides: Dict[str, Dict[str, str]] = {}
+        for s in suggestions:
+            entry: Dict[str, str] = {}
+            if s.display_name and s.display_name != s.field_name:
+                entry["display_name"] = s.display_name
+            if s.relation_verb_phrase:
+                entry["relation_verb_phrase"] = s.relation_verb_phrase
+            if entry:
+                overrides[s.field_name] = entry
         if overrides:
             artifact[type_name] = overrides
     return artifact
@@ -125,19 +136,22 @@ def render_suggestions_md(
         rows = [
             s
             for s in suggestions_by_type[type_name]
-            if (s.display_name and s.display_name != s.field_name) or s.suggested_rename
+            if (s.display_name and s.display_name != s.field_name)
+            or s.relation_verb_phrase
+            or s.suggested_rename
         ]
         if not rows:
             continue
         lines += [
             f"## {type_name}",
             "",
-            "| field | display_name | suggested_rename | confidence | rationale |",
-            "|---|---|---|---|---|",
+            "| field | display_name | relation_verb_phrase | suggested_rename | confidence | rationale |",
+            "|---|---|---|---|---|---|",
         ]
         for s in rows:
             lines.append(
                 f"| `{s.field_name}` | {s.display_name} | "
+                f"{s.relation_verb_phrase or '—'} | "
                 f"{('`' + s.suggested_rename + '`') if s.suggested_rename else '—'} | "
                 f"{s.confidence} | {s.rationale} |"
             )
@@ -174,6 +188,13 @@ end -> "end"); expand snake_case to spaced words (amount_details -> "amount deta
 established domain terms; do NOT prepend the type name (NOT "Employee salary", just "salary"); \
 keep it lowercase unless it is a proper noun/acronym. If the raw name already reads well, return \
 it unchanged.
+- relation_verb_phrase: when the field names a RELATION as a verb (a thing this object is \
+connected to via an action), the passive verb phrase to SAY in "the object has not been \
+<relation_verb_phrase> any <RelatedType>". E.g. assigned_to -> "assigned to", owner -> "owned by", \
+manages -> "managing" is wrong; use "managed by" only if the field holds the manager. Set it ONLY \
+for genuine verb/relation fields (assigned_to, owned_by, reports_to, manager, parent for a \
+containment); for a plain noun attribute (name, battery, color) return null. This is the override \
+for relations the runtime name-heuristic cannot detect on its own.
 - suggested_rename: a genuinely better SOURCE identifier when the field name is poorly chosen \
 (begin -> "start"), else null. This is advice for developers, not applied automatically.
 - rationale: one short clause explaining the choice.
@@ -198,6 +219,7 @@ def anthropic_parse_fn(model: str = "claude-opus-4-8") -> ParseFn:
     class _Suggestion(BaseModel):
         field_name: str
         display_name: str
+        relation_verb_phrase: Optional[str] = None
         suggested_rename: Optional[str] = None
         rationale: str = ""
         confidence: str = "medium"
@@ -231,6 +253,7 @@ def anthropic_parse_fn(model: str = "claude-opus-4-8") -> ParseFn:
             FieldSuggestion(
                 field_name=s.field_name,
                 display_name=s.display_name,
+                relation_verb_phrase=s.relation_verb_phrase,
                 suggested_rename=s.suggested_rename,
                 rationale=s.rationale,
                 confidence=s.confidence,

@@ -72,7 +72,11 @@ def render_absence(
         return PhraseFragment(
             parts=[context.child(left), NonExistence.for_number(number).as_fragment()]
         )
-    verb_phrase = relational_verb_phrase(left._attribute_name_)
+    # Field metadata (offline-authored) overrides the name-based heuristic, so a relation the
+    # heuristic cannot detect from the identifier still reads as a passive verb.
+    verb_phrase = context.services.field_metadata.relation_verb_phrase(
+        left._owner_class_, left._attribute_name_
+    ) or relational_verb_phrase(left._attribute_name_)
     if verb_phrase is not None:
         return PhraseFragment(
             parts=[
