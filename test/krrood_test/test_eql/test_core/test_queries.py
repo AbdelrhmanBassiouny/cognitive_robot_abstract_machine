@@ -1262,18 +1262,25 @@ def test_editing_and_rebuilding_a_count_all_subquery_after_embedding_leaves_snap
     assert sorted(tuple(row.values()) for row in outer.tolist()) == before
 
 
-def test_embedded_subquery_is_a_snapshot_clone_sharing_variable_leaves():
-    """The operand embedded for a subquery is an independent clone of the source's compiled
-    expression (not the live node), while variable leaves are shared so derived references stay
-    valid."""
+def test_embedded_subquery_captures_the_current_product_and_shares_variable_leaves():
+    """The operand embedded for a subquery is the source's compiled product captured at embed time,
+    sharing variable leaves so derived references stay valid. A later edit rebuilds the source into a
+    new product, leaving the already-embedded operand frozen."""
     var1 = variable(int, [1, 2, 3])
     source = entity(var1).where(var1 == 2)
 
     condition = var1 != an(source)
     source.build()
 
-    assert condition.right is not source._expression_
-    assert any(descendant is var1 for descendant in condition.right._descendants_)
+    embedded = condition.right
+    assert embedded is source._expression_
+    assert any(descendant is var1 for descendant in embedded._descendants_)
+
+    # Editing and rebuilding the source produces a new product; the embedded operand is unchanged.
+    source.where(var1 == 3)
+    source.build()
+    assert condition.right is embedded
+    assert source._expression_ is not embedded
 
 
 def test_first():

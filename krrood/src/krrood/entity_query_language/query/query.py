@@ -154,19 +154,25 @@ class Query(
     Re-entrancy guard set while :meth:`build` wires the wrapper layers, so that parenting the query
     to its own wrappers does not recursively trigger another build.
     """
+    _is_compiled_product_: bool = field(default=False, init=False)
+    """
+    Whether this instance is a compiled product (wired as the cartesian-product node) rather than a
+    spec. A spec delegates evaluation to the product it compiles, so that the spec behaves like its
+    product while never being the mutated, embedded node itself.
+    """
+    _compiled_product_node_: Optional[Query] = field(default=None, init=False)
+    """
+    The inner cartesian-product node of the last compiled product (the node sharing this query's
+    identifier, beneath the ordering/quantification wrappers). Derived references such as
+    ``query.name`` embed this node so that, evaluated against a result that already binds the query's
+    identifier, they resolve to that result rather than re-running the whole subquery.
+    """
     _compiled_inner_head_: Optional[SymbolicExpression] = field(
         default=None, init=False
     )
     """
     The data-source head (Where / GroupedBy / Having) wired by the last build, tracked so it can be
     detached cleanly when the chain is rewired.
-    """
-    _embedding_snapshot_: Optional[SymbolicExpression] = field(default=None, init=False)
-    """
-    The immutable snapshot embedded into parent expressions, cached so that multiple embeddings of
-    this query (for example as a selected variable and within a condition) share one identity. It is
-    discarded whenever the query is modified, so a later embedding reflects the change while
-    already-embedded snapshots stay frozen.
     """
 
     def __post_init__(self):
@@ -184,7 +190,6 @@ class Query(
         next :meth:`build` recomputes them. Called by every modifier method.
         """
         self._dirty_ = True
-        self._embedding_snapshot_ = None
         self.__dict__.pop("_group_", None)
         self.__dict__.pop("_distinct_on_ids_", None)
 
@@ -323,29 +328,74 @@ class Query(
 
     def build(self) -> Self:
         """
-        Build (or rebuild) the query by wiring the nodes together in the correct order of
-        evaluation, and cache the compiled expression.
+        Build (or rebuild) the query, caching a freshly compiled product expression.
 
-        The query is never frozen: any modifier marks it dirty and flags exactly which part changed
-        (data-source chain, ordering, quantification), so it can always be modified — even after it
-        has been built or embedded as a child of another expression. Building only re-does the
-        flagged parts; the ordering and quantification wrappers are applied *around* the current
-        compiled expression and keep their identity across rebuilds, so an expression derived from
-        the query (e.g. ``query.ordered_by(query.name)``) stays consistent with what it ordered.
+        This query is a stable spec: it holds the modifiers and a stable identity that derived
+        references and rules point at, but it is never itself the evaluated node. Each build compiles
+        a fresh product tree from the current spec via :meth:`_compile_` and stores it in
+        :attr:`_expression_`; the spec is never frozen, so any modifier marks it dirty and the next
+        build produces a new product. Because every build yields a new tree (rather than mutating the
+        previous one in place), a product already embedded elsewhere stays frozen against later edits.
 
         :return: This query.
         """
         if not self._dirty_:
             return self
+        self._compiled_product_node_ = self._compile_()
+        self._expression_ = self._compiled_product_node_._expression_
+        self._dirty_ = False
+        return self
 
+    def _compile_(self) -> SymbolicExpression:
+        """
+        Compile a fresh, independent product expression from this spec — the single compile path.
+
+        The product is a separate node graph that shares this query's identifier and selected
+        variables, so it evaluates identically and co-references the same variables, while later
+        edits that rebuild the spec cannot reach it. It is produced by replaying the spec's modifiers
+        onto a fresh instance and wiring that instance as the cartesian-product node, rather than by
+        cloning a live graph, so grouping, distinct, and self-referential ordering all compile
+        correctly.
+
+        :return: The compiled inner product node (its ordering/quantification wrappers are reachable
+            through its :attr:`_expression_`).
+        """
+        product = type(self)(_selected_variables_=self._selected_variables_)
+        product._id_ = self._id_
+        product._expression_id_cache_ = {}
+        if self._where_builder_ is not None:
+            product.where(*self._where_builder_.conditions)
+        if self._grouped_by_builder_ is not None:
+            product.grouped_by(*self._grouped_by_builder_.variables_to_group_by)
+        if self._having_builder_ is not None:
+            product.having(*self._having_builder_.conditions)
+        if self._ordered_by_builder_ is not None:
+            ordering = self._ordered_by_builder_
+            product.ordered_by(
+                ordering.variable, descending=ordering.descending, key=ordering.key
+            )
+        if self._distinct_on:
+            product.distinct(*self._distinct_on)
+        if self._limit_ is not None:
+            product.limit(self._limit_)
+        quantifier = self._quantifier_builder_
+        product._quantify_(quantifier.type, quantifier.quantification_constraint)
+        product._wire_in_place_()
+        return product
+
+    def _wire_in_place_(self) -> Self:
+        """
+        Wire this instance as the cartesian-product node: build the data-source chain (Where /
+        GroupedBy / Having) and selected variables as its children, then apply the ordering and
+        quantification wrappers around it. Called once on a freshly compiled product instance.
+
+        :return: This instance.
+        """
         self._building_ = True
-
-        if self._inner_dirty_:
-            self._rewire_data_source_chain_()
-            self._inner_dirty_ = False
-
+        self._is_compiled_product_ = True
+        self._rewire_data_source_chain_()
+        self._inner_dirty_ = False
         self._apply_wrapping_modifiers_()
-
         self._dirty_ = False
         self._building_ = False
         return self
@@ -416,7 +466,14 @@ class Query(
         """
         Evaluate the query by constraining values, updating conclusions,
         and selecting variables.
+
+        A spec delegates to its compiled product so that evaluating the spec as an expression behaves
+        exactly like evaluating the product; only the compiled product runs the real evaluation.
         """
+        if not self._is_compiled_product_:
+            self.build()
+            yield from self._compiled_product_node_._evaluate__(sources)
+            return
 
         yield from (
             self._get_operation_result_(result)
@@ -568,69 +625,43 @@ class Query(
 
     def _as_embeddable_child_(self, parent: SymbolicExpression) -> SymbolicExpression:
         """
-        Embed an immutable snapshot of this query when it becomes a value operand of another
-        expression, so a later edit to this query cannot mutate the already-embedded copy.
+        Embed this query's compiled product when it becomes an operand of another expression.
 
-        The live compiled node is used instead in two cases: while this query wires its own wrapper
-        layers during :meth:`build` (``_building_``), where the wrappers must wrap the query itself;
-        and when the parent is a derived reference (a :class:`MappedVariable` such as ``query.name``),
-        which must track the live query so its values resolve against the query's own bindings.
+        The product is captured as it stands at embed time; because each rebuild produces a new
+        product rather than mutating the previous one, a later edit to this query cannot change the
+        already-embedded copy. While a product instance wires its own wrapper layers during
+        :meth:`_wire_in_place_` (``_building_``), the wrappers must wrap that instance itself, so its
+        own (partial) expression is returned.
 
         :param parent: The expression about to take this query as a child.
-        :return: A freshly compiled snapshot of the query, or the live node for self-wrapping and
-            derived references.
+        :return: The compiled product to embed; the inner product node for a derived reference (a
+            :class:`MappedVariable` such as ``query.name``) so it resolves against the query's own
+            bindings; or the in-place node during self-wrapping.
         """
         if self._building_:
             return self._expression_
         self.build()
         if isinstance(parent, MappedVariable):
-            return self._expression_
-        if self._embedding_snapshot_ is None:
-            self._embedding_snapshot_ = self._compile_snapshot_()
-        return self._embedding_snapshot_
+            return self._compiled_product_node_
+        return self._expression_
 
-    def _compile_snapshot_(self) -> SymbolicExpression:
+    @property
+    def _conditions_root_(self) -> Optional[SymbolicExpression]:
         """
-        Compile an independent snapshot of this query by replaying its modifiers onto a fresh query
-        built from the same spec, rather than cloning the live compiled graph.
+        Resolve the conditions root within the compiled product, so rule definition (:meth:`__enter__`)
+        and conclusions attach to the node that is actually evaluated.
 
-        The snapshot is a separate object graph sharing this query's identifier and selected
-        variables, so it evaluates identically and co-references the same variables, while later
-        edits that rebuild the original cannot reach it. Building from the spec sidesteps the
-        cross-reference hazards of graph cloning, so grouping, distinct, and self-referential
-        ordering all compile correctly.
-
-        :return: The compiled expression of the freshly built snapshot query.
+        :return: The conditions root of the compiled product.
         """
-        snapshot = type(self)(_selected_variables_=self._selected_variables_)
-        snapshot._id_ = self._id_
-        snapshot._expression_id_cache_ = {}
-        if self._where_builder_ is not None:
-            snapshot.where(*self._where_builder_.conditions)
-        if self._grouped_by_builder_ is not None:
-            snapshot.grouped_by(*self._grouped_by_builder_.variables_to_group_by)
-        if self._having_builder_ is not None:
-            snapshot.having(*self._having_builder_.conditions)
-        if self._ordered_by_builder_ is not None:
-            ordering = self._ordered_by_builder_
-            snapshot.ordered_by(
-                ordering.variable, descending=ordering.descending, key=ordering.key
-            )
-        if self._distinct_on:
-            snapshot.distinct(*self._distinct_on)
-        if self._limit_ is not None:
-            snapshot.limit(self._limit_)
-        quantifier = self._quantifier_builder_
-        snapshot._quantify_(quantifier.type, quantifier.quantification_constraint)
-        snapshot.build()
-        return snapshot._expression_
+        self.build()
+        return self._expression_._conditions_root_
 
     @UnaryExpression._parent_.setter
     def _parent_(self, parent: SymbolicExpression):
         """
-        Route parenting to the compiled expression of the query (its outer wrapper) rather than to
-        the query node itself, building the snapshot first. The ``_building_`` re-entrancy guard
-        prevents recursion while the query is wiring its own wrapper layers during :meth:`build`.
+        Route parenting to the compiled product (its outer wrapper) rather than to the spec node,
+        building it first. The ``_building_`` re-entrancy guard prevents recursion while a product
+        instance wires its own wrapper layers during :meth:`_wire_in_place_`.
         """
         if not self._building_:
             self.build()
