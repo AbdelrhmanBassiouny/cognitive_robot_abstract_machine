@@ -39,6 +39,29 @@ def test_embedded_subquery_does_not_correlate_with_the_outer_row():
     assert query.tolist() == [1, 2]
 
 
+def test_isolation_is_owned_by_the_query_scope_not_the_quantifier(monkeypatch):
+    """The result quantifier forwards the outer row's bindings into the nested query rather than
+    dropping them; the query scope is what isolates the subquery, which still ranges over its full
+    domain."""
+    sources_seen_by_compiled_queries = []
+    original_evaluate = Query._evaluate__
+
+    def recording_evaluate(self, sources):
+        if self._is_compiled_product_:
+            sources_seen_by_compiled_queries.append(dict(sources.bindings))
+        yield from original_evaluate(self, sources)
+
+    monkeypatch.setattr(Query, "_evaluate__", recording_evaluate)
+
+    outer = variable(int, [1, 2, 3])
+    query = entity(outer).where(outer < entity(eql.max(outer)))
+
+    assert query.tolist() == [1, 2]
+    # The nested subquery received forwarded outer bindings (non-empty), proving the quantifier no
+    # longer performs the isolating source-cut.
+    assert any(bindings for bindings in sources_seen_by_compiled_queries)
+
+
 def test_constant_subquery_is_computed_once_per_evaluation(monkeypatch):
     """A constant (uncorrelated) subquery is computed a single time per top-level evaluation and its
     results reused across outer rows, rather than recomputed once per row."""

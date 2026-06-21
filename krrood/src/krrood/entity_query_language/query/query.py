@@ -482,6 +482,11 @@ class Query(
 
         A spec delegates to its compiled product so that evaluating the spec as an expression behaves
         exactly like evaluating the product; only the compiled product runs the real evaluation.
+
+        This query is the scope that isolates a nested subquery: evaluated as a subquery (nested
+        inside another query's evaluation) it ignores the surrounding bindings and ranges over its own
+        domain, and its result is cached so it is computed once and replayed to every outer row.
+        Evaluated directly (as the outermost query) it threads the incoming sources unchanged.
         """
         if not self._is_compiled_product_:
             self.build()
@@ -489,7 +494,9 @@ class Query(
             return
 
         evaluation_context = get_evaluation_context()
-        if evaluation_context is None:
+        if evaluation_context is None or not self._is_nested_subquery_(
+            evaluation_context
+        ):
             yield from self._produce_results_(sources)
             return
 
@@ -498,9 +505,23 @@ class Query(
         )
         cached_stream = cache.get(self._id_)
         if cached_stream is None:
-            cached_stream = CachedResultStream(self._produce_results_(sources))
+            cached_stream = CachedResultStream(
+                self._produce_results_(OperationResult({}))
+            )
             cache[self._id_] = cached_stream
         yield from cached_stream
+
+    def _is_nested_subquery_(self, evaluation_context) -> bool:
+        """
+        :param evaluation_context: The active evaluation context.
+        :return: Whether this compiled query is evaluating as a nested subquery rather than as the
+            outermost query of the current evaluation. The first compiled query to evaluate claims the
+            outermost role; any other is nested.
+        """
+        outermost_query_id = evaluation_context.data.setdefault(
+            EvaluationContextKey.OUTERMOST_QUERY_ID_KEY, self._id_
+        )
+        return outermost_query_id != self._id_
 
     def _produce_results_(self, sources: OperationResult) -> Iterator[OperationResult]:
         """

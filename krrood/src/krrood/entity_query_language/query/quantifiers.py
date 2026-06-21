@@ -192,7 +192,9 @@ class ResultQuantifier(
     ) -> Iterable[T]:
 
         result_count = 0
-        values = self._child_._evaluate_()
+        # Isolation of a nested subquery is owned by the query scope, not the quantifier: forward the
+        # incoming sources unchanged and let the wrapped query decide whether to range freely.
+        values = self._child_._evaluate_(sources)
         for value in values:
             result_count += 1
             self._assert_satisfaction_of_quantification_constraints_(

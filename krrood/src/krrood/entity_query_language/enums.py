@@ -87,3 +87,10 @@ class EvaluationContextKey(StrEnum):
     results within the current top-level evaluation, so an uncorrelated subquery reached from many
     outer rows is computed once and replayed.
     """
+
+    OUTERMOST_QUERY_ID_KEY = "outermost_query_id"
+    """
+    A reserved key holding the identifier of the first compiled query node to evaluate in the current
+    top-level evaluation. Any other compiled query node that evaluates is a nested subquery, which the
+    query scope isolates from the surrounding bindings.
+    """
