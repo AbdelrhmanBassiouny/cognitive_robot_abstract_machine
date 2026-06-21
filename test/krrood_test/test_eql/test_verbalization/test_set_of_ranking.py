@@ -109,7 +109,7 @@ def test_unlimited_ordered_set_of_reports_pronominalised():
     """An unranked ordered set-of reports the plural population, pronominalised to "their"."""
     e = variable(Employee, [])
     text = verbalize_expression(a(set_of(e).ordered_by(e.salary, descending=True)))
-    assert text == "Report Employees ordered by their salaries (descending)"
+    assert text == "Report Employees ordered by their salaries from highest to lowest"
 
 
 # ── limit on a set_of → ranking, ordered-by suppressed ───────────────────────

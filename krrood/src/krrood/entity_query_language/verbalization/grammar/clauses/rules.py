@@ -30,11 +30,11 @@ class GroupedByRule(PhraseRule):
 
 
 class OrderedByRule(PhraseRule):
-    """OrderedBy → *"ordered by <variable> (ascending|descending)"*.
+    """OrderedBy → *"ordered by <variable> from lowest to highest / from highest to lowest"*.
 
     >>> employee = variable(Employee, [])
     >>> verbalize_expression(a(set_of(employee).ordered_by(employee.salary, descending=True)))
-    'Report Employees ordered by their salaries (descending)'
+    'Report Employees ordered by their salaries from highest to lowest'
     """
 
     construct = OrderedBy

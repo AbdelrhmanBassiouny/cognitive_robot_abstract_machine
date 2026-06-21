@@ -85,7 +85,7 @@ def test_ordered_report_agrees_attribute_operator_and_possessive():
     text = verbalize_expression(an(entity(e).where(e.salary > 5).ordered_by(e.salary)))
     assert text == (
         "Report Employees whose salaries are greater than 5, "
-        "ordered by their salaries (ascending)"
+        "ordered by their salaries from lowest to highest"
     )
 
 
@@ -112,7 +112,7 @@ def test_plural_subject_agrees_a_range_restriction():
     text = verbalize_expression(query)
     assert text == (
         "Report Employees whose salaries are between 100 and 200, "
-        "ordered by their salaries (ascending)"
+        "ordered by their salaries from lowest to highest"
     )
 
 

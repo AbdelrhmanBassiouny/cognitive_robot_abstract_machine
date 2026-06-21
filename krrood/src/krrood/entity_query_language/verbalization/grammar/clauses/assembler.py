@@ -27,7 +27,6 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Copulas,
     Keywords,
-    Punctuation,
     SortDirections,
 )
 
@@ -102,11 +101,12 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
 
 
 class OrderedByAssembler(Assembler[Union[OrderedBy, OrderedByBuilder], None]):
-    """*"ordered by <variable> (ascending|descending)"*. Realisation-only (no plan).
+    """*"ordered by <variable> from lowest to highest / from highest to lowest"*. Realisation-only
+    (no plan).
 
     >>> employee = variable(Employee, [])
     >>> verbalize_expression(a(set_of(employee).ordered_by(employee.salary, descending=True)))
-    'Report Employees ordered by their salaries (descending)'
+    'Report Employees ordered by their salaries from highest to lowest'
     """
 
     def realize(
@@ -118,23 +118,17 @@ class OrderedByAssembler(Assembler[Union[OrderedBy, OrderedByBuilder], None]):
 
         :param node: The ordered-by expression or builder.
         :param plan: Unused (this assembler has no plan).
-        :return: The clause *"ordered by <variable> (ascending|descending)"*.
+        :return: The clause *"ordered by <variable> from lowest to highest"* (ascending) or
+            *"… from highest to lowest"* (descending).
         """
         direction = (
             SortDirections.DESCENDING if node.descending else SortDirections.ASCENDING
-        )
-        paren = PhraseFragment(
-            parts=[
-                Punctuation.OPEN_PAREN.as_fragment(),
-                direction.as_fragment(),
-                Punctuation.CLOSE_PAREN.as_fragment(),
-            ]
         )
         return PhraseFragment(
             parts=[
                 Keywords.ORDERED_BY.as_fragment(),
                 self.context.child(node.variable),
-                paren,
+                direction.as_fragment(),
             ]
         )
 

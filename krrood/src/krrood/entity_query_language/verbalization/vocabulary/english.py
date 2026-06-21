@@ -444,10 +444,11 @@ class CoindexedPhrases(VocabEnum):
 
 
 class SortDirections(VocabEnum):
-    """Sort direction words for ORDERED BY clauses."""
+    """Sort direction prose for ORDERED BY clauses — the range the ordering runs over, read as
+    plain English rather than a parenthetical SQL keyword."""
 
-    ASCENDING = PlainWord("ascending")
-    DESCENDING = PlainWord("descending")
+    ASCENDING = PlainWord("from lowest to highest")
+    DESCENDING = PlainWord("from highest to lowest")
 
 
 class RankingWords(VocabEnum):

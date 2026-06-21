@@ -1156,7 +1156,7 @@ def test_verbalize_order_by_aggregation(handles_and_containers_world):
     assert "number" in text
     assert "Cabinets" in text
     assert "drawers" in text
-    assert "descending" in text
+    assert "from highest to lowest" in text
 
 
 def test_ordered_by_rule_standalone_ascending(handles_and_containers_world):
@@ -1177,11 +1177,11 @@ def test_ordered_by_rule_standalone_ascending(handles_and_containers_world):
     text = ParagraphRenderer(PlainFormatter()).render(frag)
 
     assert "ordered by" in text.lower()
-    assert "ascending" in text.lower()
+    assert "from lowest to highest" in text.lower()
 
 
 def test_ordered_by_rule_standalone_descending(handles_and_containers_world):
-    """OrderedByRule.transform produces (descending) for descending=True."""
+    """OrderedByRule.transform produces 'from highest to lowest' for descending=True."""
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     drawer = flat_variable(cabinet.drawers)
@@ -1198,7 +1198,7 @@ def test_ordered_by_rule_standalone_descending(handles_and_containers_world):
     text = ParagraphRenderer(PlainFormatter()).render(frag)
 
     assert "ordered by" in text.lower()
-    assert "descending" in text.lower()
+    assert "from highest to lowest" in text.lower()
 
 
 def test_grouped_by_rule_standalone(handles_and_containers_world):
@@ -2079,7 +2079,7 @@ def test_grouped_by_without_instantiated_variable(handles_and_containers_world):
     text = verbalize_expression(query)
     assert (
         text
-        == "Report the distinct Cabinets ordered by the number of drawers of Cabinets (descending)"
+        == "Report the distinct Cabinets ordered by the number of drawers of Cabinets from highest to lowest"
     )
 
 

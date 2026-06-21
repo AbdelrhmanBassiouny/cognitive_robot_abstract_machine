@@ -4,7 +4,8 @@ the selection.
 
 A ``limit`` reshapes the selection's leading phrase rather than adding a trailing clause:
 *"the first two Robots"*, *"the top three Employees by salary"*, *"the Employee with the highest
-salary"*. When a limit is present the standalone *"ordered by … (descending)"* clause is suppressed;
+salary"*. When a limit is present the standalone *"ordered by … from highest to lowest"* clause is
+suppressed;
 ordering *without* a limit keeps it. Ordering by an attribute of the selection (vs. the selection
 itself) changes where the superlative attaches.
 """
@@ -101,7 +102,7 @@ def test_limit_suppresses_the_ordered_by_clause():
         entity(e).ordered_by(e.salary, descending=True).limit(3)
     )
     assert "ordered by" not in text
-    assert "descending" not in text
+    assert "from highest to lowest" not in text
 
 
 def test_ordering_without_limit_reports_the_ordered_listing():
@@ -109,7 +110,7 @@ def test_ordering_without_limit_reports_the_ordered_listing():
     population and keeps the ordered-by clause."""
     e = variable(Employee, [])
     text = verbalize_expression(an(entity(e).ordered_by(e.salary, descending=True)))
-    assert text == "Report Employees ordered by their salaries (descending)"
+    assert text == "Report Employees ordered by their salaries from highest to lowest"
 
 
 def test_conditioned_ordering_still_reports():
@@ -120,7 +121,7 @@ def test_conditioned_ordering_still_reports():
     text = verbalize_expression(an(entity(e).where(e.salary > 5).ordered_by(e.salary)))
     assert (
         text
-        == "Report Employees whose salaries are greater than 5, ordered by their salaries (ascending)"
+        == "Report Employees whose salaries are greater than 5, ordered by their salaries from lowest to highest"
     )
 
 
