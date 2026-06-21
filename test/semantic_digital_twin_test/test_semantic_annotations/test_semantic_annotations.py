@@ -8,7 +8,10 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.explanation.explanation import explain_inference
 from krrood.entity_query_language.factories import entity, variable, in_, inference, an
 from krrood.entity_query_language.verbalization.rendering.renderer import HierarchicalRenderer
-from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from krrood.entity_query_language.verbalization.pipeline import (
+    verbalize_expression,
+    VerbalizationPipeline,
+)
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
@@ -271,7 +274,9 @@ def test_verbalize_query_that_inferred_semantic_annotations(apartment_world_setu
     drawer = next(ann for ann in found_semantic_annotations if isinstance(ann, Drawer))
     explanation = explain_inference(drawer)
     verbalization_paragraph = verbalize_expression(explanation.query_root)
-    verbalization_hierarchical = verbalize_expression(explanation.query_root, renderer=HierarchicalRenderer())
+    verbalization_hierarchical = VerbalizationPipeline(
+        HierarchicalRenderer()
+    ).verbalize(explanation.query_root)
     assert verbalization_paragraph == (
         "If there's a FixedConnection whose parent is the child of a PrismaticConnection,"
         " there's a Handle whose root is the child of the FixedConnection,"
