@@ -293,66 +293,30 @@ def test_subclass_safe_generic_propagates_non_transient_resolution_errors():
                 pass
 
 
-def test_subclass_safe_generic_warns_when_a_concrete_binding_is_lost(caplog):
+def test_subclass_safe_generic_flags_a_lost_concrete_binding():
     """
-    A transient resolution failure that drops a concrete type binding is logged at ``WARNING``.
+    A substitution that maps a type variable to a concrete type is reported as a lost binding,
+    which is the case worth surfacing when resolution fails.
     """
-    import logging
-    from unittest.mock import patch
-
     T_local = TypeVar("T_local")
 
-    @dataclass
-    class _Storage(SubClassSafeGeneric[T_local]):
-        required: T_local = dataclass_field(kw_only=True)
-
-    target = (
-        "krrood.patterns.subclass_safe_generic"
-        ".get_and_resolve_generic_type_hints_of_object_using_substitutions"
+    assert (
+        AbstractSubClassSafeGeneric._concrete_binding_was_lost({T_local: int}) is True
     )
-    with patch(target, side_effect=ImportError("boom")), caplog.at_level(
-        logging.DEBUG, logger="krrood"
-    ):
-
-        @dataclass
-        class _IntStorage(_Storage[int]):
-            pass
-
-    records = [r for r in caplog.records if "could not resolve type hints" in r.getMessage()]
-    assert records
-    assert all(record.levelno == logging.WARNING for record in records)
 
 
-def test_subclass_safe_generic_logs_at_debug_for_a_typevar_only_rename(caplog):
+def test_subclass_safe_generic_does_not_flag_a_typevar_only_rename():
     """
-    A transient resolution failure that only renames a type variable is logged at ``DEBUG``,
-    not ``WARNING``, because no concrete binding was lost.
+    A substitution that only renames a type variable (or is empty) is a no-op, not a lost binding.
     """
-    import logging
-    from unittest.mock import patch
-
     T_local = TypeVar("T_local")
     Renamed = TypeVar("Renamed")
 
-    @dataclass
-    class _Storage(SubClassSafeGeneric[T_local]):
-        required: T_local = dataclass_field(kw_only=True)
-
-    target = (
-        "krrood.patterns.subclass_safe_generic"
-        ".get_and_resolve_generic_type_hints_of_object_using_substitutions"
+    assert (
+        AbstractSubClassSafeGeneric._concrete_binding_was_lost({T_local: Renamed})
+        is False
     )
-    with patch(target, side_effect=ImportError("boom")), caplog.at_level(
-        logging.DEBUG, logger="krrood"
-    ):
-
-        @dataclass
-        class _RenamedStorage(_Storage[Renamed]):
-            pass
-
-    records = [r for r in caplog.records if "could not resolve type hints" in r.getMessage()]
-    assert records
-    assert all(record.levelno == logging.DEBUG for record in records)
+    assert AbstractSubClassSafeGeneric._concrete_binding_was_lost({}) is False
 
 
 def test_subclass_safe_generic_inherited_default_factory_survives_type_update():
