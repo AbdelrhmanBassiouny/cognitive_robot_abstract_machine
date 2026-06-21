@@ -7,11 +7,10 @@ This module defines builder classes that collect metadata and produce symbolic e
 
 from __future__ import annotations
 
-import itertools
 import uuid
 from abc import ABC
 from dataclasses import dataclass, field
-from functools import cached_property, lru_cache
+from functools import cached_property
 
 from ordered_set import OrderedSet
 from typing_extensions import (
@@ -143,11 +142,11 @@ class FilterBuilder(ExpressionBuilder, ABC):
                 # No need to traverse inside aggregators
                 return
             elif isinstance(expr, Selectable) and not isinstance(
-                expr, (Literal, ResultQuantifier, Query)
+                expr, (Literal, Query)
             ):
                 non_aggregators.append(expr)
 
-            if isinstance(expr, (Literal, ResultQuantifier, Query)):
+            if isinstance(expr, (Literal, Query)):
                 # Subqueries are a boundary, we don't need to traverse inside them.
                 return
 

@@ -801,7 +801,7 @@ class Selectable(SymbolicExpression, Generic[T], ABC):
     A variable that is used if the child class to this class want to provide a variable to be tracked other than 
     itself, this is specially useful for child classes that holds a variable instead of being a variable and want
      to delegate the variable behaviour to the variable it has instead.
-    For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
+    For example, this is the case for queries and derived references that operate on a single selected
     variable.
     """
 

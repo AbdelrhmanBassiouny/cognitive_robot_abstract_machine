@@ -14,7 +14,7 @@ from krrood.entity_query_language.query.query import (
     SetOf,
     UnificationDict,
 )
-from krrood.entity_query_language.query.operations import Where, OrderedBy
+from krrood.entity_query_language.query.operations import Where
 from krrood.entity_query_language.query.quantifiers import ResultQuantifier, An, The
 from krrood.entity_query_language.operators.core_logical_operators import AND, OR, Not
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -599,8 +599,6 @@ class EQLTranslator:
                 return self.translate_query(query.condition)
             case CaseWhen():
                 return self.translate_case_when(query)
-            case ResultQuantifier():
-                return None
             case Variable():
                 return None
             case _:

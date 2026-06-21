@@ -457,7 +457,7 @@ class MatchVariable(Match[T]):
 
     def __call__(self, **kwargs) -> Union[Entity[T], T]:
         """
-        Add kwargs constraints and return the resolved expression as An() instance.
+        Add the keyword-argument constraints and return the resolved entity expression.
         """
         if not kwargs:
             raise NoKwargsInMatchVar(self)

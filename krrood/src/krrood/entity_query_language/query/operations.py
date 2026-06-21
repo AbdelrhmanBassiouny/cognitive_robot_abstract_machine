@@ -18,24 +18,16 @@ from typing_extensions import (
     Iterator,
     Iterable,
     Optional,
-    Callable,
     Dict,
     FrozenSet,
-    Hashable,
 )
 
-from krrood.entity_query_language.core.variable import (
-    Literal,
-    ExternallySetVariable,
-    InstantiatedVariable,
-)
 from krrood.entity_query_language.operators.aggregators import (
     Aggregator,
     Count,
     CountAll,
 )
 from krrood.entity_query_language.core.base_expressions import (
-    DerivedExpression,
     SymbolicExpression,
     UnaryExpression,
     Bindings,
@@ -121,70 +113,6 @@ class Having(Filter, BinaryExpression):
             )
             if annotated_result.is_true
         )
-
-
-@dataclass(eq=False, repr=False)
-class OrderedBy(BinaryExpression, DerivedExpression):
-    """
-    Represents an ordered by clause in a query. This orders the results of query according to the values of the
-    specified variable.
-    """
-
-    right: Selectable
-    """
-    The variable to order by.
-    """
-    descending: bool = False
-    """
-    Whether to order the results in descending order.
-    """
-    key: Optional[Callable] = None
-    """
-    A function to extract the key from the variable value.
-    """
-
-    @property
-    def _original_expression_(self) -> SymbolicExpression:
-        """
-        The original expression that this expression was derived from.
-        """
-        return self.left
-
-    @property
-    def variable(self) -> Selectable:
-        """
-        The variable to order by.
-        """
-        return self.right
-
-    def _evaluate__(self, sources: OperationResult) -> Iterator[OperationResult]:
-        results = list(self.left._evaluate_(sources))
-        yield from sorted(
-            results,
-            key=self.apply_key,
-            reverse=self.descending,
-        )
-
-    def apply_key(self, result: OperationResult) -> Any:
-        """
-        Apply the key function to the variable to extract the reference value to order the results by.
-        """
-        var = self.variable
-        var_id = var._id_
-        if var_id not in result.all_bindings:
-            variable_value = next(
-                var._evaluate_(OperationResult(result.all_bindings))
-            ).value
-        else:
-            variable_value = result.all_bindings[var_id]
-        if self.key:
-            return self.key(variable_value)
-        else:
-            return variable_value
-
-    @property
-    def _name_(self) -> str:
-        return f"OrderedBy({self.variable._name_})"
 
 
 GroupBindings = Dict[GroupKey, OperationResult]

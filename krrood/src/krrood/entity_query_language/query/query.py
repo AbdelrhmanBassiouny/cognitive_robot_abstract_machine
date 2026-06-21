@@ -51,7 +51,6 @@ from krrood.entity_query_language.query.result_transformers import (
     ResultTransformer,
 )
 from krrood.entity_query_language.core.base_expressions import (
-    Bindings,
     OperationResult,
     SymbolicExpression,
     UnaryExpression,
@@ -64,7 +63,6 @@ from krrood.entity_query_language.cache_data import (
 from krrood.entity_query_language.evaluation_context import get_evaluation_context
 from krrood.entity_query_language.core.variable import (
     InstantiatedVariable,
-    Variable,
     ExternallySetVariable,
 )
 from krrood.entity_query_language.enums import DomainSource, EvaluationContextKey
@@ -181,12 +179,12 @@ class Query(
     """
     _ordered_by_builder_: Optional[OrderedByBuilder] = field(default=None, init=False)
     """
-    The builder for the `OrderedBy` expression if present.
+    The ordering specification applied as a pipeline stage, if the query is ordered.
     """
     _quantifier_builder_: Optional[QuantifierBuilder] = field(default=None, init=False)
     """
-    The builder for the `ResultQuantifier` expression of the query. The default quantifier is `An`
-     which yields all results.
+    The quantification specification applied as a pipeline stage. Defaults to `An`, which accepts all
+    results.
     """
     _dirty_: bool = field(default=True, init=False)
     """
@@ -196,8 +194,8 @@ class Query(
     """
     _building_: bool = field(default=False, init=False)
     """
-    Re-entrancy guard set while :meth:`build` wires the wrapper layers, so that parenting the query
-    to its own wrappers does not recursively trigger another build.
+    Re-entrancy guard set while :meth:`build` wires the compiled product, so that parenting the query
+    to its product does not recursively trigger another build.
     """
     _is_compiled_product_: bool = field(default=False, init=False)
     """
@@ -226,8 +224,8 @@ class Query(
 
     def evaluate(self) -> Iterator:
         """
-        Wrap the query in a ResultQuantifier expression and evaluate it,
-         returning an iterator over the results.
+        Build and evaluate the query, returning an iterator over its results (ordered and quantified
+        by the result pipeline).
         """
         self.build()
         if self._expression_ is not self:
@@ -726,9 +724,9 @@ class Query(
     @UnaryExpression._parent_.setter
     def _parent_(self, parent: SymbolicExpression):
         """
-        Route parenting to the compiled product (its outer wrapper) rather than to the spec node,
-        building it first. The ``_building_`` re-entrancy guard prevents recursion while a product
-        instance wires its own wrapper layers during :meth:`_wire_in_place_`.
+        Route parenting to the compiled product rather than to the spec node, building it first. The
+        ``_building_`` re-entrancy guard prevents recursion while a product instance wires itself
+        during :meth:`_wire_in_place_`.
         """
         if not self._building_:
             self.build()
