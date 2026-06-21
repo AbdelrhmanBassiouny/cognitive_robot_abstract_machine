@@ -517,8 +517,8 @@ def test_boolean_predicative_standalone_navigation_unchanged():
 
 
 def test_attribute_through_relational_referent_pronominalises():
-    """An attribute reached through an already-introduced, unique relational referent reads as
-    *"its <attribute>"* — after a boolean predicative introduces it too."""
+    """An attribute reached through the local centre reads as *"its <attribute>"* — a boolean
+    predicative makes its relational referent the centre just as a possessive does."""
     m = variable(_NavMission, [])
     text = verbalize_expression(
         an(entity(m).where(m.assigned_to.operational, m.assigned_to.battery > 5))
@@ -529,27 +529,34 @@ def test_attribute_through_relational_referent_pronominalises():
     )
 
 
-def test_numbered_relational_referent_keeps_its_label_not_its():
-    """*"its"* would be ambiguous when two same-type relational referents coexist, so a numbered
-    referent keeps its *"Robot 1"* label instead of pronominalising."""
+def test_its_binds_only_to_the_referent_named_directly_before():
+    """*"its"* is scoped to the local centre — the referent named in the immediately preceding
+    clause. When another referent intervenes, the pronoun would be ambiguous, so the chain falls
+    back to the explicit numbered label (*"the power of Robot 1"*) rather than a stranded *"its"*.
+    """
     p = variable(_NavPair, [])
     text = verbalize_expression(
         an(
             entity(p).where(
                 p.primary.assigned_to.battery > 5,
-                p.primary.assigned_to.power > 1,
                 p.secondary.assigned_to.battery > 3,
+                p.primary.assigned_to.power > 1,
             )
         )
     )
-    assert "the power of _NavRobot 1" in text
-    assert "its power" not in text
+    assert text == (
+        "Find a _NavPair such that the battery of _NavRobot 1 to which its primary is "
+        "assigned is greater than 5, the battery of _NavRobot 2 to which its secondary "
+        "is assigned is greater than 3, and the power of _NavRobot 1 is greater than 1"
+    )
+    assert "its power" not in text  # _NavRobot 2 intervened, so no adjacency
 
 
 def test_two_distinct_relational_referents_are_numbered():
-    """Two distinct relational referents of the same type would both reduce to an ambiguous
-    *"the Robot"*; instead they are numbered *"Robot 1"* / *"Robot 2"* (bare, matching the variable
-    numbering convention), and a repeat of either reduces to its bare numbered label."""
+    """Two distinct relational referents of the same type are numbered *"Robot 1"* / *"Robot 2"*
+    (bare, matching the variable convention) to tell them apart; an attribute reached through one
+    immediately after its clause still pronominalises (*"its power"*), since *"its"* binds to the
+    referent named directly before."""
     p = variable(_NavPair, [])
     text = verbalize_expression(
         an(
@@ -562,8 +569,8 @@ def test_two_distinct_relational_referents_are_numbered():
     )
     assert text == (
         "Find a _NavPair such that the battery of _NavRobot 1 to which its primary is "
-        "assigned is greater than 5, the power of _NavRobot 1 is greater than 1, and the "
-        "battery of _NavRobot 2 to which its secondary is assigned is greater than 3"
+        "assigned is greater than 5, its power is greater than 1, and the battery of "
+        "_NavRobot 2 to which its secondary is assigned is greater than 3"
     )
 
 

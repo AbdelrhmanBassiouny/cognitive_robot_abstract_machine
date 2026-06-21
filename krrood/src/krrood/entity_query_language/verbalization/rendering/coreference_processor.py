@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing_extensions import Dict, Iterable, List, Optional, Set
+from typing_extensions import Dict, Iterable, List, Optional, Set, Tuple
 import uuid
 
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -10,6 +10,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PossessiveChain,
     Fragment,
 )
+from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
     Number,
@@ -74,6 +75,12 @@ class CoreferenceProcessor:
     _subject_stack: List[SubjectFrame] = field(init=False, default_factory=list)
     """Stack of :class:`SubjectFrame` entries — the number selects *"its"*/*"their"*."""
 
+    _center: Optional[uuid.UUID] = field(init=False, default=None)
+    """The local centre — the relational referent the immediately preceding chain was *about* (the
+    owner of its outermost attribute). The next chain's matching attribute pronominalises to *"its
+    …"*; an intervening chain about something else clears it, so *"its"* only ever binds to the
+    referent named directly before (centering theory, Grosz/Joshi/Weinstein 1995)."""
+
     def process(
         self,
         fragment: Fragment,
@@ -88,6 +95,7 @@ class CoreferenceProcessor:
         """
         self._seen = set(already_seen or ())
         self._subject_stack = []
+        self._center = None
         return self._walk(fragment)
 
     def _walk(self, fragment: Fragment) -> Fragment:
@@ -125,47 +133,64 @@ class CoreferenceProcessor:
 
         The built chain is walked, not returned raw: a relational hop emits a referring noun phrase
         (*"the Robot to which it is assigned"*), so the walk resolves its first/repeat mention — a
-        second mention of the same navigation reduces to a bare *"the Robot"*."""
+        second mention of the same navigation reduces to a bare *"the Robot"*.
+
+        After resolving, this chain's own topic becomes the local centre, so the *next* chain's
+        matching attribute can pronominalise to *"its …"*."""
         built = self._relational_possessive(possessive_chain)
         if built is not None:
-            return self._walk(built)
-        if self._pronominalises(possessive_chain):
+            resolved = self._walk(built)
+        elif self._pronominalises(possessive_chain):
             subject_number = self._subject_stack[-1].number
-            built = pronominal_path(possessive_chain.parts, subject_number)
-        else:
-            built = possessive_path(
-                possessive_chain.parts, possessive_chain.root_fragment
+            resolved = self._walk(
+                pronominal_path(possessive_chain.parts, subject_number)
             )
-        return self._walk(built)
+        else:
+            resolved = self._walk(
+                possessive_path(possessive_chain.parts, possessive_chain.root_fragment)
+            )
+        self._center = self._chain_topic(possessive_chain.parts)
+        return resolved
+
+    @staticmethod
+    def _outermost_relation(parts: List[PathStep]) -> Optional[Tuple[uuid.UUID, List]]:
+        """:return: ``(referent_id, tail)`` for the chain's outermost relational hop — the related
+        entity it introduces and the attributes hanging off it — or ``None`` when the chain has no
+        relational hop (or it carries no referent id)."""
+        for index in reversed(range(len(parts))):
+            if parts[index].is_relation:
+                referent_id = parts[index].relation.referent_id
+                return (
+                    None if referent_id is None else (referent_id, parts[index + 1 :])
+                )
+        return None
+
+    def _chain_topic(self, parts: List[PathStep]) -> Optional[uuid.UUID]:
+        """:return: The referent a chain is *about* — its outermost relational referent — to carry
+        forward as the local centre, or ``None`` for a chain with no relational hop (which clears
+        the centre, so *"its"* never reaches across an unrelated mention)."""
+        relation = self._outermost_relation(parts)
+        return relation[0] if relation is not None else None
 
     def _relational_possessive(
         self, possessive_chain: PossessiveChain
     ) -> Optional[Fragment]:
-        """An attribute reached *through* an already-introduced relational referent reads as
-        *"its <attribute>"* rather than re-naming the referent — *"the power of the Robot to which
-        it is assigned"* becomes *"its power"* on a later mention.
+        """An attribute reached *through* the local centre reads as *"its <attribute>"* rather than
+        re-naming the referent — *"the power of the Robot to which it is assigned"* becomes *"its
+        power"* once that Robot is the referent named directly before.
 
-        Fires only when the relational referent is a repeat mention (so the pronoun has an
-        antecedent) and is the *unique* one of its type (not numbered — otherwise *"its"* would be
-        ambiguous between *"Robot 1"* and *"Robot 2"*, which keep their numbered label instead).
+        Binding to the centre (not merely to any seen referent) keeps *"its"* unambiguous even when
+        several same-type referents coexist: each numbered *"Robot 1"* / *"Robot 2"* takes *"its"*
+        only for the attribute immediately following its own clause.
 
-        :return: The pronominalised tail, or ``None`` when no relational referent qualifies (leaving
-            the subject / possessive forms to apply).
+        :return: The pronominalised tail, or ``None`` when the chain's relational referent is not the
+            current centre (leaving the subject / possessive forms to apply).
         """
-        parts = possessive_chain.parts
-        relational_index = next(
-            (i for i in reversed(range(len(parts))) if parts[i].is_relation), None
-        )
-        if relational_index is None:
+        relation = self._outermost_relation(possessive_chain.parts)
+        if relation is None:
             return None
-        referent_id = parts[relational_index].relation.referent_id
-        tail = parts[relational_index + 1 :]
-        if (
-            referent_id is None
-            or referent_id not in self._seen
-            or referent_id in self.numbered_labels
-            or not tail
-        ):
+        referent_id, tail = relation
+        if referent_id != self._center or not tail:
             return None
         return pronominal_path(tail, Number.SINGULAR)
 
