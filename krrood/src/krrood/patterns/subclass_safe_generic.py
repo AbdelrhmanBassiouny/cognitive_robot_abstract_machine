@@ -96,11 +96,11 @@ class AbstractSubClassSafeGeneric(ABC):
             # subclass binds the parameter to a concrete type. Only warn when a concrete binding was
             # actually lost; a failed pure type-variable rename is a no-op, logged at debug to avoid
             # noise.
-            lost_concrete_binding = any(
-                not isinstance(value, (TypeVar, TypeVarTuple))
-                for value in substitutions.values()
+            log = (
+                logger.warning
+                if cls._concrete_binding_was_lost(substitutions)
+                else logger.debug
             )
-            log = logger.warning if lost_concrete_binding else logger.debug
             log(
                 f"SubClassSafeGeneric: could not resolve type hints for {cls} — field "
                 f"types will not be updated. Cause: {error}"
@@ -110,6 +110,22 @@ class AbstractSubClassSafeGeneric(ABC):
             if not result.resolved:
                 continue
             cls._update_field_kwargs(name, {"type": result.resolved_type})
+
+    @staticmethod
+    def _concrete_binding_was_lost(
+        substitutions: Dict[Any, ResolvableType],
+    ) -> bool:
+        """
+        Decide whether a failed substitution dropped information worth surfacing.
+
+        :param substitutions: The substitution map that could not be applied.
+        :return: True if any substitution maps to a concrete type, False when every substitution
+            only renames a type variable (a no-op not worth warning about).
+        """
+        return any(
+            not isinstance(value, (TypeVar, TypeVarTuple))
+            for value in substitutions.values()
+        )
 
     @classmethod
     def _update_field_kwargs(
