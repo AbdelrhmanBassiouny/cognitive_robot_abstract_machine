@@ -151,6 +151,7 @@ class Keywords(VocabEnum):
     GIVEN_THAT = KeyWord("given that")
     WHERE = KeyWord("where")
     WHOSE = KeyWord("whose")
+    WHICH = KeyWord("which")
     GROUPED_BY = KeyWord("grouped by")
     GROUPED = KeyWord("grouped")
     HAVING = KeyWord("having")

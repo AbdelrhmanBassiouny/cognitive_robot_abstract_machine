@@ -11,6 +11,8 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
+    Copulas,
+    Keywords,
     Prepositions,
 )
 
@@ -24,24 +26,51 @@ def _attribute_fragment(step: PathStep) -> RoleFragment:
     )
 
 
+def _genitive_step(step: PathStep, owner_fragment: Fragment) -> Fragment:
+    """:return: *"the <attribute> of <owner>"* — one plain (noun) hop wrapping its owner."""
+    return PhraseFragment(
+        parts=[
+            Articles.THE.as_fragment(),
+            _attribute_fragment(step),
+            Prepositions.OF.as_fragment(),
+            owner_fragment,
+        ]
+    )
+
+
+def _relative_clause(step: PathStep, owner_fragment: Fragment) -> Fragment:
+    """:return: *"the <Type> which <owner> is <verb-phrase>"* — one relational hop wrapping its
+    owner as a relative clause. Keeping the owner the verb's subject means the meaning never flips
+    (*"the Person which a Book is owned by"*, not the reversed *"the Person owned by a Book"*).
+    """
+    relation = step.relation
+    return PhraseFragment(
+        parts=[
+            Articles.THE.as_fragment(),
+            RoleFragment.for_type(relation.value_type),
+            Keywords.WHICH.as_fragment(),
+            owner_fragment,
+            Copulas.IS.as_fragment(),
+            RoleFragment.for_attribute(
+                relation.owner_class, step.name, text=relation.verb_phrase
+            ),
+        ]
+    )
+
+
 def possessive_path(parts: List[PathStep], root_fragment: Fragment) -> Fragment:
-    """:return: *"the <inner> of the <outer> of <root>"* (parts iterated innermost-first)."""
-    if not parts:
-        return root_fragment
-    reversed_parts = list(reversed(parts))
-    fragment_parts: List[Fragment] = [
-        Articles.THE.as_fragment(),
-        _attribute_fragment(reversed_parts[0]),
-    ]
-    for step in reversed_parts[1:]:
-        fragment_parts.extend(
-            [
-                Prepositions.OF_THE.as_fragment(),
-                _attribute_fragment(step),
-            ]
+    """:return: the navigation read out from the root, hop by hop (parts innermost-first) — a plain
+    hop as the genitive *"the <attribute> of <owner>"*, a relational hop as the relative clause
+    *"the <Type> which <owner> is <verb-phrase>"*. With only plain hops this is the familiar
+    *"the <outer> of the <inner> of <root>"*."""
+    owner = root_fragment
+    for step in parts:
+        owner = (
+            _relative_clause(step, owner)
+            if step.is_relation
+            else _genitive_step(step, owner)
         )
-    fragment_parts.extend([Prepositions.OF.as_fragment(), root_fragment])
-    return PhraseFragment(parts=fragment_parts)
+    return owner
 
 
 def pronominal_path(parts: List[PathStep], pronoun: Fragment) -> Fragment:

@@ -109,6 +109,24 @@ print(verbalize_expression(t.completed == variable(bool, [True, False])))  # lef
 `== True` reads *"is completed"*, `== False` (and `!= True`) reads *"is not completed"*, and a
 boolean variable whose domain holds both values reads *"is either completed or not"*.
 
+## Relational Attributes
+
+When an attribute is named as a *relation* — a past participle plus a preposition, like
+`assigned_to`, `owned_by`, or `written_by` — navigating through it reads as a **relative clause**
+naming the related type, rather than the bare genitive *"the assigned_to of …"*:
+
+```{code-cell} ipython3
+m = variable(Mission, domain=None)
+print(verbalize_expression(m.assigned_to))               # the Robot which a Mission is assigned to
+print(verbalize_expression(m.assigned_to.operational))   # … is operational
+```
+
+The head noun (*"the Robot"*) is the attribute's declared type, and the owner stays the subject of
+the verb — so even agentive *by* relations read correctly (*"the Person which a Book is owned by"*,
+never the reversed *"the Person owned by a Book"*). A plain noun attribute is unaffected and keeps
+the genitive *"the name of the department of an Employee"*; a noun that merely ends in a preposition
+(e.g. `color_in`) is not treated as a relation.
+
 ## Absence Conditions (`== None`)
 
 A comparison to `None` is read as an *absence*, not as a value. The exact wording adapts to the

@@ -315,6 +315,133 @@ def test_verbalize_second_index_ordinal():
     assert "completed" in text
 
 
+# ── Relational navigation: a verb-named hop reads as a relative clause ────────────
+
+
+@dataclass
+class _NavRobot:
+    operational: bool
+    battery: int
+
+
+@dataclass
+class _NavPerson:
+    pass
+
+
+@dataclass
+class _NavAuthor:
+    pass
+
+
+@dataclass
+class _NavAddress:
+    pass
+
+
+@dataclass
+class _NavMission:
+    assigned_to: _NavRobot  # past participle + preposition → relation
+
+
+@dataclass
+class _NavBook:
+    owned_by: _NavPerson  # agentive "by"
+
+
+@dataclass
+class _NavDoc:
+    written_by: _NavAuthor  # irregular participle + agentive "by"
+
+
+@dataclass
+class _NavParcel:
+    sent_to: _NavAddress  # irregular participle + goal "to"
+
+
+@dataclass
+class _NavPanel:
+    lit: bool
+
+
+@dataclass
+class _NavGadget:
+    color_in: _NavPanel  # "color" is not a participle → plain genitive hop
+
+
+@dataclass
+class _NavDept:
+    name: str
+
+
+@dataclass
+class _NavEmp:
+    department: _NavDept
+
+
+def test_relational_navigation_reads_as_relative_clause():
+    """A relational hop before a boolean terminal reads *"the <Type> which <owner> is <verb>"*,
+    using the field's type as the head and dropping the genitive *of*."""
+    m = variable(_NavMission, [])
+    text = verbalize_expression(m.assigned_to.operational)
+    assert text == "the _NavRobot which a _NavMission is assigned to is operational"
+    assert "assigned_to" not in text and " of " not in text
+
+
+def test_relational_navigation_standalone():
+    m = variable(_NavMission, [])
+    assert (
+        verbalize_expression(m.assigned_to)
+        == "the _NavRobot which a _NavMission is assigned to"
+    )
+
+
+def test_relational_navigation_agentive_by_does_not_reverse():
+    """The relative-clause frame keeps the owner the verb's subject, so agentive *by* relations
+    read correctly rather than reversed (*not* "the Person owned by a Book")."""
+    assert (
+        verbalize_expression(variable(_NavBook, []).owned_by)
+        == "the _NavPerson which a _NavBook is owned by"
+    )
+    assert (
+        verbalize_expression(variable(_NavDoc, []).written_by)
+        == "the _NavAuthor which a _NavDoc is written by"
+    )
+
+
+def test_relational_navigation_irregular_participle():
+    """The participle check is morphological, so an irregular participle (*sent*) is recognised."""
+    assert (
+        verbalize_expression(variable(_NavParcel, []).sent_to)
+        == "the _NavAddress which a _NavParcel is sent to"
+    )
+
+
+def test_relational_navigation_multi_hop_outer_genitive():
+    """A plain hop after a relational one keeps the genitive, wrapping the relative clause."""
+    m = variable(_NavMission, [])
+    assert (
+        verbalize_expression(m.assigned_to.battery)
+        == "the battery of the _NavRobot which a _NavMission is assigned to"
+    )
+
+
+def test_noun_hop_ending_in_preposition_is_not_relativized():
+    """A hop whose name merely ends in a preposition (*color_in*) is not a participle, so it stays
+    the genitive form."""
+    text = verbalize_expression(variable(_NavGadget, []).color_in.lit)
+    assert text == "the color_in of a _NavGadget is lit"
+    assert "which" not in text
+
+
+def test_non_relational_navigation_unchanged():
+    """A purely noun chain renders the familiar genitive path, unchanged."""
+    assert (
+        verbalize_expression(variable(_NavEmp, []).department.name)
+        == "the name of the department of a _NavEmp"
+    )
+
+
 def test_verbalize_non_bool_indexed_attribute_possession():
     r = variable(_Robot, [])
     text = verbalize_expression(r.tasks[0].name)

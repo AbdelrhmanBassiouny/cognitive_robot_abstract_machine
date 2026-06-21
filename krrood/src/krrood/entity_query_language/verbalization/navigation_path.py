@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional
+from typing_extensions import Callable, List, Optional
 
 from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
@@ -15,6 +15,21 @@ from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
     SourceReference,
 )
+
+
+@dataclass(frozen=True)
+class RelationStep:
+    """The data a *relational* hop renders from — the related type (the relative clause's head
+    noun), the verb phrase, and the owner class (for the verb phrase's source link)."""
+
+    value_type: object
+    """The hop's value type — the head noun of the relative clause (*"the Robot"*)."""
+
+    owner_class: type
+    """The attribute's owner class — supplies the verb phrase's source link."""
+
+    verb_phrase: str
+    """The passive verb phrase (*"assigned to"*), derived from the field name."""
 
 
 @dataclass(frozen=True)
@@ -32,14 +47,29 @@ class PathStep:
     source_reference: Optional[SourceReference] = None
     """The attribute's source reference, or ``None`` for composite / index / call hops."""
 
+    relation: Optional[RelationStep] = None
+    """When set, this hop is a *relation* named as a verb (``assigned_to``) and renders as a relative
+    clause *"the <Type> which <owner> is <verb-phrase>"* instead of the genitive *"the <attr> of
+    <owner>"*; ``None`` for a plain noun hop."""
 
-def build_path_parts(chain: List[MappedVariable]) -> List[PathStep]:
+    @property
+    def is_relation(self) -> bool:
+        """:return: ``True`` when this hop renders as a relative clause rather than a genitive."""
+        return self.relation is not None
+
+
+def build_path_parts(
+    chain: List[MappedVariable],
+    relational_phrase: Optional[Callable[[str], Optional[str]]] = None,
+) -> List[PathStep]:
     """
     Convert a walked chain into :class:`PathStep` hops.
 
     Hop rules:
 
-    * ``Attribute`` nodes appear as the attribute name, linked to their source reference.
+    * ``Attribute`` nodes appear as the attribute name, linked to their source reference. When
+      *relational_phrase* recognises the name as a verb relation (returns its phrase), the hop is
+      flagged relational, so it renders as a relative clause instead of a genitive.
     * Integer ``Index`` nodes appear as their ordinal word (``0`` → ``"first"``) with no source
       reference, so the possessive path reads *"the first of the tasks of …"* rather than leaking a
       raw subscript (``"tasks[0]"``). Non-integer keys keep the ``"[key]"`` bracket form.
@@ -47,6 +77,8 @@ def build_path_parts(chain: List[MappedVariable]) -> List[PathStep]:
     * ``FlatVariable`` nodes are skipped.
 
     :param chain: Innermost-first chain list (nearest the root first).
+    :param relational_phrase: Optional name → verb-phrase recogniser, injected so this module stays
+        decoupled from the grammar's recognizers; ``None`` disables relational rendering.
     :return: Ordered list of :class:`PathStep`, innermost hop first.
     """
     parts: List[PathStep] = []
@@ -54,7 +86,19 @@ def build_path_parts(chain: List[MappedVariable]) -> List[PathStep]:
         if isinstance(node, Attribute):
             owner = node._owner_class_
             name = node._attribute_name_
-            parts.append(PathStep(name, SourceReference.for_attribute(owner, name)))
+            phrase = relational_phrase(name) if relational_phrase is not None else None
+            relation = (
+                RelationStep(getattr(node, "_type_", None), owner, phrase)
+                if phrase is not None
+                else None
+            )
+            parts.append(
+                PathStep(
+                    name,
+                    SourceReference.for_attribute(owner, name),
+                    relation=relation,
+                )
+            )
         elif isinstance(node, Index):
             parts.append(_index_step(node._key_))
         elif isinstance(node, Call):

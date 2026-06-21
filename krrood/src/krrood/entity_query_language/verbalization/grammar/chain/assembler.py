@@ -33,6 +33,9 @@ from krrood.entity_query_language.verbalization.grammar.chain.planner import (
     ChainPlan,
     ChainPlanner,
 )
+from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+    relational_verb_phrase,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
     SpecificityRule,
 )
@@ -123,7 +126,8 @@ class OrdinalIndexNavigation(NavigationForm):
     ) -> Fragment:
         ordinal = morphology.ordinal(navigation_chain[-1]._key_)
         prefix_fragment = possessive_path(
-            build_path_parts(navigation_chain[:-1]), root_fragment
+            build_path_parts(navigation_chain[:-1], relational_verb_phrase),
+            root_fragment,
         )
         return PhraseFragment(
             parts=[
@@ -136,10 +140,11 @@ class OrdinalIndexNavigation(NavigationForm):
 
 
 class PossessiveNavigation(NavigationForm):
-    """Any other navigation → the possessive path *"the a of the b of …"*.
+    """Any other navigation → the possessive path, where a *relational* hop (a verb-named field such
+    as ``assigned_to``) reads as a relative clause rather than a genitive.
 
     >>> verbalize_expression(variable(Mission, []).assigned_to.operational)
-    'the assigned_to of a Mission is operational'
+    'the Robot which a Mission is assigned to is operational'
     """
 
     @classmethod
@@ -150,7 +155,9 @@ class PossessiveNavigation(NavigationForm):
     def render(
         cls, navigation_chain: List[MappedVariable], root_fragment: Fragment
     ) -> Fragment:
-        return possessive_path(build_path_parts(navigation_chain), root_fragment)
+        return possessive_path(
+            build_path_parts(navigation_chain, relational_verb_phrase), root_fragment
+        )
 
 
 class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
