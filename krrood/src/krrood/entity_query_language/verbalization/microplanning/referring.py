@@ -41,90 +41,6 @@ class NounForm:
     """The display label for the noun head."""
 
 
-def _aggregation_source_ids(expression: SymbolicExpression) -> Set[uuid.UUID]:
-    """
-    Such a variable denotes a population to aggregate over, not a specific entity, so it must not
-    consume an entity-disambiguation number — otherwise the outer subject would pick up a
-    spurious *"1"* with no matching *"2"*, and a constrained aggregation scope would read *"among
-    BankTransaction 2"* rather than *"among BankTransactions"*.
-
-    :param expression: Root expression to scan.
-    :return: The ``_id_`` of every variable that serves as the source population of an
-        aggregation sub-query (e.g. the ``BankTransaction`` behind ``max(t.amount_details.amount)``),
-        to exclude from numbering.
-    """
-    ids: Set[uuid.UUID] = set()
-    for node in expression._all_expressions_:
-        if isinstance(node, Entity) and selected_aggregator(node) is not None:
-            root = aggregation_source_root(node)
-            if root is not None:
-                ids.add(root._id_)
-    return ids
-
-
-def _numberable_type_name(node: SymbolicExpression) -> Optional[str]:
-    """:return: The type name a node is disambiguated under — its own type for a (non-literal)
-    variable, or the *value* type for a relational attribute (a verb-named hop such as
-    ``assigned_to``, whose relative clause names a distinct entity that must be told apart from
-    other same-type entities). ``None`` for anything that does not denote a numberable entity.
-    """
-    if isinstance(node, Variable) and not isinstance(node, Literal):
-        return (
-            node._type_.__name__
-            if getattr(node, "_type_", None)
-            else node.__class__.__name__
-        )
-    if (
-        isinstance(node, Attribute)
-        and relational_verb(node._attribute_name_) is not None
-    ):
-        value_type = getattr(node, "_type_", None)
-        return value_type.__name__ if isinstance(value_type, type) else None
-    return None
-
-
-def _build_disambiguation_map(
-    expression: SymbolicExpression,
-) -> Tuple[Dict[uuid.UUID, str], Dict[uuid.UUID, str]]:
-    """
-    Types appearing once keep the plain type name; types appearing two or more times get
-    "TypeName 1", "TypeName 2", … labels in encounter order. Both free variables and relational
-    referents (the related entity a verb-named hop introduces) count toward a type's occurrences, so
-    two distinct entities of one type are told apart wherever they appear. Literal nodes are
-    excluded, as are variables that only serve as the source population of an aggregation sub-query.
-
-    :param expression: Root expression to pre-scan.
-    :return: ``(labels, numbered)`` — the full ``_id_`` → label map, and the subset whose label was
-        actually numbered (the collisions).
-    """
-    if isinstance(expression, Query):
-        expression.build()
-
-    suppressed = _aggregation_source_ids(expression)
-
-    type_to_ids: Dict[str, List[uuid.UUID]] = defaultdict(list)
-    seen_ids: Set[uuid.UUID] = set()
-
-    for node in expression._all_expressions_:
-        type_name = _numberable_type_name(node)
-        if type_name is None or node._id_ in suppressed or node._id_ in seen_ids:
-            continue
-        seen_ids.add(node._id_)
-        type_to_ids[type_name].append(node._id_)
-
-    labels: Dict[uuid.UUID, str] = {}
-    numbered: Dict[uuid.UUID, str] = {}
-    for type_name, ids in type_to_ids.items():
-        if len(ids) == 1:
-            labels[ids[0]] = type_name
-            continue
-        for ordinal, referent_id in enumerate(ids, 1):
-            label = f"{type_name} {ordinal}"
-            labels[referent_id] = label
-            numbered[referent_id] = label
-    return labels, numbered
-
-
 @dataclass
 class ReferringExpressions:
     """
@@ -164,8 +80,93 @@ class ReferringExpressions:
         :param expression: Root EQL expression or query to scan.
         :return: An instance with the disambiguation map pre-built for *expression*.
         """
-        labels, numbered = _build_disambiguation_map(expression)
+        labels, numbered = cls._build_disambiguation_map(expression)
         return cls(disambiguation_map=labels, numbered_labels=numbered)
+
+    @classmethod
+    def _build_disambiguation_map(
+        cls, expression: SymbolicExpression
+    ) -> Tuple[Dict[uuid.UUID, str], Dict[uuid.UUID, str]]:
+        """
+        Types appearing once keep the plain type name; types appearing two or more times get
+        "TypeName 1", "TypeName 2", … labels in encounter order. Both free variables and relational
+        referents (the related entity a verb-named hop introduces) count toward a type's occurrences,
+        so two distinct entities of one type are told apart wherever they appear. Literal nodes are
+        excluded, as are variables that only serve as the source population of an aggregation
+        sub-query.
+
+        :param expression: Root expression to pre-scan.
+        :return: ``(labels, numbered)`` — the full ``_id_`` → label map, and the subset whose label
+            was actually numbered (the collisions).
+        """
+        if isinstance(expression, Query):
+            expression.build()
+
+        suppressed = cls._aggregation_source_ids(expression)
+
+        type_to_ids: Dict[str, List[uuid.UUID]] = defaultdict(list)
+        seen_ids: Set[uuid.UUID] = set()
+
+        for node in expression._all_expressions_:
+            type_name = cls._numberable_type_name(node)
+            if type_name is None or node._id_ in suppressed or node._id_ in seen_ids:
+                continue
+            seen_ids.add(node._id_)
+            type_to_ids[type_name].append(node._id_)
+
+        labels: Dict[uuid.UUID, str] = {}
+        numbered: Dict[uuid.UUID, str] = {}
+        for type_name, ids in type_to_ids.items():
+            if len(ids) == 1:
+                labels[ids[0]] = type_name
+                continue
+            for ordinal, referent_id in enumerate(ids, 1):
+                label = f"{type_name} {ordinal}"
+                labels[referent_id] = label
+                numbered[referent_id] = label
+        return labels, numbered
+
+    @staticmethod
+    def _aggregation_source_ids(expression: SymbolicExpression) -> Set[uuid.UUID]:
+        """
+        Such a variable denotes a population to aggregate over, not a specific entity, so it must not
+        consume an entity-disambiguation number — otherwise the outer subject would pick up a
+        spurious *"1"* with no matching *"2"*, and a constrained aggregation scope would read *"among
+        BankTransaction 2"* rather than *"among BankTransactions"*.
+
+        :param expression: Root expression to scan.
+        :return: The ``_id_`` of every variable that serves as the source population of an
+            aggregation sub-query (e.g. the ``BankTransaction`` behind ``max(t.amount_details.amount)``),
+            to exclude from numbering.
+        """
+        ids: Set[uuid.UUID] = set()
+        for node in expression._all_expressions_:
+            if isinstance(node, Entity) and selected_aggregator(node) is not None:
+                root = aggregation_source_root(node)
+                if root is not None:
+                    ids.add(root._id_)
+        return ids
+
+    @staticmethod
+    def _numberable_type_name(node: SymbolicExpression) -> Optional[str]:
+        """:return: The type name a node is disambiguated under — its own type for a (non-literal)
+        variable, or the *value* type for a relational attribute (a verb-named hop such as
+        ``assigned_to``, whose relative clause names a distinct entity that must be told apart from
+        other same-type entities). ``None`` for anything that does not denote a numberable entity.
+        """
+        if isinstance(node, Variable) and not isinstance(node, Literal):
+            return (
+                node._type_.__name__
+                if getattr(node, "_type_", None)
+                else node.__class__.__name__
+            )
+        if (
+            isinstance(node, Attribute)
+            and relational_verb(node._attribute_name_) is not None
+        ):
+            value_type = getattr(node, "_type_", None)
+            return value_type.__name__ if isinstance(value_type, type) else None
+        return None
 
     def numbered_label(self, variable: Variable) -> NumberedLabel:
         """Records *variable* as introduced.
