@@ -75,6 +75,7 @@ class EQLVerbalizer:
             previously_introduced_referents=previously_introduced_referents,
             discourse=discourse,
             numbered_labels=services.referring.numbered_labels,
+            gender_by_referent=services.referring.gender_by_referent,
         )
 
     @staticmethod

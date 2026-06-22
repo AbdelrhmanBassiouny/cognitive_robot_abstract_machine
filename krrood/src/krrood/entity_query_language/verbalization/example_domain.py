@@ -27,6 +27,7 @@ Canonical class list (the single source of truth;
   ``WeakLoveBird``
 * Containers (deep-nesting rule trees) — ``Handle``, ``Container``, ``FixedConnection``,
   ``PrismaticConnection``, ``Drawer``, ``Cabinet``
+* Gendered nouns (he/his, she/her, who/whom) — ``Queen``, ``Knight``
 """
 
 from __future__ import annotations
@@ -37,6 +38,10 @@ from typing import List
 
 from krrood.entity_query_language.factories import Symbol
 from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.verbalization.grammatical_gender import (
+    Feminine,
+    Masculine,
+)
 
 # ── Robots & missions (the quick-start + cross-variable examples) ────────────
 
@@ -300,3 +305,41 @@ class Cabinet:
 
     drawers: list
     """The cabinet's drawers (aggregated antecedent → plural *"there are … drawers"*)."""
+
+
+# ── Gendered nouns (he/his, she/her, who/whom pronoun examples) ──────────────
+
+
+@dataclass
+class Queen(Feminine):
+    """A feminine-gendered example noun — its referents read *she* / *her* (and *who/whom*)."""
+
+    name: str
+    """The queen's name."""
+
+    realm: str
+    """The realm she rules."""
+
+    treasury: int
+    """Current treasury balance."""
+
+    starting_treasury: int
+    """Treasury balance at her coronation."""
+
+
+@dataclass
+class Knight(Masculine):
+    """A masculine-gendered example noun — its referents read *he* / *his* (and *who/whom*)."""
+
+    name: str
+    """The knight's name."""
+
+    rank: int
+    """Current rank."""
+
+    starting_rank: int
+    """Rank at his knighting."""
+
+    assigned_to: Queen
+    """The queen he is assigned to — a relational hop into a (feminine) animate noun, so the
+    relative clause reads *"the Queen to **whom** he is assigned"*."""

@@ -66,6 +66,8 @@ _EXAMPLE_CLASSES = [
     "PrismaticConnection",
     "Drawer",
     "Cabinet",
+    "Queen",
+    "Knight",
 ]
 
 

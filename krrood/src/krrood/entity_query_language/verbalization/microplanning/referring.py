@@ -10,6 +10,10 @@ from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Variable, Literal
 from krrood.entity_query_language.query.query import Entity, Query
 from krrood.entity_query_language.verbalization.fragments.features import Definiteness
+from krrood.entity_query_language.verbalization.grammatical_gender import (
+    GrammaticalGender,
+    grammatical_gender,
+)
 from krrood.entity_query_language.verbalization.relational_attributes import (
     relational_verb,
 )
@@ -74,19 +78,63 @@ class ReferringExpressions:
     Relational referents carry no rule-resolved label — their relative-clause noun phrase is built
     deep in the microplanner — so the coreference pass applies these to number them *"Robot 1"*."""
 
+    gender_by_referent: Dict[uuid.UUID, GrammaticalGender] = field(default_factory=dict)
+    """``_id_`` → grammatical gender for the *gendered* referents (a ``Masculine`` / ``Feminine``
+    variable, or a relational hop into such a type), pre-resolved here so the coreference pass
+    pronominalises them *his/her* rather than *its*. Unmarked referents are omitted (they default to
+    neuter). Mirrors :attr:`numbered_labels`."""
+
     @classmethod
     def from_expression(cls, expression: SymbolicExpression) -> ReferringExpressions:
         """
         :param expression: Root EQL expression or query to scan.
-        :return: An instance with the disambiguation map pre-built for *expression*.
+        :return: An instance with the disambiguation and gender maps pre-built for *expression*.
 
         >>> first, second = variable(Robot, []), variable(Robot, [])
         >>> referring = ReferringExpressions.from_expression(an(set_of(first, second)))
         >>> referring.disambiguation_map[first._id_]
         'Robot 1'
+        >>> knight = variable(Knight, [])
+        >>> ReferringExpressions.from_expression(entity(knight)).gender_by_referent[knight._id_]
+        <GrammaticalGender.MASCULINE: 'masculine'>
         """
         labels, numbered = cls._build_disambiguation_map(expression)
-        return cls(disambiguation_map=labels, numbered_labels=numbered)
+        return cls(
+            disambiguation_map=labels,
+            numbered_labels=numbered,
+            gender_by_referent=cls._build_gender_map(expression),
+        )
+
+    @classmethod
+    def _build_gender_map(
+        cls, expression: SymbolicExpression
+    ) -> Dict[uuid.UUID, GrammaticalGender]:
+        """:return: ``_id_`` → gender for every *gendered* referent (a marker-bearing variable, or a
+        relational hop into a marker-bearing type). Unmarked (neuter) referents are omitted, since
+        the pass falls back to neuter for any id it does not find.
+
+        :param expression: Root expression to scan (already built by :meth:`_build_disambiguation_map`).
+        """
+        return {
+            node._id_: gender
+            for node in expression._all_expressions_
+            if (gender := cls._referent_gender(node)).is_animate
+        }
+
+    @staticmethod
+    def _referent_gender(node: SymbolicExpression) -> GrammaticalGender:
+        """:return: The grammatical gender a node is pronominalised under — its own type for a
+        (non-literal) variable, or the value type for a relational hop — else ``NEUTER`` for anything
+        that is not a gendered referent.
+        """
+        if isinstance(node, Variable) and not isinstance(node, Literal):
+            return grammatical_gender(node._type_)
+        if (
+            isinstance(node, Attribute)
+            and relational_verb(node._attribute_name_) is not None
+        ):
+            return grammatical_gender(node._type_)
+        return GrammaticalGender.NEUTER
 
     @classmethod
     def _build_disambiguation_map(

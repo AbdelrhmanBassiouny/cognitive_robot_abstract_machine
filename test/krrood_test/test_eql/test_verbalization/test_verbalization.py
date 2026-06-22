@@ -607,6 +607,9 @@ def test_pronominal_relative_clause_agrees_with_subject_number():
         pronominal_path,
     )
     from krrood.entity_query_language.verbalization.fragments.features import Number
+    from krrood.entity_query_language.verbalization.grammatical_gender import (
+        PronounFeatures,
+    )
     from krrood.entity_query_language.verbalization.rendering.realization import (
         realize_subtree,
     )
@@ -621,11 +624,11 @@ def test_pronominal_relative_clause_agrees_with_subject_number():
         relation=RelationStep(_Target, _NavMission, "assigned", "to"),
     )
     assert (
-        realize_subtree(pronominal_path([step], Number.SINGULAR))
+        realize_subtree(pronominal_path([step], PronounFeatures(Number.SINGULAR)))
         == "the _Target to which it is assigned"
     )
     assert (
-        realize_subtree(pronominal_path([step], Number.PLURAL))
+        realize_subtree(pronominal_path([step], PronounFeatures(Number.PLURAL)))
         == "the _Target to which they are assigned"
     )
 

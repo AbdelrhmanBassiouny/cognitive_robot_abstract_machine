@@ -7,6 +7,9 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
     Fragment,
 )
+from krrood.entity_query_language.verbalization.grammatical_gender import (
+    GrammaticalGender,
+)
 from krrood.entity_query_language.verbalization.rendering.coreference_processor import (
     CoreferenceProcessor,
 )
@@ -40,6 +43,7 @@ def realize_tree(
     previously_introduced_referents: Optional[Iterable[uuid.UUID]] = None,
     discourse: DiscourseView = EMPTY_DISCOURSE,
     numbered_labels: Optional[Mapping[uuid.UUID, str]] = None,
+    gender_by_referent: Optional[Mapping[uuid.UUID, GrammaticalGender]] = None,
 ) -> Fragment:
     """
     Run the ordered realisation passes over *fragment* — the one place the lowering passes and
@@ -55,6 +59,8 @@ def realize_tree(
         sub-tree, which has no query scope of its own).
     :param numbered_labels: Disambiguation numbers for referents the rules cannot label themselves
         (relational referents) — applied by the coreference pass.
+    :param gender_by_referent: Each gendered referent's grammatical gender — the coreference pass
+        keys *his/her* (and *who/whom*) off it; an absent referent stays neuter (*its*, *which*).
     :return: The fully realised fragment tree.
 
     This is the pass-running step: it returns a lowered fragment *tree*, so the example wraps it in
@@ -70,6 +76,7 @@ def realize_tree(
         CoreferenceProcessor(
             discourse=discourse,
             numbered_labels=dict(numbered_labels or {}),
+            gender_by_referent=dict(gender_by_referent or {}),
             previously_introduced_referents=tuple(previously_introduced_referents or ()),
         ),
         *_LOWERING_PASSES,
