@@ -34,6 +34,8 @@ class ClauseComposer:
     """
 
     context: RuleContext
+    """The per-node context (recursion entry and microplanning services) the clause assemblers are
+    built with."""
 
     def restriction(
         self, plan: QueryPlan, number: Number = Number.SINGULAR
