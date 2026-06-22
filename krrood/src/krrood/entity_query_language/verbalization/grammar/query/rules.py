@@ -26,6 +26,9 @@ class TopLevelEntityRule(PhraseRule):
     def when(self, node: Entity, context: RuleContext) -> bool:
         """:return: ``True`` only for a top-level (query depth 0), non-inline entity.
 
+        This is the decision that routes the entity to the imperative *"Find …"* surface rather than
+        the nested noun-phrase form — it is the outermost entity, so the result opens with the verb:
+
         >>> verbalize_expression(an(entity(variable(Robot, []))))
         'Find a Robot'
         """
@@ -33,6 +36,9 @@ class TopLevelEntityRule(PhraseRule):
 
     def build(self, node: Entity, context: RuleContext) -> Fragment:
         """:return: the imperative *"Find …"* form built by the query assembler.
+
+        It produces the whole imperative sentence by delegating to the query assembler, which emits
+        the leading *"Find"* and weaves in the selection and its restrictions:
 
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))
@@ -58,6 +64,9 @@ class NestedEntityRule(PhraseRule):
     def when(self, node: Entity, context: RuleContext) -> bool:
         """:return: ``True`` only for a nested (query depth > 0), non-inline entity.
 
+        This is the decision that routes the inner entity to the bare noun-phrase surface — being
+        nested, it contributes only the trailing *"a Task"* and never a second *"Find"*:
+
         >>> worker = variable(Worker, [])
         >>> verbalize_expression(
         ...     an(entity(worker).where(contains(worker.tasks, an(entity(variable(Task, []))))))
@@ -68,6 +77,9 @@ class NestedEntityRule(PhraseRule):
 
     def build(self, node: Entity, context: RuleContext) -> Fragment:
         """:return: the noun-phrase form built by the query assembler (never *"Find …"*).
+
+        For the nested entity it produces only the inner noun phrase *"a Task"*, leaving the outer
+        query to supply the surrounding *"Find a Worker whose tasks contains …"*:
 
         >>> worker = variable(Worker, [])
         >>> verbalize_expression(
@@ -93,6 +105,9 @@ class SetOfRule(PhraseRule):
     def build(self, node: SetOf, context: RuleContext) -> Fragment:
         """:return: the set-of form built by the query assembler.
 
+        It produces the whole set-of sentence by delegating to the query assembler, which here emits
+        *"Find"* followed by the coordinated selection *"a Robot and a Task"*:
+
         >>> verbalize_expression(an(set_of(variable(Robot, []), variable(Task, []))))
         'Find a Robot and a Task'
         """
@@ -111,6 +126,10 @@ class InlineEntityRule(PhraseRule):
     def when(self, node: Entity, context: RuleContext) -> bool:
         """:return: ``True`` only when the fold recurses in inline (chain-root) position.
 
+        This is the decision that routes the entity to the inline-noun surface — sitting at the root
+        of the ``.name`` chain, it contributes only *"a Robot"*, so the chain reads *"the name of a
+        Robot"* rather than an imperative *"Find"* sentence:
+
         >>> verbalize_expression(an(entity(variable(Robot, []))).name)
         'the name of a Robot'
         """
@@ -118,6 +137,9 @@ class InlineEntityRule(PhraseRule):
 
     def build(self, node: Entity, context: RuleContext) -> Fragment:
         """:return: the inline-noun form *"a Robot"* (no *"Find"*; the entity's WHERE deferred).
+
+        It produces only the chain-root noun *"a Robot"* (the *"the name of"* comes from the
+        enclosing attribute chain), with the entity's WHERE deferred to the binding scope:
 
         >>> verbalize_expression(an(entity(variable(Robot, []))).name)
         'the name of a Robot'
@@ -134,6 +156,9 @@ class ResultQuantifierRule(PhraseRule):
 
     def build(self, node: ResultQuantifier, context: RuleContext) -> Fragment:
         """:return: the child's fragment, forwarding the render context (the wrapper is transparent).
+
+        It adds no words of its own: the entire *"Find the unique Robot"* is produced by the wrapped
+        entity, and this method only passes the render context straight through:
 
         >>> verbalize_expression(the(entity(variable(Robot, []))))
         'Find the unique Robot'

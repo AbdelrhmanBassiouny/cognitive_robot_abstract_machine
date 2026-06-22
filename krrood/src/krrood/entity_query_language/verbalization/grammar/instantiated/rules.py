@@ -30,6 +30,10 @@ class InstantiatedVariableRule(PhraseRule):
         """:return: The instantiated variable's *"a TypeName, where the field of the TypeName is …"*
         noun phrase, built by the :class:`InstantiatedAssembler`.
 
+        Its contribution is selecting the generic decomposed surface: with no verbalization template
+        on ``Drawer``, this fallback rule fires and delegates to the assembler, which is why the
+        result is the long *"a Drawer, where …"* form rather than a templated sentence.
+
         >>> connection = variable(FixedConnection, [])
         >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
         'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
@@ -46,6 +50,10 @@ class InstantiatedVerbalizableRule(PhraseRule):
     def when(self, node: InstantiatedVariable, context: RuleContext) -> bool:
         """:return: ``True`` when *node*'s type supplies a verbalization template, selecting this rule
         over the generic *"a TypeName, where …"* form.
+
+        Its contribution is the guard that admits this rule: ``IsReachable`` supplies a template, so
+        this rule wins and the example renders via the template as *"a Robot is reachable"* instead
+        of the generic decomposed phrase. :meth:`build` then fills that template.
 
         >>> verbalize_expression(inference(IsReachable)(body=variable(Robot, [])))
         'a Robot is reachable'

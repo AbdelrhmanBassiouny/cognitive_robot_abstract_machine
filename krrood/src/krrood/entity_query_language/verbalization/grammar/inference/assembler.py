@@ -58,6 +58,10 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
         :param plan: The IF/THEN rule structure.
         :return: *"If <antecedents…>, then <consequent…>"* — the two-block IF/THEN form.
 
+        Its contribution is the two-block skeleton: it pairs the *"If"* header over
+        :meth:`_if_items` with the *"then"* header over :meth:`_then_items`, so the whole shown
+        sentence is exactly one *"If …, then …"* construction.
+
         >>> from krrood.entity_query_language.factories import inference
         >>> connection = variable(FixedConnection, [])
         >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
@@ -93,6 +97,10 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
         """
         :return: One item per antecedent — *"there's a <Type> whose …, and …"* — plus any unmatched
             conditions; *"true"* when there are none.
+
+        Its contribution is the body of the IF clause: it produces every *"there's a FixedConnection
+        whose parent is a Container"* item that the *"If"* header then sits above, which is why the
+        shown sentence opens with exactly those antecedents.
 
         >>> from krrood.entity_query_language.factories import inference
         >>> connection = variable(FixedConnection, [])
@@ -154,6 +162,10 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
     def _antecedent_intro(self, antecedent: AntecedentInformation) -> Fragment:
         """:return: *"there's a <Type>"* / *"there are <Types>"* — the antecedent's existential intro.
 
+        Its contribution is only the leading *"there's a FixedConnection"* noun phrase of the shown
+        antecedent; the *"whose parent is a Container"* restriction that follows is woven on by
+        :meth:`_antecedent`, not here.
+
         >>> from krrood.entity_query_language.factories import inference
         >>> connection = variable(FixedConnection, [])
         >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
@@ -195,6 +207,10 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
         """:return: The consequent as a single bulleted entry — *"there's a <Consequent>"* with its
         field bindings under one *"whose"* group (the same form a query subject restriction uses):
         *"whose <field> is <value>, and …"* inline / in paragraph, sub-points in hierarchical.
+
+        Its contribution is the entire span beneath the *"then"* header: the *"there's a Drawer"*
+        intro plus the single *"whose container is …, and handle is …"* group that wraps the per-field
+        bindings, which is why every consequent field hangs off one shared *"whose"* in the result.
 
         >>> from krrood.entity_query_language.factories import inference
         >>> connection = variable(FixedConnection, [])
@@ -240,6 +256,10 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
         :return: The binding's value: *"the <plural chain>"* (aggregated), bare plural, the
             group-key *"common …"* phrase, or the plain rendering.
 
+        Its contribution is choosing which of those forms the value takes: here the grouped query
+        makes the plural ``drawers`` binding aggregated, so it picks the *"the Drawers"* form seen
+        after *"drawers are"* rather than a bare plural or the plain rendering.
+
         >>> from krrood.entity_query_language.factories import inference
         >>> container = variable(Container, [])
         >>> cabinet = inference(Cabinet)(container=container, drawers=variable(Drawer, []))
@@ -264,6 +284,11 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
 
     def _group_key_value(self, expression: SymbolicExpression) -> Fragment:
         """:return: *"the common <field> of the <Roots>"* — a binding that refers to a GROUP BY key.
+
+        Its contribution here is the guard, not the *"common …"* phrase: the group key is a bare
+        ``Container`` variable rather than an attribute chain, so the method falls back to the plain
+        rendering, which is why the binding reads *"container is a Container"* and not *"the common
+        … of …"*.
 
         >>> from krrood.entity_query_language.factories import inference
         >>> container = variable(Container, [])

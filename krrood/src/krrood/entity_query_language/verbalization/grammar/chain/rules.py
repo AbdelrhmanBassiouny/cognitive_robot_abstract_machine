@@ -31,6 +31,10 @@ class PluralChainAttributeRule(PhraseRule):
     def when(self, node: MappedVariable, context: RuleContext) -> bool:
         """:return: ``True`` when the chain is a plural single attribute on a variable.
 
+        Its contribution is the guard that admits this rule: ``salary`` over a plural ``Employees``
+        variable is a plural single attribute, so this rule fires and the chain surfaces as the bare
+        plural *"salaries of Employees"* instead of the possessive fallback.
+
         >>> verbalize_expression(count(variable(Employee, []).salary))
         'the number of salaries of Employees'
         """
@@ -39,6 +43,10 @@ class PluralChainAttributeRule(PhraseRule):
 
     def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
         """:return: The bare plural *"attributes of Roots"*.
+
+        Its contribution is the bare-plural surface itself: it builds the *"batteries of Robots"*
+        span seen inside *"the sum of …"*, pluralising both attribute and root rather than emitting a
+        single possessive.
 
         >>> verbalize_expression(sum(variable(Robot, []).battery))
         'the sum of batteries of Robots'
@@ -61,6 +69,10 @@ class BooleanAttributeChainRule(PhraseRule):
     def when(self, node: MappedVariable, context: RuleContext) -> bool:
         """:return: ``True`` for a boolean-terminal chain that is not a bare-plural attribute.
 
+        Its contribution is the guard that admits this rule: ``operational`` is a boolean terminal and
+        not a bare-plural attribute, so this rule fires and the chain surfaces predicatively as *"a
+        Robot is operational"* rather than as a possessive.
+
         >>> verbalize_expression(variable(Robot, []).operational)
         'a Robot is operational'
         """
@@ -71,6 +83,10 @@ class BooleanAttributeChainRule(PhraseRule):
 
     def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
         """:return: The predicative *"<navigation> is <attribute>"*.
+
+        Its contribution is the predicative surface itself: it builds the *"a Task is completed"*
+        sentence, turning the boolean terminal into an *"is <attribute>"* predicate rather than a
+        possessive noun phrase.
 
         >>> verbalize_expression(variable(Task, []).completed)
         'a Task is completed'
@@ -92,6 +108,10 @@ class PossessiveChainRule(PhraseRule):
 
     def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
         """:return: The possessive path *"the attribute of the Root"*.
+
+        Its contribution is the possessive fallback surface: with no guarded form matching, it builds
+        the *"the battery of a Robot"* possessive path — the default when the chain is neither a
+        bare-plural attribute nor a boolean terminal.
 
         >>> verbalize_expression(variable(Robot, []).battery)
         'the battery of a Robot'

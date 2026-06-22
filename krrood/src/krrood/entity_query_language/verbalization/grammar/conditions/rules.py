@@ -68,6 +68,10 @@ class ComparatorRule(PhraseRule):
     def build(self, node: Comparator, context: RuleContext) -> Fragment:
         """Say the comparator as a standalone predicate.
 
+        Delegating to the predicate assembler is what produces the whole *the battery of a Robot is
+        greater than 50* sentence; this rule contributes the dispatch from a :class:`Comparator` node
+        to that predicate form.
+
         >>> verbalize_expression(variable(Robot, []).battery > 50)
         'the battery of a Robot is greater than 50'
         """
@@ -91,6 +95,9 @@ class AndRule(PhraseRule):
 
     def build(self, node: AND, context: RuleContext) -> Fragment:
         """Say the flattened conjuncts, comma-joined with a trailing *"and"*.
+
+        It owns the *, and* coordination between the two conjuncts of the example; the conjunct
+        clauses themselves come from the shared statement assembler.
 
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(and_(robot.battery > 50, robot.name == 'x'))
@@ -122,6 +129,9 @@ class RangeFoldRule(PhraseRule):
     def build(self, node: RangeFold, context: RuleContext) -> Fragment:
         """Say the folded pair as *"<chain> is between low and high"*.
 
+        It owns the *is between 10 and 90* span, emitting the *between … and …* frame over the fold's
+        two bounds — which is why the reduced pair reads as one clause rather than two comparisons.
+
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(and_(robot.battery > 10, robot.battery < 90))
         'the battery of a Robot is between 10 and 90'
@@ -152,6 +162,10 @@ class CoindexedFoldRule(PhraseRule):
 
     def build(self, node: CoindexedFold, context: RuleContext) -> Fragment:
         """Say the factored clause once — the natural *"have the same"* form over sibling prefixes.
+
+        Detecting sibling prefixes selects the natural branch here, which is why the example reads
+        *the bird_1 and bird_2 of a LoveBirds have the same name and name* rather than the faithful
+        *are equal to those of …* phrasing the other branch would emit.
 
         >>> pair = variable(LoveBirds, [])
         >>> verbalize_expression(
@@ -195,6 +209,9 @@ class CoindexedFoldRule(PhraseRule):
     def _attribute(pair: tuple) -> RoleFragment:
         """:return: The role-tagged attribute fragment for a ``(name, owner)`` hop.
 
+        It supplies just one attribute noun such as *name*; :meth:`build` calls it per hop to build
+        the *bird_1 and bird_2* and *name and name* lists of the factored clause.
+
         >>> from krrood.entity_query_language.verbalization.fragments.base import (
         ...     flatten_fragment_to_plain_text,
         ... )
@@ -218,6 +235,10 @@ class OrRule(PhraseRule):
 
     def build(self, node: OR, context: RuleContext) -> Fragment:
         """Say the flattened disjuncts as *"either a, b, or c"*.
+
+        It owns the *either …, or …* framing around the disjuncts of the example — the leading
+        *either* and the comma-*or* before the last — while the disjunct clauses come from the
+        recursion.
 
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(or_(robot.battery > 50, robot.battery < 10))
@@ -253,6 +274,9 @@ class NotRule(PhraseRule):
     def build(self, node: Not, context: RuleContext) -> Fragment:
         """Wrap the child in *"not (<child>)"* via the orthography pass.
 
+        It owns the *not (…)* wrapper of the example — the leading *not* and the parentheses — around
+        the *a Location is reachable* child the recursion renders.
+
         >>> verbalize_expression(Not(IsReachable(variable(Location, []))))
         'not (a Location is reachable)'
         """
@@ -281,6 +305,10 @@ class NotComparatorRule(PhraseRule):
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps a comparator.
 
+        Detecting that the negation wraps a :class:`Comparator` is the gate that selects this rule
+        over the generic :class:`NotRule`, which is why the example reads the inline *is not greater
+        than 50* instead of the wrapped *not (… is greater than 50)*.
+
         >>> verbalize_expression(Not(variable(Robot, []).battery > 50))
         'the battery of a Robot is not greater than 50'
         """
@@ -288,6 +316,9 @@ class NotComparatorRule(PhraseRule):
 
     def build(self, node: Not, context: RuleContext) -> Fragment:
         """Say the inner comparator with the negation folded into the operator.
+
+        Pushing the negation into the predicate is what yields the inline *is not greater than 50*
+        operator span, leaving no outer *not (…)* wrapper.
 
         >>> verbalize_expression(Not(variable(Robot, []).battery > 50))
         'the battery of a Robot is not greater than 50'
@@ -308,6 +339,10 @@ class NotBooleanAttributeRule(PhraseRule):
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps a boolean-attribute chain.
 
+        Detecting a negated boolean-attribute chain is the gate that selects this rule over the
+        generic :class:`NotRule`, which is why the example reads the predicative *is not completed*
+        instead of the wrapped *not (a Task is completed)*.
+
         >>> verbalize_expression(Not(variable(Task, []).completed))
         'a Task is not completed'
         """
@@ -315,6 +350,9 @@ class NotBooleanAttributeRule(PhraseRule):
 
     def build(self, node: Not, context: RuleContext) -> Fragment:
         """Say the negated predicative *"<nav> is not <attribute>"*.
+
+        It owns the *is not completed* span, emitting the boolean attribute as a negated predicative
+        rather than appending a *not (…)* wrapper.
 
         >>> verbalize_expression(Not(variable(Task, []).completed))
         'a Task is not completed'
@@ -336,6 +374,9 @@ class ForAllRule(PhraseRule):
 
     def build(self, node: ForAll, context: RuleContext) -> Fragment:
         """Say *"for all <plural var>, <condition>"*.
+
+        It owns the *for all Robots,* prefix — rendering the variable as plural and joining it to the
+        condition — while the condition clause comes from the recursion.
 
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(for_all(robot, robot.battery > 0))
@@ -367,6 +408,9 @@ class ExistsRule(PhraseRule):
     def build(self, node: Exists, context: RuleContext) -> Fragment:
         """Say *"there exists <variable> such that <condition>"*.
 
+        It owns the *there exists a Robot such that* framing around the condition; the condition
+        clause itself comes from the recursion.
+
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(exists(robot, robot.battery > 0))
         'there exists a Robot such that the battery of the Robot is greater than 0'
@@ -396,6 +440,9 @@ class FilterRule(PhraseRule):
 
     def build(self, node: Filter, context: RuleContext) -> Fragment:
         """Delegate transparently to the wrapped condition.
+
+        It adds no surface text of its own — unwrapping the Where/Having node so the *whose battery
+        is greater than 50* of the example comes entirely from the condition it forwards to.
 
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))

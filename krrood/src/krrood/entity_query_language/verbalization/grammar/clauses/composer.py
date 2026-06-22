@@ -42,6 +42,9 @@ class ClauseComposer:
         ``None`` when the query has no groupable subject restriction. The predicate agrees with
         *number* — a plural subject gives *"whose salaries are …"*.
 
+        Within the shown sentence this routes to and supplies only the trailing restriction span
+        *"whose battery is greater than 50"*; the leading *"Find a Robot"* comes from the assembler:
+
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))
         'Find a Robot whose battery is greater than 50'
@@ -55,6 +58,9 @@ class ClauseComposer:
     def grouped_by(self, node: Query) -> Optional[Fragment]:
         """:return: The *"grouped by …"* clause, or ``None`` when the query has no GROUP BY.
 
+        It routes to the grouped-by assembler for the grouping span; in this fronted report that span
+        surfaces as the leading *"For each department, report"* frame:
+
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(
         ...     a(set_of(employee.department, sum(employee.salary)).grouped_by(employee.department))
@@ -65,6 +71,9 @@ class ClauseComposer:
 
     def having(self, node: Query) -> Optional[Fragment]:
         """:return: The *"having …"* clause, or ``None`` when the query has no HAVING.
+
+        It routes to the having assembler, which contributes only the trailing *"having the sum
+        greater than 30000"* span appended after the report body:
 
         >>> employee = variable(Employee, [])
         >>> total = sum(employee.salary)
@@ -77,6 +86,9 @@ class ClauseComposer:
 
     def ordered_by(self, node: Query) -> Optional[Fragment]:
         """:return: The *"ordered by …"* clause, or ``None`` when the query has no ORDER BY.
+
+        It routes to the ordered-by assembler, which contributes only the trailing *"ordered by their
+        salaries from lowest to highest"* span after the *"Report Employees"* selection:
 
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(an(entity(employee).ordered_by(employee.salary)))

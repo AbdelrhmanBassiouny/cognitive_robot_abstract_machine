@@ -60,6 +60,11 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         :return: *"a TypeName, where the <field> of the TypeName is <value> …, such that
             <deferred>"*.
 
+        Its contribution is the orchestration that yields the whole shown phrase: it opens a
+        constraint frame so sibling-override constraints can be deferred into the *"such that"* tail,
+        collects the *"where …"* bindings, then hands both to :meth:`_phrase`. With no deferred
+        constraints here the result is just *"a Drawer, where …"* with no *"such that"* tail.
+
         >>> connection = variable(FixedConnection, [])
         >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
         'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
@@ -82,6 +87,11 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         self, plan: InstantiatedPlan, instantiated_type: type
     ) -> Tuple[List[Fragment], Dict[uuid.UUID, Fragment]]:
         """:return: Every binding fragment and the field-reference overrides.
+
+        Its contribution is the *"where"* clause body: it builds each *"the container of the Drawer is
+        the parent of a FixedConnection"* triple by joining a :meth:`_field_reference`, a
+        :meth:`_copula`, and a :meth:`_value`. It also records each field reference as an override so a
+        later binding can refer back to it, which is why both bindings appear side by side here.
 
         >>> connection = variable(FixedConnection, [])
         >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
@@ -106,6 +116,10 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     ) -> Fragment:
         """:return: *"the <field> of the <Type>"* — a single-hop possessive (*"the container of the
         Drawer"*).
+
+        Its contribution is only the left side of each binding — the *"the container of the Drawer"*
+        and *"the handle of the Drawer"* possessives in the shown phrase; the *"is"* and the value
+        after them are supplied by :meth:`_copula` and :meth:`_value`.
 
         >>> connection = variable(FixedConnection, [])
         >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
@@ -132,6 +146,10 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         """:return: The binding's value expression, rendered in the binding's number (*"the parent of
         a FixedConnection"*).
 
+        Its contribution is only the right side of each binding — the *"the parent of a
+        FixedConnection"* / *"the child of the FixedConnection"* values after *"is"*; recursing
+        through ``context.child`` is what renders them as full chains rather than bare names.
+
         >>> connection = variable(FixedConnection, [])
         >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
         'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
@@ -149,6 +167,11 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     ) -> Fragment:
         """:return: *"a <type>, where <bindings>, such that <constraints>"* — the referring noun
         phrase with its appositive clauses as droppable modifiers.
+
+        Its contribution is the envelope around the bindings: the *"a Drawer"* head plus the *",
+        where …"* (and, when present, *", such that …"*) appositive modifiers, joined with the
+        oxford comma seen between the two bindings. The modifiers are droppable, so a repeat mention
+        reduces to just *"the Drawer"*.
 
         >>> connection = variable(FixedConnection, [])
         >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))

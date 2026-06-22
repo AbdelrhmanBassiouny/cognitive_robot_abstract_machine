@@ -146,6 +146,11 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         """:return: *"its <attrs>"* for the selection's own attributes, else
         *"<attrs> of <object>"* (*"x, y, and z of its position"*).
 
+        Its contribution is a single predict point — here the *"battery of the Robot to which it is
+        assigned"* span. Because the predicted attribute belongs to a non-selection object, it takes
+        the *"<attrs> of <object>"* branch rather than the *"its <attrs>"* one; :meth:`_predict_block`
+        wraps these points under the shared *"and predict"* header.
+
         >>> verbalize_expression(underspecified(Mission)(assigned_to=underspecified(Robot)(battery=...)))
         'Generate a Mission and predict battery of the Robot to which it is assigned'
         """
@@ -167,6 +172,10 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
     def _given_that_block(self, plan: MatchPlan) -> Optional[Fragment]:
         """:return: The *"given that"* block — one point per attribute group (concrete assignments)
         and per non-grouping condition — or ``None`` when there is nothing to give.
+
+        Its contribution is the whole *"given that …"* block in the shown sentence: it places the
+        *"given that"* header over the per-group concrete points (here the single *"name and battery
+        of the Robot are 'R2' and 80 respectively"* point) and any free-condition statements.
 
         >>> verbalize_expression(underspecified(Robot)(name="R2", battery=80))
         "Generate a Robot given that name and battery of the Robot are 'R2' and 80 respectively"
@@ -236,6 +245,10 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         """:return: *"x, y, and z of the <object> are 1, 2, and 3 respectively"* for several
         attributes, or *"x of the <object> is 1"* for one.
 
+        Its contribution is the single given-that point and its copula agreement: with one attribute
+        it takes the *"x of the <object> is 1"* branch (singular *"is"*, no *"respectively"*), which
+        is why this lone-attribute example reads *"name of the Robot is 'R2'"*.
+
         >>> verbalize_expression(underspecified(Robot)(name="R2"))
         "Generate a Robot given that name of the Robot is 'R2'"
         """
@@ -284,6 +297,10 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
 
     def _attribute_list(self, attributes: List[Attribute]) -> Fragment:
         """:return: The attribute names as a single fragment — *"x, y, and z"* or *"x"*.
+
+        Its contribution is only the attribute-name list — the *"name and battery"* span in the shown
+        sentence; the *"of the Robot"*, the copula, the values, and *"respectively"* are added around
+        it by :meth:`_group_point`.
 
         >>> verbalize_expression(underspecified(Robot)(name="R2", battery=80))
         "Generate a Robot given that name and battery of the Robot are 'R2' and 80 respectively"

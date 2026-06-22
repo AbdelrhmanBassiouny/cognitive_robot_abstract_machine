@@ -58,6 +58,10 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
         :return: *"grouped by <keys>"* — or *"and the <aggregated> are grouped by <keys>"* when
             the query also selects aggregations (bare *"grouped"* when there are no keys).
 
+        It renders the grouping key (*"department"*) that the report is grouped on. For the grouped
+        set-of report shown, the query assembler fronts that key as the leading *"For each
+        department, report"* frame and drops this trailing clause as redundant:
+
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(
         ...     a(set_of(employee.department, sum(employee.salary)).grouped_by(employee.department))
@@ -92,6 +96,10 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
         :param node: The query being rendered.
         :return: The in-query GROUP BY clause, or ``None`` when there are no group keys.
 
+        It is the in-query grouped-by gate: it renders the clause only when group keys are present.
+        For the grouped report shown the keys surface as the fronted *"For each department, report"*
+        in the query assembler, so this trailing clause is suppressed there:
+
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(
         ...     an(entity(employee).grouped_by(employee.department))
@@ -105,6 +113,10 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
         """
         :param variables: The group-by key expressions.
         :return: The comma-joined group keys *"<key1>, <key2>, …"*.
+
+        It assembles the list of grouping keys (*"department"*, *"name"*). For the fronted report
+        shown those same keys are coordinated as *"For each department and name, report"* by the
+        query assembler:
 
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(
@@ -139,6 +151,10 @@ class OrderedByAssembler(Assembler[Union[OrderedBy, OrderedByBuilder], None]):
         :return: The clause *"ordered by <variable> from lowest to highest"* (ascending) or
             *"… from highest to lowest"* (descending).
 
+        It emits only the trailing ordering span — here *"ordered by their salaries from highest to
+        lowest"* — and chooses the descending direction word; *"Report Employees"* is supplied by the
+        query:
+
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(a(set_of(employee).ordered_by(employee.salary, descending=True)))
         'Report Employees ordered by their salaries from highest to lowest'
@@ -158,6 +174,9 @@ class OrderedByAssembler(Assembler[Union[OrderedBy, OrderedByBuilder], None]):
         """
         :param query: The query being rendered.
         :return: The in-query ORDER BY clause, or ``None`` when the query is unordered.
+
+        It is the in-query ordering gate: present an order builder and it renders the trailing
+        *"ordered by their salaries from lowest to highest"* span, otherwise nothing:
 
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(an(entity(employee).ordered_by(employee.salary)))
@@ -185,6 +204,9 @@ class HavingAssembler(Assembler[Query, None]):
         :return: *"having <condition>"* — the condition rendered with compact (copula-less)
             comparators.
 
+        It emits only the trailing *"having the sum greater than 30000"* span, using compact
+        comparators so the condition reads tersely; the rest of the report comes from elsewhere:
+
         >>> employee = variable(Employee, [])
         >>> total = sum(employee.salary)
         >>> verbalize_expression(
@@ -200,6 +222,9 @@ class HavingAssembler(Assembler[Query, None]):
         """
         :param query: The query being rendered.
         :return: The in-query HAVING clause, or ``None`` when there is no HAVING.
+
+        It is the in-query having gate: present a HAVING expression and it renders the trailing
+        *"having the number greater than 5"* span, otherwise nothing:
 
         >>> employee = variable(Employee, [])
         >>> headcount = count(employee.name)

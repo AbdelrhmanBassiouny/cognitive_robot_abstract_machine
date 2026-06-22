@@ -128,6 +128,9 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
     def plan(self) -> RuleStructure:
         """:return: The IF/THEN decomposition: antecedents, consequent bindings, and grouping.
 
+        Its contribution is assembling the whole :class:`RuleStructure`; the shown ``'Drawer'`` is the
+        ``consequent_type`` field it fills from the inferred (THEN) variable.
+
         >>> from krrood.entity_query_language.factories import inference
         >>> connection = variable(FixedConnection, [])
         >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)

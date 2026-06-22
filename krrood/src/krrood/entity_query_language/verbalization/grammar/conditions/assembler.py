@@ -55,6 +55,10 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param plan: Unused (this assembler has no plan).
         :return: The default form — a standalone predicate.
 
+        Choosing the predicate form as the default is what makes a bare comparator render as the full
+        *the battery of a Robot is greater than 50* sentence; it adds no phrasing of its own beyond
+        that choice.
+
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(robot.battery > 50)
         'the battery of a Robot is greater than 50'
@@ -69,6 +73,10 @@ class ConditionAssembler(Assembler[Comparator, None]):
             so the generic *"<left> <operator> <right>"* is one transform alongside the absence
             (*"has no …"* / *"does not exist"*) and boolean-polarity (*"is [not] <attr>"*) forms; the
             most-specific applicable one wins, and adding a new one is a new subclass.
+
+        Dispatching to the winning transform is what produces the example: the ``== None`` shape
+        selects the absence transform, so the result is *a Mission has no priority* rather than a
+        value comparison.
 
         >>> mission = variable(Mission, [])
         >>> verbalize_expression(mission.priority == None)
@@ -92,6 +100,10 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param conditions: The conditions to say, in order.
         :return: One standalone-statement fragment per condition (after reduction), in order.
 
+        It supplies the two clause fragments of the example — *the battery of a Robot is greater than
+        50* and *the name of the Robot is 'x'* — as a list; the caller (:meth:`AndRule.build`) adds
+        the *, and* that joins them.
+
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(and_(robot.battery > 50, robot.name == 'x'))
         "the battery of a Robot is greater than 50, and the name of the Robot is 'x'"
@@ -113,6 +125,9 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :return: The bare *"<attribute> <operator> <value>"* grouped predicate a *"whose …"* envelope
             wraps, all agreeing with *number* — the predicative operator factors its copula out so a
             plural subject reads *"are greater than"* (see :func:`~…predication.comparator_operator`).
+
+        It owns the *battery is greater than 50* span of the example — the attribute noun, operator,
+        and value with the subject dropped — which the caller's *whose* envelope then wraps.
 
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))
@@ -139,6 +154,9 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param subject: The subject variable.
         :return: The superlative selection modifier *"with the maximum <leaf>"* / *"with the
             minimum <leaf>"*.
+
+        It owns the whole *with the maximum salary* span of the example — reading the aggregator to
+        pick *maximum* over *minimum* and naming the leaf attribute *salary*.
 
         >>> employee, peers = variable(Employee, []), variable(Employee, [])
         >>> verbalize_expression(
@@ -169,6 +187,9 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param number: The number the attribute noun and copula agree with — *"salaries are between
             …"* for a plural subject.
         :return: The modifier *"<attribute> is between low and high"*.
+
+        It owns the *salary is between 100 and 200* span of the example — naming the attribute and
+        emitting the *between … and …* frame over the fold's bounds — which the *whose* envelope wraps.
 
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(
@@ -202,7 +223,9 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param value: The value fragment (supplied by the caller; it may itself be number-folded).
         :return: The bare predicate *"<attribute> <copula> <value>"*.
 
-        Each *"<field> is <value>"* binding of an inference consequent is one such predicate:
+        Each *"<field> is <value>"* binding of an inference consequent is one such predicate: this
+        method owns the *container is …* and *handle is …* spans of the example (noun plus copula plus
+        the caller's value), which the *whose …, and …* envelope then joins.
 
         >>> connection = variable(FixedConnection, [])
         >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
@@ -223,7 +246,8 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param number: The grammatical number to tag for inflection.
         :return: A role-tagged attribute noun (no source link — name only) tagged with *number*.
 
-        The *"container"* / *"handle"* nouns of an inference consequent's bindings are built here:
+        It supplies just the bare attribute noun: the *container* and *handle* words of the example
+        come from here, while :meth:`attribute_predicate` adds the copula and value around each.
 
         >>> connection = variable(FixedConnection, [])
         >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
