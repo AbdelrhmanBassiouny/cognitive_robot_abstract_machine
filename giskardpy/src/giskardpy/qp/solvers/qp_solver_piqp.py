@@ -14,6 +14,9 @@ from giskardpy.utils.math import fast_sparse_diagonal
 @dataclass
 class QPSolverPIQP(QPSolver[QPDataExplicit]):
     solver: piqp.SparseSolver = field(default_factory=piqp.SparseSolver)
+    """
+    The solver object of piqp.
+    """
     ignore_solver_failures: bool = False
     """
     If the QP is known to be feasible, ignore non-SOLVED solver statuses and return the (possibly
