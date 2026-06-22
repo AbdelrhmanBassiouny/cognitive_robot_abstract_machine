@@ -46,16 +46,39 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
     value expression — no fragments, no context, no recursion.
 
     Reference: Reiter & Dale (2000) — content/structure determination (microplanning).
+
+    >>> connection = variable(FixedConnection, [])
+    >>> InstantiatedPlanner(inference(Drawer)(container=connection.parent, handle=connection.child)).plan().type_name
+    'Drawer'
     """
 
     def plan(self) -> InstantiatedPlan:
-        """:return: The plan: the type name and its field bindings."""
+        """:return: The plan: the type name and its field bindings.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
+        >>> InstantiatedPlanner(drawer).plan().type_name
+        'Drawer'
+        """
         return InstantiatedPlan(type_name=self._type_name(), bindings=self._bindings())
 
     def _type_name(self) -> str:
+        """:return: The display name of the instantiated type (*"Drawer"*).
+
+        >>> connection = variable(FixedConnection, [])
+        >>> InstantiatedPlanner(inference(Drawer)(container=connection.parent, handle=connection.child))._type_name()
+        'Drawer'
+        """
         return getattr(self.node._type_, "__name__", str(self.node._type_))
 
     def _bindings(self) -> List[BindingPlan]:
+        """:return: One :class:`BindingPlan` per field binding, in construction order.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> bindings = InstantiatedPlanner(inference(Drawer)(container=connection.parent, handle=connection.child))._bindings()
+        >>> [binding.field_name for binding in bindings]
+        ['container', 'handle']
+        """
         return [
             BindingPlan(
                 field_name=field_name,
@@ -70,6 +93,10 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
         """
         :param node: The instantiated variable.
         :return: ``True`` when *node*'s type implements ``Verbalizable`` and supplies a template.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> InstantiatedPlanner.has_template(inference(Drawer)(container=connection.parent, handle=connection.child))
+        False
         """
         try:
             if isinstance(node._type_, type) and issubclass(node._type_, Verbalizable):

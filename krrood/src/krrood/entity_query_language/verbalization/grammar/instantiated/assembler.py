@@ -45,6 +45,10 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     overrides.
 
     Reference: Gatt & Reiter (2009), SimpleNLG — surface realisation.
+
+    >>> connection = variable(FixedConnection, [])
+    >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+    'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
     """
 
     planner = InstantiatedPlanner
@@ -55,6 +59,10 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         :param plan: The instantiated plan.
         :return: *"a TypeName, where the <field> of the TypeName is <value> …, such that
             <deferred>"*.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
         """
         self.context.scope.push_constraint_frame()
         binding_fragments, overrides = self._bindings(plan, node._type_)
@@ -73,7 +81,12 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     def _bindings(
         self, plan: InstantiatedPlan, instantiated_type: type
     ) -> Tuple[List[Fragment], Dict[uuid.UUID, Fragment]]:
-        """:return: Every binding fragment and the field-reference overrides."""
+        """:return: Every binding fragment and the field-reference overrides.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         binding_fragments: List[Fragment] = []
         overrides: Dict[uuid.UUID, Fragment] = {}
         for binding in plan.bindings:
@@ -91,7 +104,13 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     def _field_reference(
         self, field_name: str, type_name: str, instantiated_type: type
     ) -> Fragment:
-        """:return: *"the <field> of the <Type>"* — a single-hop possessive."""
+        """:return: *"the <field> of the <Type>"* — a single-hop possessive (*"the container of the
+        Drawer"*).
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         type_root = PhraseFragment(
             parts=[
                 Articles.THE.as_fragment(),
@@ -101,11 +120,22 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         return possessive_path([PathStep(field_name, None)], type_root)
 
     def _copula(self, binding: BindingPlan) -> Fragment:
-        """:return: *"is"* / *"are"* agreeing with the binding's plurality."""
+        """:return: *"is"* / *"are"* agreeing with the binding's plurality (the plural ``drawers``
+        field takes *"are"*).
+
+        >>> verbalize_expression(inference(Cabinet)(container=variable(Container, []), drawers=variable(Drawer, [])))
+        'a Cabinet, where the container of the Cabinet is a Container, and the drawers of the Cabinet are Drawers'
+        """
         return Copulas.for_number(Number.of(binding.is_plural))
 
     def _value(self, binding: BindingPlan) -> Fragment:
-        """:return: The binding's value expression, rendered in the binding's number."""
+        """:return: The binding's value expression, rendered in the binding's number (*"the parent of
+        a FixedConnection"*).
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         return self.context.child(binding.value, number=Number.of(binding.is_plural))
 
     # ── phrase assembly ──────────────────────────────────────────────────────────
@@ -118,7 +148,12 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         constraint_fragments: List[Fragment],
     ) -> Fragment:
         """:return: *"a <type>, where <bindings>, such that <constraints>"* — the referring noun
-        phrase with its appositive clauses as droppable modifiers."""
+        phrase with its appositive clauses as droppable modifiers.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         modifiers: List[Fragment] = []
         if binding_fragments:
             # Bindings and constraints are independent clauses → a two-clause pair keeps its comma.
