@@ -16,13 +16,17 @@ from krrood.entity_query_language.verbalization.fragments.features import (
     Number,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+from krrood.entity_query_language.verbalization.grammatical_gender import (
+    grammatical_gender,
+    PronounFeatures,
+)
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
     Conjunctions,
     Copulas,
-    Keywords,
     Prepositions,
     Pronouns,
+    Relativizers,
 )
 
 
@@ -78,6 +82,9 @@ def _relative_clause(
     same navigation reduces to a bare *"the <Type>"* during coreference (the relative clause is a
     first-mention modifier).
 
+    The relativiser agrees with the head's animacy — *which* for an inanimate type, *whom* for a
+    gendered (animate) one (*"the Queen to whom a Knight is assigned"*).
+
     >>> verbalize_expression(variable(Mission, []).assigned_to)
     'the Robot to which a Mission is assigned'
     """
@@ -87,7 +94,7 @@ def _relative_clause(
         definiteness=Definiteness.DEFINITE,
         modifiers=[
             WordFragment(text=relation.preposition),
-            Keywords.WHICH.as_fragment(),
+            Relativizers.for_gender(grammatical_gender(relation.value_type)).as_fragment(),
             owner_fragment,
             Copulas.for_number(owner_number),
             RoleFragment.for_attribute(
@@ -156,33 +163,37 @@ def possessive_path(parts: List[PathStep], root_fragment: Fragment) -> Fragment:
     return owner
 
 
-def pronominal_path(parts: List[PathStep], subject_number: Number) -> Fragment:
+def pronominal_path(parts: List[PathStep], subject: PronounFeatures) -> Fragment:
     """:return: the navigation read out with the (elided) root pronominalised — *"its attribute"* /
     *"the attribute of its foo"* for plain hops, and the relative clause *"the <Type> <prep> which
     it is <participle>"* for a relational hop (the innermost hop, adjacent to the elided root, takes
-    the pronoun: the possessive *its/their* for a genitive, the nominative *it/they* as the verb's
-    subject for a relation). Reuses the same hop builders as :func:`possessive_path`.
+    the pronoun: the possessive *its/his/her/their* for a genitive, the nominative *it/he/she/they*
+    as the verb's subject for a relation). Reuses the same hop builders as :func:`possessive_path`.
 
     :param parts: The chain hops, innermost-first.
-    :param subject_number: The discourse subject's number (its/it singular, their/they plural).
+    :param subject: The discourse subject's agreement features — its number and gender select the
+        pronoun (*its/his/her* singular by gender, *their* plural).
 
     >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
+    >>> from krrood.entity_query_language.verbalization.grammatical_gender import PronounFeatures, GrammaticalGender
     >>> from krrood.entity_query_language.verbalization.fragments.features import Number
-    >>> flatten_fragment_to_plain_text(pronominal_path([], Number.SINGULAR))
+    >>> flatten_fragment_to_plain_text(pronominal_path([], PronounFeatures(Number.SINGULAR)))
     'its'
+    >>> flatten_fragment_to_plain_text(pronominal_path([], PronounFeatures(Number.SINGULAR, GrammaticalGender.MASCULINE)))
+    'his'
     """
-    possessive_pronoun = Pronouns.possessive(subject_number).as_fragment()
+    possessive_pronoun = Pronouns.possessive(subject).as_fragment()
     if not parts:
         return possessive_pronoun
-    nominative_pronoun = Pronouns.nominative(subject_number).as_fragment()
+    nominative_pronoun = Pronouns.nominative(subject).as_fragment()
     # The innermost hop, adjacent to the elided root, takes the pronoun; the rest extend it exactly
     # as :func:`possessive_path` does.
     first, rest = parts[0], parts[1:]
     # A scalar leaf possessed by a plural subject distributes ("their salaries"); an entity owner of
     # further structure stays singular ("the begin and end of their period").
-    attribute_number = subject_number if first.is_scalar_value else Number.SINGULAR
+    attribute_number = subject.number if first.is_scalar_value else Number.SINGULAR
     owner: Fragment = (
-        _relative_clause(first, nominative_pronoun, subject_number)
+        _relative_clause(first, nominative_pronoun, subject.number)
         if first.is_relation
         else PhraseFragment(
             parts=[possessive_pronoun, attribute_fragment(first, attribute_number)]

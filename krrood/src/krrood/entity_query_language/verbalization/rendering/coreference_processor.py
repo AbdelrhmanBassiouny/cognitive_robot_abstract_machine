@@ -15,6 +15,10 @@ from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
     Number,
 )
+from krrood.entity_query_language.verbalization.grammatical_gender import (
+    GrammaticalGender,
+    PronounFeatures,
+)
 from krrood.entity_query_language.verbalization.microplanning.possessive import (
     attribute_fragment,
     possessive_path,
@@ -37,6 +41,15 @@ class SubjectFrame:
     number: Number = Number.SINGULAR
     """The subject's grammatical number — selects *"its"* (singular) vs. *"their"* (plural). Filled
     from the subject's own noun phrase when the pass walks it (rules supply no number)."""
+
+    gender: GrammaticalGender = GrammaticalGender.NEUTER
+    """The subject's grammatical gender — selects *his/her/its* (and *he/she/it*). Resolved from the
+    subject's type when the frame is opened (a marker-free type stays neuter)."""
+
+    @property
+    def features(self) -> PronounFeatures:
+        """:return: The subject's number and gender bundled for pronoun selection."""
+        return PronounFeatures(self.number, self.gender)
 
 
 @dataclass
@@ -76,6 +89,12 @@ class CoreferenceProcessor(RealizationPass):
     """Disambiguation numbers (*"Robot 1"*) for referents the rules cannot label themselves — a
     relational referent's relative clause is built in the microplanner, with no access to the
     referring service, so the number is stamped on here instead."""
+
+    gender_by_referent: Dict[uuid.UUID, GrammaticalGender] = field(default_factory=dict)
+    """Each referent's grammatical gender, pre-resolved from its type by
+    :class:`~krrood.entity_query_language.verbalization.microplanning.referring.ReferringExpressions`
+    (mirrors :attr:`numbered_labels`). The pass keys the subject pronoun's gender off it; an
+    unmarked type is absent and falls back to neuter."""
 
     previously_introduced_referents: Iterable[uuid.UUID] = ()
     """Referents introduced by *prior* builds sharing the same context, so the same expression
@@ -120,6 +139,10 @@ class CoreferenceProcessor(RealizationPass):
         self._center = None
         return self._walk(fragment)
 
+    def _gender_of(self, referent_id: Optional[uuid.UUID]) -> GrammaticalGender:
+        """:return: A referent's grammatical gender, or ``NEUTER`` when it is unknown / unmarked."""
+        return self.gender_by_referent.get(referent_id, GrammaticalGender.NEUTER)
+
     def _walk(self, fragment: Fragment) -> Fragment:
         """Document-order rebuild, threading the accumulating discourse state.
 
@@ -135,8 +158,9 @@ class CoreferenceProcessor(RealizationPass):
         'Find a Mission such that the battery of the Robot to which it is assigned is greater than 50'
         """
         if self.discourse.is_scope(fragment.source):
+            focus = self.discourse.focus_of(fragment.source)
             self._subject_stack.append(
-                SubjectFrame(self.discourse.focus_of(fragment.source))
+                SubjectFrame(focus, gender=self._gender_of(focus))
             )
             try:
                 return self._dispatch(fragment)
@@ -194,9 +218,8 @@ class CoreferenceProcessor(RealizationPass):
             # An "its …" continuation keeps the centre it referred to.
             return self._walk(built)
         elif self._pronominalises(possessive_chain):
-            subject_number = self._subject_stack[-1].number
             resolved = self._walk(
-                pronominal_path(possessive_chain.parts, subject_number)
+                pronominal_path(possessive_chain.parts, self._subject_stack[-1].features)
             )
         else:
             resolved = self._walk(
@@ -310,7 +333,9 @@ class CoreferenceProcessor(RealizationPass):
         referent_id, tail = relation
         if referent_id != self._center or not tail:
             return None
-        return pronominal_path(tail, Number.SINGULAR)
+        return pronominal_path(
+            tail, PronounFeatures(Number.SINGULAR, self._gender_of(self._center))
+        )
 
     def _pronominalises(self, possessive_chain: PossessiveChain) -> bool:
         """:return: ``True`` when the chain root is the current, already-introduced, non-numbered subject.
@@ -454,7 +479,11 @@ class CoreferenceProcessor(RealizationPass):
             modifiers = [self._walk(modifier) for modifier in noun_phrase.modifiers]
         else:
             self._subject_stack.append(
-                SubjectFrame(noun_phrase.referent_id, noun_phrase.number)
+                SubjectFrame(
+                    noun_phrase.referent_id,
+                    noun_phrase.number,
+                    gender=self._gender_of(noun_phrase.referent_id),
+                )
             )
             try:
                 modifiers = [self._walk(modifier) for modifier in noun_phrase.modifiers]

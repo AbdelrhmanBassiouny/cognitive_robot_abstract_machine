@@ -20,6 +20,10 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.fragments.features import Spacing
+from krrood.entity_query_language.verbalization.grammatical_gender import (
+    GrammaticalGender,
+    PronounFeatures,
+)
 from krrood.entity_query_language.verbalization.vocabulary.words import (
     AggregationWord,
     ChildForm,
@@ -172,7 +176,6 @@ class Keywords(VocabEnum):
     GIVEN_THAT = KeyWord("given that")
     WHERE = KeyWord("where")
     WHOSE = KeyWord("whose")
-    WHICH = KeyWord("which")
     GROUPED_BY = KeyWord("grouped by")
     GROUPED = KeyWord("grouped")
     HAVING = KeyWord("having")
@@ -479,6 +482,25 @@ class Punctuation(VocabEnum):
     CLOSE_PAREN = PunctuationWord(")", spacing=Spacing.LEFT)
 
 
+class Relativizers(VocabEnum):
+    """The relative pronoun that introduces a relative clause — *which* for an inanimate head,
+    *whom* for an animate (gendered) one."""
+
+    WHICH = KeyWord("which")
+    WHOM = KeyWord("whom")
+
+    @classmethod
+    def for_gender(cls, gender: GrammaticalGender) -> "Relativizers":
+        """:return: *whom* for an animate (gendered) head, else *which*.
+
+        >>> Relativizers.for_gender(GrammaticalGender.FEMININE).text
+        'whom'
+        >>> Relativizers.for_gender(GrammaticalGender.NEUTER).text
+        'which'
+        """
+        return cls.WHOM if gender.is_animate else cls.WHICH
+
+
 class Pronouns(VocabEnum):
     """Coreference pronouns standing in for a previously introduced variable."""
 
@@ -486,28 +508,46 @@ class Pronouns(VocabEnum):
     THEIR = PronounWord("their")
     IT = PronounWord("it")
     THEY = PronounWord("they")
+    HIS = PronounWord("his")
+    HER = PronounWord("her")
+    HE = PronounWord("he")
+    SHE = PronounWord("she")
 
     @classmethod
-    def possessive(cls, number: Number) -> "Pronouns":
-        """:return: The possessive pronoun — ``THEIR`` for a plural subject, else ``ITS``.
+    def possessive(cls, features: PronounFeatures) -> "Pronouns":
+        """:return: The possessive pronoun for *features* — *their* for a plural subject (the plural
+        is gender-neutral), else *his* / *her* / *its* by gender.
 
-        >>> Pronouns.possessive(Number.PLURAL).text
+        >>> Pronouns.possessive(PronounFeatures(Number.SINGULAR, GrammaticalGender.MASCULINE)).text
+        'his'
+        >>> Pronouns.possessive(PronounFeatures(Number.PLURAL, GrammaticalGender.FEMININE)).text
         'their'
-        >>> Pronouns.possessive(Number.SINGULAR).text
+        >>> Pronouns.possessive(PronounFeatures(Number.SINGULAR)).text
         'its'
         """
-        return cls.THEIR if number is Number.PLURAL else cls.ITS
+        if features.number is Number.PLURAL:
+            return cls.THEIR
+        return {GrammaticalGender.MASCULINE: cls.HIS, GrammaticalGender.FEMININE: cls.HER}.get(
+            features.gender, cls.ITS
+        )
 
     @classmethod
-    def nominative(cls, number: Number) -> "Pronouns":
-        """:return: The nominative (subject) pronoun — ``THEY`` for a plural subject, else ``IT``.
+    def nominative(cls, features: PronounFeatures) -> "Pronouns":
+        """:return: The nominative (subject) pronoun for *features* — *they* for a plural subject,
+        else *he* / *she* / *it* by gender.
 
-        >>> Pronouns.nominative(Number.PLURAL).text
+        >>> Pronouns.nominative(PronounFeatures(Number.SINGULAR, GrammaticalGender.FEMININE)).text
+        'she'
+        >>> Pronouns.nominative(PronounFeatures(Number.PLURAL)).text
         'they'
-        >>> Pronouns.nominative(Number.SINGULAR).text
+        >>> Pronouns.nominative(PronounFeatures(Number.SINGULAR)).text
         'it'
         """
-        return cls.THEY if number is Number.PLURAL else cls.IT
+        if features.number is Number.PLURAL:
+            return cls.THEY
+        return {GrammaticalGender.MASCULINE: cls.HE, GrammaticalGender.FEMININE: cls.SHE}.get(
+            features.gender, cls.IT
+        )
 
 
 class RangePhrases(VocabEnum):
