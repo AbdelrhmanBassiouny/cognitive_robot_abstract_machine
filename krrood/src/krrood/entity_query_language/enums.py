@@ -80,3 +80,17 @@ class EvaluationContextKey(StrEnum):
     version key: results yielded while the set has a given length share one snapshot instead of
     each copying the whole set.
     """
+
+    SUBQUERY_RESULT_CACHE_KEY = "subquery_result_cache"
+    """
+    A reserved key mapping a compiled query node's identifier to the lazily-cached stream of its
+    results within the current top-level evaluation, so an uncorrelated subquery reached from many
+    outer rows is computed once and replayed.
+    """
+
+    OUTERMOST_QUERY_ID_KEY = "outermost_query_id"
+    """
+    A reserved key holding the identifier of the first compiled query node to evaluate in the current
+    top-level evaluation. Any other compiled query node that evaluates is a nested subquery, which the
+    query scope isolates from the surrounding bindings.
+    """
