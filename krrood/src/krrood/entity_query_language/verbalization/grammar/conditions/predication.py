@@ -367,13 +367,22 @@ def coindexed_operator(operation) -> Fragment:
         bare *"are"*), *"are greater than"* for ``gt``, etc. The plural copula agrees because the
         coordinated terminals are the grammatical subject.
 
+    The returned fragment carries plural number; the copula only agrees once the morphology pass
+    runs, so realising it through :class:`MorphologyProcessor` yields the plural copula.
+
     >>> from krrood.entity_query_language.verbalization.fragments.base import (
     ...     flatten_fragment_to_plain_text,
     ... )
-    >>> flatten_fragment_to_plain_text(coindexed_operator(operator.eq))
-    'is equal to'
-    >>> flatten_fragment_to_plain_text(coindexed_operator(operator.gt))
-    'is greater than'
+    >>> from krrood.entity_query_language.verbalization.rendering.morphology_processor import (
+    ...     MorphologyProcessor,
+    ... )
+    >>> realise = lambda fragment: flatten_fragment_to_plain_text(
+    ...     MorphologyProcessor().process(fragment)
+    ... )
+    >>> realise(coindexed_operator(operator.eq))
+    'are equal to'
+    >>> realise(coindexed_operator(operator.gt))
+    'are greater than'
     """
     phrase = (
         Operators.CALC_EQ
