@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
@@ -8,11 +9,16 @@ from functools import lru_cache
 from typing_extensions import Callable, Optional, Type, Any, ClassVar
 
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
-from krrood.parametrization.feature_extraction.exceptions import MissingFieldNameError
+from krrood.parametrization.feature_extraction.exceptions import (
+    MissingFieldNameError,
+    OutOfDomainValueError,
+)
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from random_events.variable import Variable
+from random_events.variable import Variable, Symbolic
 from krrood.entity_query_language.factories import variable
 from krrood.utils import T, recursive_subclasses
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -104,7 +110,11 @@ class AggregationStatistic(SubClassSafeGeneric[T]):
         Each owner class may have at most one ``AggregationStatistic`` subclass, which must
         handle all of its exchangeable-part fields.  Shared logic across owner types should
         be extracted to an intermediate abstract subclass whose concrete children each bind
-        their own ``T``.
+        their own ``T``.  When all such owner types share a common supertype ``Base``,
+        declare a bounded TypeVar ``S = TypeVar("S", bound=Base)`` and inherit from
+        ``AggregationStatistic[S]``; this lets the intermediate class access ``self.instance``
+        with the full interface of ``Base`` without losing type safety in the concrete
+        subclasses.
     """
 
     instance: T
@@ -145,10 +155,10 @@ class AggregationStatistic(SubClassSafeGeneric[T]):
         """
         names: set[str] = set()
         for ancestor in cls.__mro__:
-            own_registry = ancestor.__dict__.get("aggregation_registry")
-            if own_registry is not None:
-                for func in own_registry.get(field_name, []):
-                    names.add(func.__name__)
+            if not issubclass(ancestor, AggregationStatistic):
+                continue
+            for func in ancestor.aggregation_registry[field_name]:
+                names.add(func.__name__)
         return names
 
     @property
@@ -187,17 +197,18 @@ class AggregationStatistic(SubClassSafeGeneric[T]):
             for func in self.aggregation_features
         ]
 
-    def apply_mapping(self) -> list:
+    def apply_mapping(self) -> dict[str, Any]:
         """
         Evaluates every statistic for :attr:`field_name` against this instance.
 
-        :return: One concrete value per matching statistic method, in
-            alphabetical order.
+        :return: A mapping from each statistic method name to its computed value.
         """
-        return [
-            feature.apply_mapping_on_external_root(self)
-            for feature in self.symbolic_aggregation_features()
-        ]
+        return {
+            func.__name__: feature.apply_mapping_on_external_root(self)
+            for func, feature in zip(
+                self.aggregation_features, self.symbolic_aggregation_features()
+            )
+        }
 
 
 def compute_aggregation_statistics(
@@ -210,8 +221,7 @@ def compute_aggregation_statistics(
     results to latent variables.
 
     Each feature function is evaluated only if its name matches a latent
-    variable; values outside the training domain of their variable are
-    silently skipped to avoid impossible conditioning events.
+    variable.
 
     :param domain_object: The domain object whose aggregation statistics
         are computed.
@@ -236,13 +246,11 @@ def compute_aggregation_statistics(
             continue
         value = feature_function.apply_mapping_on_external_root(aggregation_instance)
         latent_variable = latent_variable_by_name[feature_name]
-        # ``make_value`` is the random_events API that validates domain membership;
-        # it signals an out-of-domain value by raising. There is no non-throwing
-        # membership predicate for a raw value against a symbolic domain, so this
-        # boundary adapts that exception into a skip.
         try:
             latent_variable.make_value(value)
-            statistics[latent_variable] = value
         except (ValueError, TypeError):
-            pass
+            logger.info(
+                "Could not determine value for the aggregation statistic. Falling back to Monte-Carlo integration",
+            )
+        statistics[latent_variable] = value
     return statistics

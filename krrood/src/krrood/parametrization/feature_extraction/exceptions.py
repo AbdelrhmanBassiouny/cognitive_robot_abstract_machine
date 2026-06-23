@@ -37,6 +37,33 @@ class MissingFieldNameError(InputError):
 
 
 @dataclass
+class OutOfDomainValueError(DataclassException):
+    """
+    Raised when a computed aggregation statistic falls outside the training
+    domain of its latent variable.
+    """
+
+    feature_name: str
+    """
+    The name of the feature whose value was out of domain.
+    """
+
+    value: object
+    """
+    The computed value that violated the domain constraint.
+    """
+
+    def error_message(self) -> str:
+        return f"Value {self.value!r} for feature '{self.feature_name}' is outside its training domain."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Ensure the observed value falls within the domain of the corresponding latent variable, "
+            "or extend the model's training domain to include this value."
+        )
+
+
+@dataclass
 class UnsupportedFeatureTypeError(DataclassException):
     """
     Raised when a feature column has a type that cannot be preprocessed for a

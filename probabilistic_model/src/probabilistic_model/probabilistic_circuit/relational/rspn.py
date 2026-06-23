@@ -40,9 +40,9 @@ from probabilistic_model.probabilistic_circuit.relational.exceptions import (
     UndeterminedLatentsNotModeledError,
 )
 from probabilistic_model.probabilistic_circuit.relational.helper import (
-    class_qualified_name,
     find_lowest_product_nodes_that_model_variables,
 )
+from krrood.utils import get_class_and_attribute_name
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
     ProductUnit,
@@ -83,7 +83,9 @@ def _rename_variables_with_part_prefix(
     :param excluded_variables: Variables that should keep their current names.
     """
     variable_renames = {
-        variable: type(variable)(class_qualified_name(prefix, variable.name), domain=variable.domain)
+        variable: type(variable)(
+            get_class_and_attribute_name(prefix, variable.name), domain=variable.domain
+        )
         for variable in circuit.variables
         if variable not in excluded_variables
     }
@@ -480,14 +482,22 @@ class RelationalProbabilisticCircuit:
         )
         if not sampled_assignments:
             self._attach_single_exchangeable_instance(
-                circuit, product_nodes_to_extend, template, query_parts,
+                circuit,
+                product_nodes_to_extend,
+                template,
+                query_parts,
                 determined_statistics,
             )
             return circuit
 
         self._attach_monte_carlo_mixture(
-            circuit, product_nodes_to_extend, template, query_parts,
-            determined_statistics, undetermined_latents, sampled_assignments,
+            circuit,
+            product_nodes_to_extend,
+            template,
+            query_parts,
+            determined_statistics,
+            undetermined_latents,
+            sampled_assignments,
         )
         return circuit
 
@@ -557,7 +567,10 @@ class RelationalProbabilisticCircuit:
         for row, assignment in enumerate(latent_assignments):
             for variable, value in assignment.items():
                 events[row, index_of_variable[variable]] = value
-        return [float(log_likelihood) for log_likelihood in subcircuit.log_likelihood(events)]
+        return [
+            float(log_likelihood)
+            for log_likelihood in subcircuit.log_likelihood(events)
+        ]
 
     @staticmethod
     def _mount_instance(
@@ -641,9 +654,9 @@ class RelationalProbabilisticCircuit:
         retained_variables = SortedSet(circuit.variables) - undetermined_latents
         circuit.marginal_in_place(retained_variables)
         mounted_roots = [
-            self._mount_instance(circuit, template, query_parts, {
-                **determined_statistics, **assignment
-            })
+            self._mount_instance(
+                circuit, template, query_parts, {**determined_statistics, **assignment}
+            )
             for assignment in sampled_assignments
         ]
         for product_node, log_weights in zip(

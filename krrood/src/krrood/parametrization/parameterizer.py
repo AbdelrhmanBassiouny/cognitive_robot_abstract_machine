@@ -12,9 +12,6 @@ import random_events.variable
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.factories import and_
-from krrood.entity_query_language.core.mapped_variable import (
-    Attribute,
-)
 from krrood.entity_query_language.query.match import MatchVariable, AttributeMatch
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
@@ -145,6 +142,7 @@ class UnderspecifiedParameters:
         if (
             issubclass(type_, compatible_types)
             and not isinstance(value, compatible_types)
+            and not isinstance(value, (list, tuple, set))
             and not isinstance(value, EllipsisType)
         ):
             raise TypeError(
@@ -163,13 +161,13 @@ class UnderspecifiedParameters:
             self.conditioning_assignments_from_literal_values[result[name]] = value
             return result
 
-        if isinstance(value, (list, tuple)):
+        if isinstance(value, (list, tuple, set)):
             return self._extract_variables_from_iterable_literal(name, value)
 
         if isinstance(value, compatible_types) or isinstance(type_, compatible_types):
             return self._handle_compatible_type_literal(name, value, type_)
 
-        return self._extract_variables_from_non_primitive_literal(attribute_match)
+        return self._extract_variables_from_non_primitive_literal(value, name)
 
     def _handle_compatible_type_literal(
         self,
@@ -229,52 +227,40 @@ class UnderspecifiedParameters:
 
             indexed_name = f"{name}[{index}]"
             if isinstance(element, compatible_types):
-                random_events_variable = variable_from_name_and_type(
-                    name=indexed_name, type_=type(element)
-                )
-                result[indexed_name] = random_events_variable
-                self.conditioning_assignments_from_literal_values[
-                    random_events_variable
-                ] = element
+                result.update(self._handle_compatible_type_literal(indexed_name, element, type_))
             else:
-                dao_state = ToDataAccessObjectState()
-                extractor = FeatureExtractor.from_instances(
-                    [to_dao(element, dao_state)]
+                result.update(
+                    self._extract_variables_from_non_primitive_literal(element, indexed_name)
                 )
-                for feature in extractor.features:
-                    feature_name = f"{indexed_name}.{feature.get_clean_name_from_mapped_variable()}"
-                    random_events_variable = variable_from_name_and_type(
-                        name=feature_name, type_=feature._type_
-                    )
-                    result[feature_name] = random_events_variable
-                    mapping = feature.apply_mapping_on_external_root(element)
-                    if not isinstance(mapping, feature._type_):
-                        mapping = feature._type_(mapping)
-                    self.conditioning_assignments_from_literal_values[
-                        random_events_variable
-                    ] = mapping
         return result
 
     def _extract_variables_from_non_primitive_literal(
-        self, attribute_match: AttributeMatch
+        self, value: Any, name_prefix: str
     ) -> dict[str, random_events.variable.Variable]:
         """
-        Extract variables from a literal value that is not a primitive type.
+        Extract variables from a single non-primitive literal value.
 
-        :param attribute_match: The attribute match with a non-primitive literal value.
-        :return: A dictionary of extracted variables.
+        Converts ``value`` to a DAO, runs feature extraction, and registers a
+        conditioning assignment for every discovered feature.
+
+        :param value: The non-primitive literal to decompose.
+        :param name_prefix: Attribute access path used to namespace the feature names
+            (e.g. ``"obj"`` yields ``"obj.position.x"``).
+        :return: A dictionary mapping prefixed feature names to their variables.
         """
         result = {}
         dao_state = ToDataAccessObjectState()
-
-        extractor = FeatureExtractor.from_instances(
-            [to_dao(attribute_match.assigned_value, dao_state)]
-        )
+        extractor = FeatureExtractor.from_instances([to_dao(value, dao_state)])
         for feature in extractor.features:
-            result[feature._name_] = random_events.variable.Continuous(
-                name=feature._name_
+            feature_name = f"{name_prefix}.{feature.get_clean_name_from_mapped_variable()}"
+            random_events_variable = variable_from_name_and_type(
+                name=feature_name, type_=feature._type_
             )
-            self._register_literal_conditioning_event(attribute_match, feature, result)
+            result[feature_name] = random_events_variable
+            mapping = feature.apply_mapping_on_external_root(value)
+            if not isinstance(mapping, feature._type_):
+                mapping = feature._type_(mapping)
+            self.conditioning_assignments_from_literal_values[random_events_variable] = mapping
         return result
 
     def _handle_variable_attribute_match(
@@ -448,32 +434,6 @@ class UnderspecifiedParameters:
         self.statement._update_kwargs_from_literal_values()
         result = self.statement.construct_instance()
         return result
-
-    def _register_literal_conditioning_event(
-        self,
-        attribute_match: AttributeMatch,
-        attribute: Attribute,
-        result: dict[str, random_events.variable.Variable],
-    ):
-        """
-        Register a conditioning event for a literal attribute match.
-
-        :param attribute_match: The attribute match.
-        :param attribute: The attribute being matched.
-        :param result: The dictionary of variables to update.
-        """
-        if not isinstance(attribute_match.assigned_value, compatible_types):
-            mapping = attribute.apply_mapping_on_external_root(
-                attribute_match.assigned_value
-            )
-            if not isinstance(mapping, attribute._type_):
-                # this cast is necessary because of the way the mapping is applied to the attribute. For instance, mapping might be Scalar(), but the attribute type is float.
-                mapping = attribute._type_(mapping)
-        else:
-            mapping = attribute_match.assigned_value
-        self.conditioning_assignments_from_literal_values[result[attribute._name_]] = (
-            mapping
-        )
 
     @staticmethod
     def _process_attribute_match_type(type_):

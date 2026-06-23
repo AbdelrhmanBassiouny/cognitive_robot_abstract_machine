@@ -54,11 +54,11 @@ def test_single_aggregation(example_scenario):
     values = aggregation_instance.apply_mapping()
     assert len(aggregations) == 3
     closed = Bound.CLOSED
-    assert values == [
-        SimpleInterval.from_data(1, 4, closed, closed),
-        SimpleInterval.from_data(1, 4, closed, closed),
-        5,
-    ]
+    assert values == {
+        "chair_count": SimpleInterval.from_data(1, 4, closed, closed),
+        "table_count": SimpleInterval.from_data(1, 4, closed, closed),
+        "total_count": 5,
+    }
 
 
 def test_feature_extraction_with_aggregation_statistics(example_scenario):
@@ -101,7 +101,7 @@ def test_aggregation_count_values(example_scenario):
     aggregation_cls = get_aggregation_class(type(room))
     aggregation_instance = aggregation_cls(instance=room, field_name="objects")
     values = aggregation_instance.apply_mapping()
-    assert values[0] == SimpleInterval.from_data(1, 4, Bound.CLOSED, Bound.CLOSED)
+    assert values["chair_count"] == SimpleInterval.from_data(1, 4, Bound.CLOSED, Bound.CLOSED)
 
 
 def test_only_marked_methods_are_statistics():
@@ -353,5 +353,5 @@ def test_room_count_computes_correct_number_of_rooms():
     )
     test_ex_parts = TestExParts(objects=[], rooms=[room1, room2])
     instance = TestExPartsAggregations(instance=test_ex_parts, field_name="rooms")
-    [room_count] = instance.apply_mapping()
+    [room_count] = instance.apply_mapping().values()
     assert room_count == 2

@@ -231,7 +231,7 @@ class FeatureExtractor:
 
         return result
 
-    def apply_mapping(self, instance: DataAccessObject) -> list:
+    def apply_mapping(self, instance: DataAccessObject) -> list[Any]:
         """
         Extracts the mapped values for each feature from the given instance.
         :param instance: The instance to extract features from.

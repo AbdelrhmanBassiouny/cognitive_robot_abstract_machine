@@ -3,9 +3,7 @@ from dataclasses import dataclass
 from typing_extensions import Type, Dict
 
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
-from probabilistic_model.probabilistic_circuit.relational.helper import (
-    class_qualified_name,
-)
+from krrood.utils import get_class_and_attribute_name
 from probabilistic_model.probabilistic_circuit.relational.rspn import (
     RelationalProbabilisticCircuit,
 )
@@ -69,7 +67,9 @@ class RelationalCircuitRegistry(ModelRegistry):
         class_prefix = self.relational_probabilistic_circuit.class_.__name__
         rename_map = {}
         for circuit_var in grounded.variables:
-            qualified_name = class_qualified_name(class_prefix, circuit_var.name)
+            qualified_name = get_class_and_attribute_name(
+                class_prefix, circuit_var.name
+            )
             if qualified_name in parameters.variables:
                 rename_map[circuit_var] = parameters.variables[qualified_name]
         grounded.update_variables(rename_map)
