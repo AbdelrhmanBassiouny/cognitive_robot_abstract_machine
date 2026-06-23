@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import operator
 from abc import abstractmethod
+from dataclasses import replace
 from itertools import islice
 
-from typing_extensions import TYPE_CHECKING, List, Optional, Set
+from typing_extensions import TYPE_CHECKING, Dict, List, Optional, Set
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import is_temporal
@@ -32,6 +33,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     RoleFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.grammar.chain.assembler import (
     ChainAssembler,
 )
@@ -58,6 +60,7 @@ from krrood.entity_query_language.verbalization.relational_attributes import (
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Absence,
+    Copulas,
     Logicals,
     NonExistence,
     Operators,
@@ -363,6 +366,50 @@ def _operator_fragment(
     if not copula:
         return RoleFragment.for_operator(predicative_core(word.text))
     return predicative_operator(word.text, number)
+
+
+#: The affirmative-to-negative copula surfaces a predicate clause is negated through.
+_NEGATED_COPULA: Dict[str, str] = {
+    Copulas.IS.text: Copulas.IS_NOT.text,
+    Copulas.ARE.text: Copulas.ARE_NOT.text,
+}
+
+
+def negate_copula(fragment: Fragment) -> Optional[Fragment]:
+    """
+    :param fragment: A predicate clause built from the shared vocabulary.
+    :return: *fragment* with its first copula leaf flipped to the negative (*"is"* → *"is not"*), or
+        ``None`` when it carries no copula to negate — the caller then wraps it in *"not (…)"*.
+
+    This is what lets a wrapping ``Not`` over a verbalizable predicate read *"a Robot is not
+    reachable"* in place rather than *"not (a Robot is reachable)"*: a predicate that says its clause
+    with a vocabulary copula is negated by flipping that copula.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text, PhraseFragment, WordFragment,
+    ... )
+    >>> from krrood.entity_query_language.verbalization.vocabulary.english import Copulas
+    >>> clause = PhraseFragment(parts=[WordFragment(text="a Robot"), Copulas.IS.as_fragment(),
+    ...                                WordFragment(text="reachable")])
+    >>> flatten_fragment_to_plain_text(negate_copula(clause))
+    'a Robot is not reachable'
+    >>> negate_copula(WordFragment(text="a Robot")) is None
+    True
+    """
+    if (
+        isinstance(fragment, RoleFragment)
+        and fragment.role is SemanticRole.OPERATOR
+        and fragment.text in _NEGATED_COPULA
+    ):
+        return replace(fragment, text=_NEGATED_COPULA[fragment.text])
+    if isinstance(fragment, PhraseFragment):
+        for index, part in enumerate(fragment.parts):
+            negated_part = negate_copula(part)
+            if negated_part is not None:
+                parts = list(fragment.parts)
+                parts[index] = negated_part
+                return replace(fragment, parts=parts)
+    return None
 
 
 def coindexed_operator(operation) -> Fragment:

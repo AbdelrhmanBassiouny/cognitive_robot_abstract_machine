@@ -1,10 +1,7 @@
 from __future__ import annotations
 
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
-    WordFragment,
-)
+from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     PhraseRule,
     RuleContext,
@@ -14,9 +11,6 @@ from krrood.entity_query_language.verbalization.grammar.instantiated.assembler i
 )
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
-)
-from krrood.entity_query_language.verbalization.rendering.realization import (
-    realize_subtree,
 )
 
 
@@ -42,36 +36,37 @@ class InstantiatedVariableRule(PhraseRule):
 
 
 class InstantiatedVerbalizableRule(PhraseRule):
-    """An InstantiatedVariable whose type supplies a verbalization template string."""
+    """An InstantiatedVariable whose type builds its own verbalization :class:`Fragment`."""
 
     construct = InstantiatedVariable
     name = "instantiated-verbalizable"
 
     def when(self, node: InstantiatedVariable, context: RuleContext) -> bool:
-        """:return: ``True`` when *node*'s type supplies a verbalization template, selecting this rule
+        """:return: ``True`` when *node*'s type supplies a verbalization fragment, selecting this rule
         over the generic *"a TypeName, where …"* form.
 
-        Its contribution is the guard that admits this rule: ``IsReachable`` supplies a template, so
-        this rule wins and the example renders via the template as *"a Robot is reachable"* instead
-        of the generic decomposed phrase. :meth:`build` then fills that template.
+        Its contribution is the guard that admits this rule: ``IsReachable`` supplies a fragment, so
+        this rule wins and the example renders as *"a Robot is reachable"* instead of the generic
+        decomposed phrase. :meth:`build` then assembles that fragment.
 
         >>> verbalize_expression(inference(IsReachable)(body=variable(Robot, [])))
         'a Robot is reachable'
         """
-        return InstantiatedPlanner.has_template(node)
+        return InstantiatedPlanner.has_fragment(node)
 
     def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
-        """:return: The type's template filled with its rendered field values
-        (*"{body} is reachable"* → *"a Robot is reachable"*).
+        """:return: the type's verbalization fragment, built from its rendered field fragments
+        (*"a Robot is reachable"*).
+
+        The type composes the surface from the shared vocabulary, so the result is a structured
+        fragment that flows through the remaining passes (coreference, determiner, morphology) — not
+        an opaque string blob — which is why a wrapping ``Not`` can negate it inline.
 
         >>> verbalize_expression(inference(IsReachable)(body=variable(Robot, [])))
         'a Robot is reachable'
         """
-        # An opaque format string: it consumes finalized child text, so it realizes its
-        # children locally (morphology pass + flatten) rather than deferring to the global pass.
-        template = node._type_._verbalization_template_()
-        kwargs = {
-            name: realize_subtree(context.child(child))
+        fields = {
+            name: context.child(child)
             for name, child in node._child_vars_.items()
         }
-        return WordFragment(text=template.format(**kwargs))
+        return node._type_._verbalization_fragment_(fields)

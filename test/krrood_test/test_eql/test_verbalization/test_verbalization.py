@@ -41,6 +41,11 @@ from krrood.entity_query_language.factories import (
     or_,
 )
 from krrood.entity_query_language.predicate import HasType, Predicate, Triple
+from krrood.entity_query_language.verbalization.fragments.base import (
+    PhraseFragment,
+    WordFragment,
+)
+from krrood.entity_query_language.verbalization.vocabulary.english import Copulas
 from krrood.entity_query_language.verbalization.pipeline import (
     VerbalizationPipeline,
     verbalize_expression,
@@ -1451,8 +1456,14 @@ def test_verbalize_custom_predicate_robotics_domain(handles_and_containers_world
             return True
 
         @classmethod
-        def _verbalization_template_(cls) -> str:
-            return "{body} is reachable"
+        def _verbalization_fragment_(cls, fields):
+            return PhraseFragment(
+                parts=[
+                    fields["body"],
+                    Copulas.IS.as_fragment(),
+                    WordFragment(text="reachable"),
+                ]
+            )
 
     world = handles_and_containers_world
     handle = variable(Handle, world.bodies)
@@ -1472,8 +1483,14 @@ def test_verbalize_custom_predicate_employee_domain():
             return self.employee.department == self.department
 
         @classmethod
-        def _verbalization_template_(cls) -> str:
-            return "{employee} works in {department}"
+        def _verbalization_fragment_(cls, fields):
+            return PhraseFragment(
+                parts=[
+                    fields["employee"],
+                    WordFragment(text="works in"),
+                    fields["department"],
+                ]
+            )
 
     employee = variable(Employee, [])
     department = variable(Department, [])

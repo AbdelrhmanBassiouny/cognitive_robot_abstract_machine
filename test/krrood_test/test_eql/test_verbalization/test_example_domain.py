@@ -25,6 +25,10 @@ from pathlib import Path
 import pytest
 
 from krrood.entity_query_language.verbalization import example_domain
+from krrood.entity_query_language.verbalization.fragments.base import (
+    Fragment,
+    WordFragment,
+)
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
     SourceReference,
 )
@@ -122,7 +126,12 @@ def test_config_no_longer_copies_api_mock():
 
 
 @pytest.mark.parametrize("cls_name", ["IsReachable", "WorksIn"])
-def test_predicates_expose_verbalization_template(cls_name):
-    """The custom-predicate examples still carry their verbalization templates."""
+def test_predicates_build_a_verbalization_fragment(cls_name):
+    """The custom-predicate examples build their verbalization as a :class:`Fragment` from the shared
+    vocabulary, given the rendered fragment for each field."""
     cls = getattr(example_domain, cls_name)
-    assert isinstance(cls._verbalization_template_(), str)
+    fields = {
+        field.name: WordFragment(text=field.name)
+        for field in dataclasses.fields(cls)
+    }
+    assert isinstance(cls._verbalization_fragment_(fields), Fragment)

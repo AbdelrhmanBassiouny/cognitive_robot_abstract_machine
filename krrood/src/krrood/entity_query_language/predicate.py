@@ -18,10 +18,15 @@ from typing_extensions import (
     Type,
     Tuple,
     ClassVar,
+    Mapping,
     Sized,
+    TYPE_CHECKING,
     Dict,
     Union,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.fragments.base import Fragment
 
 from krrood.entity_query_language.utils import T, merge_args_and_kwargs
 from krrood.entity_query_language.core.variable import Variable, InstantiatedVariable
@@ -72,20 +77,31 @@ class Verbalizable(ABC):
     """
 
     @classmethod
-    def _verbalization_template_(cls) -> str:
+    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
         """
-        Optional natural-language template for verbalizing this predicate.
+        Optional structured verbalization for this predicate.
 
-        Slot names must match the predicate's field names. Example::
+        Build the surface from the shared fragment vocabulary (copulas, phrase / noun-phrase
+        fragments), composing the already-rendered field fragments in *fields* (keyed by field name).
+        Returning a :class:`Fragment` rather than a string keeps the predicate composable with the
+        rest of the pipeline — a wrapping ``Not`` negates it inline (*"… is not …"*) and coreference
+        still reduces the operands — instead of an opaque text blob. Using a copula from the vocabulary
+        (``Copulas.IS``) is what makes inline negation possible. Example::
 
-        @dataclass(eq=False)
-        class Loves(Predicate):
-            person_1: Person
-            person_2: Person
+            @dataclass(eq=False)
+            class Loves(Predicate):
+                person_1: Person
+                person_2: Person
 
-        @classmethod
-        def _verbalization_template_(cls) -> str:
-            return "{person_1} loves {person_2}"
+                @classmethod
+                def _verbalization_fragment_(cls, fields):
+                    return PhraseFragment(
+                        parts=[fields["person_1"], RoleFragment.for_operator("loves"),
+                               fields["person_2"]]
+                    )
+
+        :param fields: The rendered fragment for each predicate field, keyed by field name.
+        :return: The predicate's verbalization fragment.
         """
         raise NotImplementedError()
 
@@ -169,10 +185,17 @@ class Triple(Predicate):
         """
 
     @classmethod
-    def _verbalization_template_(cls) -> str:
+    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
         """
         Verbalization of a Triple is a subject - predicate - object.
         """
+        # Imported locally: the verbalization layer depends on the core predicate types, so a
+        # module-level import here would close an import cycle.
+        from krrood.entity_query_language.verbalization.fragments.base import (
+            PhraseFragment,
+            RoleFragment,
+        )
+
         predicate_name = camel_case_to_words(cls.__name__)
         subject_name = get_accessed_attribute_name_in_return_statement_of_property(
             cls.subject, cls
@@ -180,7 +203,13 @@ class Triple(Predicate):
         object_name = get_accessed_attribute_name_in_return_statement_of_property(
             cls.object, cls
         )
-        return f"{{{subject_name}}} " + predicate_name + f" {{{object_name}}}"
+        return PhraseFragment(
+            parts=[
+                fields[subject_name],
+                RoleFragment.for_operator(predicate_name),
+                fields[object_name],
+            ]
+        )
 
 
 @dataclass(eq=False)
@@ -214,8 +243,22 @@ class HasType(Triple):
         return self.types_
 
     @classmethod
-    def _verbalization_template_(cls) -> str:
-        return "{variable} is of type {types_}"
+    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+        # Imported locally to avoid the core → verbalization import cycle (see :class:`Triple`).
+        from krrood.entity_query_language.verbalization.fragments.base import (
+            PhraseFragment,
+            WordFragment,
+        )
+        from krrood.entity_query_language.verbalization.vocabulary.english import Copulas
+
+        return PhraseFragment(
+            parts=[
+                fields["variable"],
+                Copulas.IS.as_fragment(),
+                WordFragment(text="of type"),
+                fields["types_"],
+            ]
+        )
 
 
 @dataclass(eq=False)

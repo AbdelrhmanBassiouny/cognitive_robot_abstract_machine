@@ -35,8 +35,16 @@ import datetime
 from dataclasses import dataclass
 from typing import List
 
+from typing_extensions import Mapping
+
 from krrood.entity_query_language.factories import Symbol
 from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.verbalization.fragments.base import (
+    Fragment,
+    PhraseFragment,
+    WordFragment,
+)
+from krrood.entity_query_language.verbalization.vocabulary.english import Copulas
 
 # ── Robots & missions (the quick-start + cross-variable examples) ────────────
 
@@ -155,8 +163,14 @@ class IsReachable(Predicate):
         return True
 
     @classmethod
-    def _verbalization_template_(cls):
-        return "{body} is reachable"
+    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+        return PhraseFragment(
+            parts=[
+                fields["body"],
+                Copulas.IS.as_fragment(),
+                WordFragment(text="reachable"),
+            ]
+        )
 
 
 @dataclass(eq=False)
@@ -192,8 +206,14 @@ class WorksIn(Predicate):
         return True
 
     @classmethod
-    def _verbalization_template_(cls):
-        return "{employee} works in {department}"
+    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+        return PhraseFragment(
+            parts=[
+                fields["employee"],
+                WordFragment(text="works in"),
+                fields["department"],
+            ]
+        )
 
 
 # ── Birds (rule-tree / inference verbalization examples) ─────────────────────

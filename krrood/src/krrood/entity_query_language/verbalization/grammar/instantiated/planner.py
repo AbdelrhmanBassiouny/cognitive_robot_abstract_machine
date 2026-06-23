@@ -89,19 +89,20 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
         ]
 
     @staticmethod
-    def has_template(node: InstantiatedVariable) -> bool:
+    def has_fragment(node: InstantiatedVariable) -> bool:
         """
         :param node: The instantiated variable.
-        :return: ``True`` when *node*'s type implements ``Verbalizable`` and supplies a template.
+        :return: ``True`` when *node*'s type implements ``Verbalizable`` and overrides
+            ``_verbalization_fragment_`` with its own structured surface.
 
         >>> connection = variable(FixedConnection, [])
-        >>> InstantiatedPlanner.has_template(inference(Drawer)(container=connection.parent, handle=connection.child))
+        >>> InstantiatedPlanner.has_fragment(inference(Drawer)(container=connection.parent, handle=connection.child))
         False
         """
-        try:
-            if isinstance(node._type_, type) and issubclass(node._type_, Verbalizable):
-                node._type_._verbalization_template_()
-                return True
-        except NotImplementedError:
-            pass
-        return False
+        type_ = node._type_
+        return (
+            isinstance(type_, type)
+            and issubclass(type_, Verbalizable)
+            and type_._verbalization_fragment_.__func__
+            is not Verbalizable._verbalization_fragment_.__func__
+        )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from krrood.entity_query_language.core.base_expressions import Filter
+from krrood.entity_query_language.core.variable import InstantiatedVariable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import (
     AND,
@@ -32,6 +33,10 @@ from krrood.entity_query_language.verbalization.grammar.conditions.assembler imp
 from krrood.entity_query_language.verbalization.grammar.conditions.predication import (
     coindexed_operator,
     comparator_operator,
+    negate_copula,
+)
+from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
+    InstantiatedPlanner,
 )
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     fold_shared_subject_comparisons,
@@ -325,8 +330,9 @@ class OrRule(PhraseRule):
 class NotRule(PhraseRule):
     """Generic negation *"not (<child>)"* (specialised by the guarded Not rules below).
 
-    >>> verbalize_expression(Not(IsReachable(variable(Location, []))))
-    'not (a Location is reachable)'
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(Not(or_(robot.battery > 50, robot.name == 'x')))
+    "not (either the battery of a Robot is greater than 50, or the name of the Robot is 'x')"
     """
 
     construct = Not
@@ -335,22 +341,61 @@ class NotRule(PhraseRule):
     def build(self, node: Not, context: RuleContext) -> Fragment:
         """Wrap the child in *"not (<child>)"* via the orthography pass.
 
-        It owns the *not (…)* wrapper of the example — the leading *not* and the parentheses — around
-        the *a Location is reachable* child the recursion renders.
-
-        >>> verbalize_expression(Not(IsReachable(variable(Location, []))))
-        'not (a Location is reachable)'
+        It owns the *not (…)* wrapper of the class example — the leading *not* and the parentheses —
+        around the disjunction child the recursion renders.
         """
-        child_fragment = context.child(node._child_)
-        # The parens glue to the child via the orthography pass → "not (child)".
-        return PhraseFragment(
-            parts=[
-                Logicals.NOT.as_fragment(),
-                Punctuation.OPEN_PAREN.as_fragment(),
-                child_fragment,
-                Punctuation.CLOSE_PAREN.as_fragment(),
-            ]
-        )
+        return _negation_wrap(context.child(node._child_))
+
+
+def _negation_wrap(child_fragment: Fragment) -> Fragment:
+    """:return: *child_fragment* wrapped as *"not (<child>)"* — the fallback negation for a clause
+    that cannot be negated in place. The parens glue to the child via the orthography pass."""
+    return PhraseFragment(
+        parts=[
+            Logicals.NOT.as_fragment(),
+            Punctuation.OPEN_PAREN.as_fragment(),
+            child_fragment,
+            Punctuation.CLOSE_PAREN.as_fragment(),
+        ]
+    )
+
+
+class NotVerbalizablePredicateRule(PhraseRule):
+    """Inline-negated verbalizable predicate *"<subject> is not <complement>"* (Not over a predicate
+    whose type builds its own verbalization fragment).
+
+    Because the predicate states its clause with a vocabulary copula, the negation flips that copula
+    in place rather than wrapping the whole clause in *"not (...)"*. A predicate with no copula
+    (a verb phrase like *"works in"*) has nothing to flip, so it falls back to the wrapped form.
+
+    >>> verbalize_expression(Not(IsReachable(variable(Location, []))))
+    'a Location is not reachable'
+    """
+
+    construct = Not
+    name = "not-verbalizable-predicate"
+
+    def when(self, node: Not, context: RuleContext) -> bool:
+        """Fires when the negation wraps a predicate that builds its own verbalization fragment.
+
+        Detecting a verbalizable-predicate child is the gate that selects this rule over the generic
+        :class:`NotRule`, so the class example flips the predicate's copula to *is not* instead of
+        wrapping it in *not (…)*.
+        """
+        return isinstance(
+            node._child_, InstantiatedVariable
+        ) and InstantiatedPlanner.has_fragment(node._child_)
+
+    def build(self, node: Not, context: RuleContext) -> Fragment:
+        """Say the predicate with its copula flipped to the negative, or wrap it when it has none.
+
+        Flipping the copula of the rendered predicate clause is what yields the inline *is not
+        reachable*; a copula-less predicate clause has nothing to flip, so it falls back to the
+        *not (…)* wrapper.
+        """
+        clause = context.child(node._child_)
+        negated = negate_copula(clause)
+        return negated if negated is not None else _negation_wrap(clause)
 
 
 class NotComparatorRule(PhraseRule):
