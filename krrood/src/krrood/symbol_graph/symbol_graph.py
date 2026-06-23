@@ -62,6 +62,12 @@ class Symbol:
             SymbolGraph().add_node(WrappedInstance(instance))
         return instance
 
+    def __init_subclass__(cls, **kwargs):
+        """Mark the symbol graph's cached class diagram stale whenever a new ``Symbol`` subclass is
+        defined, so the single diagram stays current regardless of class-definition order."""
+        super().__init_subclass__(**kwargs)
+        SymbolGraph.invalidate_class_diagram()
+
 
 TSymbol = TypeVar("TSymbol", bound=Symbol)
 
@@ -269,8 +275,26 @@ class SymbolGraph(metaclass=SingletonMeta):
         classes = self._collect_symbol_classes()
         return ClassDiagram(classes, introspector=DescriptorAwareIntrospector())
 
+    @classmethod
+    def invalidate_class_diagram(cls) -> None:
+        """Drop the cached class diagram of the existing graph so it is rebuilt on next access.
+
+        A no-op when no graph instance exists yet, so defining ``Symbol`` subclasses during import
+        costs nothing.
+        """
+        instance = cls._instances.get(cls)
+        if instance is not None:
+            instance._class_diagram = None
+
     @property
     def class_diagram(self) -> ClassDiagram:
+        """The single class diagram over the currently known ``Symbol`` subclasses.
+
+        Rebuilt on access after a new ``Symbol`` subclass invalidated the cache, so the diagram
+        always reflects every known symbol regardless of class-definition order.
+        """
+        if self._class_diagram is None:
+            self._class_diagram = self._build_class_diagram()
         return self._class_diagram
 
     def add_node(self, wrapped_instance: WrappedInstance):
@@ -338,7 +362,7 @@ class SymbolGraph(metaclass=SingletonMeta):
 
     @classmethod
     def clear(cls) -> None:
-        if cls in cls._instances:
+        if cls in cls._instances and cls._instances[cls]._class_diagram is not None:
             cls._instances[cls]._class_diagram.clear()
         cls.clear_instance()
 
