@@ -449,30 +449,6 @@ def test_non_relational_navigation_unchanged():
     )
 
 
-@dataclass
-class _Cash:
-    amount: float
-
-
-@dataclass
-class _Wallet:
-    money: _Cash
-
-
-@dataclass
-class _Holder:
-    wallet: _Wallet
-
-
-def test_genitive_omits_article_before_an_uncountable_noun():
-    """A mass noun in a genitive chain takes no article — *"the amount of money"*, never *"the
-    amount of the money"* — while its countable neighbours keep *"the"*."""
-    assert (
-        verbalize_expression(variable(_Holder, []).wallet.money.amount)
-        == "the amount of money of the wallet of a _Holder"
-    )
-
-
 # ── Relational navigation: pronominalisation of the relative-clause owner ─────────
 
 

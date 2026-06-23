@@ -326,18 +326,18 @@ class _Account:
     money: _Cash
 
 
-def test_metadata_countability_overrides_the_lexicon():
-    """A field whose name is a lexicon mass noun (``money``) keeps its article when metadata asserts
-    it is countable in this domain — the per-field override wins over the curated default."""
+def test_countability_is_metadata_only_no_name_lexicon():
+    """Countability comes solely from the metadata: a field whose name is an everyday mass noun
+    (``money``) still keeps its article with an empty registry — nothing is special-cased by name —
+    and only drops it once metadata marks the field uncountable."""
     expression = variable(_Account, []).money.amount
     assert (
         _verbalize(expression, FieldMetadataRegistry())
-        == "the amount of money of a _Account"
+        == "the amount of the money of a _Account"
     )
     registry = FieldMetadataRegistry.from_mapping(
-        {(_Account, "money"): FieldMetadata(countable=True)}
+        {(_Account, "money"): FieldMetadata(countable=False)}
     )
     assert (
-        _verbalize(expression, registry)
-        == "the amount of the money of a _Account"
+        _verbalize(expression, registry) == "the amount of money of a _Account"
     )

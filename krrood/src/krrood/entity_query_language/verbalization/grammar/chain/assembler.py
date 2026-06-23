@@ -99,7 +99,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         both the direct genitive path and the pronominalised one (a :class:`PossessiveChain` the
         coreference pass later reads) drop the article before a metadata-uncountable noun.
 
-        A hop is left untouched when the registry has no opinion, deferring to the curated lexicon.
+        A hop is left untouched when the registry has no opinion, so it keeps the definite article.
         """
         registry = self.context.services.field_metadata
         resolved: List[PathStep] = []

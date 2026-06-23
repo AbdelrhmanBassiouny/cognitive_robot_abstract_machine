@@ -31,11 +31,10 @@ class FieldMetadata:
     name-based heuristic cannot detect (irregular or non-participle namings, present-tense verbs)."""
 
     countable: Optional[bool] = None
-    """Whether the attribute's noun is countable, or ``None`` to defer to the curated mass-noun
-    lexicon. ``False`` marks an uncountable (mass) noun so a genitive hop drops the article
-    (*"the amount of money"*, not *"… of the money"*); this is the per-field override of the
-    name-based default (:class:`~…vocabulary.countability.NounCountability`), covering mass nouns the
-    curated set omits and domain terms whose countability differs from ordinary English."""
+    """Whether the attribute's noun is countable, or ``None`` when unspecified (treated as
+    countable). ``False`` marks an uncountable (mass) noun so a genitive hop drops the article
+    (*"the amount of money"*, not *"… of the money"*). Countability is authored here per field — there
+    is no name-based lexicon — so an unannotated field keeps the definite article."""
 
 
 _Key = Tuple[str, str]
@@ -105,7 +104,7 @@ class FieldMetadataRegistry:
         :param owner: The class that owns the attribute.
         :param attribute: The canonical attribute name.
         :return: The countability override for *owner*.*attribute* (``False`` for a mass noun), or
-            ``None`` when no entry applies and the curated lexicon should decide.
+            ``None`` when no entry applies (the hop then keeps the definite article).
         """
         return self._resolve(owner, attribute, lambda meta: meta.countable)
 

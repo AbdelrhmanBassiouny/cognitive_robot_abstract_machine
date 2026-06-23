@@ -50,9 +50,9 @@ class FieldSuggestion:
     *"assigned to"*), else ``None`` — drives the absence form *"has not been <phrase> any <Type>"*."""
 
     countable: Optional[bool] = None
-    """Whether the attribute's noun is countable, or ``None`` to defer to the curated mass-noun
-    lexicon. ``False`` marks a mass noun (``money``, ``water``) so a genitive hop drops the article
-    (*"the amount of money"*); ``True`` is an explicit countable assertion."""
+    """Whether the attribute's noun is countable, or ``None`` when unspecified. ``False`` marks a
+    mass noun (``money``, ``water``) so a genitive hop drops the article (*"the amount of money"*);
+    countability is authored here per field, with no name-based lexicon behind it."""
 
     suggested_rename: Optional[str] = None
     """A genuinely better *source* identifier, or ``None`` — advisory only, never auto-applied."""

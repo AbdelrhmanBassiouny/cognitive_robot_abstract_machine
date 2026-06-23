@@ -76,8 +76,8 @@ class PathStep:
     further structure does not (*"the begin and end of their period"*)."""
 
     countability: Optional[Countability] = None
-    """The per-field countability override resolved from field metadata, or ``None`` to defer to the
-    curated mass-noun lexicon. When ``UNCOUNTABLE`` the genitive hop drops the article
+    """The per-field countability resolved from field metadata, or ``None`` when unspecified (the hop
+    keeps the definite article). When ``UNCOUNTABLE`` the genitive hop drops the article
     (*"the amount of money"*)."""
 
     @property
