@@ -28,7 +28,26 @@ class InferenceRuleRule(TopLevelEntityRule):
     enters_query_scope = False
 
     def when(self, node: Entity, context: RuleContext) -> bool:
+        """:return: ``True`` for a top-level entity whose selected variable is an instantiated
+        variable (an inference rule).
+
+        >>> from krrood.entity_query_language.factories import inference
+        >>> connection = variable(FixedConnection, [])
+        >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
+        >>> verbalize_expression(entity(drawer)).startswith("If")
+        True
+        """
         return super().when(node, context) and InferencePlanner.can_handle(node)
 
     def build(self, node: Entity, context: RuleContext) -> Fragment:
+        """:return: the ``IF … THEN …`` block built by the inference assembler.
+
+        >>> from krrood.entity_query_language.factories import inference
+        >>> connection = variable(FixedConnection, [])
+        >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
+        >>> verbalize_expression(entity(drawer).where(
+        ...     connection.parent == variable(Container, []))).startswith(
+        ...     "If there's a FixedConnection")
+        True
+        """
         return InferenceAssembler(context).assemble(node)

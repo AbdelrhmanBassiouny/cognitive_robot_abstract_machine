@@ -6,7 +6,6 @@ from typing_extensions import Optional
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
-    map_fragment,
     NounPhrase,
     PhraseFragment,
     RoleFragment,
@@ -17,10 +16,11 @@ from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
     Number,
 )
+from krrood.entity_query_language.verbalization.rendering.passes import RewritePass
 from krrood.entity_query_language.verbalization.vocabulary.english import Articles
 
 
-class DeterminerProcessor:
+class DeterminerProcessor(RewritePass):
     """
     Lower every noun phrase to a determiner-bearing phrase.
 
@@ -44,18 +44,23 @@ class DeterminerProcessor:
     (2000) — microplanning.
     """
 
-    def process(self, fragment: Fragment) -> Fragment:
-        """
-        :param fragment: Root of the fragment tree.
-        :return: A new tree with every noun phrase lowered (idempotent on noun phrase-free trees).
-        """
-        return map_fragment(fragment, self._lower_if_noun_phrase)
+    def rewrite(self, leaf: Fragment) -> Fragment:
+        """:return: A lowered noun-phrase leaf; any other leaf passes through unchanged.
 
-    def _lower_if_noun_phrase(self, leaf: Fragment) -> Fragment:
-        """:return: A lowered noun-phrase leaf; any other leaf passes through unchanged."""
+        >>> verbalize_expression(a(entity(variable(Robot, []))))
+        'Find a Robot'
+        """
         return self._lower_noun_phrase(leaf) if isinstance(leaf, NounPhrase) else leaf
 
     def _lower_noun_phrase(self, noun_phrase: NounPhrase) -> Fragment:
+        """:return: *noun_phrase* lowered to a determiner-bearing phrase — the chosen determiner,
+        an optional pre-head qualifier, the number-tagged head, and the recursed modifiers.
+
+        >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
+        >>> phrase = NounPhrase(head=RoleFragment.for_type(Robot), definiteness=Definiteness.INDEFINITE)
+        >>> flatten_fragment_to_plain_text(DeterminerProcessor()._lower_noun_phrase(phrase))
+        'a Robot'
+        """
         head = self._tag_number(self.process(noun_phrase.head), noun_phrase.number)
         # A pre-head qualifier sits between the determiner and the head: "the [first two] Robots" /
         # "a [specific] Body". The indefinite article agrees with the first surface word, so it is
@@ -90,7 +95,11 @@ class DeterminerProcessor:
 
     @staticmethod
     def _tag_number(head: Fragment, number: Number) -> Fragment:
-        """Tag the head leaf with the phrase's number."""
+        """Tag the head leaf with the phrase's number.
+
+        >>> DeterminerProcessor._tag_number(WordFragment(text="Robot"), Number.PLURAL).number
+        <Number.PLURAL: 'plural'>
+        """
         if isinstance(head, (WordFragment, RoleFragment)):
             return replace(head, number=number)
         return head
@@ -101,7 +110,18 @@ class DeterminerProcessor:
     ) -> Optional[Fragment]:
         """:return: The determiner fragment for *(definiteness, number)*, or ``None`` (bare). The
         indefinite *a/an* agrees phonologically with *article_anchor* (the first surface word —
-        the pre-head when present, else the head)."""
+        the pre-head when present, else the head).
+
+        >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
+        >>> flatten_fragment_to_plain_text(
+        ...     DeterminerProcessor._determiner(Definiteness.INDEFINITE, Number.SINGULAR, WordFragment(text="hour")))
+        'an'
+        >>> flatten_fragment_to_plain_text(
+        ...     DeterminerProcessor._determiner(Definiteness.DEFINITE, Number.SINGULAR, WordFragment(text="Robot")))
+        'the'
+        >>> DeterminerProcessor._determiner(Definiteness.INDEFINITE, Number.PLURAL, WordFragment(text="Robot")) is None
+        True
+        """
         if definiteness is Definiteness.UNIQUE:
             return Articles.THE_UNIQUE.as_fragment()
         if definiteness is Definiteness.DEFINITE:

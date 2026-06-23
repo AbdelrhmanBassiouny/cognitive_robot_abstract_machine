@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from krrood.entity_query_language.factories import variable
-from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+from krrood.entity_query_language.verbalization.grammar.conditions.placement import (
     ConditionForm,
     Placement,
     Slot,

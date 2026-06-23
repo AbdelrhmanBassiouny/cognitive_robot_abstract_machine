@@ -18,75 +18,23 @@ from krrood.entity_query_language.core.expression_structure import (
     chain_root,
     walk_chain,
 )
-from krrood.entity_query_language.verbalization import morphology
-from krrood.entity_query_language.verbalization.subquery import (
+from krrood.entity_query_language.query.aggregation_structure import (
     aggregation_source_root,
     is_collapsible_aggregation_subquery,
     selected_aggregator,
     unwrap_result_quantifiers,
 )
-from krrood.entity_query_language.verbalization.vocabulary.english import (
-    ENGLISH_PREPOSITIONS,
-)
-
-#: The prepositions that, as the final token of a snake_case attribute name, mark a *relational*
-#: field (*assigned_to*, *owned_by*, *located_in*): the English preposition inventory from the
-#: lexicon minus ``of`` — ``<noun>_of`` is a genitive (``number_of``, ``type_of``), never a relation.
-_RELATIONAL_PREPOSITIONS = ENGLISH_PREPOSITIONS - {"of"}
-
-
-@dataclass(frozen=True)
-class RelationVerb:
-    """A relational field's verb, split into its parts — so callers can either strand the
-    preposition (*"assigned to"*, used by absence) or pied-pipe it (*"to which … is assigned"*,
-    used by relational navigation)."""
-
-    participle: str
-    """The past-participle verb word(s) (*"assigned"*, *"cross referenced"*)."""
-
-    preposition: str
-    """The trailing preposition (*"to"*, *"by"*, *"with"*)."""
-
-    @property
-    def phrase(self) -> str:
-        """:return: The stranded phrase *"<participle> <preposition>"* (*"assigned to"*)."""
-        return f"{self.participle} {self.preposition}"
-
-
-def relational_verb(attribute_name: str) -> Optional[RelationVerb]:
-    """
-    :param attribute_name: An attribute identifier (snake_case).
-    :return: The relation's verb, split into participle + preposition, when *attribute_name* names a
-        relation as *past-participle + preposition* (*assigned_to* → *"assigned"* + *"to"*); else
-        ``None`` for a plain noun attribute.
-
-    The participle check (:func:`morphology.is_past_participle`) is what distinguishes a relation
-    from a noun that merely ends in a preposition: *color_in* / *price_at* / *name_to* are rejected
-    because *color* / *price* / *name* are not participles.
-    """
-    tokens = attribute_name.split("_")
-    if len(tokens) < 2 or tokens[-1] not in _RELATIONAL_PREPOSITIONS:
-        return None
-    if not morphology.is_past_participle(tokens[-2]):
-        return None
-    return RelationVerb(participle=" ".join(tokens[:-1]), preposition=tokens[-1])
-
-
-def relational_verb_phrase(attribute_name: str) -> Optional[str]:
-    """
-    :param attribute_name: An attribute identifier (snake_case).
-    :return: The humanized stranded verb phrase (*"assigned to"*) for a relational field, else
-        ``None`` — the form absence uses (*"has not been assigned to any Robot"*). Thin wrapper over
-        :func:`relational_verb` so the recognition lives in one place.
-    """
-    verb = relational_verb(attribute_name)
-    return verb.phrase if verb is not None else None
 
 
 def attribute_names(left: SymbolicExpression) -> List[str]:
     """
     :param left: A ``MappedVariable`` chain (or any expression).
-    :return: The attribute names along the chain, outermost last (``[]`` if none).
+    :return: The attribute names along the chain, outermost (last-accessed) first (``[]`` if none).
+
+    >>> attribute_names(variable(BankTransaction, []).amount_details.amount)
+    ['amount', 'amount_details']
+    >>> attribute_names(variable(Robot, []))
+    []
     """
     names: List[str] = []
     current = left
@@ -105,6 +53,13 @@ def single_hop_attribute(
     :param subject_variable: The variable the attribute must be on.
     :return: The attribute node when *expression* is exactly ``subject_variable.<attribute>``, else
         ``None``.
+
+    >>> robot = variable(Robot, [])
+    >>> single_hop_attribute(robot.battery, robot)._attribute_name_
+    'battery'
+    >>> transaction = variable(BankTransaction, [])
+    >>> single_hop_attribute(transaction.amount_details.amount, transaction) is None
+    True
     """
     if subject_variable is None or not isinstance(expression, MappedVariable):
         return None
@@ -122,6 +77,11 @@ def is_none_literal(expression: SymbolicExpression) -> bool:
     :return: ``True`` when *expression* is a literal whose value is ``None`` — the marker for an
         absence comparison (``<chain> == None``) rendered as *"has no <attribute>"* / *"does not
         exist"* rather than a value predicate.
+
+    >>> is_none_literal((variable(Robot, []).name == None).right)
+    True
+    >>> is_none_literal((variable(Robot, []).battery > 50).right)
+    False
     """
     return isinstance(expression, Literal) and expression._value_ is None
 
@@ -133,6 +93,12 @@ def is_concrete_object_literal(expression: SymbolicExpression) -> bool:
         dataclass or :class:`Symbol` instance) — rendered by identity (*"a specific Body"*) rather
         than its (possibly huge) ``repr``. A class object, primitive, ``enum`` member, ``datetime``,
         or ``None`` is not.
+
+    >>> robot = variable(Robot, [])
+    >>> is_concrete_object_literal((robot == Robot("R2D2", 80, True)).right)
+    True
+    >>> is_concrete_object_literal((robot.battery > 50).right)
+    False
     """
     if not isinstance(expression, Literal):
         return False
@@ -149,6 +115,11 @@ def is_atomic_value(expression: SymbolicExpression) -> bool:
         type-object literal — so it may sit in a *"… are X, Y, and Z respectively"* coordination.
         A concrete-object literal (*"a specific Body"*), a domain-listing variable (*"one of …"*), a
         sub-query, or a range each renders as a phrase and is *not* atomic, so it is said on its own.
+
+    >>> is_atomic_value((variable(Robot, []).battery > 50).right)
+    True
+    >>> is_atomic_value((variable(Robot, []).name == None).right)
+    False
     """
     if not isinstance(expression, Literal):
         return False
@@ -163,6 +134,12 @@ def references(expression: SymbolicExpression, subject_variable: Variable) -> bo
     :param subject_variable: The variable to look for.
     :return: ``True`` when *expression* mentions *subject_variable* (so it is not a clean right-hand side
         value).
+
+    >>> robot = variable(Robot, [])
+    >>> references(robot.battery, robot)
+    True
+    >>> references(robot.battery, variable(Robot, []))
+    False
     """
     try:
         return any(
@@ -178,6 +155,11 @@ def is_boolean_attribute_chain(expression: SymbolicExpression) -> bool:
     :param expression: Candidate expression.
     :return: ``True`` when *expression* is a ``MappedVariable`` chain ending in a ``bool``-typed
         attribute.
+
+    >>> is_boolean_attribute_chain(variable(Task, []).completed)
+    True
+    >>> is_boolean_attribute_chain(variable(Robot, []).battery)
+    False
     """
     if not isinstance(expression, MappedVariable):
         return False
@@ -210,6 +192,12 @@ def superlative_aggregation(
     :param subject: The variable the restriction is on.
     :return: The fold when *comparator* is ``subject.<chain> == <unconstrained Max/Min over a
         different same-type variable's identical chain>``, else ``None``.
+
+    >>> employee, peers = variable(Employee, []), variable(Employee, [])
+    >>> superlative_aggregation(employee.salary == the(entity(max(peers.salary))), employee) is not None
+    True
+    >>> superlative_aggregation(employee.salary > 50, employee) is None
+    True
     """
     if subject is None or not isinstance(comparator, Comparator):
         return None

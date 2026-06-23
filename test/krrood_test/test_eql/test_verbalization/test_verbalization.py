@@ -346,6 +346,12 @@ class _NavMission:
 
 
 @dataclass
+class _NavPair:
+    primary: _NavMission
+    secondary: _NavMission  # two missions, so two distinct assigned_to robots
+
+
+@dataclass
 class _NavBook:
     owned_by: _NavPerson  # agentive "by"
 
@@ -443,6 +449,30 @@ def test_non_relational_navigation_unchanged():
     )
 
 
+@dataclass
+class _Cash:
+    amount: float
+
+
+@dataclass
+class _Wallet:
+    money: _Cash
+
+
+@dataclass
+class _Holder:
+    wallet: _Wallet
+
+
+def test_genitive_omits_article_before_an_uncountable_noun():
+    """A mass noun in a genitive chain takes no article — *"the amount of money"*, never *"the
+    amount of the money"* — while its countable neighbours keep *"the"*."""
+    assert (
+        verbalize_expression(variable(_Holder, []).wallet.money.amount)
+        == "the amount of money of the wallet of a _Holder"
+    )
+
+
 # ── Relational navigation: pronominalisation of the relative-clause owner ─────────
 
 
@@ -459,24 +489,135 @@ def test_relational_navigation_pronominalises_the_subject():
     )  # the owner is pronominalised, not repeated
 
 
-def test_relational_navigation_pronominalises_at_every_occurrence():
-    """Each occurrence of the subject's relational chain pronominalises (two distinct terminals, so
-    they do not range-fold into one clause)."""
+def test_genitive_then_genitive_does_not_pronominalise_the_owner():
+    """Two attributes of the relational referent in a row do *not* read *"its power"*: the first
+    clause's subject is *the battery* (the head of its subject phrase), not the robot, so *"its"*
+    would bind to the battery. The owner is spelled out instead — *"the power of the Robot"* (the
+    robot reduced, already named)."""
     m = variable(_NavMission, [])
     text = verbalize_expression(
         an(entity(m).where(m.assigned_to.battery > 5, m.assigned_to.power > 10))
     )
-    assert text.count("to which it is assigned") == 2
+    assert text == (
+        "Find a _NavMission such that the battery of the _NavRobot to which it is "
+        "assigned is greater than 5, and the power of the _NavRobot is greater than 10"
+    )
+    assert (
+        "its power" not in text
+    )  # the battery, not the robot, headed the first clause
 
 
-def test_relational_navigation_pronominalises_in_nested_query():
-    """The relative clause pronominalises inside a nested aggregation sub-query too."""
+def test_aggregation_where_on_measured_quantity_reduces_to_the_attribute():
+    """When the WHERE filters the very attribute being aggregated, the relative clause is spelled
+    out once (in the measure) and the repeat reduces to a bare *"the battery"* — not the whole
+    possessive, and not *"its battery"* (which would re-introduce the owner)."""
     m = variable(_NavMission, [])
     nested = an(
         entity(eql.average(m.assigned_to.battery)).where(m.assigned_to.battery > 5)
     )
     text = verbalize_expression(nested)
-    assert "to which it is assigned" in text
+    assert text == (
+        "Find the average of the battery of the _NavRobot to which a _NavMission is "
+        "assigned such that the battery is greater than 5"
+    )
+    assert text.count("to which") == 1  # spelled out once, then the bare attribute
+
+
+def test_aggregation_where_on_other_attribute_spells_out_the_owner():
+    """The aggregation foregrounds the measured quantity (the battery), not its owner, so a WHERE on
+    a *different* attribute of that owner is **not** *"its power"* (which would misread as the
+    battery's power) — it spells out *"the power of the Robot"*."""
+    m = variable(_NavMission, [])
+    nested = an(
+        entity(eql.average(m.assigned_to.battery)).where(m.assigned_to.power > 5)
+    )
+    text = verbalize_expression(nested)
+    assert "such that the power of the _NavRobot is greater than 5" in text
+    assert "its power" not in text
+
+
+def test_boolean_predicative_pronominalises_relational_navigation():
+    """A boolean-terminal chain on the subject's relational navigation reads *"the <Type> to which
+    it is <verb> is <attribute>"* — the navigation prefix is recursed through the standard grammar,
+    so it pronominalises to the subject just like a deferred possessive chain."""
+    m = variable(_NavMission, [])
+    text = verbalize_expression(an(entity(m).where(m.assigned_to.operational)))
+    assert "the _NavRobot to which it is assigned is operational" in text
+    assert "_NavMission is assigned" not in text
+
+
+def test_boolean_predicative_standalone_navigation_unchanged():
+    """Outside a subject scope the same predicative keeps the full relative clause (no subject to
+    pronominalise to)."""
+    m = variable(_NavMission, [])
+    assert (
+        verbalize_expression(m.assigned_to.operational)
+        == "the _NavRobot to which a _NavMission is assigned is operational"
+    )
+
+
+def test_attribute_through_relational_referent_pronominalises():
+    """An attribute reached through the local centre reads as *"its <attribute>"* — a boolean
+    predicative makes its relational referent the centre just as a possessive does."""
+    m = variable(_NavMission, [])
+    text = verbalize_expression(
+        an(entity(m).where(m.assigned_to.operational, m.assigned_to.battery > 5))
+    )
+    assert text == (
+        "Find a _NavMission such that the _NavRobot to which it is assigned is "
+        "operational, and its battery is greater than 5"
+    )
+
+
+def test_its_continues_uniformly_once_the_subject_licenses_it():
+    """A boolean predicative makes the robot the subject, so the attributes that follow read
+    *"its battery … its power"* — uniformly pronominal. Once *"its"* refers to the robot it keeps it
+    as the topic (a centering CONTINUE), so the run never mixes *"its battery"* with a re-named
+    *"the power of the Robot"*."""
+    m = variable(_NavMission, [])
+    text = verbalize_expression(
+        an(
+            entity(m).where(
+                m.assigned_to.operational,
+                m.assigned_to.battery > 5,
+                m.assigned_to.power > 1,
+            )
+        )
+    )
+    assert text == (
+        "Find a _NavMission such that the _NavRobot to which it is assigned is "
+        "operational, its battery is greater than 5, and its power is greater than 1"
+    )
+
+
+def test_two_distinct_relational_referents_are_numbered():
+    """Two distinct relational referents of the same type are numbered *"Robot 1"* / *"Robot 2"*
+    (bare, matching the variable convention) to tell them apart. A following attribute spells the
+    numbered owner out (*"the power of Robot 1"*) rather than *"its power"* — the first clause's
+    subject was the battery, not the robot."""
+    p = variable(_NavPair, [])
+    text = verbalize_expression(
+        an(
+            entity(p).where(
+                p.primary.assigned_to.battery > 5,
+                p.primary.assigned_to.power > 1,
+                p.secondary.assigned_to.battery > 3,
+            )
+        )
+    )
+    assert text == (
+        "Find a _NavPair such that the battery of _NavRobot 1 to which its primary is "
+        "assigned is greater than 5, the power of _NavRobot 1 is greater than 1, and the "
+        "battery of _NavRobot 2 to which its secondary is assigned is greater than 3"
+    )
+
+
+def test_single_relational_referent_is_not_numbered():
+    """A lone relational referent (no same-type collision) keeps the plain definite form."""
+    m = variable(_NavMission, [])
+    text = verbalize_expression(an(entity(m).where(m.assigned_to.battery > 5)))
+    assert "_NavRobot 1" not in text
+    assert "the _NavRobot to which it is assigned" in text
 
 
 def test_pronominal_relative_clause_agrees_with_subject_number():
@@ -728,15 +869,15 @@ def test_min_multi_level_attribute_chain():
     ), f"Got: {text!r}"
 
 
-def test_max_re_mention_in_having():
-    """MAX appears in both selected variable and HAVING: both mentions use 'the maximum of …'."""
+def test_max_re_mention_in_having_reduces_to_the_head():
+    """MAX is a computed quantity, so its HAVING re-mention is anaphoric: named in full as the
+    reported column, then reduced to the bare 'the maximum' (not repeated whole)."""
     t = variable(BankTransaction, domain=None)
     max_amount = eql.max(t.amount_details.amount)
     query = a(set_of(max_amount).grouped_by(t.amount_details).having(max_amount > 100))
     text = verbalize_expression(query)
-    assert (
-        text.count("the maximum of") >= 2
-    ), f"Expected ≥2 occurrences of 'the maximum of' in: {text!r}"
+    assert text.count("the maximum of") == 1  # the column names it in full, once
+    assert "having the maximum greater than 100" in text  # the re-mention reduces
 
 
 # ── Nested sub-queries as values (the imperative "Find" is reserved for the top level) ──
@@ -1031,12 +1172,15 @@ def test_verbalize_order_by_aggregation(handles_and_containers_world):
     text = verbalize_expression(query)
 
     assert "Cabinet" in text
-    assert "grouped by" in text
+    # The selection IS the group key, so the grouping is fronted as a distinct listing,
+    # never a trailing "grouped by".
+    assert "distinct" in text
+    assert "grouped by" not in text
     assert "ordered by" in text
     assert "number" in text
     assert "Cabinets" in text
     assert "drawers" in text
-    assert "descending" in text
+    assert "from highest to lowest" in text
 
 
 def test_ordered_by_rule_standalone_ascending(handles_and_containers_world):
@@ -1057,11 +1201,11 @@ def test_ordered_by_rule_standalone_ascending(handles_and_containers_world):
     text = ParagraphRenderer(PlainFormatter()).render(frag)
 
     assert "ordered by" in text.lower()
-    assert "ascending" in text.lower()
+    assert "from lowest to highest" in text.lower()
 
 
 def test_ordered_by_rule_standalone_descending(handles_and_containers_world):
-    """OrderedByRule.transform produces (descending) for descending=True."""
+    """OrderedByRule.transform produces 'from highest to lowest' for descending=True."""
     world = handles_and_containers_world
     cabinet = variable(Cabinet, domain=world.views)
     drawer = flat_variable(cabinet.drawers)
@@ -1078,7 +1222,7 @@ def test_ordered_by_rule_standalone_descending(handles_and_containers_world):
     text = ParagraphRenderer(PlainFormatter()).render(frag)
 
     assert "ordered by" in text.lower()
-    assert "descending" in text.lower()
+    assert "from highest to lowest" in text.lower()
 
 
 def test_grouped_by_rule_standalone(handles_and_containers_world):
@@ -1127,9 +1271,46 @@ def test_verbalize_complex_having(departments_and_employees_fixture):
     assert "department" in text
     assert "average" in text
     assert "salaries" in text
-    assert "grouped by" in text
+    assert "For each department, report" in text  # a report, fronted by its grouping
+    assert "grouped by" not in text
     assert "having" in text
     assert "30000" in text
+
+
+def test_grouped_having_reduces_the_repeated_aggregate():
+    """The reported aggregate is a computed quantity: named in full as the column, its HAVING
+    re-mention reduces to the bare 'the sum' rather than repeating the whole phrase."""
+    employee = variable(Employee, domain=None)
+    total = eql.sum(employee.salary)
+    query = a(
+        set_of(employee.department, total)
+        .grouped_by(employee.department)
+        .having(total > 30000)
+    )
+    text = verbalize_expression(query)
+    assert (
+        text
+        == "For each department, report the sum of salaries of Employees having the sum greater than 30000"
+    )
+    assert text.count("the sum of salaries of Employees") == 1
+
+
+def test_grouped_selection_equal_to_key_reports_distinct():
+    """A grouped query whose selection IS the group key reports the distinct keys, fronted —
+    never a trailing 'grouped by'."""
+    employee = variable(Employee, domain=None)
+    text = verbalize_expression(a(set_of(employee.department).grouped_by(employee.department)))
+    assert text == "Report the distinct departments"
+    assert "grouped by" not in text
+
+
+def test_grouped_selection_other_than_key_fronts_for_each_all():
+    """A grouped query with a non-key selection fronts the grouping as 'For each <key>' and lists
+    the per-group population with 'all'."""
+    employee = variable(Employee, domain=None)
+    text = verbalize_expression(an(entity(employee).grouped_by(employee.department)))
+    assert text == "For each department, report all Employees"
+    assert "grouped by" not in text
 
 
 def test_verbalize_nested_rule(doors_and_drawers_world):
@@ -1417,8 +1598,12 @@ def test_having_negated_comparator_compact(departments_and_employees_fixture):
     assert "not greater than" in having_part
 
 
-def test_set_of_grouped_by_no_double_find(departments_and_employees_fixture):
-    """SetOf query with grouped_by must not produce 'Find Find' or redundant restatement."""
+def test_set_of_grouped_by_reports_without_restating_the_key(
+    departments_and_employees_fixture,
+):
+    """A grouped aggregation reads as a single fronted report — no double header, no trailing
+    'grouped by', and the group key named once (in 'For each …'), not restated as a column.
+    """
     _, _ = departments_and_employees_fixture
     employee = variable(Employee, domain=None)
     avg_salary = eql.average(employee.salary)
@@ -1429,22 +1614,16 @@ def test_set_of_grouped_by_no_double_find(departments_and_employees_fixture):
     )
     text = verbalize_expression(query)
 
-    # Must not have duplicated "Find"
-    assert text.count("Find") == 1, f"Expected one 'Find' in: {text!r}"
+    assert text.startswith("For each department, report ")
+    assert text.count("report") == 1  # no double header
+    assert "Find" not in text and "grouped by" not in text
+    assert (
+        text.count("department") == 1
+    )  # named once in "For each department", not restated
+    assert "having" in text and "30000" in text
 
-    # "grouped by" must appear between the parenthesised selection and "having"
-    # — not before a restatement of the aggregated columns.
-    open_paren = text.index("(")
-    grouped_pos = text.index("grouped by")
-    having_pos = text.index("having")
-    assert (
-        open_paren < grouped_pos < having_pos
-    ), f"Expected (…) < grouped by < having in: {text!r}"
-    # No second copy of the selected variable names before "grouped by"
-    between_paren_and_grouped = text[text.index(")") : grouped_pos]
-    assert (
-        "department" not in between_paren_and_grouped
-    ), f"Unexpected restatement before 'grouped by' in: {text!r}"  # ── Comparator "is" form ──────────────────────────────────────────────────────
+
+# ── Comparator "is" form ──────────────────────────────────────────────────────
 
 
 def test_verbalize_comparator_eq_uses_is():
@@ -1808,7 +1987,7 @@ def test_inference_planner_decomposes_rule_without_rendering(
 
     # The planner only collects each antecedent's raw conditions; choosing the surface form
     # (whose / standalone) is the condition-form registry's concern at render time.
-    from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+    from krrood.entity_query_language.verbalization.grammar.conditions.placement import (
         ConditionForm,
         Placement,
         Slot,
@@ -1835,7 +2014,7 @@ def test_query_planner_collects_subject_restriction_without_placing():
         QueryPlanner,
         SelectionKind,
     )
-    from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+    from krrood.entity_query_language.verbalization.grammar.conditions.placement import (
         ConditionForm,
         Placement,
         Slot,
@@ -1912,7 +2091,8 @@ def test_plural_field_binding_uses_are(handles_and_containers_world):
 
 
 def test_grouped_by_without_instantiated_variable(handles_and_containers_world):
-    """grouped_by on a plain variable query falls back to 'grouped by X' (no aggregated subject)."""
+    """grouped_by where the selection IS the group key renders a fronted distinct listing
+    (never a trailing 'grouped by')."""
     cabinet = variable(Cabinet, handles_and_containers_world.views)
     drawer = flat_variable(cabinet.drawers)
     query = an(
@@ -1921,10 +2101,10 @@ def test_grouped_by_without_instantiated_variable(handles_and_containers_world):
         .ordered_by(eql.count(drawer), descending=True)
     )
     text = verbalize_expression(query)
-    # The selected variable IS the group key, so there are no extra aggregated nouns;
-    # the sentence should still contain "grouped by" without crashing.
-    assert "grouped by" in text, f"Expected 'grouped by' in: {text!r}"
-    assert "Cabinet" in text, f"Expected 'Cabinet' in: {text!r}"
+    assert (
+        text
+        == "Report the distinct Cabinets ordered by the number of drawers of Cabinets from highest to lowest"
+    )
 
 
 # ── Fixture ────────────────────────────────────────────────────────────────────
@@ -2239,7 +2419,7 @@ def test_second_domain_calc_equality_in_whose():
 
 
 def test_is_calculation_value_predicate():
-    from krrood.entity_query_language.verbalization.subquery import is_calculation_value
+    from krrood.entity_query_language.query.aggregation_structure import is_calculation_value
 
     bank_transaction = variable(BankTransaction, domain=None)
     assert is_calculation_value(eql.max(bank_transaction.amount_details.amount)) is True

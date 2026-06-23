@@ -104,6 +104,12 @@ class VerbalizationPipeline:
         :param services: Shared verbalization state; created automatically when omitted.  Pass the
             same services across calls so repeated mentions corefer (a Robot … the Robot).
         :return: Formatted natural-language string (plain, ANSI, or HTML, per the renderer).
+
+        It runs the full path — build the fragment tree, then render it — whereas
+        :meth:`verbalize_fragment` renders an already-built fragment.
+
+        >>> VerbalizationPipeline.plain().verbalize(a(entity(variable(Robot, []))))
+        'Find a Robot'
         """
         if isinstance(expression, Match):
             expression.expression.build()
@@ -124,6 +130,14 @@ class VerbalizationPipeline:
 
         :param fragment: Root of the fragment tree to render.
         :return: Formatted string.
+
+        Its contribution is the render half only: given a tree already built by
+        :class:`EQLVerbalizer`, it applies this pipeline's renderer (and HTML wrapping) without
+        re-building — the step :meth:`verbalize` calls after building.
+
+        >>> tree = EQLVerbalizer().build(a(entity(variable(Robot, []))))
+        >>> VerbalizationPipeline.plain().verbalize_fragment(tree)
+        'Find a Robot'
         """
         result = self.renderer.render(fragment)
         if self._is_html_renderer():
@@ -245,5 +259,11 @@ def verbalize_expression(expression: SymbolicExpression) -> str:
 
     :param expression: Any EQL expression or query.
     :return: Plain-text natural-language string.
+
+    >>> verbalize_expression(a(entity(variable(Robot, []))))
+    'Find a Robot'
+    >>> robot = variable(Robot, [])
+    >>> verbalize_expression(a(entity(robot).where(robot.battery > 50)))
+    'Find a Robot whose battery is greater than 50'
     """
     return _PLAIN_PIPELINE.verbalize(expression)

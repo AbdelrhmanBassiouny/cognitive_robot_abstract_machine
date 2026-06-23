@@ -3,13 +3,17 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing_extensions import Dict, List, Set
+from typing_extensions import Dict, List, Optional, Set, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Variable, Literal
 from krrood.entity_query_language.query.query import Entity, Query
 from krrood.entity_query_language.verbalization.fragments.features import Definiteness
-from krrood.entity_query_language.verbalization.subquery import (
+from krrood.entity_query_language.verbalization.relational_attributes import (
+    relational_verb,
+)
+from krrood.entity_query_language.query.aggregation_structure import (
     aggregation_source_root,
     selected_aggregator,
 )
@@ -35,67 +39,6 @@ class NounForm:
 
     label: str
     """The display label for the noun head."""
-
-
-def _aggregation_source_ids(expression: SymbolicExpression) -> Set[uuid.UUID]:
-    """
-    Such a variable denotes a population to aggregate over, not a specific entity, so it must not
-    consume an entity-disambiguation number — otherwise the outer subject would pick up a
-    spurious *"1"* with no matching *"2"*, and a constrained aggregation scope would read *"among
-    BankTransaction 2"* rather than *"among BankTransactions"*.
-
-    :param expression: Root expression to scan.
-    :return: The ``_id_`` of every variable that serves as the source population of an
-        aggregation sub-query (e.g. the ``BankTransaction`` behind ``max(t.amount_details.amount)``),
-        to exclude from numbering.
-    """
-    ids: Set[uuid.UUID] = set()
-    for node in expression._all_expressions_:
-        if isinstance(node, Entity) and selected_aggregator(node) is not None:
-            root = aggregation_source_root(node)
-            if root is not None:
-                ids.add(root._id_)
-    return ids
-
-
-def _build_disambiguation_map(expression: SymbolicExpression) -> Dict[uuid.UUID, str]:
-    """
-    Types appearing once keep the plain type name; types appearing two or more times get
-    "TypeName 1", "TypeName 2", … labels in encounter order. Literal nodes are excluded, as are
-    variables that only serve as the source population of an aggregation sub-query.
-
-    :param expression: Root expression to pre-scan.
-    :return: A mapping of ``variable._id_`` → display label.
-    """
-    if isinstance(expression, Query):
-        expression.build()
-
-    suppressed = _aggregation_source_ids(expression)
-
-    type_to_ids: Dict[str, List[uuid.UUID]] = defaultdict(list)
-    seen_ids: Set[uuid.UUID] = set()
-
-    for node in expression._all_expressions_:
-        if isinstance(node, Variable) and not isinstance(node, Literal):
-            if node._id_ in suppressed:
-                continue
-            type_name = (
-                node._type_.__name__
-                if getattr(node, "_type_", None)
-                else node.__class__.__name__
-            )
-            if node._id_ not in seen_ids:
-                seen_ids.add(node._id_)
-                type_to_ids[type_name].append(node._id_)
-
-    result: Dict[uuid.UUID, str] = {}
-    for type_name, ids in type_to_ids.items():
-        if len(ids) == 1:
-            result[ids[0]] = type_name
-        else:
-            for ordinal, variable_id in enumerate(ids, 1):
-                result[variable_id] = f"{type_name} {ordinal}"
-    return result
 
 
 @dataclass
@@ -126,13 +69,122 @@ class ReferringExpressions:
     begins.  Single-type variables keep the plain type name; colliding types get
     ``"TypeName 1"``, ``"TypeName 2"`` labels."""
 
+    numbered_labels: Dict[uuid.UUID, str] = field(default_factory=dict)
+    """The subset of :attr:`disambiguation_map` whose label was actually numbered (the collisions).
+    Relational referents carry no rule-resolved label — their relative-clause noun phrase is built
+    deep in the microplanner — so the coreference pass applies these to number them *"Robot 1"*."""
+
     @classmethod
     def from_expression(cls, expression: SymbolicExpression) -> ReferringExpressions:
         """
         :param expression: Root EQL expression or query to scan.
         :return: An instance with the disambiguation map pre-built for *expression*.
+
+        >>> first, second = variable(Robot, []), variable(Robot, [])
+        >>> referring = ReferringExpressions.from_expression(an(set_of(first, second)))
+        >>> referring.disambiguation_map[first._id_]
+        'Robot 1'
         """
-        return cls(disambiguation_map=_build_disambiguation_map(expression))
+        labels, numbered = cls._build_disambiguation_map(expression)
+        return cls(disambiguation_map=labels, numbered_labels=numbered)
+
+    @classmethod
+    def _build_disambiguation_map(
+        cls, expression: SymbolicExpression
+    ) -> Tuple[Dict[uuid.UUID, str], Dict[uuid.UUID, str]]:
+        """
+        Types appearing once keep the plain type name; types appearing two or more times get
+        "TypeName 1", "TypeName 2", … labels in encounter order. Both free variables and relational
+        referents (the related entity a verb-named hop introduces) count toward a type's occurrences,
+        so two distinct entities of one type are told apart wherever they appear. Literal nodes are
+        excluded, as are variables that only serve as the source population of an aggregation
+        sub-query.
+
+        :param expression: Root expression to pre-scan.
+        :return: ``(labels, numbered)`` — the full ``_id_`` → label map, and the subset whose label
+            was actually numbered (the collisions).
+
+        >>> labels, numbered = ReferringExpressions._build_disambiguation_map(
+        ...     an(set_of(variable(Robot, []), variable(Robot, []))))
+        >>> sorted(labels.values()), sorted(numbered.values())
+        (['Robot 1', 'Robot 2'], ['Robot 1', 'Robot 2'])
+        """
+        if isinstance(expression, Query):
+            expression.build()
+
+        suppressed = cls._aggregation_source_ids(expression)
+
+        type_to_ids: Dict[str, List[uuid.UUID]] = defaultdict(list)
+        seen_ids: Set[uuid.UUID] = set()
+
+        for node in expression._all_expressions_:
+            type_name = cls._numberable_type_name(node)
+            if type_name is None or node._id_ in suppressed or node._id_ in seen_ids:
+                continue
+            seen_ids.add(node._id_)
+            type_to_ids[type_name].append(node._id_)
+
+        labels: Dict[uuid.UUID, str] = {}
+        numbered: Dict[uuid.UUID, str] = {}
+        for type_name, ids in type_to_ids.items():
+            if len(ids) == 1:
+                labels[ids[0]] = type_name
+                continue
+            for ordinal, referent_id in enumerate(ids, 1):
+                label = f"{type_name} {ordinal}"
+                labels[referent_id] = label
+                numbered[referent_id] = label
+        return labels, numbered
+
+    @staticmethod
+    def _aggregation_source_ids(expression: SymbolicExpression) -> Set[uuid.UUID]:
+        """
+        Such a variable denotes a population to aggregate over, not a specific entity, so it must not
+        consume an entity-disambiguation number — otherwise the outer subject would pick up a
+        spurious *"1"* with no matching *"2"*, and a constrained aggregation scope would read *"among
+        BankTransaction 2"* rather than *"among BankTransactions"*.
+
+        :param expression: Root expression to scan.
+        :return: The ``_id_`` of every variable that serves as the source population of an
+            aggregation sub-query (e.g. the ``BankTransaction`` behind ``max(t.amount_details.amount)``),
+            to exclude from numbering.
+
+        >>> transaction = variable(BankTransaction, [])
+        >>> source = an(entity(max(transaction.amount_details.amount)))
+        >>> transaction._id_ in ReferringExpressions._aggregation_source_ids(source)
+        True
+        """
+        ids: Set[uuid.UUID] = set()
+        for node in expression._all_expressions_:
+            if isinstance(node, Entity) and selected_aggregator(node) is not None:
+                root = aggregation_source_root(node)
+                if root is not None:
+                    ids.add(root._id_)
+        return ids
+
+    @staticmethod
+    def _numberable_type_name(node: SymbolicExpression) -> Optional[str]:
+        """:return: The type name a node is disambiguated under — its own type for a (non-literal)
+        variable, or the *value* type for a relational attribute (a verb-named hop such as
+        ``assigned_to``, whose relative clause names a distinct entity that must be told apart from
+        other same-type entities). ``None`` for anything that does not denote a numberable entity.
+
+        >>> ReferringExpressions._numberable_type_name(variable(Robot, []))
+        'Robot'
+        """
+        if isinstance(node, Variable) and not isinstance(node, Literal):
+            return (
+                node._type_.__name__
+                if getattr(node, "_type_", None)
+                else node.__class__.__name__
+            )
+        if (
+            isinstance(node, Attribute)
+            and relational_verb(node._attribute_name_) is not None
+        ):
+            value_type = getattr(node, "_type_", None)
+            return value_type.__name__ if isinstance(value_type, type) else None
+        return None
 
     def numbered_label(self, variable: Variable) -> NumberedLabel:
         """Records *variable* as introduced.
@@ -142,6 +194,11 @@ class ReferringExpressions:
 
         :param variable: A variable instance.
         :return: The :class:`NumberedLabel` for *variable*.
+
+        >>> first, second = variable(Robot, []), variable(Robot, [])
+        >>> referring = ReferringExpressions.from_expression(an(set_of(first, second)))
+        >>> referring.numbered_label(second).text
+        'Robot 2'
         """
         type_name = (
             variable._type_.__name__
@@ -157,6 +214,9 @@ class ReferringExpressions:
         :param variable: A variable instance.
         :return: The first-mention :class:`NounForm` for *variable* — a numbered variable
             (*"Robot 2"*) is ``BARE``, any other is ``INDEFINITE`` (*"a Robot"*).
+
+        >>> ReferringExpressions().noun_for_parts(variable(Robot, [])).label
+        'Robot'
         """
         numbered = self.numbered_label(variable)
         definiteness = (

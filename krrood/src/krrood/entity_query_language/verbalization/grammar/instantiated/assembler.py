@@ -45,6 +45,10 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     overrides.
 
     Reference: Gatt & Reiter (2009), SimpleNLG — surface realisation.
+
+    >>> connection = variable(FixedConnection, [])
+    >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+    'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
     """
 
     planner = InstantiatedPlanner
@@ -55,6 +59,15 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         :param plan: The instantiated plan.
         :return: *"a TypeName, where the <field> of the TypeName is <value> …, such that
             <deferred>"*.
+
+        Its contribution is the orchestration that yields the whole shown phrase: it opens a
+        constraint frame so sibling-override constraints can be deferred into the *"such that"* tail,
+        collects the *"where …"* bindings, then hands both to :meth:`_phrase`. With no deferred
+        constraints here the result is just *"a Drawer, where …"* with no *"such that"* tail.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
         """
         self.context.scope.push_constraint_frame()
         binding_fragments, overrides = self._bindings(plan, node._type_)
@@ -73,7 +86,17 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     def _bindings(
         self, plan: InstantiatedPlan, instantiated_type: type
     ) -> Tuple[List[Fragment], Dict[uuid.UUID, Fragment]]:
-        """:return: Every binding fragment and the field-reference overrides."""
+        """:return: Every binding fragment and the field-reference overrides.
+
+        Its contribution is the *"where"* clause body: it builds each *"the container of the Drawer is
+        the parent of a FixedConnection"* triple by joining a :meth:`_field_reference`, a
+        :meth:`_copula`, and a :meth:`_value`. It also records each field reference as an override so a
+        later binding can refer back to it, which is why both bindings appear side by side here.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         binding_fragments: List[Fragment] = []
         overrides: Dict[uuid.UUID, Fragment] = {}
         for binding in plan.bindings:
@@ -91,7 +114,17 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
     def _field_reference(
         self, field_name: str, type_name: str, instantiated_type: type
     ) -> Fragment:
-        """:return: *"the <field> of the <Type>"* — a single-hop possessive."""
+        """:return: *"the <field> of the <Type>"* — a single-hop possessive (*"the container of the
+        Drawer"*).
+
+        Its contribution is only the left side of each binding — the *"the container of the Drawer"*
+        and *"the handle of the Drawer"* possessives in the shown phrase; the *"is"* and the value
+        after them are supplied by :meth:`_copula` and :meth:`_value`.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         type_root = PhraseFragment(
             parts=[
                 Articles.THE.as_fragment(),
@@ -101,11 +134,26 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         return possessive_path([PathStep(field_name, None)], type_root)
 
     def _copula(self, binding: BindingPlan) -> Fragment:
-        """:return: *"is"* / *"are"* agreeing with the binding's plurality."""
+        """:return: *"is"* / *"are"* agreeing with the binding's plurality (the plural ``drawers``
+        field takes *"are"*).
+
+        >>> verbalize_expression(inference(Cabinet)(container=variable(Container, []), drawers=variable(Drawer, [])))
+        'a Cabinet, where the container of the Cabinet is a Container, and the drawers of the Cabinet are Drawers'
+        """
         return Copulas.for_number(Number.of(binding.is_plural))
 
     def _value(self, binding: BindingPlan) -> Fragment:
-        """:return: The binding's value expression, rendered in the binding's number."""
+        """:return: The binding's value expression, rendered in the binding's number (*"the parent of
+        a FixedConnection"*).
+
+        Its contribution is only the right side of each binding — the *"the parent of a
+        FixedConnection"* / *"the child of the FixedConnection"* values after *"is"*; recursing
+        through ``context.child`` is what renders them as full chains rather than bare names.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         return self.context.child(binding.value, number=Number.of(binding.is_plural))
 
     # ── phrase assembly ──────────────────────────────────────────────────────────
@@ -118,7 +166,17 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         constraint_fragments: List[Fragment],
     ) -> Fragment:
         """:return: *"a <type>, where <bindings>, such that <constraints>"* — the referring noun
-        phrase with its appositive clauses as droppable modifiers."""
+        phrase with its appositive clauses as droppable modifiers.
+
+        Its contribution is the envelope around the bindings: the *"a Drawer"* head plus the *",
+        where …"* (and, when present, *", such that …"*) appositive modifiers, joined with the
+        oxford comma seen between the two bindings. The modifiers are droppable, so a repeat mention
+        reduces to just *"the Drawer"*.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         modifiers: List[Fragment] = []
         if binding_fragments:
             # Bindings and constraints are independent clauses → a two-clause pair keeps its comma.

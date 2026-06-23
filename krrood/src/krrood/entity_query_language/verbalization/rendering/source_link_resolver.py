@@ -58,11 +58,10 @@ class AutoAPIResolver:
         :param reference: Source reference to resolve.
         :return: AutoAPI page URL, or ``None`` when *reference.owner_type* has no ``__module__``.
         """
-        try:
-            module = reference.owner_type.__module__
-            qualname = reference.owner_type.__qualname__
-        except AttributeError:
+        if not isinstance(reference.owner_type, type):
             return None
+        module = reference.owner_type.__module__
+        qualname = reference.owner_type.__qualname__
         module_path = module.replace(".", "/")
         anchor = f"{module}.{qualname}"
         if reference.attribute is not None:

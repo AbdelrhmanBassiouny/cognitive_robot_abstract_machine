@@ -1,26 +1,20 @@
 from __future__ import annotations
 
-from abc import abstractmethod
+from dataclasses import replace
 
 from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import (
-    Index,
     MappedVariable,
 )
 from krrood.entity_query_language.core.variable import Variable
-from krrood.entity_query_language.verbalization import morphology
-from krrood.entity_query_language.verbalization.navigation_path import (
-    build_path_parts,
-)
 from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PhraseFragment,
     PossessiveChain,
     RoleFragment,
     Fragment,
-    WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
@@ -33,131 +27,19 @@ from krrood.entity_query_language.verbalization.grammar.chain.planner import (
     ChainPlan,
     ChainPlanner,
 )
-from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
-    relational_verb,
-)
-from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
-    SpecificityRule,
-)
+from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.microplanning.possessive import (
     possessive_path,
 )
+from krrood.entity_query_language.verbalization.vocabulary.countability import (
+    Countability,
+)
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Articles,
     Conjunctions,
     Copulas,
     Logicals,
     Prepositions,
 )
-
-
-def _ends_in_integer_index(navigation_chain: List[MappedVariable]) -> bool:
-    """
-    :param navigation_chain: A boolean predicative's navigation prefix.
-    :return: ``True`` when it ends in an integer index — the ordinal navigation *"the 1st of …"*.
-    """
-    return (
-        bool(navigation_chain)
-        and isinstance(navigation_chain[-1], Index)
-        and isinstance(navigation_chain[-1]._key_, int)
-    )
-
-
-class NavigationForm(SpecificityRule):
-    """How to render the navigation prefix of a boolean predicative — the *"<navigation>"* of
-    *"<navigation> is <attribute>"*.
-
-    The forms partition the prefix shapes (empty / ordinal-index / any other), so exactly one
-    applies; adding a navigation form is a new subclass with no change to the others.
-    """
-
-    @classmethod
-    @abstractmethod
-    def applies(cls, navigation_chain: List[MappedVariable]) -> bool:
-        """
-        :param navigation_chain: The predicative's navigation prefix (the chain minus its terminal).
-        :return: ``True`` when this form renders *navigation_chain*.
-        """
-
-    @classmethod
-    @abstractmethod
-    def render(
-        cls, navigation_chain: List[MappedVariable], root_fragment: Fragment
-    ) -> Fragment:
-        """
-        :param navigation_chain: The navigation prefix this form matched.
-        :param root_fragment: The rendered chain root.
-        :return: The navigation fragment.
-        """
-
-
-class EmptyNavigation(NavigationForm):
-    """No navigation (the boolean attribute sits on the root) — the root itself navigates.
-
-    >>> verbalize_expression(variable(Task, []).completed)
-    'a Task is completed'
-    """
-
-    @classmethod
-    def applies(cls, navigation_chain: List[MappedVariable]) -> bool:
-        return not navigation_chain
-
-    @classmethod
-    def render(
-        cls, navigation_chain: List[MappedVariable], root_fragment: Fragment
-    ) -> Fragment:
-        return root_fragment
-
-
-class OrdinalIndexNavigation(NavigationForm):
-    """Navigation ending in an integer index → ordinal *"the 1st of <prefix>"*.
-
-    >>> verbalize_expression(variable(Worker, []).tasks[0].completed)
-    'the first of the tasks of a Worker is completed'
-    """
-
-    @classmethod
-    def applies(cls, navigation_chain: List[MappedVariable]) -> bool:
-        return _ends_in_integer_index(navigation_chain)
-
-    @classmethod
-    def render(
-        cls, navigation_chain: List[MappedVariable], root_fragment: Fragment
-    ) -> Fragment:
-        ordinal = morphology.ordinal(navigation_chain[-1]._key_)
-        prefix_fragment = possessive_path(
-            build_path_parts(navigation_chain[:-1], relational_verb),
-            root_fragment,
-        )
-        return PhraseFragment(
-            parts=[
-                Articles.THE.as_fragment(),
-                WordFragment(text=ordinal),
-                Prepositions.OF.as_fragment(),
-                prefix_fragment,
-            ]
-        )
-
-
-class PossessiveNavigation(NavigationForm):
-    """Any other navigation → the possessive path, where a *relational* hop (a verb-named field such
-    as ``assigned_to``) reads as a relative clause rather than a genitive.
-
-    >>> verbalize_expression(variable(Mission, []).assigned_to.operational)
-    'the Robot to which a Mission is assigned is operational'
-    """
-
-    @classmethod
-    def applies(cls, navigation_chain: List[MappedVariable]) -> bool:
-        return bool(navigation_chain) and not _ends_in_integer_index(navigation_chain)
-
-    @classmethod
-    def render(
-        cls, navigation_chain: List[MappedVariable], root_fragment: Fragment
-    ) -> Fragment:
-        return possessive_path(
-            build_path_parts(navigation_chain, relational_verb), root_fragment
-        )
 
 
 class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
@@ -183,6 +65,9 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         :param node: The chain to render.
         :param plan: The chain plan computed for *node*.
         :return: The possessive rendering — the unguarded default form.
+
+        >>> verbalize_expression(variable(Robot, []).battery)
+        'the battery of a Robot'
         """
         return self.possessive(plan)
 
@@ -194,21 +79,54 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         :return: The possessive path *"the attribute of the Root"*; for a variable root, deferred to
             the coreference pass as a :class:`PossessiveChain` (it knows whether the root is the
             current discourse subject, for *"its …"*).
+
+        >>> verbalize_expression(variable(Task, []).name)
+        'the name of a Task'
         """
         root_fragment = self._chain_root(plan.root)
+        parts = self._with_countability(plan.parts)
         if isinstance(plan.root, Variable):
             return PossessiveChain(
-                parts=plan.parts,
+                parts=parts,
                 root_fragment=root_fragment,
                 root_referent_id=plan.root._id_,
+                node_id=plan.chain[-1]._id_,
             )
-        return possessive_path(plan.parts, root_fragment)
+        return possessive_path(parts, root_fragment)
+
+    def _with_countability(self, parts: List[PathStep]) -> List[PathStep]:
+        """:return: *parts* with each attribute hop's countability resolved from field metadata, so
+        both the direct genitive path and the pronominalised one (a :class:`PossessiveChain` the
+        coreference pass later reads) drop the article before a metadata-uncountable noun.
+
+        A hop is left untouched when the registry has no opinion, deferring to the curated lexicon.
+        """
+        registry = self.context.services.field_metadata
+        resolved: List[PathStep] = []
+        for step in parts:
+            reference = step.source_reference
+            if reference is not None and reference.attribute is not None:
+                countable = registry.countable(reference.owner_type, reference.attribute)
+                if countable is not None:
+                    step = replace(
+                        step,
+                        countability=(
+                            Countability.COUNTABLE
+                            if countable
+                            else Countability.UNCOUNTABLE
+                        ),
+                    )
+            resolved.append(step)
+        return resolved
 
     def plural_attribute(self, plan: ChainPlan) -> Fragment:
         """
         :param plan: The analysed chain (a single attribute on a variable — see
             :attr:`ChainPlan.is_single_variable_attribute`).
         :return: The bare plural *"attributes of Roots"*.
+
+        >>> verbalize_expression(sum(variable(Robot, []).battery))
+        'the sum of batteries of Robots'
         """
         attribute = plan.chain[0]
         # The root's plural noun phrase ("Robots" / "Robot 2") is the variable rule's job; recurse
@@ -229,18 +147,21 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         :return: The noun phrase for the chain root. Recursed in ``inline`` position, so an entity
             root is dispatched to the inline-noun form and anything else renders normally — the
             chain assembler doesn't decide which, nor call the query assembler.
+
+        >>> verbalize_expression(variable(Mission, []).assigned_to)
+        'the Robot to which a Mission is assigned'
         """
         return self.context.child(root, inline=True)
 
     def boolean_predicative(self, plan: ChainPlan, negated: bool = False) -> Fragment:
         """
-        The navigation prefix is rendered by its :class:`NavigationForm` (ordinal index / possessive
-        / none).
-
         :param plan: The analysed chain (a boolean terminal — see
             :attr:`ChainPlan.is_boolean_terminal`).
         :param negated: Whether to negate the predicative.
         :return: The predicative *"<navigation> is [not] <attribute>"*.
+
+        >>> verbalize_expression(variable(Robot, []).operational)
+        'a Robot is operational'
         """
         navigation_fragment, attribute_fragment = self._boolean_parts(plan)
         copula = Copulas.IS_NOT.as_fragment() if negated else Copulas.IS.as_fragment()
@@ -252,6 +173,9 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         :return: The unconstrained-boolean predicative *"<navigation> is either <attribute> or not"* —
             for a boolean attribute compared to a domain holding both ``True`` and ``False`` (the
             value is left open, so neither polarity is asserted).
+
+        >>> verbalize_expression(variable(Task, []).completed == variable(bool, [True, False]))
+        'a Task is either completed or not'
         """
         navigation_fragment, attribute_fragment = self._boolean_parts(plan)
         return PhraseFragment(
@@ -267,14 +191,20 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
 
     def _boolean_parts(self, plan: ChainPlan) -> tuple:
         """:return: ``(navigation_fragment, attribute_fragment)`` for a boolean-terminal chain — the
-        navigation prefix (rendered by its :class:`NavigationForm`) and the terminal attribute noun,
-        shared by the predicative and the open-alternative forms."""
-        chain = plan.chain
-        root_fragment = self._chain_root(plan.root)
-        navigation_chain = chain[:-1]
-        navigation_form = NavigationForm.most_applicable(navigation_chain)
-        navigation_fragment = navigation_form.render(navigation_chain, root_fragment)
-        terminal = chain[-1]
+        navigation prefix and the terminal attribute noun, shared by the predicative and the
+        open-alternative forms.
+
+        The prefix is the chain minus its boolean terminal, recursed through the standard grammar
+        (``terminal._child_``) rather than re-rendered here: it is itself a navigable referent, so
+        the recursion supplies its surface form (root *"a Mission"*, ordinal *"the first of …"*,
+        relational *"the Robot to which a Mission is assigned"*) and — crucially — pronominalises it
+        to the discourse subject (*"the Robot to which it is assigned"*) when one is in scope.
+
+        >>> verbalize_expression(variable(Worker, []).tasks[0].completed)
+        'the first of the tasks of a Worker is completed'
+        """
+        terminal = plan.chain[-1]
+        navigation_fragment = self.context.child(terminal._child_, inline=True)
         return navigation_fragment, RoleFragment.for_attribute(
             terminal._owner_class_, terminal._attribute_name_
         )

@@ -66,6 +66,11 @@ class VariableRule(PhraseRule):
     name = "variable"
 
     def build(self, node: Variable, context: RuleContext) -> Fragment:
+        """:return: The variable noun phrase (*"a Robot"* / *"the Robot"* / *"Robot N"*).
+
+        >>> verbalize_expression(variable(Robot, []))
+        'a Robot'
+        """
         if context.as_value:
             choice = self._domain_choice(node, context)
             if choice is not None:
@@ -90,6 +95,10 @@ class VariableRule(PhraseRule):
         :param node: The variable in value position.
         :param context: The per-node context (for value lexicalisation).
         :return: The candidate-set fragment, or ``None`` to fall back to the noun form.
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(a(entity(employee).where(employee.department == variable(str, ["Sales", "Eng"]))))
+        "Find an Employee whose department is one of 'Sales' or 'Eng'"
         """
         type_ = getattr(node, "_type_", None)
         is_enum = isinstance(type_, type) and issubclass(type_, enum.Enum)
@@ -121,6 +130,9 @@ class VariableRule(PhraseRule):
 
         A numbered label (*"Robot 2"*) is surface-final — kept singular and bare; a plain type
         name is a plural indefinite noun phrase (the concord table renders it bare-then-pluralised).
+
+        >>> verbalize_expression(count(variable(Robot, [])))
+        'the number of Robots'
         """
         numbered = context.refer.numbered_label(node)
         return NounPhrase(
@@ -142,6 +154,11 @@ class LiteralRule(PhraseRule):
     name = "literal"
 
     def build(self, node: Literal, context: RuleContext) -> Fragment:
+        """:return: The literal value, or *"a specific <Type>"* for a concrete object literal.
+
+        >>> verbalize_expression(variable(Robot, []).battery == 42)
+        'the battery of a Robot is 42'
+        """
         if is_concrete_object_literal(node):
             return self._concrete_object(node, context)
         return RoleFragment.for_literal(node._value_)
@@ -151,6 +168,13 @@ class LiteralRule(PhraseRule):
         huge) repr — qualified by its identifying field(s) when any are known (*"a specific Body with
         name 'door'"*). The fields come from the class's ``_identifying_attributes_`` if it declares
         any, else the first present :data:`conventional identity field <_CONVENTIONAL_ID_FIELDS>`.
+
+        This method builds the whole *"a specific Robot with name 'R2D2'"* noun phrase — the
+        identity head plus the qualifying detail :meth:`_identifying_fields` supplies:
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(a(entity(robot).where(robot == Robot("R2D2", 80, True))))
+        "Find a Robot such that the Robot is a specific Robot with name 'R2D2'"
         """
         value = node._value_
         details = [
@@ -181,7 +205,16 @@ class LiteralRule(PhraseRule):
     def _identifying_fields(value: Any) -> List[tuple]:
         """:return: The ``(name, value)`` pairs that identify *value* for display — the class's
         declared ``_identifying_attributes_`` (a name or iterable of names) if present, else the first
-        present conventional identity field — keeping only scalar values."""
+        present conventional identity field — keeping only scalar values.
+
+        Its contribution is just the identifying detail: it returns ``[("name", "R2D2")]`` here, which
+        is what becomes the *"with name 'R2D2'"* qualifier (drop it and the phrase is the bare *"a
+        specific Robot"*):
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(a(entity(robot).where(robot == Robot("R2D2", 80, True))))
+        "Find a Robot such that the Robot is a specific Robot with name 'R2D2'"
+        """
         declared = getattr(type(value), "_identifying_attributes_", None)
         if callable(declared):
             try:
@@ -209,14 +242,13 @@ class ExternalVariableRule(PhraseRule):
     name = "external-variable"
 
     def build(self, node: ExternallySetVariable, context: RuleContext) -> Fragment:
-        type_name = (
-            node._type_.__name__
-            if getattr(node, "_type_", None)
-            else FallbackNouns.VARIABLE.text
-        )
-        return NounPhrase(
-            head=RoleFragment.for_type(getattr(node, "_type_", None), text=type_name)
-        )
+        """:return: The indefinite type-name noun phrase for the externally-set variable.
+
+        >>> verbalize_expression(ExternallySetVariable(_type_=Robot))
+        'a Robot'
+        """
+        type_name = FallbackNouns.VARIABLE.name_of(node)
+        return NounPhrase(head=RoleFragment.for_type(node._type_, text=type_name))
 
 
 class FlatVariableRule(PhraseRule):
@@ -226,4 +258,9 @@ class FlatVariableRule(PhraseRule):
     name = "flat-variable"
 
     def build(self, node: FlatVariable, context: RuleContext) -> Fragment:
+        """:return: The child's rendering, unwrapped from the transparent SetOf wrapper.
+
+        >>> verbalize_expression(FlatVariable(_child_=variable(Worker, []).tasks))
+        'the tasks of a Worker'
+        """
         return context.child(node._child_, number=context.number)

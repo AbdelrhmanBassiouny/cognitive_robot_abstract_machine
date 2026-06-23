@@ -4,13 +4,13 @@ from dataclasses import replace
 
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
-    map_fragment,
     RoleFragment,
     Fragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Number
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+from krrood.entity_query_language.verbalization.rendering.passes import RewritePass
 from krrood.entity_query_language.verbalization.vocabulary.english import Copulas
 
 #: Plural suppletion for the copula (the only ``OPERATOR`` leaves ever tagged plural).
@@ -20,7 +20,7 @@ _COPULA_PLURAL = {
 }
 
 
-class MorphologyProcessor:
+class MorphologyProcessor(RewritePass):
     """
     Realise grammatical number on every leaf tagged plural — the single realisation pass that
     applies grammatical agreement.
@@ -35,15 +35,16 @@ class MorphologyProcessor:
     Reference: Gatt & Reiter (2009), SimpleNLG — the MorphologyProcessor realisation stage.
     """
 
-    def process(self, fragment: Fragment) -> Fragment:
-        """
-        :param fragment: Root of the fragment tree.
-        :return: A new tree with all plural-tagged leaves agreed/inflected (idempotent).
-        """
-        return map_fragment(fragment, self._inflect)
+    def rewrite(self, leaf: Fragment) -> Fragment:
+        """:return: *leaf* with grammatical number realised — a plural-tagged noun pluralised, a
+        plural-tagged copula replaced by its suppletion (*"is"* → *"are"*) — and reset to singular;
+        any leaf not tagged plural is returned unchanged.
 
-    @staticmethod
-    def _inflect(leaf: Fragment) -> Fragment:
+        >>> MorphologyProcessor().rewrite(WordFragment(text="Robot", number=Number.PLURAL)).text
+        'Robots'
+        >>> MorphologyProcessor().rewrite(WordFragment(text="Robot")).text
+        'Robot'
+        """
         if not isinstance(leaf, (WordFragment, RoleFragment)):
             return leaf
         if leaf.number is not Number.PLURAL:

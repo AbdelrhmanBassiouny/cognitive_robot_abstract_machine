@@ -691,11 +691,10 @@ def test_pipeline_html_contains_span():
 
 def test_pipeline_html_hierarchical_has_br():
     r = variable(_Robot, [])
-    text = VerbalizationPipeline.ansi(hierarchical=True).verbalize(
+    text = VerbalizationPipeline.html(hierarchical=True).verbalize(
         an(entity(r).where(r.battery > 50))
     )
-    print("\n" + text)
-    # assert "<br>" in text
+    assert "<br>" in text
 
 
 def test_pipeline_html_hierarchical_has_br_between_items_on_rule(
@@ -705,9 +704,6 @@ def test_pipeline_html_hierarchical_has_br_between_items_on_rule(
     text = VerbalizationPipeline.html(hierarchical=True).verbalize_fragment(
         drawer_fragment
     )
-    print_ = False
-    if print_:
-        print("\n" + text)
     assert "<br>" in text
 
 
@@ -716,8 +712,5 @@ def test_pipeline_ansi_hierarchical_has_newlines_on_rule(doors_and_drawers_world
     text = VerbalizationPipeline.ansi(hierarchical=True).verbalize_fragment(
         drawer_fragment
     )
-    print_ = True
-    if print_:
-        print("\n" + text)
     assert "\n" in text
     assert "<br>" not in text

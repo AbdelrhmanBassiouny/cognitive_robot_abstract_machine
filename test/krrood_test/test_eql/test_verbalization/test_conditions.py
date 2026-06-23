@@ -16,6 +16,8 @@ from krrood.entity_query_language.factories import (
     a,
     an,
     entity,
+    not_,
+    or_,
     set_of,
     variable,
 )
@@ -27,8 +29,10 @@ from krrood.entity_query_language.verbalization.grammar.conditions.recognition i
     is_concrete_object_literal,
     is_none_literal,
     references,
-    relational_verb_phrase,
     single_hop_attribute,
+)
+from krrood.entity_query_language.verbalization.relational_attributes import (
+    relational_verb_phrase,
 )
 from krrood.entity_query_language.verbalization.morphology import is_past_participle
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
@@ -375,8 +379,10 @@ def test_coindexed_non_equality_uses_faithful_those_of_form():
         .grouped_by(p.period.begin.month)
     )
     text = verbalize_expression(query)
+    # The selection is the group key, so the query fronts a distinct listing; the faithful
+    # non-equality co-indexed form ("are greater than those of …") is unchanged.
     assert (
-        "the month and year of the begin of its period are greater than "
+        "the month and year of the begin of the period of a _Statement are greater than "
         "those of the end of its period" in text
     )
 
@@ -413,7 +419,9 @@ def test_coindexed_does_not_fold_inequality_operator():
     assert "is not the month of the end" in text
 
 
-def test_coindexed_single_condition_is_not_factored():
+def test_coindexed_single_equality_is_factored():
+    """A lone co-indexed equality over sibling prefixes reads as the natural 'have the same' form —
+    the single-terminal case of the co-indexed fold."""
     p = variable(_Statement, domain=None)
     query = a(
         set_of(p.period.begin.month)
@@ -421,8 +429,8 @@ def test_coindexed_single_condition_is_not_factored():
         .grouped_by(p.period.begin.month)
     )
     text = verbalize_expression(query)
-    assert "have the same" not in text
-    assert "is the month of the end of its period" in text
+    assert "the begin and end of the period of a _Statement have the same month" in text
+    assert "is the month of the end" not in text
 
 
 def test_coindexed_mixed_operators_are_not_folded_together():
@@ -435,7 +443,12 @@ def test_coindexed_mixed_operators_are_not_folded_together():
         )
         .grouped_by(p.period.begin.month)
     )
-    assert "have the same" not in verbalize_expression(query)
+    text = verbalize_expression(query)
+    # the equality folds to its own 'have the same month'; the '>' stays a separate comparison —
+    # they are never combined into one 'have the same month and year'.
+    assert "have the same month and year" not in text
+    assert "have the same month" in text
+    assert "greater than" in text
 
 
 def test_coindexed_non_sibling_prefixes_use_faithful_form():
@@ -461,3 +474,40 @@ def test_coindexed_factoring_in_subject_whose_path():
     assert "the begin and end of the _Period have the same month and year" in (
         verbalize_expression(query)
     )
+
+
+def test_coindexed_lone_equality_folds_inside_each_or_arm():
+    """The lone-equality fold fires wherever a comparator is said, not only in conjunct lists: each
+    arm of an OR folds independently to its own natural 'have the same' clause."""
+    p = variable(_Period, domain=None)
+    query = an(
+        entity(p).where(
+            or_(p.begin.month == p.end.month, p.begin.year == p.end.year)
+        )
+    )
+    text = verbalize_expression(query)
+    assert "the begin and end of the _Period have the same month" in text
+    assert "the begin and end of the _Period have the same year" in text
+    # the two arms stay separate alternatives, never merged into one 'same month and year'
+    assert "have the same month and year" not in text
+    assert " or " in text
+
+
+def test_coindexed_negated_lone_equality_keeps_the_faithful_form():
+    """An outer negation disables the fold — 'NOT (begin.month == end.month)' must read as the
+    faithful negated comparison, never a negated 'have the same' (which would be ambiguous)."""
+    p = variable(_Period, domain=None)
+    query = an(entity(p).where(not_(p.begin.month == p.end.month)))
+    text = verbalize_expression(query)
+    assert "the month of its begin is not the month of its end" in text
+    assert "have the same" not in text
+
+
+def test_coindexed_lone_inequality_is_not_folded():
+    """The natural 'have the same' form covers equality only; a lone co-indexed '>' keeps the
+    faithful per-attribute comparison."""
+    p = variable(_Period, domain=None)
+    query = an(entity(p).where(p.begin.month > p.end.month))
+    text = verbalize_expression(query)
+    assert "the month of its begin is greater than the month of its end" in text
+    assert "have the same" not in text

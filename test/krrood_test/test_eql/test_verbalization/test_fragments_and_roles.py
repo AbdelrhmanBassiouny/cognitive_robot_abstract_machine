@@ -240,13 +240,15 @@ def test_ordered_by_direction_fragment(handles_and_containers_world):
     frag = EQLVerbalizer().build(query)
     texts = _all_texts(frag)
 
-    assert "descending" in texts, f"'descending' not found in fragment texts: {texts!r}"
-    # 'descending' must be a fragment leaf, not embedded in a larger string
+    assert (
+        "from highest to lowest" in texts
+    ), f"direction not found in fragment texts: {texts!r}"
+    # the direction must be a fragment leaf, not embedded in a larger string
     word_leaf_texts = []
     _collect_word_leaves(frag, word_leaf_texts)
     assert (
-        "descending" in word_leaf_texts
-    ), f"'descending' should be a standalone leaf fragment, got: {word_leaf_texts!r}"
+        "from highest to lowest" in word_leaf_texts
+    ), f"direction should be a standalone leaf fragment, got: {word_leaf_texts!r}"
 
 
 def _collect_word_leaves(frag: Fragment, accumulator: list[str]) -> None:

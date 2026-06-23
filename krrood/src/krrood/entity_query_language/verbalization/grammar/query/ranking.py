@@ -59,7 +59,13 @@ class RankingSurface:
 
 def _quality(direction: RankingDirection, n: int) -> RankingWords:
     """:return: The leading quality word for a (direction, n): *first* (no order), *highest*/*top*
-    (descending, n=1/n>1), *lowest*/*bottom* (ascending, n=1/n>1)."""
+    (descending, n=1/n>1), *lowest*/*bottom* (ascending, n=1/n>1).
+
+    >>> _quality(RankingDirection.DESCENDING, 1).name
+    'HIGHEST'
+    >>> _quality(RankingDirection.DESCENDING, 3).name
+    'TOP'
+    """
     if direction is RankingDirection.DESCENDING:
         return RankingWords.HIGHEST if n == 1 else RankingWords.TOP
     if direction is RankingDirection.ASCENDING:
@@ -68,13 +74,21 @@ def _quality(direction: RankingDirection, n: int) -> RankingWords:
 
 
 def _cardinal(n: int) -> Fragment:
-    """:return: The cardinal-word fragment for *n* (``3`` → *"three"*)."""
+    """:return: The cardinal-word fragment for *n* (``3`` → *"three"*).
+
+    >>> _cardinal(3).text
+    'three'
+    """
     return WordFragment(text=morphology.cardinal(n))
 
 
 def _key_attribute(order_key: SymbolicExpression) -> Fragment:
     """:return: The order key's terminal attribute as a bare attribute word (*"salary"*, not the
-    verbose *"the salary of the Employee"*)."""
+    verbose *"the salary of the Employee"*).
+
+    >>> _key_attribute(variable(Employee, []).salary).text
+    'salary'
+    """
     chain, _ = walk_chain(order_key)
     attribute = chain[-1]
     return RoleFragment.for_attribute(
@@ -89,18 +103,35 @@ class RankingForm(SpecificityRule):
 
     The registry is *total*: :class:`LeadingRankForm` is the unguarded base every specific form
     refines, so :meth:`~SpecificityRule.most_applicable` always returns a form. Adding a template is
-    a new subclass; nothing else changes (open/closed). Mirrors ``grammar/conditions/forms.py``.
+    a new subclass; nothing else changes (open/closed). Mirrors ``grammar/conditions/placement.py``.
     """
 
     @classmethod
     @abstractmethod
     def applies(cls, request: RankingRequest) -> bool:
-        """:return: ``True`` when this form renders *request*."""
+        """:return: ``True`` when this form renders *request*.
+
+        This is the per-form guard that decides whether the ranking takes this form's surface; the
+        winning form for the shown ranking is what makes it read *"the top three Employees by
+        salary"*:
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(entity(employee).ordered_by(employee.salary, descending=True).limit(3))
+        'Find the top three Employees by salary'
+        """
 
     @classmethod
     @abstractmethod
     def render(cls, request: RankingRequest) -> RankingSurface:
-        """:return: *request* rendered into the selection's ranking pieces."""
+        """:return: *request* rendered into the selection's ranking pieces.
+
+        It produces the ranking pieces the selection noun carries — here the *"top three"* qualifier
+        and the *"by salary"* modifier that surround the head:
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(entity(employee).ordered_by(employee.salary, descending=True).limit(3))
+        'Find the top three Employees by salary'
+        """
 
 
 class LeadingRankForm(RankingForm):
@@ -110,10 +141,29 @@ class LeadingRankForm(RankingForm):
 
     @classmethod
     def applies(cls, request: RankingRequest) -> bool:
+        """:return: Always ``True`` — the unguarded base every specific form refines.
+
+        Being the always-matching base, this is the decision that routes any ranking with no more
+        specific form to the leading-quality surface — here ordering by the selection itself names no
+        key, so the result is the bare *"the top three Robots"*:
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(entity(robot).ordered_by(robot, descending=True).limit(3))
+        'Find the top three Robots'
+        """
         return True
 
     @classmethod
     def render(cls, request: RankingRequest) -> RankingSurface:
+        """:return: The quality (+ count) leading the noun, with no key named.
+
+        It emits the leading qualifier *"first two"* placed before the head, with no trailing key
+        modifier — so the ranking reads *"the first two Robots"*:
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(entity(robot).limit(2))
+        'Find the first two Robots'
+        """
         n = request.plan.n
         quality = _quality(request.plan.direction, n).as_fragment()
         pre_head = quality if n == 1 else PhraseFragment(parts=[quality, _cardinal(n)])
@@ -126,11 +176,31 @@ class AttributeSuperlativeForm(LeadingRankForm):
 
     @classmethod
     def applies(cls, request: RankingRequest) -> bool:
+        """:return: ``True`` for an attribute key with *n = 1*.
+
+        This is the decision that routes a single result ordered by an attribute to the superlative
+        surface — so the output is *"the Employee with the highest salary"* rather than a
+        leading-quality *"the highest Employee"*:
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(entity(employee).ordered_by(employee.salary, descending=True).limit(1))
+        'Find the Employee with the highest salary'
+        """
         plan = request.plan
         return plan.relation is RankingKeyRelation.ATTRIBUTE and plan.n == 1
 
     @classmethod
     def render(cls, request: RankingRequest) -> RankingSurface:
+        """:return: The superlative attached to the key — *"with the highest/lowest <attribute>"*.
+
+        It emits no leading qualifier; instead it attaches the post-nominal modifier *"with the
+        lowest salary"* to the head, which is why the result trails the key rather than fronting a
+        quality word:
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(entity(employee).ordered_by(employee.salary).limit(1))
+        'Find the Employee with the lowest salary'
+        """
         superlative = (
             RankingWords.LOWEST
             if request.plan.direction is RankingDirection.ASCENDING
@@ -155,11 +225,30 @@ class AttributeRankedByForm(LeadingRankForm):
 
     @classmethod
     def applies(cls, request: RankingRequest) -> bool:
+        """:return: ``True`` for an attribute key with *n > 1*.
+
+        This is the decision that routes several results ordered by an attribute to the *"by
+        <attribute>"* surface — so the shown ranking reads *"the top three Employees by salary"*
+        rather than dropping the key as the leading base form would:
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(entity(employee).ordered_by(employee.salary, descending=True).limit(3))
+        'Find the top three Employees by salary'
+        """
         plan = request.plan
         return plan.relation is RankingKeyRelation.ATTRIBUTE and plan.n > 1
 
     @classmethod
     def render(cls, request: RankingRequest) -> RankingSurface:
+        """:return: The count leading the noun with the key named — *"top/bottom <n> … by <attribute>"*.
+
+        It emits both the leading *"bottom three"* qualifier and the post-nominal *"by salary"*
+        modifier, so the head is framed on both sides — *"the bottom three Employees by salary"*:
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(entity(employee).ordered_by(employee.salary).limit(3))
+        'Find the bottom three Employees by salary'
+        """
         plan = request.plan
         quality = (
             RankingWords.BOTTOM
@@ -183,5 +272,13 @@ def ranking_surface(request: RankingRequest) -> RankingSurface:
 
     :param request: The ranking and selection-type label.
     :return: The ranking pieces for the selection noun phrase.
+
+    The chosen form drives the selection's surface — *"the top three Employees by salary"* for a
+    descending attribute ranking of several:
+
+    >>> employee = variable(Employee, [])
+    >>> verbalize_expression(
+    ...     the(entity(employee)).ordered_by(employee.salary, descending=True).limit(3))
+    'Find the top three Employees by salary'
     """
     return RankingForm.most_applicable(request).render(request)

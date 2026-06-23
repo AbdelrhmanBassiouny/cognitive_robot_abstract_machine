@@ -22,6 +22,17 @@ def value_phrase(value: Any) -> str:
 
     :param value: Python value from a literal node.
     :return: Human-readable string representation.
+
+    >>> value_phrase(None)
+    'nothing'
+    >>> value_phrase(int)
+    'int'
+    >>> value_phrase((int, str))
+    'int or str'
+    >>> value_phrase(datetime.datetime(2026, 5, 23))
+    'May 23, 2026'
+    >>> value_phrase(42)
+    '42'
     """
     if value is None:
         return "nothing"

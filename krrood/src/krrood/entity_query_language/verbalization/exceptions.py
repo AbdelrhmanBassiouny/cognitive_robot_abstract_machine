@@ -17,7 +17,7 @@ from krrood.exceptions import DataclassException
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
     from krrood.entity_query_language.verbalization.fragments.base import Fragment
-    from krrood.entity_query_language.verbalization.grammar.conditions.forms import (
+    from krrood.entity_query_language.verbalization.grammar.conditions.placement import (
         ConditionForm,
     )
 
@@ -67,7 +67,7 @@ class UnloweredFragmentError(DataclassException):
 @dataclass
 class UndeclaredFormSlotError(DataclassException):
     """
-    A concrete :class:`~krrood.entity_query_language.verbalization.grammar.conditions.forms.ConditionForm`
+    A concrete :class:`~krrood.entity_query_language.verbalization.grammar.conditions.placement.ConditionForm`
     subclass did not declare its ``slot`` class variable — caught at class-definition time rather
     than as a silent ``AttributeError`` deep in ``place``.
     """

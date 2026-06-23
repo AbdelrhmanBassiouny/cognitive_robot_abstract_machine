@@ -3,7 +3,7 @@ from __future__ import annotations
 import operator
 from dataclasses import dataclass
 
-from typing_extensions import Dict, List, Optional, Tuple
+from typing_extensions import List, Optional, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
@@ -12,6 +12,9 @@ from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.query.match import Match, is_underspecified
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
+from krrood.entity_query_language.verbalization.microplanning.coordination import (
+    group_by_owner,
+)
 
 
 @dataclass(frozen=True)
@@ -44,12 +47,24 @@ class AttributeGroup:
 
     @property
     def concrete(self) -> List[AttributeAssignment]:
-        """:return: The assignments with a concrete value (the *"given that …"* part)."""
+        """:return: The assignments with a concrete value (the *"given that …"* part).
+
+        >>> from krrood.entity_query_language.verbalization.grammar.match.planner import MatchPlanner
+        >>> plan = MatchPlanner(underspecified(Robot)(name="R2", battery=...)).plan()
+        >>> len(plan.groups[0].concrete)
+        1
+        """
         return [a for a in self.assignments if not a.is_predicted]
 
     @property
     def predicted(self) -> List[AttributeAssignment]:
-        """:return: The Ellipsis assignments (the *"predict …"* part)."""
+        """:return: The Ellipsis assignments (the *"predict …"* part).
+
+        >>> from krrood.entity_query_language.verbalization.grammar.match.planner import MatchPlanner
+        >>> plan = MatchPlanner(underspecified(Robot)(name="R2", battery=...)).plan()
+        >>> len(plan.groups[0].predicted)
+        1
+        """
         return [a for a in self.assignments if a.is_predicted]
 
 
@@ -85,32 +100,28 @@ class MatchPlanner(Planner[Match, MatchPlan]):
     their object so related attributes (a position's x/y/z) verbalise together.
 
     Reference: Reiter & Dale (2000) — content determination + aggregation (microplanning).
+
+    >>> MatchPlanner(underspecified(Robot)(name="R2", battery=80)).plan().underspecified
+    True
     """
 
     def plan(self) -> MatchPlan:
-        """:return: The match plan."""
+        """:return: The match plan.
+
+        >>> plan = MatchPlanner(underspecified(Robot)(name="R2", battery=80)).plan()
+        >>> (type(plan.selection).__name__, len(plan.groups))
+        ('Variable', 1)
+        """
         match = self.node
         match.resolve()
-        ordered_keys: List[object] = []
-        builders: Dict[object, Tuple[SymbolicExpression, List[AttributeAssignment]]] = (
-            {}
+        # Aggregate single-hop equalities by their object via the shared owner-grouping primitive;
+        # conditions that are not such an equality (``_as_assignment`` → ``None``) are the remainder.
+        owner_groups, other = group_by_owner(
+            list(match.conditions), self._as_assignment
         )
-        other: List[SymbolicExpression] = []
-
-        for condition in match.conditions:
-            decomposed = self._as_assignment(condition)
-            if decomposed is None:
-                other.append(condition)
-                continue
-            obj, assignment = decomposed
-            if obj._id_ not in builders:
-                builders[obj._id_] = (obj, [])
-                ordered_keys.append(obj._id_)
-            builders[obj._id_][1].append(assignment)
-
         groups = [
-            AttributeGroup(object=builders[key][0], assignments=builders[key][1])
-            for key in ordered_keys
+            AttributeGroup(object=group.owner, assignments=group.items)
+            for group in owner_groups
         ]
         return MatchPlan(
             underspecified=is_underspecified(match),
@@ -130,6 +141,12 @@ class MatchPlanner(Planner[Match, MatchPlan]):
             (``object.attr == value``) — grouping by the attribute's immediate owner so a nested
             match's attributes aggregate per sub-object (``pose.position.x/y/z`` group under
             ``pose.position``) — else ``None`` (a non-equality or non-attribute condition).
+
+        >>> MatchPlanner._as_assignment(variable(Robot, []).battery > 50) is None
+        True
+        >>> owner, assignment = MatchPlanner._as_assignment(variable(Robot, []).name == "R2")
+        >>> assignment.is_predicted
+        False
         """
         if not (
             isinstance(condition, Comparator) and condition.operation is operator.eq

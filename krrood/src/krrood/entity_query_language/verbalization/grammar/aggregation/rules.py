@@ -26,6 +26,12 @@ class AggregatorRule(PhraseRule):
     name = "aggregator"
 
     def build(self, node: Aggregator, context: RuleContext) -> Fragment:
+        """:return: the definite noun phrase for *node* — *"the <aggregation> of <child>"* — or the
+        bare aggregation word for a childless aggregate.
+
+        >>> verbalize_expression(max(variable(BankTransaction, []).amount_details.amount))
+        'the maximum of the amount of the amount_details of a BankTransaction'
+        """
         # The aggregation word owns its complement realisation (the "of" and the child's number);
         # the rule only chooses the structure — a childless aggregate is the bare word, otherwise a
         # definite noun phrase around the lexicon-built complement.
@@ -33,8 +39,13 @@ class AggregatorRule(PhraseRule):
         if not kind.has_child:
             return kind.as_fragment()  # childless aggregate, e.g. "count of all"
         child_fragment = context.child(node._child_, number=kind.child_number)
+        # A computed quantity is a referring expression: named in full when first introduced (the
+        # reported column), a later mention of the same aggregate (a HAVING / ordering on it) is the
+        # general repeat-reduction's job — "the sum of salaries of Employees" → "the sum".
         return NounPhrase(
             head=kind.as_fragment(),
             definiteness=Definiteness.DEFINITE,
             modifiers=kind.complement(child_fragment),
+            referent_id=node._id_,
+            subject_of_modifiers=False,
         )

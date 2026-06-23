@@ -88,6 +88,9 @@ class RuleContext:
         :param inline: Fold the child in chain-root (inline-noun) position.
         :param as_value: Fold the child in value position (domain variables list their candidates).
         :return: The child's fragment.
+
+        >>> verbalize_expression(variable(BankTransaction, []).amount_details.amount)
+        'the amount of the amount_details of a BankTransaction'
         """
         return self.recurse(
             node, RenderOptions(number=number, inline=inline, as_value=as_value)
@@ -184,6 +187,13 @@ def _is_guarded(rule: PhraseRule) -> bool:
     """
     :param rule: A phrase rule instance.
     :return: ``True`` when *rule* overrides ``when`` (a guarded rule).
+
+    >>> from krrood.entity_query_language.verbalization.grammar.query.rules import (
+    ...     SetOfRule, TopLevelEntityRule)
+    >>> _is_guarded(TopLevelEntityRule())
+    True
+    >>> _is_guarded(SetOfRule())
+    False
     """
     return type(rule).when is not PhraseRule.when
 
@@ -207,6 +217,16 @@ def select(
     :param context: The per-node context, passed to each rule's ``when``.
     :return: The most-specific rule whose ``construct`` and ``when`` match *node*, or ``None``
         when none apply (the caller supplies the fallback).
+
+    The winning rule decides the phrasing: an inference-rule entity is dispatched to the
+    more-derived ``InferenceRuleRule`` (an ``IF … THEN …`` block) rather than the plain
+    top-level entity form.
+
+    >>> from krrood.entity_query_language.factories import inference
+    >>> fixed = variable(FixedConnection, [])
+    >>> verbalize_expression(entity(inference(Drawer)(
+    ...     container=fixed.parent, handle=fixed.child))).startswith('If')
+    True
     """
     candidates = [
         rule

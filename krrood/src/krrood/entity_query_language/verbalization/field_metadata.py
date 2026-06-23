@@ -4,7 +4,9 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Callable, Dict, Mapping, Optional, Tuple, Union
+from typing_extensions import Callable, Dict, Mapping, Optional, Tuple, TypeVar, Union
+
+_Value = TypeVar("_Value")
 
 
 @dataclass(frozen=True)
@@ -12,8 +14,8 @@ class FieldMetadata:
     """
     The linguistic metadata for one ``(owner type, attribute)`` pair, consumed at runtime.
 
-    Two overrides are read by the verbalizer (richer, advisory output — a suggested *source* rename,
-    rationale — lives in the human-readable report the offline generator writes, not here):
+    The overrides below are read by the verbalizer (richer, advisory output — a suggested *source*
+    rename, rationale — lives in the human-readable report the offline generator writes, not here):
     """
 
     display_name: Optional[str] = None
@@ -27,6 +29,13 @@ class FieldMetadata:
     override of the runtime heuristic
     (:func:`~…grammar.conditions.recognition.relational_verb_phrase`), so it covers relations the
     name-based heuristic cannot detect (irregular or non-participle namings, present-tense verbs)."""
+
+    countable: Optional[bool] = None
+    """Whether the attribute's noun is countable, or ``None`` to defer to the curated mass-noun
+    lexicon. ``False`` marks an uncountable (mass) noun so a genitive hop drops the article
+    (*"the amount of money"*, not *"… of the money"*); this is the per-field override of the
+    name-based default (:class:`~…vocabulary.countability.NounCountability`), covering mass nouns the
+    curated set omits and domain terms whose countability differs from ordinary English."""
 
 
 _Key = Tuple[str, str]
@@ -56,8 +65,8 @@ class FieldMetadataRegistry:
         self,
         owner: type,
         attribute: str,
-        select: Callable[[FieldMetadata], Optional[str]],
-    ) -> Optional[str]:
+        select: Callable[[FieldMetadata], Optional[_Value]],
+    ) -> Optional[_Value]:
         """
         Walk *owner*'s MRO by name and return the first non-``None`` value *select* reads from a
         matching entry — so an attribute declared on a base class resolves when accessed through a
@@ -68,11 +77,8 @@ class FieldMetadataRegistry:
         :param select: Reads the wanted field off a matched :class:`FieldMetadata`.
         :return: The first non-``None`` value found along the MRO, or ``None``.
         """
-        for klass in getattr(owner, "__mro__", (owner,)):
-            name = getattr(klass, "__name__", None)
-            if name is None:
-                continue
-            meta = self.by_key.get((name, attribute))
+        for klass in owner.__mro__:
+            meta = self.by_key.get((klass.__name__, attribute))
             if meta is not None and select(meta) is not None:
                 return select(meta)
         return None
@@ -93,6 +99,15 @@ class FieldMetadataRegistry:
             when the field is not annotated as relational.
         """
         return self._resolve(owner, attribute, lambda meta: meta.relation_verb_phrase)
+
+    def countable(self, owner: type, attribute: str) -> Optional[bool]:
+        """
+        :param owner: The class that owns the attribute.
+        :param attribute: The canonical attribute name.
+        :return: The countability override for *owner*.*attribute* (``False`` for a mass noun), or
+            ``None`` when no entry applies and the curated lexicon should decide.
+        """
+        return self._resolve(owner, attribute, lambda meta: meta.countable)
 
     @classmethod
     def from_mapping(
@@ -117,8 +132,8 @@ class FieldMetadataRegistry:
         Load a registry from a committed JSON artifact.
 
         The artifact is nested ``{"TypeName": {"attribute": {"display_name": "…",
-        "relation_verb_phrase": "…"}, …}, …}`` (a bare string value is also accepted as shorthand for
-        ``display_name``), matching what the offline generator writes.
+        "relation_verb_phrase": "…", "countable": false}, …}, …}`` (a bare string value is also
+        accepted as shorthand for ``display_name``), matching what the offline generator writes.
 
         :param path: Path to the JSON artifact.
         :return: The loaded registry (empty when the file holds an empty object).
@@ -131,6 +146,7 @@ class FieldMetadataRegistry:
                     meta = FieldMetadata(
                         display_name=entry.get("display_name"),
                         relation_verb_phrase=entry.get("relation_verb_phrase"),
+                        countable=entry.get("countable"),
                     )
                 else:
                     meta = FieldMetadata(display_name=entry)

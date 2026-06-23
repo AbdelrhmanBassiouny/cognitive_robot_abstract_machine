@@ -27,6 +27,17 @@ class InstantiatedVariableRule(PhraseRule):
     name = "instantiated-variable"
 
     def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
+        """:return: The instantiated variable's *"a TypeName, where the field of the TypeName is …"*
+        noun phrase, built by the :class:`InstantiatedAssembler`.
+
+        Its contribution is selecting the generic decomposed surface: with no verbalization template
+        on ``Drawer``, this fallback rule fires and delegates to the assembler, which is why the
+        result is the long *"a Drawer, where …"* form rather than a templated sentence.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> verbalize_expression(inference(Drawer)(container=connection.parent, handle=connection.child))
+        'a Drawer, where the container of the Drawer is the parent of a FixedConnection, and the handle of the Drawer is the child of the FixedConnection'
+        """
         return InstantiatedAssembler(context).assemble(node)
 
 
@@ -37,9 +48,25 @@ class InstantiatedVerbalizableRule(PhraseRule):
     name = "instantiated-verbalizable"
 
     def when(self, node: InstantiatedVariable, context: RuleContext) -> bool:
+        """:return: ``True`` when *node*'s type supplies a verbalization template, selecting this rule
+        over the generic *"a TypeName, where …"* form.
+
+        Its contribution is the guard that admits this rule: ``IsReachable`` supplies a template, so
+        this rule wins and the example renders via the template as *"a Robot is reachable"* instead
+        of the generic decomposed phrase. :meth:`build` then fills that template.
+
+        >>> verbalize_expression(inference(IsReachable)(body=variable(Robot, [])))
+        'a Robot is reachable'
+        """
         return InstantiatedPlanner.has_template(node)
 
     def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
+        """:return: The type's template filled with its rendered field values
+        (*"{body} is reachable"* → *"a Robot is reachable"*).
+
+        >>> verbalize_expression(inference(IsReachable)(body=variable(Robot, [])))
+        'a Robot is reachable'
+        """
         # An opaque format string: it consumes finalized child text, so it realizes its
         # children locally (morphology pass + flatten) rather than deferring to the global pass.
         template = node._type_._verbalization_template_()

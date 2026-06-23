@@ -241,3 +241,103 @@ def test_generate_runs_pipeline_with_a_fake_parse_fn():
     assert artifact["GraspConfig"]["rotate_gripper"] == {
         "display_name": "gripper rotation"
     }
+
+
+# ── countability metadata ────────────────────────────────────────────────────────
+
+
+@dataclass
+class _Reading:
+    value: float
+
+
+@dataclass
+class _Sensor:
+    throughput: _Reading
+
+
+@dataclass
+class _Device:
+    sensor: _Sensor
+
+
+def test_countable_lookup_and_mro():
+    class Base:
+        pass
+
+    class Sub(Base):
+        pass
+
+    registry = FieldMetadataRegistry.from_mapping(
+        {(Base, "load"): FieldMetadata(countable=False)}
+    )
+    assert registry.countable(Base, "load") is False
+    assert registry.countable(Sub, "load") is False  # resolved via MRO
+    assert registry.countable(Base, "missing") is None
+    assert FieldMetadataRegistry().countable(Base, "load") is None
+
+
+def test_from_json_loads_countable(tmp_path):
+    artifact = tmp_path / "field_metadata.json"
+    artifact.write_text('{"_Sensor": {"throughput": {"countable": false}}}')
+    registry = FieldMetadataRegistry.from_json(artifact)
+    assert registry.countable(_Sensor, "throughput") is False
+
+
+def test_build_runtime_artifact_includes_uncountable_only():
+    """A field marked uncountable is emitted as ``countable: false``; a countable / unspecified field
+    carries no countability key."""
+    suggestions = {
+        "Sensor": [
+            gen.FieldSuggestion("throughput", "throughput", countable=False),
+            gen.FieldSuggestion("reading", "reading", countable=True),  # default → omitted
+            gen.FieldSuggestion("name", "name"),  # unspecified → omitted
+        ]
+    }
+    assert gen.build_runtime_artifact(suggestions) == {
+        "Sensor": {"throughput": {"countable": False}}
+    }
+
+
+def test_metadata_marks_a_non_lexicon_field_uncountable():
+    """A mass noun the curated lexicon does not know drops its genitive article once metadata marks
+    it uncountable, while an empty registry keeps the article."""
+    expression = variable(_Device, []).sensor.throughput.value
+    assert (
+        _verbalize(expression, FieldMetadataRegistry())
+        == "the value of the throughput of the sensor of a _Device"
+    )
+    registry = FieldMetadataRegistry.from_mapping(
+        {(_Sensor, "throughput"): FieldMetadata(countable=False)}
+    )
+    assert (
+        _verbalize(expression, registry)
+        == "the value of throughput of the sensor of a _Device"
+    )
+
+
+@dataclass
+class _Cash:
+    amount: float
+
+
+@dataclass
+class _Account:
+    money: _Cash
+
+
+def test_metadata_countability_overrides_the_lexicon():
+    """A field whose name is a lexicon mass noun (``money``) keeps its article when metadata asserts
+    it is countable in this domain — the per-field override wins over the curated default."""
+    expression = variable(_Account, []).money.amount
+    assert (
+        _verbalize(expression, FieldMetadataRegistry())
+        == "the amount of money of a _Account"
+    )
+    registry = FieldMetadataRegistry.from_mapping(
+        {(_Account, "money"): FieldMetadata(countable=True)}
+    )
+    assert (
+        _verbalize(expression, registry)
+        == "the amount of the money of a _Account"
+    )

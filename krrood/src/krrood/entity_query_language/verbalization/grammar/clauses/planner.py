@@ -29,7 +29,11 @@ class GroupPlan:
 
     @property
     def has_keys(self) -> bool:
-        """:return: ``True`` when the query carries at least one group-by key."""
+        """:return: ``True`` when the query carries at least one group-by key.
+
+        >>> GroupPlan(keys=[], aggregated=[]).has_keys
+        False
+        """
         return bool(self.keys)
 
 
@@ -52,7 +56,11 @@ class GroupedByPlanner(Planner[Union[Query, GroupedBy], GroupPlan]):
     """
 
     def plan(self) -> GroupPlan:
-        """:return: The group plan: the group-by keys and the expressions aggregated over them."""
+        """:return: The group plan: the group-by keys and the expressions aggregated over them.
+
+        >>> GroupedByPlanner(an(entity(variable(Employee, [])))).plan().has_keys
+        False
+        """
         grouped = self._grouped_by()
         if grouped is None or not grouped.variables_to_group_by:
             return GroupPlan(keys=[], aggregated=[])
@@ -69,7 +77,11 @@ class GroupedByPlanner(Planner[Union[Query, GroupedBy], GroupPlan]):
 
     def _grouped_by(self) -> Optional[GroupedBy]:
         """:return: The GROUP BY of *node* — *node* itself when it is a bare ``GroupedBy``, else
-        the query's grouped-by expression (``None`` when the query is ungrouped)."""
+        the query's grouped-by expression (``None`` when the query is ungrouped).
+
+        >>> GroupedByPlanner(an(entity(variable(Employee, []))))._grouped_by() is None
+        True
+        """
         if isinstance(self.node, GroupedBy):
             return self.node
         return self.node._grouped_by_expression_

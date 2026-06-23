@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing_extensions import Iterable, Optional
+from typing_extensions import Iterable, List, Mapping, Optional
 
 from krrood.entity_query_language.verbalization.field_metadata import (
     FieldMetadataRegistry,
@@ -29,9 +29,12 @@ from krrood.entity_query_language.verbalization.rendering.morphology_processor i
 from krrood.entity_query_language.verbalization.rendering.orthography_processor import (
     OrthographyProcessor,
 )
+from krrood.entity_query_language.verbalization.rendering.passes import RealizationPass
 
-# The stateless passes are shared module-level instances; the coreference pass is
-# stateful per walk and is therefore created fresh inside realize_tree.
+# The stateless lowering passes are shared module-level instances. The coreference pass is stateful
+# per walk (parameterised by discourse, numbered labels, and prior-build referents) and the
+# field-metadata pass is parameterised by the per-run registry, so both are created fresh per call
+# and assembled into the pipeline in realize_tree.
 _DETERMINER = DeterminerProcessor()
 _MORPHOLOGY = MorphologyProcessor()
 _ORTHOGRAPHY = OrthographyProcessor()
@@ -39,8 +42,9 @@ _ORTHOGRAPHY = OrthographyProcessor()
 
 def realize_tree(
     fragment: Fragment,
-    already_seen: Optional[Iterable[uuid.UUID]] = None,
+    previously_introduced_referents: Optional[Iterable[uuid.UUID]] = None,
     discourse: DiscourseView = EMPTY_DISCOURSE,
+    numbered_labels: Optional[Mapping[uuid.UUID, str]] = None,
     field_metadata: Optional[FieldMetadataRegistry] = None,
 ) -> Fragment:
     """
@@ -56,20 +60,40 @@ def realize_tree(
     Reference: Gatt & Reiter (2009), SimpleNLG — the ordered realisation stages.
 
     :param fragment: Root of the fragment tree.
-    :param already_seen: Referents introduced by prior builds on a shared context.
+    :param previously_introduced_referents: Referents introduced by prior builds on a shared context.
     :param discourse: The focus-per-scope view the coreference pass consults (empty for a local
         sub-tree, which has no query scope of its own).
+    :param numbered_labels: Disambiguation numbers for referents the rules cannot label themselves
+        (relational referents) — applied by the coreference pass.
     :param field_metadata: Per-field display-name overrides; an empty registry (the default) keeps
         every attribute's raw identifier.
     :return: The fully realised fragment tree.
+
+    This is the pass-running step: it returns a lowered fragment *tree*, so the example wraps it in
+    :func:`flatten_fragment_to_plain_text` to read the text out; :func:`realize_subtree` runs the
+    same passes and returns that plain string directly.
+
+    >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+    >>> tree = EQLVerbalizer().build(a(entity(variable(Robot, []))))
+    >>> flatten_fragment_to_plain_text(realize_tree(tree))
+    'Find a Robot'
     """
-    resolved = CoreferenceProcessor(discourse=discourse).process(
-        fragment, already_seen=already_seen
-    )
     registry = field_metadata if field_metadata is not None else FieldMetadataRegistry()
-    renamed = FieldMetadataProcessor(registry).process(_DETERMINER.process(resolved))
-    inflected = _MORPHOLOGY.process(renamed)
-    return _ORTHOGRAPHY.process(inflected)
+    pipeline: List[RealizationPass] = [
+        CoreferenceProcessor(
+            discourse=discourse,
+            numbered_labels=dict(numbered_labels or {}),
+            previously_introduced_referents=tuple(previously_introduced_referents or ()),
+        ),
+        _DETERMINER,
+        FieldMetadataProcessor(registry),
+        _MORPHOLOGY,
+        _ORTHOGRAPHY,
+    ]
+    realised = fragment
+    for realisation_pass in pipeline:
+        realised = realisation_pass.process(realised)
+    return realised
 
 
 def realize_subtree(fragment: Fragment) -> str:
@@ -81,5 +105,13 @@ def realize_subtree(fragment: Fragment) -> str:
 
     :param fragment: Root of the sub-tree.
     :return: The realised plain-text string.
+
+    Its contribution over :func:`realize_tree` is the final flatten: it returns the plain *string*
+    *Find a Robot*, not a fragment tree — the form an opaque template needs for its locally realised
+    children.
+
+    >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+    >>> realize_subtree(EQLVerbalizer().build(a(entity(variable(Robot, [])))))
+    'Find a Robot'
     """
     return flatten_fragment_to_plain_text(realize_tree(fragment))

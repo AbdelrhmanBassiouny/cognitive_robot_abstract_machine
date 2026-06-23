@@ -26,7 +26,7 @@ from dataclasses import dataclass, fields as dataclass_fields, is_dataclass
 from pathlib import Path
 from types import ModuleType
 
-from typing_extensions import Callable, Dict, List, Optional
+from typing_extensions import Callable, Dict, List, Optional, Union
 
 from krrood.ormatic.utils import classes_of_module
 
@@ -48,6 +48,11 @@ class FieldSuggestion:
     relation_verb_phrase: Optional[str] = None
     """The passive verb phrase when the field names a *relation* as a verb (``assigned_to`` →
     *"assigned to"*), else ``None`` — drives the absence form *"has not been <phrase> any <Type>"*."""
+
+    countable: Optional[bool] = None
+    """Whether the attribute's noun is countable, or ``None`` to defer to the curated mass-noun
+    lexicon. ``False`` marks a mass noun (``money``, ``water``) so a genitive hop drops the article
+    (*"the amount of money"*); ``True`` is an explicit countable assertion."""
 
     suggested_rename: Optional[str] = None
     """A genuinely better *source* identifier, or ``None`` — advisory only, never auto-applied."""
@@ -88,26 +93,28 @@ def iter_type_fields(modules: List[ModuleType]) -> Dict[str, List[str]]:
 
 def build_runtime_artifact(
     suggestions_by_type: Dict[str, List[FieldSuggestion]],
-) -> Dict[str, Dict[str, Dict[str, str]]]:
+) -> Dict[str, Dict[str, Dict[str, Union[str, bool]]]]:
     """
     Build the runtime JSON artifact, keeping only the entries that actually carry an override.
 
-    A field is emitted when its display name differs from the raw identifier, or it is annotated
-    with a relational verb phrase (or both).
+    A field is emitted when its display name differs from the raw identifier, it is annotated with a
+    relational verb phrase, or it is marked uncountable (any combination).
 
     :param suggestions_by_type: The per-type suggestions.
-    :return: ``{TypeName: {field: {"display_name"?: …, "relation_verb_phrase"?: …}}}`` (types with
-        no override are omitted).
+    :return: ``{TypeName: {field: {"display_name"?: …, "relation_verb_phrase"?: …,
+        "countable"?: false}}}`` (types with no override are omitted).
     """
-    artifact: Dict[str, Dict[str, Dict[str, str]]] = {}
+    artifact: Dict[str, Dict[str, Dict[str, Union[str, bool]]]] = {}
     for type_name, suggestions in suggestions_by_type.items():
-        overrides: Dict[str, Dict[str, str]] = {}
+        overrides: Dict[str, Dict[str, Union[str, bool]]] = {}
         for s in suggestions:
-            entry: Dict[str, str] = {}
+            entry: Dict[str, Union[str, bool]] = {}
             if s.display_name and s.display_name != s.field_name:
                 entry["display_name"] = s.display_name
             if s.relation_verb_phrase:
                 entry["relation_verb_phrase"] = s.relation_verb_phrase
+            if s.countable is False:
+                entry["countable"] = False
             if entry:
                 overrides[s.field_name] = entry
         if overrides:
@@ -195,6 +202,11 @@ manages -> "managing" is wrong; use "managed by" only if the field holds the man
 for genuine verb/relation fields (assigned_to, owned_by, reports_to, manager, parent for a \
 containment); for a plain noun attribute (name, battery, color) return null. This is the override \
 for relations the runtime name-heuristic cannot detect on its own.
+- countable: false ONLY when the attribute's noun is a mass/uncountable noun (money, water, \
+information, advice, equipment) — so it reads "the amount of money", never "the amount of the \
+money". For an ordinary countable noun (battery, salary, department) return null; do not return \
+true unless the noun looks uncountable in general English but is countable in THIS domain. Judge \
+the display_name word, not the field name.
 - suggested_rename: a genuinely better SOURCE identifier when the field name is poorly chosen \
 (begin -> "start"), else null. This is advice for developers, not applied automatically.
 - rationale: one short clause explaining the choice.
@@ -220,6 +232,7 @@ def anthropic_parse_fn(model: str = "claude-opus-4-8") -> ParseFn:
         field_name: str
         display_name: str
         relation_verb_phrase: Optional[str] = None
+        countable: Optional[bool] = None
         suggested_rename: Optional[str] = None
         rationale: str = ""
         confidence: str = "medium"
@@ -254,6 +267,7 @@ def anthropic_parse_fn(model: str = "claude-opus-4-8") -> ParseFn:
                 field_name=s.field_name,
                 display_name=s.display_name,
                 relation_verb_phrase=s.relation_verb_phrase,
+                countable=s.countable,
                 suggested_rename=s.suggested_rename,
                 rationale=s.rationale,
                 confidence=s.confidence,

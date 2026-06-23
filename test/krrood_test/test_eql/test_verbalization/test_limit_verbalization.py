@@ -4,7 +4,8 @@ the selection.
 
 A ``limit`` reshapes the selection's leading phrase rather than adding a trailing clause:
 *"the first two Robots"*, *"the top three Employees by salary"*, *"the Employee with the highest
-salary"*. When a limit is present the standalone *"ordered by … (descending)"* clause is suppressed;
+salary"*. When a limit is present the standalone *"ordered by … from highest to lowest"* clause is
+suppressed;
 ordering *without* a limit keeps it. Ordering by an attribute of the selection (vs. the selection
 itself) changes where the superlative attaches.
 """
@@ -101,13 +102,27 @@ def test_limit_suppresses_the_ordered_by_clause():
         entity(e).ordered_by(e.salary, descending=True).limit(3)
     )
     assert "ordered by" not in text
-    assert "descending" not in text
+    assert "from highest to lowest" not in text
 
 
-def test_ordering_without_limit_keeps_the_ordered_by_clause():
+def test_ordering_without_limit_reports_the_ordered_listing():
+    """An unranked ordered query is a listing, not a search: it reports the whole (plural)
+    population and keeps the ordered-by clause."""
     e = variable(Employee, [])
     text = verbalize_expression(an(entity(e).ordered_by(e.salary, descending=True)))
-    assert text == "Find an Employee ordered by its salary (descending)"
+    assert text == "Report Employees ordered by their salaries from highest to lowest"
+
+
+def test_conditioned_ordering_still_reports():
+    """Report-ness and conditions are orthogonal: a filtered ordered query is still a report (a
+    filtered listing), so it keeps "Report" and the plural subject alongside its restriction.
+    """
+    e = variable(Employee, [])
+    text = verbalize_expression(an(entity(e).where(e.salary > 5).ordered_by(e.salary)))
+    assert (
+        text
+        == "Report Employees whose salaries are greater than 5, ordered by their salaries from lowest to highest"
+    )
 
 
 # ── composition with WHERE (the ranking selection stays a referring subject) ──
@@ -122,7 +137,7 @@ def test_ranking_composes_with_where_clause():
         .limit(3)
     )
     assert verbalize_expression(q) == (
-        "Find the top three Employees by starting_salary whose salary is greater than 1000"
+        "Find the top three Employees by starting_salary whose salaries are greater than 1000"
     )
 
 
@@ -167,7 +182,7 @@ def test_ranking_hierarchical_rendering():
     assert text == (
         "Find the top three Employees by starting_salary\n"
         "  whose\n"
-        "    - salary is greater than 1000"
+        "    - salaries are greater than 1000"
     )
 
 

@@ -59,6 +59,10 @@ class FragmentRenderer(ABC):
         :param role: Semantic role for colour lookup.
         :param source_reference: Source reference for link resolution; may be ``None``.
         :return: Coloured (and optionally linked) string.
+
+        >>> from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
+        >>> ParagraphRenderer()._render_role("Robot", SemanticRole.VARIABLE, None)
+        'Robot'
         """
         colored = self.formatter.colorize(text, role)
         if source_reference is not None and self.link_resolver is not None:
@@ -84,6 +88,16 @@ class ParagraphRenderer(FragmentRenderer):
 
         :param fragment: Root of the fragment tree.
         :return: Plain or coloured prose string (no newlines or bullets).
+
+        Its contribution is flattening the *whole* tree — block headers and items included — into one
+        prose line; the same tree given to :meth:`HierarchicalRenderer.render` would instead become an
+        indented bullet list.
+
+        >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+        >>> robot = variable(Robot, [])
+        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> ParagraphRenderer().render(tree)
+        'Find a Robot whose battery is between 50 and 90'
         """
 
         def _block(block: BlockFragment) -> str:
@@ -138,6 +152,14 @@ class HierarchicalRenderer(FragmentRenderer):
         :param fragment: Root of the fragment tree.
         :param depth: Current indentation depth (incremented for each block level).
         :return: Multi-line string with bullets and indentation.
+
+        >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+        >>> robot = variable(Robot, [])
+        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> print(HierarchicalRenderer().render(tree))
+        Find a Robot
+          whose
+            - battery is between 50 and 90
         """
         match fragment:
             case BlockFragment(header=header, items=items):
@@ -169,14 +191,32 @@ class HierarchicalRenderer(FragmentRenderer):
 
     @property
     def formatted_indent(self) -> str:
-        """:return: The indentation string, with spaces replaced by the formatter's space character."""
+        """:return: The indentation string, with spaces replaced by the formatter's space character.
+
+        >>> HierarchicalRenderer().formatted_indent
+        '  '
+        """
         return self.indent_size.value.replace(" ", self.formatter.space)
 
     def _render_item(
         self, fragment: Fragment, depth: int, conjunction: Optional[Fragment] = None
     ) -> str:
         """Render one item, prepending the bullet at its indentation level (and a coordinating
-        conjunction when this is the last item of a coordinated block)."""
+        conjunction when this is the last item of a coordinated block).
+
+        Its contribution is the per-item dispatch: a *block* item recurses into :meth:`render` (no
+        bullet of its own), a *leaf* item gets the ``- `` prefix. The output matches :meth:`render`
+        because the top item here is the whole block (recursed), while the bullet it adds is visible
+        on the leaf line *"- battery is between 50 and 90"*:
+
+        >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+        >>> robot = variable(Robot, [])
+        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> print(HierarchicalRenderer()._render_item(tree, 0))
+        Find a Robot
+          whose
+            - battery is between 50 and 90
+        """
         match fragment:
             case BlockFragment():
                 return self.render(fragment, depth)
@@ -197,7 +237,19 @@ class HierarchicalRenderer(FragmentRenderer):
         """Render a fragment as a flat inline string. A nested block is flattened to prose (its
         items coordinated as in paragraph rendering) rather than expanded into bullets — bullets are
         for a block that sits at the item level, not one embedded in a phrase (e.g. a *"whose …"*
-        modifier inside an inline noun phrase)."""
+        modifier inside an inline noun phrase).
+
+        It is the hierarchical renderer's *flatten-to-prose* helper: it collapses a (possibly
+        multi-block) fragment to a single inline line — here the whole tree to *Find a Robot whose
+        battery is between 50 and 90* — the form a *whose …* modifier takes when it sits inside a noun
+        phrase rather than at the bullet level.
+
+        >>> from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+        >>> robot = variable(Robot, [])
+        >>> tree = EQLVerbalizer().build(a(entity(robot).where(and_(robot.battery > 50, robot.battery < 90))))
+        >>> HierarchicalRenderer()._inline(tree)
+        'Find a Robot whose battery is between 50 and 90'
+        """
 
         def _flatten(block: BlockFragment) -> str:
             rendered = [self._inline(item) for item in block.items]

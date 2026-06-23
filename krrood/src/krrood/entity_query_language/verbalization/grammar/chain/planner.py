@@ -19,7 +19,7 @@ from krrood.entity_query_language.verbalization.navigation_path import (
     build_path_parts,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Number
-from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
+from krrood.entity_query_language.verbalization.relational_attributes import (
     relational_verb,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
@@ -47,7 +47,11 @@ class ChainPlan:
     @property
     def is_single_variable_attribute(self) -> bool:
         """:return: ``True`` when the chain is a single attribute on a variable (the bare-plural
-        *"attributes of Roots"* form)."""
+        *"attributes of Roots"* form).
+
+        >>> ChainPlanner(variable(Robot, []).battery).plan().is_single_variable_attribute
+        True
+        """
         return (
             isinstance(self.root, Variable)
             and len(self.chain) == 1
@@ -62,6 +66,9 @@ class ChainPlan:
 
         :param number: The grammatical number requested for the chain.
         :return: ``True`` when the chain renders as the bare-plural attribute form.
+
+        >>> ChainPlanner(variable(Robot, []).battery).plan().renders_as_plural_attribute(Number.PLURAL)
+        True
         """
         return number is Number.PLURAL and self.is_single_variable_attribute
 
@@ -80,7 +87,11 @@ class ChainPlanner(Planner[MappedVariable, ChainPlan]):
     """
 
     def plan(self) -> ChainPlan:
-        """:return: The chain plan: the walked chain, its root, display parts, and boolean form."""
+        """:return: The chain plan: the walked chain, its root, display parts, and boolean form.
+
+        >>> ChainPlanner(variable(Task, []).name).plan().is_boolean_terminal
+        False
+        """
         chain, root = walk_chain(self.node)
         return ChainPlan(
             chain=chain,

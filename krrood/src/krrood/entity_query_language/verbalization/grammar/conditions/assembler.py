@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import operator
-
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -15,15 +13,13 @@ from krrood.entity_query_language.verbalization.grammar.aggregation.kinds import
 from krrood.entity_query_language.verbalization.grammar.framework.assembler import (
     Assembler,
 )
-from krrood.entity_query_language.verbalization.grammar.conditions.operator_phrase import (
+from krrood.entity_query_language.verbalization.grammar.conditions.predication import (
     comparator_operator,
+    PredicateTransform,
 )
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     single_hop_attribute,
     superlative_aggregation,
-)
-from krrood.entity_query_language.verbalization.grammar.conditions.transforms import (
-    PredicateTransform,
 )
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
     reduce_conjuncts,
@@ -58,6 +54,14 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param node: The condition (comparator) to render.
         :param plan: Unused (this assembler has no plan).
         :return: The default form — a standalone predicate.
+
+        Choosing the predicate form as the default is what makes a bare comparator render as the full
+        *the battery of a Robot is greater than 50* sentence; it adds no phrasing of its own beyond
+        that choice.
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(robot.battery > 50)
+        'the battery of a Robot is greater than 50'
         """
         return self.predicate(node)
 
@@ -69,6 +73,14 @@ class ConditionAssembler(Assembler[Comparator, None]):
             so the generic *"<left> <operator> <right>"* is one transform alongside the absence
             (*"has no …"* / *"does not exist"*) and boolean-polarity (*"is [not] <attr>"*) forms; the
             most-specific applicable one wins, and adding a new one is a new subclass.
+
+        Dispatching to the winning transform is what produces the example: the ``== None`` shape
+        selects the absence transform, so the result is *a Mission has no priority* rather than a
+        value comparison.
+
+        >>> mission = variable(Mission, [])
+        >>> verbalize_expression(mission.priority == None)
+        'a Mission has no priority'
         """
         transform = PredicateTransform.most_applicable(comparator, negated)
         return transform.render(comparator, self.context, negated)
@@ -87,6 +99,14 @@ class ConditionAssembler(Assembler[Comparator, None]):
 
         :param conditions: The conditions to say, in order.
         :return: One standalone-statement fragment per condition (after reduction), in order.
+
+        It supplies the two clause fragments of the example — *the battery of a Robot is greater than
+        50* and *the name of the Robot is 'x'* — as a list; the caller (:meth:`AndRule.build`) adds
+        the *, and* that joins them.
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(and_(robot.battery > 50, robot.name == 'x'))
+        "the battery of a Robot is greater than 50, and the name of the Robot is 'x'"
         """
         return [self.context.child(item) for item in reduce_conjuncts(list(conditions))]
 
@@ -99,25 +119,29 @@ class ConditionAssembler(Assembler[Comparator, None]):
         """
         :param comparator: The comparator on *subject*'s single-hop attribute.
         :param subject: The subject variable.
-        :param number: The number the attribute noun, operator, and value agree with — singular for
-            a query subject; plural for an aggregated inference antecedent (*"whose children are …"*).
+        :param number: The number the attribute noun, operator, and value agree with — singular for a
+            singular subject; plural for a plural one (a ranking / ordered report, or an aggregated
+            inference antecedent — *"whose salaries are greater than 5"*).
         :return: The bare *"<attribute> <operator> <value>"* grouped predicate a *"whose …"* envelope
-            wraps. An equality reads as a copula agreeing with *number* (so a plural subject gives
-            *"are"*); any other operator keeps its comparator phrase (singular).
+            wraps, all agreeing with *number* — the predicative operator factors its copula out so a
+            plural subject reads *"are greater than"* (see :func:`~…predication.comparator_operator`).
+
+        It owns the *battery is greater than 50* span of the example — the attribute noun, operator,
+        and value with the subject dropped — which the caller's *whose* envelope then wraps.
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))
+        'Find a Robot whose battery is greater than 50'
         """
         attribute = single_hop_attribute(comparator.left, subject)
-        if comparator.operation is operator.eq and number is Number.PLURAL:
-            operator_fragment = Copulas.for_number(number)
-        else:
-            operator_fragment = comparator_operator(
-                comparator, self.context.services, compact=False
-            )
         return PhraseFragment(
             parts=[
                 RoleFragment.for_attribute(
                     attribute._owner_class_, attribute._attribute_name_, number=number
                 ),
-                operator_fragment,
+                comparator_operator(
+                    comparator, self.context.services, compact=False, number=number
+                ),
                 self.context.child(comparator.right, number=number, as_value=True),
             ]
         )
@@ -130,6 +154,15 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param subject: The subject variable.
         :return: The superlative selection modifier *"with the maximum <leaf>"* / *"with the
             minimum <leaf>"*.
+
+        It owns the whole *with the maximum salary* span of the example — reading the aggregator to
+        pick *maximum* over *minimum* and naming the leaf attribute *salary*.
+
+        >>> employee, peers = variable(Employee, []), variable(Employee, [])
+        >>> verbalize_expression(
+        ...     an(entity(employee).where(employee.salary == the(entity(max(peers.salary)))))
+        ... )
+        'Find an Employee with the maximum salary'
         """
         fold = superlative_aggregation(comparator, subject)
         leaf = fold.aggregator._leaf_attribute_
@@ -142,21 +175,38 @@ class ConditionAssembler(Assembler[Comparator, None]):
             ]
         )
 
-    def range_modifier(self, range_fold: RangeFold, subject: Variable) -> Fragment:
+    def range_modifier(
+        self,
+        range_fold: RangeFold,
+        subject: Variable,
+        number: Number = Number.SINGULAR,
+    ) -> Fragment:
         """
         :param range_fold: The folded lower/upper bound pair on *subject*'s single-hop attribute.
         :param subject: The subject variable.
+        :param number: The number the attribute noun and copula agree with — *"salaries are between
+            …"* for a plural subject.
         :return: The modifier *"<attribute> is between low and high"*.
+
+        It owns the *salary is between 100 and 200* span of the example — naming the attribute and
+        emitting the *between … and …* frame over the fold's bounds — which the *whose* envelope wraps.
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(
+        ...     an(entity(employee).where(and_(employee.salary > 100, employee.salary < 200)))
+        ... )
+        'Find an Employee whose salary is between 100 and 200'
         """
         attribute = single_hop_attribute(range_fold.chain_expression, subject)
         left = RoleFragment.for_attribute(
-            attribute._owner_class_, attribute._attribute_name_
+            attribute._owner_class_, attribute._attribute_name_, number=number
         )
         return build_between(
             left,
             self.context.child(range_fold.lower_expression),
             self.context.child(range_fold.upper_expression),
             compact=False,
+            number=number,
         )
 
     def attribute_predicate(
@@ -172,6 +222,15 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param number: The grammatical number the noun and copula agree with.
         :param value: The value fragment (supplied by the caller; it may itself be number-folded).
         :return: The bare predicate *"<attribute> <copula> <value>"*.
+
+        Each *"<field> is <value>"* binding of an inference consequent is one such predicate: this
+        method owns the *container is …* and *handle is …* spans of the example (noun plus copula plus
+        the caller's value), which the *whose …, and …* envelope then joins.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
+        >>> verbalize_expression(entity(drawer))
+        "If true, then there's a Drawer whose container is the parent of a FixedConnection, and handle is its child"
         """
         return PhraseFragment(
             parts=[
@@ -186,5 +245,13 @@ class ConditionAssembler(Assembler[Comparator, None]):
         :param name: The attribute's name.
         :param number: The grammatical number to tag for inflection.
         :return: A role-tagged attribute noun (no source link — name only) tagged with *number*.
+
+        It supplies just the bare attribute noun: the *container* and *handle* words of the example
+        come from here, while :meth:`attribute_predicate` adds the copula and value around each.
+
+        >>> connection = variable(FixedConnection, [])
+        >>> drawer = inference(Drawer)(container=connection.parent, handle=connection.child)
+        >>> verbalize_expression(entity(drawer))
+        "If true, then there's a Drawer whose container is the parent of a FixedConnection, and handle is its child"
         """
         return RoleFragment.for_attribute(None, name, number)

@@ -2,23 +2,13 @@
 Standalone unit tests for the morphology facade
 (:mod:`krrood.entity_query_language.verbalization.morphology`).
 
-The facade is the single point of access to ``inflect``; these tests pin the
+The facade is the single point of access to ``inflect`` / ``lemminflect``; these tests pin the
 behaviour each call site relies on.
 """
 
 from __future__ import annotations
 
-import pytest
-
 from krrood.entity_query_language.verbalization import morphology
-
-
-@pytest.fixture(autouse=True)
-def _clear_overrides():
-    """Each test starts and ends with no registered overrides."""
-    morphology.clear_overrides()
-    yield
-    morphology.clear_overrides()
 
 
 def test_plural_is_unconditional():
@@ -50,29 +40,13 @@ def test_ordinal_is_zero_based_words():
     assert morphology.ordinal(2) == "third"
 
 
-def test_plural_override_beats_inflect():
-    morphology.register_plural("Octopus", "Octopodes")
-    assert morphology.plural("Octopus") == "Octopodes"
-    assert morphology.ensure_plural("Octopus") == "Octopodes"
-    assert (
-        morphology.ensure_plural("Octopodes") == "Octopodes"
-    )  # already the override plural
-    assert morphology.is_plural("Octopodes") is True
-    assert morphology.is_plural("Octopus") is False
+def test_cardinal_is_number_words():
+    assert morphology.cardinal(2) == "two"
+    assert morphology.cardinal(3) == "three"
 
 
-def test_invariant_plural_override():
-    morphology.register_plural("sheep", "sheep")
-    assert morphology.ensure_plural("sheep") == "sheep"
-    assert morphology.is_plural("sheep") is True
-
-
-def test_indefinite_article_override():
-    morphology.register_indefinite_article("FBI", "an")
-    assert morphology.indefinite_article("FBI") == "an"
-
-
-def test_no_override_is_pure_inflect():
-    # With nothing registered, behaviour is unchanged.
-    assert morphology.plural("Robot") == "Robots"
-    assert morphology.indefinite_article("apple") == "an"
+def test_is_past_participle_distinguishes_participles_from_nouns():
+    assert morphology.is_past_participle("assigned") is True
+    assert morphology.is_past_participle("written") is True  # irregular
+    assert morphology.is_past_participle("battery") is False
+    assert morphology.is_past_participle("assign") is False  # base form

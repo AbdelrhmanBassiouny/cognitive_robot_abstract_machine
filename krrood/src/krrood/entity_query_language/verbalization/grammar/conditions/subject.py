@@ -9,7 +9,7 @@ from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
     SpecificityRule,
 )
-from krrood.entity_query_language.verbalization.subquery import aggregation_source_root
+from krrood.entity_query_language.query.aggregation_structure import aggregation_source_root
 
 # ── restriction-subject rules (which variable does the WHERE restrict?) ──────
 
@@ -30,6 +30,10 @@ class RestrictionSubjectRule(SpecificityRule):
         :param expression: The query whose restriction subject to resolve.
         :param selected_variable: The query's selected variable.
         :return: ``True`` when this rule can name the restriction subject of *expression*.
+
+        >>> robot = variable(Robot, [])
+        >>> verbalize_expression(an(entity(robot).where(robot.battery > 50)))
+        'Find a Robot whose battery is greater than 50'
         """
 
     @classmethod
@@ -41,6 +45,11 @@ class RestrictionSubjectRule(SpecificityRule):
         :param expression: The query whose restriction subject to resolve.
         :param selected_variable: The query's selected variable.
         :return: The variable the ``WHERE`` restricts.
+
+        >>> robot = variable(Robot, [])
+        >>> query = an(entity(robot).where(robot.battery > 50))
+        >>> restriction_subject(query, query.selected_variable) is robot
+        True
         """
 
 
@@ -51,12 +60,26 @@ class SelectedVariableSubjectRule(RestrictionSubjectRule):
     def applies(
         cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
     ) -> bool:
+        """Fires when the selection is a plain variable.
+
+        >>> robot = variable(Robot, [])
+        >>> query = an(entity(robot).where(robot.battery > 50))
+        >>> SelectedVariableSubjectRule.applies(query, query.selected_variable)
+        True
+        """
         return isinstance(selected_variable, Variable)
 
     @classmethod
     def subject(
         cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
     ) -> Optional[Variable]:
+        """The plain selection is its own restriction subject.
+
+        >>> robot = variable(Robot, [])
+        >>> query = an(entity(robot).where(robot.battery > 50))
+        >>> SelectedVariableSubjectRule.subject(query, query.selected_variable) is robot
+        True
+        """
         return selected_variable
 
 
@@ -77,6 +100,13 @@ class AggregationSourceSubjectRule(RestrictionSubjectRule):
     def applies(
         cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
     ) -> bool:
+        """Fires when the selection aggregates over a single source variable's chain.
+
+        >>> employee = variable(Employee, [])
+        >>> query = an(entity(max(employee.salary)).where(employee.department == 'Sales'))
+        >>> AggregationSourceSubjectRule.applies(query, query.selected_aggregator)
+        True
+        """
         return (
             isinstance(selected_variable, Aggregator)
             and aggregation_source_root(expression) is not None
@@ -86,6 +116,13 @@ class AggregationSourceSubjectRule(RestrictionSubjectRule):
     def subject(
         cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
     ) -> Optional[Variable]:
+        """The aggregated source variable is the restriction subject.
+
+        >>> employee = variable(Employee, [])
+        >>> query = an(entity(max(employee.salary)).where(employee.department == 'Sales'))
+        >>> AggregationSourceSubjectRule.subject(query, query.selected_aggregator) is employee
+        True
+        """
         return aggregation_source_root(expression)
 
 
@@ -97,6 +134,11 @@ def restriction_subject(
     :param selected_variable: The query's selected variable.
     :return: The variable a selection's ``WHERE`` restricts (most-specific rule wins), or
         ``None``.
+
+    >>> robot = variable(Robot, [])
+    >>> query = an(entity(robot).where(robot.battery > 50))
+    >>> restriction_subject(query, query.selected_variable) is robot
+    True
     """
     chosen = RestrictionSubjectRule.most_applicable(expression, selected_variable)
     return chosen.subject(expression, selected_variable) if chosen is not None else None
