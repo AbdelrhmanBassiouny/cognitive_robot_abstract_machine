@@ -163,10 +163,10 @@ def test_has_hinge_has_slider_aggregate_bodies():
         world.add_semantic_annotation(slider)
         world.add_semantic_annotation(drawer)
         world.add_semantic_annotation(door)
-        door.add_handle(handle2)
-        door.add_hinge(hinge)
-        drawer.add_handle(handle1)
-        drawer.add_slider(slider)
+        door.add(handle2)
+        door.add(hinge)
+        drawer.add(handle1)
+        drawer.add(slider)
 
     expected_door_bodies = {door_body, handle2_body, hinge_body}
     expected_drawer_bodies = {drawer_body, handle1_body, slider_body}
@@ -217,7 +217,6 @@ def test_infer_apartment_semantic_annotation(
     update_existing_semantic_annotations,
     scenario,
     expected_number,
-    apartment_world_setup,
     apartment_world_copy,
 ):
     fit_rules_and_assert_semantic_annotations(
@@ -346,41 +345,6 @@ def test_minimal_robot_annotation(pr2_world_state_reset):
     pr2 = pr2_world_state_reset.get_semantic_annotations_by_type(AbstractRobot)[0]
     assert len(robot.bodies) == len(pr2.bodies)
     assert len(robot.connections) == len(pr2.connections)
-
-
-def test_room_roles():
-    floor = Floor(root=Body(name=PrefixedName("room_floor")))
-    room = Room(floor=floor)
-    kitchen = Kitchen.from_role_taker(room)
-
-    # Test ability to access Room properties
-    assert room.floor is kitchen.floor
-
-    # Test correct caching of roles
-    assert Role.roles_for(room, Kitchen)[0] == kitchen
-    assert Role.has_role(room, Kitchen)
-    assert not isinstance(room, Kitchen)
-    assert isinstance(kitchen, Room)
-
-    # Test correct caching of roles
-    living_room = LivingRoom.from_role_taker(room)
-    assert Role.roles_for(room, LivingRoom)[0] == living_room
-    assert len(Role.roles_for(room)) == 2
-    assert Role.has_role(room, LivingRoom)
-    assert not isinstance(room, LivingRoom)
-    assert isinstance(living_room, Room)
-
-    assert living_room == kitchen
-    assert hash(living_room) == hash(kitchen)
-
-    # Create the room implicitly
-    kitchen = Kitchen(floor=floor)
-    room = kitchen.room
-    assert Role.roles_for(room, Kitchen)[0] == kitchen
-    assert Role.has_role(room, Kitchen)
-    assert not isinstance(room, Kitchen)
-    assert isinstance(kitchen, Room)
-    assert kitchen.floor is room.floor
 
 
 def test_kinematic_chain_with_root_equal_tip_has_no_connections():

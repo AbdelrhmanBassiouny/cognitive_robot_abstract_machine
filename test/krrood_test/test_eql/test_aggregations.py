@@ -21,7 +21,7 @@ from krrood.entity_query_language.factories import (
     a,
     flat_variable,
 )
-from krrood.utils import inheritance_path_length
+from krrood.inheritance_path_length import inheritance_path_length
 from ..dataset.example_classes import KRROODVectorsWithProperty
 from krrood.entity_query_language.predicate import length, symbolic_function
 from krrood.entity_query_language.query.operations import GroupedBy
@@ -501,9 +501,10 @@ def test_having_node_hierarchy(departments_and_employees):
         set_of(department, avg_salary).grouped_by(department).having(avg_salary > 20000)
     ).build()
 
-    # Graph hierarchy check
-    assert query._having_expression_._parent_ is query
-    assert isinstance(query._having_expression_.grouped_by, GroupedBy)
+    # Graph hierarchy check: the having node is wired into the compiled product the query delegates to.
+    product = query._expression_
+    assert product._having_expression_._parent_ is product
+    assert isinstance(product._having_expression_.grouped_by, GroupedBy)
     assert query._conditions_root_._name_ == ">"
 
 

@@ -32,6 +32,11 @@ from typing_extensions import (
     Type,
 )
 
+Bindings = Dict[uuid.UUID, Any]
+"""
+A dictionary for expressions' bindings in EQL that maps the expression's unique identifier to its value.
+"""
+
 from krrood.entity_query_language.exceptions import NoExpressionFoundForGivenID
 from krrood.entity_query_language.utils import make_list, T, make_set, is_iterable
 from krrood.symbol_graph.symbol_graph import SymbolGraph
@@ -47,11 +52,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.rules.conclusion import Conclusion
     from krrood.entity_query_language.core.variable import Variable
     from krrood.entity_query_language.query.query import Query
-
-Bindings = Dict[uuid.UUID, Any]
-"""
-A dictionary for expressions' bindings in EQL that maps the expression's unique identifier to its value.
-"""
 
 
 @dataclass(eq=False)
@@ -136,27 +136,37 @@ class SymbolicExpression(ABC):
 
     def tolist(
         self,
+        backend=None,
     ) -> list[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]]:
         """
         Evaluate and return the results as a list.
-        """
-        return make_list(self.evaluate())
 
-    def first(self) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]:
+        :param backend: Optional query backend; forwarded to :py:meth:`evaluate`.
+        """
+        return make_list(self.evaluate(backend=backend))
+
+    def first(
+        self, backend=None
+    ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]:
         """
         Evaluate and return the first result of the query object descriptor.
 
+        :param backend: Optional query backend; forwarded to :py:meth:`evaluate`.
         :return: The first result of the query object descriptor.
         :raises StopIteration: If no results are found.
         """
-        return next(self.evaluate())
+        return next(self.evaluate(backend=backend))
 
     def evaluate(
         self,
+        backend=None,
     ) -> Iterator[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]]:
         """
         Evaluate the query and map the results to the correct output data structure.
         This is the exposed evaluation method for users.
+
+        :param backend: Accepted for interface uniformity with ``Query``/``Match``; the base
+            symbolic-expression engine always evaluates natively and ignores this argument.
         """
         SymbolGraph().remove_dead_instances()
         results = (
@@ -221,9 +231,20 @@ class SymbolicExpression(ABC):
             v if isinstance(v, SymbolicExpression) else Literal(_value_=v)
             for v in children
         ]
-        for v in children:
-            v._parent_ = self
-        return tuple(v._expression_ for v in children)
+        embedded_children = tuple(v._as_embeddable_child_(self) for v in children)
+        for child in embedded_children:
+            child._parent_ = self
+        return embedded_children
+
+    def _as_embeddable_child_(self, parent: SymbolicExpression) -> SymbolicExpression:
+        """
+        :param parent: The expression about to take this expression as a child.
+        :return: The node that should be stored as ``parent``'s child, defaulting to this
+            expression's compiled form. Subclasses whose compiled form is mutable and shared (for
+            example :class:`~krrood.entity_query_language.query.query.Query`) override this to embed
+            an immutable snapshot instead.
+        """
+        return self._expression_
 
     def _ensure_children_ids_are_cached_(self, *children: SymbolicExpression) -> None:
         """
@@ -401,13 +422,10 @@ class SymbolicExpression(ABC):
         """
         from krrood.entity_query_language.query.query import Query
 
-        root = self._root_
-        root_query = None
-        for descendant in root._descendants_:
-            if isinstance(descendant, Query):
-                root_query = descendant
-                break
-        return root_query
+        for expression in self._all_expressions_:
+            if isinstance(expression, Query):
+                return expression
+        return None
 
     @property
     @abstractmethod
@@ -793,7 +811,7 @@ class Selectable(SymbolicExpression, Generic[T], ABC):
     A variable that is used if the child class to this class want to provide a variable to be tracked other than 
     itself, this is specially useful for child classes that holds a variable instead of being a variable and want
      to delegate the variable behaviour to the variable it has instead.
-    For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
+    For example, this is the case for queries and derived references that operate on a single selected
     variable.
     """
 

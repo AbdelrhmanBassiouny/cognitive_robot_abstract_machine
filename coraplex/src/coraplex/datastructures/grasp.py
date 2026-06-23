@@ -6,12 +6,8 @@ from dataclasses import dataclass, field
 from typing import Tuple
 
 import numpy as np
-from typing_extensions import Optional, Union, List
+from typing_extensions import Optional, Union, List, TYPE_CHECKING
 
-from krrood.entity_query_language.core.mapped_variable import Attribute
-from krrood.entity_query_language.factories import variable_from
-from krrood.patterns.role import Role
-from semantic_digital_twin.robots.abstract_robot import Manipulator
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
@@ -19,7 +15,10 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Vector3,
     Quaternion,
 )
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import (
+    Body,
+    KinematicStructureEntity,
+)
 from coraplex.datastructures.rotations import Rotations
 from coraplex.datastructures.enums import (
     AxisIdentifier,
@@ -29,6 +28,9 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.tf_transformations import quaternion_multiply
 from coraplex.utils import translate_pose_along_local_axis
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.robots.robot_parts import EndEffector
 
 
 @dataclass
@@ -280,7 +282,9 @@ class GraspDescription:
         :return: A sorted list of GraspDescription instances representing all grasp permutations.
         """
         world = end_effector._world
-        map_T_object = world.transform(pose.to_homogeneous_matrix(), world.root).to_pose()
+        map_T_object = world.transform(
+            pose.to_homogeneous_matrix(), world.root
+        ).to_pose()
 
         map_T_robot = end_effector._robot.root.global_pose
 
@@ -400,6 +404,7 @@ class GraspDescription:
     def __hash__(self):
         return id(self)
 
+
 @dataclass
 class PreferredGraspAlignment:
     """
@@ -422,16 +427,12 @@ class PreferredGraspAlignment:
     """
 
 
-@dataclass(eq=False)
-class GraspPose(Role[Pose], Pose):
+@dataclass(eq=False, init=False)
+class GraspPose(Pose):
     """
     A pose from which a grasp can be performed along with the respective arm and grasp description.
     """
 
-    pose: Pose = field(kw_only=True)
-    """
-    The pose of the grasp.
-    """
     arm: Optional[Arms] = None
     """
     Arm corresponding to the grasp pose.
@@ -441,6 +442,29 @@ class GraspPose(Role[Pose], Pose):
     Grasp description corresponding to the grasp pose.
     """
 
+    def __init__(
+        self,
+        position: Optional[Point3] = None,
+        orientation: Optional[Quaternion] = None,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+        arm: Optional[Arms] = None,
+        grasp_description: Optional[GraspDescription] = None,
+    ):
+        super().__init__(position, orientation, reference_frame)
+        self.arm = arm
+        self.grasp_description = grasp_description
+
     @classmethod
-    def role_taker_attribute(cls) -> Attribute[Pose]:
-        return variable_from(cls).pose
+    def from_pose(
+        cls,
+        pose: Pose,
+        arm: Arms,
+        grasp_description: GraspDescription,
+    ) -> GraspPose:
+        return cls(
+            position=pose.to_position(),
+            orientation=pose.to_quaternion(),
+            reference_frame=pose.reference_frame,
+            arm=arm,
+            grasp_description=grasp_description,
+        )

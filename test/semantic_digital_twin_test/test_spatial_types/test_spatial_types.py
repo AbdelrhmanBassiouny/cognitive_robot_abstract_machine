@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import krrood.symbolic_math.symbolic_math as sm
-from krrood.entity_query_language.factories import underspecified
+from krrood.entity_query_language.factories import an
 from krrood.symbolic_math.exceptions import (
     UnsupportedOperationError,
     WrongDimensionsError,
@@ -20,7 +20,6 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import Body
-from .example_classes import RoleForPose
 from .reference_implementations import (
     rotation_matrix_from_quaternion,
     axis_angle_from_rotation_matrix,
@@ -102,7 +101,6 @@ class TestRotationMatrix:
             rotation_matrix,
             HomogeneousTransformationMatrix(),
             Pose(),
-            RoleForPose(pose=Pose()),
         ]
         does_not_work = [
             sm.FloatVariable(name="s"),
@@ -1889,7 +1887,7 @@ class TestQuaternion:
 
 
 def test_underspecification_of_vector():
-    q = underspecified(Vector3)(x=1, y=2, z=3).resolve()
+    q = an(Vector3)(x=1, y=2, z=3)
     q = q.where(q.variable.x > 0)
     v1 = q.construct_instance()
     assert v1.x == 1
@@ -1898,7 +1896,7 @@ def test_underspecification_of_vector():
 
 
 def test_underspecification_of_transformation():
-    q = underspecified(HomogeneousTransformationMatrix.from_xyz_rpy)(x=1).resolve()
+    q = an(HomogeneousTransformationMatrix.from_xyz_rpy)(x=1)
     q = q.where(q.variable.x > 0)
     t1 = q.construct_instance()
     assert t1.x == 1

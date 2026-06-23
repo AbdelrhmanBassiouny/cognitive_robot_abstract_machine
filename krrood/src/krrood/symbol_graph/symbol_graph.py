@@ -47,7 +47,7 @@ class Symbol:
     Whether instances of this class should be cached or not in the symbol graph.
     """
     _inference_explanation_: Optional[InferenceExplanation] = field(
-        default=None, init=False, repr=False
+        default=None, init=False, repr=False, compare=False
     )
     """If this symbol was inferred, this field can contain an explanation of how it
      was inferred.
@@ -243,28 +243,31 @@ class SymbolGraph(metaclass=SingletonMeta):
 
     def __post_init__(self):
         if self._class_diagram is None:
-            all_symbols = [
-                cls
-                for cls in recursive_subclasses(Symbol)
-                if hasattr(cls, "__module__")
-                and (cls.__module__ in sys.modules)
-                and (
-                    (not self.packages)
-                    or any(
-                        cls.__module__.startswith(pkg_name)
-                        for pkg_name in self.packages
-                    )
+            self._class_diagram = self._build_class_diagram()
+
+    def _collect_symbol_classes(self) -> List[Type]:
+        """Collect the ``Symbol`` subclasses that belong in the class diagram, honouring the
+        configured package filter."""
+        return [
+            cls
+            for cls in recursive_subclasses(Symbol)
+            if hasattr(cls, "__module__")
+            and (cls.__module__ in sys.modules)
+            and (
+                (not self.packages)
+                or any(
+                    cls.__module__.startswith(pkg_name) for pkg_name in self.packages
                 )
-                and not (
-                    getattr(sys.modules[cls.__module__], "__file__", "").endswith(
-                        ".pyi"
-                    )
-                )
-            ]
-            self._class_diagram = ClassDiagram(
-                all_symbols,
-                introspector=DescriptorAwareIntrospector(),
             )
+            and not (
+                getattr(sys.modules[cls.__module__], "__file__", "").endswith(".pyi")
+            )
+        ]
+
+    def _build_class_diagram(self) -> ClassDiagram:
+        """Build a class diagram from the currently known ``Symbol`` subclasses."""
+        classes = self._collect_symbol_classes()
+        return ClassDiagram(classes, introspector=DescriptorAwareIntrospector())
 
     @property
     def class_diagram(self) -> ClassDiagram:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import doctest
 from dataclasses import is_dataclass, dataclass, field
 from typing import Type
 
@@ -10,21 +11,50 @@ from krrood.class_diagrams.class_diagram import (
     HasRoleTaker,
     AssociationThroughRoleTaker,
 )
+from krrood.class_diagrams.method_classifier import (
+    factory_method_names,
+    is_factory_method,
+)
 from krrood.class_diagrams.utils import classes_of_module, T
-from krrood.patterns.role import Role
+from krrood.patterns.exceptions import DelegatedFactoryMethodError
+from krrood.patterns.role import Role, role_taker_field
+from krrood.patterns.role_predicates import IsSameEntity
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
-from ..dataset.role_and_ontology import university_ontology_like_classes
+from ..dataset.role_and_ontology import (
+    university_ontology_like_classes,
+    university_ontology_like_classes_without_descriptors,
+)
 from ..dataset.role_and_ontology.university_ontology_like_classes_without_descriptors import (
     PersonInRoleAndOntology,
     CEOAsFirstRole,
+    CEOThatOverridesFactory,
     Company,
     ProfessorAsFirstRole,
     Course,
     RepresentativeAsSecondRole,
     DelegateAsThirdRole,
-    DirectDiamondShapedInheritanceWhereOneIsRole,
-    RoleWithOtherBasesThatHaveTheirOwnInit,
 )
+
+
+def test_role_class_docstring_examples_execute_with_documented_results():
+    # Runs the doctest embedded in the Role class docstring and verifies that every
+    # documented result matches reality, so the docstring example cannot silently drift.
+    #
+    # The example defines a role class inline, so it runs in a dedicated namespace
+    # rather than the role module's own namespace. The role module enables
+    # ``from __future__ import annotations``; reusing that namespace would turn the
+    # example annotations into strings the class diagram cannot resolve for inline
+    # classes. A fresh namespace keeps annotations as real objects.
+    namespace = {
+        "Role": Role,
+        "role_taker_field": role_taker_field,
+        "__name__": "role_docstring_example",
+    }
+    docstring_test = doctest.DocTestParser().get_doctest(
+        Role.__doc__, namespace, name="Role", filename=__file__, lineno=0
+    )
+    results = doctest.DocTestRunner(verbose=False).run(docstring_test)
+    assert results.failed == 0
 
 
 def test_getting_and_setting_attribute_for_role_and_role_taker():
@@ -41,18 +71,26 @@ def test_getting_and_setting_attribute_for_role_and_role_taker():
     assert ceo.head_of == Company(name="BassCo")
 
 
-def test_is_instance_or_role():
+def test_role_is_not_an_instance_of_its_taker():
     person = PersonInRoleAndOntology(name="Bass")
     ceo = CEOAsFirstRole(person=person)
     representative = RepresentativeAsSecondRole(ceo=ceo)
-    assert isinstance(ceo, PersonInRoleAndOntology)
+
+    # Pure composition: a role is not an instance of its role-taker type.
+    assert not isinstance(ceo, PersonInRoleAndOntology)
+    assert not isinstance(representative, PersonInRoleAndOntology)
+    assert not isinstance(representative, CEOAsFirstRole)
+
+    # A role is an instance of its own role type, and the taker is plainly itself.
     assert isinstance(ceo, CEOAsFirstRole)
     assert isinstance(representative, RepresentativeAsSecondRole)
-    assert isinstance(representative, CEOAsFirstRole)
-    assert isinstance(representative, PersonInRoleAndOntology)
     assert isinstance(person, PersonInRoleAndOntology)
     assert isinstance(person, CEOAsFirstRole) is False
     assert isinstance(person, RepresentativeAsSecondRole) is False
+
+    # Role membership is expressed through has_role, not inheritance.
+    assert Role.has_role(person, CEOAsFirstRole)
+    assert Role.has_role(ceo, RepresentativeAsSecondRole)
 
 
 def test_role_native_attr_accessible_from_roles_dict():
@@ -98,16 +136,61 @@ def test_accessing_attribute_of_role_from_role_taker_when_role_does_not_exist_an
     assert hasattr(person, "teacher_of") is False
 
 
-def test_roles_are_equal_and_has_same_hash_as_each_other():
+def test_roles_are_distinct_objects_but_share_same_entity():
     person = PersonInRoleAndOntology(name="Bass")
     ceo = CEOAsFirstRole(person=person)
     representative = RepresentativeAsSecondRole(ceo=ceo)
     professor = ProfessorAsFirstRole(person=person)
-    assert hash(ceo) == hash(person)
-    assert ceo == person
-    assert ceo == representative
-    assert ceo == professor
-    assert len({person, ceo, representative, professor}) == 1
+
+    # A role is an ordinary object: equal only to itself, distinct from its taker and
+    # from sibling roles, so all four stay distinct in a set.
+    assert ceo != person
+    assert ceo != representative
+    assert ceo != professor
+    assert len({person, ceo, representative, professor}) == 4
+
+    # ...yet the IsSameEntity predicate sees through the role chain to the one root entity.
+    assert IsSameEntity(ceo, person)
+    assert IsSameEntity(ceo, representative)
+    assert IsSameEntity(ceo, professor)
+    assert IsSameEntity(representative, professor)
+
+
+def test_multiple_roles_of_same_type_on_same_taker():
+    person = PersonInRoleAndOntology(name="Bass")
+    first = CEOAsFirstRole(person=person, head_of=Company(name="Acme"))
+    second = CEOAsFirstRole(person=person, head_of=Company(name="Globex"))
+
+    # Both same-type roles are retrievable and keep their own role-native state.
+    retrieved = Role.roles_for(person, CEOAsFirstRole)
+    assert len(retrieved) == 2
+    assert {role.head_of.name for role in retrieved} == {"Acme", "Globex"}
+
+    # They are distinct objects (no collapse in a set) but the same underlying entity.
+    assert first is not second
+    assert first != second
+    assert len({first, second}) == 2
+    assert IsSameEntity(first, second)
+
+
+def test_is_same_entity_predicate():
+    person = PersonInRoleAndOntology(name="Bass")
+    ceo = CEOAsFirstRole(person=person)
+    professor = ProfessorAsFirstRole(person=person)
+    representative = RepresentativeAsSecondRole(ceo=ceo)
+    delegate = DelegateAsThirdRole(representative=representative)
+    other_person = PersonInRoleAndOntology(name="Other")
+
+    # Two roles on one taker, and a role versus its taker, are the same entity.
+    assert IsSameEntity(ceo, professor)
+    assert IsSameEntity(ceo, person)
+    # A role chain resolves to its root entity, in either operand order.
+    assert IsSameEntity(delegate, person)
+    assert IsSameEntity(person, delegate)
+    # Unrelated entities are not the same; a plain object is the same as itself.
+    assert not IsSameEntity(ceo, other_person)
+    assert not IsSameEntity(person, other_person)
+    assert IsSameEntity(person, person)
 
 
 def test_mappings_between_roles_and_role_takers():
@@ -118,8 +201,13 @@ def test_mappings_between_roles_and_role_takers():
     delegate = DelegateAsThirdRole(representative=representative)
     roles = [ceo, representative, professor, delegate]
 
-    for role_ in roles:
-        assert all(role in role_.role_taker_roles for role in roles)
+    # Every role in the chain registers an edge to the root taker, so the root taker can
+    # retrieve all of them (by identity), and each role reports the same underlying entity.
+    roles_of_person = Role.roles_for(person)
+    assert all(
+        any(role is retrieved for retrieved in roles_of_person) for role in roles
+    )
+    assert all(IsSameEntity(role, person) for role in roles)
 
     delegate_role_takers = [representative, ceo, person]
     assert len(delegate_role_takers) == len(delegate.all_role_takers)
@@ -166,27 +254,8 @@ def test_get_roles_of_type():
         Role.get_taker_roles_of_type(person, ProfessorAsFirstRole)[0],
         ProfessorAsFirstRole,
     )
-    assert len(Role.get_taker_roles_of_type(person, PersonInRoleAndOntology)) == 3
-
-
-def test_role_that_inherits_from_class_that_role_taker_inherits_from_that_has_default_attributes():
-    person = PersonInRoleAndOntology(name="Bass", default_name="BassDefault")
-    # DirectDiamondShapedInheritanceWhereOneIsRole inherits from HasName and
-    # DelegatorForPersonInRoleAndOntology; the mixin property delegates name to role_taker.
-    ceo = DirectDiamondShapedInheritanceWhereOneIsRole(person=person)
-    assert ceo.name == person.name
-    assert ceo.default_name == person.default_name
-
-
-def test_role_that_inherits_from_class_that_has_explicit_init():
-    person = PersonInRoleAndOntology(name="Bass", default_name="BassDefault")
-    role = RoleWithOtherBasesThatHaveTheirOwnInit(
-        person=person, base_attribute="blabla"
-    )
-    assert role.name == person.name
-    assert role.default_name == person.default_name
-    assert role.base_attribute == "blabla"
-    assert role.person is person
+    # All three roles (ceo, representative, professor) resolve back to the same taker.
+    assert len(Role.roles_for(person)) == 3
 
 
 def test_role_taker_associations():
@@ -218,6 +287,93 @@ def test_role_taker_associations():
         )
         == 9
     )
+
+
+def test_delegated_factory_method_raises_on_call_through_role():
+    person = PersonInRoleAndOntology(name="Bass")
+    ceo = CEOAsFirstRole(person=person)
+
+    # Accessing the delegated factory is fine; the guard fires only on call.
+    delegated_factory = ceo.from_name
+    with pytest.raises(DelegatedFactoryMethodError):
+        delegated_factory("Other")
+    with pytest.raises(DelegatedFactoryMethodError):
+        ceo.from_name("Other")
+
+    # The @factory_method-marked classmethod is guarded the same way.
+    with pytest.raises(DelegatedFactoryMethodError):
+        ceo.spawn()
+
+
+def test_factory_method_still_callable_on_taker_and_root_persistent_entity():
+    person = PersonInRoleAndOntology(name="Bass")
+    ceo = CEOAsFirstRole(person=person)
+
+    built_from_taker = ceo.role_taker.from_name("Made")
+    built_from_root = ceo.root_persistent_entity.from_name("Made")
+
+    assert isinstance(built_from_taker, PersonInRoleAndOntology)
+    assert built_from_taker.name == "Made"
+    assert isinstance(built_from_root, PersonInRoleAndOntology)
+
+
+def test_role_overriding_factory_method_shadows_the_guard():
+    # A role that overrides the factory keeps the role instead of dropping it. Normal attribute
+    # lookup finds the override, so __getattr__ (and the guard) never runs.
+    from_class = CEOThatOverridesFactory.from_name("Bass")
+    assert isinstance(from_class, CEOThatOverridesFactory)
+    assert from_class.name == "Bass"
+
+    existing = CEOThatOverridesFactory(person=PersonInRoleAndOntology(name="Seed"))
+    from_instance = existing.from_name("Bass")
+    assert isinstance(from_instance, CEOThatOverridesFactory)
+    assert from_instance.name == "Bass"
+
+
+def test_factory_method_guard_applies_through_nested_roles():
+    person = PersonInRoleAndOntology(name="Bass")
+    representative = RepresentativeAsSecondRole(ceo=CEOAsFirstRole(person=person))
+    with pytest.raises(DelegatedFactoryMethodError):
+        representative.from_name("Other")
+
+
+def test_ordinary_taker_method_still_delegates_through_role():
+    person = PersonInRoleAndOntology(name="Bass", works_for=Company(name="BassCo"))
+    ceo = CEOAsFirstRole(person=person)
+
+    # An ordinary (non-factory) classmethod delegates to the taker and runs normally.
+    assert ceo.describe() == "PersonInRoleAndOntology"
+    # An instance method also keeps delegating.
+    assert ceo.method_in_person() == Company(name="BassCo")
+
+
+def test_is_factory_method_classification():
+    assert is_factory_method(PersonInRoleAndOntology, "from_name")  # -> Self annotation
+    assert is_factory_method(PersonInRoleAndOntology, "spawn")  # @factory_method marker
+    assert not is_factory_method(PersonInRoleAndOntology, "describe")  # -> str
+    assert not is_factory_method(
+        PersonInRoleAndOntology, "method_in_person"
+    )  # instance
+    assert not is_factory_method(PersonInRoleAndOntology, "name")  # not a method
+
+    names = factory_method_names(PersonInRoleAndOntology)
+    assert "from_name" in names and "spawn" in names
+    assert "describe" not in names and "method_in_person" not in names
+
+
+def test_wrapped_class_exposes_factory_methods():
+    classes = [
+        cls
+        for cls in classes_of_module(
+            university_ontology_like_classes_without_descriptors
+        )
+        if is_dataclass(cls)
+    ]
+    diagram = ClassDiagram(classes)
+    wrapped = diagram.get_wrapped_class(PersonInRoleAndOntology)
+    assert "from_name" in wrapped.factory_methods
+    assert "spawn" in wrapped.factory_methods
+    assert "describe" not in wrapped.factory_methods
 
 
 @dataclass

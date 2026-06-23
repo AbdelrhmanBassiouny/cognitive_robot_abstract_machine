@@ -3,10 +3,11 @@ from __future__ import annotations
 import enum
 import inspect
 import logging
+import re
 import sys
 from collections.abc import Sequence
 from copy import copy
-from dataclasses import dataclass, Field, MISSING, field as dataclass_field
+from dataclasses import dataclass, Field, MISSING
 from datetime import datetime
 from functools import cached_property, lru_cache
 from inspect import isclass
@@ -27,10 +28,6 @@ from typing_extensions import (
 from krrood.class_diagrams.exceptions import MissingContainedTypeOfContainer
 from krrood.class_diagrams.utils import (
     behaves_like_a_built_in_type,
-    get_type_hints_of_object,
-)
-from krrood.class_diagrams.utils import (
-    behaves_like_a_built_in_class,
     common_base_class,
     get_type_hints_of_object,
 )
@@ -71,7 +68,7 @@ class WrappedField:
     The dataclass field object that is wrapped.
     """
 
-    public_name: str = None
+    public_name: Optional[str] = None
     """
     If the field is a relationship managed field, this is public name of the relationship that manages the field.
     """
@@ -221,7 +218,20 @@ class WrappedField:
             return get_args(self.resolved_type)[0]
         else:
             try:
-                return get_args(self.resolved_type)[0]
+                args = get_args(self.resolved_type)
+                if len(args) > 1:
+                    # TypeVarTuple expansion produces list[A, B, ...] — use the LCA
+                    lowest_common_base_class = common_base_class(list(args))
+                    if lowest_common_base_class is not None:
+                        return lowest_common_base_class
+                arg = args[0]
+                # Explicit Union contained type e.g. list[Union[A, B]] — resolve to LCA
+                if get_origin(arg) is Union:
+                    non_none = [t for t in get_args(arg) if t is not NoneType]
+                    lowest_common_base_class = common_base_class(non_none)
+                    if lowest_common_base_class is not None:
+                        return lowest_common_base_class
+                return arg
             except IndexError:
                 if self.resolved_type is Type:
                     return self.resolved_type
@@ -239,16 +249,23 @@ class WrappedField:
         return issubclass(self.type_endpoint, enum.Enum)
 
     @cached_property
-    def is_one_to_one_relationship(self) -> bool:
+    def is_many_to_one_relationship(self) -> bool:
+        """
+        ..note:: One-to-one relationships are not possible as its not enforceable that nobody references to the other side.
+        See `one-to-one relationships <https://docs.sqlalchemy.org/en/21/orm/basic_relationships.html#one-to-one>`_
+        """
         return not self.is_container and not self.is_builtin_type
 
     @cached_property
-    def is_one_to_many_relationship(self) -> bool:
+    def is_many_to_many_relationship(self) -> bool:
+        """
+        ..note:: One-to-many relationships are not possible as its not enforceable that nobody references to the other side.
+        """
         return self.is_container and not self.is_builtin_type and not self.is_optional
 
     @cached_property
     def is_iterable(self):
-        return self.is_one_to_many_relationship and hasattr(
+        return self.is_many_to_many_relationship and hasattr(
             self.container_type, "__iter__"
         )
 
@@ -266,21 +283,17 @@ class WrappedField:
 
     @cached_property
     def is_role_taker(self) -> bool:
-        return (
-            self.is_one_to_one_relationship
-            and not self.is_optional
-            and self.field.default == MISSING
-            and self.field.default_factory == MISSING
-        )
+        # Imported lazily: RoleTakerField lives with the Role class, and importing it at module
+        # level would close an import cycle through symbol_graph -> class_diagram -> wrapped_field.
+        from krrood.patterns.role import RoleTakerField
+
+        return isinstance(self.field, RoleTakerField)
 
     @property
     def type_name(self) -> str:
         """
         Return the string representation of the field's type.
         """
-        from typing import get_origin
-        import re
-
         if self.resolved_type is NoneType:
             return "None"
 
@@ -328,11 +341,13 @@ class WrappedField:
 
         :return: True if the type hint is an underspecified generic class.
         """
-        # If it's a class and it inherits from Generic but has no arguments
+        # A class is underspecified only if it still has free TypeVar parameters.
+        # Concrete subclasses of generic parents (e.g. HSRBMobileBase(MobileBase, HasTorso[HSRBTorso]))
+        # are subclasses of Generic but have __parameters__ == (), so they must not be skipped.
         if inspect.isclass(self.type_endpoint) and issubclass(
             self.type_endpoint, Generic
         ):
-            return True
+            return len(getattr(self.type_endpoint, "__parameters__", ())) > 0
 
         # Also check if it's a GenericAlias with empty args (though usually origin is used then)
         origin = get_origin(self.type_endpoint)

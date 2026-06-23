@@ -18,6 +18,7 @@ parts:
         - file: eql/user/result_processors
         - file: eql/user/predicate_and_symbolic_function
         - file: eql/user/match
+        - file: eql/user/underspecified
         - file: eql/user/eql_for_sql_experts
         - file: eql/user/writing_rule_trees
         - file: eql/user/inference_explanation
@@ -45,6 +46,11 @@ parts:
     - file: ripple_down_rules/relational_example_tutorial
     - file: ripple_down_rules/relational_example_with_decorator_tutorial
     - file: ripple_down_rules/test_driven_rdr_fitting_tutorial
+- caption: Role Pattern
+  chapters:
+    - file: patterns/role
+    - file: patterns/developer/role
+
 - caption: rustworkx_utils
   chapters:
     - file: rustworkx_utils/visualize_graph

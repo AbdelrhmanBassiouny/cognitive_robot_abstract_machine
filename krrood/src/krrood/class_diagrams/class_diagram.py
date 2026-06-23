@@ -45,7 +45,7 @@ from krrood.class_diagrams.attribute_introspector import (
     AttributeIntrospector,
     DataclassOnlyIntrospector,
 )
-from krrood.class_diagrams.utils import Role, get_generic_type_param, resolve_type
+from krrood.class_diagrams.method_classifier import factory_method_names
 from krrood.class_diagrams.wrapped_field import WrappedField
 
 from krrood.class_diagrams.exceptions import (
@@ -132,9 +132,9 @@ class Association(ClassRelation):
         return source_instance
 
     @cached_property
-    def one_to_many(self) -> bool:
+    def many_to_many(self) -> bool:
         """Whether the association is one-to-many (True) or many-to-one (False)."""
-        return self.field.is_one_to_many_relationship and not self.field.is_type_type
+        return self.field.is_many_to_many_relationship and not self.field.is_type_type
 
     def get_key(self, include_field_name: bool = False) -> tuple:
         """
@@ -201,6 +201,15 @@ class AssociationThroughRoleTaker(Association):
     def get_original_source_instance_given_this_relation_source_instance(
         self, source_instance: Any
     ):
+        """
+        Resolve the instance that actually owns the target, following the role-taker path.
+
+        Walks every field in the path except the last (the association to the target), so the
+        returned instance is the role taker on which the target association is declared.
+
+        :param source_instance: The role instance this association starts from.
+        :return: The instance along the role-taker path that owns the target association.
+        """
         source_instance = (
             super().get_original_source_instance_given_this_relation_source_instance(
                 source_instance
@@ -318,6 +327,14 @@ class WrappedClass(Generic[T]):
         :return: The name of the class that is wrapped.
         """
         return self.clazz.__name__
+
+    @cached_property
+    def factory_methods(self) -> Tuple[str, ...]:
+        """
+        :return: The names of the factory classmethods of the wrapped class (see
+            :func:`krrood.class_diagrams.method_classifier.is_factory_method`).
+        """
+        return factory_method_names(self.clazz)
 
     def __hash__(self):
         return hash((self.index, self.clazz))

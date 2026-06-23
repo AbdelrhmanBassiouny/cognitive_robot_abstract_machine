@@ -10,7 +10,7 @@ from __future__ import annotations
 from abc import ABC
 from copy import copy
 from dataclasses import dataclass, field
-from functools import cached_property, wraps
+from functools import cached_property
 
 from typing_extensions import (
     Iterable,
@@ -39,36 +39,39 @@ from krrood.entity_query_language.query.operations import (
     Where,
     Having,
     GroupedBy,
-    OrderedBy,
 )
 from krrood.entity_query_language.query.quantifiers import (
     ResultQuantificationConstraint,
     ResultQuantifier,
     An,
 )
+from krrood.entity_query_language.query.result_transformers import (
+    Ordering,
+    Quantification,
+    ResultTransformer,
+)
 from krrood.entity_query_language.core.base_expressions import (
-    Bindings,
     OperationResult,
     SymbolicExpression,
     UnaryExpression,
     Selectable,
     UnificationDict,
 )
+from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.cache_data import (
     SeenSet,
 )
+from krrood.entity_query_language.evaluation_context import get_evaluation_context
 from krrood.entity_query_language.core.variable import (
     InstantiatedVariable,
-    Variable,
     ExternallySetVariable,
 )
-from krrood.entity_query_language.enums import DomainSource
+from krrood.entity_query_language.enums import DomainSource, EvaluationContextKey
 from krrood.entity_query_language.exceptions import (
     UnsupportedNegation,
-    TryingToModifyAnAlreadyBuiltQuery,
     NonPositiveLimitValue,
 )
-from krrood.entity_query_language.operators.aggregators import Aggregator, CountAll
+from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.operators.set_operations import (
     MultiArityExpressionThatPerformsACartesianProduct,
 )
@@ -87,11 +90,61 @@ ResultMapping = Callable[[Iterator[OperationResult]], Iterator[OperationResult]]
 A function that maps the results of a query to a new set of results.
 """
 
+_STREAM_EXHAUSTED = object()
+"""
+Sentinel distinguishing a genuinely exhausted source from a ``None`` result.
+"""
+
+
+@dataclass
+class CachedResultStream:
+    """
+    A lazily-filled, replayable view over a source iterator.
+
+    The source is advanced on demand and each produced item is buffered, so the stream can be
+    iterated many times — once per outer row that reaches an uncorrelated subquery — while the
+    underlying computation runs at most once. Filling lazily preserves short-circuiting for callers
+    that stop early.
+    """
+
+    _source: Iterator[OperationResult]
+    """
+    The underlying result iterator, advanced at most once per produced item.
+    """
+    _buffer: List[OperationResult] = field(default_factory=list)
+    """
+    The results produced so far, replayed to every iterator.
+    """
+    _exhausted: bool = field(default=False)
+    """
+    Whether the source has been fully consumed.
+    """
+
+    def __iter__(self) -> Iterator[OperationResult]:
+        index = 0
+        while True:
+            if index < len(self._buffer):
+                yield self._buffer[index]
+                index += 1
+                continue
+            if self._exhausted:
+                return
+            next_item = next(self._source, _STREAM_EXHAUSTED)
+            if next_item is _STREAM_EXHAUSTED:
+                self._exhausted = True
+                return
+            self._buffer.append(next_item)
+            yield next_item
+            index += 1
+
 
 @monitored
 @dataclass(eq=False, repr=False)
 class Query(
-    MultiArityExpressionThatPerformsACartesianProduct, CanBehaveLikeAVariable[T], ABC
+    Evaluable,
+    MultiArityExpressionThatPerformsACartesianProduct,
+    CanBehaveLikeAVariable[T],
+    ABC,
 ):
     """
     Describes the queried object(s), could be a query over a single variable or a set of variables,
@@ -130,27 +183,29 @@ class Query(
     """
     _ordered_by_builder_: Optional[OrderedByBuilder] = field(default=None, init=False)
     """
-    The builder for the `OrderedBy` expression if present.
+    The ordering specification applied as a pipeline stage, if the query is ordered.
     """
     _quantifier_builder_: Optional[QuantifierBuilder] = field(default=None, init=False)
     """
-    The builder for the `ResultQuantifier` expression of the query. The default quantifier is `An`
-     which yields all results.
+    The quantification specification applied as a pipeline stage. Defaults to `An`, which accepts all
+    results.
     """
-    _built_: bool = field(default=False, init=False)
+    _dirty_: bool = field(default=True, init=False)
     """
-    Whether the query has built the query (wired the query operations) or not. If built already, it
-    cannot be modified further and an error will be raised if a user tries to modify the query.
+    Whether anything needs (re)building. Any modifier method marks the query dirty; :meth:`build`
+    is a no-op while clean and otherwise applies only the parts flagged below. The query is never
+    frozen, so it can always be modified, even after being built or embedded as a child.
     """
-    _update_ordered_by_: bool = field(default=True, init=False)
+    _building_: bool = field(default=False, init=False)
     """
-    Whether the query has updated the ordered by expression or not. If updated already, it
-    cannot be modified further and an error will be raised if a user tries to modify the query.
+    Re-entrancy guard set while :meth:`build` wires the compiled product, so that parenting the query
+    to its product does not recursively trigger another build.
     """
-    _update_quantifier_: bool = field(default=True, init=False)
+    _is_compiled_product_: bool = field(default=False, init=False)
     """
-    Whether the query has updated the quantifier expression or not. If updated already, it
-    cannot be modified further and an error will be raised if a user tries to modify the query.
+    Whether this instance is a compiled product (wired as the cartesian-product node) rather than a
+    spec. A spec delegates evaluation to the product it compiles, so that the spec behaves like its
+    product while never being the mutated, embedded node itself.
     """
 
     def __post_init__(self):
@@ -162,33 +217,39 @@ class Query(
 
         self._quantifier_builder_ = QuantifierBuilder(self)
 
-    @staticmethod
-    def modifies_query_structure(method):
+    def _mark_dirty_(self) -> None:
         """
-        A decorator to mark methods that modify the structure of the query. If the query is already
-        built, an error will be raised when trying to call any of these methods.
+        Flag the compiled expression as stale and drop caches that depend on modifier state, so the
+        next :meth:`build` recomputes them. Called by every modifier method.
         """
+        self._dirty_ = True
+        self.__dict__.pop("_group_", None)
+        self.__dict__.pop("_distinct_on_ids_", None)
 
-        @wraps(method)
-        def wrapper(self, *args, **kwargs):
-            if self._built_:
-                raise TryingToModifyAnAlreadyBuiltQuery(self)
-            return method(self, *args, **kwargs)
-
-        return wrapper
-
-    def evaluate(self) -> Iterator:
+    def evaluate(self, backend=None) -> Iterator:
         """
-        Wrap the query in a ResultQuantifier expression and evaluate it,
-         returning an iterator over the results.
+        Evaluate the query using the given backend, returning an iterator over the results.
+
+        Builds the query eagerly so that ``evaluate`` consistently marks it as built regardless of
+        when the returned iterator is consumed; ``build`` is idempotent.
+
+        :param backend: The query backend to evaluate with. Defaults to the
+            ``EntityQueryLanguageBackend`` (native python evaluation).
         """
         self.build()
-        if self._expression_ is not self:
-            return self._expression_.evaluate()
-        else:
-            return MultiArityExpressionThatPerformsACartesianProduct.evaluate(self)
+        return super().evaluate(backend)
 
-    @modifies_query_structure
+    def _evaluate_natively_(self) -> Iterator:
+        """
+        Evaluate the query in this python process, returning an iterator over its results (ordered
+        and quantified by the result pipeline). This is the engine used by the
+        ``EntityQueryLanguageBackend``.
+        """
+        self.build()
+        if not self._is_compiled_product_:
+            return self._expression_.evaluate()
+        return MultiArityExpressionThatPerformsACartesianProduct.evaluate(self)
+
     def where(self, *conditions: ConditionType) -> Self:
         """
         Set the conditions that describe the query object. The conditions are chained using AND.
@@ -200,9 +261,9 @@ class Query(
             self._where_builder_ = WhereBuilder(conditions=conditions, query=self)
         else:
             self._where_builder_.conditions += conditions
+        self._mark_dirty_()
         return self
 
-    @modifies_query_structure
     def having(self, *conditions: ConditionType) -> Self:
         """
         Set the conditions that describe the query object. The conditions are chained using AND.
@@ -214,6 +275,7 @@ class Query(
             self._having_builder_ = HavingBuilder(conditions=conditions, query=self)
         else:
             self._having_builder_.conditions += conditions
+        self._mark_dirty_()
         return self
 
     def ordered_by(
@@ -232,7 +294,7 @@ class Query(
         self._ordered_by_builder_ = OrderedByBuilder(
             self, variable, descending=descending, key=key
         )
-        self._update_ordered_by_ = True
+        self._mark_dirty_()
         return self
 
     def distinct(
@@ -246,11 +308,11 @@ class Query(
         :return: This query.
         """
         self._distinct_on = on if on else self._selected_variables_
+        self._mark_dirty_()
         self._seen_results = SeenSet(keys=self._distinct_on_ids_)
         self._results_mapping.append(self._get_distinct_results_)
         return self
 
-    @modifies_query_structure
     def grouped_by(
         self, *variables_to_group_by: TypingUnion[Selectable, Any]
     ) -> TypingUnion[Self, T]:
@@ -261,6 +323,7 @@ class Query(
         :return: This query.
         """
         self._grouped_by_builder_ = GroupedByBuilder(self, variables_to_group_by)
+        self._mark_dirty_()
         return self
 
     def limit(self, n: int) -> Self:
@@ -273,8 +336,7 @@ class Query(
         self._limit_ = n
         if not isinstance(self._limit_, int) or self._limit_ <= 0:
             raise NonPositiveLimitValue(self._limit_)
-        if self._built_:
-            self._expression_._limit_ = self._limit_
+        self._mark_dirty_()
         return self
 
     def _quantify_(
@@ -292,7 +354,7 @@ class Query(
         self._quantifier_builder_ = QuantifierBuilder(
             self, quantifier_type, quantification_constraint
         )
-        self._update_quantifier_ = True
+        self._mark_dirty_()
         return self
 
     def __enter__(self):
@@ -306,92 +368,108 @@ class Query(
 
     def build(self) -> Self:
         """
-        Build the query by wiring the nodes together in the correct order of evaluation.
+        Build (or rebuild) the query, caching a freshly compiled product expression.
+
+        This query is a stable spec: it holds the modifiers and a stable identity that derived
+        references and rules point at, but it is never itself the evaluated node. Each build compiles
+        a fresh product tree from the current spec via :meth:`_compile_` and stores it in
+        :attr:`_expression_`; the spec is never frozen, so any modifier marks it dirty and the next
+        build produces a new product. Because every build yields a new tree (rather than mutating the
+        previous one in place), a product already embedded elsewhere stays frozen against later edits.
 
         :return: This query.
         """
-        if self._built_:
-            # TODO: This is a temporary fix, a coming PR will clean it up.
-            self._update_ordered_by_expression_()
-            self._update_quantifier_expression_()
+        if not self._dirty_:
             return self
+        self._expression_ = self._compile_()
+        self._dirty_ = False
+        return self
 
-        self._built_ = True
+    def _compile_(self) -> SymbolicExpression:
+        """
+        Compile a fresh, independent product expression from this spec — the single compile path.
 
+        The product is a separate node graph that shares this query's identifier and selected
+        variables, so it evaluates identically and co-references the same variables, while later
+        edits that rebuild the spec cannot reach it. It is produced by replaying the spec's modifiers
+        onto a fresh instance and wiring that instance as the cartesian-product node, rather than by
+        cloning a live graph, so grouping, distinct, and self-referential ordering all compile
+        correctly.
+
+        :return: The compiled inner product node (its ordering/quantification wrappers are reachable
+            through its :attr:`_expression_`).
+        """
+        product = type(self)(_selected_variables_=self._selected_variables_)
+        product._id_ = self._id_
+        product._expression_id_cache_ = {}
+        if self._where_builder_ is not None:
+            product.where(*self._where_builder_.conditions)
+        if self._grouped_by_builder_ is not None:
+            product.grouped_by(*self._grouped_by_builder_.variables_to_group_by)
+        if self._having_builder_ is not None:
+            product.having(*self._having_builder_.conditions)
+        if self._ordered_by_builder_ is not None:
+            ordering = self._ordered_by_builder_
+            product.ordered_by(
+                ordering.variable, descending=ordering.descending, key=ordering.key
+            )
+        if self._distinct_on:
+            product.distinct(*self._distinct_on)
+        if self._limit_ is not None:
+            product.limit(self._limit_)
+        quantifier = self._quantifier_builder_
+        product._quantify_(quantifier.type, quantifier.quantification_constraint)
+        product._wire_in_place_()
+        return product
+
+    def _wire_in_place_(self) -> Self:
+        """
+        Wire this instance as the cartesian-product node: build the data-source chain (Where /
+        GroupedBy / Having) and selected variables as its children. Ordering and quantification are
+        applied as result-pipeline stages during evaluation, so the product is its own compiled
+        expression. Called once on a freshly compiled product instance.
+
+        :return: This instance.
+        """
+        self._building_ = True
+        self._is_compiled_product_ = True
+        self._rewire_data_source_chain_()
+        self._dirty_ = False
+        self._building_ = False
+        return self
+
+    def _rewire_data_source_chain_(self) -> None:
+        """
+        Wire the data-source chain (Where / GroupedBy / Having) and the selected variables as the
+        children of this product node.
+        """
+        head = self._data_source_chain_head_()
+        children = (
+            self._selected_variables_
+            if head is None
+            else (head, *self._selected_variables_)
+        )
+        self.update_children(*children)
+
+    def _data_source_chain_head_(self) -> Optional[SymbolicExpression]:
+        """
+        Build the head of the data-source chain that feeds the selected variables. At most one of
+        Having / GroupedBy / Where heads the chain, with precedence ``Having > GroupedBy > Where``
+        since each already incorporates the previous one.
+
+        :return: The chain head, or ``None`` if the query is unfiltered/ungrouped.
+        """
         if self._group_ and self._grouped_by_builder_ is None:
             self._grouped_by_builder_ = GroupedByBuilder(self)
 
-        children = []
         if self._having_builder_ is not None:
             self._having_builder_.grouped_by = self._grouped_by_builder_.expression
-            children.append(self._having_builder_.expression)
-        elif self._grouped_by_builder_ is not None:
-            children.append(self._grouped_by_builder_.expression)
-        elif self._where_builder_ is not None:
-            children.append(self._where_builder_.expression)
-
-        self._if_count_all_is_used_update_its_child_to_be_the_grouped_by_expression_()
-
-        children.extend(self._selected_variables_)
-
-        self.update_children(*children)
-
-        self._update_ordered_by_expression_()
-
-        self._update_quantifier_expression_()
-
-        return self
-
-    def _if_count_all_is_used_update_its_child_to_be_the_grouped_by_expression_(
-        self,
-    ) -> None:
-        """
-        Update the child of the `CountAll` aggregator to be the `GroupedBy` expression if it exists.
-        """
-        if self._grouped_by_builder_ is None:
-            return
-        count_all = next(
-            (
-                aggregator
-                for aggregator in self._grouped_by_builder_.aggregators_and_non_aggregators[
-                    0
-                ]
-                if isinstance(aggregator, CountAll)
-            ),
-            None,
-        )
-        if count_all is None:
-            return
-        count_all._replace_child_(
-            count_all._child_, self._grouped_by_builder_.expression
-        )
-
-    # TODO: This is a temporary fix, a coming PR will clean it up.
-    def _update_ordered_by_expression_(self):
-        if (self._ordered_by_builder_ is None) or not self._update_ordered_by_:
-            return self
-        og_child = self._expression_
-        if isinstance(self._expression_, OrderedBy):
-            og_child = self._expression_._child_
-            self._remove_parent_(self._expression_)
-        self._update_ordered_by_ = False
-        self._ordered_by_builder_.data_source = og_child
-        self._expression_ = self._ordered_by_builder_.expression
-        return self
-
-    # TODO: This is a temporary fix, a coming PR will clean it up.
-    def _update_quantifier_expression_(self):
-        if (self._quantifier_builder_ is None) or not self._update_quantifier_:
-            return self
-        og_child = self._expression_
-        if isinstance(self._expression_, ResultQuantifier):
-            og_child = self._expression_._child_
-            self._remove_parent_(self._expression_)
-        self._update_quantifier_ = False
-        self._quantifier_builder_.child = og_child
-        self._expression_ = self._quantifier_builder_.expression
-        self._expression_._limit_ = self._limit_
-        return self
+            return self._having_builder_.expression
+        if self._grouped_by_builder_ is not None:
+            return self._grouped_by_builder_.expression
+        if self._where_builder_ is not None:
+            return self._where_builder_.expression
+        return None
 
     def _evaluate__(
         self,
@@ -400,17 +478,107 @@ class Query(
         """
         Evaluate the query by constraining values, updating conclusions,
         and selecting variables.
-        """
 
-        yield from (
+        A spec delegates to its compiled product so that evaluating the spec as an expression behaves
+        exactly like evaluating the product; only the compiled product runs the real evaluation.
+
+        This query is the scope that isolates a nested subquery: evaluated as a subquery (nested
+        inside another query's evaluation) it ignores the surrounding bindings and ranges over its own
+        domain, and its result is cached so it is computed once and replayed to every outer row.
+        Evaluated directly (as the outermost query) it threads the incoming sources unchanged.
+        """
+        if not self._is_compiled_product_:
+            self.build()
+            yield from self._expression_._evaluate__(sources)
+            return
+
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is None or not self._is_nested_subquery_(
+            evaluation_context
+        ):
+            yield from self._produce_results_(sources)
+            return
+
+        cache = evaluation_context.data.setdefault(
+            EvaluationContextKey.SUBQUERY_RESULT_CACHE_KEY, {}
+        )
+        cached_stream = cache.get(self._id_)
+        if cached_stream is None:
+            cached_stream = CachedResultStream(
+                self._produce_results_(OperationResult({}))
+            )
+            cache[self._id_] = cached_stream
+        yield from cached_stream
+
+    def _is_nested_subquery_(self, evaluation_context) -> bool:
+        """
+        :param evaluation_context: The active evaluation context.
+        :return: Whether this compiled query is evaluating as a nested subquery rather than as the
+            outermost query of the current evaluation. The first compiled query to evaluate claims the
+            outermost role; any other is nested.
+        """
+        outermost_query_id = evaluation_context.data.setdefault(
+            EvaluationContextKey.OUTERMOST_QUERY_ID_KEY, self._id_
+        )
+        return outermost_query_id != self._id_
+
+    def _produce_results_(self, sources: OperationResult) -> Iterator[OperationResult]:
+        """
+        Produce this product's results: the projected, result-mapped rows of its cartesian product.
+
+        :param sources: The current bindings.
+        :return: An iterator over the query's result rows.
+        """
+        results = (
             self._get_operation_result_(result)
             for result in self._apply_results_mapping_(
                 self._evaluate_product_(sources),
             )
         )
+        for transformer in self._result_transformers_:
+            results = transformer.transform(results)
+        yield from results
 
         if self._seen_results is not None:
             self._seen_results.clear()
+
+    @cached_property
+    def _result_transformers_(self) -> List[ResultTransformer]:
+        """
+        :return: The ordered result-pipeline stages applied to this query's produced rows: ordering
+            (when configured), then quantification. Inspectable as :attr:`result_stages`.
+        """
+        transformers: List[ResultTransformer] = []
+        if self._ordered_by_builder_ is not None:
+            ordering = self._ordered_by_builder_
+            transformers.append(
+                Ordering(
+                    variable=ordering.variable,
+                    descending=ordering.descending,
+                    key=ordering.key,
+                )
+            )
+        quantifier = self._quantifier_builder_
+        constraint = (
+            quantifier.quantification_constraint
+            or quantifier.type._default_constraint_()
+        )
+        transformers.append(
+            Quantification(
+                quantifier_type=quantifier.type, constraint=constraint, owner=self
+            )
+        )
+        return transformers
+
+    @property
+    def result_stages(self) -> List[ResultTransformer]:
+        """
+        :return: The result-pipeline stages of this query's compiled product (ordering,
+            quantification), so an inspector can identify how results are ordered and quantified
+            without traversing or evaluating.
+        """
+        self.build()
+        return self._expression_._result_transformers_
 
     def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
         """
@@ -445,12 +613,6 @@ class Query(
         """
         return (
             self._grouped_by_builder_.expression if self._grouped_by_builder_ else None
-        )
-
-    @property
-    def _quantifier_expression_(self) -> Optional[ResultQuantifier]:
-        return (
-            self._quantifier_builder_.expression if self._quantifier_builder_ else None
         )
 
     @cached_property
@@ -544,18 +706,51 @@ class Query(
             results = result_mapping(results)
         return results
 
+    def _as_embeddable_child_(self, parent: SymbolicExpression) -> SymbolicExpression:
+        """
+        Embed this query's compiled product when it becomes an operand of another expression.
+
+        The product is captured as it stands at embed time; because each rebuild produces a new
+        product rather than mutating the previous one, a later edit to this query cannot change the
+        already-embedded copy. The product shares this query's identifier, so a derived reference
+        (``query.name``) embedded over it resolves against the query's own results. While the product
+        is wiring itself during :meth:`_wire_in_place_` (``_building_``), its own in-place node is
+        returned.
+
+        :param parent: The expression about to take this query as a child.
+        :return: The compiled product to embed (or the in-place node during self-wiring).
+        """
+        if self._building_:
+            return self._expression_
+        self.build()
+        return self._expression_
+
+    @property
+    def _conditions_root_(self) -> Optional[SymbolicExpression]:
+        """
+        Resolve the conditions root within the compiled product, so rule definition (:meth:`__enter__`)
+        and conclusions attach to the node that is actually evaluated.
+
+        :return: The conditions root of the compiled product.
+        """
+        self.build()
+        if not self._is_compiled_product_:
+            return self._expression_._conditions_root_
+        return SymbolicExpression._conditions_root_.fget(self)
+
     @UnaryExpression._parent_.setter
     def _parent_(self, parent: SymbolicExpression):
         """
-        Make sure to set the parent of the built expression of the query instead of the query itself.
+        Route parenting to the compiled product rather than to the spec node, building it first. The
+        ``_building_`` re-entrancy guard prevents recursion while a product instance wires itself
+        during :meth:`_wire_in_place_`.
         """
-        # TODO: A hot fix for now, will be cleaned in a coming PR.
-        if not isinstance(parent, (ResultQuantifier, OrderedBy)):
+        if not self._building_:
             self.build()
-        if self._expression_ is not self:
+        if not self._is_compiled_product_:
             self._expression_._parent_ = parent
-        else:
-            UnaryExpression._parent_.__set__(self, parent)
+            return
+        UnaryExpression._parent_.__set__(self, parent)
 
     def _invert_(self):
         raise UnsupportedNegation(self.__class__)

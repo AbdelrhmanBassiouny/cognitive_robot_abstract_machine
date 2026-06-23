@@ -1,6 +1,5 @@
 import pytest
 
-from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.patterns.role import Role
 from ..dataset.role_and_ontology.classes_for_testing_role_recursion_error import (
     PersonForRoleRecursion,
@@ -13,15 +12,11 @@ from ..dataset.role_and_ontology.classes_for_testing_role_recursion_error import
 
 
 def test_role_attribute_resolution():
-    diagram = ClassDiagram(
-        [PersonForRoleRecursion, StudentForRoleRecursion, TeacherForRoleRecursion]
-    )
-
     p = PersonForRoleRecursion(name="John")
     s = StudentForRoleRecursion(student_id="S123", person=p)
     t = TeacherForRoleRecursion(employee_id="T456", person=p)
 
-    # Taker attr accessible from role via RoleFor mixin property.
+    # Taker attr accessible from role via __getattr__ delegation.
     assert s.name == "John"
     assert t.name == "John"
 
@@ -39,10 +34,6 @@ def test_role_attribute_resolution():
 
 
 def test_role_recursion_with_chained_roles():
-    diagram = ClassDiagram(
-        [BaseForRoleRecursion, IntermediateForRoleRecursion, TopForRoleRecursion]
-    )
-
     b = BaseForRoleRecursion()
     i = IntermediateForRoleRecursion(base=b)
     top = TopForRoleRecursion(inter=i)
@@ -52,7 +43,7 @@ def test_role_recursion_with_chained_roles():
     assert i.inter_attr == "inter"
     assert b.base_attr == "base"
 
-    # Taker attrs accessible from role via RoleFor mixin property.
+    # Taker attrs accessible from role via __getattr__ delegation.
     assert top.inter_attr == "inter"
     assert i.base_attr == "base"
     assert top.base_attr == "base"

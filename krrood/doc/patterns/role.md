@@ -1,371 +1,370 @@
-# Role Pattern
-
-## What is it?
-
-The **Role** pattern lets an existing object take on a new semantic context — adding context-specific
-attributes and behaviour — while **remaining the same entity**. A role and its role taker share
-identity: they compare equal, have the same hash, and point to each other through a role registry.
-
+---
+jupytext:
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+    jupytext_version: 1.19.3
+kernelspec:
+  display_name: Python 3
+  language: python
+  name: python3
 ---
 
-## Quick example
+# Role Pattern — User Guide
 
-### Defining a role taker
+The Role pattern lets an existing object take on a new semantic context — adding context-specific
+attributes and behaviour — without changing the original object's type or identity. A role is an
+**ordinary object with its own identity**: it is equal only to itself. When
+you need to ask whether two objects refer to the same underlying entity, use the `IsSameEntity`
+predicate, which sees through role chains to the root entity.
 
-```python
+This guide uses a university domain as its running example. A `Person` is a persistent entity
+with a name. Over time that person may become a `CEO` or a `Professor`. These are roles: they
+add context-specific data, but the person's identity never changes.
+
+## Defining a Role Taker
+
+A role taker is any dataclass you define.
+
+```{code-cell} ipython3
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing_extensions import List, Optional
 
-@dataclass(eq=False)
-class Room(SemanticAnnotation):
-    floor: Floor = field(kw_only=True)
-```
-
-### Defining a role
-
-Inherit from `Role[T]` (where `T` is the role taker type), add the role taker as a field, and
-implement `role_taker_attribute()` to point to that field:
-
-```python
-from krrood.patterns.role import Role
-from krrood.entity_query_language.factories import variable_from
+from krrood.entity_query_language.predicate import Symbol
+from krrood.patterns.role_predicates import IsSameEntity
 
 
-@dataclass(eq=False)
-class Kitchen(Role[Room], Room): # The Role should also inherit from the role taker type (only for the IDE support).
-    room: Room = field(kw_only=True) # the role taker should be a keyword-only argument
-    utilities: list[str] = field(default_factory=list)
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Room]:
-        return variable_from(cls).room
-```
-
-### Using the role
-
-```python
-room = Room(floor=ground_floor)
-kitchen = Kitchen(room=room)
-
-# Identity is shared
-assert kitchen == room
-assert hash(kitchen) == hash(room)
-
-# Role registry: the room knows about the kitchen
-assert Role.roles_for(room, Kitchen)[0] is kitchen
-
-# Room attributes are accessible directly on the kitchen (via delegation)
-kitchen.floor   # → room.floor
-
-# Role-specific attributes live on the kitchen
-kitchen.utilities
-```
-
----
-
-## Examples from semantic_annotations
-
-### Room roles — Kitchen, Bedroom, Bathroom, LivingRoom
-
-A `Room` is a physical area with spatial bounds and a floor. Its semantic purpose — *kitchen*,
-*bedroom*, *bathroom*, *living room* — is a temporary, contextual role. The same room could be a
-kitchen today and converted to a bedroom tomorrow. The room's identity never changes; only its
-semantic role does.
-
-The `semantic_digital_twin` package defines four room roles, all following the same pattern:
-
-```python
-@dataclass(eq=False)
-class Kitchen(Role[Room], Room):
-    room: Room = field(kw_only=True)
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Room]:
-        return variable_from(cls).room
-
-@dataclass(eq=False)
-class Bedroom(Role[Room], Room):
-    room: Room = field(kw_only=True)
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Room]:
-        return variable_from(cls).room
-
-@dataclass(eq=False)
-class Bathroom(Role[Room], Room):
-    room: Room = field(kw_only=True)
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Room]:
-        return variable_from(cls).room
-
-@dataclass(eq=False)
-class LivingRoom(Role[Room], Room):
-    room: Room = field(kw_only=True)
-
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Room]:
-        return variable_from(cls).room
-```
-
-A single `Room` can take on multiple roles simultaneously — a studio apartment's room might be a
-`Kitchen`, `Bedroom`, and `LivingRoom` all at once:
-
-```python
-room = Room(floor=ground_floor)
-kitchen = Kitchen(room=room)
-bedroom = Bedroom(room=room)
-living_room = LivingRoom(room=room)
-
-# All roles share identity with the room
-assert kitchen == bedroom == living_room == room
-assert hash(kitchen) == hash(bedroom) == hash(living_room) == hash(room)
-
-# The room's registry sees all active roles
-assert len(Role.roles_for(room, Room)) == 4
-
-# Room attributes are accessible on every role (via DelegatorForRoom)
-kitchen.floor       # → room.floor
-bedroom.floor       # → room.floor
-living_room.floor   # → room.floor
-```
-
-This is the key insight of the Role pattern: the physical entity (`Room`) has a stable identity,
-while its semantic roles come and go. Accessing of role-taker attributes is direct.
-
----
-
-## Examples from ontology
-
-### Person, CEO, Professor — parallel roles on the same entity
-
-In an ontology, a `Person` is a persistent entity with a name and identity. Over time, that person
-may take on various roles: they can become a `CEO` (temporarily heading a company), a `Professor`
-(teaching courses), or both simultaneously. These roles are not permanent properties of the person —
-they are contextual relationships that come and go.
-
-```python
 @dataclass(eq=False)
 class Person(Symbol):
+    """A persistent human entity with a unique name."""
+
     name: str
 
-@dataclass(eq=False)
-class CEO(Role[Person], Person):
-    person: Person = field(kw_only=True)
-    head_of: Company = None
+    def __hash__(self) -> int:
+        return hash(self.name)
 
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Person]:
-        return variable_from(cls).person
 
 @dataclass(eq=False)
-class Professor(Role[Person], Person):
-    person: Person = field(kw_only=True)
-    teacher_of: List[Course] = field(default_factory=list)
+class Company(Symbol):
+    """An organisation that people can head or work for."""
 
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[Person]:
-        return variable_from(cls).person
-```
+    name: str
 
-A single person can hold both roles at once:
+    def __hash__(self) -> int:
+        return hash(self.name)
 
-```python
+
+@dataclass(eq=False)
+class Course(Symbol):
+    """An academic course that a professor can teach."""
+
+    name: str
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+
 alice = Person(name="Alice")
-ceo = CEO(person=alice, head_of=acme_corp)
-prof = Professor(person=alice, teacher_of=[cs101, math201])
-
-# Both roles share identity with Alice
-assert ceo == prof == alice
-assert hash(ceo) == hash(prof) == hash(alice)
-
-# Alice knows about all her roles
-assert Role.roles_for(alice, CEO)[0] is ceo
-assert Role.roles_for(alice, Professor)[0] is prof
-
-# Each role carries its own context
-ceo.head_of         # → acme_corp
-prof.teacher_of     # → [cs101, math201]
+print(alice)
 ```
 
-### CEO, Representative — role chaining
+## Defining a Role
 
-A role's role taker can itself be a role, creating a **role chain**. A `CEO` can temporarily act as a
-`Representative` for a company, adding another layer of context on top:
+A role is a dataclass that inherits from `Role[T]`, where `T` is the type of its role taker.
+The role taker is stored in a single field that you mark with `role_taker_field()`.
 
-```python
+```{code-cell} ipython3
+from krrood.patterns.role import Role, role_taker_field
+
+
 @dataclass(eq=False)
-class Representative(Role[CEO], CEO):
-    ceo: CEO = field(kw_only=True)
-    represents: Company = None
+class CEO(Role[Person]):
+    """The role of being the chief executive of a company."""
 
-    @classmethod
-    def role_taker_attribute(cls) -> Attribute[CEO]:
-        return variable_from(cls).ceo
+    person: Person = role_taker_field()
+    head_of: Optional[Company] = None
 ```
 
-```python
-alice = Person(name="Alice")
-ceo = CEO(person=alice, head_of=acme_corp)
-rep = Representative(ceo=ceo, represents=acme_corp)
+Notice that `CEO` inherits from `Role[Person]` — it does **not** inherit from
+`Person`. The role and its taker are entirely separate classes connected only through the
+`role_taker_field`.
 
-# All three are the same entity
-assert rep == ceo == alice
-assert hash(rep) == hash(ceo) == hash(alice)
+## Constructing a Role
 
-# The root entity sees the full chain
-assert Role.roles_for(alice, CEO)[0] is ceo
-assert Role.roles_for(alice, Representative)[0] is rep
+Role construction is explicit. You pass the role taker as a keyword argument to the role's
+constructor, just like any other dataclass field.
 
-# The chain is transparent: each role taker sees all roles
-Role.roles_for(ceo, Representative)[0] is rep   # CEO knows about its Representative role
+```{code-cell} ipython3
+acme = Company(name="ACME")
+ceo = CEO(person=alice, head_of=acme)
+print(ceo)
 ```
 
-### Why roles, not subclasses?
+The role registers itself with the `RoleRegistry` during `__post_init__`, which is what enables role lookup.
 
-A `CEO` is not a subclass of `Person` — a person does not *become* a different kind of thing when
-they take a job. They gain temporary properties (`head_of`) and relationships that may later be
-removed, but their identity as a person persists. Subclassing would imply that a `CEO` is a
-permanently different kind of entity with distinct identifying properties, which is not how these
-concepts work in the real world.
+## Distinct Identity
 
-Similarly, `Kitchen` is not a subclass of `Room` — a room can be a kitchen one year and a bedroom
-the next. If `Kitchen` were a subclass, that transition would be impossible to model without
-replacing the room object entirely. A Role captures the temporary, contextual nature of these
-concepts.
+A role is a distinct object from its role taker: they do not compare equal and do not share a
+hash, so a role and its taker — and multiple roles on one taker — stay separate in sets and
+dictionaries.
+
+```{code-cell} ipython3
+print("alice == ceo:", alice == ceo)
+print("alice is ceo:", alice is ceo)
+print("set size:", len({alice, ceo}))
+```
+
+To ask whether two objects refer to the same underlying entity, use the `IsSameEntity`
+predicate. It unwraps any role to its root entity before comparing, so a role and its taker
+count as the same entity:
+
+```{code-cell} ipython3
+print("IsSameEntity(alice, ceo):", bool(IsSameEntity(alice, ceo)))
+```
+
+## Attribute Access
+
+Reading an attribute that is not declared on the role is delegated to the role taker via
+`__getattr__`, so you can read role-taker attributes through the role as if they were declared
+there.
+
+Assignments behave differently: they always target the role itself, never the role taker, and only
+the role's own declared fields may be assigned. Assigning any other name raises
+`RoleAttributeNotDeclaredError`, so a write can never silently shadow a role-taker attribute. To
+change the role taker, assign through `role.role_taker`.
+
+```{code-cell} ipython3
+from krrood.patterns.exceptions import RoleAttributeNotDeclaredError
+
+# Reading a role-taker attribute through the role delegates to the taker
+print("ceo.name:", ceo.name)
+
+# Assigning a name the role does not declare is rejected (it would shadow a taker attribute)
+try:
+    ceo.name = "Acting CEO"
+except RoleAttributeNotDeclaredError as error:
+    print("rejected:", error)
+
+# To change the taker, assign through its reference explicitly
+ceo.role_taker.name = "Alicia"
+print("alice.name after writing through role_taker:", alice.name)
+
+# Restore the original name
+ceo.role_taker.name = "Alice"
+
+# Role-native fields are read from the role, not the taker
+print("ceo.head_of:", ceo.head_of)
+print("hasattr(alice, 'head_of'):", hasattr(alice, "head_of"))
+```
+
+## IDE Support: Python Role Lens
+
+Because a role's attributes come from two places — the fields declared on the role class and,
+through delegation, the attributes of its role-taker chain — a standard IDE only sees the
+fields declared directly on the role class. The **Python Role Lens** plugin for JetBrains IDEs
+(such as PyCharm) closes that gap: it surfaces *all* attributes accessible on a role, including
+the delegated ones, and lets you navigate straight to the source class that defines each
+attribute — much like navigating an inheritance hierarchy.
+
+- Plugin: [Python Role Lens on the JetBrains Marketplace](https://plugins.jetbrains.com/plugin/32276-python-role-lens)
+- Install from your IDE: open **Settings → Plugins → Marketplace** and search for
+  *Python Role Lens* (plugin id `io.github.abdelrhmanbassiouny.pyroles`).
+
+<iframe width="384px" height="319px" src="https://plugins.jetbrains.com/embeddable/card/32276" frameborder="0"></iframe>
+
+<iframe width="245px" height="48px" src="https://plugins.jetbrains.com/embeddable/install/32276" frameborder="0"></iframe>
+
+A short demo of the plugin in action:
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/qoPctQ9Z5Eo" frameborder="0" allowfullscreen></iframe>
+
+## Querying Roles
+
+`Role` provides class methods for checking whether a role taker has a role and for retrieving
+role instances.
+
+```{code-cell} ipython3
+# Check whether alice has a CEO role
+print("has CEO role:", Role.has_role(alice, CEO))
+
+# Retrieve all CEO roles for alice
+ceos = Role.roles_for(alice, CEO)
+print("CEO roles:", ceos)
+
+# Retrieve all roles of any type
+all_roles = Role.roles_for(alice)
+print("all roles:", all_roles)
+```
+
+## Parallel Roles
+
+A single role taker can hold multiple roles simultaneously. Each role is a separate object with
+its own identity, but all of them resolve to the same underlying entity.
+
+```{code-cell} ipython3
+@dataclass(eq=False)
+class Professor(Role[Person]):
+    """The role of being an academic who teaches courses."""
+
+    person: Person = role_taker_field()
+    teaches: List[Course] = field(default_factory=list, kw_only=True)
+
+
+cs_101 = Course(name="CS 101")
+professor = Professor(person=alice, teaches=[cs_101])
+
+print("ceo == professor:", ceo == professor)
+print("IsSameEntity(ceo, professor):", bool(IsSameEntity(ceo, professor)))
+print("IsSameEntity(professor, alice):", bool(IsSameEntity(professor, alice)))
+print("set size:", len({alice, ceo, professor}))
+
+# Each role preserves its own context-specific data
+print("CEO heads:", ceo.head_of)
+print("Professor teaches:", professor.teaches)
+
+# The taker knows about every role it currently holds
+print("all roles of alice:", Role.roles_for(alice))
+```
+
+## Multiple Roles of the Same Type
+
+Because roles are distinct objects, a taker can hold several roles of the *same* type without
+them collapsing into one. Each is retrievable from the taker and keeps its own data.
+
+```{code-cell} ipython3
+globex = Company(name="Globex")
+ceo_of_globex = CEO(person=alice, head_of=globex)
+
+# Both CEO roles are kept and returned
+same_type_roles = Role.roles_for(alice, CEO)
+print("number of CEO roles:", len(same_type_roles))
+print("companies headed:", sorted(role.head_of.name for role in same_type_roles))
+
+# They are distinct objects, yet the same underlying entity
+print("ceo is ceo_of_globex:", ceo is ceo_of_globex)
+print("IsSameEntity(ceo, ceo_of_globex):", bool(IsSameEntity(ceo, ceo_of_globex)))
+```
+
+## Role Chaining
+
+A role's role taker can itself be a role. This lets you layer multiple levels of semantic
+context onto the same entity.
+
+```{code-cell} ipython3
+@dataclass(eq=False)
+class Representative(Role[CEO]):
+    """The role of a CEO acting as a representative of their company."""
+
+    ceo: CEO = role_taker_field()
+    represents: Optional[Company] = None
+
+
+rep = Representative(ceo=ceo, represents=acme)
+
+print("rep == ceo:", rep == ceo)
+print("IsSameEntity(rep, ceo):", bool(IsSameEntity(rep, ceo)))
+print("IsSameEntity(rep, alice):", bool(IsSameEntity(rep, alice)))
+print("set size:", len({alice, ceo, professor, rep}))
+```
+
+The chain is transparent. Querying from any point in the chain resolves all the way back to
+the root entity.
+
+```{code-cell} ipython3
+# Check roles from the perspective of the root taker
+print("alice has Representative role:", Role.has_role(alice, Representative))
+print(
+    "Representative roles of alice:",
+    Role.roles_for(alice, Representative),
+)
+
+# Navigate the chain programmatically
+print("rep.role_taker:", rep.role_taker)
+print("rep.root_persistent_entity:", rep.root_persistent_entity)
+print("root type:", Representative.get_root_role_taker_type())
+```
+
+## The `from_role_taker` Factory
+
+When you do not have extra role-specific data to supply at construction time, you can use the
+`from_role_taker` class method. It constructs the role by passing only the role taker.
+
+```{code-cell} ipython3
+# Equivalent to CEO(person=alice) when no role-native fields need values up front
+new_ceo = CEO.from_role_taker(alice)
+print("new_ceo:", new_ceo)
+```
+
+## Available Features
+
+| Feature | How to use it |
+|---|---|
+| Define a role class | Inherit from `Role[T]`, mark the taker field with `role_taker_field()` |
+| Construct a role | `MyRole(taker_field=taker_instance, ...)` — always explicit |
+| Construct without extra data | `MyRole.from_role_taker(taker_instance)` |
+| Check whether a taker has a role | `Role.has_role(taker, MyRole)` |
+| Retrieve roles of a type | `Role.roles_for(taker, MyRole)` |
+| Retrieve all roles | `Role.roles_for(taker)` |
+| Access the immediate role taker | `role.role_taker` |
+| Access the root non-role entity | `role.root_persistent_entity` |
+| Check two objects are the same entity | `IsSameEntity(a, b)` (sees through role chains) |
+| Find the root role-taker type | `MyRole.get_root_role_taker_type()` |
+| Read taker attributes via role | Use the role instance directly — read delegation is automatic |
+| Change a taker attribute | Assign through `role.role_taker` |
+
+## When to Use the Role Pattern
+
+- An object needs context-specific attributes that do not logically belong to the original type.
+- The additional context is temporary or situational — the entity may gain and lose the role
+  over its lifetime.
+- The same entity can play multiple semantic roles simultaneously.
+- Any part of the system must be able to ask "does this entity have role X?" without scanning
+  all instances.
+- The role and the original object should be recognizable as the same underlying entity (via
+  `IsSameEntity`) while remaining distinct objects.
+
+## When Not to Use the Role Pattern
+
+- The new class changes the permanent, identifying properties of the original. A `Room` that becomes a `Kitchen` does
+not affect any of the things that makes it a `Room`, such as its size or location. But an `egg` that is boiled, changes
+its original properties like its state of matter from liquid to solid.
+- The new class has its own independent persistent identity.
+- You never need to relate the two objects back to a shared underlying entity.
 
 ---
 
-## Identity sharing
-
-When a `Role` is constructed, `__post_init__` automatically registers it in the role taker's `roles`
-dict and links the two objects in the symbol graph. From that point on:
-
-- `role == role_taker` (and vice versa)
-- `hash(role) == hash(role_taker)`
-- `role_taker.roles[RoleClass]` returns the role instance
-
-This means any collection, set, or dictionary keyed by the original object automatically reflects the
-role, and code that receives either object can navigate to the other:
-
-```python
-room = Room(floor=ground_floor)
-kitchen = Kitchen(room=room)
-
-# Both references refer to "the same thing" in sets and dicts
-s = {room}
-assert kitchen in s
-
-# Navigate from either direction
-kitchen.role_taker         # → room
-room.roles[Kitchen]        # → kitchen
-```
-
----
-
-## Role chaining
-
-A role's role taker can itself be a role. This is called **role chaining** and lets you layer multiple
-levels of semantic context onto a single physical entity.
-
-As shown in the ontology examples above, a `Person` can become a `CEO`, and that `CEO` can become a
-`Representative` — three layers of context, one identity. The chain can be arbitrarily deep: a
-`Representative` could become a `Delegate`, and so on.
-
-All objects in the chain are equal and share the same hash:
-
-```python
-assert rep == ceo == alice
-assert hash(rep) == hash(ceo) == hash(alice)
-
-# Each role taker in the chain sees all roles
-assert Role.roles_for(alice, CEO)[0] is ceo
-assert Role.roles_for(alice, Representative)[0] is rep
-```
-
-The `Role` class provides helpers to navigate chains:
-
-| Method / Property                                | Description                                                      |
-|--------------------------------------------------|------------------------------------------------------------------|
-| `role.role_taker`                                | The immediate role taker (may itself be a role).                 |
-| `Role.get_root_role_taker_type()`                | Walks the chain to find the non-Role base type.                  |
-| `role.role_taker_roles`                          | All roles registered on the root role taker.                     |
-| `Role.has_role(entity, RoleType)`                | Checks if `entity` (or anything equal to it) has the given role. |
-| `Role.roles_for(entity, RoleType)`               | Returns all roles of a given type.                               |
----
-
-## How it works
-
-### `__post_init__`
-
-When a role is constructed, `Role.__init__` runs automatically. It:
-
-1. Retrieves the role taker from the declared field (`role_taker_attribute_name()`).
-2. Updates the symbol graph to link the role and role taker.
-
-### `role_taker_attribute()`
-
-This abstract classmethod must be implemented by every role subclass. It returns a symbolic
-`Attribute` reference to the role-taker field. This is how `Role` knows which field holds the role taker:
-
-```python
-@classmethod
-def role_taker_attribute(cls) -> Attribute[Room]:
-    return variable_from(cls).room
-```
-
-### Shared fields
-
-If the role class and the role taker class share a common base (e.g. both inherit `Symbol`), the
-shared fields — such as a persistent `id` — are not duplicated. The role's fields for those
-attributes are set to `init=False` and delegate to the role taker.
-
----
-
-## When to use the Role pattern
-
-- An object needs **context-specific attributes** that do not logically belong to the original type
-  but are tightly coupled to a specific usage of that object.
-- The additional context is **temporary or situational** — the same entity may gain and lose this
-  role over its lifetime (a room that is a kitchen today becomes a bedroom tomorrow; a person becomes
-  a CEO and later steps down).
-- The same physical entity can play **multiple semantic roles simultaneously** (a room that is both
-  a kitchen and a living room; a person who is both a CEO and a professor).
-- The extended object and the original object must be **considered the same entity** throughout the
-  system (same hash, equality, shared identity in collections).
-- You want a **role registry**: any part of the system should be able to ask "does this room have a
-  kitchen role?" without scanning all kitchen instances.
-
-## When NOT to use the Role pattern
-
-- **The new class changes persistent, identifying properties of the original** — if a `Fruit` could
-  not exist without being an `Apple`, or if being a `Apple` fundamentally altered what the fruit *is*
-  rather than what it *does*, subclassing is the right choice.
-- **The new class has its own persistent identity** — if the concept is a permanently different kind
-  of thing that exists independently to its parent class (e.g., a `MustardBottle` is a kind of `Bottle` that has a permenant
-  shape and functionality that identifies it from any other borrle.), it is a subclass, not a role.
-- **You do not need identity sharing**.
-- **You need more than one role of the same type at the same time** — the `roles` dict is keyed by
-  type, so only one instance of each role type per role taker is supported.
-- **The role taker type changes after construction** — `role_taker` is a `cached_property`; the role
-  taker is fixed.
-
----
-
-## Decision guide
+## Decision Guide
 
 ```{mermaid}
 %%{init: {'theme': 'base', 'themeVariables': {'fontSize': '20px', 'lineColor': '#333333', 'primaryColor': '#ddeeff', 'primaryTextColor': '#111111', 'primaryBorderColor': '#3a7abf', 'edgeLabelBackground': '#ffffff'}, 'flowchart': {'nodeSpacing': 60, 'rankSpacing': 80, 'padding': 20}}}%%
 flowchart TD
-    Q1{"Should the wrapper and<br/>the original object be<br/>the same entity?"}
-    Q2{"Is this a temporary<br/>contextual role, or does it<br/>change persistent identity?"}
-    ROLE["<b>Role[T]</b><br/>Identity-sharing, role registry,<br/>optional chaining."]
-    SUBCLASS["<b>Subclass / Inheritance</b><br/>The new class has its own<br/>persistent identifying properties."]
+    Q1{"Should the wrapper and<br/>the original object represent<br/>the same underlying persistent entity?"}
+    Q2{"Is this a temporary<br/>contextual situation, or does it<br/>change persistent identity or properites?"}
+    ROLE["<b>Role[T]</b><br/>Same-entity via IsSameEntity, role registry,<br/>optional chaining."]
+    SUBCLASS["<b>Subclass</b><br/>The new class has its own<br/>persistent identifying properties."]
     ASSOCIATION["<b>Association</b><br/>The new class is a different kind<br/>of thing from the original."]
 
     Q1 -->|Yes| Q2
-    Q1 -->|No| Association
+    Q1 -->|No| ASSOCIATION
     Q2 -->|Temporary / contextual| ROLE
     Q2 -->|Persistent identity change| SUBCLASS
 ```
 
 ---
+
+## Learn More
+
+- **Developer guide**: {doc}`developer/role` — design decisions, architecture, and extension points.
+- **API reference**: `krrood.patterns.role` — `Role`, `role_taker_field`,
+  `RoleTakerFieldNotFound`; `krrood.patterns.role_registry` — `RoleRegistry`;
+  `krrood.patterns.role_predicates` — `IsSameEntity`.
+- **Source**: `krrood/src/krrood/patterns/role.py`
+- **Tests**: `test/krrood_test/test_patterns/test_role.py` and the dataset under
+  `test/krrood_test/dataset/role_and_ontology/`.
+- **IDE tooling**: [Python Role Lens](https://plugins.jetbrains.com/plugin/32276-python-role-lens) (plugin id
+  `io.github.abdelrhmanbassiouny.pyroles`) — a JetBrains plugin that displays a role's
+  accessible (including delegated) attributes and lets you navigate to the classes that
+  define them.
