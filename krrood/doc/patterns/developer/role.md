@@ -136,17 +136,14 @@ membership behaviour is independent of whether its class has been added to the c
 
 ## Attribute Access
 
-`__getattr__` delegates attribute reads that failed normal lookup to the role taker. Because
-`__getattr__` is only called when the standard attribute resolution chain has already failed,
-role-native attributes (those declared as dataclass fields on the role class) are read from the
-role directly and never reach the taker.
-
-`__setattr__` always sets attributes on the role itself, never on the role taker. Only the role's
-own declared fields and private (underscore-prefixed) attributes may be assigned; any other name
-raises `RoleAttributeNotDeclaredError`. Reads are delegated but writes are not, so writing through a
-role cannot mutate the shared entity as a side effect, and the rejection of undeclared names keeps a
-write from silently shadowing a role-taker attribute. Code that needs to modify the taker does so
-explicitly through `role.role_taker` (or `role.root_persistent_entity`).
+The mechanics (read delegation via `__getattr__`, write-local via `__setattr__`) are covered in the
+{doc}`user guide <../role>`. The design decision worth recording here is the deliberate **asymmetry**:
+reads are transparent so a consumer need not know which attributes belong to the role and which to
+the taker, but writes are not — an assignment always targets the role and rejects any undeclared
+name with `RoleAttributeNotDeclaredError`. That asymmetry is what prevents a write through a role
+from mutating the shared taker as a side effect or silently shadowing one of its attributes; changing
+the taker is therefore the explicit `role.role_taker` operation rather than an implicit consequence
+of assignment.
 
 ## Role-Taker Associations and Property Descriptors
 
