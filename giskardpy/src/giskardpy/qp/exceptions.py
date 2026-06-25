@@ -84,7 +84,7 @@ class VelocityLimitUnreachableException(QPSolverException):
     The jerk limit of the degree of freedom.
     """
 
-    mpc_dt: float
+    model_predictive_control_time_step: float
     """
     The time step of the model predictive controller.
     """
@@ -99,7 +99,7 @@ class VelocityLimitUnreachableException(QPSolverException):
             f'Free variable "{self.degree_of_freedom_name}" can\'t reach velocity limit of '
             f'"{self.velocity_limit}". Maximum reachable with prediction horizon = '
             f'"{self.prediction_horizon}", jerk limit = "{self.jerk_limit}" and dt = '
-            f'"{self.mpc_dt}" is "{self.max_reachable_velocity}".'
+            f'"{self.model_predictive_control_time_step}" is "{self.max_reachable_velocity}".'
         )
 
     def suggest_correction(self) -> str:

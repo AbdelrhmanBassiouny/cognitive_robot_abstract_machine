@@ -99,7 +99,7 @@ class QPControllerConfig:
     """
 
     # %% init false
-    mpc_dt: float = field(init=False)
+    model_predictive_control_time_step: float = field(init=False)
     """
     The time step of the MPC in seconds.
     control_dt == mpc_dt:
@@ -124,7 +124,7 @@ class QPControllerConfig:
             logging.warning(
                 f"Hertz ({self.target_frequency}) is below 20Hz. This might cause instability."
             )
-        self.mpc_dt = self.control_dt
+        self.model_predictive_control_time_step = self.control_dt
 
         if self.prediction_horizon < 4:
             raise ValueError("prediction horizon must be >= 4.")

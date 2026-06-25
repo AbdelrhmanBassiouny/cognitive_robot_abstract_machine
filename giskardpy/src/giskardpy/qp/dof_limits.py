@@ -26,7 +26,7 @@ from giskardpy.qp.pos_in_vel_limits import (
     compute_immediate_slowdown_profile,
 )
 from giskardpy.qp.solvers.qp_solver import QPSolver
-from giskardpy.utils.math import mpc
+from giskardpy.utils.math import model_predictive_control
 from krrood.symbolic_math.symbolic_math import Scalar, FloatVariable
 from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
 from semantic_digital_twin.world_description import degree_of_freedom
@@ -43,10 +43,10 @@ if TYPE_CHECKING:
 
 def max_velocity_from_horizon_and_jerk_qp(
     prediction_horizon: int,
-    vel_limit: float,
-    acc_limit: float,
+    velocity_limit: float,
+    acceleration_limit: float,
     jerk_limit: float,
-    dt: float,
+    delta_time: float,
     solver_class: type[QPSolver],
 ):
     """
@@ -55,20 +55,20 @@ def max_velocity_from_horizon_and_jerk_qp(
     velocity limit.
     """
     upper_limits = (
-        (vel_limit,) * prediction_horizon,
-        (acc_limit,) * prediction_horizon,
+        (velocity_limit,) * prediction_horizon,
+        (acceleration_limit,) * prediction_horizon,
         (jerk_limit,) * prediction_horizon,
     )
     lower_limits = (
-        (-vel_limit,) * prediction_horizon,
-        (-acc_limit,) * prediction_horizon,
+        (-velocity_limit,) * prediction_horizon,
+        (-acceleration_limit,) * prediction_horizon,
         (-jerk_limit,) * prediction_horizon,
     )
-    return mpc(
+    return model_predictive_control(
         upper_limits=upper_limits,
         lower_limits=lower_limits,
         current_values=(0, 0),
-        dt=dt,
+        dt=delta_time,
         ph=prediction_horizon,
         q_weight=(0, 0, 0),
         lin_weight=(-1, 0, 0),
@@ -218,19 +218,17 @@ class DegreeOfFreedomLimitProfiler:
         jerk_limit = upper_limits.jerk
         position_range = upper_limits.position - lower_limits.position
         velocity_limit = min(velocity_limit * time_step, position_range / 2) / time_step
-        mpc_velocity_profile, mpc_acceleration_profile = (
-            self._nominal_mpc_velocity_profile(
-                velocity_limit=velocity_limit,
-                acceleration_limit=upper_limits.acceleration,
-                jerk_limit=jerk_limit,
-                time_step=time_step,
-                prediction_horizon=prediction_horizon,
-                solver_class=solver_class,
-            )
+        velocity_profile, acceleration_profile = self._nominal_velocity_profile(
+            velocity_limit=velocity_limit,
+            acceleration_limit=upper_limits.acceleration,
+            jerk_limit=jerk_limit,
+            time_step=time_step,
+            prediction_horizon=prediction_horizon,
+            solver_class=solver_class,
         )
         velocity_lower_bound = self._directional_velocity_bound(
-            mpc_velocity_profile=mpc_velocity_profile,
-            mpc_acceleration_profile=mpc_acceleration_profile,
+            velocity_profile=velocity_profile,
+            acceleration_profile=acceleration_profile,
             position_error=lower_limits.position - degree_of_freedom_symbols.position,
             jerk_limit=jerk_limit,
             velocity_limit=velocity_limit,
@@ -238,8 +236,8 @@ class DegreeOfFreedomLimitProfiler:
             direction=BoundDirection.LOWER,
         )
         velocity_upper_bound = self._directional_velocity_bound(
-            mpc_velocity_profile=mpc_velocity_profile,
-            mpc_acceleration_profile=mpc_acceleration_profile,
+            velocity_profile=velocity_profile,
+            acceleration_profile=acceleration_profile,
             position_error=upper_limits.position - degree_of_freedom_symbols.position,
             jerk_limit=jerk_limit,
             velocity_limit=velocity_limit,
@@ -273,7 +271,7 @@ class DegreeOfFreedomLimitProfiler:
             skip_first=sm.Scalar.const_false(),
         )
 
-    def _nominal_mpc_velocity_profile(
+    def _nominal_velocity_profile(
         self,
         velocity_limit: float,
         acceleration_limit: float,
@@ -286,7 +284,7 @@ class DegreeOfFreedomLimitProfiler:
         Solves an MPC that drives the degree of freedom from full velocity to rest, returning the
         nominal velocity and acceleration braking profiles.
         """
-        profile = gm.simple_mpc(
+        profile = gm.simple_model_predictive_control(
             vel_limit=velocity_limit,
             acc_limit=acceleration_limit,
             jerk_limit=jerk_limit,
@@ -305,8 +303,8 @@ class DegreeOfFreedomLimitProfiler:
 
     def _directional_velocity_bound(
         self,
-        mpc_velocity_profile: sm.Vector,
-        mpc_acceleration_profile: sm.Vector,
+        velocity_profile: sm.Vector,
+        acceleration_profile: sm.Vector,
         position_error: sm.Scalar,
         jerk_limit: float,
         velocity_limit: float,
@@ -320,8 +318,8 @@ class DegreeOfFreedomLimitProfiler:
         """
         sign = direction.sign
         velocity_bound, _ = shifted_velocity_profile(
-            velocity_profile=mpc_velocity_profile,
-            acceleration_profile=mpc_acceleration_profile,
+            velocity_profile=velocity_profile,
+            acceleration_profile=acceleration_profile,
             distance=sign * position_error,
             delta_time=time_step,
         )
@@ -534,10 +532,10 @@ class DegreeOfFreedomLimitProfiler:
         for i in range(100):
             vel_limit = max_velocity_from_horizon_and_jerk_qp(
                 prediction_horizon=prediction_horizon,
-                vel_limit=1000,
-                acc_limit=np.inf,
+                velocity_limit=1000,
+                acceleration_limit=np.inf,
                 jerk_limit=jerk_limit,
-                dt=time_step,
+                delta_time=time_step,
                 solver_class=solver_class,
             )[0]
             if abs(vel_limit - target_velocity_limit) < abs(
@@ -591,7 +589,7 @@ class DegreeOfFreedomLimitProfiler:
         if degree_of_freedom.limits.upper.jerk is None:
             upper_limits.jerk = self.find_best_jerk_limit(
                 qp_controller_config.prediction_horizon,
-                qp_controller_config.mpc_dt,
+                qp_controller_config.model_predictive_control_time_step,
                 upper_limits.velocity,
                 solver_class=qp_controller_config.qp_solver_class,
             )
@@ -618,7 +616,7 @@ class DegreeOfFreedomLimitProfiler:
                 lower_limits=lower_limits,
                 upper_limits=upper_limits,
                 solver_class=qp_controller_config.qp_solver_class,
-                time_step=qp_controller_config.mpc_dt,
+                time_step=qp_controller_config.model_predictive_control_time_step,
                 prediction_horizon=qp_controller_config.prediction_horizon,
             )
         except InfeasibleException:
@@ -635,10 +633,10 @@ class DegreeOfFreedomLimitProfiler:
         qp_controller_config = self.qp_controller_config
         max_reachable_vel = max_velocity_from_horizon_and_jerk_qp(
             prediction_horizon=qp_controller_config.prediction_horizon,
-            vel_limit=100,
-            acc_limit=upper_limits.acceleration,
+            velocity_limit=100,
+            acceleration_limit=upper_limits.acceleration,
             jerk_limit=upper_limits.jerk,
-            dt=qp_controller_config.mpc_dt,
+            delta_time=qp_controller_config.model_predictive_control_time_step,
             solver_class=qp_controller_config.qp_solver_class,
         )[0]
         if max_reachable_vel >= upper_limits.velocity:
@@ -648,7 +646,7 @@ class DegreeOfFreedomLimitProfiler:
             velocity_limit=upper_limits.velocity,
             prediction_horizon=qp_controller_config.prediction_horizon,
             jerk_limit=upper_limits.jerk,
-            mpc_dt=qp_controller_config.mpc_dt,
+            model_predictive_control_time_step=qp_controller_config.model_predictive_control_time_step,
             max_reachable_velocity=max_reachable_vel,
         )
         logger.error(str(exception))
