@@ -51,6 +51,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 
 
+
 class KitchenEnvironment:
     """
     Manages the Kitchen Environment world with walls, furniture, and room layouts.
