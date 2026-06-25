@@ -11,6 +11,7 @@ from uuid import UUID
 
 from typing_extensions import Iterable, List
 
+from krrood.entity_query_language.configuration import EqlConfiguration, MathBackend
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     TruthValueOperator,
