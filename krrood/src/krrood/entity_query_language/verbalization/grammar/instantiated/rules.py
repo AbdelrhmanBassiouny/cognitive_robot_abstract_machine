@@ -17,6 +17,9 @@ from krrood.entity_query_language.verbalization.grammar.instantiated.assembler i
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
 )
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    predicate_clause,
+)
 
 
 class InstantiatedVariableRule(PhraseRule):
@@ -88,3 +91,44 @@ class InstantiatedVerbalizableRule(PhraseRule):
                 predicate_type=node._type_, returned=fragment
             )
         return fragment
+
+
+class SymbolicFunctionRule(PhraseRule):
+    """A boolean ``@symbolic_function`` reads as a predicate clause — ``is_one_month(period)`` →
+    *"the period is one month"* — instead of the generic decomposition.
+
+    Its type is a plain function (not a :class:`Verbalizable` class), so its guard is disjoint from
+    :class:`InstantiatedVerbalizableRule`'s; both are guarded, so each still wins over the unguarded
+    :class:`InstantiatedVariableRule` fallback when it applies.
+    """
+
+    construct = InstantiatedVariable
+    name = "symbolic-function"
+
+    def when(self, node: InstantiatedVariable, context: RuleContext) -> bool:
+        """:return: ``True`` when *node* wraps a boolean symbolic function, selecting the
+        predicate-clause surface over the generic *"a TypeName, where …"* form.
+
+        >>> from krrood.entity_query_language.predicate import symbolic_function
+        >>> @symbolic_function
+        ... def is_one_month(period: int) -> bool:
+        ...     return True
+        >>> verbalize_expression(is_one_month(variable(int, [])))
+        'an int is one month'
+        """
+        return InstantiatedPlanner.is_boolean_symbolic_function(node)
+
+    def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
+        """:return: the predicate clause *"<first operand> <name as words> <remaining operands>"*,
+        each operand recursed through the fold so coreference and determiners still apply.
+
+        >>> from krrood.entity_query_language.predicate import symbolic_function
+        >>> @symbolic_function
+        ... def is_even(number: int) -> bool:
+        ...     return number % 2 == 0
+        >>> verbalize_expression(is_even(variable(int, [])))
+        'an int is even'
+        """
+        operands = [context.child(child) for child in node._child_vars_.values()]
+        subject, *objects = operands
+        return predicate_clause(node._type_.__name__, subject, *objects)

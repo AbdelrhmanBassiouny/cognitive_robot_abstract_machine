@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from dataclasses import dataclass
 
 from typing_extensions import List
@@ -106,3 +107,33 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
             and type_._verbalization_fragment_.__func__
             is not Verbalizable._verbalization_fragment_.__func__
         )
+
+    @staticmethod
+    def is_boolean_symbolic_function(node: InstantiatedVariable) -> bool:
+        """
+        :param node: The instantiated variable.
+        :return: ``True`` when *node* wraps a ``@symbolic_function`` annotated to return ``bool`` — a
+            predicate that reads as a clause (``is_one_month(period)`` → *"the period is one month"*),
+            as opposed to a :class:`Verbalizable` class (:meth:`has_fragment`) or a value function.
+
+        A symbolic function's type is the plain function (not a class), so this guard is disjoint
+        from :meth:`has_fragment` (which requires a class); the two rules never both apply.
+        """
+        type_ = node._type_
+        if isinstance(type_, type) or not callable(type_) or not node._child_vars_:
+            return False
+        annotation = inspect.signature(type_).return_annotation
+        return annotation is bool or annotation == "bool"
+
+    @staticmethod
+    def renders_as_predicate_clause(node: InstantiatedVariable) -> bool:
+        """
+        :param node: The instantiated variable.
+        :return: ``True`` when *node* verbalizes as a predicate clause — a :class:`Verbalizable`
+            class (:meth:`has_fragment`) or a boolean symbolic function
+            (:meth:`is_boolean_symbolic_function`) — so a wrapping ``Not`` can negate it inline
+            (*"is not reachable"*, *"is not even"*) rather than wrapping it in *"not (…)"*.
+        """
+        return InstantiatedPlanner.has_fragment(
+            node
+        ) or InstantiatedPlanner.is_boolean_symbolic_function(node)

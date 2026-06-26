@@ -40,7 +40,6 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
 )
 from krrood.entity_query_language.core.base_expressions import Selectable
-from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.patterns.code_parsing_utils import (
     get_accessed_attribute_name_in_return_statement_of_property,
 )
@@ -245,33 +244,25 @@ class Triple(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
         """
-        Verbalization of a Triple is a subject - verb-phrase - object, where the verb phrase is read
-        off the class name (``ConnectsTo`` → *"connects to"*). The leading word is a :class:`Verb`
+        Verbalization of a Triple is a subject - predicate - object, where the predicate is read off
+        the class name (``ConnectsTo`` → *"connects to"*; a copular ``IsAbove`` → *"is above"*) by
+        :func:`~…vocabulary.parts_of_speech.predicate_clause`. A verb-first name is a :class:`Verb`
         (its lemma), so a wrapping ``Not`` negates with do-support (*"does not connect to"*).
         """
         # Imported locally: the verbalization layer depends on the core predicate types, so a
         # module-level import here would close an import cycle.
-        from krrood.entity_query_language.verbalization import morphology
-        from krrood.entity_query_language.verbalization.fragments.base import WordFragment
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-            clause,
-            Noun,
-            Verb,
+            predicate_clause,
         )
 
-        words = camel_case_to_words(cls.__name__).split()
         subject_name = get_accessed_attribute_name_in_return_statement_of_property(
             cls.subject, cls
         )
         object_name = get_accessed_attribute_name_in_return_statement_of_property(
             cls.object, cls
         )
-        particles = [WordFragment(text=word) for word in words[1:]]
-        return clause(
-            Noun(fields[subject_name]),
-            Verb(morphology.verb_lemma(words[0])),
-            *particles,
-            Noun(fields[object_name]),
+        return predicate_clause(
+            cls.__name__, fields[subject_name], fields[object_name]
         )
 
 

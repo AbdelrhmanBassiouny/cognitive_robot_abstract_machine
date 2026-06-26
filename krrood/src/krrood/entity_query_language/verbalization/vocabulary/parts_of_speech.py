@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing_extensions import Iterable, Protocol, Union, runtime_checkable
 
 from krrood.entity_query_language.predicate import Field
+from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     Clause,
@@ -236,3 +237,52 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     'an Employee work in a Department'
     """
     return Clause(parts=[constituent.as_fragment() for constituent in constituents])
+
+
+_COPULA_LEMMA = "be"
+"""The lemma every copular form (*"is"*, *"are"*, *"was"*) shares — used to recognise a copular name."""
+
+
+def predicate_clause(
+    name: str,
+    subject: ClauseConstituent,
+    *objects: ClauseConstituent,
+) -> Clause:
+    """Build a predicate clause from a predicate's *name* and its operands.
+
+    The name (CamelCase or snake_case) is read as the predicate. A copular name — its leading word a
+    form of *"be"* (*"is_one_month"*, *"IsReachable"*) — uses the copula with the remaining words as
+    the complement (*"<subject> is one month"*). Any other name reads verb-first, so a wrapping
+    ``Not`` negates it with do-support (*"<subject> connects to <object>"*, *"does not connect to"*).
+    The first operand is the subject; any further operands are trailing objects.
+
+    Shared by :class:`~krrood.entity_query_language.predicate.Triple` (a class-name relation) and the
+    symbolic-function rule (a function-name predicate), so the name-to-clause reading lives in one
+    place.
+
+    :param name: The predicate's identifier — a class or function name.
+    :param subject: The first operand, rendered as the clause's subject.
+    :param objects: Any further operands, rendered as trailing objects.
+    :return: The predicate clause.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text, WordFragment,
+    ... )
+    >>> flatten_fragment_to_plain_text(
+    ...     predicate_clause("is_one_month", WordFragment(text="the period"))
+    ... )
+    'the period is one month'
+    >>> flatten_fragment_to_plain_text(
+    ...     predicate_clause("connects_to", WordFragment(text="a body"),
+    ...                      WordFragment(text="another body"))
+    ... )
+    'a body connect to another body'
+    """
+    head, *rest = camel_case_to_words(name).split()
+    complement = [WordFragment(text=word) for word in rest]
+    predicate = (
+        [Copula(), *complement]
+        if morphology.verb_lemma(head) == _COPULA_LEMMA
+        else [Verb(morphology.verb_lemma(head)), *complement]
+    )
+    return clause(Noun(subject), *predicate, *(Noun(obj) for obj in objects))
