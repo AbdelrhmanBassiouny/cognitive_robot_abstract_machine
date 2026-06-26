@@ -535,8 +535,14 @@ class Query(
             if isinstance(variable_, Aggregator):
                 aggregated_variables.append(variable_)
             elif isinstance(variable_, InstantiatedVariable):
-                for child in variable_._operation_children_:
-                    _update_aggregated_and_non_aggregated_variables(child)
+                # A symbolic function (a callable applied to operands, e.g. quarter(month)) is a
+                # computed value: it is its own selectable unit, so it can be a GROUP BY key. An
+                # inference construction (a class applied to fields) is decomposed into its operands.
+                if not isinstance(variable_._type_, type) and callable(variable_._type_):
+                    non_aggregated_variables.append(variable_)
+                else:
+                    for child in variable_._operation_children_:
+                        _update_aggregated_and_non_aggregated_variables(child)
             elif (
                 isinstance(variable_, ExternallySetVariable)
                 and variable_._domain_source_ == DomainSource.DEDUCTION
