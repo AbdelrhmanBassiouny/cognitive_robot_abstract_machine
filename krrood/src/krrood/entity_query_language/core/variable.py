@@ -248,8 +248,12 @@ class InstantiatedVariable(
                 for id_, v in child_result.bindings.items()
                 if id_ in self._child_var_id_name_map_
             }
-            construct = getattr(self._type_, "_construct_normally_", self._type_)
-            instance = construct(**kwargs)
+            # A callable class (Predicate / SymbolicFunction) exposes _bound_value_ -- it binds the
+            # constructed instance, or, for a value operation, its constructed-and-called value -- the
+            # class-form counterpart of a @symbolic_function being called. A plain function/type binds
+            # the direct call result.
+            bind = getattr(self._type_, "_bound_value_", self._type_)
+            instance = bind(**kwargs)
 
             bindings = {self._id_: instance} | child_result.bindings
             result = self._build_operation_result_and_update_truth_value_(
