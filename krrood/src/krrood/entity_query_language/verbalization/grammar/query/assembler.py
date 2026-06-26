@@ -791,6 +791,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         plan = self.plan(entity)
         variable = entity.selected_variable
         definiteness = Definiteness.UNIQUE if plan.is_the else Definiteness.INDEFINITE
+        # The caller's number flows through: an aggregated population reads plural ("the number of
+        # periods such that ...") while an ordinary nested noun stays singular ("a Worker whose ...").
         # A referring noun phrase is the subject of its own modifiers (the coreference pass infers
         # this from the modifiers slot), so no scope marker is emitted here. The "whose" block
         # flattens to "whose a, and b" inline (the renderer expands a block into points only at the
@@ -800,6 +802,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             plan.selected_type,
             definiteness,
             ClauseComposer(self.context).restriction(plan),
+            number=self.context.options.number,
         )
 
     # %% query-body clauses

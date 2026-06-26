@@ -17,7 +17,10 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     RoleFragment,
     VerbalizationFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Definiteness
+from krrood.entity_query_language.verbalization.fragments.features import (
+    Definiteness,
+    GrammaticalNumber,
+)
 from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.relational_attributes import (
     relational_verb,
@@ -26,6 +29,9 @@ from krrood.entity_query_language.verbalization.vocabulary.english import Keywor
 from krrood.entity_query_language.query.aggregation_structure import (
     aggregation_source_root,
     selected_aggregator,
+)
+from krrood.entity_query_language.verbalization.grammar.query.selection import (
+    subject_referent_id,
 )
 
 if TYPE_CHECKING:
@@ -39,14 +45,17 @@ def referring_noun_with_restrictions(
     selected_type: str,
     definiteness: Definiteness,
     restriction: Optional[RestrictionFragments],
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
 ) -> NounPhrase:
     """:return: a referring noun phrase for *variable* carrying *restriction* as post-nominal
     modifiers — the shared assembly behind a nested entity noun (*"a Mission with priority greater
     than 2"* / *"a Worker whose tasks contains a Task"*).
 
     The pieces attach in reading order: inline modifiers and relative clauses hug the noun, the
-    coordinated *"whose"* block and a *"where"*-headed residual follow. A referring noun phrase is the
-    subject of its own modifiers, so the coreference pass pronominalises later mentions correctly.
+    coordinated *"whose"* block and a residual follow. A residual reads *"such that"* for a
+    :attr:`~GrammaticalNumber.PLURAL` counted population (*"Periods such that …"*) and *"where"* for an
+    ordinary singular nested noun (*"a Worker where …"*). A referring noun phrase is the subject of its
+    own modifiers, so the coreference pass pronominalises later mentions correctly.
     """
     modifiers: List[VerbalizationFragment] = []
     if restriction is not None:
@@ -55,15 +64,19 @@ def referring_noun_with_restrictions(
         if restriction.whose is not None:
             modifiers.append(restriction.whose)
         if restriction.residual is not None:
+            connective = (
+                Keywords.SUCH_THAT
+                if number is GrammaticalNumber.PLURAL
+                else Keywords.WHERE
+            )
             modifiers.append(
-                PhraseFragment(
-                    parts=[Keywords.WHERE.as_fragment(), restriction.residual]
-                )
+                PhraseFragment(parts=[connective.as_fragment(), restriction.residual])
             )
     return NounPhrase(
-        head=RoleFragment.for_variable(selected_type, variable),
+        head=RoleFragment.for_variable(selected_type, variable, number=number),
         definiteness=definiteness,
-        referent_id=variable._id_ if isinstance(variable, Variable) else None,
+        number=number,
+        referent_id=subject_referent_id(variable),
         modifiers=modifiers,
     )
 
