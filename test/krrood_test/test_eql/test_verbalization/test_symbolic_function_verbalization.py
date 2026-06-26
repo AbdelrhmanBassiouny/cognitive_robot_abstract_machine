@@ -73,21 +73,48 @@ def test_value_function_is_not_treated_as_a_predicate_clause():
     assert not InstantiatedPlanner.is_boolean_symbolic_function(length(variable(list, [])))
 
 
-def test_value_function_reads_as_a_noun():
-    # A non-bool function names the value it computes: "a parity", not a clause and not the verbose
+def test_value_function_reads_as_the_value_of_its_arguments():
+    # A non-bool function names the value it computes AND what it is computed from: "the parity of an
+    # int" -- a genitive over its argument -- not a bare floating "a parity", and not the verbose
     # "a parity, where the number of the parity is ..." decomposition.
-    assert verbalize_expression(parity(variable(int, []))) == "a parity"
+    assert verbalize_expression(parity(variable(int, []))) == "the parity of an int"
 
 
 def test_getter_named_value_function_drops_the_get_prefix():
-    # A stray imperative getter still reads as the noun it computes: get_quarter -> "a quarter".
-    assert verbalize_expression(get_quarter(variable(int, []))) == "a quarter"
+    # A stray imperative getter still reads as the noun it computes over its argument: get_quarter ->
+    # "the quarter of an int".
+    assert verbalize_expression(get_quarter(variable(int, []))) == "the quarter of an int"
+
+
+def test_value_function_over_an_attribute_chain_reads_its_path():
+    # The argument's full navigation is read out, so the value is grounded in the entity it derives
+    # from -- this is what lets a ranked/grouped report over the value reframe instead of bracketing.
+    from krrood.entity_query_language.verbalization.example_domain import Employee
+
+    employee = variable(Employee, [])
+    assert (
+        verbalize_expression(a(set_of(get_quarter(employee.salary))))
+        == "Find the quarter of the salary of an Employee"
+    )
 
 
 def test_grouped_report_names_a_value_function_key_as_a_noun():
-    # A symbolic-function GROUP BY key is named by the value it computes, a bare label like an
-    # attribute key -- "For each parity, report ...", never the raw callable.
+    # A symbolic-function GROUP BY key is still named compactly by the value it computes (a bare label
+    # like an attribute key) -- "For each parity, report ...", never decomposed or the raw callable.
     numbers = variable(int, [])
     grouping = parity(numbers)
     text = verbalize_expression(a(set_of(grouping, eql.sum(numbers)).grouped_by(grouping)))
     assert text == "For each parity, report the sum of ints"
+
+
+def test_ranked_grouped_report_by_a_value_key_reads_as_a_sentence_not_a_tuple():
+    # The motivating case: grouping by a value function and taking the single row with the highest
+    # aggregate must read as a plain sentence, never "the highest (a, b)".
+    numbers = variable(int, [])
+    grouping = parity(numbers)
+    total = eql.sum(numbers)
+    text = verbalize_expression(
+        a(set_of(grouping, total).grouped_by(grouping).ordered_by(total, descending=True).limit(1))
+    )
+    assert text == "Find the parity of an int with the highest sum of ints"
+    assert "(" not in text

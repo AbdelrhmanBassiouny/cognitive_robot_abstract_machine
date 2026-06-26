@@ -6,7 +6,10 @@ from krrood.entity_query_language.verbalization.exceptions import (
     NonFragmentPredicateError,
     PredicateFragmentRequiredError,
 )
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    Fragment,
+    oxford_comma,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     PhraseRule,
     RuleContext,
@@ -17,6 +20,11 @@ from krrood.entity_query_language.verbalization.grammar.instantiated.assembler i
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
 )
+from krrood.entity_query_language.verbalization.microplanning.possessive import (
+    possessive_path,
+)
+from krrood.entity_query_language.verbalization.navigation_path import PathStep
+from krrood.entity_query_language.verbalization.vocabulary.english import Conjunctions
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Noun,
     predicate_clause,
@@ -164,14 +172,26 @@ class SymbolicFunctionNounRule(PhraseRule):
         return InstantiatedPlanner.is_value_symbolic_function(node)
 
     def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
-        """:return: the function's name as an indefinite noun phrase — the computed value named, its
-        operands suppressed (a value, like a variable, is referred to, not decomposed).
+        """:return: the computed value named as *"the <noun> of <argument(s)>"* — a definite genitive
+        over the function's arguments, so the value is grounded in what it is computed from rather than
+        floating as a bare *"a quarter"*. A nullary function (no arguments) keeps the bare noun.
+
+        Reading the arguments out makes a value function navigate from its inputs' root like any chain,
+        so a ranked or grouped report over it reframes naturally instead of bracketing a tuple.
 
         >>> from krrood.entity_query_language.predicate import symbolic_function
         >>> @symbolic_function
         ... def get_quarter(month: int) -> int:
         ...     return (month - 1) // 3 + 1
         >>> verbalize_expression(get_quarter(variable(int, [])))
-        'a quarter'
+        'the quarter of an int'
         """
-        return Noun(value_function_noun(node._type_.__name__)).as_fragment()
+        noun = value_function_noun(node._type_.__name__)
+        arguments = list(node._child_vars_.values())
+        if not arguments:
+            return Noun(noun).as_fragment()
+        owner = oxford_comma(
+            [context.child(argument) for argument in arguments],
+            Conjunctions.AND.as_fragment(),
+        )
+        return possessive_path([PathStep(noun)], owner)

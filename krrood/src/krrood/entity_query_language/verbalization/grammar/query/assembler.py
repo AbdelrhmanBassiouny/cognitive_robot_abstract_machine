@@ -333,13 +333,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         """
         subject = self._tuple_subject(node, plan)
         if subject is None:
-            return self._query_body(
-                node,
-                plan,
-                self._selections.parenthesised(node._selected_variables_),
-                where_items=[self._where_clause(plan)],
-                find_header=self._set_of_header(plan),
-            )
+            return self._assemble_subjectless_ranked_set_of(node, plan)
         ranking = replace(
             plan.ranking,
             relation=self._key_relation_to(subject, plan.ranking.order_key),
@@ -385,6 +379,52 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             column_list,
             where_items=[self._where_clause(plan)],
             find_header=header,
+        )
+
+    def _assemble_subjectless_ranked_set_of(self, node: SetOf, plan: QueryPlan) -> Fragment:
+        """:return: a ranked set-of whose columns share no single variable subject. When the ranking
+        is by a SELECTED AGGREGATE and a single top row is wanted (``limit(1)``), it frames the other
+        columns by that aggregate — *"Find <columns> with the highest <aggregate>"* — so the tuple
+        reads as a sentence instead of a code-like *"the highest (a, b)"*. Truly unrelated columns, or
+        a top-*n* (``n > 1``) listing, keep the bracketed tuple (they are genuinely a tuple of rows).
+
+        >>> from krrood.entity_query_language.predicate import symbolic_function
+        >>> @symbolic_function
+        ... def parity(number: int) -> int:
+        ...     return number % 2
+        >>> numbers = variable(int, [])
+        >>> key = parity(numbers)
+        >>> total = sum(numbers)
+        >>> verbalize_expression(a(set_of(key, total).grouped_by(key)
+        ...     .ordered_by(total, descending=True).limit(1)))
+        'Find the parity of an int with the highest sum of ints'
+        """
+        aggregate = self._ranked_aggregate_column(node, plan.ranking)
+        if aggregate is None or plan.ranking.n != 1:
+            return self._query_body(
+                node,
+                plan,
+                self._selections.parenthesised(node._selected_variables_),
+                where_items=[self._where_clause(plan)],
+                find_header=self._set_of_header(plan),
+            )
+        columns = [
+            selection
+            for selection in node._selected_variables_
+            if selection._id_ != aggregate._id_
+        ]
+        modifier = self._highest_aggregate_modifier(aggregate, plan.ranking.direction)
+        body = (
+            PhraseFragment(parts=[self._selections.prose(columns), modifier])
+            if columns
+            else modifier
+        )
+        return self._query_body(
+            node,
+            plan,
+            body,
+            where_items=[self._where_clause(plan)],
+            find_header=Keywords.FIND.as_fragment(),
         )
 
     def _tuple_subject(self, node: SetOf, plan: QueryPlan) -> Optional[Variable]:
