@@ -109,21 +109,53 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
         )
 
     @staticmethod
+    def _is_symbolic_function(node: InstantiatedVariable) -> bool:
+        """:return: ``True`` when *node* wraps a ``@symbolic_function`` — a plain callable (not a
+        class) applied to operands — as opposed to a :class:`Verbalizable` class or a bare value."""
+        type_ = node._type_
+        return (
+            not isinstance(type_, type)
+            and callable(type_)
+            and bool(node._child_vars_)
+        )
+
+    @staticmethod
+    def _returns_bool(node: InstantiatedVariable) -> bool:
+        """:return: ``True`` when *node*'s symbolic function is annotated to return ``bool``."""
+        annotation = inspect.signature(node._type_).return_annotation
+        return annotation is bool or annotation == "bool"
+
+    @staticmethod
     def is_boolean_symbolic_function(node: InstantiatedVariable) -> bool:
         """
         :param node: The instantiated variable.
         :return: ``True`` when *node* wraps a ``@symbolic_function`` annotated to return ``bool`` — a
             predicate that reads as a clause (``is_one_month(period)`` → *"the period is one month"*),
-            as opposed to a :class:`Verbalizable` class (:meth:`has_fragment`) or a value function.
+            as opposed to a :class:`Verbalizable` class (:meth:`has_fragment`) or a value function
+            (:meth:`is_value_symbolic_function`).
 
         A symbolic function's type is the plain function (not a class), so this guard is disjoint
         from :meth:`has_fragment` (which requires a class); the two rules never both apply.
         """
-        type_ = node._type_
-        if isinstance(type_, type) or not callable(type_) or not node._child_vars_:
-            return False
-        annotation = inspect.signature(type_).return_annotation
-        return annotation is bool or annotation == "bool"
+        return InstantiatedPlanner._is_symbolic_function(
+            node
+        ) and InstantiatedPlanner._returns_bool(node)
+
+    @staticmethod
+    def is_value_symbolic_function(node: InstantiatedVariable) -> bool:
+        """
+        :param node: The instantiated variable.
+        :return: ``True`` when *node* wraps a non-boolean ``@symbolic_function`` — a calculation that
+            names a value (``quarter(month)`` → *"a quarter"*), so it reads as a noun rather than a
+            predicate clause (:meth:`is_boolean_symbolic_function`) or the generic *"a TypeName, where
+            …"* decomposition.
+
+        A boolean function is a predicate; any other return type is a computed value, so the two
+        guards partition the symbolic functions and never both apply.
+        """
+        return InstantiatedPlanner._is_symbolic_function(
+            node
+        ) and not InstantiatedPlanner._returns_bool(node)
 
     @staticmethod
     def renders_as_predicate_clause(node: InstantiatedVariable) -> bool:

@@ -86,6 +86,22 @@ def test_distinct_sum(test_numbers):
     ).tolist() == [6, 5]
 
 
+@symbolic_function
+def _parity(number: int) -> int:
+    return number % 2
+
+
+def test_grouped_by_symbolic_function_value_key():
+    """A symbolic function is a computed value, so it can be selected as a GROUP BY key: rows group
+    by the function's value, not by its operand (which would otherwise be flagged un-grouped)."""
+    numbers_var = variable(int, domain=[1, 2, 3, 4, 5])
+    parity_key = _parity(numbers_var)
+    total = eql.sum(numbers_var)
+    rows = set_of(parity_key, total).grouped_by(parity_key).tolist()
+    sum_by_parity = {row[parity_key]: row[total] for row in rows}
+    assert sum_by_parity == {1: 9, 0: 6}  # odd {1, 3, 5} = 9, even {2, 4} = 6
+
+
 def test_average(handles_and_containers_world):
     heights = [1, 2, 3, 4, 5]
     heights_var = variable(int, domain=heights)

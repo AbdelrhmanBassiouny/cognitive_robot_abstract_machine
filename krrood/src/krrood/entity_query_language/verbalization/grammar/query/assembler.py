@@ -7,6 +7,11 @@ from typing_extensions import List, Optional, Tuple
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.variable import InstantiatedVariable
+from krrood.entity_query_language.utils import camel_case_to_words
+from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
+    InstantiatedPlanner,
+)
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.verbalization import morphology
@@ -566,6 +571,17 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         if isinstance(key, Attribute):
             return RoleFragment.for_attribute(
                 key._owner_class_, key._attribute_name_, number=number
+            )
+        if isinstance(key, InstantiatedVariable) and (
+            InstantiatedPlanner.is_value_symbolic_function(key)
+            or InstantiatedPlanner.is_boolean_symbolic_function(key)
+        ):
+            # A symbolic-function group key is named by the value it computes ("quarter"), a bare
+            # label like an attribute key, not the raw callable.
+            return RoleFragment.for_type(
+                key._type_,
+                number=number,
+                text=camel_case_to_words(key._type_.__name__),
             )
         return RoleFragment.for_type(key._type_, number=number)
 

@@ -17,7 +17,9 @@ from krrood.entity_query_language.verbalization.grammar.instantiated.assembler i
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
 )
+from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    Noun,
     predicate_clause,
 )
 
@@ -132,3 +134,44 @@ class SymbolicFunctionRule(PhraseRule):
         operands = [context.child(child) for child in node._child_vars_.values()]
         subject, *objects = operands
         return predicate_clause(node._type_.__name__, subject, *objects)
+
+
+class SymbolicFunctionNounRule(PhraseRule):
+    """A non-boolean ``@symbolic_function`` reads as a *noun* naming the value it computes —
+    ``quarter(month)`` → *"a quarter"* — not a predicate clause (its output is not a truth value) and
+    not the generic *"a TypeName, where the field of the TypeName is …"* decomposition. So a grouped
+    report selecting it reads *"For each year and quarter, report …"*.
+
+    Its guard is disjoint from :class:`SymbolicFunctionRule`'s (boolean) and
+    :class:`InstantiatedVerbalizableRule`'s (a :class:`Verbalizable` class), so each guarded rule
+    still wins over the unguarded :class:`InstantiatedVariableRule` fallback when it applies.
+    """
+
+    construct = InstantiatedVariable
+    name = "symbolic-function-noun"
+
+    def when(self, node: InstantiatedVariable, context: RuleContext) -> bool:
+        """:return: ``True`` when *node* wraps a non-boolean symbolic function, selecting the
+        noun surface over the generic decomposition.
+
+        >>> from krrood.entity_query_language.predicate import symbolic_function
+        >>> @symbolic_function
+        ... def quarter(month: int) -> int:
+        ...     return (month - 1) // 3 + 1
+        >>> verbalize_expression(quarter(variable(int, [])))
+        'a quarter'
+        """
+        return InstantiatedPlanner.is_value_symbolic_function(node)
+
+    def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
+        """:return: the function's name as an indefinite noun phrase — the computed value named, its
+        operands suppressed (a value, like a variable, is referred to, not decomposed).
+
+        >>> from krrood.entity_query_language.predicate import symbolic_function
+        >>> @symbolic_function
+        ... def quarter_number(month: int) -> int:
+        ...     return (month - 1) // 3 + 1
+        >>> verbalize_expression(quarter_number(variable(int, [])))
+        'a quarter number'
+        """
+        return Noun(camel_case_to_words(node._type_.__name__)).as_fragment()
