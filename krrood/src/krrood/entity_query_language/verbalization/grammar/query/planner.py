@@ -76,7 +76,10 @@ class RankingKeyRelation(Enum):
     SELF = auto()
     """The order key *is* the selected variable (*"the highest int"*)."""
     ATTRIBUTE = auto()
-    """The order key is an attribute chain of the selection (*"… with the highest salary"*)."""
+    """The order key is an attribute chain extending the selection (*"… with the highest salary"*)."""
+    SIBLING = auto()
+    """The order key shares the selection's root variable but diverges from it — a sibling chain
+    (*"the period of a P&L with the highest amount of its total revenue"*)."""
     OTHER = auto()
     """The order key roots at a different variable — no clean noun-relative form."""
 
@@ -201,6 +204,21 @@ class QueryPlan:
     report: Optional[ReportPlan]
     """The report decomposition when the set-of selection computes aggregates, else ``None`` (a
     plain *"Find …"* search)."""
+
+
+def _chain_extends(
+    prefix_chain: List[SymbolicExpression], full_chain: List[SymbolicExpression]
+) -> bool:
+    """:return: ``True`` when *full_chain* begins with *prefix_chain* hop-for-hop — i.e. the key
+    chain is the selection chain plus zero or more further hops (a chain *on* the selection), so an
+    empty prefix (a bare-variable selection) is extended by any chain."""
+    if len(prefix_chain) > len(full_chain):
+        return False
+    return all(
+        prefix._attribute_name_ == hop._attribute_name_
+        and prefix._owner_class_ == hop._owner_class_
+        for prefix, hop in zip(prefix_chain, full_chain)
+    )
 
 
 @dataclass
@@ -412,13 +430,23 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         )
 
     def _key_relation(self, order_key: SymbolicExpression) -> RankingKeyRelation:
-        """:return: How *order_key* relates to the selected variable — ``SELF`` (the key is the
-        selection), ``ATTRIBUTE`` (a chain on it), or ``OTHER`` (a different root)."""
-        chain, root = walk_chain(order_key)
+        """:return: How *order_key* relates to the selection — ``SELF`` (the key is the selection),
+        ``ATTRIBUTE`` (a chain extending the selection), ``SIBLING`` (a chain sharing the selection's
+        root but diverging from it), or ``OTHER`` (a different root). Both sides are walked to their
+        roots, so a chain selection (``p.period``) is compared by its root, not its node identity.
+        """
         selected = self._selected
-        if selected is None or root._id_ != selected._id_:
+        if selected is None:
             return RankingKeyRelation.OTHER
-        return RankingKeyRelation.ATTRIBUTE if chain else RankingKeyRelation.SELF
+        key_chain, key_root = walk_chain(order_key)
+        selected_chain, selected_root = walk_chain(selected)
+        if key_root._id_ != selected_root._id_:
+            return RankingKeyRelation.OTHER
+        if order_key._id_ == selected._id_:
+            return RankingKeyRelation.SELF
+        if _chain_extends(selected_chain, key_chain):
+            return RankingKeyRelation.ATTRIBUTE
+        return RankingKeyRelation.SIBLING
 
     # %% discourse focus (pronominalisation)
 

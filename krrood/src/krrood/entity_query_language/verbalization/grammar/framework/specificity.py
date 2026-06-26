@@ -41,7 +41,7 @@ class SpecificityRule(ABC):
 
         >>> from krrood.entity_query_language.verbalization.grammar.query.ranking import RankingForm
         >>> sorted(rule.__name__ for rule in RankingForm.alternatives())
-        ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm']
+        ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm', 'SiblingKeyForm']
         """
         return concrete_subclasses(cls)
 
