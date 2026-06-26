@@ -242,6 +242,26 @@ def clause(*constituents: ClauseConstituent) -> Clause:
 _COPULA_LEMMA = "be"
 """The lemma every copular form (*"is"*, *"are"*, *"was"*) shares — used to recognise a copular name."""
 
+_VALUE_GETTER_PREFIX = "get"
+"""The leading imperative dropped from a value function's name so a stray getter still reads as a
+noun (``get_quarter`` → *"quarter"*); verb-named value functions are discouraged upstream."""
+
+
+def value_function_noun(name: str) -> str:
+    """:return: a value (non-boolean) symbolic function's name as noun words, dropping a leading
+    imperative ``get`` so ``get_quarter`` reads as *"quarter"* and ``get_year`` as *"year"*; a name
+    that is already a noun is returned unchanged.
+
+    >>> value_function_noun("get_quarter")
+    'quarter'
+    >>> value_function_noun("remaining_load")
+    'remaining load'
+    """
+    words = camel_case_to_words(name).split()
+    if len(words) > 1 and words[0].lower() == _VALUE_GETTER_PREFIX:
+        words = words[1:]
+    return " ".join(words)
+
 
 def predicate_clause(
     name: str,

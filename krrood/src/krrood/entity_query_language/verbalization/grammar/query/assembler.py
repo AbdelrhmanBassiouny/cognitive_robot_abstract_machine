@@ -8,7 +8,9 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.utils import camel_case_to_words
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    value_function_noun,
+)
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
 )
@@ -581,7 +583,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             return RoleFragment.for_type(
                 key._type_,
                 number=number,
-                text=camel_case_to_words(key._type_.__name__),
+                text=value_function_noun(key._type_.__name__),
             )
         return RoleFragment.for_type(key._type_, number=number)
 

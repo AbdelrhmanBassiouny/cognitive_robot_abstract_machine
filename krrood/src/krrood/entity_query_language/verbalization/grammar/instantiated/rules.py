@@ -17,10 +17,10 @@ from krrood.entity_query_language.verbalization.grammar.instantiated.assembler i
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
 )
-from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Noun,
     predicate_clause,
+    value_function_noun,
 )
 
 
@@ -169,9 +169,9 @@ class SymbolicFunctionNounRule(PhraseRule):
 
         >>> from krrood.entity_query_language.predicate import symbolic_function
         >>> @symbolic_function
-        ... def quarter_number(month: int) -> int:
+        ... def get_quarter(month: int) -> int:
         ...     return (month - 1) // 3 + 1
-        >>> verbalize_expression(quarter_number(variable(int, [])))
-        'a quarter number'
+        >>> verbalize_expression(get_quarter(variable(int, [])))
+        'a quarter'
         """
-        return Noun(camel_case_to_words(node._type_.__name__)).as_fragment()
+        return Noun(value_function_noun(node._type_.__name__)).as_fragment()
