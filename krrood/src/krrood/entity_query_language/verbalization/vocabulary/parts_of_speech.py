@@ -12,6 +12,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     Clause,
     Fragment,
     NounPhrase,
+    oxford_comma,
     PhraseFragment,
     RoleFragment,
     WordFragment,
@@ -26,7 +27,9 @@ from krrood.entity_query_language.verbalization.microplanning.coordination impor
     one_of,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Conjunctions,
     Copulas,
+    ENGLISH_PREPOSITIONS,
     SetMembership,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import (
@@ -276,6 +279,13 @@ def predicate_clause(
     ``Not`` negates it with do-support (*"<subject> connects to <object>"*, *"does not connect to"*).
     The first operand is the subject; any further operands are trailing objects.
 
+    A copular complement attaches trailing operands only through a final preposition
+    (*"is_supported_by"* → *"… is supported by <object>"*). When it has none, an adjective/noun
+    complement cannot take them as objects — *"the begin is one month the end"* is nonsense — and
+    naming any one operand as the subject is a false claim (the *period* is one month, not the
+    *begin*). So the named condition is stated to *hold for* all operands, asserting nothing false:
+    *"one month holds for the begin and the end"*.
+
     Shared by :class:`~krrood.entity_query_language.predicate.Triple` (a class-name relation) and the
     symbolic-function rule (a function-name predicate), so the name-to-clause reading lives in one
     place.
@@ -297,12 +307,35 @@ def predicate_clause(
     ...                      WordFragment(text="another body"))
     ... )
     'a body connect to another body'
+    >>> flatten_fragment_to_plain_text(
+    ...     predicate_clause("is_one_month", WordFragment(text="the begin"),
+    ...                      WordFragment(text="the end"))
+    ... )
+    'one month hold for the begin and the end'
     """
     head, *rest = camel_case_to_words(name).split()
     complement = [WordFragment(text=word) for word in rest]
+    is_copular = morphology.verb_lemma(head) == _COPULA_LEMMA
+    if is_copular and objects and (not rest or rest[-1] not in ENGLISH_PREPOSITIONS):
+        # A copular complement attaches trailing operands only through a final preposition
+        # (``is_supported_by`` → *"… is supported by <object>"*). Without one, an adjective/noun
+        # complement cannot take them as objects — *"the begin is one month the end"* is nonsense — and
+        # naming any single operand as the subject (*"the begin is one month"*) is a FALSE claim (the
+        # period is, not the begin). State only what is certain: the named condition holds for ALL the
+        # operands. *"one month holds for the begin and the end of its period"*.
+        operands = oxford_comma(
+            [Noun(subject).as_fragment(), *(Noun(obj).as_fragment() for obj in objects)],
+            Conjunctions.AND.as_fragment(),
+        )
+        return clause(
+            Noun(PhraseFragment(parts=complement)),
+            Verb("hold"),
+            WordFragment(text="for"),
+            operands,
+        )
     predicate = (
         [Copula(), *complement]
-        if morphology.verb_lemma(head) == _COPULA_LEMMA
+        if is_copular
         else [Verb(morphology.verb_lemma(head)), *complement]
     )
     return clause(Noun(subject), *predicate, *(Noun(obj) for obj in objects))
