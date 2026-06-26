@@ -258,14 +258,16 @@ def convert_args_and_kwargs_into_hashable_key(
 
 def camel_case_to_words(name: str) -> str:
     """
-    Convert a CamelCase class name to space-separated lowercase words.
+    Convert a CamelCase or snake_case identifier to space-separated lowercase words.
 
-    :param name: CamelCase identifier string.
+    :param name: CamelCase or snake_case identifier string.
     :return: Space-separated lowercase words.
 
     Examples::
 
-        camel_case_to_words("HasRole")     # → "has role"
-        camel_case_to_words("IsReachable") # → "is reachable"
+        camel_case_to_words("HasRole")      # → "has role"
+        camel_case_to_words("IsReachable")  # → "is reachable"
+        camel_case_to_words("is_one_month") # → "is one month"
     """
-    return re.sub(r"([A-Z])", r" \1", name).strip().lower()
+    spaced = re.sub(r"([A-Z])", r" \1", name.replace("_", " "))
+    return re.sub(r"\s+", " ", spaced).strip().lower()
