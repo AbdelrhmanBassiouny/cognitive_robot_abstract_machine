@@ -1454,6 +1454,32 @@ def test_grouped_selection_equal_to_key_reports_distinct():
     assert "grouped by" not in text
 
 
+def test_grouped_scalar_column_is_singular_without_all():
+    """A scalar grouped column reads distributively singular — *"the battery"* — with no *"all"*,
+    because each grouped entity contributes exactly one value (the regression you reported: it was
+    wrongly *"all the battery"*)."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(a(set_of(robot.battery).grouped_by(robot.name)))
+    assert text == "For each name, report the battery of a _Robot"
+    assert "all" not in text
+
+
+def test_grouped_collection_column_uses_all_and_plural():
+    """A collection grouped column (a ``List`` field) is genuinely many per entity, so it keeps the
+    quantified plural *"all the tasks"*."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(a(set_of(robot.tasks).grouped_by(robot.name)))
+    assert text == "For each name, report all the tasks of a _Robot"
+
+
+def test_grouped_mixed_cardinality_columns_quantify_per_column():
+    """*"all"* attaches only to the many-valued column: a scalar and a collection together read
+    *"the battery … and all its tasks"*, not a blanket *"all"* over both."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(a(set_of(robot.battery, robot.tasks).grouped_by(robot.name)))
+    assert text == "For each name, report the battery of a _Robot and all its tasks"
+
+
 def test_grouped_selection_other_than_key_fronts_for_each_all():
     """A grouped query with a non-key selection fronts the grouping as 'For each <key>' and lists
     the per-group population with 'all'."""

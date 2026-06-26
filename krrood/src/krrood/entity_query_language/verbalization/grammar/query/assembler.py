@@ -8,6 +8,10 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import InstantiatedVariable
+from krrood.entity_query_language.verbalization.cardinality import (
+    Cardinality,
+    column_cardinality,
+)
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     value_function_noun,
 )
@@ -503,19 +507,44 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 where_items=[self._where_clause(plan)],
                 find_header=self._sentence_initial(Keywords.REPORT.as_fragment()),
             )
-        selection = PhraseFragment(
-            parts=[
-                GroupingPhrases.ALL.as_fragment(),
-                self._selections.prose(report.columns, number=Number.PLURAL),
-            ]
-        )
         return self._query_body(
             node,
             plan,
-            selection,
+            self._grouped_columns(report.columns),
             where_items=[self._where_clause(plan)],
             find_header=self._for_each_header(report.group_keys),
         )
+
+    def _grouped_columns(self, columns: List[SymbolicExpression]) -> Fragment:
+        """:return: the reported columns rendered by their cardinality — a scalar column reads
+        singular (*"the total of the revenue"*), a collection column as a quantified plural (*"all
+        the tasks"*); a mix joins the two. *"all"* is used only for the genuinely many-valued columns
+        (a collection in the path), not as a blanket prefix on every grouped column.
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(a(set_of(employee.salary).grouped_by(employee.department)))
+        'For each department, report the salary of an Employee'
+
+        >>> worker = variable(Worker, [])
+        >>> verbalize_expression(a(set_of(worker.tasks).grouped_by(worker.name)))
+        'For each name, report all the tasks of a Worker'
+        """
+        by_cardinality = [(column, column_cardinality(column)) for column in columns]
+        one = [column for column, card in by_cardinality if card is Cardinality.ONE]
+        many = [column for column, card in by_cardinality if card is Cardinality.MANY]
+        parts: List[Fragment] = []
+        if one:
+            parts.append(self._selections.prose(one, number=Number.SINGULAR))
+        if many:
+            parts.append(
+                PhraseFragment(
+                    parts=[
+                        GroupingPhrases.ALL.as_fragment(),
+                        self._selections.prose(many, number=Number.PLURAL),
+                    ]
+                )
+            )
+        return parts[0] if len(parts) == 1 else oxford_comma(parts, Conjunctions.AND.as_fragment())
 
     def _distinct_keys(self, keys: List[SymbolicExpression]) -> Fragment:
         """:return: *"the distinct <keys>"* — the group keys as a plural population listing, for a
