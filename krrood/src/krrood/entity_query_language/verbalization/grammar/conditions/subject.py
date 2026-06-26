@@ -4,6 +4,8 @@ from abc import abstractmethod
 from typing_extensions import Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.expression_structure import walk_chain
+from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
@@ -126,6 +128,49 @@ class AggregationSourceSubjectRule(RestrictionSubjectRule):
         True
         """
         return aggregation_source_root(expression)
+
+
+class SelectedChainSubjectRule(RestrictionSubjectRule):
+    """
+    The selection is an attribute chain (e.g. ``p.period``); the ``WHERE`` restricts the chain's
+    root variable, whose noun ends the selection (*"the period of a ProfitAndLossStatement"*) so the
+    restriction attaches to it just as for an aggregated source.
+
+    >>> transaction = variable(BankTransaction, [])
+    >>> verbalize_expression(an(entity(transaction.amount_details).where(
+    ...     transaction.amount_details.amount > 50)))
+    'Find the amount_details of a BankTransaction such that the amount of its amount_details is greater than 50'
+    """
+
+    @classmethod
+    def applies(
+        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
+    ) -> bool:
+        """Fires when the selection is an attribute chain rooted at a variable.
+
+        >>> transaction = variable(BankTransaction, [])
+        >>> query = an(entity(transaction.amount_details))
+        >>> SelectedChainSubjectRule.applies(query, query.selected_variable)
+        True
+        """
+        if not isinstance(selected_variable, Attribute):
+            return False
+        _, root = walk_chain(selected_variable)
+        return isinstance(root, Variable)
+
+    @classmethod
+    def subject(
+        cls, expression: SymbolicExpression, selected_variable: SymbolicExpression
+    ) -> Optional[Variable]:
+        """The chain's root variable is the restriction subject.
+
+        >>> transaction = variable(BankTransaction, [])
+        >>> query = an(entity(transaction.amount_details))
+        >>> SelectedChainSubjectRule.subject(query, query.selected_variable) is transaction
+        True
+        """
+        _, root = walk_chain(selected_variable)
+        return root
 
 
 def restriction_subject(
