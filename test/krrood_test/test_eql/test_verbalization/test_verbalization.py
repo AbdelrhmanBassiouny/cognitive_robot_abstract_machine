@@ -104,6 +104,7 @@ class _Window:
 class _Report:
     window: _Window
     revenue: _Revenue
+    priority: int
 
 
 from ...dataset.semantic_world_like_classes import (
@@ -831,6 +832,17 @@ def test_attribute_chain_selection_names_its_sibling_order_key():
         "Find the window of a _Report with the highest amount of the total of its revenue "
         "such that the days of its window is between 28 and 31"
     )
+
+
+def test_single_hop_sibling_order_key_omits_the_redundant_root():
+    """A sibling key one hop off the root (``r.priority``) is owned by the root, which is the
+    selection's trailing noun — the very noun the modifier attaches to — so it is named by the bare
+    attribute, without restating the root (no "… of a _Report")."""
+    report = variable(_Report, [])
+    text = verbalize_expression(
+        an(entity(report.window).ordered_by(report.priority, descending=True).limit(1))
+    )
+    assert text == "Find the window of a _Report with the highest priority"
 
 
 def test_plain_variable_ranking_is_unchanged():

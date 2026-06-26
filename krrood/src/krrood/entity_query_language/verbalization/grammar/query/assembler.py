@@ -722,7 +722,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         >>> p = variable(BankTransaction, [])
         >>> verbalize_expression(an(entity(p.amount_details).ordered_by(
         ...     p.booking_date, descending=True).limit(1)))
-        'Find the amount_details of a BankTransaction with the highest booking_date of the BankTransaction'
+        'Find the amount_details of a BankTransaction with the highest booking_date'
         """
         ranking = plan.ranking
         # A single result whose key trails as a "with the highest …" / "with the latest …" modifier:

@@ -7,6 +7,8 @@ from typing_extensions import TYPE_CHECKING, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
+from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.variable import Variable
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
@@ -269,22 +271,31 @@ class AttributeRankedByForm(LeadingRankForm):
 
 
 class SiblingKeyForm(LeadingRankForm):
-    """Ordering by a *sibling* chain of the selection — same root variable, a different path (e.g.
-    selecting ``p.period`` ordered by ``p.revenue.total.amount``). The key's owner is not the head,
-    so its terminal alone (*"the highest amount"*) would be ambiguous; the key is named through to
-    its chain: *"with the highest amount of its total revenue"* (*n = 1*) or *"by the amount of its
-    total revenue"* (*n > 1*). Rendering the chain needs the context; without it the form abstains
-    (it guards on ``context``) and the leading base form takes over.
+    """Ordering by a *sibling* chain of the selection — same root variable, a different path. How the
+    key is named depends on whether its owner is already on screen:
+
+    - A key one hop off the root (``transaction.booking_date``) is owned by the root, which is the
+      selection's trailing noun — the very noun the modifier attaches to — so the bare terminal
+      suffices and the owner is not restated: *"the amount_details of a BankTransaction with the
+      highest booking_date"* (just as *"the Employee with the highest salary"* never restates
+      *"Employee"*).
+    - A deeper key (``p.revenue.total.amount``, selecting ``p.period``) has an owner that is not on
+      screen, so it is named through its path, whose root pronominalises: *"with the highest amount
+      of the total of its revenue"*.
+
+    Rendering the path needs the context; without it (or for a degenerate non-attribute key) the form
+    abstains and the leading base form takes over.
 
     >>> transaction = variable(BankTransaction, [])
     >>> verbalize_expression(an(entity(transaction.amount_details).ordered_by(
     ...     transaction.booking_date, descending=True).limit(1)))
-    'Find the amount_details of a BankTransaction with the highest booking_date of the BankTransaction'
+    'Find the amount_details of a BankTransaction with the highest booking_date'
     """
 
     @classmethod
     def applies(cls, request: RankingRequest) -> bool:
-        """:return: ``True`` for a sibling key when the render context is available.
+        """:return: ``True`` for a sibling key that is an attribute chain, when the render context is
+        available (a bare-variable key has no terminal to name and abstains to the leading form).
 
         >>> transaction = variable(BankTransaction, [])
         >>> query = an(entity(transaction.amount_details).ordered_by(
@@ -295,45 +306,56 @@ class SiblingKeyForm(LeadingRankForm):
         return (
             request.plan.relation is RankingKeyRelation.SIBLING
             and request.context is not None
+            and isinstance(request.plan.order_key, Attribute)
         )
 
     @classmethod
     def render(cls, request: RankingRequest) -> RankingSurface:
-        """:return: the key named through its chain — a superlative *"with the highest <terminal> of
-        <prefix>"* for a single result, else a *"<top/bottom n> … by <key>"* listing.
+        """:return: the key named for the ranking — a superlative *"with the highest <key>"* for a
+        single result, else a *"<top/bottom n> … by <key>"* listing.
 
-        The terminal attribute is named as the bare word (the established key convention) and the
-        chain prefix is rendered through the context so its root pronominalises (*"its total
-        revenue"*); ``n = 1`` attaches the superlative, ``n > 1`` fronts the count and trails *"by …"*.
+        The terminal attribute is the bare word (the established key convention); when the key sits
+        directly on the root its owner is the selection's anchor noun and is left unstated, otherwise
+        the chain prefix is appended through the context so its root pronominalises (*"… of its total
+        revenue"*).
         """
         plan = request.plan
         order_key = plan.order_key
+        # The key's owner is the root exactly when its prefix is the bare root variable (a single
+        # hop); then the owner is already the selection's trailing noun, so it is not restated.
+        key_owner_is_root = isinstance(order_key._child_, Variable)
         if plan.n == 1:
             superlative = (
                 RankingWords.LOWEST
                 if plan.direction is RankingDirection.ASCENDING
                 else RankingWords.HIGHEST
             )
-            modifier = PhraseFragment(
-                parts=[
-                    Prepositions.WITH.as_fragment(),
-                    Articles.THE.as_fragment(),
-                    superlative.as_fragment(),
-                    _key_attribute(order_key),
+            parts = [
+                Prepositions.WITH.as_fragment(),
+                Articles.THE.as_fragment(),
+                superlative.as_fragment(),
+                _key_attribute(order_key),
+            ]
+            if not key_owner_is_root:
+                parts += [
                     Prepositions.OF.as_fragment(),
                     request.context.child(order_key._child_),
                 ]
+            return RankingSurface(
+                pre_head=None, number=Number.SINGULAR, modifiers=[PhraseFragment(parts=parts)]
             )
-            return RankingSurface(pre_head=None, number=Number.SINGULAR, modifiers=[modifier])
         quality = (
             RankingWords.BOTTOM
             if plan.direction is RankingDirection.ASCENDING
             else RankingWords.TOP
         )
         pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.n)])
-        modifier = PhraseFragment(
-            parts=[RankingWords.BY.as_fragment(), request.context.child(order_key)]
+        key_fragment = (
+            _key_attribute(order_key)
+            if key_owner_is_root
+            else request.context.child(order_key)
         )
+        modifier = PhraseFragment(parts=[RankingWords.BY.as_fragment(), key_fragment])
         return RankingSurface(pre_head=pre_head, number=Number.PLURAL, modifiers=[modifier])
 
 
