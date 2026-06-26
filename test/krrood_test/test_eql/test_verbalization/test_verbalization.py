@@ -571,6 +571,26 @@ def test_aggregation_where_on_other_attribute_spells_out_the_owner():
     assert "its power" not in text
 
 
+def test_count_over_query_renders_population_not_imperative_find():
+    """A ``count`` wrapping a whole query counts a *population*, so the inner query surfaces as a
+    plural noun with its restriction folded in — *"the number of _Robots whose battery is greater
+    than 50"* — never the imperative *"Find …"* (which would read as *"the number of Find a _Robot
+    …"*)."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(eql.count(entity(robot).where(robot.battery > 50)))
+    assert text == "the number of _Robots whose battery is greater than 50"
+    assert "Find" not in text
+
+
+def test_count_over_query_uses_such_that_for_a_standalone_condition():
+    """A condition on the counted variable itself reads *"such that …"* and the population is plural
+    — *"the number of ints such that …"* — so the aggregate over a query and the equivalent query
+    over an aggregate verbalise consistently."""
+    number = variable(int, [1, 2, 3])
+    text = verbalize_expression(eql.count(entity(number).where(number > 0)))
+    assert text == "the number of ints such that the int is greater than 0"
+
+
 def test_boolean_predicative_pronominalises_relational_navigation():
     """A boolean-terminal chain on the subject's relational navigation reads *"the <Type> to which
     it is <verb> is <attribute>"* — the navigation prefix is recursed through the standard grammar,

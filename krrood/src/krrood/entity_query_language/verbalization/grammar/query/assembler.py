@@ -758,6 +758,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         plan = self.plan(entity)
         variable = entity.selected_variable
         definiteness = Definiteness.UNIQUE if plan.is_the else Definiteness.INDEFINITE
+        # The caller's number flows through: an aggregated population reads plural ("the number of
+        # periods such that ...") while an ordinary nested noun stays singular ("a Worker whose ...").
+        number = self.context.options.number
 
         modifiers: List[Fragment] = []
         rendered = ClauseComposer(self.context).restriction(plan)
@@ -768,17 +771,20 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             if rendered.whose is not None:
                 modifiers.append(rendered.whose)
             if rendered.residual is not None:
+                # A plural population reads "... such that ..."; a singular nested noun reads "where".
+                connective = (
+                    Keywords.SUCH_THAT if number is Number.PLURAL else Keywords.WHERE
+                )
                 modifiers.append(
-                    PhraseFragment(
-                        parts=[Keywords.WHERE.as_fragment(), rendered.residual]
-                    )
+                    PhraseFragment(parts=[connective.as_fragment(), rendered.residual])
                 )
 
         # A referring noun phrase is the subject of its own modifiers (the coreference pass infers
         # this from the modifiers slot), so no scope marker is emitted here.
         return NounPhrase(
-            head=RoleFragment.for_variable(plan.selected_type, variable),
+            head=RoleFragment.for_variable(plan.selected_type, variable, number=number),
             definiteness=definiteness,
+            number=number,
             referent_id=subject_referent_id(variable),
             modifiers=modifiers,
         )
