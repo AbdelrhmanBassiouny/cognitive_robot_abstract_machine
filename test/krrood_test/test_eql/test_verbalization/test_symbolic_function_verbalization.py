@@ -64,6 +64,30 @@ def test_symbolic_function_subclass_evaluates_via_call():
     assert _RemainingLoad._construct_normally_(capacity=10, load=3)() == 7
 
 
+@dataclass(eq=False)
+class _Doubled(SymbolicFunction):
+    """A single-argument value SymbolicFunction, used to test query evaluation."""
+
+    number: int
+    """The number it doubles."""
+
+    def __call__(self) -> int:
+        return self.number * 2
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return Noun(WordFragment(text="the doubled number")).as_fragment()
+
+
+def test_symbolic_function_binds_its_computed_value_in_a_query():
+    # In a query a value SymbolicFunction binds what it COMPUTES (constructed AND called), exactly like
+    # a @symbolic_function -- not the constructed instance.
+    numbers = variable(int, domain=[1, 2, 3])
+    rows = a(set_of(_Doubled(numbers))).tolist()
+    values = sorted(next(iter(row.values())) for row in rows)
+    assert values == [2, 4, 6]
+
+
 @symbolic_function
 def parity(number: int) -> int:
     return number % 2

@@ -209,6 +209,17 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
         instance.__init__(**kwargs)
         return instance
 
+    @classmethod
+    def _bound_value_(cls, **kwargs) -> Any:
+        """:return: the value this operation contributes to a query result when its arguments have
+        concrete values -- the constructed instance itself by default (a :class:`Predicate`'s truth is
+        then read from that instance). A value operation overrides this to its COMPUTED value.
+
+        ..note:: This is the class-form counterpart of calling a ``@symbolic_function``: for a function
+            the query binds ``function(**values)``; for a callable class it binds this.
+        """
+        return cls._construct_normally_(**kwargs)
+
     @abstractmethod
     def __call__(self) -> Any:
         """
@@ -245,6 +256,13 @@ class SymbolicFunction(SymbolicCallable, ABC):
     *"the &lt;name&gt; of &lt;arguments&gt;"* reading produced by the :func:`symbolic_function` decorator is not
     the surface you want; for a plain value function the decorator remains the simplest form.
     """
+
+    @classmethod
+    def _bound_value_(cls, **kwargs) -> Any:
+        """:return: the COMPUTED value -- a value operation is constructed AND called, so a query binds
+        what it computes (exactly as a ``@symbolic_function`` is called), not the instance.
+        """
+        return cls._construct_normally_(**kwargs)()
 
     @abstractmethod
     def __call__(self) -> Any:
