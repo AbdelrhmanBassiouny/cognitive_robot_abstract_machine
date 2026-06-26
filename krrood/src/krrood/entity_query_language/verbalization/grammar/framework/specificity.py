@@ -62,7 +62,7 @@ def concrete_subclasses(base: Type[_T]) -> List[Type[_T]]:
 
     >>> from krrood.entity_query_language.verbalization.grammar.query.ranking import RankingForm
     >>> sorted(rule.__name__ for rule in concrete_subclasses(RankingForm))
-    ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm']
+    ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm', 'SiblingKeyForm']
     """
     return [
         subclass
@@ -100,7 +100,7 @@ class SpecificityRule(ABC):
 
         >>> from krrood.entity_query_language.verbalization.grammar.query.ranking import RankingForm
         >>> sorted(rule.__name__ for rule in RankingForm.alternatives())
-        ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm']
+        ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm', 'SiblingKeyForm']
         """
         return concrete_subclasses(cls)
 

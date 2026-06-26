@@ -3,10 +3,15 @@ from __future__ import annotations
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional
+from typing_extensions import TYPE_CHECKING, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
+        RuleContext,
+    )
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     Fragment,
@@ -36,6 +41,17 @@ class RankingRequest:
 
     plan: RankingPlan
     """The ``limit`` (+ ordering) decomposition."""
+
+    context: Optional["RuleContext"] = None
+    """The render context, supplied when the surface may need to render the order key's chain (a
+    sibling key); ``None`` makes such a form fall back to the leading surface."""
+
+
+def ranking_number(plan: RankingPlan) -> Number:
+    """:return: the grammatical number of a ranking's subject — ``PLURAL`` for several, ``SINGULAR``
+    for one — independent of the chosen surface form, so a caller needing only the number does not
+    render (and thereby first-mention) the whole phrase."""
+    return Number.of(plan.n > 1)
 
 
 @dataclass(frozen=True)
@@ -250,6 +266,75 @@ class AttributeRankedByForm(LeadingRankForm):
         return RankingSurface(
             pre_head=pre_head, number=Number.PLURAL, modifiers=[modifier]
         )
+
+
+class SiblingKeyForm(LeadingRankForm):
+    """Ordering by a *sibling* chain of the selection — same root variable, a different path (e.g.
+    selecting ``p.period`` ordered by ``p.revenue.total.amount``). The key's owner is not the head,
+    so its terminal alone (*"the highest amount"*) would be ambiguous; the key is named through to
+    its chain: *"with the highest amount of its total revenue"* (*n = 1*) or *"by the amount of its
+    total revenue"* (*n > 1*). Rendering the chain needs the context; without it the form abstains
+    (it guards on ``context``) and the leading base form takes over.
+
+    >>> transaction = variable(BankTransaction, [])
+    >>> verbalize_expression(an(entity(transaction.amount_details).ordered_by(
+    ...     transaction.booking_date, descending=True).limit(1)))
+    'Find the amount_details of a BankTransaction with the highest booking_date of the BankTransaction'
+    """
+
+    @classmethod
+    def applies(cls, request: RankingRequest) -> bool:
+        """:return: ``True`` for a sibling key when the render context is available.
+
+        >>> transaction = variable(BankTransaction, [])
+        >>> query = an(entity(transaction.amount_details).ordered_by(
+        ...     transaction.booking_date, descending=True).limit(1))
+        >>> verbalize_expression(query).startswith('Find the amount_details')
+        True
+        """
+        return (
+            request.plan.relation is RankingKeyRelation.SIBLING
+            and request.context is not None
+        )
+
+    @classmethod
+    def render(cls, request: RankingRequest) -> RankingSurface:
+        """:return: the key named through its chain — a superlative *"with the highest <terminal> of
+        <prefix>"* for a single result, else a *"<top/bottom n> … by <key>"* listing.
+
+        The terminal attribute is named as the bare word (the established key convention) and the
+        chain prefix is rendered through the context so its root pronominalises (*"its total
+        revenue"*); ``n = 1`` attaches the superlative, ``n > 1`` fronts the count and trails *"by …"*.
+        """
+        plan = request.plan
+        order_key = plan.order_key
+        if plan.n == 1:
+            superlative = (
+                RankingWords.LOWEST
+                if plan.direction is RankingDirection.ASCENDING
+                else RankingWords.HIGHEST
+            )
+            modifier = PhraseFragment(
+                parts=[
+                    Prepositions.WITH.as_fragment(),
+                    Articles.THE.as_fragment(),
+                    superlative.as_fragment(),
+                    _key_attribute(order_key),
+                    Prepositions.OF.as_fragment(),
+                    request.context.child(order_key._child_),
+                ]
+            )
+            return RankingSurface(pre_head=None, number=Number.SINGULAR, modifiers=[modifier])
+        quality = (
+            RankingWords.BOTTOM
+            if plan.direction is RankingDirection.ASCENDING
+            else RankingWords.TOP
+        )
+        pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.n)])
+        modifier = PhraseFragment(
+            parts=[RankingWords.BY.as_fragment(), request.context.child(order_key)]
+        )
+        return RankingSurface(pre_head=pre_head, number=Number.PLURAL, modifiers=[modifier])
 
 
 def ranking_surface(request: RankingRequest) -> RankingSurface:

@@ -85,6 +85,27 @@ class _Robot:
     tasks: List[_Task]
 
 
+@dataclass
+class _Amount:
+    amount: int
+
+
+@dataclass
+class _Revenue:
+    total: _Amount
+
+
+@dataclass
+class _Window:
+    days: int
+
+
+@dataclass
+class _Report:
+    window: _Window
+    revenue: _Revenue
+
+
 from ...dataset.semantic_world_like_classes import (
     Apple,
     Body,
@@ -790,6 +811,40 @@ def test_attribute_chain_selection_keeps_its_where():
         "Find the _NavRobot to which a _NavMission is assigned such that its battery is "
         "between 28 and 31"
     )
+
+
+def test_attribute_chain_selection_names_its_sibling_order_key():
+    """Selecting an attribute chain (``r.window``) ordered by a *sibling* chain
+    (``r.revenue.total.amount``, sharing the root but on a different path) must name the key in full
+    — not drop it to *"the highest window"*. The selection renders as its own noun, the key trails as
+    *"with the highest <key>"* with the shared root pronominalised, and the WHERE still attaches."""
+    report = variable(_Report, [])
+    text = verbalize_expression(
+        an(
+            entity(report.window)
+            .where(report.window.days >= 28, report.window.days <= 31)
+            .ordered_by(report.revenue.total.amount, descending=True)
+            .limit(1)
+        )
+    )
+    assert text == (
+        "Find the window of a _Report with the highest amount of the total of its revenue "
+        "such that the days of its window is between 28 and 31"
+    )
+
+
+def test_plain_variable_ranking_is_unchanged():
+    """The sibling-key handling must not disturb a plain-variable ranking: ordering by an attribute
+    of the selection still reads *"with the highest salary"* / *"the top three … by salary"*."""
+    employee = variable(Employee, [])
+    one = verbalize_expression(
+        entity(employee).ordered_by(employee.salary, descending=True).limit(1)
+    )
+    several = verbalize_expression(
+        entity(employee).ordered_by(employee.salary, descending=True).limit(3)
+    )
+    assert one == "Find the Employee with the highest salary"
+    assert several == "Find the top three Employees by salary"
 
 
 def test_verbalize_bare_variable_bounds_fold_into_a_range():

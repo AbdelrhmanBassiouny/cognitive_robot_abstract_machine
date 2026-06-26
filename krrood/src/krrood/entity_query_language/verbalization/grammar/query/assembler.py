@@ -43,6 +43,7 @@ from krrood.entity_query_language.verbalization.grammar.query.planner import (
     SelectionKind,
 )
 from krrood.entity_query_language.verbalization.grammar.query.ranking import (
+    ranking_number,
     ranking_surface,
     RankingRequest,
 )
@@ -633,7 +634,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         'Report Employees ordered by their salaries from lowest to highest'
         """
         if plan.ranking is not None:
-            return ranking_surface(RankingRequest(plan=plan.ranking)).number
+            return ranking_number(plan.ranking)
         if plan.report is not None and plan.report.kind in (
             ReportKind.ORDERING,
             ReportKind.GROUPING,
@@ -698,8 +699,29 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(entity(employee).ordered_by(employee.salary, descending=True).limit(3))
         'Find the top three Employees by salary'
+
+        A chain selection (``p.period``) ranked so the key trails as a modifier renders the chain as
+        its own noun, with the ranking modifier attached:
+
+        >>> p = variable(BankTransaction, [])
+        >>> verbalize_expression(an(entity(p.amount_details).ordered_by(
+        ...     p.booking_date, descending=True).limit(1)))
+        'Find the amount_details of a BankTransaction with the highest booking_date of the BankTransaction'
         """
-        surface = ranking_surface(RankingRequest(plan=plan.ranking))
+        ranking = plan.ranking
+        # A single result whose key trails as a "with the highest …" / "with the latest …" modifier:
+        # for a chain selection (p.period) render the chain as its own noun and attach the modifier,
+        # rather than the bare type word the variable form below uses. The head is rendered before the
+        # ranking surface so the root's first mention is here and the key pronominalises back to it.
+        key_trails = ranking.n == 1 and ranking.relation in (
+            RankingKeyRelation.ATTRIBUTE,
+            RankingKeyRelation.SIBLING,
+        )
+        if not isinstance(variable, Variable) and key_trails:
+            head = self.context.child(variable)
+            surface = ranking_surface(RankingRequest(plan=ranking, context=self.context))
+            return PhraseFragment(parts=[head, *surface.modifiers])
+        surface = ranking_surface(RankingRequest(plan=ranking, context=self.context))
         return NounPhrase(
             head=RoleFragment.for_variable(
                 plan.selected_type, variable, number=surface.number
