@@ -7,13 +7,61 @@ truth value, so it reads as a noun naming the value it computes (``quarter(month
 and a grouped report names such a key by that noun (*"For each year and quarter, report …"*).
 """
 
+from dataclasses import dataclass
+
 import krrood.entity_query_language.factories as eql
 from krrood.entity_query_language.factories import variable, entity, an, a, not_, set_of
-from krrood.entity_query_language.predicate import length, symbolic_function
+from krrood.entity_query_language.predicate import (
+    length,
+    Predicate,
+    SymbolicCallable,
+    SymbolicFunction,
+    symbolic_function,
+)
+from krrood.entity_query_language.verbalization.fragments.base import WordFragment
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
 )
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import Noun
+
+
+@dataclass(eq=False)
+class _RemainingLoad(SymbolicFunction):
+    """A value SymbolicFunction with a custom noun surface, used to test the class form."""
+
+    capacity: int
+    """The capacity it is computed from."""
+
+    load: int
+    """The load it is computed from."""
+
+    def __call__(self) -> int:
+        return self.capacity - self.load
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return Noun(WordFragment(text="the remaining load")).as_fragment()
+
+
+def test_symbolic_function_and_predicate_share_a_base():
+    # Both are self-verbalizing symbolic callables, so the construction machinery lives in one base.
+    assert issubclass(Predicate, SymbolicCallable)
+    assert issubclass(SymbolicFunction, SymbolicCallable)
+
+
+def test_symbolic_function_subclass_uses_its_custom_fragment():
+    # A SymbolicFunction subclass names its value through its own _verbalization_fragment_ (a noun
+    # phrase) -- like a Predicate names its clause -- rather than the decorator's default surface.
+    numbers = variable(int, [])
+    assert (
+        verbalize_expression(a(set_of(_RemainingLoad(numbers, numbers))))
+        == "Find the remaining load"
+    )
+
+
+def test_symbolic_function_subclass_evaluates_via_call():
+    assert _RemainingLoad._construct_normally_(capacity=10, load=3)() == 7
 
 
 @symbolic_function
