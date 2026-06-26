@@ -767,10 +767,38 @@ def test_verbalize_and_chain_flattening():
     x = variable(int, [])
     cond = and_(x > 1, x < 10, x != 5)
     text = verbalize_expression(cond)
-    assert "greater than" in text
-    assert "less than" in text
+    # The lower/upper bounds fold into one range item (the variable is the zero-hop chain, so it
+    # folds exactly like an attribute chain), and the AND still flattens to a comma-and list.
+    assert "between 1 and 10" in text
     assert "is not" in text
     assert ", and " in text
+
+
+def test_attribute_chain_selection_keeps_its_where():
+    """Selecting an attribute chain (``m.assigned_to``) must not drop its WHERE: the restriction
+    subject is the chain's root, whose noun ends the selection, so the WHERE attaches as a
+    *"such that …"* clause (with the root pronominalised) instead of vanishing."""
+    mission = variable(_NavMission, [])
+    text = verbalize_expression(
+        an(
+            entity(mission.assigned_to).where(
+                mission.assigned_to.battery >= 28, mission.assigned_to.battery <= 31
+            )
+        )
+    )
+    assert text == (
+        "Find the _NavRobot to which a _NavMission is assigned such that its battery is "
+        "between 28 and 31"
+    )
+
+
+def test_verbalize_bare_variable_bounds_fold_into_a_range():
+    """A lower and upper bound on the same bare variable fold into one *"between … and …"* item,
+    exactly like two bounds on an attribute chain — the variable is the zero-hop chain, so the range
+    fold needs no bare-variable special case."""
+    x = variable(int, [])
+    text = verbalize_expression(an(entity(x).where(x >= 28, x <= 31)))
+    assert text == "Find an int such that the int is between 28 and 31"
 
 
 def test_verbalize_and_stops_at_or():
@@ -1445,8 +1473,7 @@ def test_verbalize_condition_graph_example():
 
     assert "Item" in text
     assert "either" in text
-    assert "greater than" in text
-    assert "less than" in text
+    assert "between 5 and 10" in text  # the lower/upper bounds fold into one range item
     assert "is" in text
 
 
