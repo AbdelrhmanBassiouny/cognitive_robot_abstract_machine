@@ -22,6 +22,11 @@ def parity(number: int) -> int:
 
 
 @symbolic_function
+def get_quarter(month: int) -> int:
+    return (month - 1) // 3 + 1
+
+
+@symbolic_function
 def is_one_month(period: int) -> bool:
     return True
 
@@ -72,6 +77,11 @@ def test_value_function_reads_as_a_noun():
     # A non-bool function names the value it computes: "a parity", not a clause and not the verbose
     # "a parity, where the number of the parity is ..." decomposition.
     assert verbalize_expression(parity(variable(int, []))) == "a parity"
+
+
+def test_getter_named_value_function_drops_the_get_prefix():
+    # A stray imperative getter still reads as the noun it computes: get_quarter -> "a quarter".
+    assert verbalize_expression(get_quarter(variable(int, []))) == "a quarter"
 
 
 def test_grouped_report_names_a_value_function_key_as_a_noun():
