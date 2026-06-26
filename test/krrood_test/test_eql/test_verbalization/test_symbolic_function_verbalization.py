@@ -7,13 +7,61 @@ truth value, so it reads as a noun naming the value it computes (``quarter(month
 and a grouped report names such a key by that noun (*"For each year and quarter, report …"*).
 """
 
+from dataclasses import dataclass
+
 import krrood.entity_query_language.factories as eql
 from krrood.entity_query_language.factories import variable, entity, an, a, not_, set_of
-from krrood.entity_query_language.predicate import length, symbolic_function
+from krrood.entity_query_language.predicate import (
+    length,
+    Predicate,
+    SymbolicCallable,
+    SymbolicFunction,
+    symbolic_function,
+)
+from krrood.entity_query_language.verbalization.fragments.base import WordFragment
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
     InstantiatedPlanner,
 )
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import Noun
+
+
+@dataclass(eq=False)
+class _RemainingLoad(SymbolicFunction):
+    """A value SymbolicFunction with a custom noun surface, used to test the class form."""
+
+    capacity: int
+    """The capacity it is computed from."""
+
+    load: int
+    """The load it is computed from."""
+
+    def __call__(self) -> int:
+        return self.capacity - self.load
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return Noun(WordFragment(text="the remaining load")).as_fragment()
+
+
+def test_symbolic_function_and_predicate_share_a_base():
+    # Both are self-verbalizing symbolic callables, so the construction machinery lives in one base.
+    assert issubclass(Predicate, SymbolicCallable)
+    assert issubclass(SymbolicFunction, SymbolicCallable)
+
+
+def test_symbolic_function_subclass_uses_its_custom_fragment():
+    # A SymbolicFunction subclass names its value through its own _verbalization_fragment_ (a noun
+    # phrase) -- like a Predicate names its clause -- rather than the decorator's default surface.
+    numbers = variable(int, [])
+    assert (
+        verbalize_expression(a(set_of(_RemainingLoad(numbers, numbers))))
+        == "Find the remaining load"
+    )
+
+
+def test_symbolic_function_subclass_evaluates_via_call():
+    assert _RemainingLoad._construct_normally_(capacity=10, load=3)() == 7
 
 
 @symbolic_function
@@ -42,14 +90,14 @@ def divides(divisor: int, dividend: int) -> bool:
 
 
 def test_copular_function_reads_as_a_copular_clause():
-    assert verbalize_expression(is_one_month(variable(int, []))) == "an int is one month"
+    assert verbalize_expression(is_one_month(variable(int, []))) == "an Integer is one month"
 
 
 def test_function_reads_as_a_predicate_in_where_with_coreference():
     number = variable(int, [])
     assert (
         verbalize_expression(an(entity(number).where(is_even(number))))
-        == "Find an int such that it is even"
+        == "Find an Integer such that it is even"
     )
 
 
@@ -57,14 +105,14 @@ def test_function_negates_inline():
     number = variable(int, [])
     assert (
         verbalize_expression(an(entity(number).where(not_(is_even(number)))))
-        == "Find an int such that it is not even"
+        == "Find an Integer such that it is not even"
     )
 
 
 def test_verb_first_function_has_a_subject_and_an_object():
     assert (
         verbalize_expression(divides(variable(int, []), variable(int, [])))
-        == "int 1 divides int 2"
+        == "Integer 1 divides Integer 2"
     )
 
 
@@ -104,7 +152,7 @@ def test_grouped_report_names_a_value_function_key_as_a_noun():
     numbers = variable(int, [])
     grouping = parity(numbers)
     text = verbalize_expression(a(set_of(grouping, eql.sum(numbers)).grouped_by(grouping)))
-    assert text == "For each parity, report the sum of ints"
+    assert text == "For each parity, report the sum of Integers"
 
 
 def test_ranked_grouped_report_by_a_value_key_reads_as_a_sentence_not_a_tuple():
@@ -116,5 +164,5 @@ def test_ranked_grouped_report_by_a_value_key_reads_as_a_sentence_not_a_tuple():
     text = verbalize_expression(
         a(set_of(grouping, total).grouped_by(grouping).ordered_by(total, descending=True).limit(1))
     )
-    assert text == "Find the parity of an int with the highest sum of ints"
+    assert text == "Find the parity of an Integer with the highest sum of Integers"
     assert "(" not in text

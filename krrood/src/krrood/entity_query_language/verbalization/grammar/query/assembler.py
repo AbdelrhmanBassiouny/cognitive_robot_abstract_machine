@@ -419,7 +419,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         'Find the parity of an int with the highest sum of ints'
         """
         aggregate = self._ranked_aggregate_column(node, plan.ranking)
-        if aggregate is None or plan.ranking.n != 1:
+        if aggregate is None or plan.ranking.limit_number != 1:
             return self._query_body(
                 node,
                 plan,
@@ -836,7 +836,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         # for a chain selection (p.period) render the chain as its own noun and attach the modifier,
         # rather than the bare type word the variable form below uses. The head is rendered before the
         # ranking surface so the root's first mention is here and the key pronominalises back to it.
-        key_trails = ranking.n == 1 and ranking.relation in (
+        key_trails = ranking.limit_number == 1 and ranking.relation in (
             RankingKeyRelation.ATTRIBUTE,
             RankingKeyRelation.SIBLING,
         )
