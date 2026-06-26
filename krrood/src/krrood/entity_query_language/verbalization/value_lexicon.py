@@ -31,6 +31,10 @@ def value_phrase(value: Any) -> str:
     'int or str'
     >>> value_phrase(datetime.datetime(2026, 5, 23))
     'May 23, 2026'
+    >>> value_phrase(datetime.datetime(2026, 5, 5))
+    'May 5, 2026'
+    >>> value_phrase(datetime.datetime(2026, 5, 23, 14, 30))
+    'May 23, 2026 at 14:30'
     >>> value_phrase(42)
     '42'
     """
@@ -45,7 +49,10 @@ def value_phrase(value: Any) -> str:
     if isinstance(value, enum.Enum):
         return value.name
     if isinstance(value, datetime.datetime):
+        # `value.day` (an int) gives the day with no leading zero portably -- strftime's "%-d" is a
+        # glibc-only extension that raises ValueError on Windows.
+        date_phrase = f"{value:%B} {value.day}, {value.year}"
         if value.time() == datetime.time.min:
-            return value.strftime("%B %-d, %Y")
-        return value.strftime("%B %-d, %Y at %H:%M")
+            return date_phrase
+        return f"{date_phrase} at {value:%H:%M}"
     return repr(value)
