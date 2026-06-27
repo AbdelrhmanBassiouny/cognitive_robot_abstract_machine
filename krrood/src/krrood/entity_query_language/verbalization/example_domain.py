@@ -35,7 +35,7 @@ import datetime
 from dataclasses import dataclass
 from typing import List
 
-from typing_extensions import Mapping
+from typing_extensions import Mapping, Self
 
 from krrood.entity_query_language.factories import Symbol
 from krrood.entity_query_language.predicate import Predicate
@@ -166,8 +166,8 @@ class IsReachable(Predicate):
         return True
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
-        return clause(Noun(fields["body"]), Copula(), Adjective("reachable"))
+    def _verbalization_fragment_(cls, operands: Self) -> Fragment:
+        return clause(Noun(operands.body), Copula(), Adjective("reachable"))
 
 
 @dataclass(eq=False)
@@ -203,12 +203,12 @@ class WorksIn(Predicate):
         return True
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+    def _verbalization_fragment_(cls, operands: Self) -> Fragment:
         return clause(
-            Noun(fields["employee"]),
+            Noun(operands.employee),
             Verb("work"),
             Preposition.IN,
-            Noun(fields["department"]),
+            Noun(operands.department),
         )
 
 

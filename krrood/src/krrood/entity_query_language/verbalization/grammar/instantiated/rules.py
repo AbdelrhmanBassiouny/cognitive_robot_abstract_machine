@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.predicate import RenderedFields, Verbalizable
+from krrood.entity_query_language.predicate import OperandView, Verbalizable
 from krrood.entity_query_language.verbalization.exceptions import (
     NonFragmentPredicateError,
     PredicateFragmentRequiredError,
@@ -88,14 +88,11 @@ class InstantiatedVerbalizableRule(PhraseRule):
         >>> verbalize_expression(inference(IsReachable)(body=variable(Robot, [])))
         'a Robot is reachable'
         """
-        fields = RenderedFields(
-            fragments={
-                name: context.child(child)
-                for name, child in node._child_vars_.items()
-            },
-            raw=node._child_vars_,
+        operands = OperandView(
+            _child_expressions_=node._child_vars_,
+            _render_=lambda expression: context.child(expression),
         )
-        fragment = node._type_._verbalization_fragment_(fields)
+        fragment = node._type_._verbalization_fragment_(operands)
         if not isinstance(fragment, Fragment):
             raise NonFragmentPredicateError(
                 predicate_type=node._type_, returned=fragment
@@ -167,7 +164,7 @@ class SymbolicFunctionNounRule(PhraseRule):
         ... def quarter(month: int) -> int:
         ...     return (month - 1) // 3 + 1
         >>> verbalize_expression(quarter(variable(int, [])))
-        'a quarter'
+        'the quarter of an int'
         """
         return InstantiatedPlanner.is_value_symbolic_function(node)
 

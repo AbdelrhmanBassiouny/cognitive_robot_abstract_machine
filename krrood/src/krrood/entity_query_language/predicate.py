@@ -8,7 +8,7 @@ from regular Python functions when variables are present.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, fields
+from dataclasses import MISSING, dataclass, fields
 from functools import wraps
 
 from typing_extensions import (
@@ -16,6 +16,7 @@ from typing_extensions import (
     Iterator,
     Optional,
     Any,
+    Self,
     Type,
     Tuple,
     ClassVar,
@@ -139,6 +140,109 @@ class RenderedFields(Mapping):
         return len(self.fragments)
 
 
+@dataclass(frozen=True)
+class Operand:
+    """One operand of a symbolic callable, as its :meth:`Verbalizable._verbalization_fragment_` sees it.
+
+    It wraps the operand's EXISTING child expression — never a freshly constructed variable, so
+    coreference is preserved — together with the renderer that turns an expression into a
+    :class:`Fragment` in the current context. Used directly it renders the operand
+    (``Noun(operands.body)``); navigated it renders a DERIVED expression on the SAME variable
+    (``operands.tip.name`` → *"the name of …"*), reusing EQL's attribute navigation.
+
+    An author never constructs one: it is handed to the fragment as an attribute of the typed
+    :class:`OperandView` (``operands.tip``), so the IDE resolves ``tip`` to the field and ``name`` to
+    the field type's attribute (autocompletion, go-to-definition).
+    """
+
+    _expression_: Any
+    """The EXISTING child expression this operand wraps (or a derived expression after navigation)."""
+
+    _render_: "Callable[[Any], Fragment]"
+    """Renders an expression to a fragment in the current context (coreference, determiners)."""
+
+    def as_fragment(self) -> "Fragment":
+        """:return: the operand's rendered fragment, so an :class:`Operand` is a clause constituent
+        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work."""
+        return self._render_(self._expression_)
+
+    @property
+    def _value_of_operand_(self) -> Any:
+        """:return: the raw Python value bound to the operand (a literal's value unwrapped) — what
+        :class:`OneOf` enumerates. Named with surrounding underscores so it is not mistaken for a
+        navigated attribute (``operands.x.value`` navigates to ``x.value``, it does not read this)."""
+        return (
+            self._expression_._value_
+            if isinstance(self._expression_, Literal)
+            else self._expression_
+        )
+
+    def __getattr__(self, attribute_name: str) -> "Operand":
+        """:return: the operand for a navigated attribute, built on the SAME underlying expression so
+        coreference holds — ``operands.tip.name`` is the name of the existing tip, not a new variable.
+
+        Only public names navigate; a dunder/private name raises :class:`AttributeError` so copying,
+        pickling and the real fields are unaffected.
+        """
+        if attribute_name.startswith("_"):
+            raise AttributeError(attribute_name)
+        return Operand(getattr(self._expression_, attribute_name), self._render_)
+
+
+@dataclass(frozen=True)
+class OperandView:
+    """The typed view of a symbolic callable's operands handed to ``_verbalization_fragment_``.
+
+    Each attribute is the :class:`Operand` for that field — ``operands.body`` — navigable to derived
+    expressions (``operands.tip.name``) and usable directly as a clause constituent. The author types
+    the parameter as the callable instance (``operands: Self``), so the IDE autocompletes the operand
+    fields and their attributes and go-to-definition works; at runtime each resolves to the EXISTING
+    child expression. Iterating yields the operands in field order (used by the default surfaces).
+    """
+
+    _child_expressions_: "Mapping[str, Any]"
+    """The EXISTING child expression for each operand field, keyed by field name."""
+
+    _render_: "Callable[[Any], Fragment]"
+    """Renders an expression to a fragment in the current context."""
+
+    def _operand_for_(self, field_name: str) -> Operand:
+        return Operand(self._child_expressions_[field_name], self._render_)
+
+    def __getattr__(self, field_name: str) -> Operand:
+        if field_name.startswith("_"):
+            raise AttributeError(field_name)
+        return self._operand_for_(field_name)
+
+    def __getitem__(self, field_name: str) -> Operand:
+        return self._operand_for_(field_name)
+
+    def __iter__(self) -> Iterator[Operand]:
+        return (self._operand_for_(name) for name in self._child_expressions_)
+
+
+@dataclass(frozen=True)
+class _PreviewExpression:
+    """A stand-in operand expression for :meth:`SymbolicCallable.preview_verbalization`.
+
+    It has no query behind it, so navigation just records a dotted path (``tip`` → ``tip.name``)
+    that the preview renders verbatim — letting a developer see which derived attribute a fragment
+    reads without building a query.
+    """
+
+    _path_: str
+    """The dotted access path so far (the field name, then each navigated attribute)."""
+
+    def __getattr__(self, attribute_name: str) -> "_PreviewExpression":
+        if attribute_name.startswith("_"):
+            raise AttributeError(attribute_name)
+        return _PreviewExpression(f"{self._path_}.{attribute_name}")
+
+    def __iter__(self) -> Iterator[Any]:
+        # So a fragment using OneOf over an operand previews without a real collection behind it.
+        return iter(())
+
+
 @dataclass(eq=False)
 class Verbalizable(ABC):
     """
@@ -148,21 +252,23 @@ class Verbalizable(ABC):
 
     @classmethod
     @abstractmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> Fragment:
+    def _verbalization_fragment_(cls, operands: "OperandView") -> Fragment:
         """
-        Structured verbalization for this predicate — a required clause (no string fallback).
+        Structured verbalization for this operation — a clause built from typed operands.
 
         Build the clause from the typed part-of-speech vocabulary
         (:func:`~…vocabulary.parts_of_speech.clause` with ``Noun`` / ``Verb`` / ``Copula`` /
-        ``Preposition`` / ``Adjective``), composing the already-rendered field fragments in *fields*
-        (keyed by field name). State only the **affirmative, present-tense** form: a ``Verb`` is given
-        as its lemma, and the realisation passes inflect it (*"work"* → *"works"*) and agree its
-        number. Returning a typed clause rather than a string keeps the predicate composable — a
-        wrapping ``Not`` negates it automatically (a verb with do-support, *"does not love"*; a copula
-        with suppletion, *"is not reachable"*) and coreference still reduces the operands.
+        ``Preposition`` / ``Adjective``), composing the *operands* — each ``operands.<field>`` is the
+        operand for that field, rendered when used (``Noun(operands.person_1)``) and navigable to a
+        derived expression on the SAME variable (``operands.tip.name``, so coreference holds). State
+        only the **affirmative, present-tense** form: a ``Verb`` is given as its lemma, and the
+        realisation passes inflect it (*"work"* → *"works"*) and agree its number. Returning a typed
+        clause rather than a string keeps the operation composable — a wrapping ``Not`` negates it
+        automatically (do-support *"does not love"*; copula suppletion *"is not reachable"*) and
+        coreference still reduces the operands.
 
-        ..note:: Abstract, so every concrete predicate must supply a clause; a missing implementation
-            fails at (concrete) instantiation rather than only when the predicate is verbalized.
+        Type the parameter as ``Self`` so the IDE resolves each ``operands.<field>`` to the field's
+        declared type — autocompleting its attributes and following go-to-definition into them.
 
         Example::
 
@@ -172,11 +278,11 @@ class Verbalizable(ABC):
                 person_2: Person
 
                 @classmethod
-                def _verbalization_fragment_(cls, fields):
-                    return clause(Noun(fields["person_1"]), Verb("love"), Noun(fields["person_2"]))
+                def _verbalization_fragment_(cls, operands: Self):
+                    return clause(Noun(operands.person_1), Verb("love"), Noun(operands.person_2))
 
-        :param fields: The rendered fragment for each predicate field, keyed by field name.
-        :return: The predicate's verbalization fragment.
+        :param operands: The typed view of the operation's operands (``operands.<field>``).
+        :return: The operation's verbalization fragment.
         """
 
 
@@ -258,21 +364,29 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
             Noun,
         )
 
-        # Only the operands (the fields a subclass declares) are arguments; the fields inherited from
-        # SymbolicCallable are infrastructure and are not part of the surface (a real call renders
-        # only its _child_vars_).
+        # The surface is built from the operands a typical call passes: the fields a subclass declares
+        # (the fields inherited from SymbolicCallable are infrastructure), excluding those with a
+        # default (configuration usually left out of the call, so out of the rendered operands).
         infrastructure = {field.name for field in fields(SymbolicCallable)}
         field_names = [
-            field.name for field in fields(cls) if field.name not in infrastructure
+            field.name
+            for field in fields(cls)
+            if field.name not in infrastructure
+            and field.default is MISSING
+            and field.default_factory is MISSING
         ]
-        placeholders = {
-            name: Noun(WordFragment(text=name.replace("_", " ").strip())).as_fragment()
-            for name in field_names
-        }
-        rendered_fields = RenderedFields(
-            fragments=placeholders, raw=dict.fromkeys(field_names)
+
+        def render(expression: _PreviewExpression) -> "Fragment":
+            return Noun(WordFragment(text=expression._path_)).as_fragment()
+
+        operands = OperandView(
+            _child_expressions_={
+                name: _PreviewExpression(name.replace("_", " ").strip())
+                for name in field_names
+            },
+            _render_=render,
         )
-        return realize_subtree(cls._verbalization_fragment_(rendered_fields))
+        return realize_subtree(cls._verbalization_fragment_(operands))
 
     @abstractmethod
     def __call__(self) -> Any:
@@ -300,7 +414,7 @@ class Predicate(SymbolicCallable, ABC):
         return bool(self.__call__())
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> "Fragment":
+    def _verbalization_fragment_(cls, operands: "OperandView") -> "Fragment":
         """Default boolean surface — a clause read off the class name: copular for an ``Is…`` name
         (``IsReachable`` → *"<subject> is reachable"*), verb-first otherwise (``ConnectsTo`` →
         *"<subject> connects to <object>"*). The class-form counterpart of a boolean
@@ -316,7 +430,7 @@ class Predicate(SymbolicCallable, ABC):
             predicate_clause,
         )
 
-        subject, *objects = fields.values()
+        subject, *objects = operands
         return predicate_clause(cls.__name__, subject, *objects)
 
 
@@ -338,7 +452,7 @@ class SymbolicFunction(SymbolicCallable, ABC):
         return cls._construct_normally_(**kwargs)()
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> "Fragment":
+    def _verbalization_fragment_(cls, operands: "OperandView") -> "Fragment":
         """Default value surface — *"the <name> of <arguments>"* read off the class name
         (``NodeId`` → *"the node id of …"*), the class-form counterpart of a value
         ``@symbolic_function``'s reading, so every value function reads sensibly without extra code.
@@ -353,7 +467,7 @@ class SymbolicFunction(SymbolicCallable, ABC):
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
     @abstractmethod
     def __call__(self) -> Any:
@@ -385,12 +499,15 @@ class Triple(Predicate):
         """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+    def _verbalization_fragment_(cls, operands: "OperandView") -> Fragment:
         """
         Verbalization of a Triple is a subject - predicate - object, where the predicate is read off
         the class name (``ConnectsTo`` → *"connects to"*; a copular ``IsAbove`` → *"is above"*) by
         :func:`~…vocabulary.parts_of_speech.predicate_clause`. A verb-first name is a :class:`Verb`
         (its lemma), so a wrapping ``Not`` negates with do-support (*"does not connect to"*).
+
+        The subject/object field names are read off the ``subject``/``object`` properties, so the
+        operands are looked up by those names (``operands[subject_name]``) rather than as attributes.
         """
         # Imported locally: the verbalization layer depends on the core predicate types, so a
         # module-level import here would close an import cycle.
@@ -405,7 +522,7 @@ class Triple(Predicate):
             cls.object, cls
         )
         return predicate_clause(
-            cls.__name__, fields[subject_name], fields[object_name]
+            cls.__name__, operands[subject_name], operands[object_name]
         )
 
 
@@ -440,7 +557,7 @@ class HasType(Triple):
         return self.types_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+    def _verbalization_fragment_(cls, operands: Self) -> Fragment:
         # Imported locally to avoid the core → verbalization import cycle (see :class:`Triple`).
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             Adjective,
@@ -450,10 +567,10 @@ class HasType(Triple):
         )
 
         return clause(
-            Noun(fields["variable"]),
+            Noun(operands.variable),
             Copula(),
             Adjective("of type"),
-            Noun(fields["types_"]),
+            Noun(operands.types_),
         )
 
 
@@ -475,10 +592,10 @@ class HasTypes(HasType):
     """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: "RenderedFields") -> "Fragment":
+    def _verbalization_fragment_(cls, operands: Self) -> "Fragment":
         """Say membership over the admissible types — *"<variable> is one of A, B, or C"*. The
         :class:`OneOf` element handles the bounded listing (linking, *"or"*, the count cap), so the
-        types are read from the field's value (an ``isinstance`` over the tuple is membership, not the
+        types are read from the operand's value (an ``isinstance`` over the tuple is membership, not the
         tuple value an equality would mean)."""
         # Imported locally to avoid the core → verbalization import cycle (see :class:`Triple`).
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
@@ -488,7 +605,7 @@ class HasTypes(HasType):
             OneOf,
         )
 
-        return clause(Noun(fields["variable"]), Copula(), OneOf(fields["types_"]))
+        return clause(Noun(operands.variable), Copula(), OneOf(operands.types_))
 
 
 @dataclass(eq=False)
