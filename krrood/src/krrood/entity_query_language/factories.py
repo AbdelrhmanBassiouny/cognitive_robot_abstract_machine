@@ -102,7 +102,7 @@ def set_of(*selected_variables: Union[Selectable[T], Any]) -> SetOf:
 
 
 def match(
-        type_: Optional[Union[Type[T], Selectable[T]]] = None,
+    type_: Optional[Union[Type[T], Selectable[T]]] = None,
 ) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
     """
     Create a symbolic variable matching the type and the provided keyword arguments. This is used for easy variable
@@ -115,7 +115,7 @@ def match(
 
 
 def match_variable(
-        type_: Union[Type[T], Selectable[T]], domain: DomainType
+    type_: Union[Type[T], Selectable[T]], domain: DomainType
 ) -> Union[T, Entity[T], MatchVariable[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.match.match` but with a domain to use for the variable created
@@ -129,7 +129,7 @@ def match_variable(
 
 
 def underspecified(
-        expression: Union[Type[T], Callable[..., T]], target_type: Type[T] | None = None
+    expression: Union[Type[T], Callable[..., T]], target_type: Type[T] | None = None
 ) -> Union[Type[T], Match[T]]:
     """
     Same as :py:func:`krrood.entity_query_language.factories.match` but instead of searching for solutions in
@@ -145,8 +145,8 @@ def underspecified(
 
 
 def variable(
-        type_: Type[T],
-        domain: Optional[DomainType],
+    type_: Type[T],
+    domain: Optional[DomainType],
 ) -> Union[T, Selectable[T], Variable[T]]:
     """
     Declare a symbolic variable that can be used inside queries.
@@ -181,7 +181,7 @@ def variable(
 
 
 def deduced_variable(
-        type_: Optional[Type[T]] = None,
+    type_: Optional[Type[T]] = None,
 ) -> Union[Type[T], ExternallySetVariable[T]]:
     """
     Create a variable that is inferred through deductive reasoning.
@@ -208,7 +208,7 @@ def variable_from(
 
 
 def concatenation(
-        *variables: Union[Iterable[T], Selectable[T]],
+    *variables: Union[Iterable[T], Selectable[T]],
 ) -> Union[T, Selectable[T]]:
     """
     Concatenation of two or more variables.
@@ -217,7 +217,7 @@ def concatenation(
 
 
 def contains(
-        container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any
+    container: Union[Iterable, CanBehaveLikeAVariable[T]], item: Any
 ) -> Comparator:
     """
     Check whether a container contains an item.
@@ -243,7 +243,7 @@ def in_(item: Any, container: Union[Iterable, CanBehaveLikeAVariable[T]]):
 
 
 def flat_variable(
-        var: Union[CanBehaveLikeAVariable[T], Iterable[T]],
+    var: Union[CanBehaveLikeAVariable[T], Iterable[T]],
 ) -> Union[FlatVariable[T], T]:
     """
     Flatten a nested iterable domain into individual items while preserving the parent bindings.
@@ -290,8 +290,8 @@ def not_(operand: ConditionType) -> SymbolicExpression:
 
 
 def for_all(
-        universal_variable: Union[CanBehaveLikeAVariable[T], T],
-        condition: ConditionType,
+    universal_variable: Union[CanBehaveLikeAVariable[T], T],
+    condition: ConditionType,
 ) -> ForAll:
     """
     A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **every**
@@ -305,8 +305,8 @@ def for_all(
 
 
 def exists(
-        universal_variable: Union[CanBehaveLikeAVariable[T], T],
-        condition: ConditionType,
+    universal_variable: Union[CanBehaveLikeAVariable[T], T],
+    condition: ConditionType,
 ) -> Exists:
     """
     A universal on variable that finds all sets of variable bindings (values) that satisfy the condition for **any**
@@ -323,8 +323,8 @@ def exists(
 
 
 def an(
-        entity_: Union[T, Query],
-        quantification: Optional[ResultQuantificationConstraint] = None,
+    entity_: Union[T, Query],
+    quantification: Optional[ResultQuantificationConstraint] = None,
 ) -> Union[T, Query]:
     """
     Select all values satisfying the given entity description.
@@ -336,14 +336,26 @@ def an(
     return entity_._quantify_(An, quantification_constraint=quantification)
 
 
-a = an
-"""
-This is an alias to accommodate for words not starting with vowels.
-"""
+def a(
+    entity_: Union[T, Query],
+    quantification: Optional[ResultQuantificationConstraint] = None,
+) -> Union[T, Query]:
+    """
+    Select all values satisfying the given entity description.
+
+    This accommodates words not starting with a vowel; it delegates to :func:`an`. It is a real
+    function (not an ``a = an`` alias) so its ``__name__`` is ``"a"``, which lets tools that key a
+    namespace by ``__name__`` (e.g. the doctest harness) expose it under the name ``a``.
+
+    :param entity_: An entity or a set expression to quantify over.
+    :param quantification: Optional quantification constraint.
+    :return: The entity with the applied quantifier.
+    """
+    return an(entity_, quantification=quantification)
 
 
 def the(
-        entity_: Union[T, Query],
+    entity_: Union[T, Query],
 ) -> Union[T, Query]:
     """
     Select the unique value satisfying the given entity description.
@@ -369,7 +381,7 @@ def add(variable: Any, value: Any) -> None:
 
 
 def inference(
-        type_: Type[T],
+    type_: Type[T],
 ) -> Union[Callable[[], Union[T, InstantiatedVariable[T]]]]:
     """
     This returns a factory function that creates a new variable of the given type and takes keyword arguments for the
@@ -426,10 +438,11 @@ def next_rule(*conditions: ConditionType) -> SymbolicExpression:
 
 # %% Conditionals
 
+
 def case_when(
-        condition: SymbolicExpression,
-        then_value: SymbolicExpression,
-        else_value: Optional[SymbolicExpression] = None,
+    condition: SymbolicExpression,
+    then_value: SymbolicExpression,
+    else_value: Optional[SymbolicExpression] = None,
 ) -> CaseWhen:
     """
     Create a CASE WHEN ... THEN ... ELSE ... END expression.
@@ -453,10 +466,10 @@ def case_when(
 
 
 def max(
-        variable: Selectable[T],
-        key: Optional[Callable] = None,
-        default: Optional[T] = None,
-        distinct: bool = False,
+    variable: Selectable[T],
+    key: Optional[Callable] = None,
+    default: Optional[T] = None,
+    distinct: bool = False,
 ) -> Union[T, Max[T]]:
     """
     Maps the variable values to their maximum value.
@@ -473,8 +486,8 @@ def max(
 
 
 def mode(
-        variable: Selectable[T],
-        default: Optional[T] = None,
+    variable: Selectable[T],
+    default: Optional[T] = None,
 ) -> Union[T, Mode[T]]:
     """
     Calculate and return the first mode from the variable values. The mode is the most common value in the iterable. It is found by
@@ -490,8 +503,8 @@ def mode(
 
 
 def multimode(
-        variable: Selectable[T],
-        default: Optional[T] = None,
+    variable: Selectable[T],
+    default: Optional[T] = None,
 ) -> Union[T, MultiMode[T]]:
     """
     Calculate and return all mode values from the variable values. Similar to :py:func:`krrood.entity_query_language.factories.mode`
@@ -505,10 +518,10 @@ def multimode(
 
 
 def min(
-        variable: Selectable[T],
-        key: Optional[Callable] = None,
-        default: Optional[T] = None,
-        distinct: bool = False,
+    variable: Selectable[T],
+    key: Optional[Callable] = None,
+    default: Optional[T] = None,
+    distinct: bool = False,
 ) -> Union[T, Min[T]]:
     """
     Maps the variable values to their minimum value.
@@ -525,10 +538,10 @@ def min(
 
 
 def sum(
-        variable: Union[T, Selectable[T]],
-        key: Optional[Callable] = None,
-        default: Optional[T] = None,
-        distinct: bool = False,
+    variable: Union[T, Selectable[T]],
+    key: Optional[Callable] = None,
+    default: Optional[T] = None,
+    distinct: bool = False,
 ) -> Union[T, Sum]:
     """
     Computes the sum of values produced by the given variable.
@@ -545,10 +558,10 @@ def sum(
 
 
 def average(
-        variable: Union[Selectable[T], Any],
-        key: Optional[Callable] = None,
-        default: Optional[T] = None,
-        distinct: bool = False,
+    variable: Union[Selectable[T], Any],
+    key: Optional[Callable] = None,
+    default: Optional[T] = None,
+    distinct: bool = False,
 ) -> Union[T, Average]:
     """
     Computes the sum of values produced by the given variable.
@@ -586,8 +599,8 @@ def count_all(distinct: bool = False) -> Union[T, Count[T]]:
 
 
 def distinct(
-        expression: T,
-        *on: Any,
+    expression: T,
+    *on: Any,
 ) -> T:
     """
     Indicate that the result of the expression should be distinct.
@@ -604,7 +617,7 @@ def distinct(
 
 
 def get_conditioned_statements(
-        statement, condition: Callable[OperationResult, bool]
+    statement, condition: Callable[OperationResult, bool]
 ) -> List[SymbolicExpression]:
     """
     Iterates over all sub-statements of the statement and returns all statements that satisfy the condition.

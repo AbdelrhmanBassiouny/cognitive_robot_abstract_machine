@@ -1,13 +1,17 @@
 import logging
 
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.explanation.explanation import explain_inference
-from krrood.entity_query_language.factories import entity, variable, in_, inference, an
-from krrood.entity_query_language.query.quantifiers import An
 from numpy.ma.testutils import (
     assert_equal,
 )  # You could replace this with numpy's regular assert for better compatibility
+
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.explanation.explanation import explain_inference
+from krrood.entity_query_language.factories import entity, variable, in_, inference, an
+from krrood.entity_query_language.verbalization.rendering.renderer import HierarchicalRenderer
+from krrood.entity_query_language.verbalization.pipeline import (
+    verbalize_expression,
+    VerbalizationPipeline,
+)
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
@@ -163,10 +167,10 @@ def test_has_hinge_has_slider_aggregate_bodies():
         world.add_semantic_annotation(slider)
         world.add_semantic_annotation(drawer)
         world.add_semantic_annotation(door)
-        door.add_handle(handle2)
-        door.add_hinge(hinge)
-        drawer.add_handle(handle1)
-        drawer.add_slider(slider)
+        door.add(handle2)
+        door.add(hinge)
+        drawer.add(handle1)
+        drawer.add(slider)
 
     expected_door_bodies = {door_body, handle2_body, hinge_body}
     expected_drawer_bodies = {drawer_body, handle1_body, slider_body}
@@ -275,6 +279,35 @@ def test_explain_inferred_semantic_annotations(apartment_world_copy):
     visualize = False
     if visualize:
         explanation.condition_graph().visualize(filename="drawer_explanation.pdf")
+
+
+@pytest.mark.order("fourth_to_last")
+def test_verbalize_query_that_inferred_semantic_annotations(_apartment_world_setup):
+    world_reasoner = WorldReasoner(_apartment_world_setup)
+    found_semantic_annotations = list(world_reasoner.infer_semantic_annotations())
+    drawer = next(ann for ann in found_semantic_annotations if isinstance(ann, Drawer))
+    explanation = explain_inference(drawer)
+    verbalization_paragraph = verbalize_expression(explanation.query_root)
+    verbalization_hierarchical = VerbalizationPipeline(
+        HierarchicalRenderer()
+    ).verbalize(explanation.query_root)
+    assert verbalization_paragraph == (
+        "If there's a FixedConnection whose parent is the child of a PrismaticConnection,"
+        " there's a Handle whose root is the child of the FixedConnection,"
+        " then there's a Drawer whose root is the parent of the FixedConnection,"
+        " whose handle is the Handle"
+    )
+    assert verbalization_hierarchical == (
+        "If\n"
+        "  there's a FixedConnection\n"
+        "    - whose parent is the child of a PrismaticConnection\n"
+        "  there's a Handle\n"
+        "    - whose root is the child of the FixedConnection\n"
+        "then\n"
+        "  there's a Drawer\n"
+        "    - whose root is the parent of the FixedConnection\n"
+        "    - whose handle is the Handle"
+    )
 
 
 def fit_rules_and_assert_semantic_annotations(

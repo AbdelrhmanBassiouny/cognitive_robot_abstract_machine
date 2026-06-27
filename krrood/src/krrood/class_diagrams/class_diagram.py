@@ -132,9 +132,9 @@ class Association(ClassRelation):
         return source_instance
 
     @cached_property
-    def one_to_many(self) -> bool:
+    def many_to_many(self) -> bool:
         """Whether the association is one-to-many (True) or many-to-one (False)."""
-        return self.field.is_one_to_many_relationship and not self.field.is_type_type
+        return self.field.is_many_to_many_relationship and not self.field.is_type_type
 
     def get_key(self, include_field_name: bool = False) -> tuple:
         """
@@ -378,6 +378,11 @@ class ClassDiagram:
 
     def __post_init__(self):
         """Initialize the diagram with the provided classes and build relations."""
+        self._rebuild_diagram(self.classes)
+
+    def _rebuild_diagram(self, classes: Iterable[Type]) -> None:
+        self.classes = list(classes)
+        self._cls_wrapped_cls_map = {}
         self._dependency_graph = rx.PyDiGraph()
         generics = []
         for clazz in self.classes:
