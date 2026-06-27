@@ -19,6 +19,7 @@ from krrood.entity_query_language.verbalization.fragments.base import WordFragme
 from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
+    All,
     clause,
     Copula,
     Noun,
@@ -737,22 +738,16 @@ class AllClose(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        # "each element of <array1> is close to the matching element of <array2>" -- the query operands
-        # render naturally (coreference/disambiguation name the arrays). A singular "each element ... is"
-        # is used rather than "all elements ... are" because the realizer does not agree the copula with
-        # a plural subject for this construction.
+        # "all elements of <array1> are close to <array2>" -- the All quantifier makes the subject
+        # "elements" plural and agrees the copula; the morphology pass does the inflection.
         return clause(
-            WordFragment(text="each"),
-            WordFragment(text="element"),
+            All(),
+            Noun("element"),
             Prepositions.OF,
             Noun(operands.array1),
             Copula(),
             Adjective("close"),
             Prepositions.TO,
-            WordFragment(text="the"),
-            WordFragment(text="matching"),
-            WordFragment(text="element"),
-            Prepositions.OF,
             Noun(operands.array2),
         )
 

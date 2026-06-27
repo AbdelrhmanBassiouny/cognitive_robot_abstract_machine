@@ -422,7 +422,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         >>> total = sum(numbers)
         >>> verbalize_expression(a(set_of(key, total).grouped_by(key)
         ...     .ordered_by(total, descending=True).limit(1)))
-        'Find the parity of an int with the highest sum of ints'
+        'Find the parity of an Integer with the highest sum of Integers'
         """
         aggregate = self._ranked_aggregate_column(node, plan.ranking)
         if aggregate is None or plan.ranking.limit_number != 1:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from typing_extensions import Any, Iterable, Protocol, Union, runtime_checkable
+from typing_extensions import Any, Iterable, List, Protocol, Union, runtime_checkable
 
 from krrood.entity_query_language.predicate import Operand, VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
@@ -33,6 +33,7 @@ from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Copulas,
+    GroupingPhrases,
     Prepositions,
     SetMembership,
 )
@@ -127,6 +128,25 @@ class Adjective(ClauseElement):
         'reachable'
         """
         return WordFragment(text=self.word)
+
+
+@dataclass(frozen=True)
+class All(ClauseElement):
+    """The universal quantifier *"all"* fronting a clause's subject.
+
+    In a :func:`clause` it both reads as *"all"* and tells the builder to make the quantified subject
+    — the first noun phrase after it — plural and to agree the clause's verb / copula, so
+    ``clause(All(), Noun("element"), Copula(), Adjective("close"))`` reads *"all elements are close"*.
+    Only the number features are set here; the morphology pass does the inflection (*"element"* →
+    *"elements"*, *"is"* → *"are"*)."""
+
+    def as_fragment(self) -> VerbalizationFragment:
+        """:return: the *"all"* quantifier word leaf.
+
+        >>> All().as_fragment().text
+        'all'
+        """
+        return GroupingPhrases.ALL.as_fragment()
 
 
 @dataclass(frozen=True)
@@ -234,8 +254,47 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     ...            Noun(WordFragment(text="a Department")))
     ... )
     'an Employee work in a Department'
+
+    An :class:`All` quantifier makes the clause read a universal: the subject it fronts becomes plural
+    and the verb / copula agrees (shown realised here, since the plural surface — *"elements"*,
+    *"are"* — is produced by the morphology pass, not by :func:`clause` itself).
+
+    >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+    ...     realize_subtree)
+    >>> realize_subtree(clause(All(), Noun("element"), Copula(), Adjective("close")))
+    'all elements are close'
     """
-    return Clause(parts=[constituent.as_fragment() for constituent in constituents])
+    parts = [(constituent, constituent.as_fragment()) for constituent in constituents]
+    if any(isinstance(constituent, All) for constituent, _ in parts):
+        return Clause(parts=_agree_with_universal_quantifier(parts))
+    return Clause(parts=[fragment for _, fragment in parts])
+
+
+def _agree_with_universal_quantifier(
+    parts: List[tuple],
+) -> List[VerbalizationFragment]:
+    """:return: the clause fragments with universal-quantifier agreement applied — the quantified
+    subject (the first noun phrase after the :class:`All` word) is made plural and the clause's
+    copula / verb agrees. Only the number features are set; the morphology pass inflects them.
+    """
+    fragments: List[VerbalizationFragment] = []
+    seen_all = False
+    subject_pluralized = False
+    for constituent, fragment in parts:
+        if isinstance(constituent, All):
+            seen_all = True
+            fragments.append(fragment)
+        elif seen_all and not subject_pluralized and isinstance(fragment, NounPhrase):
+            fragments.append(replace(fragment, number=GrammaticalNumber.PLURAL))
+            subject_pluralized = True
+        elif isinstance(fragment, RoleFragment) and fragment.role in (
+            SemanticRole.OPERATOR,
+            SemanticRole.VERB,
+        ):
+            fragments.append(replace(fragment, number=GrammaticalNumber.PLURAL))
+        else:
+            fragments.append(fragment)
+    return fragments
 
 
 _COPULA_LEMMA = "be"
@@ -262,7 +321,7 @@ def value_function_noun(name: str) -> str:
     return " ".join(words)
 
 
-def value_function_phrase(name: str, *operands: ClauseConstituent) -> Fragment:
+def value_function_phrase(name: str, *operands: ClauseConstituent) -> VerbalizationFragment:
     """Build *"the &lt;noun&gt; of &lt;operands&gt;"* for a value function — the counterpart of
     :func:`predicate_clause` for an operation that computes a value rather than a truth.
 
