@@ -17,7 +17,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_comma,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -83,7 +83,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     # ── entry points ─────────────────────────────────────────────────────────
 
-    def realize(self, node: Query, plan: QueryPlan) -> Fragment:
+    def realize(self, node: Query, plan: QueryPlan) -> VerbalizationFragment:
         """
         :param node: The query being rendered.
         :param plan: The query plan.
@@ -103,7 +103,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         }
         return handlers[plan.kind](node, plan)
 
-    def _realize_entity_selector(self, node: Query, plan: QueryPlan) -> Fragment:
+    def _realize_entity_selector(
+        self, node: Query, plan: QueryPlan
+    ) -> VerbalizationFragment:
         """:return: *"Find <a Robot where …> such that …"* — the selected variable is itself an entity.
 
         It handles the entity-selector shape: the selection is rendered as a noun and wrapped in the
@@ -117,7 +119,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             node, plan, selection, where_items=[self._where_clause(plan)]
         )
 
-    def _realize_empty(self, node: Query, plan: QueryPlan) -> Fragment:
+    def _realize_empty(self, node: Query, plan: QueryPlan) -> VerbalizationFragment:
         """:return: *"Find entities such that …"* — no selected variable (the fallback form).
 
         ..note:: Unreachable through the public API: ``entity()`` always carries a selected
@@ -130,7 +132,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             where_items=[self._where_clause(plan)],
         )
 
-    def assemble_nested(self, node: Query) -> Fragment:
+    def assemble_nested(self, node: Query) -> VerbalizationFragment:
         """
         :param node: The nested entity.
         :return: The noun-phrase form for a nested entity (never emits *"Find …"*).
@@ -149,7 +151,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             return AggregationValueAssembler(self.context).realize(node, plan)
         return self._as_noun(node)
 
-    def assemble_set_of(self, node: SetOf) -> Fragment:
+    def assemble_set_of(self, node: SetOf) -> VerbalizationFragment:
         """
         :param node: The set-of query.
         :return: *"Find v1 and v2 such that …"* for a search; *"Report <columns>"* /
@@ -182,7 +184,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _assemble_ranked_report(
         self, node: SetOf, plan: QueryPlan, report: ReportPlan
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: a grouped/aggregated report whose rows are ranked *by an aggregate* — framed as
         *"For the <entity> with the highest <aggregate>, report <columns>"* (singular for
         ``limit(1)``, *"the three <entities> with the highest …"* for ``n > 1``). Naming the entity
@@ -246,7 +248,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _highest_aggregate_modifier(
         self, aggregate: SymbolicExpression, direction: RankingDirection
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: the post-nominal ranking modifier *"with the highest/lowest <aggregate>"* — the
         aggregate's first (full) mention, which the body's repeat reduces to *"the sum"*.
         """
@@ -286,8 +288,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         return (kind, root_id, path)
 
     def _with_superlative(
-        self, fragment: Fragment, direction: RankingDirection
-    ) -> Fragment:
+        self, fragment: VerbalizationFragment, direction: RankingDirection
+    ) -> VerbalizationFragment:
         """:return: *fragment* qualified by the ranking superlative — *"the highest …"* (descending) /
         *"the lowest …"* (ascending) — attached as the noun's pre-head so it reads *"the highest sum
         of …"*."""
@@ -300,7 +302,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             return replace(fragment, pre_head=quality.as_fragment())
         return PhraseFragment(parts=[quality.as_fragment(), fragment])
 
-    def _set_of_selection(self, node: SetOf, plan: QueryPlan) -> Fragment:
+    def _set_of_selection(self, node: SetOf, plan: QueryPlan) -> VerbalizationFragment:
         """:return: the set-of's rendered selection — a plural listing for an ordered report, else
         natural Oxford-comma prose.
 
@@ -317,7 +319,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             )
         return self._selections.prose(node._selected_variables_)
 
-    def _assemble_ranked_set_of(self, node: SetOf, plan: QueryPlan) -> Fragment:
+    def _assemble_ranked_set_of(
+        self, node: SetOf, plan: QueryPlan
+    ) -> VerbalizationFragment:
         """:return: a ranked set-of reframed onto the entity its columns describe — *"Report, for the
         top three Employees by salary, their department and name"* — so the tuple reads as a
         possessive listing instead of a code-like *"(a, b)"*. The ranking attaches to the subject
@@ -460,7 +464,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _assemble_aggregation_report(
         self, node: SetOf, plan: QueryPlan, report: ReportPlan
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: a calculation/report — *"Report <columns>"*, or *"For each <keys>, report
         <columns>"* when grouped (the grouping stated first, so it frames the whole report and the
         trailing *"grouped by"* clause is dropped as redundant).
@@ -485,7 +489,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _assemble_grouped_report(
         self, node: Query, plan: QueryPlan, report: ReportPlan
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: a grouped report with no aggregates — *"For each <keys>, report all <columns>"*
         (the columns listed as per-group populations), or *"Report the distinct <keys>"* when the
         selection is exactly the group key (so there is nothing left to report but the keys
@@ -517,7 +521,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             find_header=self._for_each_header(report.group_keys),
         )
 
-    def _distinct_keys(self, keys: List[SymbolicExpression]) -> Fragment:
+    def _distinct_keys(self, keys: List[SymbolicExpression]) -> VerbalizationFragment:
         """:return: *"the distinct <keys>"* — the group keys as a plural population listing, for a
         grouped query that reports nothing but its keys.
 
@@ -537,7 +541,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             ]
         )
 
-    def _for_each_header(self, keys: List[SymbolicExpression]) -> Fragment:
+    def _for_each_header(self, keys: List[SymbolicExpression]) -> VerbalizationFragment:
         """:return: the fronted *"For each <key>, report"* frame — the grouping first (it is the row
         dimension of the result), the keys as bare singular labels, then the lowercase verb.
 
@@ -562,7 +566,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         self,
         key: SymbolicExpression,
         number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: a group key as a bare label in *number* — *"department"* / *"departments"* for an
         attribute key, the type name for a variable key — naming the group itself rather than one
         member's navigation (*"the department of an Employee"*).
@@ -579,7 +583,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         return RoleFragment.for_type(key._type_, number=number)
 
     @staticmethod
-    def _sentence_initial(fragment: RoleFragment) -> Fragment:
+    def _sentence_initial(fragment: RoleFragment) -> VerbalizationFragment:
         """:return: *fragment* with its first letter capitalised — a keyword carries its mid-sentence
         (lowercase) form, capitalised here when it opens the sentence (*"report"* → *"Report"*).
 
@@ -589,7 +593,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         """
         return replace(fragment, text=fragment.text[:1].upper() + fragment.text[1:])
 
-    def _set_of_header(self, plan: QueryPlan) -> Fragment:
+    def _set_of_header(self, plan: QueryPlan) -> VerbalizationFragment:
         """:return: The set-of header — *"Find the <top three>"* when a ``limit`` ranks the tuples
         (the order key is suppressed; it is a visible tuple element), else the plain verb
         (*"Find"* / *"Report"*). The literal *"sets of"* is intentionally dropped — the selection
@@ -615,7 +619,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             ]
         )
 
-    def _verb(self, plan: QueryPlan) -> Fragment:
+    def _verb(self, plan: QueryPlan) -> VerbalizationFragment:
         """:return: the opening verb — *"Report"* when the query presents results (a report),
         else *"Find"* (a search).
 
@@ -653,7 +657,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     # ── subject selection ──────────────────────────────────────────────────────
 
-    def _assemble_subject(self, node: Query, plan: QueryPlan) -> Fragment:
+    def _assemble_subject(self, node: Query, plan: QueryPlan) -> VerbalizationFragment:
         """:return: *"Find a Robot whose battery is high, such that … [clauses]"* — the
         plain-variable selection with its WHERE woven in.
 
@@ -670,7 +674,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _build_selection(
         self, node: Query, variable: SymbolicExpression, plan: QueryPlan
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: the selection's referring noun phrase — a ``limit`` ranking phrase (*"the top
         three Robots"*), else *"the unique Robot"* (``eql.the``) / *"a Robot"*.
 
@@ -699,7 +703,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _build_ranking_selection(
         self, variable: SymbolicExpression, plan: QueryPlan
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: The ranking selection — *"the first two Robots"* / *"the top three Employees by
         salary"* / *"the Employee with the highest salary"*. A ranking is inherently definite
         (*"the"*), so it ignores ``is_the``; it stays a referring noun phrase so a repeat mention
@@ -722,8 +726,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         )
 
     def _apply_subject_restrictions(
-        self, plan: QueryPlan, selected: Fragment
-    ) -> Tuple[Fragment, List[Optional[Fragment]]]:
+        self, plan: QueryPlan, selected: VerbalizationFragment
+    ) -> Tuple[VerbalizationFragment, List[Optional[VerbalizationFragment]]]:
         """:return: The selection with its inline superlative modifiers attached, and the WHERE's
         clause items — the *"whose"* group (a sub-list of points in hierarchical) then a separate
         *"such that <residual>"* clause (each ``None`` when absent).
@@ -748,7 +752,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     # ── noun forms ───────────────────────────────────────────────────────────
 
-    def _as_noun(self, entity: Query) -> Fragment:
+    def _as_noun(self, entity: Query) -> VerbalizationFragment:
         """
         A referring noun phrase — *"a/the unique <type>"* with the restrictions as appositive
         modifiers.
@@ -769,7 +773,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         variable = entity.selected_variable
         definiteness = Definiteness.UNIQUE if plan.is_the else Definiteness.INDEFINITE
 
-        modifiers: List[Fragment] = []
+        modifiers: List[VerbalizationFragment] = []
         rendered = ClauseComposer(self.context).restriction(plan)
         if rendered is not None:
             modifiers.extend(rendered.inline_modifiers)
@@ -799,10 +803,10 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         self,
         node: Query,
         plan: QueryPlan,
-        selection: Fragment,
-        where_items: List[Optional[Fragment]],
-        find_header: Optional[Fragment] = None,
-    ) -> Fragment:
+        selection: VerbalizationFragment,
+        where_items: List[Optional[VerbalizationFragment]],
+        find_header: Optional[VerbalizationFragment] = None,
+    ) -> VerbalizationFragment:
         """:return: *"Find <selection>"* + the present clauses (the subject restriction's *"whose"*
         / *"such that"*, then *grouped by … having … ordered by …*) as block items — absent
         clauses (``None``) are simply skipped.
@@ -822,7 +826,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
 
     def _trailing_clauses(
         self, node: Query, plan: QueryPlan
-    ) -> List[Optional[Fragment]]:
+    ) -> List[Optional[VerbalizationFragment]]:
         """:return: The post-selection clauses, in canonical reading order (``None`` when absent).
 
         The standalone *"ordered by …"* clause is suppressed when a ranking selection already
@@ -847,7 +851,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             None if ranked else composer.ordered_by(node),
         ]
 
-    def _where_clause(self, plan: QueryPlan) -> Optional[Fragment]:
+    def _where_clause(self, plan: QueryPlan) -> Optional[VerbalizationFragment]:
         """:return: *"such that <condition>"*, or ``None`` when the query has no WHERE.
 
         It emits only the trailing *"such that the battery of the Robot is greater than 50"* span; the
@@ -866,7 +870,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             ]
         )
 
-    def inline_noun(self, entity: Query) -> Fragment:
+    def inline_noun(self, entity: Query) -> VerbalizationFragment:
         """
         The entity's WHERE condition is deferred to the binding scope so it can be emitted as a
         *"such that …"* clause after all binding overrides are registered.

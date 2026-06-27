@@ -9,7 +9,7 @@ from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_comma,
     PhraseFragment,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
@@ -51,7 +51,9 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
 
     planner = GroupedByPlanner
 
-    def realize(self, node: Union[Query, GroupedBy], plan: GroupPlan) -> Fragment:
+    def realize(
+        self, node: Union[Query, GroupedBy], plan: GroupPlan
+    ) -> VerbalizationFragment:
         """
         :param node: The query (or bare grouped-by node) being rendered.
         :param plan: The group plan.
@@ -85,7 +87,7 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
             )
         return PhraseFragment(parts=[Keywords.GROUPED_BY.as_fragment(), groups_phrase])
 
-    def clause(self, node: Union[Query, GroupedBy]) -> Optional[Fragment]:
+    def clause(self, node: Union[Query, GroupedBy]) -> Optional[VerbalizationFragment]:
         """
         :param node: The query being rendered.
         :return: The in-query GROUP BY clause, or ``None`` when there are no group keys.
@@ -103,7 +105,9 @@ class GroupedByAssembler(Assembler[Union[Query, GroupedBy], GroupPlan]):
         plan = self.plan(node)
         return self.realize(node, plan) if plan.has_keys else None
 
-    def _keys_phrase(self, variables: List[SymbolicExpression]) -> Fragment:
+    def _keys_phrase(
+        self, variables: List[SymbolicExpression]
+    ) -> VerbalizationFragment:
         """
         :param variables: The group-by key expressions.
         :return: The comma-joined group keys *"<key1>, <key2>, …"*.
@@ -135,7 +139,7 @@ class OrderedByAssembler(Assembler[Union[OrderedBy, OrderedByBuilder], None]):
 
     def realize(
         self, node: Union[OrderedBy, OrderedByBuilder], plan: None = None
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         *node* is "ordered-like": an ``OrderedBy`` expression or an ``OrderedByBuilder``, both
         exposing ``.variable`` and ``.descending``.
@@ -160,7 +164,7 @@ class OrderedByAssembler(Assembler[Union[OrderedBy, OrderedByBuilder], None]):
             ]
         )
 
-    def clause(self, query: Query) -> Optional[Fragment]:
+    def clause(self, query: Query) -> Optional[VerbalizationFragment]:
         """
         :param query: The query being rendered.
         :return: The in-query ORDER BY clause, or ``None`` when the query is unordered.
@@ -187,7 +191,7 @@ class HavingAssembler(Assembler[Query, None]):
     'For each department, report the sum of salaries of Employees having the sum greater than 30000'
     """
 
-    def realize(self, node: Query, plan: None = None) -> Fragment:
+    def realize(self, node: Query, plan: None = None) -> VerbalizationFragment:
         """
         :param node: The query whose HAVING condition to render.
         :param plan: Unused (this assembler has no plan).
@@ -201,7 +205,7 @@ class HavingAssembler(Assembler[Query, None]):
             having_fragment = self.context.child(node._having_expression_.condition)
         return PhraseFragment(parts=[Keywords.HAVING.as_fragment(), having_fragment])
 
-    def clause(self, query: Query) -> Optional[Fragment]:
+    def clause(self, query: Query) -> Optional[VerbalizationFragment]:
         """
         :param query: The query being rendered.
         :return: The in-query HAVING clause, or ``None`` when there is no HAVING.

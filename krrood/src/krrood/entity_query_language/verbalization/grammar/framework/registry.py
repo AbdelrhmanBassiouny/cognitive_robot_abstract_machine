@@ -9,9 +9,7 @@ from krrood.entity_query_language.verbalization import grammar as grammar_packag
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     PhraseRule,
 )
-from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
-    concrete_subclasses,
-)
+from krrood.patterns.specificity_ranking import concrete_subclasses
 
 
 def _load_rule_modules() -> None:

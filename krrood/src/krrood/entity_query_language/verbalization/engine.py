@@ -5,7 +5,9 @@ from dataclasses import replace
 from typing_extensions import TYPE_CHECKING, Optional, Sequence
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RenderOptions,
     RuleContext,
@@ -59,7 +61,7 @@ def fold(
     services: MicroplanningServices,
     rules: Optional[Sequence[PhraseRule]] = None,
     options: Optional[RenderOptions] = None,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Verbalize *node* by dispatching it to its matching grammar rule and recursing — the single
     catamorphism (fold) over the EQL expression tree.
@@ -108,7 +110,9 @@ def fold(
     return _with_source(rule.build(node, context), node)
 
 
-def _with_source(fragment: Fragment, node: FoldNode) -> Fragment:
+def _with_source(
+    fragment: VerbalizationFragment, node: FoldNode
+) -> VerbalizationFragment:
     """
     Stamp *node* as the fragment's provenance, so later passes can follow it back to the read
     model. The innermost producer wins: a transparent wrapper (``An(Entity)``) returns its child's

@@ -5,7 +5,7 @@ from typing_extensions import Iterable, List, Mapping, Optional
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.rendering.coreference_processor import (
     CoreferenceProcessor,
@@ -36,11 +36,11 @@ _LOWERING_PASSES: List[RealizationPass] = [
 
 
 def realize_tree(
-    fragment: Fragment,
+    fragment: VerbalizationFragment,
     previously_introduced_referents: Optional[Iterable[uuid.UUID]] = None,
     discourse: DiscourseView = EMPTY_DISCOURSE,
     numbered_labels: Optional[Mapping[uuid.UUID, str]] = None,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Run the ordered realisation passes over *fragment* — the one place the lowering passes and
     their order are defined: coreference resolution → determiner lowering → morphology →
@@ -82,7 +82,7 @@ def realize_tree(
     return realised
 
 
-def realize_subtree(fragment: Fragment) -> str:
+def realize_subtree(fragment: VerbalizationFragment) -> str:
     """
     Fully realise a sub-tree to plain text — the realisation passes, then flatten.
 

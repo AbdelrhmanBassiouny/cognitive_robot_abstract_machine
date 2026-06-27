@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     NounPhrase,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Definiteness
@@ -23,7 +23,7 @@ class AggregatorRule(PhraseRule):
     construct = Aggregator
     name = "aggregator"
 
-    def build(self, node: Aggregator, context: RuleContext) -> Fragment:
+    def build(self, node: Aggregator, context: RuleContext) -> VerbalizationFragment:
         """:return: the definite noun phrase for *node* — *"the <aggregation> of <child>"* — or the
         bare aggregation word for a childless aggregate.
 

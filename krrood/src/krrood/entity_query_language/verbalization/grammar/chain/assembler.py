@@ -10,7 +10,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     PossessiveChain,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
@@ -55,7 +55,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
 
     planner = ChainPlanner
 
-    def realize(self, node: MappedVariable, plan: ChainPlan) -> Fragment:
+    def realize(self, node: MappedVariable, plan: ChainPlan) -> VerbalizationFragment:
         """
         :param node: The chain to render.
         :param plan: The chain plan computed for *node*.
@@ -65,7 +65,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
 
     # ── surface forms ──────────────────────────────────────────────────────────
 
-    def possessive(self, plan: ChainPlan) -> Fragment:
+    def possessive(self, plan: ChainPlan) -> VerbalizationFragment:
         """
         :param plan: The analysed chain.
         :return: The possessive path *"the attribute of the Root"*; for a variable root, deferred to
@@ -85,7 +85,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
             )
         return possessive_path(plan.parts, root_fragment)
 
-    def plural_attribute(self, plan: ChainPlan) -> Fragment:
+    def plural_attribute(self, plan: ChainPlan) -> VerbalizationFragment:
         """
         :param plan: The analysed chain (a single attribute on a variable — see
             :attr:`ChainPlan.is_single_variable_attribute`).
@@ -109,7 +109,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
             modifiers=[Prepositions.OF.as_fragment(), root_noun_phrase],
         )
 
-    def _chain_root(self, root: SymbolicExpression) -> Fragment:
+    def _chain_root(self, root: SymbolicExpression) -> VerbalizationFragment:
         """
         :param root: The chain root.
         :return: The noun phrase for the chain root. Recursed in ``inline`` position, so an entity
@@ -121,7 +121,9 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         """
         return self.context.child(root, inline=True)
 
-    def boolean_predicative(self, plan: ChainPlan, negated: bool = False) -> Fragment:
+    def boolean_predicative(
+        self, plan: ChainPlan, negated: bool = False
+    ) -> VerbalizationFragment:
         """
         :param plan: The analysed chain (a boolean terminal — see
             :attr:`ChainPlan.is_boolean_terminal`).
@@ -135,7 +137,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         copula = Copulas.IS_NOT.as_fragment() if negated else Copulas.IS.as_fragment()
         return PhraseFragment(parts=[navigation_fragment, copula, attribute_fragment])
 
-    def boolean_alternative(self, plan: ChainPlan) -> Fragment:
+    def boolean_alternative(self, plan: ChainPlan) -> VerbalizationFragment:
         """
         :param plan: The analysed boolean-terminal chain.
         :return: The unconstrained-boolean predicative *"<navigation> is either <attribute> or not"* —

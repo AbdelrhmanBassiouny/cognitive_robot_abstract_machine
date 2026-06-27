@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from krrood.entity_query_language.query.quantifiers import ResultQuantifier
 from krrood.entity_query_language.query.query import Entity, SetOf
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     PhraseRule,
     RuleContext,
@@ -34,7 +36,7 @@ class TopLevelEntityRule(PhraseRule):
         """
         return context.configuration.query_depth == 0 and not context.inline
 
-    def build(self, node: Entity, context: RuleContext) -> Fragment:
+    def build(self, node: Entity, context: RuleContext) -> VerbalizationFragment:
         """:return: the imperative *"Find …"* form built by the query assembler.
 
         It produces the whole imperative sentence by delegating to the query assembler, which emits
@@ -75,7 +77,7 @@ class NestedEntityRule(PhraseRule):
         """
         return context.configuration.query_depth > 0 and not context.inline
 
-    def build(self, node: Entity, context: RuleContext) -> Fragment:
+    def build(self, node: Entity, context: RuleContext) -> VerbalizationFragment:
         """:return: the noun-phrase form built by the query assembler (never *"Find …"*).
 
         For the nested entity it produces only the inner noun phrase *"a Task"*, leaving the outer
@@ -102,7 +104,7 @@ class SetOfRule(PhraseRule):
     name = "set-of"
     enters_query_scope = True
 
-    def build(self, node: SetOf, context: RuleContext) -> Fragment:
+    def build(self, node: SetOf, context: RuleContext) -> VerbalizationFragment:
         """:return: the set-of form built by the query assembler.
 
         It produces the whole set-of sentence by delegating to the query assembler, which here emits
@@ -135,7 +137,7 @@ class InlineEntityRule(PhraseRule):
         """
         return context.inline
 
-    def build(self, node: Entity, context: RuleContext) -> Fragment:
+    def build(self, node: Entity, context: RuleContext) -> VerbalizationFragment:
         """:return: the inline-noun form *"a Robot"* (no *"Find"*; the entity's WHERE deferred).
 
         It produces only the chain-root noun *"a Robot"* (the *"the name of"* comes from the
@@ -154,7 +156,9 @@ class ResultQuantifierRule(PhraseRule):
     construct = ResultQuantifier
     name = "result-quantifier"
 
-    def build(self, node: ResultQuantifier, context: RuleContext) -> Fragment:
+    def build(
+        self, node: ResultQuantifier, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: the child's fragment, forwarding the render context (the wrapper is transparent).
 
         It adds no words of its own: the entire *"Find the unique Robot"* is produced by the wrapped

@@ -27,7 +27,9 @@ from typing_extensions import (
 )
 
 if TYPE_CHECKING:
-    from krrood.entity_query_language.verbalization.fragments.base import Fragment
+    from krrood.entity_query_language.verbalization.fragments.base import (
+        VerbalizationFragment,
+    )
 
 from krrood.entity_query_language.utils import T, merge_args_and_kwargs
 from krrood.entity_query_language.core.variable import (
@@ -84,13 +86,13 @@ class VerbalizationField:
     author just passes ``fields[name]`` and the right thing happens, never an explicit accessor.
     """
 
-    fragment: Fragment
+    fragment: VerbalizationFragment
     """The field's rendered, source-linked fragment — what :class:`Noun` uses."""
 
     value: Any
     """The raw Python value bound to the field (a literal's value) — what :class:`OneOf` enumerates."""
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the field's rendered fragment, so a :class:`VerbalizationField` is a clause constituent like
         the part-of-speech elements — ``clause(field)`` and ``Noun(field)`` both work.
         """
@@ -106,7 +108,7 @@ class RenderedFields(Mapping):
     takes the fragment, ``OneOf`` takes the value — without the author choosing between them.
     """
 
-    fragments: "Mapping[str, Fragment]"
+    fragments: "Mapping[str, VerbalizationFragment]"
     """The rendered fragment for each field, keyed by field name."""
 
     raw: "Mapping[str, SymbolicExpression]"
@@ -133,7 +135,7 @@ class Verbalizable(ABC):
 
     @classmethod
     @abstractmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> Fragment:
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """
         Structured verbalization for this predicate — a required clause (no string fallback).
 
@@ -244,7 +246,9 @@ class Triple(Predicate):
         """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+    def _verbalization_fragment_(
+        cls, fields: Mapping[str, VerbalizationFragment]
+    ) -> VerbalizationFragment:
         """
         Verbalization of a Triple is a subject - verb-phrase - object, where the verb phrase is read
         off the class name (``ConnectsTo`` → *"connects to"*). The leading word is a :class:`Verb`
@@ -309,7 +313,9 @@ class HasType(Triple):
         return self.types_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+    def _verbalization_fragment_(
+        cls, fields: Mapping[str, VerbalizationFragment]
+    ) -> VerbalizationFragment:
         # Imported locally to avoid the core → verbalization import cycle (see :class:`Triple`).
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             Adjective,
@@ -344,7 +350,7 @@ class HasTypes(HasType):
     """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> Fragment:
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """Say membership over the admissible types — *"<variable> is one of A, B, or C"*. The
         :class:`OneOf` element handles the bounded listing (linking, *"or"*, the count cap), so the
         types are read from the field's value (an ``isinstance`` over the tuple is membership, not the

@@ -5,7 +5,7 @@ from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.assembler import (
     Assembler,
@@ -49,7 +49,7 @@ class ConditionAssembler(Assembler[Comparator, None]):
     Reference: Gatt & Reiter (2009), SimpleNLG — surface realisation.
     """
 
-    def realize(self, node: Comparator, plan: None = None) -> Fragment:
+    def realize(self, node: Comparator, plan: None = None) -> VerbalizationFragment:
         """
         :param node: The condition (comparator) to render.
         :param plan: Unused (this assembler has no plan).
@@ -65,7 +65,9 @@ class ConditionAssembler(Assembler[Comparator, None]):
         """
         return self.predicate(node)
 
-    def predicate(self, comparator: Comparator, *, negated: bool = False) -> Fragment:
+    def predicate(
+        self, comparator: Comparator, *, negated: bool = False
+    ) -> VerbalizationFragment:
         """
         :param comparator: The comparator to render.
         :param negated: Whether an outer negation applies.
@@ -85,7 +87,9 @@ class ConditionAssembler(Assembler[Comparator, None]):
         transform = PredicateTransform.most_applicable(comparator, negated)
         return transform.render(comparator, self.context, negated)
 
-    def as_statements(self, conditions: List[SymbolicExpression]) -> List[Fragment]:
+    def as_statements(
+        self, conditions: List[SymbolicExpression]
+    ) -> List[VerbalizationFragment]:
         """
         Say a list of conditions as standalone statements — the entry a caller uses when the
         conditions stand on their own (an ``AND``'s operands, a ``where`` block), as opposed to
@@ -115,7 +119,7 @@ class ConditionAssembler(Assembler[Comparator, None]):
         comparator: Comparator,
         subject: Variable,
         number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         :param comparator: The comparator on *subject*'s single-hop attribute.
         :param subject: The subject variable.
@@ -148,7 +152,7 @@ class ConditionAssembler(Assembler[Comparator, None]):
 
     def superlative_modifier(
         self, comparator: Comparator, subject: Variable
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         :param comparator: The ``subject.<chain> == max/min(over all <Type>.<chain>)`` comparator.
         :param subject: The subject variable.
@@ -180,7 +184,7 @@ class ConditionAssembler(Assembler[Comparator, None]):
         range_fold: RangeFold,
         subject: Variable,
         number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         :param range_fold: The folded lower/upper bound pair on *subject*'s single-hop attribute.
         :param subject: The subject variable.
@@ -210,8 +214,11 @@ class ConditionAssembler(Assembler[Comparator, None]):
         )
 
     def attribute_predicate(
-        self, attribute_name: str, number: GrammaticalNumber, value: Fragment
-    ) -> Fragment:
+        self,
+        attribute_name: str,
+        number: GrammaticalNumber,
+        value: VerbalizationFragment,
+    ) -> VerbalizationFragment:
         """
         The bare *"<attribute> <copula> <value>"* predicate (the noun and copula agree with
         *number*), with no source link on the noun — for a field binding whose owner is implicit.
@@ -240,7 +247,9 @@ class ConditionAssembler(Assembler[Comparator, None]):
             ]
         )
 
-    def _attribute_noun(self, name: str, number: GrammaticalNumber) -> Fragment:
+    def _attribute_noun(
+        self, name: str, number: GrammaticalNumber
+    ) -> VerbalizationFragment:
         """
         :param name: The attribute's name.
         :param number: The grammatical number to tag for inflection.

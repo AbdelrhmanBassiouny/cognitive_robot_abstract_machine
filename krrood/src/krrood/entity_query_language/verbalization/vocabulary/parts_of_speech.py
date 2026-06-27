@@ -9,7 +9,7 @@ from krrood.entity_query_language.predicate import VerbalizationField
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     Clause,
-    Fragment,
+    VerbalizationFragment,
     NounPhrase,
     PhraseFragment,
     RoleFragment,
@@ -44,7 +44,7 @@ class ClauseElement(ABC):
     """
 
     @abstractmethod
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the fragment this element contributes to the clause."""
 
 
@@ -61,7 +61,7 @@ class Noun(ClauseElement):
     """For a literal-head noun, the article to realise — *"an instance"* (indefinite, the default) vs
     *"the instance"*. Ignored when *content* is already a rendered constituent."""
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: an indefinite (or definite) noun phrase for a literal head — so the article is
         chosen by the determiner pass (*"a"* / *"an"*) and the head pluralises and reduces with
         coreference — else the constituent's own fragment.
@@ -152,7 +152,7 @@ class OneOf(ClauseElement):
     bound to a collection, or a collection directly. Classes render as linked type references, other
     values as literals."""
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the membership phrase, or a count summary past the cap.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import (
@@ -197,11 +197,11 @@ class Preposition(VocabEnum):
 
 @runtime_checkable
 class ClauseConstituent(Protocol):
-    """The one contract every clause constituent satisfies: it renders itself to a :class:`Fragment`.
+    """The one contract every clause constituent satisfies: it renders itself to a :class:`VerbalizationFragment`.
 
     A typed part-of-speech element (:class:`ClauseElement` — :class:`Noun` / :class:`Verb` / …), a
     :class:`Preposition`, a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`, and a
-    raw :class:`Fragment` all satisfy it structurally (each defines ``as_fragment``), so
+    raw :class:`VerbalizationFragment` all satisfy it structurally (each defines ``as_fragment``), so
     :func:`clause` depends on this single abstraction rather than enumerating concrete types — a new
     kind of constituent only has to implement the method (open/closed).
 
@@ -211,7 +211,7 @@ class ClauseConstituent(Protocol):
     unifies them without forcing inheritance.
     """
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the fragment this constituent contributes to a clause."""
 
 
@@ -221,7 +221,7 @@ def clause(*constituents: ClauseConstituent) -> Clause:
 
     A predicate states its affirmative form once — *"<subject> works in <object>"* —
     ``clause(Noun(subject), Verb("work"), Preposition.IN, Noun(object))`` — and the realisation
-    passes handle agreement and negation. A raw :class:`Fragment` is accepted too, so a rendered
+    passes handle agreement and negation. A raw :class:`VerbalizationFragment` is accepted too, so a rendered
     field fragment can be dropped in directly. The result is a :class:`Clause`, so coreference
     treats the first constituent as the clause's subject (pronominalisation, verb agreement).
 

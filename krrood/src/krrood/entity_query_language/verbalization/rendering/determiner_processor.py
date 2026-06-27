@@ -9,7 +9,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -44,7 +44,7 @@ class DeterminerProcessor(RewritePass):
     (2000) — microplanning.
     """
 
-    def rewrite(self, leaf: Fragment) -> Fragment:
+    def rewrite(self, leaf: VerbalizationFragment) -> VerbalizationFragment:
         """:return: A lowered noun-phrase leaf; any other leaf passes through unchanged.
 
         >>> verbalize_expression(a(entity(variable(Robot, []))))
@@ -52,7 +52,7 @@ class DeterminerProcessor(RewritePass):
         """
         return self._lower_noun_phrase(leaf) if isinstance(leaf, NounPhrase) else leaf
 
-    def _lower_noun_phrase(self, noun_phrase: NounPhrase) -> Fragment:
+    def _lower_noun_phrase(self, noun_phrase: NounPhrase) -> VerbalizationFragment:
         """:return: *noun_phrase* lowered to a determiner-bearing phrase — the chosen determiner,
         an optional pre-head qualifier, the number-tagged head, and the recursed modifiers.
 
@@ -94,7 +94,9 @@ class DeterminerProcessor(RewritePass):
         )
 
     @staticmethod
-    def _tag_number(head: Fragment, number: GrammaticalNumber) -> Fragment:
+    def _tag_number(
+        head: VerbalizationFragment, number: GrammaticalNumber
+    ) -> VerbalizationFragment:
         """Tag the head leaf with the phrase's number.
 
         >>> DeterminerProcessor._tag_number(WordFragment(text="Robot"), GrammaticalNumber.PLURAL).number
@@ -106,8 +108,10 @@ class DeterminerProcessor(RewritePass):
 
     @staticmethod
     def _determiner(
-        definiteness: Definiteness, number: GrammaticalNumber, article_anchor: Fragment
-    ) -> Optional[Fragment]:
+        definiteness: Definiteness,
+        number: GrammaticalNumber,
+        article_anchor: VerbalizationFragment,
+    ) -> Optional[VerbalizationFragment]:
         """:return: The determiner fragment for *(definiteness, number)*, or ``None`` (bare). The
         indefinite *a/an* agrees phonologically with *article_anchor* (the first surface word —
         the pre-head when present, else the head).

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from krrood.entity_query_language.query.operations import GroupedBy, OrderedBy
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.clauses.assembler import (
     GroupedByAssembler,
     OrderedByAssembler,
@@ -25,7 +27,7 @@ class GroupedByRule(PhraseRule):
     construct = GroupedBy
     name = "grouped-by"
 
-    def build(self, node: GroupedBy, context: RuleContext) -> Fragment:
+    def build(self, node: GroupedBy, context: RuleContext) -> VerbalizationFragment:
         """:return: The *"grouped by …"* clause for the GROUP BY node.
 
         It produces the grouping span by delegating to the grouped-by assembler, which fronts the key
@@ -45,7 +47,7 @@ class OrderedByRule(PhraseRule):
     construct = OrderedBy
     name = "ordered-by"
 
-    def build(self, node: OrderedBy, context: RuleContext) -> Fragment:
+    def build(self, node: OrderedBy, context: RuleContext) -> VerbalizationFragment:
         """:return: The *"ordered by …"* clause for the ORDER BY node.
 
         It produces the trailing ordering span *"ordered by their salaries from highest to lowest"*

@@ -8,7 +8,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_comma,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -47,7 +47,7 @@ def attribute_fragment(
     )
 
 
-def _genitive_article(step: PathStep) -> Optional[Fragment]:
+def _genitive_article(step: PathStep) -> Optional[VerbalizationFragment]:
     """:return: the article introducing a genitive hop — none for a mass noun (*"the amount of
     money"*, never *"the amount of the money"*), else the definite *"the"*.
 
@@ -59,7 +59,9 @@ def _genitive_article(step: PathStep) -> Optional[Fragment]:
     return Articles.THE.as_fragment()
 
 
-def _genitive_step(step: PathStep, owner_fragment: Fragment) -> Fragment:
+def _genitive_step(
+    step: PathStep, owner_fragment: VerbalizationFragment
+) -> VerbalizationFragment:
     """:return: *"the <attribute> of <owner>"* — one plain (noun) hop wrapping its owner; a mass-noun
     hop drops the article (*"… of money of …"*).
 
@@ -84,9 +86,9 @@ def _genitive_step(step: PathStep, owner_fragment: Fragment) -> Fragment:
 
 def _relative_clause(
     step: PathStep,
-    owner_fragment: Fragment,
+    owner_fragment: VerbalizationFragment,
     owner_number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
-) -> Fragment:
+) -> VerbalizationFragment:
     """:return: *"the <Type> <preposition> which <owner> is <participle>"* — one relational hop
     wrapping its owner as a relative clause (the preposition pied-piped before *which*: *"the Robot
     to which a Mission is assigned"*). Keeping the owner the verb's subject means the meaning never
@@ -118,8 +120,9 @@ def _relative_clause(
 
 
 def coordinated_genitive(
-    attribute_fragments: List[Fragment], owner_fragment: Fragment
-) -> Fragment:
+    attribute_fragments: List[VerbalizationFragment],
+    owner_fragment: VerbalizationFragment,
+) -> VerbalizationFragment:
     """:return: *"the <a, b, and c> of <owner>"* — several attributes sharing one genitive owner,
     coordinated under it (right-node raising: *"the department and salary of an Employee"*) rather
     than repeated owner by owner (*"the department of an Employee and its salary"*).
@@ -139,7 +142,9 @@ def coordinated_genitive(
     )
 
 
-def _extend_hop(step: PathStep, owner_fragment: Fragment) -> Fragment:
+def _extend_hop(
+    step: PathStep, owner_fragment: VerbalizationFragment
+) -> VerbalizationFragment:
     """:return: *owner_fragment* wrapped by one more hop — the relative clause for a relational hop,
     else the genitive. The shared hop builder both path readouts extend their owner with.
 
@@ -158,7 +163,9 @@ def _extend_hop(step: PathStep, owner_fragment: Fragment) -> Fragment:
     )
 
 
-def possessive_path(parts: List[PathStep], root_fragment: Fragment) -> Fragment:
+def possessive_path(
+    parts: List[PathStep], root_fragment: VerbalizationFragment
+) -> VerbalizationFragment:
     """:return: the navigation read out from the root, hop by hop (parts innermost-first) — a plain
     hop as the genitive *"the <attribute> of <owner>"*, a relational hop as the relative clause
     *"the <Type> <prep> which <owner> is <participle>"*. With only plain hops this is the familiar
@@ -202,7 +209,7 @@ def chain_head_number(
 
 def pronominal_path(
     parts: List[PathStep], subject_number: GrammaticalNumber
-) -> Fragment:
+) -> VerbalizationFragment:
     """:return: the navigation read out with the (elided) root pronominalised — *"its attribute"* /
     *"the attribute of its foo"* for plain hops, and the relative clause *"the <Type> <prep> which
     it is <participle>"* for a relational hop (the innermost hop, adjacent to the elided root, takes
@@ -229,7 +236,7 @@ def pronominal_path(
     attribute_number = (
         subject_number if first.is_scalar_value else GrammaticalNumber.SINGULAR
     )
-    owner: Fragment = (
+    owner: VerbalizationFragment = (
         _relative_clause(first, nominative_pronoun, subject_number)
         if first.is_relation
         else PhraseFragment(

@@ -16,7 +16,7 @@ from krrood.entity_query_language.verbalization.exceptions import (
 )
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
-    Fragment,
+    VerbalizationFragment,
     oxford_comma,
 )
 from krrood.entity_query_language.verbalization.grammar.conditions.assembler import (
@@ -85,7 +85,7 @@ class Placed:
     position: SurfacePosition
     """The surface position the fragment occupies."""
 
-    fragment: Fragment
+    fragment: VerbalizationFragment
     """The rendered condition."""
 
 
@@ -134,7 +134,7 @@ class ConditionForm(SpecificityRule):
 
     @classmethod
     @abstractmethod
-    def render(cls, request: Placement, context: RuleContext) -> Fragment:
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
         """
         :param request: The condition and its subject.
         :param context: The per-node context (recursion and services).
@@ -168,7 +168,7 @@ class StandaloneForm(ConditionForm):
         return True
 
     @classmethod
-    def render(cls, request: Placement, context: RuleContext) -> Fragment:
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
         """Render the residual condition as its own clause via the normal recursion.
 
         Deferring to the recursion is what supplies the whole *its salary is greater than its
@@ -205,7 +205,7 @@ class SuperlativeForm(StandaloneForm):
         return superlative_aggregation(request.item, request.subject) is not None
 
     @classmethod
-    def render(cls, request: Placement, context: RuleContext) -> Fragment:
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
         """Render the post-nominal superlative modifier *"with the maximum/minimum <leaf>"*.
 
         It owns the entire *with the maximum amount* span of the class example, reading the aggregator
@@ -243,7 +243,7 @@ class WhoseRangeForm(StandaloneForm):
         )
 
     @classmethod
-    def render(cls, request: Placement, context: RuleContext) -> Fragment:
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
         """Render the *"<attribute> is between low and high"* whose-modifier.
 
         It owns the *salary is between 100 and 200* span — naming the attribute and emitting the
@@ -287,7 +287,7 @@ class WhosePredicateForm(StandaloneForm):
         return not references(item.right, subject)
 
     @classmethod
-    def render(cls, request: Placement, context: RuleContext) -> Fragment:
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
         """Render the bare *"<attribute> <operator> <value>"* the *"whose"* envelope wraps.
 
         It owns the *battery is greater than 50* span of the class example — the attribute noun,
@@ -328,7 +328,7 @@ class AbsenceForm(StandaloneForm):
         )
 
     @classmethod
-    def render(cls, request: Placement, context: RuleContext) -> Fragment:
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
         """Render the standalone absence predicate *"<owner> has no <attribute>"*.
 
         It owns the *the Mission has no priority* span, flipping owner and attribute into the *has
@@ -368,16 +368,16 @@ class RestrictionFragments:
     """The placed pieces of a subject's WHERE, for the caller to position — each goes to a different
     sentence position, so they are kept apart rather than pre-joined."""
 
-    inline_modifiers: List[Fragment] = field(default_factory=list)
+    inline_modifiers: List[VerbalizationFragment] = field(default_factory=list)
     """Superlative selection phrases (*"with the maximum amount"*) that attach inline, right after
     the selection noun."""
 
-    whose: Optional[Fragment] = None
+    whose: Optional[VerbalizationFragment] = None
     """The *"whose"* group as a coordinated block (header *"whose"*, one bare predicate per item,
     Oxford-joined) — a sub-list of points in hierarchical rendering, *"whose a, and b"* inline / in
     paragraph. ``None`` when nothing folds into a *"whose"*."""
 
-    residual: Optional[Fragment] = None
+    residual: Optional[VerbalizationFragment] = None
     """The residual condition for a separate *"such that …"* / *"where …"* clause; the caller picks
     the keyword and position. ``None`` when the WHERE folds entirely into the other pieces."""
 
@@ -449,7 +449,9 @@ def as_subject_restrictions(
     )
 
 
-def _join_residual(fragments: List[Fragment]) -> Optional[Fragment]:
+def _join_residual(
+    fragments: List[VerbalizationFragment],
+) -> Optional[VerbalizationFragment]:
     """:return: The standalone conjuncts joined into one residual condition, or ``None``.
 
     It supplies the comma-and join that knits the two absence clauses of the example into the single

@@ -11,7 +11,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     OwnedAttributes,
     PhraseFragment,
     PossessiveChain,
-    Fragment,
+    VerbalizationFragment,
     RoleFragment,
 )
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
@@ -103,7 +103,7 @@ class CoreferenceProcessor(RealizationPass):
     to the referent that was the subject just before (centering theory, Grosz/Joshi/Weinstein
     1995)."""
 
-    def process(self, fragment: Fragment) -> Fragment:
+    def process(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         """
         :param fragment: Root of the fragment tree.
         :return: A new tree with referring noun phrases resolved (first / repeat / pronoun), seeded
@@ -128,7 +128,7 @@ class CoreferenceProcessor(RealizationPass):
         self._center = None
         return self._walk(fragment)
 
-    def _walk(self, fragment: Fragment) -> Fragment:
+    def _walk(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         """Document-order rebuild, threading the accumulating discourse state.
 
         A fragment built from a query node opens a discourse scope whose focus the
@@ -152,7 +152,7 @@ class CoreferenceProcessor(RealizationPass):
                 self._subject_stack.pop()
         return self._dispatch(fragment)
 
-    def _dispatch(self, fragment: Fragment) -> Fragment:
+    def _dispatch(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         """Resolve *fragment* by kind (the scope, if any, is already on the stack).
 
         Its contribution is the routing: each possessive chain (*its salary*, *its starting_salary*)
@@ -178,7 +178,7 @@ class CoreferenceProcessor(RealizationPass):
                 rebuilt = map_structural_children(fragment, self._walk)
                 return rebuilt if rebuilt is not None else fragment
 
-    def _predicate_clause(self, clause: PhraseFragment) -> Fragment:
+    def _predicate_clause(self, clause: PhraseFragment) -> VerbalizationFragment:
         """A clause led by its subject chain (*"<subject> <copula> <value>"* — a comparator
         predicate or a *"… is between …"* range) whose finite copula agrees with that subject.
 
@@ -204,7 +204,9 @@ class CoreferenceProcessor(RealizationPass):
             return self._with_agreed_copula(rebuilt, subject_number)
         return rebuilt
 
-    def _clause_subject_number(self, subject: Fragment) -> GrammaticalNumber:
+    def _clause_subject_number(
+        self, subject: VerbalizationFragment
+    ) -> GrammaticalNumber:
         """:return: The grammatical number the clause's subject is realised with — plural only when
         a pronominalised chain distributes a scalar leaf over a plural population (*"their
         batteries"*); singular for every other subject (a deeper chain, a non-pronominalised one, or
@@ -215,7 +217,7 @@ class CoreferenceProcessor(RealizationPass):
             return GrammaticalNumber.SINGULAR
         return chain_head_number(subject.parts, self._subject_stack[-1].number)
 
-    def _subject_clause(self, clause: Clause) -> Fragment:
+    def _subject_clause(self, clause: Clause) -> VerbalizationFragment:
         """A part-of-speech predicate clause (*"<subject> <verb/copula> …"* built by
         :func:`~krrood.entity_query_language.verbalization.vocabulary.parts_of_speech.clause`).
 
@@ -244,7 +246,9 @@ class CoreferenceProcessor(RealizationPass):
         ]
         return replace(clause, parts=[pronoun, *agreed_rest])
 
-    def _subject_pronoun_number(self, subject: Fragment) -> Optional[GrammaticalNumber]:
+    def _subject_pronoun_number(
+        self, subject: VerbalizationFragment
+    ) -> Optional[GrammaticalNumber]:
         """:return: The number to pronominalise the clause subject with — the in-scope subject's
         number when *subject* is the current, already-introduced discourse subject, else ``None``
         (leaving the subject as its first/repeat noun-phrase mention)."""
@@ -262,7 +266,7 @@ class CoreferenceProcessor(RealizationPass):
     @staticmethod
     def _with_agreed_copula(
         clause: PhraseFragment, number: GrammaticalNumber
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """:return: *clause* with its finite copula tagged *number* (*"is"* → *"are"* once the
         morphology pass realises it). Only the operator slot's leading copula inflects — the subject
         and value (and any copula nested in a relative clause on either) are left untouched.
@@ -280,7 +284,9 @@ class CoreferenceProcessor(RealizationPass):
     lexical verb."""
 
     @staticmethod
-    def _agree_finite(part: Fragment, number: GrammaticalNumber) -> Fragment:
+    def _agree_finite(
+        part: VerbalizationFragment, number: GrammaticalNumber
+    ) -> VerbalizationFragment:
         """:return: *part* re-tagged with *number* when it is the clause's finite slot — an
         ``OPERATOR`` or ``VERB`` leaf, or a phrase led by one (the factored *"is greater than"*) —
         else *part* unchanged. The copula inflects (*"is"* → *"are"*) and a lexical verb agrees
@@ -304,7 +310,7 @@ class CoreferenceProcessor(RealizationPass):
             )
         return part
 
-    def _owned_attributes(self, owned: OwnedAttributes) -> Fragment:
+    def _owned_attributes(self, owned: OwnedAttributes) -> VerbalizationFragment:
         """:return: the owner's attributes as the possessive *"its/their <attrs>"* when the owner is
         the current subject, else the genitive *"the <attrs> of <owner>"* — the same pronominalise vs.
         spell-out choice :meth:`_possessive_chain` makes for a navigation chain, but for a coordinated
@@ -338,7 +344,9 @@ class CoreferenceProcessor(RealizationPass):
             and owned.owner_fragment.definiteness is Definiteness.BARE
         )
 
-    def _possessive_chain(self, possessive_chain: PossessiveChain) -> Fragment:
+    def _possessive_chain(
+        self, possessive_chain: PossessiveChain
+    ) -> VerbalizationFragment:
         """:return: The chain as *"its/their …"* when its root is the current subject (the
         pronoun agreeing with the subject's number — *"their"* for a plural population), else as
         the possessive *"the … of <root>"* (resolving the root noun phrase for first/subsequent
@@ -381,7 +389,7 @@ class CoreferenceProcessor(RealizationPass):
 
     def _reduced_selected_quantity(
         self, possessive_chain: PossessiveChain
-    ) -> Optional[Fragment]:
+    ) -> Optional[VerbalizationFragment]:
         """A query's selected / measured quantity (an aggregation's measured attribute) spells out
         in full where it is first named — *"the average of the battery of the Robot to which a
         Mission is assigned"* — and a later mention of that same quantity (a WHERE on the very
@@ -458,7 +466,7 @@ class CoreferenceProcessor(RealizationPass):
 
     def _relational_possessive(
         self, possessive_chain: PossessiveChain
-    ) -> Optional[Fragment]:
+    ) -> Optional[VerbalizationFragment]:
         """An attribute reached *through* the local centre reads as *"its <attribute>"* rather than
         re-naming the referent — after *"the Robot to which it is assigned is operational"* a
         following *"the battery of the Robot"* becomes *"its battery"*.
@@ -513,7 +521,7 @@ class CoreferenceProcessor(RealizationPass):
             and possessive_chain.root_fragment.definiteness is Definiteness.BARE
         )
 
-    def _noun_phrase(self, noun_phrase: NounPhrase) -> Fragment:
+    def _noun_phrase(self, noun_phrase: NounPhrase) -> VerbalizationFragment:
         """Every mention (singular or plural) marks its referent introduced.  A repeat **singular**
         mention is reduced to its head — dropping the first-mention modifiers and keeping the head
         label (*"a Robot, where …"* → *"the Robot"*, *"Robot 1 to which …"* → *"Robot 1"*).  A
@@ -565,7 +573,7 @@ class CoreferenceProcessor(RealizationPass):
             definiteness=Definiteness.BARE,
         )
 
-    def _reduced(self, noun_phrase: NounPhrase) -> Fragment:
+    def _reduced(self, noun_phrase: NounPhrase) -> VerbalizationFragment:
         """:return: A repeat mention reduced to its head — the first-mention modifiers dropped — as a
         bare label (*"Robot 1"*) when numbered, else a definite reference (*"the Robot"*).
 

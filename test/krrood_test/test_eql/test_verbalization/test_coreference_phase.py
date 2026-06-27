@@ -16,7 +16,7 @@ from dataclasses import replace
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
-    Fragment,
+    VerbalizationFragment,
     map_fragment,
     NounPhrase,
     PhraseFragment,
@@ -43,7 +43,7 @@ from krrood.entity_query_language.verbalization.rendering.discourse import (
 from ...dataset.minimal_symbolic_expression import MinimalSymbolicExpression
 
 
-def _scope(child: Fragment, focus_id):
+def _scope(child: VerbalizationFragment, focus_id):
     """Make *child* a discourse scope with focus *focus_id* — a query-sourced fragment plus the
     matching discourse model (``focus_id=None`` for a scope with no single subject).
 
@@ -241,13 +241,13 @@ def _scalar_part(name):
     return PathStep(name, None, is_scalar_value=True)
 
 
-def _operator_numbers(fragment: Fragment) -> list:
+def _operator_numbers(fragment: VerbalizationFragment) -> list:
     """:return: The grammatical number of every OPERATOR leaf in *fragment*, in document order —
     so a test can read off the copula's realised agreement without the morphology pass.
     """
     numbers = []
 
-    def collect(leaf: Fragment) -> Fragment:
+    def collect(leaf: VerbalizationFragment) -> VerbalizationFragment:
         if isinstance(leaf, RoleFragment) and leaf.role is SemanticRole.OPERATOR:
             numbers.append(leaf.number)
         return leaf

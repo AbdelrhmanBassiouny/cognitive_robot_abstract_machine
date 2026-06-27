@@ -39,7 +39,9 @@ from typing_extensions import Mapping
 
 from krrood.entity_query_language.factories import Symbol
 from krrood.entity_query_language.predicate import Predicate
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
     clause,
@@ -166,7 +168,9 @@ class IsReachable(Predicate):
         return True
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+    def _verbalization_fragment_(
+        cls, fields: Mapping[str, VerbalizationFragment]
+    ) -> VerbalizationFragment:
         return clause(Noun(fields["body"]), Copula(), Adjective("reachable"))
 
 
@@ -203,7 +207,9 @@ class WorksIn(Predicate):
         return True
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: Mapping[str, Fragment]) -> Fragment:
+    def _verbalization_fragment_(
+        cls, fields: Mapping[str, VerbalizationFragment]
+    ) -> VerbalizationFragment:
         return clause(
             Noun(fields["employee"]),
             Verb("work"),

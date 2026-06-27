@@ -42,7 +42,7 @@ the object model is in place — and that residue is small and well-typed:
 | Conjunct coordination strategies | `ConjunctReducer`, `ConjunctFold` (`RangeBoundFold`, `CoindexedComparisonFold`) |
 | Output format (plain / ANSI / HTML) | `Formatter`, `Renderer` hierarchies |
 | Referring-expression discourse state | `ReferringExpressions`, `DiscourseModel` |
-| The fragment IR itself | the `Fragment` dataclass tree |
+| The fragment IR itself | the `VerbalizationFragment` dataclass tree |
 
 Everything below is the residue, in seven kinds.
 
@@ -58,7 +58,7 @@ A recursion scheme is parameterised by an **algebra** (the per-node handlers),
 not by object state. `fold_fragment(fragment, word=…, role=…, phrase=…,
 block=…)` is the F-algebra catamorphism over the fragment tree: the *scheme* is
 the unit of reuse, and each caller supplies a different algebra (flattening,
-lowering, plain-text). Making it a method on `Fragment` would either fix one
+lowering, plain-text). Making it a method on `VerbalizationFragment` would either fix one
 algebra per node class or force a `Visitor` object — re-introducing exactly the
 double-dispatch boilerplate the fold removes, scattered across the leaf
 subclasses. The scheme lives **once**, free, and every consumer reuses it.
@@ -126,7 +126,7 @@ bundling the answers could pay off — they are not.)
 `_attribute_pair`, `_between_operator`, `_chain_key`, `_classify`,
 `_terminal_attribute`).
 
-Each is a pure `inputs -> Fragment | data`. They are the *grammar of a phrase
+Each is a pure `inputs -> VerbalizationFragment | data`. They are the *grammar of a phrase
 shape*, not an object: nothing persists between calls, so there is nothing to
 encapsulate. Where coordination genuinely had a **strategy with state**, we
 built it — the `ConjunctFold` subclasses own the fold state machine; these free

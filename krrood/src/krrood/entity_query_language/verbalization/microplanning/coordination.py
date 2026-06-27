@@ -8,7 +8,7 @@ Two stages live here, top to bottom:
   (:class:`RangeFold`, :class:`CoindexedFold`) that the grammar then renders. Each fold is a
   :class:`ConjunctFold` strategy in the reducer's ordered registry — adding a fold is a new strategy,
   nothing else changes (open/closed). This is the *one* place a caller goes to simplify conjuncts.
-* **Fragment-level coordination builders** — :func:`build_between` and :func:`oxford_comma`
+* **VerbalizationFragment-level coordination builders** — :func:`build_between` and :func:`oxford_comma`
   (re-exported from the fragment layer) assemble already-rendered pieces into a coordinated phrase.
 
 References: Reiter & Dale (2000) and Dalianis (1999) — aggregation realised via coordination /
@@ -39,7 +39,7 @@ from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_comma,
     PhraseFragment,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
@@ -691,13 +691,13 @@ def coindexed_natural_parts(fold: CoindexedFold) -> Optional[CoindexedNaturalPar
 
 
 def build_between(
-    left_fragment: Fragment,
-    lower_fragment: Fragment,
-    upper_fragment: Fragment,
+    left_fragment: VerbalizationFragment,
+    lower_fragment: VerbalizationFragment,
+    upper_fragment: VerbalizationFragment,
     *,
     compact: bool,
     number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Build *"<left> is between <low> and <high>"* (or copula-less *"<left> between …"* when *compact*).
 
@@ -726,12 +726,12 @@ def build_between(
 
 
 def between_phrase(
-    lower_fragment: Fragment,
-    upper_fragment: Fragment,
+    lower_fragment: VerbalizationFragment,
+    upper_fragment: VerbalizationFragment,
     *,
     compact: bool,
     number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Build the subject-less range predicate *"is between <low> and <high>"* (or the copula-less
     *"between <low> and <high>"* when *compact*) — the part of a *between* clause after the subject,
@@ -757,7 +757,9 @@ def between_phrase(
     )
 
 
-def _between_operator(compact: bool, number: GrammaticalNumber) -> Fragment:
+def _between_operator(
+    compact: bool, number: GrammaticalNumber
+) -> VerbalizationFragment:
     """:return: the *between* operator fragment — the copula-less core when *compact*, else an
     agreeing copula plus *"between"* (*"is between"* / *"are between"*).
 
@@ -777,7 +779,7 @@ def _between_operator(compact: bool, number: GrammaticalNumber) -> Fragment:
 MAX_SET_MEMBERS = 6
 
 
-def one_of(candidates: List[Fragment]) -> Optional[Fragment]:
+def one_of(candidates: List[VerbalizationFragment]) -> Optional[VerbalizationFragment]:
     """
     Render a small, bounded candidate set as a membership phrase — the shared *"one of A, B, or C"*
     surface used both for a domain-constrained variable's candidate values and for a tuple of

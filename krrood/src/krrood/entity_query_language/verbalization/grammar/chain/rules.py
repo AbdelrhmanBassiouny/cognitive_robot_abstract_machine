@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from krrood.entity_query_language.core.mapped_variable import MappedVariable
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.chain.assembler import (
     ChainAssembler,
 )
@@ -43,7 +45,9 @@ class PluralChainAttributeRule(PhraseRule):
         plan = context.microplan.plan_for(node, ChainPlanner)
         return plan.renders_as_plural_attribute(context.number)
 
-    def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
+    def build(
+        self, node: MappedVariable, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: The bare plural *"attributes of Roots"*.
 
         Its contribution is the bare-plural surface itself: it builds the *"batteries of Robots"*
@@ -80,7 +84,9 @@ class BooleanAttributeChainRule(PhraseRule):
             context.number
         )
 
-    def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
+    def build(
+        self, node: MappedVariable, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: The predicative *"<navigation> is <attribute>"*.
 
         Its contribution is the predicative surface itself: it builds the *"a Task is completed"*
@@ -102,7 +108,9 @@ class PossessiveChainRule(PhraseRule):
     construct = MappedVariable
     name = "chain-possessive"
 
-    def build(self, node: MappedVariable, context: RuleContext) -> Fragment:
+    def build(
+        self, node: MappedVariable, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: The possessive path *"the attribute of the Root"*.
 
         Its contribution is the possessive fallback surface: with no guarded form matching, it builds

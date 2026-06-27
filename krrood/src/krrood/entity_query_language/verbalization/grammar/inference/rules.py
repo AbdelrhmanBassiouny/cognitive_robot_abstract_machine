@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from krrood.entity_query_language.query.query import Entity
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RuleContext,
 )
@@ -39,7 +41,7 @@ class InferenceRuleRule(TopLevelEntityRule):
         """
         return super().when(node, context) and InferencePlanner.can_handle(node)
 
-    def build(self, node: Entity, context: RuleContext) -> Fragment:
+    def build(self, node: Entity, context: RuleContext) -> VerbalizationFragment:
         """:return: the ``IF … THEN …`` block built by the inference assembler.
 
         >>> from krrood.entity_query_language.factories import inference

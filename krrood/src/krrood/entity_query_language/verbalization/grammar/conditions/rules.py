@@ -14,7 +14,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 from krrood.entity_query_language.operators.logical_quantifiers import Exists, ForAll
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
-    Fragment,
+    VerbalizationFragment,
     oxford_comma,
     PhraseFragment,
     RoleFragment,
@@ -80,7 +80,7 @@ class ComparatorRule(PhraseRule):
     construct = Comparator
     name = "comparator"
 
-    def build(self, node: Comparator, context: RuleContext) -> Fragment:
+    def build(self, node: Comparator, context: RuleContext) -> VerbalizationFragment:
         """Say the comparator as a standalone predicate.
 
         Delegating to the predicate assembler is what produces the whole *the battery of a Robot is
@@ -111,7 +111,7 @@ class AndRule(PhraseRule):
     construct = AND
     name = "and"
 
-    def build(self, node: AND, context: RuleContext) -> Fragment:
+    def build(self, node: AND, context: RuleContext) -> VerbalizationFragment:
         """Say the flattened conjuncts, comma-joined with a trailing *"and"*.
 
         It owns the *, and* coordination between the two conjuncts of the example; the conjunct
@@ -150,7 +150,7 @@ class RangeFoldRule(PhraseRule):
     construct = RangeFold
     name = "range-fold"
 
-    def build(self, node: RangeFold, context: RuleContext) -> Fragment:
+    def build(self, node: RangeFold, context: RuleContext) -> VerbalizationFragment:
         """Say the folded pair as *"<chain> is between low and high"*.
 
         It owns the *is between 10 and 90* span, emitting the *between … and …* frame over the fold's
@@ -184,7 +184,7 @@ class CoindexedFoldRule(PhraseRule):
     construct = CoindexedFold
     name = "coindexed-fold"
 
-    def build(self, node: CoindexedFold, context: RuleContext) -> Fragment:
+    def build(self, node: CoindexedFold, context: RuleContext) -> VerbalizationFragment:
         """Say the factored clause once — the natural *"have the same"* form over sibling prefixes.
 
         Detecting sibling prefixes selects the natural branch here (the faithful branch would instead
@@ -265,7 +265,9 @@ class SharedSubjectComparisonsRule(PhraseRule):
     construct = SharedSubjectComparisons
     name = "shared-subject-comparisons"
 
-    def build(self, node: SharedSubjectComparisons, context: RuleContext) -> Fragment:
+    def build(
+        self, node: SharedSubjectComparisons, context: RuleContext
+    ) -> VerbalizationFragment:
         """Say the factored disjunction — subject and copula once, tails coordinated under *either … or*.
 
         It owns the *is either … or …* framing: the shared subject and its copula are stated once and
@@ -283,7 +285,7 @@ class SharedSubjectComparisonsRule(PhraseRule):
         )
 
     @staticmethod
-    def _tail(comparator: Comparator, context: RuleContext) -> Fragment:
+    def _tail(comparator: Comparator, context: RuleContext) -> VerbalizationFragment:
         """:return: a comparator's copula-less operator-and-value tail (*"greater than 50"*) — the
         differing piece coordinated under the shared subject. A bare equality has an empty operator
         core (*"is 30"* → *"30"*), so only the value is kept."""
@@ -312,7 +314,9 @@ class SharedSubjectConjunctionRule(PhraseRule):
     construct = SharedSubjectConjunction
     name = "shared-subject-conjunction"
 
-    def build(self, node: SharedSubjectConjunction, context: RuleContext) -> Fragment:
+    def build(
+        self, node: SharedSubjectConjunction, context: RuleContext
+    ) -> VerbalizationFragment:
         """Say the factored conjunction — subject once, the lead copula carried by the relative
         clause, the tails coordinated Oxford-style.
 
@@ -333,7 +337,7 @@ class SharedSubjectConjunctionRule(PhraseRule):
         )
 
     @classmethod
-    def _tail(cls, tail, context: RuleContext, *, lead: bool) -> Fragment:
+    def _tail(cls, tail, context: RuleContext, *, lead: bool) -> VerbalizationFragment:
         """:return: one relative-clause tail. A folded :class:`RangeFold` reads *"between low and
         high"* (with the lead copula when it leads); a :class:`Comparator` reads its
         operator-and-value tail. The lead tail carries the clause's copula (*"that is greater than
@@ -376,7 +380,7 @@ class OrRule(PhraseRule):
     construct = OR
     name = "or"
 
-    def build(self, node: OR, context: RuleContext) -> Fragment:
+    def build(self, node: OR, context: RuleContext) -> VerbalizationFragment:
         """Say the flattened disjuncts as *"either a, b, or c"*, or the factored *"… is either … or …"*
         when they share a subject.
 
@@ -417,7 +421,7 @@ class NotRule(PhraseRule):
     construct = Not
     name = "not"
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Wrap the child in *"not (<child>)"* via the orthography pass.
 
         It owns the *not (…)* wrapper of the class example — the leading *not* and the parentheses —
@@ -426,7 +430,7 @@ class NotRule(PhraseRule):
         return _negation_wrap(context.child(node._child_))
 
 
-def _negation_wrap(child_fragment: Fragment) -> Fragment:
+def _negation_wrap(child_fragment: VerbalizationFragment) -> VerbalizationFragment:
     """:return: *child_fragment* wrapped as *"not (<child>)"* — the fallback negation for a clause
     that cannot be negated in place. The parens glue to the child via the orthography pass.
     """
@@ -471,7 +475,7 @@ class NotVerbalizablePredicateRule(PhraseRule):
             node._child_, InstantiatedVariable
         ) and InstantiatedPlanner.has_fragment(node._child_)
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Say the predicate with its head verb / copula negated, or wrap it when it has neither.
 
         Marking the clause's verb or copula negated is what yields the inline *does not work in* /
@@ -505,7 +509,7 @@ class NotComparatorRule(PhraseRule):
         """
         return isinstance(node._child_, Comparator)
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Say the inner comparator with the negation folded into the operator.
 
         Pushing the negation into the predicate is what yields the inline *is not greater than 50*
@@ -539,7 +543,7 @@ class NotBooleanAttributeRule(PhraseRule):
         """
         return is_boolean_attribute_chain(node._child_)
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Say the negated predicative *"<nav> is not <attribute>"*.
 
         It owns the *is not completed* span, emitting the boolean attribute as a negated predicative
@@ -563,7 +567,7 @@ class ForAllRule(PhraseRule):
     construct = ForAll
     name = "for-all"
 
-    def build(self, node: ForAll, context: RuleContext) -> Fragment:
+    def build(self, node: ForAll, context: RuleContext) -> VerbalizationFragment:
         """Say *"for all <plural var>, <condition>"*.
 
         It owns the *for all Robots,* prefix — rendering the variable as plural and joining it to the
@@ -601,7 +605,7 @@ class ExistsRule(PhraseRule):
     construct = Exists
     name = "exists"
 
-    def build(self, node: Exists, context: RuleContext) -> Fragment:
+    def build(self, node: Exists, context: RuleContext) -> VerbalizationFragment:
         """Say *"there exists <variable> such that <condition>"*.
 
         It owns the *there exists a Robot such that* framing around the condition; the condition
@@ -636,7 +640,7 @@ class FilterRule(PhraseRule):
     construct = Filter
     name = "filter"
 
-    def build(self, node: Filter, context: RuleContext) -> Fragment:
+    def build(self, node: Filter, context: RuleContext) -> VerbalizationFragment:
         """Delegate transparently to the wrapped condition.
 
         It adds no surface text of its own — unwrapping the Where/Having node so the *whose battery

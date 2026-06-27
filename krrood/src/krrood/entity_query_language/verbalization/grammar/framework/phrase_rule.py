@@ -4,14 +4,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing_extensions import TYPE_CHECKING, Callable, ClassVar, Optional, Sequence
 
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
 )
-from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
-    most_specific,
-    mro_depth,
-)
+from krrood.entity_query_language.verbalization.exceptions import AmbiguousRuleError
+from krrood.patterns.specificity_ranking import mro_depth, sole_maximum
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.context import MicroplanningServices
@@ -66,7 +66,7 @@ class RuleContext:
     for cross-cutting state directly.
     """
 
-    recurse: Callable[["FoldNode", "RenderOptions"], Fragment]
+    recurse: Callable[["FoldNode", "RenderOptions"], VerbalizationFragment]
     """The fold continuation — given a sub-expression and its render options, returns its fragment.
     Rules do not call this directly; they call :meth:`child`."""
 
@@ -83,7 +83,7 @@ class RuleContext:
         number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
         inline: bool = False,
         as_value: bool = False,
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """Recurse on a sub-expression, requesting its render flags (all reset by default — they do
         not inherit from this node).
 
@@ -177,7 +177,7 @@ class PhraseRule(ABC):
         return True
 
     @abstractmethod
-    def build(self, node: FoldNode, context: RuleContext) -> Fragment:
+    def build(self, node: FoldNode, context: RuleContext) -> VerbalizationFragment:
         """
         Build the fragment for *node*.
 
@@ -213,14 +213,15 @@ def select(
     it: when both guards hold, the more-derived rule class wins (e.g. an inference-rule entity is a
     refinement of a top-level entity). This only models *subsumption* — a guard that implies
     another's. Rules whose guards merely *overlap* (neither implies the other) have no is-a
-    relationship to express; their guards must be mutually exclusive, since equal-specificity ties
-    resolve by registration order, which is not a contract.
+    relationship to express; their guards must be mutually exclusive, since an equal-specificity
+    tie is a collision raised as :class:`~krrood.entity_query_language.verbalization.exceptions.AmbiguousRuleError`.
 
     :param node: The EQL expression being dispatched.
     :param rules: The grammar.
     :param context: The per-node context, passed to each rule's ``when``.
     :return: The most-specific rule whose ``construct`` and ``when`` match *node*, or ``None``
         when none apply (the caller supplies the fallback).
+    :raises AmbiguousRuleError: When two rules are equally specific for *node*.
 
     The winning rule decides the phrasing: an inference-rule entity is dispatched to the
     more-derived ``InferenceRuleRule`` (an ``IF … THEN …`` block) rather than the plain
@@ -237,11 +238,14 @@ def select(
         for rule in rules
         if isinstance(node, rule.construct) and rule.when(node, context)
     ]
-    return most_specific(
+    return sole_maximum(
         candidates,
         key=lambda rule: (
             mro_depth(rule.construct),
             _is_guarded(rule),
             mro_depth(type(rule)),
+        ),
+        collision_error=lambda tied: AmbiguousRuleError(
+            subject=node, candidates=[type(rule) for rule in tied]
         ),
     )

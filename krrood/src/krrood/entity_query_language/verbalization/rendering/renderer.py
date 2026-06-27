@@ -7,7 +7,7 @@ from typing_extensions import TYPE_CHECKING, Optional
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     fold_fragment,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.rendering.formatter import (
     BulletStyle,
@@ -41,7 +41,7 @@ class FragmentRenderer(ABC):
     """Optional resolver that maps source references to URL strings."""
 
     @abstractmethod
-    def render(self, fragment: Fragment) -> str:
+    def render(self, fragment: VerbalizationFragment) -> str:
         """
         Render a fragment tree into a string.
 
@@ -82,7 +82,7 @@ class ParagraphRenderer(FragmentRenderer):
     visual structure — only content is preserved.
     """
 
-    def render(self, fragment: Fragment) -> str:
+    def render(self, fragment: VerbalizationFragment) -> str:
         """
         Render *fragment* and all descendants into a flat prose string.
 
@@ -145,7 +145,7 @@ class HierarchicalRenderer(FragmentRenderer):
     bullet: BulletStyle = field(default=BulletStyle.DASH)
     """Bullet character prepended to each list item."""
 
-    def render(self, fragment: Fragment, depth: int = 0) -> str:
+    def render(self, fragment: VerbalizationFragment, depth: int = 0) -> str:
         """
         Render *fragment* with indented bullet structure.
 
@@ -199,7 +199,10 @@ class HierarchicalRenderer(FragmentRenderer):
         return self.indent_size.value.replace(" ", self.formatter.space)
 
     def _render_item(
-        self, fragment: Fragment, depth: int, conjunction: Optional[Fragment] = None
+        self,
+        fragment: VerbalizationFragment,
+        depth: int,
+        conjunction: Optional[VerbalizationFragment] = None,
     ) -> str:
         """Render one item, prepending the bullet at its indentation level (and a coordinating
         conjunction when this is the last item of a coordinated block).
@@ -233,7 +236,7 @@ class HierarchicalRenderer(FragmentRenderer):
                     )
                 return prefix + content
 
-    def _inline(self, fragment: Fragment) -> str:
+    def _inline(self, fragment: VerbalizationFragment) -> str:
         """Render a fragment as a flat inline string. A nested block is flattened to prose (its
         items coordinated as in paragraph rendering) rather than expanded into bullets — bullets are
         for a block that sits at the item level, not one embedded in a phrase (e.g. a *"whose …"*

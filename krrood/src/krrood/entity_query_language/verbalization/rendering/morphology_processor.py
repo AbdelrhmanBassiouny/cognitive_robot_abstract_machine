@@ -5,7 +5,7 @@ from dataclasses import replace
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -45,7 +45,7 @@ class MorphologyProcessor(RewritePass):
     Reference: Gatt & Reiter (2009), SimpleNLG — the MorphologyProcessor realisation stage.
     """
 
-    def rewrite(self, leaf: Fragment) -> Fragment:
+    def rewrite(self, leaf: VerbalizationFragment) -> VerbalizationFragment:
         """:return: *leaf* with number and polarity realised, then reset; a leaf with no realisable
         feature is returned unchanged.
 

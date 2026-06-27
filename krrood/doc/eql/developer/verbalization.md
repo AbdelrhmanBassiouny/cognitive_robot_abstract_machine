@@ -50,7 +50,7 @@ Pass a shared {py:class}`~krrood.entity_query_language.verbalization.context.Mic
 ```{mermaid}
 graph LR
     A[EQL Expression] --> B[fold + realisation passes]
-    B -- realised Fragment tree --> C[FragmentRenderer]
+    B -- realised VerbalizationFragment tree --> C[FragmentRenderer]
     C -- formatted string --> D[Output]
     E[grammar RULES / select] -. dispatch .-> B
     F[MicroplanningServices] -. services .-> B
@@ -58,16 +58,16 @@ graph LR
     H[SourceLinkResolver] -. URLs .-> C
 ```
 
-### Layer 1 — Fragment building + realisation (`EQLVerbalizer.build`)
+### Layer 1 — VerbalizationFragment building + realisation (`EQLVerbalizer.build`)
 
 {py:class}`~krrood.entity_query_language.verbalization.verbalizer.EQLVerbalizer` is the internal fragment builder behind the pipeline (use it directly only when you want the fragment tree itself, e.g. in tests).  `build(expression, services)`:
 
-1. **Folds** the EQL tree into a {py:class}`~krrood.entity_query_language.verbalization.fragments.base.Fragment` tree via the grammar (see [Rule dispatch](#rule-dispatch-the-fold)).
+1. **Folds** the EQL tree into a {py:class}`~krrood.entity_query_language.verbalization.fragments.base.VerbalizationFragment` tree via the grammar (see [Rule dispatch](#rule-dispatch-the-fold)).
 2. Runs the ordered **realisation passes** ({py:func}`~krrood.entity_query_language.verbalization.rendering.realization.realize_tree`): coreference → determiner → morphology → orthography (see [Realisation passes](#realisation-passes)).
 
 It never produces strings — formatting is Layer 2/3.
 
-### Layer 2 — Fragment rendering (`FragmentRenderer`)
+### Layer 2 — VerbalizationFragment rendering (`FragmentRenderer`)
 
 {py:class}`~krrood.entity_query_language.verbalization.rendering.renderer.FragmentRenderer` traverses the realised tree and produces a single string.
 
@@ -88,13 +88,13 @@ It never produces strings — formatting is Layer 2/3.
 
 ---
 
-## Fragment Type Hierarchy
+## VerbalizationFragment Type Hierarchy
 
-All verbalization output is expressed as a tree of `Fragment` subclasses.  There are **leaf** nodes (text), **structural** containers (hold children), and one **coreference marker** (`PossessiveChain`) the realisation passes consume and strip.
+All verbalization output is expressed as a tree of `VerbalizationFragment` subclasses.  There are **leaf** nodes (text), **structural** containers (hold children), and one **coreference marker** (`PossessiveChain`) the realisation passes consume and strip.
 
 ```{mermaid}
 classDiagram
-    class Fragment {
+    class VerbalizationFragment {
         <<abstract>>
     }
     class WordFragment {
@@ -115,12 +115,12 @@ classDiagram
     class PossessiveChain {
         a chain whose its/of form coreference decides (stripped after coreference)
     }
-    Fragment <|-- WordFragment
-    Fragment <|-- RoleFragment
-    Fragment <|-- PhraseFragment
-    Fragment <|-- NounPhrase
-    Fragment <|-- BlockFragment
-    Fragment <|-- PossessiveChain
+    VerbalizationFragment <|-- WordFragment
+    VerbalizationFragment <|-- RoleFragment
+    VerbalizationFragment <|-- PhraseFragment
+    VerbalizationFragment <|-- NounPhrase
+    VerbalizationFragment <|-- BlockFragment
+    VerbalizationFragment <|-- PossessiveChain
 ```
 
 `NounPhrase` is a *spec*, not a lowered phrase: rules emit it with grammatical features (`Definiteness`, `Number`) but **no** determiner; the [determiner pass](#realisation-passes) lowers it to a `PhraseFragment`.  The recursion helpers over this tree are {py:func}`~krrood.entity_query_language.verbalization.fragments.base.fold_fragment` (a catamorphism to any value — used by the renderer/flatten), {py:func}`~krrood.entity_query_language.verbalization.fragments.base.map_structural_children` / {py:func}`~krrood.entity_query_language.verbalization.fragments.base.map_fragment` (structure-preserving rebuilds — used by the realisation passes), and {py:func}`~krrood.entity_query_language.verbalization.fragments.base.flatten_fragment_to_plain_text`.
@@ -222,7 +222,7 @@ class BetweenRule(PhraseRule):
     construct = Between
     name = "between"
 
-    def build(self, node, context: RuleContext) -> Fragment:
+    def build(self, node, context: RuleContext) -> VerbalizationFragment:
         return PhraseFragment(
             parts=[
                 context.child(node.left),                   # recurse via the fold
@@ -363,13 +363,13 @@ deferred = context.scope.pop_constraint_frame()
 
 ### Binding overrides (BindingScope)
 
-`context.scope.binding_overrides` maps `expression._id_` → `Fragment`.  `fold` checks it before dispatch, so when a bound variable appears again as a WHERE value it reuses the *"the field of the Type"* fragment instead of re-verbalizing the raw variable.
+`context.scope.binding_overrides` maps `expression._id_` → `VerbalizationFragment`.  `fold` checks it before dispatch, so when a bound variable appears again as a WHERE value it reuses the *"the field of the Type"* fragment instead of re-verbalizing the raw variable.
 
 ---
 
 ## Coordination (aggregation / conjunction reduction)
 
-{py:mod}`~krrood.entity_query_language.verbalization.microplanning.coordination` owns the EQL-level conjunction-reduction microplanning task as a single pass.  {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.ConjunctReducer` is that pass: it applies an ordered registry of {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.ConjunctFold` strategies to a flat conjunct list — adding a fold is a new strategy, nothing else changes (open/closed). The default registry is `RangeBoundFold` (complementary lower/upper bound comparisons on one chain → a {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.RangeFold`, rendered *"… is between lo and hi"* by {py:func}`~krrood.entity_query_language.verbalization.microplanning.coordination.build_between`) then `CoindexedComparisonFold` (co-indexed comparisons across two prefixes → a {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.CoindexedFold`, *"the begin and end … have the same month and year"*).  {py:func}`~krrood.entity_query_language.verbalization.microplanning.coordination.reduce_conjuncts` is the thin function entry every conjunct-rendering caller uses (it constructs the default reducer), so no caller has to know a fold exists.  The fold artifacts are first-class verbalizable nodes with their own `PhraseRule`s, so a reduced list renders through the normal recursion.  Fragment-level Oxford-comma joining is {py:func}`~krrood.entity_query_language.verbalization.fragments.base.oxford_comma`.
+{py:mod}`~krrood.entity_query_language.verbalization.microplanning.coordination` owns the EQL-level conjunction-reduction microplanning task as a single pass.  {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.ConjunctReducer` is that pass: it applies an ordered registry of {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.ConjunctFold` strategies to a flat conjunct list — adding a fold is a new strategy, nothing else changes (open/closed). The default registry is `RangeBoundFold` (complementary lower/upper bound comparisons on one chain → a {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.RangeFold`, rendered *"… is between lo and hi"* by {py:func}`~krrood.entity_query_language.verbalization.microplanning.coordination.build_between`) then `CoindexedComparisonFold` (co-indexed comparisons across two prefixes → a {py:class}`~krrood.entity_query_language.verbalization.microplanning.coordination.CoindexedFold`, *"the begin and end … have the same month and year"*).  {py:func}`~krrood.entity_query_language.verbalization.microplanning.coordination.reduce_conjuncts` is the thin function entry every conjunct-rendering caller uses (it constructs the default reducer), so no caller has to know a fold exists.  The fold artifacts are first-class verbalizable nodes with their own `PhraseRule`s, so a reduced list renders through the normal recursion.  VerbalizationFragment-level Oxford-comma joining is {py:func}`~krrood.entity_query_language.verbalization.fragments.base.oxford_comma`.
 
 ---
 
@@ -401,7 +401,7 @@ The resolver is passed to the renderer at construction (via the `VerbalizationPi
 | Area | Modules |
 |---|---|
 | Engine | `engine.py` (`fold`), `verbalizer.py` (`EQLVerbalizer`), `pipeline.py` (`VerbalizationPipeline`, `verbalize_expression`), `context.py` (`MicroplanningServices`), `exceptions.py` (`UnverbalizableExpressionError`) |
-| Fragment IR | `fragments/base.py` (the `Fragment` hierarchy + `fold_fragment` / `map_structural_children` / `map_fragment` / `oxford_comma` / `flatten_fragment_to_plain_text`), `fragments/features.py`, `fragments/roles.py`, `fragments/source_reference.py` |
+| VerbalizationFragment IR | `fragments/base.py` (the `VerbalizationFragment` hierarchy + `fold_fragment` / `map_structural_children` / `map_fragment` / `oxford_comma` / `flatten_fragment_to_plain_text`), `fragments/features.py`, `fragments/roles.py`, `fragments/source_reference.py` |
 | Lexicon | `vocabulary/english.py`, `vocabulary/words.py` — **all** English words/phrases/punctuation |
 | Grammar framework | `grammar/framework/` — `phrase_rule` (`PhraseRule`, `RuleContext`, `select`), `registry` (`RULES`, auto-discovered by walking the grammar package), `specificity` (`SpecificityRule`, `most_applicable`, and the shared `concrete_subclasses` / `most_specific` / `mro_depth` selection primitives), `assembler` (`Assembler` base), `planner` (`Planner` base) |
 | Grammar (per construct) | `grammar/<construct>/` — `terms`, `chain`, `conditions`, `query`, `inference`, `aggregation`, `clauses`, `instantiated`, `match`; each has `rules.py`, and the involved ones a `planner.py` + `assembler.py` |
@@ -474,9 +474,9 @@ text = VerbalizationPipeline(ParagraphRenderer(MarkdownFormatter())).verbalize(q
 - {py:class}`~krrood.entity_query_language.verbalization.grammar.conditions.assembler.ConditionAssembler` / {py:class}`~krrood.entity_query_language.verbalization.grammar.conditions.placement.ConditionForm` / {py:func}`~krrood.entity_query_language.verbalization.grammar.conditions.placement.as_subject_restrictions`
 - {py:func}`~krrood.entity_query_language.verbalization.grammar.conditions.predication.comparator_operator`
 
-### Fragment hierarchy
+### VerbalizationFragment hierarchy
 
-- {py:class}`~krrood.entity_query_language.verbalization.fragments.base.Fragment` / `WordFragment` / `RoleFragment` / `PhraseFragment` / `NounPhrase` / `BlockFragment` / `PossessiveChain`
+- {py:class}`~krrood.entity_query_language.verbalization.fragments.base.VerbalizationFragment` / `WordFragment` / `RoleFragment` / `PhraseFragment` / `NounPhrase` / `BlockFragment` / `PossessiveChain`
 - {py:func}`~krrood.entity_query_language.verbalization.fragments.base.fold_fragment` / {py:func}`~krrood.entity_query_language.verbalization.fragments.base.map_structural_children` / {py:func}`~krrood.entity_query_language.verbalization.fragments.base.map_fragment` / {py:func}`~krrood.entity_query_language.verbalization.fragments.base.oxford_comma`
 - {py:class}`~krrood.entity_query_language.verbalization.fragments.roles.SemanticRole` / {py:class}`~krrood.entity_query_language.verbalization.fragments.source_reference.SourceReference`
 

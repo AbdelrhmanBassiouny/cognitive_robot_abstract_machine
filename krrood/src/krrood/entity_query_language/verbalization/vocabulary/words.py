@@ -6,7 +6,7 @@ from typing_extensions import ClassVar, Optional
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (  # noqa: F401  (re-export)
@@ -200,7 +200,7 @@ class VocabEnum(Enum):
     never write ``.value`` explicitly.
     """
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: The fragment representing this vocabulary item.
 
         >>> class Connective(VocabEnum):

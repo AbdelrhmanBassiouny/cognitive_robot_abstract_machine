@@ -9,7 +9,7 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     PhraseFragment,
     RoleFragment,
     WordFragment,
@@ -48,14 +48,14 @@ class RankingSurface:
     *modifiers* — e.g. ``"the"`` + ``"top three"`` + ``"Employees"`` + ``"by salary"``.
     """
 
-    pre_head: Optional[Fragment]
+    pre_head: Optional[VerbalizationFragment]
     """The qualifier between the determiner and the head (*"first two"* / *"top three"* /
     *"highest"*), or ``None`` (the attribute-superlative form carries it as a modifier instead)."""
 
     number: GrammaticalNumber
     """The head's grammatical number — ``SINGULAR`` for *n = 1*, ``PLURAL`` for *n > 1*."""
 
-    modifiers: List[Fragment]
+    modifiers: List[VerbalizationFragment]
     """Post-nominal modifiers — *"with the highest salary"* / *"by salary"* — or empty."""
 
 
@@ -75,7 +75,7 @@ def _quality(direction: RankingDirection, n: int) -> RankingWords:
     return RankingWords.FIRST
 
 
-def _cardinal(n: int) -> Fragment:
+def _cardinal(n: int) -> VerbalizationFragment:
     """:return: The cardinal-word fragment for *n* (``3`` → *"three"*).
 
     >>> _cardinal(3).text
@@ -84,7 +84,7 @@ def _cardinal(n: int) -> Fragment:
     return WordFragment(text=morphology.cardinal(n))
 
 
-def _key_attribute(order_key: SymbolicExpression) -> Fragment:
+def _key_attribute(order_key: SymbolicExpression) -> VerbalizationFragment:
     """:return: The order key's terminal attribute as a bare attribute word (*"salary"*, not the
     verbose *"the salary of the Employee"*).
 

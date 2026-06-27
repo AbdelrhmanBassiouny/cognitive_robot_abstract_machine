@@ -6,7 +6,9 @@ from typing_extensions import TYPE_CHECKING, Dict, List
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-    from krrood.entity_query_language.verbalization.fragments.base import Fragment
+    from krrood.entity_query_language.verbalization.fragments.base import (
+        VerbalizationFragment,
+    )
 
 
 @dataclass
@@ -26,8 +28,10 @@ class BindingScope:
     """Stack of deferred-expression frames.  Each frame belongs to one nesting
     level of InstantiatedVariable verbalization."""
 
-    binding_overrides: Dict[uuid.UUID, Fragment] = field(default_factory=dict)
-    """Maps a child expression's ``_id_`` → a ``Fragment`` that substitutes for
+    binding_overrides: Dict[uuid.UUID, VerbalizationFragment] = field(
+        default_factory=dict
+    )
+    """Maps a child expression's ``_id_`` → a ``VerbalizationFragment`` that substitutes for
     it on subsequent encounters, so a pre-rendered field reference is reused rather
     than re-verbalized."""
 

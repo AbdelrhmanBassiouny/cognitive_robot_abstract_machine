@@ -202,7 +202,7 @@ def test_clause_subject_keeps_noun_phrase_outside_a_subject_scope():
 
 
 def test_predicate_returning_a_string_template_is_rejected():
-    """A hook returning a string (an old-style template) rather than a Fragment is an error."""
+    """A hook returning a string (an old-style template) rather than a VerbalizationFragment is an error."""
 
     @dataclass(eq=False)
     class SaysHello(Predicate):

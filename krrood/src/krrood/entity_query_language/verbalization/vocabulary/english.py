@@ -28,7 +28,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
@@ -61,7 +61,7 @@ class SingularExistential(PlainWord):
 
     def build_phrase(
         self, type_name: str, referent_id: Optional[uuid.UUID] = None
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         Build *"there's a/an <type_name>"*.
 
@@ -98,7 +98,7 @@ class PluralExistential(PlainWord):
     Parameterised existential phrase: *"there are TypeNames"*.
     """
 
-    def build_phrase(self, type_name: str) -> Fragment:
+    def build_phrase(self, type_name: str) -> VerbalizationFragment:
         """
         Build *"there are <plural_type_name>"*.
 
@@ -146,7 +146,7 @@ class CommonGroupKeyWord(PlainWord):
     Group-key binding phrase: *"the common <field> of the <plural_root>"*.
     """
 
-    def build_phrase(self, field_name: str, root: str) -> Fragment:
+    def build_phrase(self, field_name: str, root: str) -> VerbalizationFragment:
         """
         Build *"the common <field_name> of the <plural root>"*.
 
@@ -274,7 +274,7 @@ class Aggregations(VocabEnum):
         """
         return self.value.child_form or GrammaticalNumber.SINGULAR
 
-    def complement(self, child: Fragment) -> List[Fragment]:
+    def complement(self, child: VerbalizationFragment) -> List[VerbalizationFragment]:
         """
         :param child: The already-rendered complement, built at :attr:`child_number`.
         :return: The complement modifiers — *"of"* then the child — so the bare aggregation noun
@@ -291,7 +291,9 @@ class Aggregations(VocabEnum):
             return []
         return [Prepositions.OF.as_fragment(), child]
 
-    def compact_complement(self, leaf: Fragment) -> List[Fragment]:
+    def compact_complement(
+        self, leaf: VerbalizationFragment
+    ) -> List[VerbalizationFragment]:
         """:return: The complement for the *compact* value form, where the leaf attaches directly to
         the aggregation noun — *"of <plural leaf>"* for a population (*"the sum of amounts"*), the
         bare singular leaf as a noun modifier otherwise (*"the maximum amount"*); empty for a
@@ -646,7 +648,7 @@ class ExistentialPhrase(VocabEnum):
 
     def build_phrase(
         self, type_name: str, referent_id: Optional[uuid.UUID] = None
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         Build the existential phrase for *type_name*.
 
@@ -702,7 +704,7 @@ class GroupKeyPhrases(VocabEnum):
 
     COMMON_OF = CommonGroupKeyWord("the common")
 
-    def build_phrase(self, field_name: str, plural_root: str) -> Fragment:
+    def build_phrase(self, field_name: str, plural_root: str) -> VerbalizationFragment:
         """
         Build the group-key phrase.
 
@@ -886,7 +888,7 @@ def copula_with(
     number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
     *,
     negated: bool = False,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Compose a predicative operator as an agreeing copula followed by an invariant core.
 
@@ -925,7 +927,7 @@ def copula_with(
 
 def predicative_operator(
     text: str, number: GrammaticalNumber = GrammaticalNumber.SINGULAR
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Factor a baked predicative operator surface into an agreeing copula and its invariant core.
 

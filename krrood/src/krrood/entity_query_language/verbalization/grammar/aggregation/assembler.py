@@ -7,7 +7,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
@@ -46,7 +46,7 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
 
     planner = QueryPlanner
 
-    def realize(self, node: Query, plan: QueryPlan) -> Fragment:
+    def realize(self, node: Query, plan: QueryPlan) -> VerbalizationFragment:
         """
         The unconstrained aggregate value — *"the <aggregation> <leaf>"*; a constrained one adds an
         *"among <population> …"* scope (see :meth:`_among_population`).
@@ -79,8 +79,8 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
         return self._among_population(node, plan, aggregate)
 
     def _among_population(
-        self, node: Query, plan: QueryPlan, aggregate: Fragment
-    ) -> Fragment:
+        self, node: Query, plan: QueryPlan, aggregate: VerbalizationFragment
+    ) -> VerbalizationFragment:
         """
         Build the *"among <population> …"* scope of a constrained aggregation — the source
         population followed by its restriction and any HAVING clause. The clauses are rendered by
@@ -106,7 +106,7 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
             if source is not None
             else FallbackNouns.ENTITY.plural_fragment()
         )
-        parts: List[Fragment] = [
+        parts: List[VerbalizationFragment] = [
             aggregate,
             Prepositions.AMONG.as_fragment(),
             source_fragment,
