@@ -13,23 +13,54 @@ from typing_extensions import (
     TypeVar,
 )
 
+from krrood.entity_query_language.verbalization.exceptions import AmbiguousRuleError
 from krrood.utils import recursive_subclasses
 
 _T = TypeVar("_T")
 
 
-def most_specific(candidates: Sequence[_T], key: Callable[[_T], Any]) -> Optional[_T]:
+def maxima(candidates: Sequence[_T], key: Callable[[_T], Any]) -> List[_T]:
     """
     :param candidates: Items already filtered to those that apply.
-    :param key: Specificity key; the maximum wins.
-    :return: The single most-specific candidate by *key*, or ``None`` when empty.
+    :param key: Specificity key; the highest value wins.
+    :return: Every candidate sharing the maximum *key* (more than one ⇒ a tie); empty when there
+        are no candidates.
 
-    >>> most_specific(["a", "abc", "ab"], key=len)
+    >>> maxima(["a", "abc", "ab"], key=len)
+    ['abc']
+    >>> maxima(["ab", "cd", "a"], key=len)
+    ['ab', 'cd']
+    >>> maxima([], key=len)
+    []
+    """
+    if not candidates:
+        return []
+    best = max(key(candidate) for candidate in candidates)
+    return [candidate for candidate in candidates if key(candidate) == best]
+
+
+def sole_maximum(
+    candidates: Sequence[_T],
+    key: Callable[[_T], Any],
+    collision_error: Callable[[List[_T]], Exception],
+) -> Optional[_T]:
+    """
+    :param candidates: Items already filtered to those that apply.
+    :param key: Specificity key; the highest value wins.
+    :param collision_error: Builds the exception to raise when several candidates tie, given the
+        tied candidates. Injected so this stays decoupled from any one caller's exception type.
+    :return: The single most-specific candidate by *key*, or ``None`` when empty.
+    :raises Exception: The *collision_error* result when two or more candidates are equally specific.
+
+    >>> sole_maximum(["a", "abc", "ab"], key=len, collision_error=AssertionError)
     'abc'
-    >>> most_specific([], key=len) is None
+    >>> sole_maximum([], key=len, collision_error=AssertionError) is None
     True
     """
-    return max(candidates, key=key, default=None)
+    winners = maxima(candidates, key)
+    if len(winners) > 1:
+        raise collision_error(winners)
+    return winners[0] if winners else None
 
 
 def mro_depth(cls: type) -> int:
@@ -122,4 +153,10 @@ class SpecificityRule(ABC):
         'AttributeRankedByForm'
         """
         applicable = [alt for alt in cls.alternatives() if alt.applies(*args)]
-        return most_specific(applicable, key=mro_depth)
+        return sole_maximum(
+            applicable,
+            key=mro_depth,
+            collision_error=lambda tied: AmbiguousRuleError(
+                subject=args, candidates=tied
+            ),
+        )

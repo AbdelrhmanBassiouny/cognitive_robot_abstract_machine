@@ -9,9 +9,10 @@ from krrood.entity_query_language.verbalization.fragments.base import Fragment
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
 )
+from krrood.entity_query_language.verbalization.exceptions import AmbiguousRuleError
 from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
-    most_specific,
     mro_depth,
+    sole_maximum,
 )
 
 if TYPE_CHECKING:
@@ -211,14 +212,15 @@ def select(
     it: when both guards hold, the more-derived rule class wins (e.g. an inference-rule entity is a
     refinement of a top-level entity). This only models *subsumption* — a guard that implies
     another's. Rules whose guards merely *overlap* (neither implies the other) have no is-a
-    relationship to express; their guards must be mutually exclusive, since equal-specificity ties
-    resolve by registration order, which is not a contract.
+    relationship to express; their guards must be mutually exclusive, since an equal-specificity
+    tie is a collision raised as :class:`~krrood.entity_query_language.verbalization.exceptions.AmbiguousRuleError`.
 
     :param node: The EQL expression being dispatched.
     :param rules: The grammar.
     :param context: The per-node context, passed to each rule's ``when``.
     :return: The most-specific rule whose ``construct`` and ``when`` match *node*, or ``None``
         when none apply (the caller supplies the fallback).
+    :raises AmbiguousRuleError: When two rules are equally specific for *node*.
 
     The winning rule decides the phrasing: an inference-rule entity is dispatched to the
     more-derived ``InferenceRuleRule`` (an ``IF … THEN …`` block) rather than the plain
@@ -235,11 +237,14 @@ def select(
         for rule in rules
         if isinstance(node, rule.construct) and rule.when(node, context)
     ]
-    return most_specific(
+    return sole_maximum(
         candidates,
         key=lambda rule: (
             mro_depth(rule.construct),
             _is_guarded(rule),
             mro_depth(type(rule)),
+        ),
+        collision_error=lambda tied: AmbiguousRuleError(
+            subject=node, candidates=[type(rule) for rule in tied]
         ),
     )
