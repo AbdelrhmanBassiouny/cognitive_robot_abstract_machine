@@ -527,10 +527,14 @@ class Query(
             if isinstance(variable, Aggregator):
                 aggregated_variables.append(variable)
             elif isinstance(variable, InstantiatedVariable):
-                # A symbolic function (a callable applied to operands, e.g. quarter(month)) is a
-                # computed value: it is its own selectable unit, so it can be a GROUP BY key. An
-                # inference construction (a class applied to fields) is decomposed into its operands.
-                if not isinstance(variable._type_, type) and callable(variable._type_):
+                # A symbolic operation (a Predicate / SymbolicFunction applied to operands, e.g.
+                # quarter(month)) is a computed value: it is its own selectable unit, so it can be a
+                # GROUP BY key. An inference construction (a plain class applied to fields) is
+                # decomposed into its operands instead.
+                from krrood.entity_query_language.predicate import SymbolicCallable
+
+                type_ = variable._type_
+                if isinstance(type_, type) and issubclass(type_, SymbolicCallable):
                     non_aggregated_variables.append(variable)
                 else:
                     non_aggregated_variables.extend(variable._operation_children_)

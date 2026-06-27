@@ -249,9 +249,8 @@ class InstantiatedVariable(
                 if id_ in self._child_var_id_name_map_
             }
             # A callable class (Predicate / SymbolicFunction) exposes _bound_value_ -- it binds the
-            # constructed instance, or, for a value operation, its constructed-and-called value -- the
-            # class-form counterpart of a @symbolic_function being called. A plain function/type binds
-            # the direct call result.
+            # constructed instance, or, for a value operation, its constructed-and-called value. A
+            # plain function/type binds the direct call result.
             bind = getattr(self._type_, "_bound_value_", self._type_)
             instance = bind(**kwargs)
 

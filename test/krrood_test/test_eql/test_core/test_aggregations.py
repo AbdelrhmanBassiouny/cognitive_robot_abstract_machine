@@ -23,7 +23,11 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.inheritance_path_length import inheritance_path_length
 from ...dataset.example_classes import KRROODVectorsWithProperty
-from krrood.entity_query_language.predicate import length, symbolic_function
+from krrood.entity_query_language.predicate import (
+    length,
+    SymbolicFunction,
+    functional_form,
+)
 from krrood.entity_query_language.query.operations import GroupedBy
 from ...dataset.department_and_employee import Department, Employee
 from ...dataset.example_classes import NamedNumbers
@@ -86,9 +90,15 @@ def test_distinct_sum(test_numbers):
     ).tolist() == [6, 5]
 
 
-@symbolic_function
-def _parity(number: int) -> int:
-    return number % 2
+@dataclass(eq=False)
+class _Parity(SymbolicFunction):
+    number: int
+
+    def __call__(self) -> int:
+        return self.number % 2
+
+
+_parity = functional_form(_Parity)
 
 
 def test_grouped_by_symbolic_function_value_key():
@@ -729,13 +739,24 @@ def test_nearest_object_type():
     @dataclass
     class Level2Object(Object1): ...
 
-    @symbolic_function
-    def symbolic_distance(type1: Type, type2: Type) -> int | None:
-        return inheritance_path_length(type1, type2)
+    @dataclass(eq=False)
+    class SymbolicDistance(SymbolicFunction):
+        type1: Type
+        type2: Type
 
-    @symbolic_function
-    def eql_mro(object_: Any) -> tuple[Type]:
-        return object_.__class__.__mro__
+        def __call__(self) -> int | None:
+            return inheritance_path_length(self.type1, self.type2)
+
+    symbolic_distance = functional_form(SymbolicDistance)
+
+    @dataclass(eq=False)
+    class EqlMro(SymbolicFunction):
+        object_: Any
+
+        def __call__(self) -> tuple[Type]:
+            return self.object_.__class__.__mro__
+
+    eql_mro = functional_form(EqlMro)
 
     objects = [BaseObject(), Object1(), Object2()]
     object_of_interest = Level2Object()

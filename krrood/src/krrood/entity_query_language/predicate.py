@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import MISSING, dataclass, fields
-from functools import wraps
 
 from typing_extensions import (
     Callable,
@@ -32,7 +31,6 @@ if TYPE_CHECKING:
 
 from krrood.entity_query_language.utils import T, merge_args_and_kwargs
 from krrood.entity_query_language.core.variable import (
-    Variable,
     InstantiatedVariable,
     Literal,
 )
@@ -47,41 +45,14 @@ from krrood.patterns.code_parsing_utils import (
 from krrood.symbol_graph.symbol_graph import Symbol
 
 
-def symbolic_function(
-    function: Callable[..., T],
-) -> Union[Callable[..., Variable[T]], T]:
-    """
-    Function decorator that constructs a symbolic expression representing the function call
-     when inside a symbolic_rule context.
-
-    When symbolic mode is active, calling the method returns a Call instance which is a SymbolicExpression bound to
-    representing the method call that is not evaluated until the evaluate() method is called on the query/rule.
-
-    :param function: The function to decorate.
-    :return: The decorated function.
-    """
-
-    @wraps(function)
-    def wrapper(*args, **kwargs) -> Optional[Any]:
-        all_kwargs = merge_args_and_kwargs(function, args, kwargs)
-        if _any_of_the_kwargs_is_a_variable(all_kwargs):
-            return InstantiatedVariable(
-                _type_=function,
-                _kwargs_=all_kwargs,
-            )
-        return function(*args, **kwargs)
-
-    return wrapper
-
-
 def functional_form(symbolic_callable: Type[T]) -> Callable[..., Any]:
-    """:return: a function that calls *symbolic_callable* -- the class-form counterpart of the
-    :func:`symbolic_function` decorator.
+    """:return: a plain function that calls *symbolic_callable* -- the call-form of a symbolic
+    operation.
 
     It returns a symbolic expression when any argument is a variable (so it composes in a query) and
-    the directly computed value otherwise. Binding an existing function name to
-    ``functional_form(TheClass)`` lets a migration to the class form keep that name's behaviour
-    unchanged -- the logic moves into the class's ``__call__`` and the name just constructs it.
+    the directly computed value otherwise. Binding a name to ``functional_form(TheClass)`` gives a
+    :class:`SymbolicCallable` a plain function name: the logic lives in the class's ``__call__`` and
+    the name just constructs it.
     """
 
     def call(*args: Any, **kwargs: Any) -> Any:
@@ -340,8 +311,8 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
         concrete values -- the constructed instance itself by default (a :class:`Predicate`'s truth is
         then read from that instance). A value operation overrides this to its COMPUTED value.
 
-        ..note:: This is the class-form counterpart of calling a ``@symbolic_function``: for a function
-            the query binds ``function(**values)``; for a callable class it binds this.
+        ..note:: A query binds this value for a callable class (a :class:`Predicate`'s truth is then
+            read from the constructed instance).
         """
         return cls._construct_normally_(**kwargs)
 
@@ -417,8 +388,7 @@ class Predicate(SymbolicCallable, ABC):
     def _verbalization_fragment_(cls, operands: "OperandView") -> "Fragment":
         """Default boolean surface — a clause read off the class name: copular for an ``Is…`` name
         (``IsReachable`` → *"<subject> is reachable"*), verb-first otherwise (``ConnectsTo`` →
-        *"<subject> connects to <object>"*). The class-form counterpart of a boolean
-        ``@symbolic_function``'s reading, so every predicate reads sensibly without extra code.
+        *"<subject> connects to <object>"*), so every predicate reads sensibly without extra code.
 
         ..warning:: This name-based default is a best guess — correct only when the class name reads
             as the predicate. When it does not, override this method with a
@@ -447,15 +417,14 @@ class SymbolicFunction(SymbolicCallable, ABC):
     @classmethod
     def _bound_value_(cls, **kwargs) -> Any:
         """:return: the COMPUTED value -- a value operation is constructed AND called, so a query binds
-        what it computes (exactly as a ``@symbolic_function`` is called), not the instance.
+        what it computes, not the instance.
         """
         return cls._construct_normally_(**kwargs)()
 
     @classmethod
     def _verbalization_fragment_(cls, operands: "OperandView") -> "Fragment":
         """Default value surface — *"the <name> of <arguments>"* read off the class name
-        (``NodeId`` → *"the node id of …"*), the class-form counterpart of a value
-        ``@symbolic_function``'s reading, so every value function reads sensibly without extra code.
+        (``NodeId`` → *"the node id of …"*), so every value function reads sensibly without extra code.
 
         ..warning:: This name-based default is a best guess — correct only when the class name already
             reads as the noun the value is. When the reading is wrong, override this method with a

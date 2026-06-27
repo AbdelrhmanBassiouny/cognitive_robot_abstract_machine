@@ -1,10 +1,11 @@
-"""``@symbolic_function`` verbalization: boolean predicates read as clauses, value functions as nouns.
+"""Symbolic-operation verbalization: a boolean :class:`Predicate` reads as a clause, a value
+:class:`SymbolicFunction` as a noun.
 
-A boolean symbolic function reads as a predicate clause — copular for an ``is_…`` name, verb-first
-otherwise — instead of the generic *"a TypeName, where …"* decomposition. It composes with the rest
-of the grammar (placed under *"such that …"*, negated inline). A value (non-bool) function is not a
-truth value, so it reads as a noun naming the value it computes (``quarter(month)`` → *"a quarter"*),
-and a grouped report names such a key by that noun (*"For each year and quarter, report …"*).
+A :class:`Predicate` reads as a predicate clause — copular for an ``Is…`` name, verb-first otherwise
+— instead of the generic *"a TypeName, where …"* decomposition. It composes with the rest of the
+grammar (placed under *"such that …"*, negated inline). A :class:`SymbolicFunction` is not a truth
+value, so it reads as a noun naming the value it computes (``Quarter`` → *"the quarter of …"*), and a
+grouped report names such a key by that noun (*"For each year and quarter, report …"*).
 """
 
 from dataclasses import dataclass
@@ -17,7 +18,7 @@ from krrood.entity_query_language.predicate import (
     Predicate,
     SymbolicCallable,
     SymbolicFunction,
-    symbolic_function,
+    functional_form,
 )
 from krrood.entity_query_language.verbalization.fragments.base import WordFragment
 from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
@@ -81,8 +82,8 @@ class _Doubled(SymbolicFunction):
 
 
 def test_migrated_length_keeps_its_surface_and_value():
-    # `length` migrated from @symbolic_function to a SymbolicFunction class behind a functional_form
-    # wrapper: same name, same default surface ("the length of ..."), same computed value.
+    # `length` is a SymbolicFunction class behind a functional_form wrapper: the name keeps its
+    # default surface ("the length of ...") and its computed value.
     assert issubclass(Length, SymbolicFunction)
     assert verbalize_expression(a(set_of(length(variable(list, []))))) == "Find the length of a list"
     items = variable(list, domain=[[1, 2], [], [3, 4, 5]])
@@ -91,37 +92,68 @@ def test_migrated_length_keeps_its_surface_and_value():
 
 
 def test_symbolic_function_binds_its_computed_value_in_a_query():
-    # In a query a value SymbolicFunction binds what it COMPUTES (constructed AND called), exactly like
-    # a @symbolic_function -- not the constructed instance.
+    # In a query a value SymbolicFunction binds what it COMPUTES (constructed AND called), not the
+    # constructed instance.
     numbers = variable(int, domain=[1, 2, 3])
     rows = a(set_of(_Doubled(numbers))).tolist()
     values = sorted(next(iter(row.values())) for row in rows)
     assert values == [2, 4, 6]
 
 
-@symbolic_function
-def parity(number: int) -> int:
-    return number % 2
+@dataclass(eq=False)
+class Parity(SymbolicFunction):
+    number: int
+
+    def __call__(self) -> int:
+        return self.number % 2
 
 
-@symbolic_function
-def get_quarter(month: int) -> int:
-    return (month - 1) // 3 + 1
+parity = functional_form(Parity)
 
 
-@symbolic_function
-def is_one_month(period: int) -> bool:
-    return True
+@dataclass(eq=False)
+class GetQuarter(SymbolicFunction):
+    month: int
+
+    def __call__(self) -> int:
+        return (self.month - 1) // 3 + 1
 
 
-@symbolic_function
-def is_even(number: int) -> bool:
-    return number % 2 == 0
+get_quarter = functional_form(GetQuarter)
 
 
-@symbolic_function
-def divides(divisor: int, dividend: int) -> bool:
-    return dividend % divisor == 0
+@dataclass(eq=False)
+class IsOneMonth(Predicate):
+    period: int
+
+    def __call__(self) -> bool:
+        return True
+
+
+is_one_month = functional_form(IsOneMonth)
+
+
+@dataclass(eq=False)
+class IsEven(Predicate):
+    number: int
+
+    def __call__(self) -> bool:
+        return self.number % 2 == 0
+
+
+is_even = functional_form(IsEven)
+
+
+@dataclass(eq=False)
+class Divides(Predicate):
+    divisor: int
+    dividend: int
+
+    def __call__(self) -> bool:
+        return self.dividend % self.divisor == 0
+
+
+divides = functional_form(Divides)
 
 
 def test_copular_function_reads_as_a_copular_clause():
@@ -152,8 +184,8 @@ def test_verb_first_function_has_a_subject_and_an_object():
 
 
 def test_value_function_is_not_treated_as_a_predicate_clause():
-    # length returns int, so it is a value, not a predicate -- the clause rule must not claim it.
-    assert not InstantiatedPlanner.is_boolean_symbolic_function(length(variable(list, [])))
+    # length returns int, so it is a value, not a predicate -- it must not render as a clause.
+    assert not InstantiatedPlanner.renders_as_predicate_clause(length(variable(list, [])))
 
 
 def test_value_function_reads_as_the_value_of_its_arguments():
@@ -214,8 +246,7 @@ class _IsPositive(Predicate):
 
 def test_value_function_inherits_the_name_based_default_surface():
     # With no override, a SymbolicFunction reads through the inherited default "the <name> of <args>"
-    # -- exactly the surface the @symbolic_function decorator produced -- so a migration needs no
-    # per-class fragment.
+    # -- so a value operation needs no per-class fragment.
     assert (
         verbalize_expression(a(set_of(_Tripled(variable(int, [])))))
         == "Find the tripled of an int"
@@ -224,7 +255,7 @@ def test_value_function_inherits_the_name_based_default_surface():
 
 def test_predicate_inherits_the_name_based_default_clause():
     # With no override, a Predicate reads through the inherited default clause, negating inline under
-    # a where with coreference -- same surface a boolean @symbolic_function produced.
+    # a where with coreference.
     number = variable(int, [])
     assert (
         verbalize_expression(an(entity(number).where(_IsPositive(number))))

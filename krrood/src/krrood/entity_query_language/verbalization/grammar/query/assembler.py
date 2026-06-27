@@ -8,6 +8,7 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import InstantiatedVariable
+from krrood.entity_query_language.predicate import SymbolicCallable
 from krrood.entity_query_language.verbalization.cardinality import (
     Cardinality,
     column_cardinality,
@@ -388,10 +389,15 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         reads as a sentence instead of a code-like *"the highest (a, b)"*. Truly unrelated columns, or
         a top-*n* (``n > 1``) listing, keep the bracketed tuple (they are genuinely a tuple of rows).
 
-        >>> from krrood.entity_query_language.predicate import symbolic_function
-        >>> @symbolic_function
-        ... def parity(number: int) -> int:
-        ...     return number % 2
+        >>> from dataclasses import dataclass
+        >>> from krrood.entity_query_language.predicate import (
+        ...     SymbolicFunction, functional_form)
+        >>> @dataclass(eq=False)
+        ... class Parity(SymbolicFunction):
+        ...     number: int
+        ...     def __call__(self) -> int:
+        ...         return self.number % 2
+        >>> parity = functional_form(Parity)
         >>> numbers = variable(int, [])
         >>> key = parity(numbers)
         >>> total = sum(numbers)
@@ -643,11 +649,12 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             return RoleFragment.for_attribute(
                 key._owner_class_, key._attribute_name_, number=number
             )
-        if isinstance(key, InstantiatedVariable) and (
-            InstantiatedPlanner.is_value_symbolic_function(key)
-            or InstantiatedPlanner.is_boolean_symbolic_function(key)
+        if (
+            isinstance(key, InstantiatedVariable)
+            and isinstance(key._type_, type)
+            and issubclass(key._type_, SymbolicCallable)
         ):
-            # A symbolic-function group key is named by the value it computes ("quarter"), a bare
+            # A symbolic-operation group key is named by the value it computes ("quarter"), a bare
             # label like an attribute key, not the raw callable.
             return RoleFragment.for_type(
                 key._type_,

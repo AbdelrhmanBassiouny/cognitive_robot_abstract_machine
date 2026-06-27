@@ -25,8 +25,10 @@ from krrood.entity_query_language.core.mapped_variable import (
 )
 from krrood.entity_query_language.core.variable import (
     DomainType,
+    InstantiatedVariable,
     Literal,
     ExternallySetVariable,
+    Variable,
 )
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import UnsupportedExpressionTypeForDistinct
@@ -54,7 +56,6 @@ from krrood.entity_query_language.predicate import (
     Predicate,
     SymbolicFunction,
     functional_form,
-    symbolic_function,
 )
 from krrood.entity_query_language.query.match import (
     Match,
