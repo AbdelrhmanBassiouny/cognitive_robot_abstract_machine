@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import trimesh.boolean
 from trimesh.collision import CollisionManager
-from typing_extensions import List, Self, TYPE_CHECKING, Iterable, Type
+from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
 from krrood.entity_query_language.predicate import (
     Predicate,
