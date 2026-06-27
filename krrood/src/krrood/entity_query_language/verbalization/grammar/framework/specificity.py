@@ -1,105 +1,15 @@
 from __future__ import annotations
 
-import inspect
 from abc import ABC
 
-from typing_extensions import (
-    Any,
-    Callable,
-    List,
-    Optional,
-    Sequence,
-    Type,
-    TypeVar,
-)
+from typing_extensions import Any, List, Optional, Type
 
 from krrood.entity_query_language.verbalization.exceptions import AmbiguousRuleError
-from krrood.utils import recursive_subclasses
-
-_T = TypeVar("_T")
-
-
-def maxima(candidates: Sequence[_T], key: Callable[[_T], Any]) -> List[_T]:
-    """
-    :param candidates: Items already filtered to those that apply.
-    :param key: Specificity key; the highest value wins.
-    :return: Every candidate sharing the maximum *key* (more than one ⇒ a tie); empty when there
-        are no candidates.
-
-    >>> maxima(["a", "abc", "ab"], key=len)
-    ['abc']
-    >>> maxima(["ab", "cd", "a"], key=len)
-    ['ab', 'cd']
-    >>> maxima([], key=len)
-    []
-    """
-    if not candidates:
-        return []
-    best = max(key(candidate) for candidate in candidates)
-    return [candidate for candidate in candidates if key(candidate) == best]
-
-
-def sole_maximum(
-    candidates: Sequence[_T],
-    key: Callable[[_T], Any],
-    collision_error: Callable[[List[_T]], Exception],
-) -> Optional[_T]:
-    """
-    :param candidates: Items already filtered to those that apply.
-    :param key: Specificity key; the highest value wins.
-    :param collision_error: Builds the exception to raise when several candidates tie, given the
-        tied candidates. Injected so this stays decoupled from any one caller's exception type.
-    :return: The single most-specific candidate by *key*, or ``None`` when empty.
-    :raises Exception: The *collision_error* result when two or more candidates are equally specific.
-
-    >>> sole_maximum(["a", "abc", "ab"], key=len, collision_error=AssertionError)
-    'abc'
-    >>> sole_maximum([], key=len, collision_error=AssertionError) is None
-    True
-    """
-    winners = maxima(candidates, key)
-    if len(winners) > 1:
-        raise collision_error(winners)
-    return winners[0] if winners else None
-
-
-def mro_depth(cls: type) -> int:
-    """
-    :param cls: A class.
-    :return: Its specificity — deeper in the hierarchy ⇒ more specific (a subclass outranks the
-        alternative it refines).
-
-    >>> mro_depth(object)
-    1
-    >>> mro_depth(bool) > mro_depth(int)
-    True
-    """
-    return len(cls.__mro__)
-
-
-def concrete_subclasses(base: Type[_T]) -> List[Type[_T]]:
-    """
-    The single subclass-discovery primitive: every concrete (instantiable) transitive subclass of
-    *base*, abstract intermediates excluded. Shared by the ``RULES`` registry (over
-    :class:`PhraseRule`) and the :class:`SpecificityRule` families (over each family base), so
-    discovery is defined once.
-
-    :param base: The family / rule base class.
-    :return: Its concrete transitive subclasses.
-
-    This is the low-level primitive doing the walk: it collects the instantiable forms under
-    ``RankingForm`` and drops the abstract base — the raw list :meth:`SpecificityRule.alternatives`
-    then exposes per family.
-
-    >>> from krrood.entity_query_language.verbalization.grammar.query.ranking import RankingForm
-    >>> sorted(rule.__name__ for rule in concrete_subclasses(RankingForm))
-    ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm']
-    """
-    return [
-        subclass
-        for subclass in recursive_subclasses(base)
-        if not inspect.isabstract(subclass)
-    ]
+from krrood.patterns.specificity_ranking import (
+    concrete_subclasses,
+    mro_depth,
+    sole_maximum,
+)
 
 
 class SpecificityRule(ABC):

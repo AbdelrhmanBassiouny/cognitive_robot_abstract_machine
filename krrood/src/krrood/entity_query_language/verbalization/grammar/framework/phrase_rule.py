@@ -10,10 +10,7 @@ from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.exceptions import AmbiguousRuleError
-from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
-    mro_depth,
-    sole_maximum,
-)
+from krrood.patterns.specificity_ranking import mro_depth, sole_maximum
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.context import MicroplanningServices

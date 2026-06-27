@@ -17,7 +17,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
     select,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.registry import RULES
-from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
+from krrood.patterns.specificity_ranking import (
     concrete_subclasses,
     maxima,
     sole_maximum,
