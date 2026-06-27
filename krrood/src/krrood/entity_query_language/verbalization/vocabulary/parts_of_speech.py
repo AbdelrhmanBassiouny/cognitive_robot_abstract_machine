@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from typing_extensions import Any, Iterable, Protocol, Union, runtime_checkable
+from typing_extensions import Any, Iterable, List, Protocol, Union, runtime_checkable
 
 from krrood.entity_query_language.predicate import Field, Operand
 from krrood.entity_query_language.utils import camel_case_to_words
@@ -34,6 +34,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Copulas,
     ENGLISH_PREPOSITIONS,
+    GroupingPhrases,
     SetMembership,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import (
@@ -131,6 +132,25 @@ class Adjective(ClauseElement):
         'reachable'
         """
         return WordFragment(text=self.word)
+
+
+@dataclass(frozen=True)
+class All(ClauseElement):
+    """The universal quantifier *"all"* fronting a clause's subject.
+
+    In a :func:`clause` it both reads as *"all"* and tells the builder to make the quantified subject
+    — the first noun phrase after it — plural and to agree the clause's verb / copula, so
+    ``clause(All(), Noun("element"), Copula(), Adjective("close"))`` reads *"all elements are close"*.
+    Only the number features are set here; the morphology pass does the inflection (*"element"* →
+    *"elements"*, *"is"* → *"are"*)."""
+
+    def as_fragment(self) -> Fragment:
+        """:return: the *"all"* quantifier word leaf.
+
+        >>> All().as_fragment().text
+        'all'
+        """
+        return GroupingPhrases.ALL.as_fragment()
 
 
 @dataclass(frozen=True)
@@ -251,8 +271,46 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     ...            Noun(WordFragment(text="a Department")))
     ... )
     'an Employee work in a Department'
+
+    An :class:`All` quantifier makes the clause read a universal: the subject it fronts becomes plural
+    and the verb / copula agrees.
+
+    >>> flatten_fragment_to_plain_text(
+    ...     clause(All(), Noun("element"), Copula(), Adjective("close"))
+    ... )
+    'all elements are close'
     """
-    return Clause(parts=[constituent.as_fragment() for constituent in constituents])
+    parts = [(constituent, constituent.as_fragment()) for constituent in constituents]
+    if any(isinstance(constituent, All) for constituent, _ in parts):
+        return Clause(parts=_agree_with_universal_quantifier(parts))
+    return Clause(parts=[fragment for _, fragment in parts])
+
+
+def _agree_with_universal_quantifier(
+    parts: List[tuple],
+) -> List[Fragment]:
+    """:return: the clause fragments with universal-quantifier agreement applied — the quantified
+    subject (the first noun phrase after the :class:`All` word) is made plural and the clause's
+    copula / verb agrees. Only the number features are set; the morphology pass inflects them.
+    """
+    fragments: List[Fragment] = []
+    seen_all = False
+    subject_pluralized = False
+    for constituent, fragment in parts:
+        if isinstance(constituent, All):
+            seen_all = True
+            fragments.append(fragment)
+        elif seen_all and not subject_pluralized and isinstance(fragment, NounPhrase):
+            fragments.append(replace(fragment, number=Number.PLURAL))
+            subject_pluralized = True
+        elif isinstance(fragment, RoleFragment) and fragment.role in (
+            SemanticRole.OPERATOR,
+            SemanticRole.VERB,
+        ):
+            fragments.append(replace(fragment, number=Number.PLURAL))
+        else:
+            fragments.append(fragment)
+    return fragments
 
 
 _COPULA_LEMMA = "be"

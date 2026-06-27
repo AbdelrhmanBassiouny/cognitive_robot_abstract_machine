@@ -46,6 +46,7 @@ from krrood.entity_query_language.verbalization.rendering.morphology_processor i
 )
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
+    All,
     clause,
     Copula,
     Noun,
@@ -205,3 +206,46 @@ def test_predicate_returning_a_string_template_is_rejected():
 
     with pytest.raises(NonFragmentPredicateError):
         verbalize_expression(SaysHello(variable(Location, [])))
+
+
+# ── universal quantifier ───────────────────────────────────────────────────────
+
+
+def test_all_quantifier_pluralizes_subject_and_agrees_copula():
+    # All makes the quantified subject (the first noun after it) plural and agrees the copula; the
+    # morphology pass does the inflection ("element" -> "elements", "is" -> "are").
+    assert (
+        flatten_fragment_to_plain_text(
+            realize_tree(clause(All(), Noun("element"), Copula(), Adjective("close")))
+        )
+        == "all elements are close"
+    )
+
+
+def test_all_quantifier_agrees_a_verb():
+    assert (
+        flatten_fragment_to_plain_text(
+            realize_tree(clause(All(), Noun("robot"), Verb("work")))
+        )
+        == "all robots work"
+    )
+
+
+def test_all_quantifier_only_pluralizes_the_quantified_subject():
+    # "all elements of an array" -- only the fronted subject ("element") is pluralized, not a later
+    # noun ("array").
+    assert (
+        flatten_fragment_to_plain_text(
+            realize_tree(
+                clause(
+                    All(),
+                    Noun("element"),
+                    Preposition.OF,
+                    Noun("array"),
+                    Copula(),
+                    Adjective("close"),
+                )
+            )
+        )
+        == "all elements of an array are close"
+    )
