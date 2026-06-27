@@ -3,9 +3,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Iterable, Protocol, Union, runtime_checkable
+from typing_extensions import Any, Iterable, Protocol, Union, runtime_checkable
 
-from krrood.entity_query_language.predicate import VerbalizationField
+from krrood.entity_query_language.predicate import Operand, VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -57,9 +57,12 @@ class Noun(ClauseElement):
     """A noun constituent — a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`, an
     already-rendered fragment, or a literal noun given by its *head word only*."""
 
-    content: Union[str, "ClauseConstituent"]
+    content: Any
     """A literal noun *head* (the article is a feature, not part of the text — write ``"instance"``,
-    not ``"an instance"``), or any constituent (a field, a rendered fragment) rendered as-is."""
+    not ``"an instance"``), or any constituent rendered as-is — a rendered fragment, or an
+    :class:`~krrood.entity_query_language.predicate.Operand` (``operands.body`` / ``operands.tip.name``).
+    Typed :class:`~typing.Any` because an operand is statically the field's declared type (so the IDE
+    resolves its attributes), not a constituent type."""
 
     definiteness: Definiteness = Definiteness.INDEFINITE
     """For a literal-head noun, the article to realise — *"an instance"* (indefinite, the default) vs
@@ -151,10 +154,11 @@ class OneOf(ClauseElement):
     surface a domain-constrained variable uses.
     """
 
-    members: Union[Iterable, VerbalizationField]
-    """The admissible values — a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`
-    bound to a collection, or a collection directly. Classes render as linked type references, other
-    values as literals."""
+    members: Union[Iterable, VerbalizationField, Operand, Any]
+    """The admissible values — an :class:`~krrood.entity_query_language.predicate.Operand`
+    (``operands.types_``) or :class:`~krrood.entity_query_language.predicate.VerbalizationField` bound
+    to a collection, or a collection directly. Classes render as linked type references, other values
+    as literals."""
 
     def as_fragment(self) -> VerbalizationFragment:
         """:return: the membership phrase, or a count summary past the cap.
@@ -165,11 +169,13 @@ class OneOf(ClauseElement):
         >>> flatten_fragment_to_plain_text(OneOf((int, str)).as_fragment())
         'one of Integer or Text'
         """
-        members = list(
-            self.members.value
-            if isinstance(self.members, VerbalizationField)
-            else self.members
-        )
+        if isinstance(self.members, Operand):
+            collection = self.members._value_of_operand_
+        elif isinstance(self.members, VerbalizationField):
+            collection = self.members.value
+        else:
+            collection = self.members
+        members = list(collection)
         are_types = bool(members) and all(
             isinstance(member, type) for member in members
         )
