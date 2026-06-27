@@ -26,6 +26,10 @@ from krrood.entity_query_language.verbalization.microplanning.coordination impor
     MAX_SET_MEMBERS,
     one_of,
 )
+from krrood.entity_query_language.verbalization.microplanning.possessive import (
+    possessive_path,
+)
+from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Copulas,
@@ -264,6 +268,38 @@ def value_function_noun(name: str) -> str:
     if len(words) > 1 and words[0].lower() == _VALUE_GETTER_PREFIX:
         words = words[1:]
     return " ".join(words)
+
+
+def value_function_phrase(name: str, *operands: ClauseConstituent) -> Fragment:
+    """Build *"the &lt;noun&gt; of &lt;operands&gt;"* for a value function — the counterpart of
+    :func:`predicate_clause` for an operation that computes a value rather than a truth.
+
+    The *name* is read as the value's noun (a leading ``get`` dropped), and the operands are read out
+    as a genitive over it. A nullary function is just the noun. This is the default, name-based surface
+    a value :class:`~krrood.entity_query_language.predicate.SymbolicFunction` reuses, so the reading
+    lives in one place.
+
+    :param name: The function's identifier.
+    :param operands: The function's already-rendered arguments.
+    :return: The value noun phrase.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text, WordFragment,
+    ... )
+    >>> flatten_fragment_to_plain_text(value_function_phrase("get_quarter"))
+    'quarter'
+    >>> flatten_fragment_to_plain_text(
+    ...     value_function_phrase("remaining_load", WordFragment(text="the capacity"))
+    ... )
+    'the remaining load of the capacity'
+    """
+    noun = value_function_noun(name)
+    if not operands:
+        return Noun(WordFragment(text=noun)).as_fragment()
+    owner = oxford_comma(
+        [operand.as_fragment() for operand in operands], Conjunctions.AND.as_fragment()
+    )
+    return possessive_path([PathStep(noun)], owner)
 
 
 def predicate_clause(

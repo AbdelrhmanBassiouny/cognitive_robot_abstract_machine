@@ -73,6 +73,23 @@ def symbolic_function(
     return wrapper
 
 
+def functional_form(symbolic_callable: Type[T]) -> Callable[..., Any]:
+    """:return: a function that calls *symbolic_callable* -- the class-form counterpart of the
+    :func:`symbolic_function` decorator.
+
+    It returns a symbolic expression when any argument is a variable (so it composes in a query) and
+    the directly computed value otherwise. Binding an existing function name to
+    ``functional_form(TheClass)`` lets a migration to the class form keep that name's behaviour
+    unchanged -- the logic moves into the class's ``__call__`` and the name just constructs it.
+    """
+
+    def call(*args: Any, **kwargs: Any) -> Any:
+        result = symbolic_callable(*args, **kwargs)
+        return result() if isinstance(result, symbolic_callable) else result
+
+    return call
+
+
 @dataclass(frozen=True)
 class Field:
     """One predicate field as ``_verbalization_fragment_`` sees it.
@@ -400,13 +417,28 @@ class HasTypes(HasType):
         return clause(Noun(fields["variable"]), Copula(), OneOf(fields["types_"]))
 
 
-@symbolic_function
-def length(iterable: Sized) -> int:
-    """
-    :param iterable: The iterable.
-    :return: The length of the iterable.
-    """
-    return len(iterable)
+@dataclass(eq=False)
+class Length(SymbolicFunction):
+    """The number of items in an iterable, as a value operation."""
+
+    iterable: Sized
+    """The iterable whose length is computed."""
+
+    def __call__(self) -> int:
+        return len(self.iterable)
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> "Fragment":
+        # Imported locally to avoid a core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
+
+
+length = functional_form(Length)
+"""Backward-compatible functional form of :class:`Length` (keeps the ``length(iterable)`` call)."""
 
 
 def _any_of_the_kwargs_is_a_variable(bindings: Dict[str, Any]) -> bool:
