@@ -8,7 +8,7 @@ from regular Python functions when variables are present.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import wraps
 
 from typing_extensions import (
@@ -185,10 +185,12 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
     """A user-defined, self-verbalizing symbolic operation.
 
     It is CALLED with arguments, is represented as an :class:`InstantiatedVariable` in a query when
-    any argument is symbolic, and renders itself through its required
-    :meth:`Verbalizable._verbalization_fragment_` (no name-based fallback). :class:`Predicate` (a
-    boolean operation) and :class:`SymbolicFunction` (a value operation) are its two concrete kinds,
-    so the symbolic-construction machinery lives here once rather than in each.
+    any argument is symbolic, and renders itself through :meth:`Verbalizable._verbalization_fragment_`.
+    Its two concrete kinds — :class:`Predicate` (a boolean operation) and :class:`SymbolicFunction`
+    (a value operation) — each supply a name-based DEFAULT fragment, so a subclass reads sensibly with
+    no extra code and overrides only when that default is wrong. Inspect the default (or an override)
+    with :meth:`preview_verbalization` to decide. The symbolic-construction machinery lives here once
+    rather than in each kind.
     """
 
     _cache_instances_: ClassVar[bool] = False
@@ -237,6 +239,41 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
         """
         return cls._construct_normally_(**kwargs)
 
+    @classmethod
+    def preview_verbalization(cls) -> str:
+        """:return: the surface this operation renders to, with each argument shown as a placeholder
+        named after its field — so a developer SEES the reading :meth:`Verbalizable._verbalization_fragment_`
+        produces (the inherited name-based default, or an override) and can decide whether to override
+        it, without constructing a whole query.
+
+        >>> Length.preview_verbalization()
+        'the length of iterable'
+        """
+        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.fragments.base import WordFragment
+        from krrood.entity_query_language.verbalization.rendering.realization import (
+            realize_subtree,
+        )
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            Noun,
+        )
+
+        # Only the operands (the fields a subclass declares) are arguments; the fields inherited from
+        # SymbolicCallable are infrastructure and are not part of the surface (a real call renders
+        # only its _child_vars_).
+        infrastructure = {field.name for field in fields(SymbolicCallable)}
+        field_names = [
+            field.name for field in fields(cls) if field.name not in infrastructure
+        ]
+        placeholders = {
+            name: Noun(WordFragment(text=name.replace("_", " ").strip())).as_fragment()
+            for name in field_names
+        }
+        rendered_fields = RenderedFields(
+            fragments=placeholders, raw=dict.fromkeys(field_names)
+        )
+        return realize_subtree(cls._verbalization_fragment_(rendered_fields))
+
     @abstractmethod
     def __call__(self) -> Any:
         """
@@ -262,6 +299,26 @@ class Predicate(SymbolicCallable, ABC):
         """
         return bool(self.__call__())
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> "Fragment":
+        """Default boolean surface — a clause read off the class name: copular for an ``Is…`` name
+        (``IsReachable`` → *"<subject> is reachable"*), verb-first otherwise (``ConnectsTo`` →
+        *"<subject> connects to <object>"*). The class-form counterpart of a boolean
+        ``@symbolic_function``'s reading, so every predicate reads sensibly without extra code.
+
+        ..warning:: This name-based default is a best guess — correct only when the class name reads
+            as the predicate. When it does not, override this method with a
+            :func:`~…vocabulary.parts_of_speech.clause` built from the part-of-speech vocabulary.
+            Call :meth:`SymbolicCallable.preview_verbalization` to SEE the exact surface and decide.
+        """
+        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            predicate_clause,
+        )
+
+        subject, *objects = fields.values()
+        return predicate_clause(cls.__name__, subject, *objects)
+
 
 @dataclass(eq=False)
 class SymbolicFunction(SymbolicCallable, ABC):
@@ -269,9 +326,8 @@ class SymbolicFunction(SymbolicCallable, ABC):
 
     Like :class:`Predicate` it is a self-verbalizing symbolic callable, but its :meth:`__call__`
     returns a value (not a truth value), so its :meth:`Verbalizable._verbalization_fragment_` names
-    that value as a NOUN PHRASE rather than a clause. Subclass it when the default
-    *"the &lt;name&gt; of &lt;arguments&gt;"* reading produced by the :func:`symbolic_function` decorator is not
-    the surface you want; for a plain value function the decorator remains the simplest form.
+    that value as a NOUN PHRASE rather than a clause. The default reads *"the &lt;name&gt; of
+    &lt;arguments&gt;"* off the class name; override it when that is not the surface you want.
     """
 
     @classmethod
@@ -280,6 +336,24 @@ class SymbolicFunction(SymbolicCallable, ABC):
         what it computes (exactly as a ``@symbolic_function`` is called), not the instance.
         """
         return cls._construct_normally_(**kwargs)()
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> "Fragment":
+        """Default value surface — *"the <name> of <arguments>"* read off the class name
+        (``NodeId`` → *"the node id of …"*), the class-form counterpart of a value
+        ``@symbolic_function``'s reading, so every value function reads sensibly without extra code.
+
+        ..warning:: This name-based default is a best guess — correct only when the class name already
+            reads as the noun the value is. When the reading is wrong, override this method with a
+            phrase built from the part-of-speech vocabulary. Call
+            :meth:`SymbolicCallable.preview_verbalization` to SEE the exact surface and decide.
+        """
+        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
 
     @abstractmethod
     def __call__(self) -> Any:
@@ -419,22 +493,17 @@ class HasTypes(HasType):
 
 @dataclass(eq=False)
 class Length(SymbolicFunction):
-    """The number of items in an iterable, as a value operation."""
+    """The number of items in an iterable, as a value operation.
+
+    Its surface is the inherited :class:`SymbolicFunction` default — *"the length of <iterable>"* —
+    so it needs no ``_verbalization_fragment_`` of its own.
+    """
 
     iterable: Sized
     """The iterable whose length is computed."""
 
     def __call__(self) -> int:
         return len(self.iterable)
-
-    @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> "Fragment":
-        # Imported locally to avoid a core -> verbalization import cycle (as Triple does).
-        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-            value_function_phrase,
-        )
-
-        return value_function_phrase(cls.__name__, *fields.values())
 
 
 length = functional_form(Length)

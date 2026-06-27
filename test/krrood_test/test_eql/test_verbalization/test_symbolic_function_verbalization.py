@@ -190,6 +190,65 @@ def test_grouped_report_names_a_value_function_key_as_a_noun():
     assert text == "For each parity, report the sum of ints"
 
 
+@dataclass(eq=False)
+class _Tripled(SymbolicFunction):
+    """A value SymbolicFunction with NO fragment override, to test the inherited default surface."""
+
+    number: int
+    """The number it triples."""
+
+    def __call__(self) -> int:
+        return self.number * 3
+
+
+@dataclass(eq=False)
+class _IsPositive(Predicate):
+    """A Predicate with NO fragment override, to test the inherited default clause surface."""
+
+    number: int
+    """The number checked for positivity."""
+
+    def __call__(self) -> bool:
+        return self.number > 0
+
+
+def test_value_function_inherits_the_name_based_default_surface():
+    # With no override, a SymbolicFunction reads through the inherited default "the <name> of <args>"
+    # -- exactly the surface the @symbolic_function decorator produced -- so a migration needs no
+    # per-class fragment.
+    assert (
+        verbalize_expression(a(set_of(_Tripled(variable(int, [])))))
+        == "Find the tripled of an int"
+    )
+
+
+def test_predicate_inherits_the_name_based_default_clause():
+    # With no override, a Predicate reads through the inherited default clause, negating inline under
+    # a where with coreference -- same surface a boolean @symbolic_function produced.
+    number = variable(int, [])
+    assert (
+        verbalize_expression(an(entity(number).where(_IsPositive(number))))
+        == "Find an int such that it is positive"
+    )
+
+
+def test_preview_shows_the_inherited_default_value_surface():
+    # preview_verbalization lets a developer SEE the default surface (args as field-named placeholders)
+    # and decide inherit-vs-override -- here the name "Tripled" is not a noun, so the awkward reading
+    # is exactly the signal to override.
+    assert Length.preview_verbalization() == "the length of iterable"
+    assert _Tripled.preview_verbalization() == "the tripled of number"
+
+
+def test_preview_shows_the_inherited_default_predicate_clause():
+    assert _IsPositive.preview_verbalization() == "number is positive"
+
+
+def test_preview_shows_a_custom_override_surface():
+    # An overridden _verbalization_fragment_ is previewed too, so the same tool confirms the override.
+    assert _RemainingLoad.preview_verbalization() == "the remaining load"
+
+
 def test_ranked_grouped_report_by_a_value_key_reads_as_a_sentence_not_a_tuple():
     # The motivating case: grouping by a value function and taking the single row with the highest
     # aggregate must read as a plain sentence, never "the highest (a, b)".
