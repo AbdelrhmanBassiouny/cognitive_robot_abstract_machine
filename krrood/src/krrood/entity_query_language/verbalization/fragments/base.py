@@ -41,7 +41,7 @@ class Fragment:
     back to the query it came from (for example, coreference looks up the focus of a query-sourced
     fragment). It is never used for equality or rendering."""
 
-    def as_fragment(self) -> "Fragment":
+    def as_fragment(self) -> Fragment:
         """:return: this fragment itself — the identity that lets an already-rendered fragment be a
         clause constituent on equal footing with the typed part-of-speech elements (see
         ``vocabulary.parts_of_speech.ClauseConstituent``)."""

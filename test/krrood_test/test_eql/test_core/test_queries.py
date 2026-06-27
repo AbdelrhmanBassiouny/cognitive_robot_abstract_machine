@@ -40,7 +40,9 @@ from krrood.entity_query_language.predicate import (
     symbolic_function,
     Predicate,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     clause,
     Noun,
@@ -617,7 +619,7 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
         def _verbalization_fragment_(cls, fields):
             return clause(
                 Noun(fields["body1"]),
-                Verb("share", number=Number.PLURAL),
+                Verb("share", number=GrammaticalNumber.PLURAL),
                 Noun("first character"),
                 Preposition.WITH,
                 Noun(fields["body2"]),

@@ -84,13 +84,13 @@ class VerbalizationField:
     author just passes ``fields[name]`` and the right thing happens, never an explicit accessor.
     """
 
-    fragment: "Fragment"
+    fragment: Fragment
     """The field's rendered, source-linked fragment — what :class:`Noun` uses."""
 
     value: Any
     """The raw Python value bound to the field (a literal's value) — what :class:`OneOf` enumerates."""
 
-    def as_fragment(self) -> "Fragment":
+    def as_fragment(self) -> Fragment:
         """:return: the field's rendered fragment, so a :class:`VerbalizationField` is a clause constituent like
         the part-of-speech elements — ``clause(field)`` and ``Noun(field)`` both work.
         """
@@ -188,7 +188,7 @@ class Predicate(Symbol, Verbalizable, ABC):
         return super().__new__(cls)
 
     @classmethod
-    def _construct_normally_(cls, **kwargs) -> "Predicate":
+    def _construct_normally_(cls, **kwargs) -> Predicate:
         """
         Construct a concrete predicate instance directly, bypassing the symbolic ``__new__`` check.
 
@@ -344,7 +344,7 @@ class HasTypes(HasType):
     """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: "RenderedFields") -> "Fragment":
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> Fragment:
         """Say membership over the admissible types — *"<variable> is one of A, B, or C"*. The
         :class:`OneOf` element handles the bounded listing (linking, *"or"*, the count cap), so the
         types are read from the field's value (an ``isinstance`` over the tuple is membership, not the

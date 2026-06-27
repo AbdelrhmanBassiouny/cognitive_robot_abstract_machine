@@ -71,8 +71,6 @@ def is_collapsible_aggregation_subquery(entity: SymbolicExpression) -> bool:
         collapsed to a compact aggregate noun phrase because it adds no filtering beyond the
         aggregation itself.
     """
-    # ``is_aggregation_subquery`` already guarantees an ``Entity`` here, so the core
-    # ``Query.is_constrained_or_grouped`` is safe to read.
     return is_aggregation_subquery(entity) and not entity.is_constrained_or_grouped
 
 

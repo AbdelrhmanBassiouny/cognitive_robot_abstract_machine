@@ -22,7 +22,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing_extensions import (
-    TYPE_CHECKING,
     Callable,
     Dict,
     List,
@@ -32,6 +31,7 @@ from typing_extensions import (
     Union,
 )
 
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
 from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.operators.comparator import Comparator
@@ -50,9 +50,6 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     SetMembership,
     copula_with,
 )
-
-if TYPE_CHECKING:
-    from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 
 #: Hashable identity of a pure attribute chain: ``(root variable id, ((name, owner), …))``.
 ChainKey = Tuple
@@ -168,7 +165,11 @@ class CoindexedNaturalParts:
 
 # ── the conjunct-reduction pass (high-level entry) ──────────────────────────
 
-ConjunctList = List[Union["SymbolicExpression", RangeFold, CoindexedFold]]
+#: One node of a reduced conjunct list: an un-folded expression (e.g. a comparison) or a fold
+#: artifact the reducer produced.
+FoldNode = Union[SymbolicExpression, RangeFold, CoindexedFold]
+
+ConjunctList = List[FoldNode]
 
 
 class ConjunctFold(ABC):

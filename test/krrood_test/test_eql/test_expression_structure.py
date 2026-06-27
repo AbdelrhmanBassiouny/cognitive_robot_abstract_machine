@@ -53,7 +53,9 @@ def test_group_key_root_ids_are_the_keys_chain_roots():
     """``group_key_root_ids`` holds the keys' chain-root ids — distinct from
     ``ids_of_variables_to_group_by`` (the keys' own ids) when a key is a chain."""
     body = variable(Body, [])
-    grouped = set_of(body.name, sum(body.size)).grouped_by(body.name)._grouped_by_expression_
+    grouped = (
+        set_of(body.name, sum(body.size)).grouped_by(body.name)._grouped_by_expression_
+    )
     assert grouped.group_key_root_ids == {body._id_}
     assert grouped.ids_of_variables_to_group_by == (body.name._id_,)
 
