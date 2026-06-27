@@ -51,11 +51,11 @@ class RankingRequest:
     sibling key); ``None`` makes such a form fall back to the leading surface."""
 
 
-def ranking_number(plan: RankingPlan) -> Number:
+def ranking_number(plan: RankingPlan) -> GrammaticalNumber:
     """:return: the grammatical number of a ranking's subject — ``PLURAL`` for several, ``SINGULAR``
     for one — independent of the chosen surface form, so a caller needing only the number does not
     render (and thereby first-mention) the whole phrase."""
-    return Number.of(plan.n > 1)
+    return GrammaticalNumber.of(plan.limit_number > 1)
 
 
 @dataclass(frozen=True)
@@ -330,10 +330,10 @@ class SiblingKeyForm(LeadingRankForm):
         # The key's owner is the root exactly when its prefix is the bare root variable (a single
         # hop); then the owner is already the selection's trailing noun, so it is not restated.
         key_owner_is_root = isinstance(order_key._child_, Variable)
-        if plan.n == 1:
+        if plan.limit_number == 1:
             superlative = (
                 RankingWords.LOWEST
-                if plan.direction is RankingDirection.ASCENDING
+                if plan.direction is SortDirection.ASCENDING
                 else RankingWords.HIGHEST
             )
             parts = [
@@ -348,21 +348,21 @@ class SiblingKeyForm(LeadingRankForm):
                     request.context.child(order_key._child_),
                 ]
             return RankingSurface(
-                pre_head=None, number=Number.SINGULAR, modifiers=[PhraseFragment(parts=parts)]
+                pre_head=None, number=GrammaticalNumber.SINGULAR, modifiers=[PhraseFragment(parts=parts)]
             )
         quality = (
             RankingWords.BOTTOM
-            if plan.direction is RankingDirection.ASCENDING
+            if plan.direction is SortDirection.ASCENDING
             else RankingWords.TOP
         )
-        pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.n)])
+        pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.limit_number)])
         key_fragment = (
             _key_attribute(order_key)
             if key_owner_is_root
             else request.context.child(order_key)
         )
         modifier = PhraseFragment(parts=[RankingWords.BY.as_fragment(), key_fragment])
-        return RankingSurface(pre_head=pre_head, number=Number.PLURAL, modifiers=[modifier])
+        return RankingSurface(pre_head=pre_head, number=GrammaticalNumber.PLURAL, modifiers=[modifier])
 
 
 def ranking_surface(request: RankingRequest) -> RankingSurface:

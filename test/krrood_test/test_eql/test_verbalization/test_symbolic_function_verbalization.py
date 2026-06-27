@@ -218,7 +218,7 @@ def test_value_function_inherits_the_name_based_default_surface():
     # per-class fragment.
     assert (
         verbalize_expression(a(set_of(_Tripled(variable(int, [])))))
-        == "Find the tripled of an int"
+        == "Find the tripled of an Integer"
     )
 
 
@@ -228,7 +228,7 @@ def test_predicate_inherits_the_name_based_default_clause():
     number = variable(int, [])
     assert (
         verbalize_expression(an(entity(number).where(_IsPositive(number))))
-        == "Find an int such that it is positive"
+        == "Find an Integer such that it is positive"
     )
 
 

@@ -41,9 +41,6 @@ from krrood.entity_query_language.factories import (
     or_,
 )
 from krrood.entity_query_language.predicate import HasType, HasTypes, Predicate, Triple
-from krrood.entity_query_language.verbalization.exceptions import (
-    PredicateFragmentRequiredError,
-)
 from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
@@ -647,7 +644,7 @@ def test_count_over_query_uses_such_that_for_a_standalone_condition():
     over an aggregate verbalise consistently."""
     number = variable(int, [1, 2, 3])
     text = verbalize_expression(eql.count(entity(number).where(number > 0)))
-    assert text == "the number of ints such that the int is greater than 0"
+    assert text == "the number of ints such that the Integer is greater than 0"
 
 
 def test_boolean_predicative_pronominalises_relational_navigation():
@@ -902,7 +899,7 @@ def test_verbalize_bare_variable_bounds_fold_into_a_range():
     fold needs no bare-variable special case."""
     x = variable(int, [])
     text = verbalize_expression(an(entity(x).where(x >= 28, x <= 31)))
-    assert text == "Find an int such that the int is between 28 and 31"
+    assert text == "Find an Integer such that the Integer is between 28 and 31"
 
 
 def test_verbalize_and_stops_at_or():
@@ -1634,9 +1631,10 @@ def test_verbalize_custom_predicate_employee_domain():
     assert "Department" in text
 
 
-def test_verbalize_predicate_without_fragment_raises():
-    """A predicate that supplies no verbalization fragment is an error — there is no name-based
-    string fallback; fragments are required."""
+def test_verbalize_predicate_without_fragment_uses_name_based_default():
+    """A predicate that supplies no verbalization fragment reads through the inherited name-based
+    default clause (``HasHighSalary`` → *"… has high salary …"*), so a sensible surface needs no
+    per-predicate fragment."""
 
     @dataclass(eq=False)
     class HasHighSalary(Predicate):
@@ -1647,11 +1645,15 @@ def test_verbalize_predicate_without_fragment_raises():
             return self.employee.salary > self.threshold
 
     employee = variable(Employee, [])
-    with pytest.raises(PredicateFragmentRequiredError):
+    assert (
         verbalize_expression(HasHighSalary(employee, 50000.0))
+        == "an Employee has high salary 50000.0"
+    )
 
 
-def test_verbalize_predicate_without_fragment_no_args_raises():
+def test_verbalize_copular_predicate_without_fragment_uses_name_based_default():
+    """A copular ``Is…`` predicate with no fragment reads as *"<subject> is <complement>"*."""
+
     @dataclass(eq=False)
     class IsActive(Predicate):
         entity: Any
@@ -1660,8 +1662,7 @@ def test_verbalize_predicate_without_fragment_no_args_raises():
             return True
 
     employee = variable(Employee, [])
-    with pytest.raises(PredicateFragmentRequiredError):
-        verbalize_expression(IsActive(employee))
+    assert verbalize_expression(IsActive(employee)) == "an Employee is active"
 
 
 # ── Aggregator coreference & HAVING compact form ──────────────────────────────
@@ -1969,9 +1970,9 @@ def test_verbalize_triple():
     assert text.index("Body") < text.index("Handle")
 
 
-def test_verbalize_1arg_predicate_without_fragment_raises():
-    """A 1-arg predicate without a verbalization fragment is an error — fragments are required, with
-    no generic name-based fallback."""
+def test_verbalize_1arg_predicate_without_fragment_uses_name_based_default():
+    """A 1-arg predicate without a verbalization fragment reads through the inherited name-based
+    default clause rather than raising — fragments are optional, overriding only a wrong reading."""
 
     @dataclass(eq=False)
     class IsActive(Predicate):
@@ -1981,8 +1982,7 @@ def test_verbalize_1arg_predicate_without_fragment_raises():
             return True
 
     employee = variable(Employee, [])
-    with pytest.raises(PredicateFragmentRequiredError):
-        verbalize_expression(IsActive(employee))
+    assert verbalize_expression(IsActive(employee)) == "an Employee is active"
 
 
 # ── Same-type variable disambiguation ─────────────────────────────────────────
