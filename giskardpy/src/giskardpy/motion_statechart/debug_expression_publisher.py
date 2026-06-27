@@ -39,8 +39,7 @@ class DebugExpressionPublisher:
         """Register the spatial debug expressions of every node for live visualization."""
         requests = [
             self._to_request(debug_expression)
-            for node in motion_statechart.nodes
-            for debug_expression in node._debug_expressions
+            for debug_expression in motion_statechart.collect_debug_expressions()
             if isinstance(debug_expression.expression, SpatialType)
         ]
         if self._publisher is None:

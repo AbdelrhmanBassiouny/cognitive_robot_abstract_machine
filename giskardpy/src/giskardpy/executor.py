@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from giskardpy.motion_statechart.plotters.debug_expression_trajectory_plotter import (
+    DebugExpressionTrajectoryPlotter,
+)
 from giskardpy.qp.exceptions import EmptyProblemException
 from giskardpy.qp.qp_controller import QPController
 from giskardpy.qp.qp_controller_config import QPControllerConfig
@@ -89,6 +92,11 @@ class Executor:
     trajectory_plotter: WorldStateTrajectoryPlotter | None = field(default=None)
     """The trajectory plotter used to plot the robot's trajectory."""
 
+    debug_expression_plotter: DebugExpressionTrajectoryPlotter | None = field(
+        default=None
+    )
+    """Records and plots how the debug expressions evolved during the motion."""
+
     pacer: Pacer = field(default_factory=SimulationPacer)
 
     # %% init False
@@ -134,6 +142,10 @@ class Executor:
         self._compile_qp_controller(self.context.qp_controller_config)
         if self.trajectory_plotter is not None:
             self.trajectory_plotter.reset(self.context.world.state, self.time)
+        if self.debug_expression_plotter is not None:
+            self.debug_expression_plotter.reset(
+                self.motion_statechart.collect_debug_expressions()
+            )
         self.context.collision_manager.update_collision_matrix()
         # do one tick to immediately active nodes whose start condition is constant true.
         self.motion_statechart.tick(self.context)
@@ -159,6 +171,8 @@ class Executor:
             self.trajectory_plotter.world_state_trajectory.append(
                 self.context.world.state, self.time
             )
+        if self.debug_expression_plotter is not None:
+            self.debug_expression_plotter.debug_expression_trajectory.append(self.time)
 
     def tick_until_end(self, timeout: int = 1_000):
         """
@@ -207,3 +221,7 @@ class Executor:
 
     def plot_trajectory(self, file_name: str = "./trajectory.pdf"):
         self.trajectory_plotter.plot_trajectory(file_name)
+
+    def plot_debug_expressions(self, file_name: str = "./debug_expressions.pdf"):
+        """Plot the recorded debug expressions to the given PDF file."""
+        self.debug_expression_plotter.plot(file_name)
