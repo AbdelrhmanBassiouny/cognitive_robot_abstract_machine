@@ -26,7 +26,6 @@ from krrood.entity_query_language.factories import (
     entity,
     count_range,
 )
-from krrood.entity_query_language.predicate import symbolic_function
 from krrood.ormatic.data_access_objects.alternative_mappings import (
     AlternativeMapping,
     T,

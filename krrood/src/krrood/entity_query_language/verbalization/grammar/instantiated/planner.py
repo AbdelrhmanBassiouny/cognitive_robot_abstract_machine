@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import inspect
 from dataclasses import dataclass
 
 from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.predicate import Verbalizable
+from krrood.entity_query_language.predicate import Predicate, Verbalizable
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 
@@ -109,63 +108,17 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
         )
 
     @staticmethod
-    def _is_symbolic_function(node: InstantiatedVariable) -> bool:
-        """:return: ``True`` when *node* wraps a ``@symbolic_function`` — a plain callable (not a
-        class) applied to operands — as opposed to a :class:`Verbalizable` class or a bare value."""
-        type_ = node._type_
-        return (
-            not isinstance(type_, type)
-            and callable(type_)
-            and bool(node._child_vars_)
-        )
-
-    @staticmethod
-    def _returns_bool(node: InstantiatedVariable) -> bool:
-        """:return: ``True`` when *node*'s symbolic function is annotated to return ``bool``."""
-        annotation = inspect.signature(node._type_).return_annotation
-        return annotation is bool or annotation == "bool"
-
-    @staticmethod
-    def is_boolean_symbolic_function(node: InstantiatedVariable) -> bool:
-        """
-        :param node: The instantiated variable.
-        :return: ``True`` when *node* wraps a ``@symbolic_function`` annotated to return ``bool`` — a
-            predicate that reads as a clause (``is_one_month(period)`` → *"the period is one month"*),
-            as opposed to a :class:`Verbalizable` class (:meth:`has_fragment`) or a value function
-            (:meth:`is_value_symbolic_function`).
-
-        A symbolic function's type is the plain function (not a class), so this guard is disjoint
-        from :meth:`has_fragment` (which requires a class); the two rules never both apply.
-        """
-        return InstantiatedPlanner._is_symbolic_function(
-            node
-        ) and InstantiatedPlanner._returns_bool(node)
-
-    @staticmethod
-    def is_value_symbolic_function(node: InstantiatedVariable) -> bool:
-        """
-        :param node: The instantiated variable.
-        :return: ``True`` when *node* wraps a non-boolean ``@symbolic_function`` — a calculation that
-            names a value (``quarter(month)`` → *"a quarter"*), so it reads as a noun rather than a
-            predicate clause (:meth:`is_boolean_symbolic_function`) or the generic *"a TypeName, where
-            …"* decomposition.
-
-        A boolean function is a predicate; any other return type is a computed value, so the two
-        guards partition the symbolic functions and never both apply.
-        """
-        return InstantiatedPlanner._is_symbolic_function(
-            node
-        ) and not InstantiatedPlanner._returns_bool(node)
-
-    @staticmethod
     def renders_as_predicate_clause(node: InstantiatedVariable) -> bool:
         """
         :param node: The instantiated variable.
-        :return: ``True`` when *node* verbalizes as a predicate clause — a :class:`Verbalizable`
-            class (:meth:`has_fragment`) or a boolean symbolic function
-            (:meth:`is_boolean_symbolic_function`) — so a wrapping ``Not`` can negate it inline
-            (*"is not reachable"*, *"is not even"*) rather than wrapping it in *"not (…)"*.
+        :return: ``True`` when *node* verbalizes as a predicate CLAUSE — a :class:`Predicate` subclass
+            (a boolean operation) with a fragment — so a wrapping ``Not`` negates it inline
+            (*"is not reachable"*, *"is not even"*) rather than wrapping it in *"not (…)"*. A value
+            :class:`SymbolicFunction` reads as a noun phrase, not a clause, so it is excluded.
         """
-        return InstantiatedPlanner.has_fragment(
-            node
-        ) or InstantiatedPlanner.is_boolean_symbolic_function(node)
+        type_ = node._type_
+        return (
+            isinstance(type_, type)
+            and issubclass(type_, Predicate)
+            and InstantiatedPlanner.has_fragment(node)
+        )
