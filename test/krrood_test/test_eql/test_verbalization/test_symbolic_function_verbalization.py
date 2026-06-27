@@ -13,6 +13,7 @@ import krrood.entity_query_language.factories as eql
 from krrood.entity_query_language.factories import variable, entity, an, a, not_, set_of
 from krrood.entity_query_language.predicate import (
     length,
+    Length,
     Predicate,
     SymbolicCallable,
     SymbolicFunction,
@@ -77,6 +78,16 @@ class _Doubled(SymbolicFunction):
     @classmethod
     def _verbalization_fragment_(cls, fields):
         return Noun(WordFragment(text="the doubled number")).as_fragment()
+
+
+def test_migrated_length_keeps_its_surface_and_value():
+    # `length` migrated from @symbolic_function to a SymbolicFunction class behind a functional_form
+    # wrapper: same name, same default surface ("the length of ..."), same computed value.
+    assert issubclass(Length, SymbolicFunction)
+    assert verbalize_expression(a(set_of(length(variable(list, []))))) == "Find the length of a list"
+    items = variable(list, domain=[[1, 2], [], [3, 4, 5]])
+    lengths = sorted(next(iter(row.values())) for row in a(set_of(length(items))).tolist())
+    assert lengths == [0, 2, 3]
 
 
 def test_symbolic_function_binds_its_computed_value_in_a_query():
