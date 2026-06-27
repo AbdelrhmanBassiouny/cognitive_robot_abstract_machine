@@ -7,6 +7,9 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
     VerbalizationFragment,
 )
+from krrood.entity_query_language.verbalization.rendering.agreement_processor import (
+    AgreementProcessor,
+)
 from krrood.entity_query_language.verbalization.rendering.coreference_processor import (
     CoreferenceProcessor,
 )
@@ -27,8 +30,10 @@ from krrood.entity_query_language.verbalization.rendering.passes import Realizat
 
 # The stateless lowering passes are shared module-level instances, in pipeline order. The
 # coreference pass is stateful per walk (parameterised by discourse and the prior-build referents),
-# so it is created fresh per call and prepended to the pipeline in realize_tree.
+# so it is created fresh per call and prepended to the pipeline in realize_tree. Agreement runs first
+# here (so right after coreference) and before morphology, which inflects the number it tags.
 _LOWERING_PASSES: List[RealizationPass] = [
+    AgreementProcessor(),
     DeterminerProcessor(),
     MorphologyProcessor(),
     OrthographyProcessor(),
@@ -43,9 +48,9 @@ def realize_tree(
 ) -> VerbalizationFragment:
     """
     Run the ordered realisation passes over *fragment* — the one place the lowering passes and
-    their order are defined: coreference resolution → determiner lowering → morphology →
-    orthography (punctuation spacing). Both the whole-expression build and the local realisation
-    of an opaque template need this same ordered sequence.
+    their order are defined: coreference resolution → subject/verb agreement → determiner lowering →
+    morphology → orthography (punctuation spacing). Both the whole-expression build and the local
+    realisation of an opaque template need this same ordered sequence.
 
     Reference: :cite:t:`gatt2009simplenlg` — the ordered realisation stages.
 
