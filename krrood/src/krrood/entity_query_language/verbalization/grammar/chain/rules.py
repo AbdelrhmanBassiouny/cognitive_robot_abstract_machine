@@ -33,7 +33,6 @@ class PluralChainAttributeRule(PhraseRule):
     """
 
     construct = MappedVariable
-    name = "chain-plural-attribute"
 
     def when(self, node: MappedVariable, context: RuleContext) -> bool:
         """:return: ``True`` when the chain is a plural single attribute on a variable.
@@ -70,7 +69,6 @@ class BooleanAttributeChainRule(PhraseRule):
     """
 
     construct = MappedVariable
-    name = "chain-boolean-attribute"
 
     def when(self, node: MappedVariable, context: RuleContext) -> bool:
         """:return: ``True`` for a boolean-terminal chain that is not a bare-plural attribute.
@@ -109,7 +107,6 @@ class PossessiveChainRule(PhraseRule):
     """
 
     construct = MappedVariable
-    name = "chain-possessive"
 
     def build(
         self, node: MappedVariable, context: RuleContext

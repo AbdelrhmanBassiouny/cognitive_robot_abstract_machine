@@ -22,7 +22,6 @@ class TopLevelEntityRule(PhraseRule):
     """
 
     construct = Entity
-    name = "top-level-entity"
     enters_query_scope = True
 
     def when(self, node: Entity, context: RuleContext) -> bool:
@@ -60,7 +59,6 @@ class NestedEntityRule(PhraseRule):
     """
 
     construct = Entity
-    name = "nested-entity"
     enters_query_scope = True
 
     def when(self, node: Entity, context: RuleContext) -> bool:
@@ -101,7 +99,6 @@ class SetOfRule(PhraseRule):
     """
 
     construct = SetOf
-    name = "set-of"
     enters_query_scope = True
 
     def build(self, node: SetOf, context: RuleContext) -> VerbalizationFragment:
@@ -123,7 +120,6 @@ class InlineEntityRule(PhraseRule):
     calling the query assembler by hand."""
 
     construct = Entity
-    name = "inline-entity"
 
     def when(self, node: Entity, context: RuleContext) -> bool:
         """:return: ``True`` only when the fold recurses in inline (chain-root) position.
@@ -154,7 +150,6 @@ class ResultQuantifierRule(PhraseRule):
     (an ``inline`` chain root stays inline through the wrapper)."""
 
     construct = ResultQuantifier
-    name = "result-quantifier"
 
     def build(
         self, node: ResultQuantifier, context: RuleContext

@@ -26,7 +26,6 @@ class InferenceRuleRule(TopLevelEntityRule):
     top-level form without any tiebreak. Unlike the plain form it does not enter query scope.
     """
 
-    name = "inference-rule"
     enters_query_scope = False
 
     def when(self, node: Entity, context: RuleContext) -> bool:

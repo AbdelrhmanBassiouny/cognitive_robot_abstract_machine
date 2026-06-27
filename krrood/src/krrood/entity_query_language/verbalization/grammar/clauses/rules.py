@@ -25,7 +25,6 @@ class GroupedByRule(PhraseRule):
     """
 
     construct = GroupedBy
-    name = "grouped-by"
 
     def build(self, node: GroupedBy, context: RuleContext) -> VerbalizationFragment:
         """:return: The *"grouped by …"* clause for the GROUP BY node.
@@ -45,7 +44,6 @@ class OrderedByRule(PhraseRule):
     """
 
     construct = OrderedBy
-    name = "ordered-by"
 
     def build(self, node: OrderedBy, context: RuleContext) -> VerbalizationFragment:
         """:return: The *"ordered by …"* clause for the ORDER BY node.

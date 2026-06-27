@@ -55,7 +55,6 @@ def _custom(construct, name, build_fn, *, guard=None, base=PhraseRule):
     """Build a PhraseRule subclass instance for testing (subclass *base* to test specificity)."""
     namespace = {
         "construct": construct,
-        "name": name,
         "build": lambda self, node, context: build_fn(node, context),
     }
     if guard is not None:
@@ -73,14 +72,14 @@ def _rule(construct, name, **kw):
 
 def test_select_prefers_deeper_construct():
     rules = [_rule(Base, "base"), _rule(Mid, "mid"), _rule(Leaf, "leaf")]
-    assert select(Leaf(), rules, _rule_context()).name == "leaf"
-    assert select(Mid(), rules, _rule_context()).name == "mid"
-    assert select(Base(), rules, _rule_context()).name == "base"
+    assert type(select(Leaf(), rules, _rule_context())).__name__ == "R_leaf"
+    assert type(select(Mid(), rules, _rule_context())).__name__ == "R_mid"
+    assert type(select(Base(), rules, _rule_context())).__name__ == "R_base"
 
 
 def test_select_guarded_beats_unguarded_same_construct():
     rules = [_rule(Mid, "plain"), _rule(Mid, "guarded", guard=lambda n: True)]
-    assert select(Mid(), rules, _rule_context()).name == "guarded"
+    assert type(select(Mid(), rules, _rule_context())).__name__ == "R_guarded"
 
 
 def test_select_prefers_more_derived_rule_class_same_construct_both_guarded():
@@ -88,7 +87,7 @@ def test_select_prefers_more_derived_rule_class_same_construct_both_guarded():
     base = _rule(Mid, "base", guard=lambda n: True)
     derived = _rule(Mid, "derived", guard=lambda n: True, base=type(base))
     rules = [base, derived]
-    assert select(Mid(), rules, _rule_context()).name == "derived"
+    assert type(select(Mid(), rules, _rule_context())).__name__ == "R_derived"
 
 
 def test_select_guard_can_exclude():
@@ -96,7 +95,7 @@ def test_select_guard_can_exclude():
     node = Mid()
     assert select(node, rules, _rule_context()) is None
     node.ok = True
-    assert select(node, rules, _rule_context()).name == "only-ok"
+    assert type(select(node, rules, _rule_context())).__name__ == "R_only-ok"
 
 
 def test_select_returns_none_when_nothing_matches():
@@ -159,7 +158,6 @@ def test_enters_query_scope_wraps_build_but_not_when():
 
     class ScopedRule(PhraseRule):
         construct = Mid
-        name = "scoped"
         enters_query_scope = True
 
         def when(self, node, context):

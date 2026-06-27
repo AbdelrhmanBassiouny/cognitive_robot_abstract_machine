@@ -25,7 +25,6 @@ class InstantiatedVariableRule(PhraseRule):
     """*"a TypeName where the field of the TypeName is … such that …"*."""
 
     construct = InstantiatedVariable
-    name = "instantiated-variable"
 
     def build(
         self, node: InstantiatedVariable, context: RuleContext
@@ -53,7 +52,6 @@ class InstantiatedVerbalizableRule(PhraseRule):
     """An InstantiatedVariable whose type builds its own verbalization :class:`VerbalizationFragment`."""
 
     construct = InstantiatedVariable
-    name = "instantiated-verbalizable"
 
     def when(self, node: InstantiatedVariable, context: RuleContext) -> bool:
         """:return: ``True`` when *node*'s type supplies a verbalization fragment, selecting this rule

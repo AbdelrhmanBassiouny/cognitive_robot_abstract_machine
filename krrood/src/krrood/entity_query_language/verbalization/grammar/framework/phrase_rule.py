@@ -154,8 +154,6 @@ class PhraseRule(ABC):
 
     construct: ClassVar[type]
     """The EQL node class this rule handles (the ``isinstance`` gate)."""
-    name: ClassVar[str] = ""
-    """Stable identifier for querying or tracing the grammar."""
     enters_query_scope: ClassVar[bool] = False
     """``True`` on a rule whose construct is itself a query body, so an entity found anywhere
     within it renders as a nested noun phrase."""

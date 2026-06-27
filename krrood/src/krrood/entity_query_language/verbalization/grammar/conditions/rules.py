@@ -78,7 +78,6 @@ class ComparatorRule(PhraseRule):
     """
 
     construct = Comparator
-    name = "comparator"
 
     def build(self, node: Comparator, context: RuleContext) -> VerbalizationFragment:
         """Say the comparator as a standalone predicate.
@@ -109,7 +108,6 @@ class AndRule(PhraseRule):
     """
 
     construct = AND
-    name = "and"
 
     def build(self, node: AND, context: RuleContext) -> VerbalizationFragment:
         """Say the flattened conjuncts, comma-joined with a trailing *"and"*.
@@ -148,7 +146,6 @@ class RangeFoldRule(PhraseRule):
     """
 
     construct = RangeFold
-    name = "range-fold"
 
     def build(self, node: RangeFold, context: RuleContext) -> VerbalizationFragment:
         """Say the folded pair as *"<chain> is between low and high"*.
@@ -182,7 +179,6 @@ class CoindexedFoldRule(PhraseRule):
     """
 
     construct = CoindexedFold
-    name = "coindexed-fold"
 
     def build(self, node: CoindexedFold, context: RuleContext) -> VerbalizationFragment:
         """Say the factored clause once — the natural *"have the same"* form over sibling prefixes.
@@ -263,7 +259,6 @@ class SharedSubjectComparisonsRule(PhraseRule):
     """
 
     construct = SharedSubjectComparisons
-    name = "shared-subject-comparisons"
 
     def build(
         self, node: SharedSubjectComparisons, context: RuleContext
@@ -312,7 +307,6 @@ class SharedSubjectConjunctionRule(PhraseRule):
     """
 
     construct = SharedSubjectConjunction
-    name = "shared-subject-conjunction"
 
     def build(
         self, node: SharedSubjectConjunction, context: RuleContext
@@ -378,7 +372,6 @@ class OrRule(PhraseRule):
     """
 
     construct = OR
-    name = "or"
 
     def build(self, node: OR, context: RuleContext) -> VerbalizationFragment:
         """Say the flattened disjuncts as *"either a, b, or c"*, or the factored *"… is either … or …"*
@@ -419,7 +412,6 @@ class NotRule(PhraseRule):
     """
 
     construct = Not
-    name = "not"
 
     def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Wrap the child in *"not (<child>)"* via the orthography pass.
@@ -462,7 +454,6 @@ class NotVerbalizablePredicateRule(PhraseRule):
     """
 
     construct = Not
-    name = "not-verbalizable-predicate"
 
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps a predicate that builds its own verbalization fragment.
@@ -495,7 +486,6 @@ class NotComparatorRule(PhraseRule):
     """
 
     construct = Not
-    name = "not-comparator"
 
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps a comparator.
@@ -529,7 +519,6 @@ class NotBooleanAttributeRule(PhraseRule):
     """
 
     construct = Not
-    name = "not-bool-attribute"
 
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps a boolean-attribute chain.
@@ -565,7 +554,6 @@ class ForAllRule(PhraseRule):
     """
 
     construct = ForAll
-    name = "for-all"
 
     def build(self, node: ForAll, context: RuleContext) -> VerbalizationFragment:
         """Say *"for all <plural var>, <condition>"*.
@@ -603,7 +591,6 @@ class ExistsRule(PhraseRule):
     """
 
     construct = Exists
-    name = "exists"
 
     def build(self, node: Exists, context: RuleContext) -> VerbalizationFragment:
         """Say *"there exists <variable> such that <condition>"*.
@@ -638,7 +625,6 @@ class FilterRule(PhraseRule):
     """
 
     construct = Filter
-    name = "filter"
 
     def build(self, node: Filter, context: RuleContext) -> VerbalizationFragment:
         """Delegate transparently to the wrapped condition.

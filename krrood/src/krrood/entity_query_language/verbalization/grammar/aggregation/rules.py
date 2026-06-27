@@ -21,7 +21,6 @@ class AggregatorRule(PhraseRule):
     """
 
     construct = Aggregator
-    name = "aggregator"
 
     def build(self, node: Aggregator, context: RuleContext) -> VerbalizationFragment:
         """:return: the definite noun phrase for *node* — *"the <aggregation> of <child>"* — or the

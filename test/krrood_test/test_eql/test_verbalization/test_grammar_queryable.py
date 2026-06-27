@@ -22,11 +22,5 @@ def test_registry_is_a_list_of_phrase_rules():
 def test_grammar_is_queryable_with_eql_by_construct():
     rule = variable(PhraseRule, domain=RULES)
     matches = list(an(entity(rule).where(rule.construct == Comparator)).evaluate())
-    assert [r.name for r in matches] == ["comparator"]
-
-
-def test_grammar_is_queryable_with_eql_by_name():
-    rule = variable(PhraseRule, domain=RULES)
-    matches = list(an(entity(rule).where(rule.name == "comparator")).evaluate())
     assert len(matches) == 1
     assert matches[0].construct is Comparator

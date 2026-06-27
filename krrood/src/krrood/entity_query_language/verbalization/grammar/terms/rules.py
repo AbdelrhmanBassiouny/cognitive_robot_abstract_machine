@@ -62,7 +62,6 @@ class VariableRule(PhraseRule):
     """
 
     construct = Variable
-    name = "variable"
 
     def build(self, node: Variable, context: RuleContext) -> VerbalizationFragment:
         """:return: The variable noun phrase (*"a Robot"* / *"the Robot"* / *"Robot N"*)."""
@@ -141,7 +140,6 @@ class LiteralRule(PhraseRule):
     """
 
     construct = Literal
-    name = "literal"
 
     def build(self, node: Literal, context: RuleContext) -> VerbalizationFragment:
         """:return: The literal value, or *"a specific <Type>"* for a concrete object literal.
@@ -259,7 +257,6 @@ class ExternalVariableRule(PhraseRule):
     """
 
     construct = ExternallySetVariable
-    name = "external-variable"
 
     def build(
         self, node: ExternallySetVariable, context: RuleContext
@@ -277,7 +274,6 @@ class FlatVariableRule(PhraseRule):
     """
 
     construct = FlatVariable
-    name = "flat-variable"
 
     def build(self, node: FlatVariable, context: RuleContext) -> VerbalizationFragment:
         """:return: The child's rendering, unwrapped from the transparent SetOf wrapper."""
