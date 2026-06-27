@@ -65,6 +65,11 @@ class Pointing(CartesianTask):
         artifacts.observation = (
             root_V_pointing_axis.angle_between(root_V_goal_axis) <= self.threshold
         )
+
+        self.add_goal_and_current_debug_expressions(
+            artifacts, goal=root_V_goal_axis, current=root_V_pointing_axis
+        )
+
         return artifacts
 
 
@@ -126,4 +131,9 @@ class PointingCone(CartesianTask):
         artifacts.observation = (
             root_V_pointing_axis.angle_between(root_V_goal_axis_proj) <= self.threshold
         )
+
+        self.add_goal_and_current_debug_expressions(
+            artifacts, goal=root_V_goal_axis_proj, current=root_V_pointing_axis
+        )
+
         return artifacts

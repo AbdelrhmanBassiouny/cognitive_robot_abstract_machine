@@ -19,6 +19,7 @@ from giskardpy.motion_statechart.goals.templates import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
     CancelMotion,
+    DebugExpression,
 )
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
     SetSeedConfiguration,
@@ -57,6 +58,7 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.geometry import (
     Box,
+    Color,
     Scale,
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -1108,3 +1110,141 @@ class TestVelocityTasks:
         assert (
             tight_cycles >= 2 * loose_cycles
         ), f"tight ({tight_cycles}) should take >= loose ({2 * loose_cycles}) control cycles"
+
+
+GOAL_COLOR = Color(0, 1, 0, 1)
+CURRENT_COLOR = Color(1, 0, 0, 1)
+
+
+def _debug_expression_by_name(
+    debug_expressions: list[DebugExpression], name: str
+) -> DebugExpression:
+    """
+    Return the single debug expression with the given name, or fail.
+    """
+    matches = [
+        debug_expression
+        for debug_expression in debug_expressions
+        if debug_expression.name == name
+    ]
+    assert len(matches) == 1, f"expected exactly one {name}, got {len(matches)}"
+    return matches[0]
+
+
+class TestDebugExpressions:
+    """
+    Cartesian tasks register a goal and a current debug expression, named with the
+    task name and colored green (goal) and red (current).
+    """
+
+    def test_cartesian_position(self, cylinder_bot_world: World):
+        root = cylinder_bot_world.root
+        tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        task = CartesianPosition(
+            root_link=root,
+            tip_link=tip,
+            goal_point=Point3(x=1, reference_frame=root),
+            name="cart_pos",
+        )
+
+        artifacts = task.build(MotionStatechartContext(world=cylinder_bot_world))
+
+        goal = _debug_expression_by_name(artifacts.debug_expressions, "cart_pos/goal")
+        current = _debug_expression_by_name(
+            artifacts.debug_expressions, "cart_pos/current"
+        )
+        assert isinstance(goal.expression, Point3)
+        assert isinstance(current.expression, Point3)
+        assert goal.color == GOAL_COLOR
+        assert current.color == CURRENT_COLOR
+
+    def test_cartesian_position_straight(self, cylinder_bot_world: World):
+        root = cylinder_bot_world.root
+        tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        task = CartesianPositionStraight(
+            root_link=root,
+            tip_link=tip,
+            goal_point=Point3(x=1, reference_frame=root),
+            name="straight",
+        )
+
+        artifacts = task.build(MotionStatechartContext(world=cylinder_bot_world))
+
+        goal = _debug_expression_by_name(artifacts.debug_expressions, "straight/goal")
+        current = _debug_expression_by_name(
+            artifacts.debug_expressions, "straight/current"
+        )
+        assert isinstance(goal.expression, Point3)
+        assert isinstance(current.expression, Point3)
+        assert goal.color == GOAL_COLOR
+        assert current.color == CURRENT_COLOR
+
+    def test_cartesian_orientation(self, cylinder_bot_world: World):
+        root = cylinder_bot_world.root
+        tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        task = CartesianOrientation(
+            root_link=root,
+            tip_link=tip,
+            goal_orientation=RotationMatrix.from_rpy(
+                yaw=np.pi / 2, reference_frame=root
+            ),
+            name="orient",
+        )
+
+        artifacts = task.build(MotionStatechartContext(world=cylinder_bot_world))
+
+        goal = _debug_expression_by_name(artifacts.debug_expressions, "orient/goal")
+        current = _debug_expression_by_name(
+            artifacts.debug_expressions, "orient/current"
+        )
+        assert isinstance(goal.expression, RotationMatrix)
+        assert isinstance(current.expression, RotationMatrix)
+        assert goal.color == GOAL_COLOR
+        assert current.color == CURRENT_COLOR
+
+    def test_cartesian_position_trajectory(self, cylinder_bot_world: World):
+        root = cylinder_bot_world.root
+        tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        task = CartesianPositionTrajectory(
+            root_link=root,
+            tip_link=tip,
+            goal_points=[
+                Point3(x=0, reference_frame=root),
+                Point3(x=1, reference_frame=root),
+            ],
+            name="traj",
+        )
+
+        artifacts = task.build(MotionStatechartContext(world=cylinder_bot_world))
+
+        goal = _debug_expression_by_name(artifacts.debug_expressions, "traj/goal")
+        current = _debug_expression_by_name(artifacts.debug_expressions, "traj/current")
+        assert isinstance(goal.expression, Point3)
+        assert isinstance(current.expression, Point3)
+        assert goal.color == GOAL_COLOR
+        assert current.color == CURRENT_COLOR
+
+    def test_cartesian_pose_uses_prefixed_names(self, cylinder_bot_world: World):
+        root = cylinder_bot_world.root
+        tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        task = CartesianPose(
+            root_link=root,
+            tip_link=tip,
+            goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=root),
+            name="pose",
+        )
+
+        artifacts = task.build(MotionStatechartContext(world=cylinder_bot_world))
+
+        names = {
+            debug_expression.name for debug_expression in artifacts.debug_expressions
+        }
+        assert names == {"pose/goal", "pose/current"}
+        assert (
+            _debug_expression_by_name(artifacts.debug_expressions, "pose/goal").color
+            == GOAL_COLOR
+        )
+        assert (
+            _debug_expression_by_name(artifacts.debug_expressions, "pose/current").color
+            == CURRENT_COLOR
+        )

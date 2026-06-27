@@ -35,7 +35,8 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.spatial_types.spatial_types import Pose, SpatialType
+from semantic_digital_twin.world_description.geometry import Color
 from semantic_digital_twin.world_description.degree_of_freedom import PositionVariable
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
@@ -94,6 +95,25 @@ class CartesianTask(Task, ABC):
         :return: Reference frame for the goal.
         """
 
+    def add_goal_and_current_debug_expressions(
+        self,
+        artifacts: NodeArtifacts,
+        goal: SpatialType,
+        current: SpatialType,
+    ):
+        """
+        Register a goal and a current spatial expression for visualization.
+
+        The expressions are named ``<task name>/goal`` and ``<task name>/current``
+        and colored green and red respectively, so they can be told apart in RViz.
+        """
+        artifacts.debug_expressions.append(
+            DebugExpression(f"{self.name}/goal", goal, color=Color(0, 1, 0, 1))
+        )
+        artifacts.debug_expressions.append(
+            DebugExpression(f"{self.name}/current", current, color=Color(1, 0, 0, 1))
+        )
+
 
 @dataclass(eq=False, repr=False)
 class CartesianPosition(CartesianTask):
@@ -149,6 +169,10 @@ class CartesianPosition(CartesianTask):
         # Success condition: distance below threshold
         distance_to_goal = root_P_goal.euclidean_distance(root_P_current)
         artifacts.observation = distance_to_goal < self.threshold
+
+        self.add_goal_and_current_debug_expressions(
+            artifacts, goal=root_P_goal, current=root_P_current
+        )
 
         return artifacts
 
@@ -237,6 +261,10 @@ class CartesianPositionTrajectory(CartesianTask):
             frame_P_current=root_P_current,
             reference_velocity=self.reference_velocity,
             quadratic_weight=self.weight,
+        )
+
+        self.add_goal_and_current_debug_expressions(
+            artifacts, goal=root_P_goal, current=root_P_current
         )
 
         self.compile_current_point_on_tick(context)
@@ -470,6 +498,11 @@ class CartesianPositionStraight(CartesianTask):
             )
 
         artifacts.observation = dist < self.threshold
+
+        self.add_goal_and_current_debug_expressions(
+            artifacts, goal=root_P_goal, current=root_P_tip
+        )
+
         return artifacts
 
 
@@ -529,6 +562,11 @@ class CartesianOrientation(CartesianTask):
         # Success condition: rotation error below threshold
         rotation_error = root_R_current.rotational_error(root_R_goal)
         artifacts.observation = sm.abs(rotation_error) < self.threshold
+
+        self.add_goal_and_current_debug_expressions(
+            artifacts, goal=root_R_goal, current=root_R_current
+        )
+
         return artifacts
 
 
@@ -612,10 +650,11 @@ class CartesianPose(CartesianTask):
             sm.abs(rotation_error) < self.threshold,
             distance_to_goal < self.threshold,
         )
-        artifacts.debug_expressions.append(
-            DebugExpression("goal", self.root_T_goal_reference_frame @ self.goal_pose)
+        self.add_goal_and_current_debug_expressions(
+            artifacts,
+            goal=self.root_T_goal_reference_frame @ self.goal_pose,
+            current=root_P_current,
         )
-        artifacts.debug_expressions.append(DebugExpression("current", root_P_current))
         return artifacts
 
 
