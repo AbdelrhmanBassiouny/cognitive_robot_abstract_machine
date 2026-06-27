@@ -3,12 +3,18 @@ from __future__ import annotations
 import uuid
 from typing_extensions import Iterable, List, Mapping, Optional
 
+from krrood.entity_query_language.verbalization.field_metadata import (
+    FieldMetadataRegistry,
+)
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
     Fragment,
 )
 from krrood.entity_query_language.verbalization.rendering.coreference_processor import (
     CoreferenceProcessor,
+)
+from krrood.entity_query_language.verbalization.rendering.field_metadata_processor import (
+    FieldMetadataProcessor,
 )
 from krrood.entity_query_language.verbalization.rendering.discourse import (
     DiscourseView,
@@ -25,14 +31,13 @@ from krrood.entity_query_language.verbalization.rendering.orthography_processor 
 )
 from krrood.entity_query_language.verbalization.rendering.passes import RealizationPass
 
-# The stateless lowering passes are shared module-level instances, in pipeline order. The
-# coreference pass is stateful per walk (parameterised by discourse and the prior-build referents),
-# so it is created fresh per call and prepended to the pipeline in realize_tree.
-_LOWERING_PASSES: List[RealizationPass] = [
-    DeterminerProcessor(),
-    MorphologyProcessor(),
-    OrthographyProcessor(),
-]
+# The stateless lowering passes are shared module-level instances. The coreference pass is stateful
+# per walk (parameterised by discourse, numbered labels, and prior-build referents) and the
+# field-metadata pass is parameterised by the per-run registry, so both are created fresh per call
+# and assembled into the pipeline in realize_tree.
+_DETERMINER = DeterminerProcessor()
+_MORPHOLOGY = MorphologyProcessor()
+_ORTHOGRAPHY = OrthographyProcessor()
 
 
 def realize_tree(
@@ -40,12 +45,17 @@ def realize_tree(
     previously_introduced_referents: Optional[Iterable[uuid.UUID]] = None,
     discourse: DiscourseView = EMPTY_DISCOURSE,
     numbered_labels: Optional[Mapping[uuid.UUID, str]] = None,
+    field_metadata: Optional[FieldMetadataRegistry] = None,
 ) -> Fragment:
     """
     Run the ordered realisation passes over *fragment* — the one place the lowering passes and
-    their order are defined: coreference resolution → determiner lowering → morphology →
-    orthography (punctuation spacing). Both the whole-expression build and the local realisation
-    of an opaque template need this same ordered sequence.
+    their order are defined: coreference resolution → determiner lowering → field-metadata
+    (display-name) → morphology → orthography (punctuation spacing). Both the whole-expression
+    build and the local realisation of an opaque template need this same ordered sequence.
+
+    The field-metadata pass runs after determiner lowering (so ``NounPhrase`` / ``PossessiveChain``
+    are already lowered to reachable attribute leaves) and before morphology (so pluralisation
+    inflects the chosen display word). It is a no-op for an empty / omitted registry.
 
     Reference: Gatt & Reiter (2009), SimpleNLG — the ordered realisation stages.
 
@@ -55,6 +65,8 @@ def realize_tree(
         sub-tree, which has no query scope of its own).
     :param numbered_labels: Disambiguation numbers for referents the rules cannot label themselves
         (relational referents) — applied by the coreference pass.
+    :param field_metadata: Per-field display-name overrides; an empty registry (the default) keeps
+        every attribute's raw identifier.
     :return: The fully realised fragment tree.
 
     This is the pass-running step: it returns a lowered fragment *tree*, so the example wraps it in
@@ -66,13 +78,17 @@ def realize_tree(
     >>> flatten_fragment_to_plain_text(realize_tree(tree))
     'Find a Robot'
     """
+    registry = field_metadata if field_metadata is not None else FieldMetadataRegistry()
     pipeline: List[RealizationPass] = [
         CoreferenceProcessor(
             discourse=discourse,
             numbered_labels=dict(numbered_labels or {}),
             previously_introduced_referents=tuple(previously_introduced_referents or ()),
         ),
-        *_LOWERING_PASSES,
+        _DETERMINER,
+        FieldMetadataProcessor(registry),
+        _MORPHOLOGY,
+        _ORTHOGRAPHY,
     ]
     realised = fragment
     for realisation_pass in pipeline:

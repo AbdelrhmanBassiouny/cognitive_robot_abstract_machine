@@ -1,0 +1,27 @@
+{
+  "GraspConfig": {
+    "approach_direction": {
+      "display_name": "approach direction"
+    },
+    "manipulation_offset": {
+      "display_name": "manipulation offset"
+    },
+    "rotate_gripper": {
+      "display_name": "gripper rotation"
+    }
+  },
+  "MoveAction": {
+    "grasp_config": {
+      "display_name": "grasp configuration"
+    },
+    "hip_rotation": {
+      "display_name": "hip rotation"
+    },
+    "robot_x": {
+      "display_name": "robot x"
+    },
+    "robot_y": {
+      "display_name": "robot y"
+    }
+  }
+}

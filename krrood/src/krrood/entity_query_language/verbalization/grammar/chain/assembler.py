@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
+from typing_extensions import List
+
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import (
     MappedVariable,
@@ -23,8 +27,12 @@ from krrood.entity_query_language.verbalization.grammar.chain.planner import (
     ChainPlan,
     ChainPlanner,
 )
+from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.microplanning.possessive import (
     possessive_path,
+)
+from krrood.entity_query_language.verbalization.vocabulary.countability import (
+    Countability,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
@@ -76,14 +84,40 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         'the name of a Task'
         """
         root_fragment = self._chain_root(plan.root)
+        parts = self._with_countability(plan.parts)
         if isinstance(plan.root, Variable):
             return PossessiveChain(
-                parts=plan.parts,
+                parts=parts,
                 root_fragment=root_fragment,
                 root_referent_id=plan.root._id_,
                 node_id=plan.chain[-1]._id_,
             )
-        return possessive_path(plan.parts, root_fragment)
+        return possessive_path(parts, root_fragment)
+
+    def _with_countability(self, parts: List[PathStep]) -> List[PathStep]:
+        """:return: *parts* with each attribute hop's countability resolved from field metadata, so
+        both the direct genitive path and the pronominalised one (a :class:`PossessiveChain` the
+        coreference pass later reads) drop the article before a metadata-uncountable noun.
+
+        A hop is left untouched when the registry has no opinion, so it keeps the definite article.
+        """
+        registry = self.context.services.field_metadata
+        resolved: List[PathStep] = []
+        for step in parts:
+            reference = step.source_reference
+            if reference is not None and reference.attribute is not None:
+                countable = registry.countable(reference.owner_type, reference.attribute)
+                if countable is not None:
+                    step = replace(
+                        step,
+                        countability=(
+                            Countability.COUNTABLE
+                            if countable
+                            else Countability.UNCOUNTABLE
+                        ),
+                    )
+            resolved.append(step)
+        return resolved
 
     def plural_attribute(self, plan: ChainPlan) -> Fragment:
         """

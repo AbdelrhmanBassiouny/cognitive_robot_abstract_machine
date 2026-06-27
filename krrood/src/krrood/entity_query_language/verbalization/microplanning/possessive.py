@@ -17,7 +17,7 @@ from krrood.entity_query_language.verbalization.fragments.features import (
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.vocabulary.countability import (
-    NounCountability,
+    Countability,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
@@ -51,10 +51,11 @@ def _genitive_article(step: PathStep) -> Optional[Fragment]:
     """:return: the article introducing a genitive hop — none for a mass noun (*"the amount of
     money"*, never *"the amount of the money"*), else the definite *"the"*.
 
-    A genitive hop is a fresh, non-anaphoric description of an attribute, so a mass-noun hop reads
-    in its bare generic form; only countable hops take *"the"*.
+    Countability is taken solely from the field metadata resolved onto the hop; a hop the metadata
+    says nothing about keeps the definite article. There is no name-based lexicon — countability is
+    authored offline alongside the other field metadata.
     """
-    if NounCountability().is_uncountable(step.name):
+    if step.countability is Countability.UNCOUNTABLE:
         return None
     return Articles.THE.as_fragment()
 

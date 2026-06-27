@@ -16,6 +16,9 @@ from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
     SourceReference,
 )
+from krrood.entity_query_language.verbalization.vocabulary.countability import (
+    Countability,
+)
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.relational_attributes import (
@@ -71,6 +74,11 @@ class PathStep:
     """``True`` when this hop's value is an atomic scalar (a number / string / date), not an entity.
     A scalar leaf possessed by a plural subject distributes (*"their salaries"*); an entity owner of
     further structure does not (*"the begin and end of their period"*)."""
+
+    countability: Optional[Countability] = None
+    """The per-field countability resolved from field metadata, or ``None`` when unspecified (the hop
+    keeps the definite article). When ``UNCOUNTABLE`` the genitive hop drops the article
+    (*"the amount of money"*)."""
 
     @property
     def is_relation(self) -> bool:
