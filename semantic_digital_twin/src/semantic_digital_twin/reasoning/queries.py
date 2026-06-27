@@ -203,7 +203,7 @@ def annotation_class_by_label(label: str) -> Optional[type]:
 
 
 @dataclass(eq=False)
-class AnnotationVolume(SymbolicFunction):
+class EntityVolume(SymbolicFunction):
     """The volume of a semantic annotation, from its body's collision scale (x * y * z)."""
 
     annotation: SemanticAnnotation
@@ -220,7 +220,7 @@ class AnnotationVolume(SymbolicFunction):
         return 0.0
 
 
-annotation_volume = functional_form(AnnotationVolume)
+annotation_volume = functional_form(EntityVolume)
 
 
 def sort_annotations_by_volume(

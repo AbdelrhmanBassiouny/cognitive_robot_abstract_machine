@@ -117,17 +117,16 @@ class Operand:
 
     It wraps the operand's EXISTING child expression — never a freshly constructed variable, so
     coreference is preserved — together with the renderer that turns an expression into a
-    :class:`Fragment` in the current context. Used directly it renders the operand
-    (``Noun(operands.body)``); navigated it renders a DERIVED expression on the SAME variable
-    (``operands.tip.name`` → *"the name of …"*), reusing EQL's attribute navigation.
+    :class:`Fragment` in the current context. It is used DIRECTLY (``Noun(operands.body)``); a fragment
+    may not navigate into it — a verbalization is built only from the operands the operation declares.
 
     An author never constructs one: it is handed to the fragment as an attribute of the typed
-    :class:`OperandView` (``operands.tip``), so the IDE resolves ``tip`` to the field and ``name`` to
-    the field type's attribute (autocompletion, go-to-definition).
+    :class:`OperandView` (``operands.body``), so the IDE resolves ``body`` to the declared field
+    (autocompletion, go-to-definition).
     """
 
     _expression_: Any
-    """The EXISTING child expression this operand wraps (or a derived expression after navigation)."""
+    """The EXISTING child expression this operand wraps."""
 
     _render_: "Callable[[Any], Fragment]"
     """Renders an expression to a fragment in the current context (coreference, determiners)."""
@@ -140,35 +139,35 @@ class Operand:
     @property
     def _value_of_operand_(self) -> Any:
         """:return: the raw Python value bound to the operand (a literal's value unwrapped) — what
-        :class:`OneOf` enumerates. Named with surrounding underscores so it is not mistaken for a
-        navigated attribute (``operands.x.value`` navigates to ``x.value``, it does not read this)."""
+        :class:`OneOf` enumerates."""
         return (
             self._expression_._value_
             if isinstance(self._expression_, Literal)
             else self._expression_
         )
 
-    def __getattr__(self, attribute_name: str) -> "Operand":
-        """:return: the operand for a navigated attribute, built on the SAME underlying expression so
-        coreference holds — ``operands.tip.name`` is the name of the existing tip, not a new variable.
-
-        Only public names navigate; a dunder/private name raises :class:`AttributeError` so copying,
-        pickling and the real fields are unaffected.
+    def __getattr__(self, attribute_name: str) -> Any:
+        """Refuse attribute access on an operand: a fragment uses the operand directly
+        (``Noun(operands.body)``) and may NOT navigate into it, so a verbalization stays built only
+        from the operands the operation declares.
         """
         if attribute_name.startswith("_"):
             raise AttributeError(attribute_name)
-        return Operand(getattr(self._expression_, attribute_name), self._render_)
+        raise AttributeError(
+            f"cannot read '.{attribute_name}' on a verbalization operand: a fragment may only use "
+            f"the operands the operation declares directly, not navigate into them"
+        )
 
 
 @dataclass(frozen=True)
 class OperandView:
     """The typed view of a symbolic callable's operands handed to ``_verbalization_fragment_``.
 
-    Each attribute is the :class:`Operand` for that field — ``operands.body`` — navigable to derived
-    expressions (``operands.tip.name``) and usable directly as a clause constituent. The author types
-    the parameter as the callable instance (``operands: Self``), so the IDE autocompletes the operand
-    fields and their attributes and go-to-definition works; at runtime each resolves to the EXISTING
-    child expression. Iterating yields the operands in field order (used by the default surfaces).
+    Each attribute is the :class:`Operand` for that field — ``operands.body`` — usable directly as a
+    clause constituent (a fragment may not navigate into an operand). The author types the parameter
+    as the callable instance (``operands: Self``), so the IDE autocompletes the declared operand
+    fields and go-to-definition works; at runtime each resolves to the EXISTING child expression.
+    Iterating yields the operands in field order (used by the default surfaces).
     """
 
     _child_expressions_: "Mapping[str, Any]"
@@ -192,28 +191,6 @@ class OperandView:
         return (self._operand_for_(name) for name in self._child_expressions_)
 
 
-@dataclass(frozen=True)
-class _PreviewExpression:
-    """A stand-in operand expression for :meth:`SymbolicCallable.preview_verbalization`.
-
-    It has no query behind it, so navigation just records a dotted path (``tip`` → ``tip.name``)
-    that the preview renders verbatim — letting a developer see which derived attribute a fragment
-    reads without building a query.
-    """
-
-    _path_: str
-    """The dotted access path so far (the field name, then each navigated attribute)."""
-
-    def __getattr__(self, attribute_name: str) -> "_PreviewExpression":
-        if attribute_name.startswith("_"):
-            raise AttributeError(attribute_name)
-        return _PreviewExpression(f"{self._path_}.{attribute_name}")
-
-    def __iter__(self) -> Iterator[Any]:
-        # So a fragment using OneOf over an operand previews without a real collection behind it.
-        return iter(())
-
-
 @dataclass(eq=False)
 class Verbalizable(ABC):
     """
@@ -230,16 +207,16 @@ class Verbalizable(ABC):
         Build the clause from the typed part-of-speech vocabulary
         (:func:`~…vocabulary.parts_of_speech.clause` with ``Noun`` / ``Verb`` / ``Copula`` /
         ``Preposition`` / ``Adjective``), composing the *operands* — each ``operands.<field>`` is the
-        operand for that field, rendered when used (``Noun(operands.person_1)``) and navigable to a
-        derived expression on the SAME variable (``operands.tip.name``, so coreference holds). State
-        only the **affirmative, present-tense** form: a ``Verb`` is given as its lemma, and the
-        realisation passes inflect it (*"work"* → *"works"*) and agree its number. Returning a typed
-        clause rather than a string keeps the operation composable — a wrapping ``Not`` negates it
-        automatically (do-support *"does not love"*; copula suppletion *"is not reachable"*) and
-        coreference still reduces the operands.
+        operand for that field, used directly (``Noun(operands.person_1)``). A fragment uses only the
+        operands the operation declares; it may not navigate into them. State only the
+        **affirmative, present-tense** form: a ``Verb`` is given as its lemma, and the realisation
+        passes inflect it (*"work"* → *"works"*) and agree its number. Returning a typed clause rather
+        than a string keeps the operation composable — a wrapping ``Not`` negates it automatically
+        (do-support *"does not love"*; copula suppletion *"is not reachable"*) and coreference still
+        reduces the operands.
 
-        Type the parameter as ``Self`` so the IDE resolves each ``operands.<field>`` to the field's
-        declared type — autocompleting its attributes and following go-to-definition into them.
+        Type the parameter as ``Self`` so the IDE resolves each ``operands.<field>`` to the declared
+        field — autocompletion and go-to-definition.
 
         Example::
 
@@ -347,13 +324,15 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
             and field.default_factory is MISSING
         ]
 
-        def render(expression: _PreviewExpression) -> "Fragment":
-            return Noun(WordFragment(text=expression._path_)).as_fragment()
+        def render(placeholder: str) -> "Fragment":
+            return Noun(WordFragment(text=placeholder)).as_fragment()
 
+        # No query behind a preview, so each operand is a placeholder named after its field; the
+        # fragment uses the operands directly (it cannot navigate into them), so a placeholder string
+        # is enough.
         operands = OperandView(
             _child_expressions_={
-                name: _PreviewExpression(name.replace("_", " ").strip())
-                for name in field_names
+                name: name.replace("_", " ").strip() for name in field_names
             },
             _render_=render,
         )

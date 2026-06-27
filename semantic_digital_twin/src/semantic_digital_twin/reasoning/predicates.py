@@ -271,14 +271,13 @@ class Reachable(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        # "<pose> is reachable by <tip's name>" -- an adjective relation; the reacher is read as the
-        # tip's name, a derived attribute on the EXISTING tip variable (so coreference holds).
+        # "<pose> is reachable by <tip>" -- an adjective relation; the reacher is the tip operand.
         return clause(
             Noun(operands.pose),
             Copula(),
             Adjective("reachable"),
             Preposition.BY,
-            Noun(operands.tip.name),
+            Noun(operands.tip),
         )
 
 
