@@ -220,7 +220,7 @@ class EntityVolume(SymbolicFunction):
         return 0.0
 
 
-annotation_volume = functional_form(EntityVolume)
+entity_volume = functional_form(EntityVolume)
 
 
 def sort_annotations_by_volume(
@@ -237,5 +237,5 @@ def sort_annotations_by_volume(
     annotaion_var = entity(a := variable_from(annotations)).where(a.bodies)
 
     return entity(annotaion_var).ordered_by(
-        annotation_volume(annotaion_var), descending=not order
+        entity_volume(annotaion_var), descending=not order
     )
