@@ -16,12 +16,14 @@ from typing_extensions import (
     Self,
     Set,
     Type,
+    TypeVar,
 )
 
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.factories import variable_from, entity, variable, an
 from krrood.ormatic.utils import classproperty
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.helper import make_dirac
 from probabilistic_model.probabilistic_circuit.rx.helper import (
@@ -94,13 +96,20 @@ class IsPerceivable:
     """
 
 
+TKinematicStructureEntity = TypeVar(
+    "TKinematicStructureEntity", bound=KinematicStructureEntity
+)
+
+
 @dataclass(eq=False)
-class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
+class HasRootKinematicStructureEntity(
+    SemanticAnnotation, SubClassSafeGeneric[TKinematicStructureEntity], ABC
+):
     """
     Base class for shared method for HasRootBody and HasRootRegion.
     """
 
-    root: KinematicStructureEntity = field(kw_only=True)
+    root: TKinematicStructureEntity = field(kw_only=True)
     """
     The root kinematic structure entity of the semantic annotation.
     """
@@ -139,7 +148,7 @@ class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
         active_axis: Optional[Vector3] = None,
         connection_multiplier: float = 1.0,
         connection_offset: float = 0.0,
-    ):
+    ) -> Self:
         """
         Create a new instance and connect its root entity to the world's root.
 
@@ -215,8 +224,11 @@ class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
         return self._world.get_kinematic_structure_entities_of_branch(self.root)
 
 
+TBody = TypeVar("TBody", bound=Body)
+
+
 @dataclass(eq=False)
-class HasRootBody(HasRootKinematicStructureEntity, ABC):
+class HasRootBody(HasRootKinematicStructureEntity[TBody], ABC):
     """
     Abstract base class for all household objects. Each semantic annotation refers to a single Body.
     Each subclass automatically derives a MatchRule from its own class name and
@@ -224,10 +236,12 @@ class HasRootBody(HasRootKinematicStructureEntity, ABC):
     naturally more specific than their bases.
     """
 
-    root: Body = field(kw_only=True)
-    """
-    The root body of the semantic annotation.
-    """
+    @property
+    def bodies(self) -> List[Body]:
+        """
+        The bodies that are part of the semantic annotation.
+        """
+        return [self.root]
 
     @classmethod
     def create_with_new_body_in_world(
@@ -276,16 +290,21 @@ class HasRootBody(HasRootKinematicStructureEntity, ABC):
         )
 
 
+TRegion = TypeVar("TRegion", bound=Region)
+
+
 @dataclass(eq=False)
-class HasRootRegion(HasRootKinematicStructureEntity, ABC):
+class HasRootRegion(HasRootKinematicStructureEntity[TRegion], ABC):
     """
     A mixin class for semantic annotations that have a region.
     """
 
-    root: Region = field(kw_only=True)
-    """
-    The root region of the semantic annotation.
-    """
+    @property
+    def regions(self) -> Iterable[Region]:
+        """
+        The regions that are part of the semantic annotation.
+        """
+        return [self.root]
 
     @classmethod
     def create_with_new_region_in_world(
@@ -469,6 +488,45 @@ class HasMechanicalJoint(HasRootBody, PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
+class HasSlider(HasRootKinematicStructureEntity, ABC):
+    """
+    A mixin class for semantic annotations that have slider joints.
+    """
+
+    slider: Optional[Slider] = field(default=None)
+    """
+    The slider of the semantic annotation.
+    """
+
+    @synchronized_attribute_modification
+    def add_slider(
+        self,
+        slider: Slider,
+    ):
+        """
+        Add a slider to the semantic annotation.
+
+        :param slider: The slider to add.
+        """
+        self._attach_parent_entity_in_kinematic_structure(
+            slider.root,
+        )
+        self.slider = slider
+
+    def _kinematic_structure_entities(
+        self, visited: Set[int]
+    ) -> list[KinematicStructureEntity]:
+        if id(self) in visited:
+            return []
+        visited.add(id(self))
+        kinematic_structure_entities = (
+            self._world.get_kinematic_structure_entities_of_branch(self.root)
+        )
+        if self.slider is not None:
+            kinematic_structure_entities.append(self.slider.root)
+        return kinematic_structure_entities
+
+@dataclass(eq=False)
 class HasDrawers(PartWholeRelationship, ABC):
     """
     A mixin class for semantic annotations that have drawers.
@@ -508,14 +566,19 @@ class HasHandle(HasRootBody, PartWholeRelationship, ABC):
     """
 
 
+THasRootBody = TypeVar("THasRootBody", bound=HasRootBody)
+"""
+A type variable for HasRootBody.
+"""
+
 @dataclass(eq=False)
-class IsStorageSpace(HasRootBody, ABC):
+class HasStorageSpace(HasRootBody, SubClassSafeGeneric[THasRootBody], ABC):
     """
     A mixin class for semantic annotations that represent storage spaces. Used to afterthefact add object for example
     to a table, and have those objects move with the table when it is moved.
     """
 
-    objects: List[HasRootBody] = field(default_factory=list, hash=False, kw_only=True)
+    objects: List[THasRootBody] = field(default_factory=list, hash=False, kw_only=True)
     """
     The occupants currently contained in/on this annotation.
     """
@@ -542,6 +605,13 @@ class IsStorageSpace(HasRootBody, ABC):
         :return: A list of HasRootBody objects of the given type.
         """
         return [obj for obj in self.objects if isinstance(obj, object_type)]
+
+
+@dataclass(eq=False)
+class IsStorageSpace(HasStorageSpace[HasRootBody], ABC):
+    """
+    Backward-compatible storage-space mixin.
+    """
 
 
 @dataclass(eq=False)

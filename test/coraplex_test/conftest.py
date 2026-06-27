@@ -2,19 +2,33 @@ from copy import deepcopy
 from functools import partial
 
 import pytest
-import rclpy
+
+try:
+    import rclpy
+except ModuleNotFoundError:
+    pass
 from sqlalchemy.orm import sessionmaker
 import runpy
 from pathlib import Path
 
 from krrood.ormatic.utils import create_engine, drop_database
-from coraplex.datastructures.dataclasses import Context
 
 import coraplex.orm.ormatic_interface as coraplex_orm
+try:
+    from coraplex.datastructures.dataclasses import Context
+except ModuleNotFoundError:
+    pass
 
-from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
-    VizMarkerPublisher,
-)
+try:
+    from coraplex.orm.ormatic_interface import Base
+except ImportError:
+    pass
+try:
+    from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+        VizMarkerPublisher,
+    )
+except ModuleNotFoundError:
+    pass
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.stretch import Stretch
 
