@@ -138,11 +138,11 @@ class Adjective(ClauseElement):
 class All(ClauseElement):
     """The universal quantifier *"all"* fronting a clause's subject.
 
-    In a :func:`clause` it both reads as *"all"* and tells the builder to make the quantified subject
-    — the first noun phrase after it — plural and to agree the clause's verb / copula, so
-    ``clause(All(), Noun("element"), Copula(), Adjective("close"))`` reads *"all elements are close"*.
-    Only the number features are set here; the morphology pass does the inflection (*"element"* →
-    *"elements"*, *"is"* → *"are"*)."""
+    In a :func:`clause` it both reads as *"all"* and marks the quantified subject — the first noun
+    phrase after it — plural; the agreement realization pass then agrees the clause's verb / copula,
+    so ``clause(All(), Noun("element"), Copula(), Adjective("close"))`` reads *"all elements are
+    close"*. Only the subject's number is decided here; agreement and the morphology inflection
+    (*"element"* → *"elements"*, *"is"* → *"are"*) happen in the realization passes."""
 
     def as_fragment(self) -> Fragment:
         """:return: the *"all"* quantifier word leaf.
@@ -272,26 +272,28 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     ... )
     'an Employee work in a Department'
 
-    An :class:`All` quantifier makes the clause read a universal: the subject it fronts becomes plural
-    and the verb / copula agrees.
+    An :class:`All` quantifier makes the clause read a universal: the subject it fronts is made
+    plural and the agreement realization pass agrees the verb / copula (shown realised here, since
+    agreement and morphology run in the passes, not in :func:`clause`).
 
-    >>> flatten_fragment_to_plain_text(
-    ...     clause(All(), Noun("element"), Copula(), Adjective("close"))
-    ... )
+    >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+    ...     realize_subtree)
+    >>> realize_subtree(clause(All(), Noun("element"), Copula(), Adjective("close")))
     'all elements are close'
     """
     parts = [(constituent, constituent.as_fragment()) for constituent in constituents]
     if any(isinstance(constituent, All) for constituent, _ in parts):
-        return Clause(parts=_agree_with_universal_quantifier(parts))
+        return Clause(parts=_pluralize_quantified_subject(parts))
     return Clause(parts=[fragment for _, fragment in parts])
 
 
-def _agree_with_universal_quantifier(
+def _pluralize_quantified_subject(
     parts: List[tuple],
 ) -> List[Fragment]:
-    """:return: the clause fragments with universal-quantifier agreement applied — the quantified
-    subject (the first noun phrase after the :class:`All` word) is made plural and the clause's
-    copula / verb agrees. Only the number features are set; the morphology pass inflects them.
+    """:return: the clause fragments with the universally-quantified subject — the first noun phrase
+    after the :class:`All` word — made plural. Only the subject's number is decided here (the
+    grammatical-number content); the finite verb / copula is agreed with it later by the agreement
+    realization pass, and the morphology pass does the inflection.
     """
     fragments: List[Fragment] = []
     seen_all = False
@@ -303,11 +305,6 @@ def _agree_with_universal_quantifier(
         elif seen_all and not subject_pluralized and isinstance(fragment, NounPhrase):
             fragments.append(replace(fragment, number=Number.PLURAL))
             subject_pluralized = True
-        elif isinstance(fragment, RoleFragment) and fragment.role in (
-            SemanticRole.OPERATOR,
-            SemanticRole.VERB,
-        ):
-            fragments.append(replace(fragment, number=Number.PLURAL))
         else:
             fragments.append(fragment)
     return fragments
