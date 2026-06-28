@@ -256,6 +256,22 @@ def _operator_numbers(fragment: VerbalizationFragment) -> list:
     return numbers
 
 
+def _concord_numbers(fragment: VerbalizationFragment) -> list:
+    """:return: the ``concord_number`` of every phrase that carries one, in document order — so a
+    test can read off the subject number coreference recorded for the agreement pass to consume."""
+    numbers = []
+
+    def visit(node: VerbalizationFragment) -> None:
+        if isinstance(node, PhraseFragment):
+            if node.concord_number is not None:
+                numbers.append(node.concord_number)
+            for child in node.parts:
+                visit(child)
+
+    visit(fragment)
+    return numbers
+
+
 def _quantified_clause(chain_parts, *, subject_number: GrammaticalNumber):
     """A *"<subject>, <chain> is high"* shape — a population intro (the scope focus) followed by a
     subject-led predicate whose singular-built copula must agree with the realised subject.
@@ -272,35 +288,38 @@ def _quantified_clause(chain_parts, *, subject_number: GrammaticalNumber):
     return _scope(PhraseFragment(parts=[intro, clause]), focus_id=rid)
 
 
-def test_copula_agrees_plural_when_a_scalar_leaf_distributes():
-    """A single scalar hop distributes over the plural population (*"their batteries"*), so the
-    clause's singular-built copula is re-tagged plural — the morphology pass then realises *"are"*.
-    The agreement is decided here, where the population reading is, not pre-baked into the rule.
-    """
+def test_concord_recorded_plural_when_a_scalar_leaf_distributes():
+    """A single scalar hop distributes over the plural population (*"their batteries"*), so coreference
+    records PLURAL concord on the predicate clause — the number is decided here, where the population
+    reading is. The copula is left singular: the agreement pass re-tags it (and morphology realises
+    *"are"*), not coreference."""
     scoped, discourse = _quantified_clause(
         [_scalar_part("battery")], subject_number=GrammaticalNumber.PLURAL
     )
     resolved = CoreferenceProcessor(discourse=discourse).process(scoped)
-    assert _operator_numbers(resolved) == [GrammaticalNumber.PLURAL]
+    assert _concord_numbers(resolved) == [GrammaticalNumber.PLURAL]
+    assert _operator_numbers(resolved) == [GrammaticalNumber.SINGULAR]
 
 
-def test_copula_stays_singular_for_a_deeper_head_chain():
+def test_no_concord_for_a_deeper_head_chain():
     """A two-hop chain heads on an inner genitive that does not distribute (*"the amount of their
-    amount_details"*), so the copula stays singular even under a plural subject — the rule keys off
-    the realised head, not the bare presence of a plural scope."""
+    amount_details"*), so coreference records no plural concord even under a plural subject — it keys
+    off the realised head, not the bare presence of a plural scope."""
     scoped, discourse = _quantified_clause(
         [_attr_part("amount_details"), _scalar_part("amount")],
         subject_number=GrammaticalNumber.PLURAL,
     )
     resolved = CoreferenceProcessor(discourse=discourse).process(scoped)
+    assert _concord_numbers(resolved) == []
     assert _operator_numbers(resolved) == [GrammaticalNumber.SINGULAR]
 
 
-def test_copula_untouched_for_a_singular_subject():
-    """A singular-subject scope leaves the copula singular: every plain predicate is unaffected, so
+def test_no_concord_for_a_singular_subject():
+    """A singular-subject scope records no plural concord: every plain predicate is unaffected, so
     this never disturbs the existing singular cases."""
     scoped, discourse = _quantified_clause(
         [_scalar_part("battery")], subject_number=GrammaticalNumber.SINGULAR
     )
     resolved = CoreferenceProcessor(discourse=discourse).process(scoped)
+    assert _concord_numbers(resolved) == []
     assert _operator_numbers(resolved) == [GrammaticalNumber.SINGULAR]
