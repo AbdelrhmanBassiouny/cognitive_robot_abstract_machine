@@ -8,6 +8,8 @@ This covers the case the build-time tagging never did: a plural subject that is 
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     WordFragment,
@@ -65,6 +67,16 @@ def test_singular_subject_is_left_untouched():
         realize_subtree(clause(Noun("robot"), Copula(), Adjective("close")))
         == "a robot is close"
     )
+
+
+def test_concord_number_stamp_drives_copula_agreement():
+    # Coreference stamps a clause's concord_number for a subject whose number is not on a plain head
+    # (a pronoun, a possessive-chain population); the pass agrees off that stamp. Stamping a plural
+    # concord here flips the copula is -> are purely from the stamp, independent of the surface subject.
+    plain = clause(Noun("dog"), Copula(), Adjective("ready"))
+    assert realize_subtree(plain) == "a dog is ready"
+    stamped = replace(plain, concord_number=Number.PLURAL)
+    assert realize_subtree(stamped) == "a dog are ready"
 
 
 def test_agreement_is_idempotent():

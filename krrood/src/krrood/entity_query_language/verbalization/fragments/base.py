@@ -248,6 +248,18 @@ class PhraseFragment(Fragment):
     separator: Separator = Separator.SPACE
     """Separator inserted between adjacent parts."""
 
+    concord_number: Optional[Number] = None
+    """The grammatical number this phrase's subject imposes on its finite verb / copula by *concord*
+    — the syntactic agreement whereby a verb matches its subject (*"the dogs **are**"* vs *"the dog
+    **is**"*; Quirk, Greenbaum, Leech & Svartvik 1985, *A Comprehensive Grammar of the English
+    Language*, ch. 10). It is the CONCORD number, distinct from a leaf's own inflection ``number``:
+    a pronoun subject *"they"* imposes plural concord yet must not itself inflect to *"theys"*.
+
+    Set by the coreference pass when it discovers a subject's number (a pronominalised population, a
+    scalar distributed over it) — the one number not evident from a plain head noun — and consumed by
+    the :class:`~krrood.entity_query_language.verbalization.rendering.agreement_processor.AgreementProcessor`.
+    ``None`` when this phrase is not a subject-led predicate (the default)."""
+
 
 @dataclass
 class Clause(PhraseFragment):
