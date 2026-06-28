@@ -23,6 +23,7 @@ from krrood.entity_query_language.operators.comparator import not_contains
 
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.exceptions import UnknownAggregatorError
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
@@ -684,9 +685,9 @@ class FallbackNouns(VocabEnum):
     def name_of(self, node: object) -> str:
         """
         :param node: A variable/entity-like node, or ``None``.
-        :return: *node*'s type name (``_type_.__name__``), or this fallback noun's text when *node*
-            is ``None`` or carries no type. Centralises the one optional-``_type_`` read every
-            planner/assembler would otherwise repeat.
+        :return: *node*'s type as the noun it reads as in prose (``int`` → *"Integer"*, a class by
+            its name), or this fallback noun's text when *node* is ``None`` or carries no type.
+            Centralises the one optional-``_type_`` read every planner/assembler would otherwise repeat.
 
         >>> FallbackNouns.ENTITY.name_of(variable(Robot, []))
         'Robot'
@@ -694,7 +695,7 @@ class FallbackNouns(VocabEnum):
         'entity'
         """
         node_type = node._type_ if isinstance(node, Selectable) else None
-        return node_type.__name__ if node_type is not None else self.text
+        return type_noun(node_type) if node_type is not None else self.text
 
 
 class GroupKeyPhrases(VocabEnum):

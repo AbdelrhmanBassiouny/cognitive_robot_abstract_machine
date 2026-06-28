@@ -38,35 +38,35 @@ def _int():
 
 
 def test_limit_without_order_first_singular():
-    assert verbalize_expression(entity(_int()).limit(1)) == "Find the first int"
+    assert verbalize_expression(entity(_int()).limit(1)) == "Find the first Integer"
 
 
 def test_limit_without_order_first_plural():
-    assert verbalize_expression(entity(_int()).limit(2)) == "Find the first two ints"
+    assert verbalize_expression(entity(_int()).limit(2)) == "Find the first two Integers"
 
 
 def test_descending_self_singular_is_highest():
     v = _int()
     q = entity(v).ordered_by(v, descending=True).limit(1)
-    assert verbalize_expression(q) == "Find the highest int"
+    assert verbalize_expression(q) == "Find the highest Integer"
 
 
 def test_descending_self_plural_is_top_n():
     v = _int()
     q = entity(v).ordered_by(v, descending=True).limit(3)
-    assert verbalize_expression(q) == "Find the top three ints"
+    assert verbalize_expression(q) == "Find the top three Integers"
 
 
 def test_ascending_self_singular_is_lowest():
     v = _int()
     q = entity(v).ordered_by(v, descending=False).limit(1)
-    assert verbalize_expression(q) == "Find the lowest int"
+    assert verbalize_expression(q) == "Find the lowest Integer"
 
 
 def test_ascending_self_plural_is_bottom_n():
     v = _int()
     q = entity(v).ordered_by(v, descending=False).limit(3)
-    assert verbalize_expression(q) == "Find the bottom three ints"
+    assert verbalize_expression(q) == "Find the bottom three Integers"
 
 
 def test_descending_attribute_singular_is_with_the_highest():

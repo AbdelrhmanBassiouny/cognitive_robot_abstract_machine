@@ -624,11 +624,11 @@ def test_count_over_query_renders_population_not_imperative_find():
 
 def test_count_over_query_uses_such_that_for_a_standalone_condition():
     """A condition on the counted variable itself reads *"such that …"* and the population is plural
-    — *"the number of ints such that …"* — so the aggregate over a query and the equivalent query
+    — *"the number of Integers such that …"* — so the aggregate over a query and the equivalent query
     over an aggregate verbalise consistently."""
     number = variable(int, [1, 2, 3])
     text = verbalize_expression(eql.count(entity(number).where(number > 0)))
-    assert text == "the number of ints such that the Integer is greater than 0"
+    assert text == "the number of Integers such that the Integer is greater than 0"
 
 
 def test_boolean_predicative_pronominalises_relational_navigation():

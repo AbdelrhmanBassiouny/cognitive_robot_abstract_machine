@@ -9,6 +9,7 @@ from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import InstantiatedVariable
 from krrood.entity_query_language.predicate import SymbolicCallable
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.cardinality import (
     Cardinality,
     column_cardinality,
@@ -216,7 +217,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         )
         subject_noun = NounPhrase(
             head=RoleFragment.for_variable(
-                subject._type_.__name__, subject, number=number
+                type_noun(subject._type_), subject, number=number
             ),
             number=number,
             definiteness=Definiteness.DEFINITE,
@@ -356,7 +357,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         surface = ranking_surface(RankingRequest(plan=ranking))
         subject_noun = NounPhrase(
             head=RoleFragment.for_variable(
-                subject._type_.__name__, subject, number=surface.number
+                type_noun(subject._type_), subject, number=surface.number
             ),
             number=surface.number,
             definiteness=Definiteness.DEFINITE,

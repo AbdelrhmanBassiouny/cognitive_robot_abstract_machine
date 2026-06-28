@@ -192,14 +192,14 @@ def test_value_function_is_not_treated_as_a_predicate_clause():
 
 def test_value_function_reads_as_the_value_of_its_arguments():
     # A non-bool function names the value it computes AND what it is computed from: "the parity of an
-    # int" -- a genitive over its argument -- not a bare floating "a parity", and not the verbose
+    # Integer" -- a genitive over its argument -- not a bare floating "a parity", and not the verbose
     # "a parity, where the number of the parity is ..." decomposition.
     assert verbalize_expression(parity(variable(int, []))) == "the parity of an Integer"
 
 
 def test_getter_named_value_function_drops_the_get_prefix():
     # A stray imperative getter still reads as the noun it computes over its argument: get_quarter ->
-    # "the quarter of an int".
+    # "the quarter of an Integer".
     assert (
         verbalize_expression(get_quarter(variable(int, []))) == "the quarter of an Integer"
     )
