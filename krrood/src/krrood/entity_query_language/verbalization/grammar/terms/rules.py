@@ -12,6 +12,7 @@ from krrood.entity_query_language.core.variable import (
     Literal,
     Variable,
 )
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
     NounPhrase,
@@ -211,7 +212,7 @@ class LiteralRule(PhraseRule):
             else []
         )
         return NounPhrase(
-            head=RoleFragment.for_variable(type(value).__name__, node),
+            head=RoleFragment.for_variable(type_noun(type(value)), node),
             definiteness=Definiteness.INDEFINITE,
             pre_head=Specificity.SPECIFIC.as_fragment(),
             modifiers=modifiers,

@@ -21,6 +21,7 @@ from typing_extensions import List, Optional, Tuple
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
     NounPhrase,
@@ -117,7 +118,7 @@ class SelectionAssembler:
         if number is GrammaticalNumber.PLURAL and isinstance(variable, Variable):
             return NounPhrase(
                 head=RoleFragment.for_variable(
-                    variable._type_.__name__, variable, number=GrammaticalNumber.PLURAL
+                    type_noun(variable._type_), variable, number=GrammaticalNumber.PLURAL
                 ),
                 number=GrammaticalNumber.PLURAL,
                 definiteness=Definiteness.INDEFINITE,
