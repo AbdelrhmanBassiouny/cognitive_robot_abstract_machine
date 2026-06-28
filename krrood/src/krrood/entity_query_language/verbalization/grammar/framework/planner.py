@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 
 from typing_extensions import Generic, TypeVar
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.patterns.subclass_safe_generic import AbstractSubClassSafeGeneric
 
 TSymbolicExpression = TypeVar("TSymbolicExpression", bound=SymbolicExpression)
 """The EQL node type the assembler realises."""
@@ -15,7 +16,7 @@ TPlan = TypeVar("TPlan")
 
 
 @dataclass
-class Planner(ABC, Generic[TSymbolicExpression, TPlan]):
+class Planner(Generic[TSymbolicExpression, TPlan], AbstractSubClassSafeGeneric):
     """
     Pure analysis of a single EQL *node* into a plan of type ``P``.
 

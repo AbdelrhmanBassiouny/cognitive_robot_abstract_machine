@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 
 from typing_extensions import ClassVar, Generic, Optional, Type
@@ -8,6 +8,7 @@ from typing_extensions import ClassVar, Generic, Optional, Type
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
+from krrood.patterns.subclass_safe_generic import AbstractSubClassSafeGeneric
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RuleContext,
 )
@@ -19,7 +20,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.planner import
 
 
 @dataclass
-class Assembler(ABC, Generic[TSymbolicExpression, TPlan]):
+class Assembler(Generic[TSymbolicExpression, TPlan], AbstractSubClassSafeGeneric):
     """
     Realise an EQL *node* into a fragment, planning it first via the paired planner.
 
