@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import operator
+
 from krrood.entity_query_language.core.base_expressions import Filter
 from krrood.entity_query_language.core.variable import InstantiatedVariable
 from krrood.entity_query_language.operators.comparator import Comparator
@@ -12,13 +14,13 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 from krrood.entity_query_language.operators.logical_quantifiers import Exists, ForAll
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
-    Fragment,
+    VerbalizationFragment,
     oxford_comma,
     PhraseFragment,
     RoleFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
-    Number,
+    GrammaticalNumber,
     Separator,
 )
 from krrood.entity_query_language.verbalization.grammar.chain.assembler import (
@@ -40,6 +42,7 @@ from krrood.entity_query_language.verbalization.grammar.instantiated.planner imp
 )
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     fold_shared_subject_comparisons,
+    fold_shared_subject_conjunction,
     is_boolean_attribute_chain,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
@@ -47,11 +50,13 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
     RuleContext,
 )
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
+    between_phrase,
     build_between,
     coindexed_natural_parts,
     CoindexedFold,
     RangeFold,
     SharedSubjectComparisons,
+    SharedSubjectConjunction,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
@@ -73,9 +78,8 @@ class ComparatorRule(PhraseRule):
     """
 
     construct = Comparator
-    name = "comparator"
 
-    def build(self, node: Comparator, context: RuleContext) -> Fragment:
+    def build(self, node: Comparator, context: RuleContext) -> VerbalizationFragment:
         """Say the comparator as a standalone predicate.
 
         Delegating to the predicate assembler is what produces the whole *the battery of a Robot is
@@ -98,22 +102,30 @@ class AndRule(PhraseRule):
     "the battery of a Robot is greater than 50, and the name of the Robot is 'x'"
     >>> verbalize_expression(and_(robot.battery > 10, robot.battery < 90))
     'the battery of a Robot is between 10 and 90'
+    >>> x = variable(int, [])
+    >>> verbalize_expression(and_(x > 1, x < 10, x != 5))
+    'an Integer that is between 1 and 10 and is not 5'
     """
 
     construct = AND
-    name = "and"
 
-    def build(self, node: AND, context: RuleContext) -> Fragment:
+    def build(self, node: AND, context: RuleContext) -> VerbalizationFragment:
         """Say the flattened conjuncts, comma-joined with a trailing *"and"*.
 
         It owns the *, and* coordination between the two conjuncts of the example; the conjunct
-        clauses themselves come from the shared statement assembler.
+        clauses themselves come from the shared statement assembler. When every conjunct is a value
+        comparison on one bare variable, it factors to the *"<subject> that is …"* relative clause via
+        the :class:`SharedSubjectConjunction` fold.
 
         >>> robot = variable(Robot, [])
         >>> verbalize_expression(and_(robot.battery > 50, robot.name == 'x'))
         "the battery of a Robot is greater than 50, and the name of the Robot is 'x'"
         """
-        parts = ConditionAssembler(context).as_statements(flatten_operands(node, AND))
+        operands = flatten_operands(node, AND)
+        shared_subject = fold_shared_subject_conjunction(operands)
+        if shared_subject is not None:
+            return context.child(shared_subject)
+        parts = ConditionAssembler(context).as_statements(operands)
         if len(parts) == 1:
             return parts[0]
         # Conjuncts are independent clauses, so a two-clause coordination keeps its comma.
@@ -134,9 +146,8 @@ class RangeFoldRule(PhraseRule):
     """
 
     construct = RangeFold
-    name = "range-fold"
 
-    def build(self, node: RangeFold, context: RuleContext) -> Fragment:
+    def build(self, node: RangeFold, context: RuleContext) -> VerbalizationFragment:
         """Say the folded pair as *"<chain> is between low and high"*.
 
         It owns the *is between 10 and 90* span, emitting the *between … and …* frame over the fold's
@@ -168,9 +179,8 @@ class CoindexedFoldRule(PhraseRule):
     """
 
     construct = CoindexedFold
-    name = "coindexed-fold"
 
-    def build(self, node: CoindexedFold, context: RuleContext) -> Fragment:
+    def build(self, node: CoindexedFold, context: RuleContext) -> VerbalizationFragment:
         """Say the factored clause once — the natural *"have the same"* form over sibling prefixes.
 
         Detecting sibling prefixes selects the natural branch here (the faithful branch would instead
@@ -249,9 +259,10 @@ class SharedSubjectComparisonsRule(PhraseRule):
     """
 
     construct = SharedSubjectComparisons
-    name = "shared-subject-comparisons"
 
-    def build(self, node: SharedSubjectComparisons, context: RuleContext) -> Fragment:
+    def build(
+        self, node: SharedSubjectComparisons, context: RuleContext
+    ) -> VerbalizationFragment:
         """Say the factored disjunction — subject and copula once, tails coordinated under *either … or*.
 
         It owns the *is either … or …* framing: the shared subject and its copula are stated once and
@@ -262,14 +273,14 @@ class SharedSubjectComparisonsRule(PhraseRule):
         return PhraseFragment(
             parts=[
                 context.child(node.subject_expression),
-                copula_with("", Number.SINGULAR),
+                copula_with("", GrammaticalNumber.SINGULAR),
                 Logicals.EITHER.as_fragment(),
                 oxford_comma(tails, Conjunctions.OR.as_fragment()),
             ]
         )
 
     @staticmethod
-    def _tail(comparator: Comparator, context: RuleContext) -> Fragment:
+    def _tail(comparator: Comparator, context: RuleContext) -> VerbalizationFragment:
         """:return: a comparator's copula-less operator-and-value tail (*"greater than 50"*) — the
         differing piece coordinated under the shared subject. A bare equality has an empty operator
         core (*"is 30"* → *"30"*), so only the value is kept."""
@@ -280,6 +291,72 @@ class SharedSubjectComparisonsRule(PhraseRule):
         if not flatten_fragment_to_plain_text(operator).strip():
             return value
         return PhraseFragment(parts=[operator, value])
+
+
+class SharedSubjectConjunctionRule(PhraseRule):
+    """Factored conjunction *"<subject> that is <tail>, …, and <tail>"* — the
+    :class:`SharedSubjectConjunction` artifact produced when every conjunct of an ``AND`` is a value
+    comparison on one shared *bare variable*.
+
+    The subject and the leading copula are said once and the predicate tails coordinate under a
+    restrictive relative clause; the conjunctive analogue of :class:`SharedSubjectComparisonsRule`.
+
+    >>> x = variable(int, [])
+    >>> verbalize_expression(and_(x > 1, x < 10, x != 5))
+    'an Integer that is between 1 and 10 and is not 5'
+    """
+
+    construct = SharedSubjectConjunction
+
+    def build(
+        self, node: SharedSubjectConjunction, context: RuleContext
+    ) -> VerbalizationFragment:
+        """Say the factored conjunction — subject once, the lead copula carried by the relative
+        clause, the tails coordinated Oxford-style.
+
+        >>> x = variable(int, [])
+        >>> verbalize_expression(and_(x > 5, x != 5))
+        'an Integer that is greater than 5 and is not 5'
+        """
+        tails = [
+            self._tail(tail, context, lead=index == 0)
+            for index, tail in enumerate(node.tails)
+        ]
+        return PhraseFragment(
+            parts=[
+                context.child(node.subject_expression),
+                Keywords.THAT.as_fragment(),
+                oxford_comma(tails, Conjunctions.AND.as_fragment()),
+            ]
+        )
+
+    @classmethod
+    def _tail(cls, tail, context: RuleContext, *, lead: bool) -> VerbalizationFragment:
+        """:return: one relative-clause tail. A folded :class:`RangeFold` reads *"between low and
+        high"* (with the lead copula when it leads); a :class:`Comparator` reads its
+        operator-and-value tail. The lead tail carries the clause's copula (*"that is greater than
+        1"*); a negation re-introduces it (*"is not 5"*); a bare equality has an empty core, so it too
+        keeps the copula (*"is 5"*); every other positive tail shares the lead copula and drops it
+        (*"less than 10"*)."""
+        if isinstance(tail, RangeFold):
+            return between_phrase(
+                context.child(tail.lower_expression),
+                context.child(tail.upper_expression),
+                compact=not lead,
+            )
+        value = context.child(tail.right, as_value=True)
+        core = comparator_operator(tail, context.services, compact=False, copula=False)
+        keeps_copula = (
+            lead
+            or tail.operation is operator.ne
+            or not flatten_fragment_to_plain_text(core).strip()
+        )
+        if keeps_copula:
+            copular = comparator_operator(
+                tail, context.services, compact=False, copula=True
+            )
+            return PhraseFragment(parts=[copular, value])
+        return PhraseFragment(parts=[core, value])
 
 
 class OrRule(PhraseRule):
@@ -295,9 +372,8 @@ class OrRule(PhraseRule):
     """
 
     construct = OR
-    name = "or"
 
-    def build(self, node: OR, context: RuleContext) -> Fragment:
+    def build(self, node: OR, context: RuleContext) -> VerbalizationFragment:
         """Say the flattened disjuncts as *"either a, b, or c"*, or the factored *"… is either … or …"*
         when they share a subject.
 
@@ -336,9 +412,8 @@ class NotRule(PhraseRule):
     """
 
     construct = Not
-    name = "not"
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Wrap the child in *"not (<child>)"* via the orthography pass.
 
         It owns the *not (…)* wrapper of the class example — the leading *not* and the parentheses —
@@ -347,9 +422,10 @@ class NotRule(PhraseRule):
         return _negation_wrap(context.child(node._child_))
 
 
-def _negation_wrap(child_fragment: Fragment) -> Fragment:
+def _negation_wrap(child_fragment: VerbalizationFragment) -> VerbalizationFragment:
     """:return: *child_fragment* wrapped as *"not (<child>)"* — the fallback negation for a clause
-    that cannot be negated in place. The parens glue to the child via the orthography pass."""
+    that cannot be negated in place. The parens glue to the child via the orthography pass.
+    """
     return PhraseFragment(
         parts=[
             Logicals.NOT.as_fragment(),
@@ -379,7 +455,6 @@ class NotVerbalizablePredicateRule(PhraseRule):
     """
 
     construct = Not
-    name = "not-verbalizable-predicate"
 
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps an instantiated variable that verbalizes as a predicate
@@ -393,7 +468,7 @@ class NotVerbalizablePredicateRule(PhraseRule):
             node._child_, InstantiatedVariable
         ) and InstantiatedPlanner.renders_as_predicate_clause(node._child_)
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Say the predicate with its head verb / copula negated, or wrap it when it has neither.
 
         Marking the clause's verb or copula negated is what yields the inline *does not work in* /
@@ -413,7 +488,6 @@ class NotComparatorRule(PhraseRule):
     """
 
     construct = Not
-    name = "not-comparator"
 
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps a comparator.
@@ -427,7 +501,7 @@ class NotComparatorRule(PhraseRule):
         """
         return isinstance(node._child_, Comparator)
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Say the inner comparator with the negation folded into the operator.
 
         Pushing the negation into the predicate is what yields the inline *is not greater than 50*
@@ -447,7 +521,6 @@ class NotBooleanAttributeRule(PhraseRule):
     """
 
     construct = Not
-    name = "not-bool-attribute"
 
     def when(self, node: Not, context: RuleContext) -> bool:
         """Fires when the negation wraps a boolean-attribute chain.
@@ -461,7 +534,7 @@ class NotBooleanAttributeRule(PhraseRule):
         """
         return is_boolean_attribute_chain(node._child_)
 
-    def build(self, node: Not, context: RuleContext) -> Fragment:
+    def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Say the negated predicative *"<nav> is not <attribute>"*.
 
         It owns the *is not completed* span, emitting the boolean attribute as a negated predicative
@@ -483,9 +556,8 @@ class ForAllRule(PhraseRule):
     """
 
     construct = ForAll
-    name = "for-all"
 
-    def build(self, node: ForAll, context: RuleContext) -> Fragment:
+    def build(self, node: ForAll, context: RuleContext) -> VerbalizationFragment:
         """Say *"for all <plural var>, <condition>"*.
 
         It owns the *for all Robots,* prefix — rendering the variable as plural and joining it to the
@@ -498,7 +570,9 @@ class ForAllRule(PhraseRule):
         >>> verbalize_expression(for_all(robot, robot.battery > 0))
         'for all Robots, their batteries are greater than 0'
         """
-        variable_fragment = context.child(node.variable, number=Number.PLURAL)
+        variable_fragment = context.child(
+            node.variable, number=GrammaticalNumber.PLURAL
+        )
         condition_fragment = context.child(node.condition)
         return PhraseFragment(
             parts=[
@@ -519,9 +593,8 @@ class ExistsRule(PhraseRule):
     """
 
     construct = Exists
-    name = "exists"
 
-    def build(self, node: Exists, context: RuleContext) -> Fragment:
+    def build(self, node: Exists, context: RuleContext) -> VerbalizationFragment:
         """Say *"there exists <variable> such that <condition>"*.
 
         It owns the *there exists a Robot such that* framing around the condition; the condition
@@ -554,9 +627,8 @@ class FilterRule(PhraseRule):
     """
 
     construct = Filter
-    name = "filter"
 
-    def build(self, node: Filter, context: RuleContext) -> Fragment:
+    def build(self, node: Filter, context: RuleContext) -> VerbalizationFragment:
         """Delegate transparently to the wrapped condition.
 
         It adds no surface text of its own — unwrapping the Where/Having node so the *whose battery

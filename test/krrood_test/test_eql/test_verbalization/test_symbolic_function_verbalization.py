@@ -157,14 +157,16 @@ divides = functional_form(Divides)
 
 
 def test_copular_function_reads_as_a_copular_clause():
-    assert verbalize_expression(is_one_month(variable(int, []))) == "an int is one month"
+    assert (
+        verbalize_expression(is_one_month(variable(int, []))) == "an Integer is one month"
+    )
 
 
 def test_function_reads_as_a_predicate_in_where_with_coreference():
     number = variable(int, [])
     assert (
         verbalize_expression(an(entity(number).where(is_even(number))))
-        == "Find an int such that it is even"
+        == "Find an Integer such that it is even"
     )
 
 
@@ -172,14 +174,14 @@ def test_function_negates_inline():
     number = variable(int, [])
     assert (
         verbalize_expression(an(entity(number).where(not_(is_even(number)))))
-        == "Find an int such that it is not even"
+        == "Find an Integer such that it is not even"
     )
 
 
 def test_verb_first_function_has_a_subject_and_an_object():
     assert (
         verbalize_expression(divides(variable(int, []), variable(int, [])))
-        == "int 1 divides int 2"
+        == "Integer 1 divides Integer 2"
     )
 
 
@@ -192,13 +194,15 @@ def test_value_function_reads_as_the_value_of_its_arguments():
     # A non-bool function names the value it computes AND what it is computed from: "the parity of an
     # int" -- a genitive over its argument -- not a bare floating "a parity", and not the verbose
     # "a parity, where the number of the parity is ..." decomposition.
-    assert verbalize_expression(parity(variable(int, []))) == "the parity of an int"
+    assert verbalize_expression(parity(variable(int, []))) == "the parity of an Integer"
 
 
 def test_getter_named_value_function_drops_the_get_prefix():
     # A stray imperative getter still reads as the noun it computes over its argument: get_quarter ->
     # "the quarter of an int".
-    assert verbalize_expression(get_quarter(variable(int, []))) == "the quarter of an int"
+    assert (
+        verbalize_expression(get_quarter(variable(int, []))) == "the quarter of an Integer"
+    )
 
 
 def test_value_function_over_an_attribute_chain_reads_its_path():
@@ -219,7 +223,7 @@ def test_grouped_report_names_a_value_function_key_as_a_noun():
     numbers = variable(int, [])
     grouping = parity(numbers)
     text = verbalize_expression(a(set_of(grouping, eql.sum(numbers)).grouped_by(grouping)))
-    assert text == "For each parity, report the sum of ints"
+    assert text == "For each parity, report the sum of Integers"
 
 
 @dataclass(eq=False)
@@ -249,7 +253,7 @@ def test_value_function_inherits_the_name_based_default_surface():
     # -- so a value operation needs no per-class fragment.
     assert (
         verbalize_expression(a(set_of(_Tripled(variable(int, [])))))
-        == "Find the tripled of an int"
+        == "Find the tripled of an Integer"
     )
 
 
@@ -259,7 +263,7 @@ def test_predicate_inherits_the_name_based_default_clause():
     number = variable(int, [])
     assert (
         verbalize_expression(an(entity(number).where(_IsPositive(number))))
-        == "Find an int such that it is positive"
+        == "Find an Integer such that it is positive"
     )
 
 
@@ -289,5 +293,5 @@ def test_ranked_grouped_report_by_a_value_key_reads_as_a_sentence_not_a_tuple():
     text = verbalize_expression(
         a(set_of(grouping, total).grouped_by(grouping).ordered_by(total, descending=True).limit(1))
     )
-    assert text == "Find the parity of an int with the highest sum of ints"
+    assert text == "Find the parity of an Integer with the highest sum of Integers"
     assert "(" not in text

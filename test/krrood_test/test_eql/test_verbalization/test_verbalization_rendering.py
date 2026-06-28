@@ -2,7 +2,7 @@
 Tests for the fragment model, formatters, renderers, and VerbalizationPipeline.
 
 Coverage:
-- Fragment tree structure: SemanticRole tagging for variables, aggregations, keywords, operators
+- VerbalizationFragment tree structure: SemanticRole tagging for variables, aggregations, keywords, operators
 - PlainFormatter: identity pass-through
 - ANSIFormatter: wraps text in ANSI escape sequences; plain for PLAIN role
 - HTMLFormatter: wraps text in <span> tags; plain for PLAIN role; uses &nbsp; / <br>
@@ -30,7 +30,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
@@ -69,10 +69,10 @@ class _Task:
     completed: bool
 
 
-# ── Fragment helpers ───────────────────────────────────────────────────────────
+# ── VerbalizationFragment helpers ───────────────────────────────────────────────────────────
 
 
-def _collect_roles(fragment: Fragment) -> list[SemanticRole]:
+def _collect_roles(fragment: VerbalizationFragment) -> list[SemanticRole]:
     """Recursively collect all SemanticRole values from a fragment tree."""
     match fragment:
         case RoleFragment(role=role):
@@ -86,7 +86,9 @@ def _collect_roles(fragment: Fragment) -> list[SemanticRole]:
             return []
 
 
-def _collect_role_texts(fragment: Fragment, role: SemanticRole) -> list[str]:
+def _collect_role_texts(
+    fragment: VerbalizationFragment, role: SemanticRole
+) -> list[str]:
     """Return all text values in the tree that carry *role*."""
     match fragment:
         case RoleFragment(text=text, role=r) if r == role:
@@ -102,7 +104,7 @@ def _collect_role_texts(fragment: Fragment, role: SemanticRole) -> list[str]:
             return []
 
 
-# ── Fragment structure tests ───────────────────────────────────────────────────
+# ── VerbalizationFragment structure tests ───────────────────────────────────────────────────
 
 
 def test_variable_fragment_carries_variable_role():
@@ -589,7 +591,9 @@ def test_hierarchical_plain_rule_structure(doors_and_drawers_world):
 # ── Rule fragment structure tests ─────────────────────────────────────────────
 
 
-def _find_block_with_keyword(fragment: Fragment, keyword: str) -> BlockFragment | None:
+def _find_block_with_keyword(
+    fragment: VerbalizationFragment, keyword: str
+) -> BlockFragment | None:
     """Return the first BlockFragment whose header text contains keyword."""
     if not isinstance(fragment, BlockFragment):
         return None
@@ -604,7 +608,7 @@ def _find_block_with_keyword(fragment: Fragment, keyword: str) -> BlockFragment 
     return None
 
 
-def _drawer_rule_fragment(doors_and_drawers_world) -> Fragment:
+def _drawer_rule_fragment(doors_and_drawers_world) -> VerbalizationFragment:
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     pc = variable(PrismaticConnection, world.connections)

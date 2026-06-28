@@ -7,14 +7,11 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
-    Number,
-)
-from krrood.entity_query_language.verbalization.grammar.aggregation.kinds import (
-    AGGREGATION_KIND,
+    GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.grammar.framework.assembler import (
     Assembler,
@@ -27,6 +24,7 @@ from krrood.entity_query_language.verbalization.grammar.query.planner import (
     QueryPlanner,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Aggregations,
     FallbackNouns,
     Keywords,
     Prepositions,
@@ -43,12 +41,12 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
     >>> verbalize_expression(an(entity(max(variable(BankTransaction, []).amount_details.amount))))
     'Find the maximum of the amount of the amount_details of a BankTransaction'
 
-    Reference: Reiter & Dale (2000) — aggregation; Gatt & Reiter (2009), SimpleNLG — realisation.
+    Reference: :cite:t:`reiter2000building` — aggregation; :cite:t:`gatt2009simplenlg` — realisation.
     """
 
     planner = QueryPlanner
 
-    def realize(self, node: Query, plan: QueryPlan) -> Fragment:
+    def realize(self, node: Query, plan: QueryPlan) -> VerbalizationFragment:
         """
         The unconstrained aggregate value — *"the <aggregation> <leaf>"*; a constrained one adds an
         *"among <population> …"* scope (see :meth:`_among_population`).
@@ -61,7 +59,9 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
         if aggregation_data.leaf is None:
             return self.context.child(aggregation_data.aggregator)
 
-        aggregation_kind = AGGREGATION_KIND[type(aggregation_data.aggregator)]
+        aggregation_kind = Aggregations.for_aggregator(
+            type(aggregation_data.aggregator)
+        )
         leaf_fragment = RoleFragment.for_attribute(
             aggregation_data.leaf._owner_class_,
             aggregation_data.leaf._attribute_name_,
@@ -79,8 +79,8 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
         return self._among_population(node, plan, aggregate)
 
     def _among_population(
-        self, node: Query, plan: QueryPlan, aggregate: Fragment
-    ) -> Fragment:
+        self, node: Query, plan: QueryPlan, aggregate: VerbalizationFragment
+    ) -> VerbalizationFragment:
         """
         Build the *"among <population> …"* scope of a constrained aggregation — the source
         population followed by its restriction and any HAVING clause. The clauses are rendered by
@@ -102,11 +102,11 @@ class AggregationValueAssembler(Assembler[Query, QueryPlan]):
         """
         source = plan.aggregation_data.source
         source_fragment = (
-            self.context.child(source, number=Number.PLURAL)
+            self.context.child(source, number=GrammaticalNumber.PLURAL)
             if source is not None
             else FallbackNouns.ENTITY.plural_fragment()
         )
-        parts: List[Fragment] = [
+        parts: List[VerbalizationFragment] = [
             aggregate,
             Prepositions.AMONG.as_fragment(),
             source_fragment,

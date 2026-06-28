@@ -5,7 +5,7 @@ from typing_extensions import Iterable, List, Mapping, Optional
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
-    Fragment,
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.rendering.agreement_processor import (
     AgreementProcessor,
@@ -41,18 +41,18 @@ _LOWERING_PASSES: List[RealizationPass] = [
 
 
 def realize_tree(
-    fragment: Fragment,
+    fragment: VerbalizationFragment,
     previously_introduced_referents: Optional[Iterable[uuid.UUID]] = None,
     discourse: DiscourseView = EMPTY_DISCOURSE,
     numbered_labels: Optional[Mapping[uuid.UUID, str]] = None,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Run the ordered realisation passes over *fragment* — the one place the lowering passes and
     their order are defined: coreference resolution → subject/verb agreement → determiner lowering →
     morphology → orthography (punctuation spacing). Both the whole-expression build and the local
     realisation of an opaque template need this same ordered sequence.
 
-    Reference: Gatt & Reiter (2009), SimpleNLG — the ordered realisation stages.
+    Reference: :cite:t:`gatt2009simplenlg` — the ordered realisation stages.
 
     :param fragment: Root of the fragment tree.
     :param previously_introduced_referents: Referents introduced by prior builds on a shared context.
@@ -75,7 +75,9 @@ def realize_tree(
         CoreferenceProcessor(
             discourse=discourse,
             numbered_labels=dict(numbered_labels or {}),
-            previously_introduced_referents=tuple(previously_introduced_referents or ()),
+            previously_introduced_referents=tuple(
+                previously_introduced_referents or ()
+            ),
         ),
         *_LOWERING_PASSES,
     ]
@@ -85,7 +87,7 @@ def realize_tree(
     return realised
 
 
-def realize_subtree(fragment: Fragment) -> str:
+def realize_subtree(fragment: VerbalizationFragment) -> str:
     """
     Fully realise a sub-tree to plain text — the realisation passes, then flatten.
 

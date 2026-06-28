@@ -8,10 +8,10 @@ Two stages live here, top to bottom:
   (:class:`RangeFold`, :class:`CoindexedFold`) that the grammar then renders. Each fold is a
   :class:`ConjunctFold` strategy in the reducer's ordered registry — adding a fold is a new strategy,
   nothing else changes (open/closed). This is the *one* place a caller goes to simplify conjuncts.
-* **Fragment-level coordination builders** — :func:`build_between` and :func:`oxford_comma`
+* **VerbalizationFragment-level coordination builders** — :func:`build_between` and :func:`oxford_comma`
   (re-exported from the fragment layer) assemble already-rendered pieces into a coordinated phrase.
 
-References: Reiter & Dale (2000) and Dalianis (1999) — aggregation realised via coordination /
+References: :cite:t:`reiter2000building` and :cite:t:`dalianis1999aggregation` — aggregation realised via coordination /
 conjunction reduction.
 """
 
@@ -22,26 +22,29 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing_extensions import (
-    TYPE_CHECKING,
     Callable,
     Dict,
     List,
     Optional,
     Tuple,
+    TypeAlias,
     TypeVar,
     Union,
 )
 
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute, MappedVariable
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_comma,
     PhraseFragment,
-    Fragment,
+    VerbalizationFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     RangePhrases,
@@ -49,11 +52,8 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     copula_with,
 )
 
-if TYPE_CHECKING:
-    from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-
 #: Hashable identity of a pure attribute chain: ``(root variable id, ((name, owner), …))``.
-ChainKey = Tuple
+ChainKey: TypeAlias = Tuple
 
 #: The comparison operators a co-indexed group folds over. Equality additionally licenses the
 #: natural *"… have the same …"* surface (see :func:`coindexed_natural_parts`); the others read in
@@ -67,7 +67,7 @@ COINDEXED_OPERATORS: Tuple[Callable, ...] = (
 )
 
 
-# ── fold artifacts (the vocabulary the pass produces) ───────────────────────
+# %% fold artifacts (the vocabulary the pass produces)
 
 
 @dataclass
@@ -130,6 +130,26 @@ class SharedSubjectComparisons:
     50"*), coordinated under the shared subject."""
 
 
+@dataclass
+class SharedSubjectConjunction:
+    """The conjunctive analogue of :class:`SharedSubjectComparisons`: two or more value comparisons
+    on the *same bare variable*, said once as a restrictive relative clause — *"an Integer that is
+    between 1 and 10 and is not 5"* — rather than repeating the subject per conjunct.
+
+    Scoped to a *bare variable* subject (not an attribute chain), so the relative pronoun attaches
+    unambiguously to the subject noun; an attribute-chain conjunction (*"the battery of a Robot"*)
+    keeps its per-clause surface, where a *"that"* clause would dangle.
+    """
+
+    subject_expression: SymbolicExpression
+    """The shared bare variable, rendered once via the normal recursion (*"an Integer"*)."""
+
+    tails: List[Union[Comparator, RangeFold]]
+    """The predicate tails in source order — a value :class:`Comparator` (its operator-and-value
+    tail, *"is not 5"*) or a folded :class:`RangeFold` (a *"between low and high"* tail), so a
+    complementary bound pair reads *"between 1 and 10"* within the clause."""
+
+
 @dataclass(frozen=True)
 class CoindexedNaturalParts:
     """The pieces of the natural *"the <a> and <b> of <shared> have the same …"* rendering."""
@@ -144,13 +164,13 @@ class CoindexedNaturalParts:
     """The right prefix's distinguishing final hop ``(name, owner)`` (e.g. ``end``)."""
 
 
-# ── the conjunct-reduction pass (high-level entry) ──────────────────────────
+# %% the conjunct-reduction pass (high-level entry)
 
-FoldNode = Union["SymbolicExpression", RangeFold, CoindexedFold]
+FoldNode: TypeAlias = Union[SymbolicExpression, RangeFold, CoindexedFold]
 """A node the verbalization fold dispatches over: either a real EQL expression or a synthetic
 coordination artifact (:class:`RangeFold` / :class:`CoindexedFold`) produced by conjunct reduction."""
 
-ConjunctList = List[FoldNode]
+ConjunctList: TypeAlias = List[FoldNode]
 
 
 class ConjunctFold(ABC):
@@ -164,7 +184,8 @@ class ConjunctFold(ABC):
     @abstractmethod
     def apply(self, conjuncts: ConjunctList) -> ConjunctList:
         """:param conjuncts: The (possibly already partly-folded) conjunct list.
-        :return: The list with every group this fold recognises collapsed to its artifact."""
+        :return: The list with every group this fold recognises collapsed to its artifact.
+        """
 
 
 class RangeBoundFold(ConjunctFold):
@@ -241,10 +262,10 @@ def reduce_conjuncts(conjuncts: List[SymbolicExpression]) -> ConjunctList:
     return ConjunctReducer().reduce(conjuncts)
 
 
-# ── range-bound fold ────────────────────────────────────────────────────────
+# %% range-bound fold
 
 
-class _Bound(Enum):
+class _RangeBound(Enum):
     """Internal marker for the direction of a bound comparison in range folding."""
 
     LOWER = auto()
@@ -280,26 +301,45 @@ def chain_key(expression: SymbolicExpression) -> Optional[ChainKey]:
     return (root._id_, tuple(parts))
 
 
-def _classify(conjunct: SymbolicExpression) -> Optional[Tuple[ChainKey, _Bound]]:
+def subject_key(expression: SymbolicExpression) -> Optional[ChainKey]:
+    """:return: The hashable identity of a comparison's subject — :func:`chain_key` for a pure
+    attribute chain, or ``(variable_id, ())`` for a bare variable — so a fold can group bounds on a
+    bare variable (*"an Integer"*) as readily as on a chain. ``None`` for anything else.
+
+    >>> x = variable(int, [])
+    >>> subject_key(x) == subject_key(x)
+    True
+    >>> subject_key(variable(Robot, []).battery) is not None
+    True
+    """
+    key = chain_key(expression)
+    if key is not None:
+        return key
+    if isinstance(expression, Variable) and not isinstance(expression, Literal):
+        return (expression._id_, ())
+    return None
+
+
+def _classify(conjunct: SymbolicExpression) -> Optional[Tuple[ChainKey, _RangeBound]]:
     """
     :param conjunct: A candidate conjunct.
-    :return: ``(chain_key, _Bound)`` when *conjunct* is a bound comparison, else ``None``.
+    :return: ``(chain_key, _RangeBound)`` when *conjunct* is a bound comparison, else ``None``.
 
     >>> robot = variable(Robot, [])
-    >>> _classify(robot.battery >= 20)[1] is _Bound.LOWER
+    >>> _classify(robot.battery >= 20)[1] is _RangeBound.LOWER
     True
     >>> _classify(robot) is None
     True
     """
     if not isinstance(conjunct, Comparator):
         return None
-    key = chain_key(conjunct.left)
+    key = subject_key(conjunct.left)
     if key is None:
         return None
     if conjunct.operation in (operator.gt, operator.ge):
-        return key, _Bound.LOWER
+        return key, _RangeBound.LOWER
     if conjunct.operation in (operator.lt, operator.le):
-        return key, _Bound.UPPER
+        return key, _RangeBound.UPPER
     return None
 
 
@@ -341,7 +381,7 @@ def fold_range_pairs(
             j = queue.pop(0)
             lower, upper = (
                 (conjuncts[j], conjuncts[i])
-                if bound is _Bound.UPPER
+                if bound is _RangeBound.UPPER
                 else (conjuncts[i], conjuncts[j])
             )
             slots[min(i, j)] = RangeFold(
@@ -369,7 +409,7 @@ def has_pair(conjuncts: List[SymbolicExpression]) -> bool:
     return any(isinstance(item, RangeFold) for item in fold_range_pairs(conjuncts))
 
 
-# ── co-indexed fold ─────────────────────────────────────────────────────────
+# %% co-indexed fold
 
 
 def _attribute_pair(node: SymbolicExpression) -> Optional[Tuple[str, type]]:
@@ -495,14 +535,14 @@ def fold_coindexed_groups(
     return [slot for index, slot in enumerate(slots) if not dropped[index]]
 
 
-# ── owner grouping (shared aggregation primitive) ───────────────────────────
+# %% owner grouping (shared aggregation primitive)
 
 _Item = TypeVar("_Item")
 _Payload = TypeVar("_Payload")
 
 #: Classify a sibling item for owner-grouping: ``(owner, payload)`` when the item belongs to an
 #: owner (the owner is identified by its ``_id_``), or ``None`` when it does not group.
-OwnerClassifier = Callable[
+OwnerClassifier: TypeAlias = Callable[
     [_Item], Optional[Tuple["SymbolicExpression", _Payload]]
 ]
 
@@ -553,7 +593,9 @@ def group_by_owner(
             builders[owner._id_] = (owner, [])
             order.append(owner._id_)
         builders[owner._id_][1].append(payload)
-    groups = [OwnerGroup(owner=builders[key][0], items=builders[key][1]) for key in order]
+    groups = [
+        OwnerGroup(owner=builders[key][0], items=builders[key][1]) for key in order
+    ]
     return groups, ungrouped
 
 
@@ -654,17 +696,17 @@ def coindexed_natural_parts(fold: CoindexedFold) -> Optional[CoindexedNaturalPar
     )
 
 
-# ── fragment-level coordination builders ────────────────────────────────────
+# %% fragment-level coordination builders
 
 
 def build_between(
-    left_fragment: Fragment,
-    lower_fragment: Fragment,
-    upper_fragment: Fragment,
+    left_fragment: VerbalizationFragment,
+    lower_fragment: VerbalizationFragment,
+    upper_fragment: VerbalizationFragment,
     *,
     compact: bool,
-    number: Number = Number.SINGULAR,
-) -> Fragment:
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+) -> VerbalizationFragment:
     """
     Build *"<left> is between <low> and <high>"* (or copula-less *"<left> between …"* when *compact*).
 
@@ -679,21 +721,61 @@ def build_between(
     >>> flatten_fragment_to_plain_text(build_between(WordFragment("x"), WordFragment("1"), WordFragment("10"), compact=False))
     'x is between 1 and 10'
     """
-    op = _between_operator(compact, number)
-    bounds = oxford_comma(
-        [lower_fragment, upper_fragment], Conjunctions.AND.as_fragment()
+    # Spread the range phrase's parts so the clause stays flat ([left, operator, bounds]); the
+    # coreference agreement pass re-tags the operator leaf in place for a plural subject ("are
+    # between"), which a nested phrase would hide.
+    return PhraseFragment(
+        parts=[
+            left_fragment,
+            *between_phrase(
+                lower_fragment, upper_fragment, compact=compact, number=number
+            ).parts,
+        ]
     )
-    return PhraseFragment(parts=[left_fragment, op, bounds])
 
 
-def _between_operator(compact: bool, number: Number) -> Fragment:
+def between_phrase(
+    lower_fragment: VerbalizationFragment,
+    upper_fragment: VerbalizationFragment,
+    *,
+    compact: bool,
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+) -> VerbalizationFragment:
+    """
+    Build the subject-less range predicate *"is between <low> and <high>"* (or the copula-less
+    *"between <low> and <high>"* when *compact*) — the part of a *between* clause after the subject,
+    shared by :func:`build_between` and the shared-subject conjunction's range tail.
+
+    :param lower_fragment: Rendered lower-bound value.
+    :param upper_fragment: Rendered upper-bound value.
+    :param compact: Drop the copula (a coordinated / post-nominal tail).
+    :param number: The number the copula agrees with — *"are between"* for a plural subject.
+    :return: The range-predicate fragment.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text, WordFragment
+    >>> flatten_fragment_to_plain_text(between_phrase(WordFragment("1"), WordFragment("10"), compact=False))
+    'is between 1 and 10'
+    """
+    return PhraseFragment(
+        parts=[
+            _between_operator(compact, number),
+            oxford_comma(
+                [lower_fragment, upper_fragment], Conjunctions.AND.as_fragment()
+            ),
+        ]
+    )
+
+
+def _between_operator(
+    compact: bool, number: GrammaticalNumber
+) -> VerbalizationFragment:
     """:return: the *between* operator fragment — the copula-less core when *compact*, else an
     agreeing copula plus *"between"* (*"is between"* / *"are between"*).
 
     >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
-    >>> flatten_fragment_to_plain_text(_between_operator(True, Number.SINGULAR))
+    >>> flatten_fragment_to_plain_text(_between_operator(True, GrammaticalNumber.SINGULAR))
     'between'
-    >>> flatten_fragment_to_plain_text(_between_operator(False, Number.SINGULAR))
+    >>> flatten_fragment_to_plain_text(_between_operator(False, GrammaticalNumber.SINGULAR))
     'is between'
     """
     if compact:
@@ -706,7 +788,7 @@ def _between_operator(compact: bool, number: Number) -> Fragment:
 MAX_SET_MEMBERS = 6
 
 
-def one_of(candidates: List[Fragment]) -> Optional[Fragment]:
+def one_of(candidates: List[VerbalizationFragment]) -> Optional[VerbalizationFragment]:
     """
     Render a small, bounded candidate set as a membership phrase — the shared *"one of A, B, or C"*
     surface used both for a domain-constrained variable's candidate values and for a tuple of

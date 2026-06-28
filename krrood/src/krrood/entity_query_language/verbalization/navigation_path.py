@@ -29,7 +29,7 @@ class RelationStep:
     noun), the verb split into participle + preposition (so the preposition pied-pipes before
     *"which"*), and the owner class (for the verb's source link)."""
 
-    value_type: object
+    value_type: Optional[type]
     """The hop's value type — the head noun of the relative clause (*"the Robot"*)."""
 
     owner_class: type
@@ -149,7 +149,7 @@ def build_path_parts(
     return parts
 
 
-def _is_scalar_value(value_type: object) -> bool:
+def _is_scalar_value(value_type: Optional[type]) -> bool:
     """:return: ``True`` when *value_type* is an atomic scalar — a primitive value, not an entity
     (an entity is a dataclass and reads as an owner, not a distributable value).
 
@@ -160,11 +160,12 @@ def _is_scalar_value(value_type: object) -> bool:
 
 
 def _index_step(key: object) -> PathStep:
-    """:return: An ordinal hop (*"first"*) for an integer *key*, else the bracketed *"[key]"* form.
+    """:return: An ordinal hop (*"first"*, *"last"* for a negative index) for an integer *key*, else
+    the bracketed *"[key]"* form.
 
-    >>> _index_step(0).name, _index_step("a").name
-    ('first', "['a']")
+    >>> _index_step(0).name, _index_step(-1).name, _index_step("a").name
+    ('first', 'last', "['a']")
     """
     if isinstance(key, int) and not isinstance(key, bool):
-        return PathStep(morphology.ordinal(key), None)
+        return PathStep(morphology.index_ordinal(key), None)
     return PathStep(f"[{repr(key)}]", None)

@@ -5,7 +5,9 @@ from dataclasses import replace
 from typing_extensions import TYPE_CHECKING, Optional, Sequence
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RenderOptions,
     RuleContext,
@@ -59,7 +61,7 @@ def fold(
     services: MicroplanningServices,
     rules: Optional[Sequence[PhraseRule]] = None,
     options: Optional[RenderOptions] = None,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Verbalize *node* by dispatching it to its matching grammar rule and recursing — the single
     catamorphism (fold) over the EQL expression tree.
@@ -68,9 +70,9 @@ def fold(
     When no rule covers the node, an ``UnverbalizableExpressionError`` is raised rather than
     degrading silently to the class name.
 
-    The recursion is an F-algebra fold over the EQL algebra, with the grammar as the algebra
-    (Meijer, Fokkinga & Paterson 1991, "Functional Programming with Bananas, Lenses, Envelopes
-    and Barbed Wire"; Bird & de Moor 1997, "Algebra of Programming").
+    The recursion is an F-algebra fold (catamorphism) over the EQL algebra, with the grammar as
+    the algebra — see :func:`~krrood.entity_query_language.verbalization.fragments.base.fold_fragment`
+    for the catamorphism / F-algebra definition (:cite:t:`meijer1991bananas`; :cite:t:`bird1997algebra`).
 
     :param node: Any EQL expression, or a synthetic coordination artifact produced by conjunct
         reduction (:class:`RangeFold` / :class:`CoindexedFold`).
@@ -108,7 +110,9 @@ def fold(
     return _with_source(rule.build(node, context), node)
 
 
-def _with_source(fragment: Fragment, node: FoldNode) -> Fragment:
+def _with_source(
+    fragment: VerbalizationFragment, node: FoldNode
+) -> VerbalizationFragment:
     """
     Stamp *node* as the fragment's provenance, so later passes can follow it back to the read
     model. The innermost producer wins: a transparent wrapper (``An(Entity)``) returns its child's

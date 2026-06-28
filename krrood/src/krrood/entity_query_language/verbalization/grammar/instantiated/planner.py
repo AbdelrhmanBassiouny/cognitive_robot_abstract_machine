@@ -45,7 +45,7 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
     It records the type name and, per field binding, the field name, grammatical number, and
     value expression — no fragments, no context, no recursion.
 
-    Reference: Reiter & Dale (2000) — content/structure determination (microplanning).
+    Reference: :cite:t:`reiter2000building` — content/structure determination (microplanning).
 
     >>> connection = variable(FixedConnection, [])
     >>> InstantiatedPlanner(inference(Drawer)(container=connection.parent, handle=connection.child)).plan().type_name

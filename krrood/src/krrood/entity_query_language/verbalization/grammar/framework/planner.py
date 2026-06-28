@@ -23,8 +23,7 @@ class Planner(ABC, Generic[TSymbolicExpression, TPlan]):
     decisions about *what to say*. It does not build fragments, touch the verbalization context,
     or recurse — the content/structure stage of the Reiter & Dale microplanning model.
 
-    Reference: Reiter, E. & Dale, R. (2000), "Building Natural Language Generation Systems", CUP —
-    microplanning vs. surface realisation.
+    Reference: :cite:t:`reiter2000building` — microplanning vs. surface realisation.
     """
 
     node: TSymbolicExpression

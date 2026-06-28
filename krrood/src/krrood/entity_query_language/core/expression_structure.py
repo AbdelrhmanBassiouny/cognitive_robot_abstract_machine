@@ -77,16 +77,28 @@ def chain_ends_in_boolean_attribute(chain: List[MappedVariable]) -> bool:
     return bool(chain) and isinstance(chain[-1], Attribute) and chain[-1]._type_ is bool
 
 
+def is_date_type(type_: object) -> bool:
+    """
+    :param type_: Any value, typically an expression's ``_type_`` (which may be ``None`` or a
+        non-type callable).
+    :return: ``True`` when *type_* is ``datetime.date`` or a subclass (``datetime.datetime``
+        included, since it derives from ``date``).
+    """
+    return isinstance(type_, type) and issubclass(type_, datetime.date)
+
+
 def is_temporal(expression: SymbolicExpression) -> bool:
     """
     :param expression: Any EQL expression.
-    :return: ``True`` when *expression* denotes a ``datetime`` value or variable.
+    :return: ``True`` when *expression* denotes a date or datetime value or variable. Date-only
+        fields count: ``datetime`` derives from ``date``, and the temporal comparators
+        (*"before"*, *"no later than"*) read naturally for both.
     """
     if isinstance(expression, Literal):
-        return isinstance(expression._value_, datetime.datetime)
+        return isinstance(expression._value_, datetime.date)
     if isinstance(expression, Variable):
-        return getattr(expression, "_type_", None) is datetime.datetime
+        return is_date_type(expression._type_)
     if isinstance(expression, MappedVariable):
         chain, _ = walk_chain(expression)
-        return bool(chain) and getattr(chain[-1], "_type_", None) is datetime.datetime
+        return bool(chain) and is_date_type(chain[-1]._type_)
     return False

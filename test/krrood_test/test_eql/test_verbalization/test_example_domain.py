@@ -27,7 +27,7 @@ import pytest
 from krrood.entity_query_language.predicate import OperandView
 from krrood.entity_query_language.verbalization import example_domain
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.source_reference import (
@@ -128,7 +128,7 @@ def test_config_no_longer_copies_api_mock():
 
 @pytest.mark.parametrize("cls_name", ["IsReachable", "WorksIn"])
 def test_predicates_build_a_verbalization_fragment(cls_name):
-    """The custom-predicate examples build their verbalization as a :class:`Fragment` from the shared
+    """The custom-predicate examples build their verbalization as a :class:`VerbalizationFragment` from the shared
     vocabulary, given the typed operand view (each operand rendered as a plain word here)."""
     cls = getattr(example_domain, cls_name)
     operands = OperandView(
@@ -138,4 +138,4 @@ def test_predicates_build_a_verbalization_fragment(cls_name):
         },
         _render_=lambda expression: expression.as_fragment(),
     )
-    assert isinstance(cls._verbalization_fragment_(operands), Fragment)
+    assert isinstance(cls._verbalization_fragment_(operands), VerbalizationFragment)

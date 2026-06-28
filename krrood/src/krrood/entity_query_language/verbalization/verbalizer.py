@@ -8,7 +8,9 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.engine import fold, root_context
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RuleContext,
 )
@@ -34,7 +36,7 @@ class EQLVerbalizer:
         self,
         expression: SymbolicExpression,
         services: Optional[MicroplanningServices] = None,
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         Translate *expression* into its natural-language fragment tree.
 

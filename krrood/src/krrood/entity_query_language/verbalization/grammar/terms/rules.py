@@ -12,7 +12,7 @@ from krrood.entity_query_language.core.variable import (
     Variable,
 )
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     NounPhrase,
     oxford_comma,
     PhraseFragment,
@@ -20,7 +20,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
-    Number,
+    GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.grammar.conditions.recognition import (
     is_concrete_object_literal,
@@ -62,15 +62,14 @@ class VariableRule(PhraseRule):
     """
 
     construct = Variable
-    name = "variable"
 
-    def build(self, node: Variable, context: RuleContext) -> Fragment:
+    def build(self, node: Variable, context: RuleContext) -> VerbalizationFragment:
         """:return: The variable noun phrase (*"a Robot"* / *"the Robot"* / *"Robot N"*)."""
         if context.as_value:
             choice = self._domain_choice(node, context)
             if choice is not None:
                 return choice
-        if context.number is Number.PLURAL:
+        if context.number is GrammaticalNumber.PLURAL:
             return self._plural(node, context)
         noun_form = context.refer.noun_for_parts(node)
         return NounPhrase(
@@ -80,7 +79,9 @@ class VariableRule(PhraseRule):
         )
 
     @staticmethod
-    def _domain_choice(node: Variable, context: RuleContext) -> Optional[Fragment]:
+    def _domain_choice(
+        node: Variable, context: RuleContext
+    ) -> Optional[VerbalizationFragment]:
         """In value position, a domain-constrained value-type variable says its candidate set —
         *"one of OPTION_A, OPTION_B, or OPTION_C"* (an enum) / *"one of 1, or 2"* (a primitive), or
         just the value for a singleton domain. ``None`` (use the type-name noun) unless the type is
@@ -105,7 +106,7 @@ class VariableRule(PhraseRule):
         return one_of([RoleFragment.for_literal(value) for value in values])
 
     @staticmethod
-    def _plural(node: Variable, context: RuleContext) -> Fragment:
+    def _plural(node: Variable, context: RuleContext) -> VerbalizationFragment:
         """Bare plural variable noun phrase (*"Robots"*); the determiner phase drops the article and
         the morphology pass inflects the head.
 
@@ -118,7 +119,11 @@ class VariableRule(PhraseRule):
         numbered = context.refer.numbered_label(node)
         return NounPhrase(
             head=RoleFragment.for_variable(numbered.text, node),
-            number=Number.SINGULAR if numbered.is_numbered else Number.PLURAL,
+            number=(
+                GrammaticalNumber.SINGULAR
+                if numbered.is_numbered
+                else GrammaticalNumber.PLURAL
+            ),
             definiteness=(
                 Definiteness.BARE if numbered.is_numbered else Definiteness.INDEFINITE
             ),
@@ -135,9 +140,8 @@ class LiteralRule(PhraseRule):
     """
 
     construct = Literal
-    name = "literal"
 
-    def build(self, node: Literal, context: RuleContext) -> Fragment:
+    def build(self, node: Literal, context: RuleContext) -> VerbalizationFragment:
         """:return: The literal value, or *"a specific <Type>"* for a concrete object literal.
 
         A bare class used as a value renders as a linked type reference, and a tuple of classes as a
@@ -171,7 +175,9 @@ class LiteralRule(PhraseRule):
             return list(value)
         return None
 
-    def _concrete_object(self, node: Literal, context: RuleContext) -> Fragment:
+    def _concrete_object(
+        self, node: Literal, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: *"a specific <Type>"* for a concrete object literal — identity, not its (possibly
         huge) repr — qualified by its identifying field(s) when any are known (*"a specific Body with
         name 'door'"*). The fields come from the class's ``_identifying_attributes_`` if it declares
@@ -194,7 +200,7 @@ class LiteralRule(PhraseRule):
             )
             for name, field_value in self._identifying_fields(value)
         ]
-        modifiers: List[Fragment] = (
+        modifiers: List[VerbalizationFragment] = (
             [
                 Prepositions.WITH.as_fragment(),
                 oxford_comma(details, Conjunctions.AND.as_fragment()),
@@ -251,9 +257,10 @@ class ExternalVariableRule(PhraseRule):
     """
 
     construct = ExternallySetVariable
-    name = "external-variable"
 
-    def build(self, node: ExternallySetVariable, context: RuleContext) -> Fragment:
+    def build(
+        self, node: ExternallySetVariable, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: The indefinite type-name noun phrase for the externally-set variable."""
         type_name = FallbackNouns.VARIABLE.name_of(node)
         return NounPhrase(head=RoleFragment.for_type(node._type_, text=type_name))
@@ -267,8 +274,7 @@ class FlatVariableRule(PhraseRule):
     """
 
     construct = FlatVariable
-    name = "flat-variable"
 
-    def build(self, node: FlatVariable, context: RuleContext) -> Fragment:
+    def build(self, node: FlatVariable, context: RuleContext) -> VerbalizationFragment:
         """:return: The child's rendering, unwrapped from the transparent SetOf wrapper."""
         return context.child(node._child_, number=context.number)

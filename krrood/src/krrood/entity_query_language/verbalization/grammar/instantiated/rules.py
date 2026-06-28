@@ -6,7 +6,9 @@ from krrood.entity_query_language.verbalization.exceptions import (
     NonFragmentPredicateError,
     PredicateFragmentRequiredError,
 )
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     PhraseRule,
     RuleContext,
@@ -23,9 +25,10 @@ class InstantiatedVariableRule(PhraseRule):
     """*"a TypeName where the field of the TypeName is … such that …"*."""
 
     construct = InstantiatedVariable
-    name = "instantiated-variable"
 
-    def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
+    def build(
+        self, node: InstantiatedVariable, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: The instantiated variable's *"a TypeName, where the field of the TypeName is …"*
         noun phrase, built by the :class:`InstantiatedAssembler`.
 
@@ -46,10 +49,9 @@ class InstantiatedVariableRule(PhraseRule):
 
 
 class InstantiatedVerbalizableRule(PhraseRule):
-    """An InstantiatedVariable whose type builds its own verbalization :class:`Fragment`."""
+    """An InstantiatedVariable whose type builds its own verbalization :class:`VerbalizationFragment`."""
 
     construct = InstantiatedVariable
-    name = "instantiated-verbalizable"
 
     def when(self, node: InstantiatedVariable, context: RuleContext) -> bool:
         """:return: ``True`` when *node*'s type supplies a verbalization fragment, selecting this rule
@@ -64,7 +66,9 @@ class InstantiatedVerbalizableRule(PhraseRule):
         """
         return InstantiatedPlanner.has_fragment(node)
 
-    def build(self, node: InstantiatedVariable, context: RuleContext) -> Fragment:
+    def build(
+        self, node: InstantiatedVariable, context: RuleContext
+    ) -> VerbalizationFragment:
         """:return: the type's verbalization fragment, built from its rendered field fragments
         (*"a Robot is reachable"*).
 
@@ -80,7 +84,7 @@ class InstantiatedVerbalizableRule(PhraseRule):
             _render_=lambda expression: context.child(expression),
         )
         fragment = node._type_._verbalization_fragment_(operands)
-        if not isinstance(fragment, Fragment):
+        if not isinstance(fragment, VerbalizationFragment):
             raise NonFragmentPredicateError(
                 predicate_type=node._type_, returned=fragment
             )

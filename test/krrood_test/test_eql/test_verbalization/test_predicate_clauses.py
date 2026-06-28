@@ -32,7 +32,9 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
     RoleFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.rendering.realization import (
     realize_tree,
@@ -64,7 +66,12 @@ def test_third_person_singular_regular_and_irregular():
     assert morphology.third_person_singular("go") == "goes"
 
 
-def _verb_leaf(lemma: str, *, number: Number = Number.SINGULAR, negated: bool = False):
+def _verb_leaf(
+    lemma: str,
+    *,
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+    negated: bool = False,
+):
     return RoleFragment(
         text=lemma, role=SemanticRole.VERB, number=number, negated=negated
     )
@@ -73,7 +80,9 @@ def _verb_leaf(lemma: str, *, number: Number = Number.SINGULAR, negated: bool = 
 def test_morphology_realizes_verb_present_tense():
     assert MorphologyProcessor().rewrite(_verb_leaf("work")).text == "works"
     assert (
-        MorphologyProcessor().rewrite(_verb_leaf("work", number=Number.PLURAL)).text
+        MorphologyProcessor()
+        .rewrite(_verb_leaf("work", number=GrammaticalNumber.PLURAL))
+        .text
         == "work"
     )
 
@@ -84,7 +93,7 @@ def test_morphology_realizes_verb_do_support_negation():
     )
     assert (
         MorphologyProcessor()
-        .rewrite(_verb_leaf("work", number=Number.PLURAL, negated=True))
+        .rewrite(_verb_leaf("work", number=GrammaticalNumber.PLURAL, negated=True))
         .text
         == "do not work"
     )
@@ -94,7 +103,10 @@ def test_morphology_realizes_negated_copula():
     copula = RoleFragment(text="is", role=SemanticRole.OPERATOR, negated=True)
     assert MorphologyProcessor().rewrite(copula).text == "is not"
     plural_copula = RoleFragment(
-        text="is", role=SemanticRole.OPERATOR, number=Number.PLURAL, negated=True
+        text="is",
+        role=SemanticRole.OPERATOR,
+        number=GrammaticalNumber.PLURAL,
+        negated=True,
     )
     assert MorphologyProcessor().rewrite(plural_copula).text == "are not"
 
@@ -191,7 +203,7 @@ def test_clause_subject_keeps_noun_phrase_outside_a_subject_scope():
 
 
 def test_predicate_returning_a_string_template_is_rejected():
-    """A hook returning a string (an old-style template) rather than a Fragment is an error."""
+    """A hook returning a string (an old-style template) rather than a VerbalizationFragment is an error."""
 
     @dataclass(eq=False)
     class SaysHello(Predicate):

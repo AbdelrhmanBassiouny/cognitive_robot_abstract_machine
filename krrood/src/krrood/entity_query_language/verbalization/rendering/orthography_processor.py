@@ -5,7 +5,7 @@ from typing_extensions import List
 from krrood.entity_query_language.verbalization.fragments.base import (
     map_structural_children,
     PhraseFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
@@ -24,11 +24,11 @@ class OrthographyProcessor(RealizationPass):
     and regroups its parts so a glued token has no adjacent separator, yielding *"(x)"* from
     ``[OPEN_PAREN, x, CLOSE_PAREN]``.
 
-    Reference: Reiter & Dale (2000) — linguistic realisation (orthography); Gatt & Reiter (2009),
+    Reference: :cite:t:`reiter2000building` — linguistic realisation (orthography); :cite:t:`gatt2009simplenlg`,
     SimpleNLG — the realisation passes.
     """
 
-    def process(self, fragment: Fragment) -> Fragment:
+    def process(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         """
         :param fragment: Root of the fragment tree.
         :return: A new tree with punctuation spacing fixed.
@@ -50,7 +50,9 @@ class OrthographyProcessor(RealizationPass):
             )
         return node
 
-    def _apply_glue(self, parts: List[Fragment]) -> List[Fragment]:
+    def _apply_glue(
+        self, parts: List[VerbalizationFragment]
+    ) -> List[VerbalizationFragment]:
         """Each merge is a zero-separator subgroup, so the surrounding separator is dropped.
 
         :param parts: The phrase's parts.
@@ -62,9 +64,9 @@ class OrthographyProcessor(RealizationPass):
         >>> len(glued)
         2
         """
-        out: List[Fragment] = []
+        out: List[VerbalizationFragment] = []
         # A RIGHT token (e.g. "(") held until its following part arrives, to attach to it.
-        pending_right: List[Fragment] = []
+        pending_right: List[VerbalizationFragment] = []
         for part in parts:
             spacing = part.spacing if isinstance(part, WordFragment) else Spacing.NONE
             if pending_right:  # attach the held "(" to this part
@@ -82,7 +84,7 @@ class OrthographyProcessor(RealizationPass):
         return out
 
     @staticmethod
-    def _merge(items: List[Fragment]) -> Fragment:
+    def _merge(items: List[VerbalizationFragment]) -> VerbalizationFragment:
         """:return: A zero-separator group of *items* (the single item itself when there is only one).
 
         >>> only = WordFragment(text="x")

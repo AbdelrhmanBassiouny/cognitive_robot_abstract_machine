@@ -91,7 +91,7 @@ class RankingPlan:
     has a ``limit``; the surface form is the ranking registry's concern at render time.
     """
 
-    n: int
+    limit_number: int
     """The limit (always ``>= 1``)."""
 
     direction: RankingDirection
@@ -229,7 +229,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
     partition (grouped *"whose …"* predicates vs. residual *"such that …"*), and whether the
     entity is an aggregation value-subquery.
 
-    Reference: Reiter & Dale (2000) — content/structure determination (microplanning).
+    Reference: :cite:t:`reiter2000building` — content/structure determination (microplanning).
 
     >>> QueryPlanner(entity(variable(Robot, []))).plan().selected_type
     'Robot'
@@ -316,7 +316,8 @@ class QueryPlanner(Planner[Query, QueryPlan]):
 
     def _grouping_report(self) -> Optional[ReportPlan]:
         """:return: The ``GROUPING`` report for a grouped query with no aggregates — its columns are
-        the selection minus the keys (empty when the selection is exactly the key), else ``None``."""
+        the selection minus the keys (empty when the selection is exactly the key), else ``None``.
+        """
         keys = self._group_keys()
         if not keys:
             return None
@@ -326,7 +327,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             columns=self._columns_without_keys(keys),
         )
 
-    # ── selection shape ──────────────────────────────────────────────────────
+    # %% selection shape
 
     @property
     def _selected(self) -> Optional[SymbolicExpression]:
@@ -366,7 +367,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         """
         return FallbackNouns.ENTITY.name_of(self._selected)
 
-    # ── subject restriction (WHERE partition) ────────────────────────────────
+    # %% subject restriction (WHERE partition)
 
     def _subject(self) -> Optional[Variable]:
         if not isinstance(self.node, Entity):
@@ -383,13 +384,13 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             return None
         return RestrictionPlan(conditions=flatten_operands(condition, AND))
 
-    # ── clauses ──────────────────────────────────────────────────────────────
+    # %% clauses
 
     def _where_condition(self) -> Optional[SymbolicExpression]:
         where = getattr(self.node, "_where_expression_", None)
         return where.condition if where is not None else None
 
-    # ── aggregation value-subquery ───────────────────────────────────────────
+    # %% aggregation value-subquery
 
     def _aggregation_data(self) -> Optional[AggregationData]:
         if not is_aggregation_subquery(self.node):
@@ -401,7 +402,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             source=aggregation_source_root(self.node),
         )
 
-    # ── ranking (limit + ordering) ───────────────────────────────────────────
+    # %% ranking (limit + ordering)
 
     def _ranking(self) -> Optional[RankingPlan]:
         """:return: The ``limit`` (+ ordering) decomposition, or ``None`` when the query has no
@@ -413,7 +414,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         builder = getattr(self.node, "_ordered_by_builder_", None)
         if builder is None:
             return RankingPlan(
-                n=limit,
+                limit_number=limit,
                 direction=RankingDirection.NONE,
                 relation=RankingKeyRelation.SELF,
                 order_key=None,
@@ -424,7 +425,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             else RankingDirection.ASCENDING
         )
         return RankingPlan(
-            n=limit,
+            limit_number=limit,
             direction=direction,
             relation=self._key_relation(builder.variable),
             order_key=builder.variable,
@@ -449,7 +450,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             return RankingKeyRelation.ATTRIBUTE
         return RankingKeyRelation.SIBLING
 
-    # ── discourse focus (pronominalisation) ──────────────────────────────────
+    # %% discourse focus (pronominalisation)
 
     def _discourse_root(self) -> Optional[uuid.UUID]:
         """:return: The single variable every chain in this query roots at, or ``None`` when the

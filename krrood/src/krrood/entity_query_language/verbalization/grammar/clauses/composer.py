@@ -5,8 +5,12 @@ from dataclasses import dataclass
 from typing_extensions import Optional
 
 from krrood.entity_query_language.query.query import Query
-from krrood.entity_query_language.verbalization.fragments.base import Fragment
-from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
 from krrood.entity_query_language.verbalization.grammar.clauses.assembler import (
     GroupedByAssembler,
     HavingAssembler,
@@ -38,7 +42,7 @@ class ClauseComposer:
     built with."""
 
     def restriction(
-        self, plan: QueryPlan, number: Number = Number.SINGULAR
+        self, plan: QueryPlan, number: GrammaticalNumber = GrammaticalNumber.SINGULAR
     ) -> Optional[RestrictionFragments]:
         """:return: The placed subject-restriction pieces (superlatives / whose / residual), or
         ``None`` when the query has no groupable subject restriction. The predicate agrees with
@@ -57,7 +61,7 @@ class ClauseComposer:
             plan.subject_restriction.conditions, plan.subject, self.context, number
         )
 
-    def grouped_by(self, node: Query) -> Optional[Fragment]:
+    def grouped_by(self, node: Query) -> Optional[VerbalizationFragment]:
         """:return: The *"grouped by …"* clause, or ``None`` when the query has no GROUP BY.
 
         It routes to the grouped-by assembler for the grouping span; in this fronted report that span
@@ -71,7 +75,7 @@ class ClauseComposer:
         """
         return GroupedByAssembler(self.context).clause(node)
 
-    def having(self, node: Query) -> Optional[Fragment]:
+    def having(self, node: Query) -> Optional[VerbalizationFragment]:
         """:return: The *"having …"* clause, or ``None`` when the query has no HAVING.
 
         It routes to the having assembler, which contributes only the trailing *"having the sum
@@ -86,7 +90,7 @@ class ClauseComposer:
         """
         return HavingAssembler(self.context).clause(node)
 
-    def ordered_by(self, node: Query) -> Optional[Fragment]:
+    def ordered_by(self, node: Query) -> Optional[VerbalizationFragment]:
         """:return: The *"ordered by …"* clause, or ``None`` when the query has no ORDER BY.
 
         It routes to the ordered-by assembler, which contributes only the trailing *"ordered by their

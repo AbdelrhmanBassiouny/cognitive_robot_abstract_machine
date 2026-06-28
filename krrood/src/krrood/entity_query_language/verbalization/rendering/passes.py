@@ -7,7 +7,7 @@ order. A :class:`RewritePass` captures the common case — a stateless pass that
 a single *leaf* rewrite — so determiner lowering and morphology need not each re-walk the tree by
 hand: :func:`~…fragments.base.map_fragment` rebuilds it bottom-up around the rewritten leaves.
 
-Reference: Gatt & Reiter (2009), SimpleNLG — the ordered realisation stages.
+Reference: :cite:t:`gatt2009simplenlg` — the ordered realisation stages.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     map_fragment,
 )
 
@@ -24,7 +24,7 @@ class RealizationPass(ABC):
     """One ordered lowering pass over the realised fragment tree."""
 
     @abstractmethod
-    def process(self, fragment: Fragment) -> Fragment:
+    def process(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         """
         :param fragment: Root of the (partly realised) fragment tree.
         :return: The tree after this pass (a new tree; passes never mutate in place).
@@ -40,10 +40,10 @@ class RewritePass(RealizationPass, ABC):
     """
 
     @abstractmethod
-    def rewrite(self, leaf: Fragment) -> Fragment:
+    def rewrite(self, leaf: VerbalizationFragment) -> VerbalizationFragment:
         """:param leaf: A leaf fragment. :return: Its replacement (or *leaf* unchanged)."""
 
-    def process(self, fragment: Fragment) -> Fragment:
+    def process(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         """:return: *fragment* rebuilt bottom-up with :meth:`rewrite` applied to every leaf.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import (

@@ -185,7 +185,7 @@ def test_verbalization_produces_natural_language_not_repr():
 
 def test_verbalize_variable_first_mention():
     x = variable(int, [1, 2])
-    assert verbalize_expression(x) == "an int"
+    assert verbalize_expression(x) == "an Integer"
 
 
 def test_verbalize_variable_article_consonant():
@@ -254,7 +254,15 @@ def test_verbalize_has_types_is_membership():
 def test_verbalize_has_types_too_many_is_not_spelled():
     """Past the membership cap the admissible types are summarised by count, not spelled out."""
     subject = variable(Body, [])
-    many = (Apple, Cabinet, Container, Drawer, FixedConnection, Handle, PrismaticConnection)
+    many = (
+        Apple,
+        Cabinet,
+        Container,
+        Drawer,
+        FixedConnection,
+        Handle,
+        PrismaticConnection,
+    )
     text = verbalize_expression(HasTypes(subject, many))
     assert "Apple" not in text
     assert text == "a Body is one of seven types"
@@ -299,6 +307,19 @@ def test_verbalize_index_access_rendered_as_ordinal():
     # An integer index reads as an ordinal ("the first of the tasks"), not a raw subscript leak.
     assert "first" in text
     assert "[0]" not in text
+
+
+def test_verbalize_negative_index_reads_from_the_end():
+    @dataclass
+    class Robot:
+        tasks: list
+
+    r = variable(Robot, [])
+    assert verbalize_expression(r.tasks[-1]) == "the last of the tasks of a Robot"
+    assert (
+        verbalize_expression(r.tasks[-2])
+        == "the second to last of the tasks of a Robot"
+    )
 
 
 def test_verbalize_index_then_attribute_is_ordinal_chain():
@@ -607,7 +628,7 @@ def test_count_over_query_uses_such_that_for_a_standalone_condition():
     over an aggregate verbalise consistently."""
     number = variable(int, [1, 2, 3])
     text = verbalize_expression(eql.count(entity(number).where(number > 0)))
-    assert text == "the number of ints such that the int is greater than 0"
+    assert text == "the number of ints such that the Integer is greater than 0"
 
 
 def test_boolean_predicative_pronominalises_relational_navigation():
@@ -704,7 +725,9 @@ def test_pronominal_relative_clause_agrees_with_subject_number():
     from krrood.entity_query_language.verbalization.microplanning.possessive import (
         pronominal_path,
     )
-    from krrood.entity_query_language.verbalization.fragments.features import Number
+    from krrood.entity_query_language.verbalization.fragments.features import (
+        GrammaticalNumber,
+    )
     from krrood.entity_query_language.verbalization.rendering.realization import (
         realize_subtree,
     )
@@ -719,11 +742,11 @@ def test_pronominal_relative_clause_agrees_with_subject_number():
         relation=RelationStep(_Target, _NavMission, "assigned", "to"),
     )
     assert (
-        realize_subtree(pronominal_path([step], Number.SINGULAR))
+        realize_subtree(pronominal_path([step], GrammaticalNumber.SINGULAR))
         == "the _Target to which it is assigned"
     )
     assert (
-        realize_subtree(pronominal_path([step], Number.PLURAL))
+        realize_subtree(pronominal_path([step], GrammaticalNumber.PLURAL))
         == "the _Target to which they are assigned"
     )
 
@@ -786,11 +809,9 @@ def test_verbalize_and_chain_flattening():
     x = variable(int, [])
     cond = and_(x > 1, x < 10, x != 5)
     text = verbalize_expression(cond)
-    # The lower/upper bounds fold into one range item (the variable is the zero-hop chain, so it
-    # folds exactly like an attribute chain), and the AND still flattens to a comma-and list.
-    assert "between 1 and 10" in text
-    assert "is not" in text
-    assert ", and " in text
+    # The flattened conjuncts on one bare variable factor into a relative clause; the complementary
+    # bound pair folds to "between".
+    assert text == "an Integer that is between 1 and 10 and is not 5"
 
 
 def test_attribute_chain_selection_keeps_its_where():
@@ -862,7 +883,7 @@ def test_verbalize_bare_variable_bounds_fold_into_a_range():
     fold needs no bare-variable special case."""
     x = variable(int, [])
     text = verbalize_expression(an(entity(x).where(x >= 28, x <= 31)))
-    assert text == "Find an int such that the int is between 28 and 31"
+    assert text == "Find an Integer such that the Integer is between 28 and 31"
 
 
 def test_verbalize_and_stops_at_or():
@@ -917,19 +938,19 @@ def test_verbalize_not_complex_fallback():
 def test_verbalize_count():
     x = variable(int, [1, 2])
     text = verbalize_expression(eql.count(x))
-    assert "number of" in text and "ints" in text
+    assert "number of" in text and "Integers" in text
 
 
 def test_verbalize_average():
     x = variable(int, [1, 2])
     text = verbalize_expression(eql.average(x))
-    assert "average" in text and "ints" in text
+    assert "average" in text and "Integers" in text
 
 
 def test_verbalize_sum():
     x = variable(int, [1, 2])
     text = verbalize_expression(eql.sum(x))
-    assert "sum" in text and "ints" in text
+    assert "sum" in text and "Integers" in text
 
 
 def test_verbalize_max_min():
@@ -939,8 +960,8 @@ def test_verbalize_max_min():
     min_text = verbalize_expression(eql.min(x))
     assert "the maximum" in max_text
     assert "the minimum" in min_text
-    assert "int" in max_text
-    assert "int" in min_text
+    assert "Integer" in max_text
+    assert "Integer" in min_text
 
 
 def test_aggregation_article_count_first_mention():
@@ -1446,7 +1467,9 @@ def test_grouped_selection_equal_to_key_reports_distinct():
     """A grouped query whose selection IS the group key reports the distinct keys, fronted —
     never a trailing 'grouped by'."""
     employee = variable(Employee, domain=None)
-    text = verbalize_expression(a(set_of(employee.department).grouped_by(employee.department)))
+    text = verbalize_expression(
+        a(set_of(employee.department).grouped_by(employee.department))
+    )
     assert text == "Report the distinct departments"
     assert "grouped by" not in text
 
@@ -1563,8 +1586,9 @@ def test_verbalize_condition_graph_example():
 
     assert "Item" in text
     assert "either" in text
-    assert "between 5 and 10" in text  # the lower/upper bounds fold into one range item
-    assert "is" in text
+    # The bare-variable bound pair folds to "between" inside its relative clause.
+    assert "between 5 and 10" in text
+    assert "is 11" in text
 
 
 def test_verbalize_has_type_with_exists():
@@ -2168,7 +2192,7 @@ def test_inference_planner_decomposes_rule_without_rendering(
     from krrood.entity_query_language.verbalization.grammar.conditions.placement import (
         ConditionForm,
         Placement,
-        Slot,
+        SurfacePosition,
     )
 
     conditions = [
@@ -2181,7 +2205,7 @@ def test_inference_planner_decomposes_rule_without_rendering(
     form = ConditionForm.most_applicable(
         Placement(item=antecedent.conditions[0], subject=antecedent.variable)
     )
-    assert form.slot is Slot.WHOSE
+    assert form.position is SurfacePosition.WHOSE
 
 
 def test_query_planner_collects_subject_restriction_without_placing():
@@ -2195,7 +2219,7 @@ def test_query_planner_collects_subject_restriction_without_placing():
     from krrood.entity_query_language.verbalization.grammar.conditions.placement import (
         ConditionForm,
         Placement,
-        Slot,
+        SurfacePosition,
         WhosePredicateForm,
     )
 
@@ -2218,7 +2242,7 @@ def test_query_planner_collects_subject_restriction_without_placing():
     # whose-predicate form (slot WHOSE: "whose battery is greater than 50").
     form = ConditionForm.most_applicable(Placement(item=conjunct, subject=plan.subject))
     assert form is WhosePredicateForm
-    assert form.slot is Slot.WHOSE
+    assert form.position is SurfacePosition.WHOSE
 
 
 def test_instantiated_planner_decomposes_bindings_without_rendering(
@@ -2597,7 +2621,9 @@ def test_second_domain_calc_equality_in_whose():
 
 
 def test_is_calculation_value_predicate():
-    from krrood.entity_query_language.query.aggregation_structure import is_calculation_value
+    from krrood.entity_query_language.query.aggregation_structure import (
+        is_calculation_value,
+    )
 
     bank_transaction = variable(BankTransaction, domain=None)
     assert is_calculation_value(eql.max(bank_transaction.amount_details.amount)) is True

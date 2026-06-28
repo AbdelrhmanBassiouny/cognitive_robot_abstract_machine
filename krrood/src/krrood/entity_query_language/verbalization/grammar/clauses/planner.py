@@ -46,7 +46,7 @@ class GroupedByPlanner(Planner[Union[Query, GroupedBy], GroupPlan]):
     them — are owned by the EQL expressions (``GroupedBy.group_key_root_ids`` and
     ``Query.aggregated_selections``); this planner only packages them into the verbalization plan.
 
-    Reference: Reiter & Dale (2000) — content/structure determination (microplanning).
+    Reference: :cite:t:`reiter2000building` — content/structure determination (microplanning).
 
     >>> employee = variable(Employee, [])
     >>> GroupedByPlanner(

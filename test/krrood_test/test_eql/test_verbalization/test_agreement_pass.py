@@ -16,7 +16,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
-    Number,
+    GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.rendering.agreement_processor import (
     AgreementProcessor,
@@ -37,7 +37,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
 def _plural_subject(head: str) -> NounPhrase:
     return NounPhrase(
         head=WordFragment(text=head),
-        number=Number.PLURAL,
+        number=GrammaticalNumber.PLURAL,
         definiteness=Definiteness.INDEFINITE,
     )
 
@@ -75,7 +75,7 @@ def test_concord_number_stamp_drives_copula_agreement():
     # concord here flips the copula is -> are purely from the stamp, independent of the surface subject.
     plain = clause(Noun("dog"), Copula(), Adjective("ready"))
     assert realize_subtree(plain) == "a dog is ready"
-    stamped = replace(plain, concord_number=Number.PLURAL)
+    stamped = replace(plain, concord_number=GrammaticalNumber.PLURAL)
     assert realize_subtree(stamped) == "a dog are ready"
 
 

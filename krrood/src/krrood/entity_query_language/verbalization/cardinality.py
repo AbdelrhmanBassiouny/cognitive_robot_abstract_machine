@@ -42,7 +42,7 @@ class Cardinality(enum.Enum):
     """Many values per entity — the path crosses (or ends in) a collection."""
 
     @property
-    def number(self) -> "Number":
+    def number(self) -> "GrammaticalNumber":
         """:return: the grammatical number this cardinality realises — plural for many, else singular.
 
         >>> Cardinality.MANY.number.name
@@ -50,9 +50,9 @@ class Cardinality(enum.Enum):
         >>> Cardinality.ONE.number.name
         'SINGULAR'
         """
-        from krrood.entity_query_language.verbalization.fragments.features import Number
+        from krrood.entity_query_language.verbalization.fragments.features import GrammaticalNumber
 
-        return Number.PLURAL if self is Cardinality.MANY else Number.SINGULAR
+        return GrammaticalNumber.PLURAL if self is Cardinality.MANY else GrammaticalNumber.SINGULAR
 
 
 def _resolved_attribute_type(owner: Type, attribute_name: str) -> Optional[object]:

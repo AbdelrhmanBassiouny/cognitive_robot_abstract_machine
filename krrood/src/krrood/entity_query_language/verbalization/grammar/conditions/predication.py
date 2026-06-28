@@ -26,13 +26,17 @@ from krrood.entity_query_language.core.expression_structure import is_temporal
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.operators.comparator import Comparator
-from krrood.entity_query_language.query.aggregation_structure import is_calculation_value
+from krrood.entity_query_language.query.aggregation_structure import (
+    is_calculation_value,
+)
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     PhraseFragment,
     RoleFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.grammar.chain.assembler import (
     ChainAssembler,
@@ -56,7 +60,13 @@ from krrood.entity_query_language.verbalization.microplanning.coordination impor
     coindexed_signature,
 )
 from krrood.entity_query_language.verbalization.relational_attributes import (
+    relational_verb,
     relational_verb_phrase,
+)
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    clause,
+    Copula,
+    Noun,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Absence,
@@ -75,7 +85,7 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.context import MicroplanningServices
 
 
-# ── predicate-transform registry (the surface a comparator takes as a predicate) ──
+# %% predicate-transform registry (the surface a comparator takes as a predicate)
 
 
 class PredicateTransform(SpecificityRule):
@@ -110,7 +120,7 @@ class PredicateTransform(SpecificityRule):
     @abstractmethod
     def render(
         cls, comparator: Comparator, context: RuleContext, negated: bool
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """
         :param comparator: The comparator to render.
         :param context: The per-node context (recursion and services).
@@ -142,7 +152,7 @@ class GenericComparator(PredicateTransform):
     @classmethod
     def render(
         cls, comparator: Comparator, context: RuleContext, negated: bool
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """Render *"<left> <operator> <right>"* with the right side in value position.
 
         It owns the whole *the battery of a Robot is greater than 50* span, placing the left chain,
@@ -182,7 +192,7 @@ class AbsenceTransform(GenericComparator):
     @classmethod
     def render(
         cls, comparator: Comparator, context: RuleContext, negated: bool
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """Render the absence predicate instead of a value comparison.
 
         Delegating to :func:`render_absence` is what supplies the *a Mission has no priority* phrasing,
@@ -194,7 +204,8 @@ class AbsenceTransform(GenericComparator):
 def _lone_coindexed_fold(comparator: Comparator) -> Optional[CoindexedFold]:
     """:return: the single-terminal :class:`CoindexedFold` for a co-indexed comparison
     (``p.begin.month == p.end.month``), or ``None`` when *comparator* is not co-indexed — the
-    one-terminal case of the conjunct-list fold, so a lone such comparison reuses the same form."""
+    one-terminal case of the conjunct-list fold, so a lone such comparison reuses the same form.
+    """
     signature = coindexed_signature(comparator)
     if signature is None:
         return None
@@ -236,7 +247,7 @@ class CoindexedEqualityTransform(GenericComparator):
     @classmethod
     def render(
         cls, comparator: Comparator, context: RuleContext, negated: bool
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """Render the lone equality through the one-terminal co-indexed fold so the *have the same*
         phrasing has a single home, rather than re-emitting it here."""
         return context.child(_lone_coindexed_fold(comparator))
@@ -270,7 +281,7 @@ class BooleanPolarityTransform(GenericComparator):
     @classmethod
     def render(
         cls, comparator: Comparator, context: RuleContext, negated: bool
-    ) -> Fragment:
+    ) -> VerbalizationFragment:
         """Fold the boolean value into the verb's polarity, never *"is completed is True"*.
 
         It owns the *is not completed* span, reading the ``False`` constraint to negate the
@@ -289,7 +300,72 @@ class BooleanPolarityTransform(GenericComparator):
         return chain.boolean_predicative(plan, negated=not positive)
 
 
-# ── operator-word selection ──────────────────────────────────────────────────
+class RelationalIdentityTransform(GenericComparator):
+    """An equality identifying a variable with a *relational* hop (``m.assigned_to == r``) → the
+    active relational predicate *"<subject> is <participle> <preposition> <owner>"* (*"it is assigned
+    to a Mission"*), instead of the literal *"the Robot to which a Mission is assigned is the Robot"*.
+
+    Said as a :func:`~…vocabulary.parts_of_speech.clause` so the subject pronominalises (*"it"*) and
+    the copula agrees, reusing the relation's participle + preposition
+    (:func:`~…relational_attributes.relational_verb`). The owner phrase is the recursion on the
+    relation's prefix, so a deeper chain reads *"… of the team of a Mission"* unchanged.
+
+    >>> robot, mission = variable(Robot, []), variable(Mission, [])
+    >>> verbalize_expression(an(entity(robot).where(mission.assigned_to == robot)))
+    'Find a Robot such that it is assigned to a Mission'
+    """
+
+    @classmethod
+    def applies(cls, comparator: Comparator, negated: bool) -> bool:
+        """Fires on a non-negated equality whose one side is a relational hop and the other a
+        variable — the identity shape the active predicate collapses."""
+        return (
+            not negated
+            and comparator.operation is operator.eq
+            and cls._relational_identity(comparator) is not None
+        )
+
+    @classmethod
+    def render(
+        cls, comparator: Comparator, context: RuleContext, negated: bool
+    ) -> VerbalizationFragment:
+        """Render *"<subject> is <participle> <preposition> <owner>"*, the relation's verb supplying
+        the participle and preposition and the recursion supplying subject and owner phrases.
+        """
+        relation_hop, subject = cls._relational_identity(comparator)
+        verb = relational_verb(relation_hop._attribute_name_)
+        return clause(
+            Noun(context.child(subject)),
+            Copula(),
+            RoleFragment.for_attribute(
+                relation_hop._owner_class_,
+                relation_hop._attribute_name_,
+                text=verb.phrase,
+            ),
+            Noun(context.child(relation_hop._child_)),
+        )
+
+    @staticmethod
+    def _relational_identity(
+        comparator: Comparator,
+    ) -> Optional[tuple]:
+        """:return: ``(relational_hop, subject_variable)`` when one operand is a relational attribute
+        chain and the other a (non-literal) variable, in either order; else ``None``."""
+        for hop, other in (
+            (comparator.left, comparator.right),
+            (comparator.right, comparator.left),
+        ):
+            if (
+                isinstance(hop, Attribute)
+                and relational_verb(hop._attribute_name_) is not None
+                and isinstance(other, Variable)
+                and not isinstance(other, Literal)
+            ):
+                return hop, other
+        return None
+
+
+# %% operator-word selection
 
 
 def comparator_operator(
@@ -298,9 +374,9 @@ def comparator_operator(
     *,
     negated: bool = False,
     compact: Optional[bool] = None,
-    number: Number = Number.SINGULAR,
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
     copula: bool = True,
-) -> Fragment:
+) -> VerbalizationFragment:
     """
     Select the operator fragment for *comparator* (e.g. *"is greater than"*,
     *"is not equal to"*, *"is before"*).
@@ -356,8 +432,8 @@ def comparator_operator(
 
 
 def _operator_fragment(
-    word: OperatorWord, number: Number, *, compact: bool, copula: bool
-) -> Fragment:
+    word: OperatorWord, number: GrammaticalNumber, *, compact: bool, copula: bool
+) -> VerbalizationFragment:
     """:return: the operator surface for a selected *word* — the bare compact verb when *compact*,
     the bare predicative core (*"greater than"*) when ``not copula``, else the agreeing predicative
     *"is greater than"*."""
@@ -368,23 +444,19 @@ def _operator_fragment(
     return predicative_operator(word.text, number)
 
 
-#: Copula surfaces a clause is negatable through (the leaf the ``negated`` feature attaches to).
-_COPULA_SURFACES = frozenset({Copulas.IS.text, Copulas.ARE.text})
-
-
-def _is_negatable_head(fragment: Fragment) -> bool:
-    """:return: whether *fragment* is a clause's negatable head — a ``VERB`` lemma (do-support) or a
-    copula (*"is"* / *"are"*)."""
+def _is_negatable_head(fragment: VerbalizationFragment) -> bool:
+    """:return: whether *fragment* is a clause's negatable head — a ``VERB`` lemma (do-support) or an
+    affirmative copula (*"is"* / *"are"*) the ``negated`` feature attaches to."""
     return isinstance(fragment, RoleFragment) and (
         fragment.role is SemanticRole.VERB
         or (
             fragment.role is SemanticRole.OPERATOR
-            and fragment.text in _COPULA_SURFACES
+            and fragment.text in (Copulas.IS.text, Copulas.ARE.text)
         )
     )
 
 
-def negate_clause(fragment: Fragment) -> Optional[Fragment]:
+def negate_clause(fragment: VerbalizationFragment) -> Optional[VerbalizationFragment]:
     """
     :param fragment: A predicate clause built from the typed clause vocabulary.
     :return: *fragment* with its head verb or copula marked ``negated`` (so the morphology pass
@@ -418,7 +490,7 @@ def negate_clause(fragment: Fragment) -> Optional[Fragment]:
     return None
 
 
-def coindexed_operator(operation) -> Fragment:
+def coindexed_operator(operation) -> VerbalizationFragment:
     """
     :param operation: A foldable comparison operator (``eq``/``gt``/``lt``/``ge``/``le``).
     :return: The plural copular operator fragment for the faithful co-indexed form — *"are equal
@@ -448,15 +520,17 @@ def coindexed_operator(operation) -> Fragment:
         if operation is operator.eq
         else Operators.from_callable(operation)
     )
-    return predicative_operator(phrase.value.standard, Number.PLURAL)
+    return predicative_operator(phrase.value.standard, GrammaticalNumber.PLURAL)
 
 
-# ── absence rendering (== None) ──────────────────────────────────────────────
+# %% absence rendering (== None)
 
 
 def render_absence(
-    comparator: Comparator, context: RuleContext, number: Number = Number.SINGULAR
-) -> Fragment:
+    comparator: Comparator,
+    context: RuleContext,
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+) -> VerbalizationFragment:
     """
     Render an ``<chain> == None`` comparison as an absence predicate rather than a value: an owned
     attribute reads *"<owner> has no <attribute>"* (the owner is the chain minus its terminal), and a
@@ -504,7 +578,7 @@ def render_absence(
     )
 
 
-def _relation_target(attribute: Attribute) -> List[Fragment]:
+def _relation_target(attribute: Attribute) -> List[VerbalizationFragment]:
     """:return: The object of a passive absence — *"any <Type>"* using the attribute's declared
     related type (*"any Robot"*), or the bare *"anything"* when that type is not a nameable class
     (a primitive, a typing generic, or unknown).

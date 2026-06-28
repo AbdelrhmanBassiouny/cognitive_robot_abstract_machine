@@ -5,14 +5,14 @@ from typing_extensions import Optional
 
 from krrood.entity_query_language.verbalization.fragments.base import (
     Clause,
-    Fragment,
+    VerbalizationFragment,
     map_structural_children,
     NounPhrase,
     PhraseFragment,
     PossessiveChain,
     RoleFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.features import GrammaticalNumber
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.rendering.passes import RealizationPass
 
@@ -21,7 +21,7 @@ FINITE_ROLES = (SemanticRole.OPERATOR, SemanticRole.VERB)
 lexical verb."""
 
 
-def agree_finite(part: Fragment, number: Number) -> Fragment:
+def agree_finite(part: VerbalizationFragment, number: GrammaticalNumber) -> VerbalizationFragment:
     """:return: *part* re-tagged with *number* when it is a clause's finite slot — an ``OPERATOR`` or
     ``VERB`` leaf, or a phrase led by one (the factored *"is greater than"*) — else *part* unchanged.
 
@@ -70,29 +70,29 @@ class AgreementProcessor(RealizationPass):
     'all elements are close'
     """
 
-    def process(self, fragment: Fragment) -> Fragment:
+    def process(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         """:return: *fragment* with every clause's finite slot agreed to its subject's number."""
         return self._walk(fragment)
 
-    def _walk(self, fragment: Fragment) -> Fragment:
+    def _walk(self, fragment: VerbalizationFragment) -> VerbalizationFragment:
         if isinstance(fragment, PhraseFragment):
             return self._agree_phrase(fragment)
         rebuilt = map_structural_children(fragment, self._walk)
         return rebuilt if rebuilt is not None else fragment
 
-    def _agree_phrase(self, phrase: PhraseFragment) -> Fragment:
+    def _agree_phrase(self, phrase: PhraseFragment) -> VerbalizationFragment:
         concord = phrase.concord_number
         if concord is None and isinstance(phrase, Clause):
             concord = self._inferred_subject_number(phrase)
         rebuilt = replace(phrase, parts=[self._walk(part) for part in phrase.parts])
-        if concord is not Number.PLURAL:
+        if concord is not GrammaticalNumber.PLURAL:
             return rebuilt
         return replace(
             rebuilt, parts=[agree_finite(part, concord) for part in rebuilt.parts]
         )
 
     @staticmethod
-    def _inferred_subject_number(clause: Clause) -> Optional[Number]:
+    def _inferred_subject_number(clause: Clause) -> Optional[GrammaticalNumber]:
         """:return: the concord number of an un-stamped clause — read from the first noun phrase, so a
         leading quantifier word such as *"all"* is skipped. A pronoun or possessive-chain subject is
         never un-stamped (coreference records its

@@ -5,12 +5,12 @@ from dataclasses import dataclass, replace
 
 from typing_extensions import Any, Iterable, List, Protocol, Union, runtime_checkable
 
-from krrood.entity_query_language.predicate import Field, Operand
+from krrood.entity_query_language.predicate import Operand, VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     Clause,
-    Fragment,
+    VerbalizationFragment,
     NounPhrase,
     oxford_comma,
     PhraseFragment,
@@ -19,7 +19,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
-    Number,
+    GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
@@ -53,13 +53,13 @@ class ClauseElement(ABC):
     """
 
     @abstractmethod
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the fragment this element contributes to the clause."""
 
 
 @dataclass(frozen=True)
 class Noun(ClauseElement):
-    """A noun constituent — a predicate :class:`~krrood.entity_query_language.predicate.Field`, an
+    """A noun constituent — a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`, an
     already-rendered fragment, or a literal noun given by its *head word only*."""
 
     content: Any
@@ -73,7 +73,7 @@ class Noun(ClauseElement):
     """For a literal-head noun, the article to realise — *"an instance"* (indefinite, the default) vs
     *"the instance"*. Ignored when *content* is already a rendered constituent."""
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: an indefinite (or definite) noun phrase for a literal head — so the article is
         chosen by the determiner pass (*"a"* / *"an"*) and the head pluralises and reduces with
         coreference — else the constituent's own fragment.
@@ -105,7 +105,7 @@ class Verb(ClauseElement):
     lemma: str
     """The verb's base form (*"work"*, *"contain"*, *"love"*)."""
 
-    number: Number = Number.SINGULAR
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR
     """The subject number the verb agrees with — ``PLURAL`` reads the bare *"work"* / *"have"* for a
     coordinated or plural subject."""
 
@@ -144,7 +144,7 @@ class All(ClauseElement):
     close"*. Only the subject's number is decided here; agreement and the morphology inflection
     (*"element"* → *"elements"*, *"is"* → *"are"*) happen in the realization passes."""
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the *"all"* quantifier word leaf.
 
         >>> All().as_fragment().text
@@ -178,24 +178,24 @@ class OneOf(ClauseElement):
     surface a domain-constrained variable uses.
     """
 
-    members: Union[Iterable, Field, Operand, Any]
+    members: Union[Iterable, VerbalizationField, Operand, Any]
     """The admissible values — an :class:`~krrood.entity_query_language.predicate.Operand`
-    (``operands.types_``) or :class:`~krrood.entity_query_language.predicate.Field` bound to a
+    (``operands.types_``) or :class:`~krrood.entity_query_language.predicate.VerbalizationField` bound to a
     collection, or a collection directly. Classes render as linked type references, other values as
     literals."""
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the membership phrase, or a count summary past the cap.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import (
         ...     flatten_fragment_to_plain_text,
         ... )
         >>> flatten_fragment_to_plain_text(OneOf((int, str)).as_fragment())
-        'one of int or str'
+        'one of Integer or Text'
         """
         if isinstance(self.members, Operand):
             collection = self.members._value_of_operand_
-        elif isinstance(self.members, Field):
+        elif isinstance(self.members, VerbalizationField):
             collection = self.members.value
         else:
             collection = self.members
@@ -232,21 +232,21 @@ class Preposition(VocabEnum):
 
 @runtime_checkable
 class ClauseConstituent(Protocol):
-    """The one contract every clause constituent satisfies: it renders itself to a :class:`Fragment`.
+    """The one contract every clause constituent satisfies: it renders itself to a :class:`VerbalizationFragment`.
 
     A typed part-of-speech element (:class:`ClauseElement` — :class:`Noun` / :class:`Verb` / …), a
-    :class:`Preposition`, a predicate :class:`~krrood.entity_query_language.predicate.Field`, and a
-    raw :class:`Fragment` all satisfy it structurally (each defines ``as_fragment``), so
+    :class:`Preposition`, a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`, and a
+    raw :class:`VerbalizationFragment` all satisfy it structurally (each defines ``as_fragment``), so
     :func:`clause` depends on this single abstraction rather than enumerating concrete types — a new
     kind of constituent only has to implement the method (open/closed).
 
     This is a :class:`~typing.Protocol`, not a base class, because the constituents are
     deliberately heterogeneous: ``Preposition`` is an ``Enum`` (it cannot also inherit an ABC) and
-    ``Field`` is a core type (it must not depend on this verbalization layer). Structural typing
+    ``VerbalizationField`` is a core type (it must not depend on this verbalization layer). Structural typing
     unifies them without forcing inheritance.
     """
 
-    def as_fragment(self) -> Fragment:
+    def as_fragment(self) -> VerbalizationFragment:
         """:return: the fragment this constituent contributes to a clause."""
 
 
@@ -256,7 +256,7 @@ def clause(*constituents: ClauseConstituent) -> Clause:
 
     A predicate states its affirmative form once — *"<subject> works in <object>"* —
     ``clause(Noun(subject), Verb("work"), Preposition.IN, Noun(object))`` — and the realisation
-    passes handle agreement and negation. A raw :class:`Fragment` is accepted too, so a rendered
+    passes handle agreement and negation. A raw :class:`VerbalizationFragment` is accepted too, so a rendered
     field fragment can be dropped in directly. The result is a :class:`Clause`, so coreference
     treats the first constituent as the clause's subject (pronominalisation, verb agreement).
 
@@ -289,13 +289,13 @@ def clause(*constituents: ClauseConstituent) -> Clause:
 
 def _pluralize_quantified_subject(
     parts: List[tuple],
-) -> List[Fragment]:
+) -> List[VerbalizationFragment]:
     """:return: the clause fragments with the universally-quantified subject — the first noun phrase
     after the :class:`All` word — made plural. Only the subject's number is decided here (the
     grammatical-number content); the finite verb / copula is agreed with it later by the agreement
     realization pass, and the morphology pass does the inflection.
     """
-    fragments: List[Fragment] = []
+    fragments: List[VerbalizationFragment] = []
     seen_all = False
     subject_pluralized = False
     for constituent, fragment in parts:
@@ -303,7 +303,7 @@ def _pluralize_quantified_subject(
             seen_all = True
             fragments.append(fragment)
         elif seen_all and not subject_pluralized and isinstance(fragment, NounPhrase):
-            fragments.append(replace(fragment, number=Number.PLURAL))
+            fragments.append(replace(fragment, number=GrammaticalNumber.PLURAL))
             subject_pluralized = True
         else:
             fragments.append(fragment)
@@ -334,7 +334,7 @@ def value_function_noun(name: str) -> str:
     return " ".join(words)
 
 
-def value_function_phrase(name: str, *operands: ClauseConstituent) -> Fragment:
+def value_function_phrase(name: str, *operands: ClauseConstituent) -> VerbalizationFragment:
     """Build *"the &lt;noun&gt; of &lt;operands&gt;"* for a value function — the counterpart of
     :func:`predicate_clause` for an operation that computes a value rather than a truth.
 

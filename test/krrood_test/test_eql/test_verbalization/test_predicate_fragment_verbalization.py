@@ -1,5 +1,5 @@
 """
-Tests for predicate verbalization via a required :class:`Fragment`.
+Tests for predicate verbalization via a required :class:`VerbalizationFragment`.
 
 A :class:`Verbalizable` predicate builds its surface from the typed clause vocabulary (``clause`` /
 ``Noun`` / ``Verb`` / ``Copula``), so the result composes with the rest of the pipeline: a wrapping

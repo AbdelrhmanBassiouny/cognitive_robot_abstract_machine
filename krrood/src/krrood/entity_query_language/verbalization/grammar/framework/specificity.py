@@ -1,74 +1,15 @@
 from __future__ import annotations
 
-import inspect
 from abc import ABC
 
-from typing_extensions import (
-    Any,
-    Callable,
-    List,
-    Optional,
-    Sequence,
-    Type,
-    TypeVar,
+from typing_extensions import Any, List, Optional, Type
+
+from krrood.entity_query_language.verbalization.exceptions import AmbiguousRuleError
+from krrood.patterns.specificity_ranking import (
+    concrete_subclasses,
+    mro_depth,
+    sole_maximum,
 )
-
-from krrood.utils import recursive_subclasses
-
-_T = TypeVar("_T")
-
-
-def most_specific(candidates: Sequence[_T], key: Callable[[_T], Any]) -> Optional[_T]:
-    """
-    :param candidates: Items already filtered to those that apply.
-    :param key: Specificity key; the maximum wins.
-    :return: The single most-specific candidate by *key*, or ``None`` when empty.
-
-    >>> most_specific(["a", "abc", "ab"], key=len)
-    'abc'
-    >>> most_specific([], key=len) is None
-    True
-    """
-    return max(candidates, key=key, default=None)
-
-
-def mro_depth(cls: type) -> int:
-    """
-    :param cls: A class.
-    :return: Its specificity — deeper in the hierarchy ⇒ more specific (a subclass outranks the
-        alternative it refines).
-
-    >>> mro_depth(object)
-    1
-    >>> mro_depth(bool) > mro_depth(int)
-    True
-    """
-    return len(cls.__mro__)
-
-
-def concrete_subclasses(base: Type[_T]) -> List[Type[_T]]:
-    """
-    The single subclass-discovery primitive: every concrete (instantiable) transitive subclass of
-    *base*, abstract intermediates excluded. Shared by the ``RULES`` registry (over
-    :class:`PhraseRule`) and the :class:`SpecificityRule` families (over each family base), so
-    discovery is defined once.
-
-    :param base: The family / rule base class.
-    :return: Its concrete transitive subclasses.
-
-    This is the low-level primitive doing the walk: it collects the instantiable forms under
-    ``RankingForm`` and drops the abstract base — the raw list :meth:`SpecificityRule.alternatives`
-    then exposes per family.
-
-    >>> from krrood.entity_query_language.verbalization.grammar.query.ranking import RankingForm
-    >>> sorted(rule.__name__ for rule in concrete_subclasses(RankingForm))
-    ['AttributeRankedByForm', 'AttributeSuperlativeForm', 'LeadingRankForm', 'SiblingKeyForm']
-    """
-    return [
-        subclass
-        for subclass in recursive_subclasses(base)
-        if not inspect.isabstract(subclass)
-    ]
 
 
 class SpecificityRule(ABC):
@@ -87,7 +28,7 @@ class SpecificityRule(ABC):
     (genuine subsumption) or from disjoint guards, never from a hand-assigned number.
 
     Reference: production-rule selection; the systemic-functional "most delicate system wins"
-    principle.
+    principle (:cite:t:`halliday2014functional`).
     """
 
     @classmethod
@@ -116,11 +57,16 @@ class SpecificityRule(ABC):
         ...     RankingForm, RankingRequest)
         >>> from krrood.entity_query_language.verbalization.grammar.query.planner import (
         ...     RankingPlan, RankingDirection, RankingKeyRelation)
-        >>> plan = RankingPlan(n=3, direction=RankingDirection.DESCENDING,
+        >>> plan = RankingPlan(limit_number=3, direction=RankingDirection.DESCENDING,
         ...     relation=RankingKeyRelation.ATTRIBUTE, order_key=None)
         >>> RankingForm.most_applicable(RankingRequest(plan=plan)).__name__
         'AttributeRankedByForm'
         """
         applicable = [alt for alt in cls.alternatives() if alt.applies(*args)]
-        return most_specific(applicable, key=mro_depth)
-
+        return sole_maximum(
+            applicable,
+            key=mro_depth,
+            collision_error=lambda tied: AmbiguousRuleError(
+                subject=args, candidates=tied
+            ),
+        )

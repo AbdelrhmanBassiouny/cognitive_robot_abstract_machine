@@ -16,12 +16,14 @@ if TYPE_CHECKING:
     )
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     PhraseFragment,
     RoleFragment,
     WordFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Number
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.specificity import (
     SpecificityRule,
 )
@@ -49,11 +51,11 @@ class RankingRequest:
     sibling key); ``None`` makes such a form fall back to the leading surface."""
 
 
-def ranking_number(plan: RankingPlan) -> Number:
+def ranking_number(plan: RankingPlan) -> GrammaticalNumber:
     """:return: the grammatical number of a ranking's subject — ``PLURAL`` for several, ``SINGULAR``
     for one — independent of the chosen surface form, so a caller needing only the number does not
     render (and thereby first-mention) the whole phrase."""
-    return Number.of(plan.n > 1)
+    return GrammaticalNumber.of(plan.limit_number > 1)
 
 
 @dataclass(frozen=True)
@@ -64,14 +66,14 @@ class RankingSurface:
     *modifiers* — e.g. ``"the"`` + ``"top three"`` + ``"Employees"`` + ``"by salary"``.
     """
 
-    pre_head: Optional[Fragment]
+    pre_head: Optional[VerbalizationFragment]
     """The qualifier between the determiner and the head (*"first two"* / *"top three"* /
     *"highest"*), or ``None`` (the attribute-superlative form carries it as a modifier instead)."""
 
-    number: Number
+    number: GrammaticalNumber
     """The head's grammatical number — ``SINGULAR`` for *n = 1*, ``PLURAL`` for *n > 1*."""
 
-    modifiers: List[Fragment]
+    modifiers: List[VerbalizationFragment]
     """Post-nominal modifiers — *"with the highest salary"* / *"by salary"* — or empty."""
 
 
@@ -91,7 +93,7 @@ def _quality(direction: RankingDirection, n: int) -> RankingWords:
     return RankingWords.FIRST
 
 
-def _cardinal(n: int) -> Fragment:
+def _cardinal(n: int) -> VerbalizationFragment:
     """:return: The cardinal-word fragment for *n* (``3`` → *"three"*).
 
     >>> _cardinal(3).text
@@ -100,7 +102,7 @@ def _cardinal(n: int) -> Fragment:
     return WordFragment(text=morphology.cardinal(n))
 
 
-def _key_attribute(order_key: SymbolicExpression) -> Fragment:
+def _key_attribute(order_key: SymbolicExpression) -> VerbalizationFragment:
     """:return: The order key's terminal attribute as a bare attribute word (*"salary"*, not the
     verbose *"the salary of the Employee"*).
 
@@ -175,10 +177,12 @@ class LeadingRankForm(RankingForm):
         It emits the leading qualifier *"first two"* placed before the head, with no trailing key
         modifier — so the class example's ranking reads *"the first two Robots"*.
         """
-        n = request.plan.n
+        n = request.plan.limit_number
         quality = _quality(request.plan.direction, n).as_fragment()
         pre_head = quality if n == 1 else PhraseFragment(parts=[quality, _cardinal(n)])
-        return RankingSurface(pre_head=pre_head, number=Number.of(n > 1), modifiers=[])
+        return RankingSurface(
+            pre_head=pre_head, number=GrammaticalNumber.of(n > 1), modifiers=[]
+        )
 
 
 class AttributeSuperlativeForm(LeadingRankForm):
@@ -199,7 +203,7 @@ class AttributeSuperlativeForm(LeadingRankForm):
         than a leading-quality *"the highest Employee"*.
         """
         plan = request.plan
-        return plan.relation is RankingKeyRelation.ATTRIBUTE and plan.n == 1
+        return plan.relation is RankingKeyRelation.ATTRIBUTE and plan.limit_number == 1
 
     @classmethod
     def render(cls, request: RankingRequest) -> RankingSurface:
@@ -223,7 +227,7 @@ class AttributeSuperlativeForm(LeadingRankForm):
             ]
         )
         return RankingSurface(
-            pre_head=None, number=Number.SINGULAR, modifiers=[modifier]
+            pre_head=None, number=GrammaticalNumber.SINGULAR, modifiers=[modifier]
         )
 
 
@@ -245,7 +249,7 @@ class AttributeRankedByForm(LeadingRankForm):
         salary"* rather than dropping the key as the leading base form would.
         """
         plan = request.plan
-        return plan.relation is RankingKeyRelation.ATTRIBUTE and plan.n > 1
+        return plan.relation is RankingKeyRelation.ATTRIBUTE and plan.limit_number > 1
 
     @classmethod
     def render(cls, request: RankingRequest) -> RankingSurface:
@@ -261,12 +265,14 @@ class AttributeRankedByForm(LeadingRankForm):
             if plan.direction is RankingDirection.ASCENDING
             else RankingWords.TOP
         )
-        pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.n)])
+        pre_head = PhraseFragment(
+            parts=[quality.as_fragment(), _cardinal(plan.limit_number)]
+        )
         modifier = PhraseFragment(
             parts=[RankingWords.BY.as_fragment(), _key_attribute(plan.order_key)]
         )
         return RankingSurface(
-            pre_head=pre_head, number=Number.PLURAL, modifiers=[modifier]
+            pre_head=pre_head, number=GrammaticalNumber.PLURAL, modifiers=[modifier]
         )
 
 
@@ -324,7 +330,7 @@ class SiblingKeyForm(LeadingRankForm):
         # The key's owner is the root exactly when its prefix is the bare root variable (a single
         # hop); then the owner is already the selection's trailing noun, so it is not restated.
         key_owner_is_root = isinstance(order_key._child_, Variable)
-        if plan.n == 1:
+        if plan.limit_number == 1:
             superlative = (
                 RankingWords.LOWEST
                 if plan.direction is RankingDirection.ASCENDING
@@ -342,21 +348,21 @@ class SiblingKeyForm(LeadingRankForm):
                     request.context.child(order_key._child_),
                 ]
             return RankingSurface(
-                pre_head=None, number=Number.SINGULAR, modifiers=[PhraseFragment(parts=parts)]
+                pre_head=None, number=GrammaticalNumber.SINGULAR, modifiers=[PhraseFragment(parts=parts)]
             )
         quality = (
             RankingWords.BOTTOM
             if plan.direction is RankingDirection.ASCENDING
             else RankingWords.TOP
         )
-        pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.n)])
+        pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.limit_number)])
         key_fragment = (
             _key_attribute(order_key)
             if key_owner_is_root
             else request.context.child(order_key)
         )
         modifier = PhraseFragment(parts=[RankingWords.BY.as_fragment(), key_fragment])
-        return RankingSurface(pre_head=pre_head, number=Number.PLURAL, modifiers=[modifier])
+        return RankingSurface(pre_head=pre_head, number=GrammaticalNumber.PLURAL, modifiers=[modifier])
 
 
 def ranking_surface(request: RankingRequest) -> RankingSurface:

@@ -22,7 +22,7 @@ from krrood.entity_query_language.core.base_expressions import SymbolicExpressio
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.verbalization.fragments.base import (
-    Fragment,
+    VerbalizationFragment,
     NounPhrase,
     oxford_comma,
     PhraseFragment,
@@ -30,7 +30,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
-    Number,
+    GrammaticalNumber,
     Separator,
 )
 from krrood.entity_query_language.verbalization.grammar.chain.planner import (
@@ -83,8 +83,8 @@ class SelectionAssembler:
     def prose(
         self,
         variables: List[SymbolicExpression],
-        number: Number = Number.SINGULAR,
-    ) -> Fragment:
+        number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+    ) -> VerbalizationFragment:
         """:return: the selections joined as natural prose *"a, b, and c"* (Oxford comma, no
         parentheses). A plural *number* lists them as populations (*"Employees"*) for an ordered
         report; otherwise contiguous attributes of one owner fold into a shared genitive (*"the
@@ -98,13 +98,15 @@ class SelectionAssembler:
         >>> verbalize_expression(a(set_of(employee.department, employee.name)))
         'Find the department and name of an Employee'
         """
-        if number is Number.PLURAL:
+        if number is GrammaticalNumber.PLURAL:
             selections = [self.one(variable, number) for variable in variables]
         else:
             selections = self._folded(variables)
         return oxford_comma(selections, Conjunctions.AND.as_fragment())
 
-    def one(self, variable: SymbolicExpression, number: Number) -> Fragment:
+    def one(
+        self, variable: SymbolicExpression, number: GrammaticalNumber
+    ) -> VerbalizationFragment:
         """:return: a single selection, as a bare plural population (*"Employees"*) when *number* is
         plural and the selection is a variable, else its default referring form.
 
@@ -112,18 +114,20 @@ class SelectionAssembler:
         >>> verbalize_expression(a(set_of(employee)).ordered_by(employee.salary, descending=True))
         'Report Employees ordered by their salaries from highest to lowest'
         """
-        if number is Number.PLURAL and isinstance(variable, Variable):
+        if number is GrammaticalNumber.PLURAL and isinstance(variable, Variable):
             return NounPhrase(
                 head=RoleFragment.for_variable(
-                    variable._type_.__name__, variable, number=Number.PLURAL
+                    variable._type_.__name__, variable, number=GrammaticalNumber.PLURAL
                 ),
-                number=Number.PLURAL,
+                number=GrammaticalNumber.PLURAL,
                 definiteness=Definiteness.INDEFINITE,
                 referent_id=subject_referent_id(variable),
             )
         return self.context.child(variable)
 
-    def parenthesised(self, variables: List[SymbolicExpression]) -> Fragment:
+    def parenthesised(
+        self, variables: List[SymbolicExpression]
+    ) -> VerbalizationFragment:
         """:return: the selections as a parenthesised tuple *"(a, b)"* — for a ranked set-of, whose
         *"the top three"* pre-head needs the tuple grouped.
 
@@ -145,7 +149,9 @@ class SelectionAssembler:
             ]
         )
 
-    def _folded(self, variables: List[SymbolicExpression]) -> List[Fragment]:
+    def _folded(
+        self, variables: List[SymbolicExpression]
+    ) -> List[VerbalizationFragment]:
         """:return: the rendered selections, with each maximal run of plain attributes sharing one
         owner folded into a single coordinated genitive, and every other selection rendered alone.
 
@@ -157,7 +163,7 @@ class SelectionAssembler:
         >>> verbalize_expression(the(set_of(employee.department, employee.salary)))
         'Find the department and salary of an Employee'
         """
-        fragments: List[Fragment] = []
+        fragments: List[VerbalizationFragment] = []
         for item in group_consecutive_by_owner(variables, self._foldable_attribute):
             if isinstance(item, OwnerGroup):
                 fragments.append(
@@ -167,7 +173,7 @@ class SelectionAssembler:
                     )
                 )
             else:
-                fragments.append(self.one(item, Number.SINGULAR))
+                fragments.append(self.one(item, GrammaticalNumber.SINGULAR))
         return fragments
 
     def _foldable_attribute(

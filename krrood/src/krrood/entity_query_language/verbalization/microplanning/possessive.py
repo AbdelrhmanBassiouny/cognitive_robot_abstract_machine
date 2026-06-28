@@ -8,12 +8,12 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     oxford_comma,
     PhraseFragment,
     RoleFragment,
-    Fragment,
+    VerbalizationFragment,
     WordFragment,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
-    Number,
+    GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.vocabulary.countability import (
@@ -30,7 +30,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 
 
 def attribute_fragment(
-    step: PathStep, number: Number = Number.SINGULAR
+    step: PathStep, number: GrammaticalNumber = GrammaticalNumber.SINGULAR
 ) -> RoleFragment:
     """:return: A role-tagged attribute fragment for *step*, tagged with *number* for inflection
     (a single-hop possessive of a plural subject distributes — *"their salaries"*).
@@ -47,7 +47,7 @@ def attribute_fragment(
     )
 
 
-def _genitive_article(step: PathStep) -> Optional[Fragment]:
+def _genitive_article(step: PathStep) -> Optional[VerbalizationFragment]:
     """:return: the article introducing a genitive hop — none for a mass noun (*"the amount of
     money"*, never *"the amount of the money"*), else the definite *"the"*.
 
@@ -59,7 +59,9 @@ def _genitive_article(step: PathStep) -> Optional[Fragment]:
     return Articles.THE.as_fragment()
 
 
-def _genitive_step(step: PathStep, owner_fragment: Fragment) -> Fragment:
+def _genitive_step(
+    step: PathStep, owner_fragment: VerbalizationFragment
+) -> VerbalizationFragment:
     """:return: *"the <attribute> of <owner>"* — one plain (noun) hop wrapping its owner; a mass-noun
     hop drops the article (*"… of money of …"*).
 
@@ -83,8 +85,10 @@ def _genitive_step(step: PathStep, owner_fragment: Fragment) -> Fragment:
 
 
 def _relative_clause(
-    step: PathStep, owner_fragment: Fragment, owner_number: Number = Number.SINGULAR
-) -> Fragment:
+    step: PathStep,
+    owner_fragment: VerbalizationFragment,
+    owner_number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+) -> VerbalizationFragment:
     """:return: *"the <Type> <preposition> which <owner> is <participle>"* — one relational hop
     wrapping its owner as a relative clause (the preposition pied-piped before *which*: *"the Robot
     to which a Mission is assigned"*). Keeping the owner the verb's subject means the meaning never
@@ -116,8 +120,9 @@ def _relative_clause(
 
 
 def coordinated_genitive(
-    attribute_fragments: List[Fragment], owner_fragment: Fragment
-) -> Fragment:
+    attribute_fragments: List[VerbalizationFragment],
+    owner_fragment: VerbalizationFragment,
+) -> VerbalizationFragment:
     """:return: *"the <a, b, and c> of <owner>"* — several attributes sharing one genitive owner,
     coordinated under it (right-node raising: *"the department and salary of an Employee"*) rather
     than repeated owner by owner (*"the department of an Employee and its salary"*).
@@ -137,7 +142,9 @@ def coordinated_genitive(
     )
 
 
-def _extend_hop(step: PathStep, owner_fragment: Fragment) -> Fragment:
+def _extend_hop(
+    step: PathStep, owner_fragment: VerbalizationFragment
+) -> VerbalizationFragment:
     """:return: *owner_fragment* wrapped by one more hop — the relative clause for a relational hop,
     else the genitive. The shared hop builder both path readouts extend their owner with.
 
@@ -156,7 +163,9 @@ def _extend_hop(step: PathStep, owner_fragment: Fragment) -> Fragment:
     )
 
 
-def possessive_path(parts: List[PathStep], root_fragment: Fragment) -> Fragment:
+def possessive_path(
+    parts: List[PathStep], root_fragment: VerbalizationFragment
+) -> VerbalizationFragment:
     """:return: the navigation read out from the root, hop by hop (parts innermost-first) — a plain
     hop as the genitive *"the <attribute> of <owner>"*, a relational hop as the relative clause
     *"the <Type> <prep> which <owner> is <participle>"*. With only plain hops this is the familiar
@@ -173,7 +182,9 @@ def possessive_path(parts: List[PathStep], root_fragment: Fragment) -> Fragment:
     return owner
 
 
-def chain_head_number(parts: List[PathStep], subject_number: Number) -> Number:
+def chain_head_number(
+    parts: List[PathStep], subject_number: GrammaticalNumber
+) -> GrammaticalNumber:
     """:return: The grammatical number the chain's head noun is realised with once its root is
     pronominalised — *subject_number* only when a single scalar hop distributes over the subject
     (*"their batteries"*), else singular: a deeper or relational chain heads on an inner genitive
@@ -183,20 +194,22 @@ def chain_head_number(parts: List[PathStep], subject_number: Number) -> Number:
     *innermost* hop): a finite verb agrees with the head, so its copula reads *"are"* exactly when
     this returns plural.
 
-    >>> from krrood.entity_query_language.verbalization.fragments.features import Number
-    >>> chain_head_number([PathStep("battery", is_scalar_value=True)], Number.PLURAL)
-    <Number.PLURAL: 'plural'>
+    >>> from krrood.entity_query_language.verbalization.fragments.features import GrammaticalNumber
+    >>> chain_head_number([PathStep("battery", is_scalar_value=True)], GrammaticalNumber.PLURAL)
+    <GrammaticalNumber.PLURAL: 'plural'>
     >>> chain_head_number(
-    ...     [PathStep("assigned_to"), PathStep("battery", is_scalar_value=True)], Number.PLURAL
+    ...     [PathStep("assigned_to"), PathStep("battery", is_scalar_value=True)], GrammaticalNumber.PLURAL
     ... )
-    <Number.SINGULAR: 'singular'>
+    <GrammaticalNumber.SINGULAR: 'singular'>
     """
     if len(parts) == 1 and parts[0].is_scalar_value:
         return subject_number
-    return Number.SINGULAR
+    return GrammaticalNumber.SINGULAR
 
 
-def pronominal_path(parts: List[PathStep], subject_number: Number) -> Fragment:
+def pronominal_path(
+    parts: List[PathStep], subject_number: GrammaticalNumber
+) -> VerbalizationFragment:
     """:return: the navigation read out with the (elided) root pronominalised — *"its attribute"* /
     *"the attribute of its foo"* for plain hops, and the relative clause *"the <Type> <prep> which
     it is <participle>"* for a relational hop (the innermost hop, adjacent to the elided root, takes
@@ -207,8 +220,8 @@ def pronominal_path(parts: List[PathStep], subject_number: Number) -> Fragment:
     :param subject_number: The discourse subject's number (its/it singular, their/they plural).
 
     >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
-    >>> from krrood.entity_query_language.verbalization.fragments.features import Number
-    >>> flatten_fragment_to_plain_text(pronominal_path([], Number.SINGULAR))
+    >>> from krrood.entity_query_language.verbalization.fragments.features import GrammaticalNumber
+    >>> flatten_fragment_to_plain_text(pronominal_path([], GrammaticalNumber.SINGULAR))
     'its'
     """
     possessive_pronoun = Pronouns.possessive(subject_number).as_fragment()
@@ -220,8 +233,10 @@ def pronominal_path(parts: List[PathStep], subject_number: Number) -> Fragment:
     first, rest = parts[0], parts[1:]
     # A scalar leaf possessed by a plural subject distributes ("their salaries"); an entity owner of
     # further structure stays singular ("the begin and end of their period").
-    attribute_number = subject_number if first.is_scalar_value else Number.SINGULAR
-    owner: Fragment = (
+    attribute_number = (
+        subject_number if first.is_scalar_value else GrammaticalNumber.SINGULAR
+    )
+    owner: VerbalizationFragment = (
         _relative_clause(first, nominative_pronoun, subject_number)
         if first.is_relation
         else PhraseFragment(
