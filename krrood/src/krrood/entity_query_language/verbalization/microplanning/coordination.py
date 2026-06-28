@@ -273,15 +273,21 @@ class _RangeBound(Enum):
 
 
 def chain_key(expression: SymbolicExpression) -> Optional[ChainKey]:
-    """:return: The hashable identity of a pure attribute chain — ``(root_id, ((name, owner),
-    …))`` — or ``None``.
+    """:return: The hashable identity of a pure variable-rooted path — ``(root_id, ((name, owner),
+    …))`` — or ``None`` when *expression* is not such a path.
+
+    A bare variable is the zero-hop path rooted at itself, so two bounds on the same variable
+    (``num >= 28``, ``num <= 31``) share a key and fold into a range exactly like two bounds on an
+    attribute chain — the variable is not a special case, just the empty chain.
 
     >>> robot = variable(Robot, [])
     >>> chain_key(robot.battery) == chain_key(robot.battery)
     True
-    >>> chain_key(robot) is None
+    >>> chain_key(robot) == (robot._id_, ())
     True
     """
+    if isinstance(expression, Variable):
+        return (expression._id_, ())
     if not isinstance(expression, MappedVariable):
         return None
     chain, root = walk_chain(expression)

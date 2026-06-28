@@ -1,4 +1,5 @@
 import math
+from dataclasses import dataclass
 from typing import List, Union, Optional
 from krrood.entity_query_language.factories import (
     variable_from,
@@ -14,7 +15,11 @@ from krrood.entity_query_language.factories import (
     distinct,
 )
 from krrood.entity_query_language.query.query import Entity
-from krrood.entity_query_language.predicate import symbolic_function, length
+from krrood.entity_query_language.predicate import (
+    SymbolicFunction,
+    functional_form,
+    length,
+)
 from krrood.utils import recursive_subclasses
 from krrood.inheritance_path_length import inheritance_path_length
 
@@ -197,6 +202,27 @@ def annotation_class_by_label(label: str) -> Optional[type]:
     return next(matching_class.evaluate(), None)
 
 
+@dataclass(eq=False)
+class EntityVolume(SymbolicFunction):
+    """The volume of a semantic annotation, from its body's collision scale (x * y * z)."""
+
+    annotation: SemanticAnnotation
+    """The annotation whose volume is computed."""
+
+    def __call__(self) -> float:
+        body = self.annotation.bodies[0]
+
+        # Get shapes from collision if available, otherwise from visual
+        if body.collision is not None:
+            return (
+                body.collision.scale.x * body.collision.scale.y * body.collision.scale.z
+            )
+        return 0.0
+
+
+entity_volume = functional_form(EntityVolume)
+
+
 def sort_annotations_by_volume(
     annotations: List[HasRootBody], order: Optional[bool] = True
 ) -> List[HasRootBody]:
@@ -210,19 +236,6 @@ def sort_annotations_by_volume(
     """
     annotaion_var = entity(a := variable_from(annotations)).where(a.bodies)
 
-    @symbolic_function
-    def get_volume(annotation: SemanticAnnotation) -> float:
-        """Calculate volume from the annotation's body scale."""
-        body = annotation.bodies[0]
-
-        # Get shapes from collision if available, otherwise from visual
-        if body.collision is not None:
-            return (
-                body.collision.scale.x * body.collision.scale.y * body.collision.scale.z
-            )
-        else:
-            return 0.0
-
     return entity(annotaion_var).ordered_by(
-        get_volume(annotaion_var), descending=not order
+        entity_volume(annotaion_var), descending=not order
     )

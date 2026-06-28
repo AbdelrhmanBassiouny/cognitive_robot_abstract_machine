@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from typing_extensions import Iterable, Protocol, Union, runtime_checkable
+from typing_extensions import Any, Iterable, List, Protocol, Union, runtime_checkable
 
-from krrood.entity_query_language.predicate import VerbalizationField
+from krrood.entity_query_language.predicate import Operand, VerbalizationField
+from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     Clause,
     VerbalizationFragment,
     NounPhrase,
+    oxford_comma,
     PhraseFragment,
     RoleFragment,
     WordFragment,
@@ -24,8 +26,15 @@ from krrood.entity_query_language.verbalization.microplanning.coordination impor
     MAX_SET_MEMBERS,
     one_of,
 )
+from krrood.entity_query_language.verbalization.microplanning.possessive import (
+    possessive_path,
+)
+from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Conjunctions,
     Copulas,
+    ENGLISH_PREPOSITIONS,
+    GroupingPhrases,
     SetMembership,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import (
@@ -53,9 +62,12 @@ class Noun(ClauseElement):
     """A noun constituent — a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`, an
     already-rendered fragment, or a literal noun given by its *head word only*."""
 
-    content: Union[str, "ClauseConstituent"]
+    content: Any
     """A literal noun *head* (the article is a feature, not part of the text — write ``"instance"``,
-    not ``"an instance"``), or any constituent (a field, a rendered fragment) rendered as-is."""
+    not ``"an instance"``), or any constituent rendered as-is — a rendered fragment, or an
+    :class:`~krrood.entity_query_language.predicate.Operand` (``operands.body`` / ``operands.tip.name``).
+    Typed :class:`~typing.Any` because an operand is statically the field's declared type (so the IDE
+    resolves its attributes), not a constituent type."""
 
     definiteness: Definiteness = Definiteness.INDEFINITE
     """For a literal-head noun, the article to realise — *"an instance"* (indefinite, the default) vs
@@ -123,6 +135,25 @@ class Adjective(ClauseElement):
 
 
 @dataclass(frozen=True)
+class All(ClauseElement):
+    """The universal quantifier *"all"* fronting a clause's subject.
+
+    In a :func:`clause` it both reads as *"all"* and marks the quantified subject — the first noun
+    phrase after it — plural; the agreement realization pass then agrees the clause's verb / copula,
+    so ``clause(All(), Noun("element"), Copula(), Adjective("close"))`` reads *"all elements are
+    close"*. Only the subject's number is decided here; agreement and the morphology inflection
+    (*"element"* → *"elements"*, *"is"* → *"are"*) happen in the realization passes."""
+
+    def as_fragment(self) -> VerbalizationFragment:
+        """:return: the *"all"* quantifier word leaf.
+
+        >>> All().as_fragment().text
+        'all'
+        """
+        return GroupingPhrases.ALL.as_fragment()
+
+
+@dataclass(frozen=True)
 class Copula(ClauseElement):
     """The copula *"is"* of a predicative clause — realised for number (*"is"* / *"are"*) and
     negation (*"is not"*) by the morphology pass."""
@@ -147,10 +178,11 @@ class OneOf(ClauseElement):
     surface a domain-constrained variable uses.
     """
 
-    members: Union[Iterable, VerbalizationField]
-    """The admissible values — a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`
-    bound to a collection, or a collection directly. Classes render as linked type references, other
-    values as literals."""
+    members: Union[Iterable, VerbalizationField, Operand, Any]
+    """The admissible values — an :class:`~krrood.entity_query_language.predicate.Operand`
+    (``operands.types_``) or :class:`~krrood.entity_query_language.predicate.VerbalizationField` bound to a
+    collection, or a collection directly. Classes render as linked type references, other values as
+    literals."""
 
     def as_fragment(self) -> VerbalizationFragment:
         """:return: the membership phrase, or a count summary past the cap.
@@ -161,11 +193,13 @@ class OneOf(ClauseElement):
         >>> flatten_fragment_to_plain_text(OneOf((int, str)).as_fragment())
         'one of Integer or Text'
         """
-        members = list(
-            self.members.value
-            if isinstance(self.members, VerbalizationField)
-            else self.members
-        )
+        if isinstance(self.members, Operand):
+            collection = self.members._value_of_operand_
+        elif isinstance(self.members, VerbalizationField):
+            collection = self.members.value
+        else:
+            collection = self.members
+        members = list(collection)
         are_types = bool(members) and all(
             isinstance(member, type) for member in members
         )
@@ -193,6 +227,7 @@ class Preposition(VocabEnum):
     AT = PlainWord("at")
     WITH = PlainWord("with")
     FROM = PlainWord("from")
+    FOR = PlainWord("for")
 
 
 @runtime_checkable
@@ -236,5 +271,171 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     ...            Noun(WordFragment(text="a Department")))
     ... )
     'an Employee work in a Department'
+
+    An :class:`All` quantifier makes the clause read a universal: the subject it fronts is made
+    plural and the agreement realization pass agrees the verb / copula (shown realised here, since
+    agreement and morphology run in the passes, not in :func:`clause`).
+
+    >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+    ...     realize_subtree)
+    >>> realize_subtree(clause(All(), Noun("element"), Copula(), Adjective("close")))
+    'all elements are close'
     """
-    return Clause(parts=[constituent.as_fragment() for constituent in constituents])
+    parts = [(constituent, constituent.as_fragment()) for constituent in constituents]
+    if any(isinstance(constituent, All) for constituent, _ in parts):
+        return Clause(parts=_pluralize_quantified_subject(parts))
+    return Clause(parts=[fragment for _, fragment in parts])
+
+
+def _pluralize_quantified_subject(
+    parts: List[tuple],
+) -> List[VerbalizationFragment]:
+    """:return: the clause fragments with the universally-quantified subject — the first noun phrase
+    after the :class:`All` word — made plural. Only the subject's number is decided here (the
+    grammatical-number content); the finite verb / copula is agreed with it later by the agreement
+    realization pass, and the morphology pass does the inflection.
+    """
+    fragments: List[VerbalizationFragment] = []
+    seen_all = False
+    subject_pluralized = False
+    for constituent, fragment in parts:
+        if isinstance(constituent, All):
+            seen_all = True
+            fragments.append(fragment)
+        elif seen_all and not subject_pluralized and isinstance(fragment, NounPhrase):
+            fragments.append(replace(fragment, number=GrammaticalNumber.PLURAL))
+            subject_pluralized = True
+        else:
+            fragments.append(fragment)
+    return fragments
+
+
+_COPULA_LEMMA = "be"
+"""The lemma every copular form (*"is"*, *"are"*, *"was"*) shares — used to recognise a copular name."""
+
+_VALUE_GETTER_PREFIX = "get"
+"""The leading imperative dropped from a value function's name so a stray getter still reads as a
+noun (``get_quarter`` → *"quarter"*); verb-named value functions are discouraged upstream."""
+
+
+def value_function_noun(name: str) -> str:
+    """:return: a value (non-boolean) symbolic function's name as noun words, dropping a leading
+    imperative ``get`` so ``get_quarter`` reads as *"quarter"* and ``get_year`` as *"year"*; a name
+    that is already a noun is returned unchanged.
+
+    >>> value_function_noun("get_quarter")
+    'quarter'
+    >>> value_function_noun("remaining_load")
+    'remaining load'
+    """
+    words = camel_case_to_words(name).split()
+    if len(words) > 1 and words[0].lower() == _VALUE_GETTER_PREFIX:
+        words = words[1:]
+    return " ".join(words)
+
+
+def value_function_phrase(name: str, *operands: ClauseConstituent) -> VerbalizationFragment:
+    """Build *"the &lt;noun&gt; of &lt;operands&gt;"* for a value function — the counterpart of
+    :func:`predicate_clause` for an operation that computes a value rather than a truth.
+
+    The *name* is read as the value's noun (a leading ``get`` dropped), and the operands are read out
+    as a genitive over it. A nullary function is just the noun. This is the default, name-based surface
+    a value :class:`~krrood.entity_query_language.predicate.SymbolicFunction` reuses, so the reading
+    lives in one place.
+
+    :param name: The function's identifier.
+    :param operands: The function's already-rendered arguments.
+    :return: The value noun phrase.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text, WordFragment,
+    ... )
+    >>> flatten_fragment_to_plain_text(value_function_phrase("get_quarter"))
+    'quarter'
+    >>> flatten_fragment_to_plain_text(
+    ...     value_function_phrase("remaining_load", WordFragment(text="the capacity"))
+    ... )
+    'the remaining load of the capacity'
+    """
+    noun = value_function_noun(name)
+    if not operands:
+        return Noun(WordFragment(text=noun)).as_fragment()
+    owner = oxford_comma(
+        [operand.as_fragment() for operand in operands], Conjunctions.AND.as_fragment()
+    )
+    return possessive_path([PathStep(noun)], owner)
+
+
+def predicate_clause(
+    name: str,
+    subject: ClauseConstituent,
+    *objects: ClauseConstituent,
+) -> Clause:
+    """Build a predicate clause from a predicate's *name* and its operands.
+
+    The name (CamelCase or snake_case) is read as the predicate. A copular name — its leading word a
+    form of *"be"* (*"is_one_month"*, *"IsReachable"*) — uses the copula with the remaining words as
+    the complement (*"<subject> is one month"*). Any other name reads verb-first, so a wrapping
+    ``Not`` negates it with do-support (*"<subject> connects to <object>"*, *"does not connect to"*).
+    The first operand is the subject; any further operands are trailing objects.
+
+    A copular complement attaches trailing operands only through a final preposition
+    (*"is_supported_by"* → *"… is supported by <object>"*). When it has none, an adjective/noun
+    complement cannot take them as objects — *"the begin is one month the end"* is nonsense — and
+    naming any one operand as the subject is a false claim (the *period* is one month, not the
+    *begin*). So the named condition is stated to *hold for* all operands, asserting nothing false:
+    *"one month holds for the begin and the end"*.
+
+    Shared by :class:`~krrood.entity_query_language.predicate.Triple` (a class-name relation) and the
+    symbolic-function rule (a function-name predicate), so the name-to-clause reading lives in one
+    place.
+
+    :param name: The predicate's identifier — a class or function name.
+    :param subject: The first operand, rendered as the clause's subject.
+    :param objects: Any further operands, rendered as trailing objects.
+    :return: The predicate clause.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text, WordFragment,
+    ... )
+    >>> flatten_fragment_to_plain_text(
+    ...     predicate_clause("is_one_month", WordFragment(text="the period"))
+    ... )
+    'the period is one month'
+    >>> flatten_fragment_to_plain_text(
+    ...     predicate_clause("connects_to", WordFragment(text="a body"),
+    ...                      WordFragment(text="another body"))
+    ... )
+    'a body connect to another body'
+    >>> flatten_fragment_to_plain_text(
+    ...     predicate_clause("is_one_month", WordFragment(text="the begin"),
+    ...                      WordFragment(text="the end"))
+    ... )
+    'one month hold for the begin and the end'
+    """
+    head, *rest = camel_case_to_words(name).split()
+    complement = [WordFragment(text=word) for word in rest]
+    is_copular = morphology.verb_lemma(head) == _COPULA_LEMMA
+    if is_copular and objects and (not rest or rest[-1] not in ENGLISH_PREPOSITIONS):
+        # A copular complement attaches trailing operands only through a final preposition
+        # (``is_supported_by`` → *"… is supported by <object>"*). Without one, an adjective/noun
+        # complement cannot take them as objects — *"the begin is one month the end"* is nonsense — and
+        # naming any single operand as the subject (*"the begin is one month"*) is a FALSE claim (the
+        # period is, not the begin). State only what is certain: the named condition holds for ALL the
+        # operands. *"one month holds for the begin and the end of its period"*.
+        operands = oxford_comma(
+            [Noun(subject).as_fragment(), *(Noun(obj).as_fragment() for obj in objects)],
+            Conjunctions.AND.as_fragment(),
+        )
+        return clause(
+            Noun(PhraseFragment(parts=complement)),
+            Verb("hold"),
+            WordFragment(text="for"),
+            operands,
+        )
+    predicate = (
+        [Copula(), *complement]
+        if is_copular
+        else [Verb(morphology.verb_lemma(head)), *complement]
+    )
+    return clause(Noun(subject), *predicate, *(Noun(obj) for obj in objects))

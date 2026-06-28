@@ -437,14 +437,15 @@ def _negation_wrap(child_fragment: VerbalizationFragment) -> VerbalizationFragme
 
 
 class NotVerbalizablePredicateRule(PhraseRule):
-    """Inline-negated verbalizable predicate (Not over a predicate whose type builds its own
-    verbalization fragment).
+    """Inline-negated predicate clause (Not over an instantiated variable that verbalizes as a
+    predicate clause — a predicate whose type builds its own fragment, or a boolean symbolic
+    function).
 
     Because the predicate states its clause with the typed clause vocabulary, the negation is set as
     a feature on the clause's head verb or copula — realised by the morphology pass as do-support
-    (*"does not work"*) or copula suppletion (*"is not reachable"*) — rather than wrapping the whole
-    clause in *"not (...)"*. A clause with no verb or copula head has nothing to negate, so it falls
-    back to the wrapped form.
+    (*"does not work"*) or copula suppletion (*"is not reachable"*, *"is not even"*) — rather than
+    wrapping the whole clause in *"not (...)"*. A clause with no verb or copula head has nothing to
+    negate, so it falls back to the wrapped form.
 
     >>> verbalize_expression(Not(IsReachable(variable(Location, []))))
     'a Location is not reachable'
@@ -456,15 +457,16 @@ class NotVerbalizablePredicateRule(PhraseRule):
     construct = Not
 
     def when(self, node: Not, context: RuleContext) -> bool:
-        """Fires when the negation wraps a predicate that builds its own verbalization fragment.
+        """Fires when the negation wraps an instantiated variable that verbalizes as a predicate
+        clause (a verbalizable predicate or a boolean symbolic function).
 
-        Detecting a verbalizable-predicate child is the gate that selects this rule over the generic
-        :class:`NotRule`, so the class example negates the predicate's head verb / copula in place
+        Detecting a predicate-clause child is the gate that selects this rule over the generic
+        :class:`NotRule`, so the negation is set on the predicate's head verb / copula in place
         instead of wrapping it in *not (…)*.
         """
         return isinstance(
             node._child_, InstantiatedVariable
-        ) and InstantiatedPlanner.has_fragment(node._child_)
+        ) and InstantiatedPlanner.renders_as_predicate_clause(node._child_)
 
     def build(self, node: Not, context: RuleContext) -> VerbalizationFragment:
         """Say the predicate with its head verb / copula negated, or wrap it when it has neither.

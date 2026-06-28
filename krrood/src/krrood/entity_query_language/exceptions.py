@@ -387,7 +387,7 @@ class LiteralConditionError(UsageError):
         >>> a = True
         >>> body = let(Body, None)
         >>> query = an(entity(body, a))
-    This could also happen when you are using a predicate or a symbolic_function and all the given arguments are literals.
+    This could also happen when you are using a predicate or a symbolic function and all the given arguments are literals.
     Example:
         >>> predicate = HasType(Body("Body1"), Body)
         >>> query = an(entity(let(Body, None), predicate))

@@ -41,9 +41,6 @@ from krrood.entity_query_language.factories import (
     or_,
 )
 from krrood.entity_query_language.predicate import HasType, HasTypes, Predicate, Triple
-from krrood.entity_query_language.verbalization.exceptions import (
-    PredicateFragmentRequiredError,
-)
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
     clause,
@@ -83,6 +80,28 @@ class _Robot:
     name: str
     battery: int
     tasks: List[_Task]
+
+
+@dataclass
+class _Amount:
+    amount: int
+
+
+@dataclass
+class _Revenue:
+    total: _Amount
+
+
+@dataclass
+class _Window:
+    days: int
+
+
+@dataclass
+class _Report:
+    window: _Window
+    revenue: _Revenue
+    priority: int
 
 
 from ...dataset.semantic_world_like_classes import (
@@ -592,6 +611,26 @@ def test_aggregation_where_on_other_attribute_spells_out_the_owner():
     assert "its power" not in text
 
 
+def test_count_over_query_renders_population_not_imperative_find():
+    """A ``count`` wrapping a whole query counts a *population*, so the inner query surfaces as a
+    plural noun with its restriction folded in — *"the number of _Robots whose battery is greater
+    than 50"* — never the imperative *"Find …"* (which would read as *"the number of Find a _Robot
+    …"*)."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(eql.count(entity(robot).where(robot.battery > 50)))
+    assert text == "the number of _Robots whose battery is greater than 50"
+    assert "Find" not in text
+
+
+def test_count_over_query_uses_such_that_for_a_standalone_condition():
+    """A condition on the counted variable itself reads *"such that …"* and the population is plural
+    — *"the number of Integers such that …"* — so the aggregate over a query and the equivalent query
+    over an aggregate verbalise consistently."""
+    number = variable(int, [1, 2, 3])
+    text = verbalize_expression(eql.count(entity(number).where(number > 0)))
+    assert text == "the number of Integers such that the Integer is greater than 0"
+
+
 def test_boolean_predicative_pronominalises_relational_navigation():
     """A boolean-terminal chain on the subject's relational navigation reads *"the <Type> to which
     it is <verb> is <attribute>"* — the navigation prefix is recursed through the standard grammar,
@@ -773,6 +812,78 @@ def test_verbalize_and_chain_flattening():
     # The flattened conjuncts on one bare variable factor into a relative clause; the complementary
     # bound pair folds to "between".
     assert text == "an Integer that is between 1 and 10 and is not 5"
+
+
+def test_attribute_chain_selection_keeps_its_where():
+    """Selecting an attribute chain (``m.assigned_to``) must not drop its WHERE: the restriction
+    subject is the chain's root, whose noun ends the selection, so the WHERE attaches as a
+    *"such that …"* clause (with the root pronominalised) instead of vanishing."""
+    mission = variable(_NavMission, [])
+    text = verbalize_expression(
+        an(
+            entity(mission.assigned_to).where(
+                mission.assigned_to.battery >= 28, mission.assigned_to.battery <= 31
+            )
+        )
+    )
+    assert text == (
+        "Find the _NavRobot to which a _NavMission is assigned such that its battery is "
+        "between 28 and 31"
+    )
+
+
+def test_attribute_chain_selection_names_its_sibling_order_key():
+    """Selecting an attribute chain (``r.window``) ordered by a *sibling* chain
+    (``r.revenue.total.amount``, sharing the root but on a different path) must name the key in full
+    — not drop it to *"the highest window"*. The selection renders as its own noun, the key trails as
+    *"with the highest <key>"* with the shared root pronominalised, and the WHERE still attaches."""
+    report = variable(_Report, [])
+    text = verbalize_expression(
+        an(
+            entity(report.window)
+            .where(report.window.days >= 28, report.window.days <= 31)
+            .ordered_by(report.revenue.total.amount, descending=True)
+            .limit(1)
+        )
+    )
+    assert text == (
+        "Find the window of a _Report with the highest amount of the total of its revenue "
+        "such that the days of its window is between 28 and 31"
+    )
+
+
+def test_single_hop_sibling_order_key_omits_the_redundant_root():
+    """A sibling key one hop off the root (``r.priority``) is owned by the root, which is the
+    selection's trailing noun — the very noun the modifier attaches to — so it is named by the bare
+    attribute, without restating the root (no "… of a _Report")."""
+    report = variable(_Report, [])
+    text = verbalize_expression(
+        an(entity(report.window).ordered_by(report.priority, descending=True).limit(1))
+    )
+    assert text == "Find the window of a _Report with the highest priority"
+
+
+def test_plain_variable_ranking_is_unchanged():
+    """The sibling-key handling must not disturb a plain-variable ranking: ordering by an attribute
+    of the selection still reads *"with the highest salary"* / *"the top three … by salary"*."""
+    employee = variable(Employee, [])
+    one = verbalize_expression(
+        entity(employee).ordered_by(employee.salary, descending=True).limit(1)
+    )
+    several = verbalize_expression(
+        entity(employee).ordered_by(employee.salary, descending=True).limit(3)
+    )
+    assert one == "Find the Employee with the highest salary"
+    assert several == "Find the top three Employees by salary"
+
+
+def test_verbalize_bare_variable_bounds_fold_into_a_range():
+    """A lower and upper bound on the same bare variable fold into one *"between … and …"* item,
+    exactly like two bounds on an attribute chain — the variable is the zero-hop chain, so the range
+    fold needs no bare-variable special case."""
+    x = variable(int, [])
+    text = verbalize_expression(an(entity(x).where(x >= 28, x <= 31)))
+    assert text == "Find an Integer such that the Integer is between 28 and 31"
 
 
 def test_verbalize_and_stops_at_or():
@@ -1363,6 +1474,32 @@ def test_grouped_selection_equal_to_key_reports_distinct():
     assert "grouped by" not in text
 
 
+def test_grouped_scalar_column_is_singular_without_all():
+    """A scalar grouped column reads distributively singular — *"the battery"* — with no *"all"*,
+    because each grouped entity contributes exactly one value (the regression you reported: it was
+    wrongly *"all the battery"*)."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(a(set_of(robot.battery).grouped_by(robot.name)))
+    assert text == "For each name, report the battery of a _Robot"
+    assert "all" not in text
+
+
+def test_grouped_collection_column_uses_all_and_plural():
+    """A collection grouped column (a ``List`` field) is genuinely many per entity, so it keeps the
+    quantified plural *"all the tasks"*."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(a(set_of(robot.tasks).grouped_by(robot.name)))
+    assert text == "For each name, report all the tasks of a _Robot"
+
+
+def test_grouped_mixed_cardinality_columns_quantify_per_column():
+    """*"all"* attaches only to the many-valued column: a scalar and a collection together read
+    *"the battery … and all its tasks"*, not a blanket *"all"* over both."""
+    robot = variable(_Robot, [])
+    text = verbalize_expression(a(set_of(robot.battery, robot.tasks).grouped_by(robot.name)))
+    assert text == "For each name, report the battery of a _Robot and all its tasks"
+
+
 def test_grouped_selection_other_than_key_fronts_for_each_all():
     """A grouped query with a non-key selection fronts the grouping as 'For each <key>' and lists
     the per-group population with 'all'."""
@@ -1548,9 +1685,10 @@ def test_verbalize_custom_predicate_employee_domain():
     assert "Department" in text
 
 
-def test_verbalize_predicate_without_fragment_raises():
-    """A predicate that supplies no verbalization fragment is an error — there is no name-based
-    string fallback; fragments are required."""
+def test_verbalize_predicate_without_fragment_uses_name_based_default():
+    """A predicate that supplies no verbalization fragment reads through the inherited name-based
+    default clause (``HasHighSalary`` → *"… has high salary …"*), so a sensible surface needs no
+    per-predicate fragment."""
 
     @dataclass(eq=False)
     class HasHighSalary(Predicate):
@@ -1561,11 +1699,15 @@ def test_verbalize_predicate_without_fragment_raises():
             return self.employee.salary > self.threshold
 
     employee = variable(Employee, [])
-    with pytest.raises(PredicateFragmentRequiredError):
+    assert (
         verbalize_expression(HasHighSalary(employee, 50000.0))
+        == "an Employee has high salary 50000.0"
+    )
 
 
-def test_verbalize_predicate_without_fragment_no_args_raises():
+def test_verbalize_copular_predicate_without_fragment_uses_name_based_default():
+    """A copular ``Is…`` predicate with no fragment reads as *"<subject> is <complement>"*."""
+
     @dataclass(eq=False)
     class IsActive(Predicate):
         entity: Any
@@ -1574,8 +1716,7 @@ def test_verbalize_predicate_without_fragment_no_args_raises():
             return True
 
     employee = variable(Employee, [])
-    with pytest.raises(PredicateFragmentRequiredError):
-        verbalize_expression(IsActive(employee))
+    assert verbalize_expression(IsActive(employee)) == "an Employee is active"
 
 
 # ── Aggregator coreference & HAVING compact form ──────────────────────────────
@@ -1878,9 +2019,9 @@ def test_verbalize_triple():
     assert text.index("Body") < text.index("Handle")
 
 
-def test_verbalize_1arg_predicate_without_fragment_raises():
-    """A 1-arg predicate without a verbalization fragment is an error — fragments are required, with
-    no generic name-based fallback."""
+def test_verbalize_1arg_predicate_without_fragment_uses_name_based_default():
+    """A 1-arg predicate without a verbalization fragment reads through the inherited name-based
+    default clause rather than raising — fragments are optional, overriding only a wrong reading."""
 
     @dataclass(eq=False)
     class IsActive(Predicate):
@@ -1890,8 +2031,7 @@ def test_verbalize_1arg_predicate_without_fragment_raises():
             return True
 
     employee = variable(Employee, [])
-    with pytest.raises(PredicateFragmentRequiredError):
-        verbalize_expression(IsActive(employee))
+    assert verbalize_expression(IsActive(employee)) == "an Employee is active"
 
 
 # ── Same-type variable disambiguation ─────────────────────────────────────────
