@@ -32,7 +32,6 @@ from krrood.entity_query_language.factories import (
     variable,
     variable_from,
     flat_variable,
-    match_variable,
     inference,
     for_all,
     exists,
@@ -1302,7 +1301,7 @@ def test_verbalize_nested_rule(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     prismatic_connection = variable(PrismaticConnection, world.connections)
-    fixed_connection = match_variable(FixedConnection, world.connections)(
+    fixed_connection = an(FixedConnection, domain=world.connections)(
         parent=prismatic_connection.child, child=handle
     )
     drawer_var = inference(Drawer)(
@@ -1335,7 +1334,7 @@ def test_verbalize_inference_rule_golden(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     prismatic_connection = variable(PrismaticConnection, world.connections)
-    fixed_connection = match_variable(FixedConnection, world.connections)(
+    fixed_connection = an(FixedConnection, domain=world.connections)(
         parent=prismatic_connection.child, child=handle
     )
     drawer_var = inference(Drawer)(
@@ -1672,7 +1671,7 @@ def test_verbalize_inference_repeated_entity_article(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     prismatic_connection = variable(PrismaticConnection, world.connections)
-    fixed_connection = match_variable(FixedConnection, world.connections)(
+    fixed_connection = an(FixedConnection, domain=world.connections)(
         parent=prismatic_connection.child, child=handle
     )
     drawer = inference(Drawer)(
@@ -1715,7 +1714,7 @@ def test_verbalize_double_nested_constraint_stack(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     prismatic_connection = variable(PrismaticConnection, world.connections)
-    fixed_connection = match_variable(FixedConnection, world.connections)(
+    fixed_connection = an(FixedConnection, domain=world.connections)(
         parent=prismatic_connection.child, child=handle
     )
     drawer_var = inference(Drawer)(
@@ -1749,7 +1748,7 @@ def test_verbalize_double_nested_with_outer_entity(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     prismatic_connection = variable(PrismaticConnection, world.connections)
-    fixed_connection = match_variable(FixedConnection, world.connections)(
+    fixed_connection = an(FixedConnection, domain=world.connections)(
         parent=prismatic_connection.child, child=handle
     )
     drawer_var = inference(Drawer)(
@@ -1759,7 +1758,7 @@ def test_verbalize_double_nested_with_outer_entity(doors_and_drawers_world):
     # A second entity used directly by the outer Wrapper
     handle2 = variable(Handle, world.bodies)
     pc2 = variable(PrismaticConnection, world.connections)
-    fc2 = match_variable(FixedConnection, world.connections)(
+    fc2 = an(FixedConnection, domain=world.connections)(
         parent=pc2.child, child=handle2
     )
 

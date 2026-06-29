@@ -193,6 +193,7 @@ class Preposition(VocabEnum):
     AT = PlainWord("at")
     WITH = PlainWord("with")
     FROM = PlainWord("from")
+    AS = PlainWord("as")
 
 
 @runtime_checkable

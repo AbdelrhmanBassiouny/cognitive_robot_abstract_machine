@@ -8,7 +8,10 @@ from typing_extensions import (
     Any, TYPE_CHECKING, ClassVar, List, Type,
 )
 
-from krrood.entity_query_language.backends import QueryBackend, EntityQueryLanguageBackend
+from krrood.entity_query_language.backends import (
+    QueryBackend,
+    EntityQueryLanguageGenerativeBackend,
+)
 from krrood.class_diagrams.mocking import MockedClass, MockedModule
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_entity import PlanEntity
@@ -23,8 +26,12 @@ try:
     import rclpy
 except ImportError as e:
     from semantic_digital_twin.utils import mocked_rclpy
-    logging.warning("Could not import rclpy. This is expected if you are not using ROS. Mocking rclpy.")
+
+    logging.warning(
+        "Could not import rclpy. This is expected if you are not using ROS. Mocking rclpy."
+    )
     rclpy = mocked_rclpy
+
 
 @dataclass
 class Context(PlanEntity):
@@ -52,9 +59,12 @@ class Context(PlanEntity):
     Should pre -and postconditions of actions be evaluated in this plan
     """
 
-    query_backend: QueryBackend = field(default_factory=EntityQueryLanguageBackend)
+    query_backend: QueryBackend = field(
+        default_factory=EntityQueryLanguageGenerativeBackend
+    )
     """
-    The backend used to answer queries about underspecified statements.
+    The backend used to answer queries about underspecified statements. Defaults to the
+    deterministic generative backend, since underspecified actions are constructed (generated).
     """
 
     alternative_motion_mappings: List[Type[AlternativeMotion]] = field(default_factory=list)
@@ -78,8 +88,9 @@ class Context(PlanEntity):
         self._debug = value
         if self.debug and not self.ros_node:
             raise ValueError("Debug mode requires a ROS node")
-        logging.getLogger("coraplex").setLevel(logging.DEBUG if self.debug else logging.INFO)
-
+        logging.getLogger("coraplex").setLevel(
+            logging.DEBUG if self.debug else logging.INFO
+        )
 
     @classmethod
     def from_world(cls, world: World, plan: Plan = None, query_backend: Optional[QueryBackend] = None,
@@ -95,9 +106,9 @@ class Context(PlanEntity):
         """
 
         if query_backend is None:
-            query_backend = EntityQueryLanguageBackend()
+            query_backend = EntityQueryLanguageGenerativeBackend()
 
-        result =  cls(
+        result = cls(
             world=world,
             robot=world.get_semantic_annotations_by_type(AbstractRobot)[0],
             query_backend=query_backend,
@@ -106,6 +117,3 @@ class Context(PlanEntity):
         if plan:
             plan.add_plan_entity(result)
         return result
-
-
-

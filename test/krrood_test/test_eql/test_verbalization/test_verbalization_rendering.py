@@ -24,7 +24,6 @@ from krrood.entity_query_language.factories import (
     entity,
     variable,
     inference,
-    match_variable,
 )
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
@@ -150,7 +149,7 @@ def test_rule_if_then_carry_keyword_role(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     pc = variable(PrismaticConnection, world.connections)
-    fc = match_variable(FixedConnection, world.connections)(
+    fc = an(FixedConnection, domain=world.connections)(
         parent=pc.child, child=handle
     )
     drawer_var = inference(Drawer)(container=fc.parent, handle=fc.child)
@@ -232,7 +231,7 @@ def test_rule_is_block_fragment(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     pc = variable(PrismaticConnection, world.connections)
-    fc = match_variable(FixedConnection, world.connections)(
+    fc = an(FixedConnection, domain=world.connections)(
         parent=pc.child, child=handle
     )
     drawer_var = inference(Drawer)(container=fc.parent, handle=fc.child)
@@ -573,7 +572,7 @@ def test_hierarchical_plain_rule_structure(doors_and_drawers_world):
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     pc = variable(PrismaticConnection, world.connections)
-    fc = match_variable(FixedConnection, world.connections)(
+    fc = an(FixedConnection, domain=world.connections)(
         parent=pc.child, child=handle
     )
     drawer_var = inference(Drawer)(container=fc.parent, handle=fc.child)
@@ -612,7 +611,7 @@ def _drawer_rule_fragment(doors_and_drawers_world) -> VerbalizationFragment:
     world = doors_and_drawers_world
     handle = variable(Handle, world.bodies)
     pc = variable(PrismaticConnection, world.connections)
-    fc = match_variable(FixedConnection, world.connections)(
+    fc = an(FixedConnection, domain=world.connections)(
         parent=pc.child, child=handle
     )
     drawer_var = inference(Drawer)(container=fc.parent, handle=fc.child)

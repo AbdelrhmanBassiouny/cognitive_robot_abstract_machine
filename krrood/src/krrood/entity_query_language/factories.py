@@ -9,11 +9,12 @@ import operator
 from inspect import isclass
 from uuid import UUID
 
-from typing_extensions import Iterable, List
+from typing_extensions import Iterable, List, overload
 
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
     TruthValueOperator,
+    OperationResult,
 )
 from krrood.entity_query_language.core.mapped_variable import (
     FlatVariable,
@@ -98,56 +99,6 @@ def set_of(*selected_variables: Union[Selectable[T], Any]) -> SetOf:
     return SetOf(_selected_variables_=selected_variables)
 
 
-# %% Match
-
-
-def match(
-    type_: Optional[Union[Type[T], Selectable[T]]] = None,
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
-    """
-    Create a symbolic variable matching the type and the provided keyword
-    arguments.
-
-    This is used for easy variable definitions when there are structural
-    constraints.
-
-    :param type_: The type of the variable (i.e., The class you want to
-        instantiate).
-    :return: The Match instance.
-    """
-    return Match(factory=type_)
-
-
-def match_variable(
-    type_: Union[Type[T], Selectable[T]], domain: DomainType
-) -> Union[T, Entity[T], MatchVariable[T]]:
-    """
-    Same as :py:func:`krrood.entity_query_language.match.match` but with a
-    domain to use for the variable created by the match.
-
-    :param type_: The type of the variable (i.e., The class you want to
-        instantiate).
-    :param domain: The domain used for the variable created by the
-        match.
-    :return: The Match instance.
-    """
-    return MatchVariable(factory=type_, domain=domain)
-
-
-def underspecified(
-    expression: Union[Type[T], Callable[..., T]], target_type: Type[T] | None = None
-) -> Union[Type[T], Match[T]]:
-    """
-    Same as :py:func:`krrood.entity_query_language.factories.match` but instead
-    of searching for solutions in the domain objects, it is used as a query for
-    generative processes to infer solutions that satisfy the constraints in the
-    query.
-    """
-    if target_type is not None:
-        return Match(factory=expression, type_=target_type)
-    return Match(factory=expression)
-
-
 # %% Variable Declaration
 
 
@@ -199,7 +150,9 @@ def deduced_variable(
     return ExternallySetVariable(_type_=type_, _domain_source_=DomainSource.DEDUCTION)
 
 
-def variable_from(domain: Union[Iterable[T], Selectable[T]]) -> Union[T, Selectable[T]]:
+def variable_from(
+    domain: Union[Iterable[T], Selectable[T], T],
+) -> Union[T, Variable[T]]:
     """
     Create a variable from a given domain.
 
@@ -338,48 +291,233 @@ def exists(
 # %% Result Quantifiers
 
 
-def an(
-    entity_: Union[T, Query],
+def _quantify_or_build_match(
+    arg: Union[T, Query, Type[T], Callable[..., T]],
+    quantifier_type: Type[ResultQuantifier],
     quantification: Optional[ResultQuantificationConstraint] = None,
-) -> Union[T, Query]:
+    *,
+    domain: Optional[DomainType] = None,
+    target_type: Optional[Type[T]] = None,
+) -> Union[T, Query, Match[T], MatchVariable[T]]:
     """
-    Select all values satisfying the given entity description.
+    Shared implementation for :py:func:`an` and :py:func:`the`.
 
-    :param entity_: An entity or a set expression to quantify over.
-    :param quantification: Optional quantification constraint.
-    :return: The entity with the applied quantifier.
+    The behaviour is selected by the runtime type of ``arg``:
+
+    * If ``arg`` is a :class:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`
+      (an entity, a set expression, a variable or an attribute), it is quantified with
+      ``quantifier_type``. Raw selectables that are not already a
+      :class:`~krrood.entity_query_language.query.query.Query` are first wrapped with
+      :py:func:`entity`.
+    * Otherwise ``arg`` is treated as a type (or a callable factory) and a structural
+      :class:`~krrood.entity_query_language.query.match.Match` is built. If ``domain`` is
+      provided, a :class:`~krrood.entity_query_language.query.match.MatchVariable` bound to
+      that domain is built instead.
+
+    :param arg: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param quantifier_type: The result quantifier to apply (``An`` or ``The``).
+    :param quantification: Optional quantification constraint (quantify path only).
+    :param domain: Optional domain that turns the match into a ``MatchVariable``.
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: A quantified query, or a ``Match``/``MatchVariable`` builder.
     """
-    return entity_._quantify_(An, quantification_constraint=quantification)
+    if isinstance(arg, SymbolicExpression):
+        if not isinstance(arg, Query):
+            arg = entity(arg)
+        return arg._quantify_(quantifier_type, quantification_constraint=quantification)
+
+    if domain is not None:
+        match_ = MatchVariable(factory=arg, type_=target_type, domain=domain)
+    else:
+        match_ = Match(factory=arg, type_=target_type)
+    match_._quantifier_type_ = quantifier_type
+    return match_
+
+
+@overload
+def an(
+    entity_: Type[T],
+    quantification: None = ...,
+    *,
+    domain: DomainType,
+    target_type: None = ...,
+) -> MatchVariable[T]: ...
+
+
+@overload
+def an(
+    entity_: Type[T],
+    quantification: None = ...,
+    *,
+    domain: None = ...,
+    target_type: None = ...,
+) -> Match[T]: ...
+
+
+@overload
+def an(
+    entity_: Callable[..., T],
+    quantification: None = ...,
+    *,
+    domain: None = ...,
+    target_type: Type[T],
+) -> Match[T]: ...
+
+
+@overload
+def an(
+    entity_: T,
+    quantification: Optional[ResultQuantificationConstraint] = ...,
+    *,
+    domain: None = ...,
+    target_type: None = ...,
+) -> T: ...
+
+
+def an(
+    entity_,
+    quantification=None,
+    *,
+    domain=None,
+    target_type=None,
+):
+    """
+    Select all values satisfying the given description.
+
+    Depending on ``entity_`` this either quantifies an existing symbolic expression with the
+    ``An`` quantifier (zero or more results), or builds a structural ``Match`` when ``entity_``
+    is a type or a callable factory. See :py:func:`_quantify_or_build_match` for details.
+
+    :param entity_: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param quantification: Optional quantification constraint (quantify path only).
+    :param domain: Optional domain that turns a type into a ``MatchVariable``.
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: The applied quantifier or the constructed match.
+    """
+    return _quantify_or_build_match(
+        entity_, An, quantification, domain=domain, target_type=target_type
+    )
+
+
+@overload
+def a(
+    entity_: Type[T],
+    quantification: None = ...,
+    *,
+    domain: DomainType,
+    target_type: None = ...,
+) -> MatchVariable[T]: ...
+
+
+@overload
+def a(
+    entity_: Type[T],
+    quantification: None = ...,
+    *,
+    domain: None = ...,
+    target_type: None = ...,
+) -> Match[T]: ...
+
+
+@overload
+def a(
+    entity_: Callable[..., T],
+    quantification: None = ...,
+    *,
+    domain: None = ...,
+    target_type: Type[T],
+) -> Match[T]: ...
+
+
+@overload
+def a(
+    entity_: T,
+    quantification: Optional[ResultQuantificationConstraint] = ...,
+    *,
+    domain: None = ...,
+    target_type: None = ...,
+) -> T: ...
 
 
 def a(
-    entity_: Union[T, Query],
-    quantification: Optional[ResultQuantificationConstraint] = None,
-) -> Union[T, Query]:
+    entity_,
+    quantification=None,
+    *,
+    domain=None,
+    target_type=None,
+):
     """
-    Select all values satisfying the given entity description.
+    Select all values satisfying the given description; the consonant-article sibling of :func:`an`.
 
-    This accommodates words not starting with a vowel; it delegates to :func:`an`. It is a real
-    function (not an ``a = an`` alias) so its ``__name__`` is ``"a"``, which lets tools that key a
-    namespace by ``__name__`` (e.g. the doctest harness) expose it under the name ``a``.
+    Identical behaviour to :py:func:`an` (it delegates). Kept as a real function rather than an
+    ``a = an`` alias so its ``__name__`` is ``"a"``, which lets tools that key a namespace by
+    ``__name__`` (e.g. the doctest harness) expose it under the name ``a``.
 
-    :param entity_: An entity or a set expression to quantify over.
-    :param quantification: Optional quantification constraint.
-    :return: The entity with the applied quantifier.
+    :param entity_: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param quantification: Optional quantification constraint (quantify path only).
+    :param domain: Optional domain that turns a type into a ``MatchVariable``.
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: The applied quantifier or the constructed match.
     """
-    return an(entity_, quantification=quantification)
+    return an(entity_, quantification, domain=domain, target_type=target_type)
+
+
+@overload
+def the(
+    entity_: Type[T],
+    *,
+    domain: DomainType,
+    target_type: None = ...,
+) -> MatchVariable[T]: ...
+
+
+@overload
+def the(
+    entity_: Type[T],
+    *,
+    domain: None = ...,
+    target_type: None = ...,
+) -> Match[T]: ...
+
+
+@overload
+def the(
+    entity_: Callable[..., T],
+    *,
+    domain: None = ...,
+    target_type: Type[T],
+) -> Match[T]: ...
+
+
+@overload
+def the(
+    entity_: T,
+    *,
+    domain: None = ...,
+    target_type: None = ...,
+) -> T: ...
 
 
 def the(
-    entity_: Union[T, Query],
-) -> Union[T, Query]:
+    entity_,
+    *,
+    domain=None,
+    target_type=None,
+):
     """
-    Select the unique value satisfying the given entity description.
+    Select the unique value satisfying the given description.
 
-    :param entity_: An entity or a set expression to quantify over.
-    :return: The entity with the applied quantifier.
+    Behaves like :py:func:`an` but applies the ``The`` quantifier, which expects exactly one
+    result when the expression is materialized (raising otherwise).
+
+    :param entity_: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param domain: Optional domain that turns a type into a ``MatchVariable``.
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: The applied quantifier or the constructed match.
     """
-    return entity_._quantify_(The)
+    return _quantify_or_build_match(
+        entity_, The, None, domain=domain, target_type=target_type
+    )
 
 
 # %% Rules

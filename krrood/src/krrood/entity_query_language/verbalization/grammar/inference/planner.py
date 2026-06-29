@@ -248,7 +248,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
 
         >>> handle = variable(Handle, [])
         >>> prismatic = variable(PrismaticConnection, [])
-        >>> fixed = match_variable(FixedConnection, [])(parent=prismatic.child, child=handle)
+        >>> fixed = an(FixedConnection, domain=[])(parent=prismatic.child, child=handle)
         >>> planner = InferencePlanner(entity(inference(Drawer)(container=fixed.parent, handle=fixed.child)))
         >>> _ = planner.node.build()
         >>> antecedents, unmatched = planner._plan_antecedents(frozenset())
@@ -267,7 +267,7 @@ class InferencePlanner(Planner[Entity, RuleStructure]):
 
         >>> handle = variable(Handle, [])
         >>> prismatic = variable(PrismaticConnection, [])
-        >>> fixed = match_variable(FixedConnection, [])(parent=prismatic.child, child=handle)
+        >>> fixed = an(FixedConnection, domain=[])(parent=prismatic.child, child=handle)
         >>> planner = InferencePlanner(entity(inference(Drawer)(container=fixed.parent, handle=fixed.child)))
         >>> _ = planner.node.build()
         >>> [antecedent.type_name for antecedent in planner._discover_antecedents(frozenset())]
