@@ -20,12 +20,13 @@ so coordination and punctuation are produced by the verbalization engine rather 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from typing_extensions import Any, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.verbalization.fragments.base import (
+    BlockFragment,
     PhraseFragment,
     VerbalizationFragment,
     WordFragment,
@@ -41,6 +42,34 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 from krrood.exceptions import DataclassException
+
+
+def _reframe_directive(
+    fragment: VerbalizationFragment, directive: VocabEnum
+) -> VerbalizationFragment:
+    """Replace the leading query directive of a match fragment (*"Find"* / *"Generate"*) with *directive*.
+
+    A query verbalizes with its own opener; an act over a query (e.g. *"Perform a NavigateAction …"*) wants
+    its own force in that slot instead. The match fragment is a
+    :class:`~krrood.entity_query_language.verbalization.fragments.base.BlockFragment` whose header opens
+    with the directive, so this swaps that one token.
+
+    :return: a fragment opening with *directive*; if *fragment* carries no directive header, it is framed
+        as *"<directive> <fragment>"* instead.
+    """
+    if (
+        isinstance(fragment, BlockFragment)
+        and isinstance(fragment.header, PhraseFragment)
+        and fragment.header.parts
+    ):
+        reframed_header = replace(
+            fragment.header,
+            parts=[directive.as_fragment(), *fragment.header.parts[1:]],
+        )
+        return replace(fragment, header=reframed_header)
+    return PhraseFragment(
+        parts=[directive.as_fragment(), fragment], separator=Separator.SPACE
+    )
 
 
 @dataclass
@@ -124,6 +153,25 @@ class Explain(Performative):
 
     def as_fragment(self) -> VerbalizationFragment:
         return self.framed_fragment(PerformativeDirective.EXPLAIN, PlanConnectives.WHY)
+
+
+@dataclass
+class Perform(Performative):
+    """Carry out the described action -- the directive that drives a plan.
+
+    The content is an action description (e.g. ``a(NavigateAction)(...).where(...)``); it verbalizes with
+    *"Perform"* in place of the query's *"Generate"*, and executing it is delegated to the plan layer.
+    """
+
+    def perform(self) -> Any:
+        raise NotImplementedError(
+            "Perform is executed by the coraplex plan layer."
+        )
+
+    def as_fragment(self) -> VerbalizationFragment:
+        return _reframe_directive(
+            fragment_for_expression(self.content), PerformativeDirective.PERFORM
+        )
 
 
 @dataclass
