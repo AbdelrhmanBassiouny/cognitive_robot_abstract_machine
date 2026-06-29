@@ -37,15 +37,12 @@ def _navigate_and_raise_torso() -> Sequential:
 
 
 def test_the_plan_composes_real_actions_a_predicate_monitor_across_frameworks():
-    text = _navigate_and_raise_torso().verbalize()
-    # coraplex action -> Perform, with the new a(Action) idiom
-    assert text.startswith("Perform a NavigateAction")
-    # sdt predicate -> Monitor (the act for predicates/constraints)
-    assert ", then Monitor whether " in text
-    assert "is_pose_free_for_robot" in text                 # the real predicate, used as-is
-    # the second coraplex action closes the plan
-    assert text.endswith(
-        ", then Perform a MoveTorsoAction given that its torso_state is HIGH"
+    # coraplex actions -> Perform (the a(Action) idiom); the sdt SymbolicFunction predicate
+    # is_pose_free_for_robot -> Monitor, verbalizing as a clean clause ("a Pose is free for ...").
+    assert _navigate_and_raise_torso().verbalize() == (
+        "Perform a NavigateAction given that its target_location is a specific Pose, "
+        "then Monitor whether a specific Pose is free for an AbstractRobot, "
+        "then Perform a MoveTorsoAction given that its torso_state is HIGH"
     )
 
 

@@ -162,4 +162,6 @@ class ResultQuantifierRule(PhraseRule):
         >>> verbalize_expression(the(entity(variable(Robot, []))))
         'Find the unique Robot'
         """
-        return context.child(node._child_, inline=context.inline)
+        return context.child(
+            node._child_, number=context.number, inline=context.inline
+        )

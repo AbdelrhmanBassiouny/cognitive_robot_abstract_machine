@@ -40,6 +40,50 @@ from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.spatial_types import Point3, Pose, Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
+from typing import Any
+from krrood.entity_query_language.predicate import SymbolicFunction, functional_form
+
+
+@dataclass(eq=False)
+class PlanarDistance(SymbolicFunction):
+    """The Euclidean distance between two points, as a value operation."""
+
+    point1: Point3
+    """The first point."""
+
+    point2: Point3
+    """The second point."""
+
+    def __call__(self):
+        return self.point1.euclidean_distance(self.point2)
+
+
+planar_distance = functional_form(PlanarDistance)
+
+
+@dataclass(eq=False)
+class ClosesToBorder(SymbolicFunction):
+    """The position of a target along the coffee table's border axis, as a value operation.
+
+    Used as a sort key, so a target nearer the table border sorts first.
+    """
+
+    target: Body
+    """The target whose closeness to the border is measured."""
+
+    world: World
+    """The world used to transform the target's pose into the table frame."""
+
+    couch_table: Any
+    """The coffee table whose frame the position is measured in."""
+
+    def __call__(self) -> float:
+        return self.world.transform(
+            self.target.global_pose, self.couch_table.root
+        ).y
+
+
+closes_to_border = functional_form(ClosesToBorder)
 
 
 @dataclass
@@ -230,10 +274,6 @@ class Sage10kTVStudioDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def book_to_pick(self) -> Body:
-        @symbolic_function
-        def closes_to_border(target) -> float:
-            return self.world.transform(target.global_pose, couch_table.root).y
-
         v = variable(
             NaturalLanguageWithTypeDescription,
             self.world.semantic_annotations,
@@ -255,7 +295,7 @@ class Sage10kTVStudioDemo(Sage10kAbstractDemoHSRB):
             .ordered_by(
                 v,
                 key=lambda x: closes_to_border(
-                    x.root,
+                    x.root, self.world, couch_table
                 ),
                 descending=False,
             )
@@ -314,10 +354,6 @@ class Sage10kCraftsmanLobbyDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def book_to_pick(self) -> Body:
-        @symbolic_function
-        def closes_to_border(target) -> float:
-            return self.world.transform(target.global_pose, couch_table.root).y
-
         v = variable(
             NaturalLanguageWithTypeDescription,
             self.world.semantic_annotations,
@@ -339,7 +375,7 @@ class Sage10kCraftsmanLobbyDemo(Sage10kAbstractDemoHSRB):
             .ordered_by(
                 v,
                 key=lambda x: closes_to_border(
-                    x.root,
+                    x.root, self.world, couch_table
                 ),
                 descending=False,
             )
@@ -398,10 +434,6 @@ class Sage10kTropicalWarehouse(Sage10kAbstractDemoHSRB):
 
     @property
     def target_to_pick(self) -> Body:
-
-        @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
-            return point1.euclidean_distance(point2)
 
         point_guess = Pose.from_xyz_rpy(
             x=2.19, y=7.64, z=0.35, reference_frame=self.world.root
@@ -477,10 +509,6 @@ class Sage10kVaporwave(Sage10kAbstractDemoHSRB):
 
     @property
     def target_to_pick(self) -> Body:
-
-        @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
-            return point1.euclidean_distance(point2)
 
         point_guess = Pose.from_xyz_rpy(
             x=0.468, y=4.87, z=0.528, reference_frame=self.world.root
@@ -558,10 +586,6 @@ class Sage10kEclecticResidence(Sage10kAbstractDemoHSRB):
 
     @property
     def target_to_pick(self) -> Body:
-
-        @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
-            return point1.euclidean_distance(point2)
 
         point_guess = Pose.from_xyz_rpy(
             x=2.66, y=4.35, z=0.442, reference_frame=self.world.root
@@ -676,10 +700,6 @@ class Sage10kSouthwesternStoreDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def world_P_object_of_interest(self):
-        @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
-            return point1.euclidean_distance(point2)
-
         near_pose = Pose.from_xyz_rpy(
             x=1.7, y=0.49, z=1.17, reference_frame=self.world.root
         )
@@ -794,10 +814,6 @@ class Sage10kBrutalistStoreDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def world_P_object_of_interest(self):
-        @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
-            return point1.euclidean_distance(point2)
-
         near_pose = Pose.from_xyz_rpy(
             x=8.28, y=0.35, z=0.69, reference_frame=self.world.root
         )
@@ -896,10 +912,6 @@ class Sage10kAmericanBuffetDemo(Sage10kAbstractDemoHSRB):
 
     @property
     def world_P_object_of_interest(self) -> Body:
-        @symbolic_function
-        def planar_distance(point1: Point3, point2: Point3):
-            return point1.euclidean_distance(point2)
-
         pose = Pose.from_xyz_rpy(x=4.06, y=8.64, reference_frame=self.world.root)
         v_table = variable(
             NaturalLanguageWithTypeDescription,

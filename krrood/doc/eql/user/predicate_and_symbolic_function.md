@@ -39,19 +39,35 @@ you need to check the type of a {py:class}`~krrood.entity_query_language.core.ma
 
 ## Symbolic Functions
 
-A **Symbolic Function** is a regular Python function decorated with `@symbolic_function`. When called with symbolic 
-arguments, it defers execution until the query is evaluated.
+A **Symbolic Function** computes a value from its arguments. Define it as a
+{py:class}`~krrood.entity_query_language.predicate.SymbolicFunction` subclass whose `__call__` holds the
+logic, then bind a plain function name to it with
+{py:func}`~krrood.entity_query_language.predicate.functional_form`. Called with symbolic arguments it
+defers execution until the query is evaluated. (A boolean check is a
+{py:class}`~krrood.entity_query_language.predicate.Predicate` instead — its `__call__` returns `bool`.)
 
 ```python
-from krrood.entity_query_language.predicate import symbolic_function
+from dataclasses import dataclass
+from krrood.entity_query_language.predicate import SymbolicFunction, functional_form
 
-@symbolic_function
-def is_even(n: int) -> bool:
-    return n % 2 == 0
+@dataclass(eq=False)
+class RemainingCharge(SymbolicFunction):
+    battery: float
+    capacity: float
+
+    def __call__(self) -> float:
+        return self.capacity - self.battery
+
+remaining_charge = functional_form(RemainingCharge)
 
 # Use it in a query
-query = entity(r).where(is_even(r.battery))
+query = entity(r).where(remaining_charge(r.battery, r.capacity) > 0)
 ```
+
+By default a symbolic function verbalizes as *"the remaining charge of …"* — its class name read as a
+noun. Override `_verbalization_fragment_` when that reading is wrong, and call
+{py:meth}`~krrood.entity_query_language.predicate.SymbolicCallable.preview_verbalization` to see the
+surface it produces before deciding.
 
 ```{note}
 EQL provides a built-in {py:func}`~krrood.entity_query_language.predicate.length` symbolic function for
@@ -65,16 +81,22 @@ Let's define a custom predicate and a symbolic function to find robots with spec
 ```{code-cell} ipython3
 from dataclasses import dataclass
 from krrood.entity_query_language.factories import variable, entity, an, Symbol
-from krrood.entity_query_language.predicate import symbolic_function, Predicate
+from krrood.entity_query_language.predicate import (
+    SymbolicFunction, Predicate, functional_form)
 
 @dataclass
 class ExampleRobot(Symbol):
     name: str
     load: float
 
-@symbolic_function
-def calculate_stress(load: float) -> float:
-    return load * 1.5
+@dataclass(eq=False)
+class CalculateStress(SymbolicFunction):
+    load: float
+
+    def __call__(self) -> float:
+        return self.load * 1.5
+
+calculate_stress = functional_form(CalculateStress)
 
 @dataclass(eq=False)
 class ExampleIsOverloaded(Predicate):
@@ -97,7 +119,8 @@ for robot in query.evaluate():
 ```
 
 ## API Reference
-- {py:func}`~krrood.entity_query_language.predicate.symbolic_function`
+- {py:class}`~krrood.entity_query_language.predicate.SymbolicFunction`
+- {py:func}`~krrood.entity_query_language.predicate.functional_form`
 - {py:class}`~krrood.entity_query_language.predicate.Predicate`
 - {py:class}`~krrood.entity_query_language.predicate.HasType`
 - {py:func}`~krrood.entity_query_language.predicate.length`

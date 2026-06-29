@@ -649,6 +649,16 @@ def test_display_opens_browser_outside_jupyter():
     assert opened_url.endswith(".html")
 
 
+def _path_from_file_url(url: str) -> Path:
+    """Convert a ``file://`` URL back to a local path portably. Windows ``Path.as_uri`` yields
+    ``file:///C:/...``; a naive ``file://`` strip would leave the invalid ``/C:/...``, so the URL is
+    parsed and ``url2pathname`` maps it to a real path on either platform."""
+    from urllib.parse import urlparse
+    from urllib.request import url2pathname
+
+    return Path(url2pathname(urlparse(url).path))
+
+
 def test_display_writes_full_html_page_to_temp_file():
     """The temp file written by display() is a complete HTML document."""
     from unittest.mock import patch as _patch
@@ -659,14 +669,14 @@ def test_display_writes_full_html_page_to_temp_file():
     captured_path: list[str] = []
 
     def fake_open(url: str) -> None:
-        captured_path.append(url.removeprefix("file://"))
+        captured_path.append(url)
 
     with _patch.object(pipeline_mod, "_is_ipython", return_value=False):
         with _patch("webbrowser.open", side_effect=fake_open):
             pipeline.display(an(entity(x)))
 
     assert captured_path, "webbrowser.open was not called"
-    path = Path(captured_path[0])
+    path = _path_from_file_url(captured_path[0])
     assert path.exists()
     content = path.read_text(encoding="utf-8")
     assert "<!DOCTYPE html>" in content
@@ -726,12 +736,13 @@ def test_display_html_page_has_dark_background_style():
     captured_path: list[str] = []
 
     def fake_open(url: str) -> None:
-        captured_path.append(url.removeprefix("file://"))
+        captured_path.append(url)
 
     with _patch.object(pipeline_mod, "_is_ipython", return_value=False):
         with _patch("webbrowser.open", side_effect=fake_open):
             pipeline.display(an(entity(x)))
 
-    content = Path(captured_path[0]).read_text(encoding="utf-8")
+    page = _path_from_file_url(captured_path[0])
+    content = page.read_text(encoding="utf-8")
     assert "background" in content
-    Path(captured_path[0]).unlink()
+    page.unlink()

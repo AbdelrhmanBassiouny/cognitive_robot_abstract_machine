@@ -6,7 +6,7 @@ from typing_extensions import List
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.predicate import Verbalizable
+from krrood.entity_query_language.predicate import Predicate, Verbalizable
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 
@@ -105,4 +105,20 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
             and issubclass(type_, Verbalizable)
             and type_._verbalization_fragment_.__func__
             is not Verbalizable._verbalization_fragment_.__func__
+        )
+
+    @staticmethod
+    def renders_as_predicate_clause(node: InstantiatedVariable) -> bool:
+        """
+        :param node: The instantiated variable.
+        :return: ``True`` when *node* verbalizes as a predicate CLAUSE — a :class:`Predicate` subclass
+            (a boolean operation) with a fragment — so a wrapping ``Not`` negates it inline
+            (*"is not reachable"*, *"is not even"*) rather than wrapping it in *"not (…)"*. A value
+            :class:`SymbolicFunction` reads as a noun phrase, not a clause, so it is excluded.
+        """
+        type_ = node._type_
+        return (
+            isinstance(type_, type)
+            and issubclass(type_, Predicate)
+            and InstantiatedPlanner.has_fragment(node)
         )

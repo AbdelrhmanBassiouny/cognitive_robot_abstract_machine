@@ -7,6 +7,19 @@ from typing_extensions import List, Optional, Tuple
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.variable import InstantiatedVariable
+from krrood.entity_query_language.predicate import SymbolicCallable
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
+from krrood.entity_query_language.verbalization.cardinality import (
+    Cardinality,
+    column_cardinality,
+)
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    value_function_noun,
+)
+from krrood.entity_query_language.verbalization.grammar.instantiated.planner import (
+    InstantiatedPlanner,
+)
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.operators.aggregators import Aggregator
 from krrood.entity_query_language.verbalization import morphology
@@ -43,6 +56,7 @@ from krrood.entity_query_language.verbalization.grammar.query.planner import (
     SelectionKind,
 )
 from krrood.entity_query_language.verbalization.grammar.query.ranking import (
+    ranking_number,
     ranking_surface,
     RankingRequest,
 )
@@ -203,7 +217,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         )
         subject_noun = NounPhrase(
             head=RoleFragment.for_variable(
-                subject._type_.__name__, subject, number=number
+                type_noun(subject._type_), subject, number=number
             ),
             number=number,
             definiteness=Definiteness.DEFINITE,
@@ -335,13 +349,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         """
         subject = self._tuple_subject(node, plan)
         if subject is None:
-            return self._query_body(
-                node,
-                plan,
-                self._selections.parenthesised(node._selected_variables_),
-                where_items=[self._where_clause(plan)],
-                find_header=self._set_of_header(plan),
-            )
+            return self._assemble_subjectless_ranked_set_of(node, plan)
         ranking = replace(
             plan.ranking,
             relation=self._key_relation_to(subject, plan.ranking.order_key),
@@ -349,7 +357,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         surface = ranking_surface(RankingRequest(plan=ranking))
         subject_noun = NounPhrase(
             head=RoleFragment.for_variable(
-                subject._type_.__name__, subject, number=surface.number
+                type_noun(subject._type_), subject, number=surface.number
             ),
             number=surface.number,
             definiteness=Definiteness.DEFINITE,
@@ -387,6 +395,57 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             column_list,
             where_items=[self._where_clause(plan)],
             find_header=header,
+        )
+
+    def _assemble_subjectless_ranked_set_of(self, node: SetOf, plan: QueryPlan) -> VerbalizationFragment:
+        """:return: a ranked set-of whose columns share no single variable subject. When the ranking
+        is by a SELECTED AGGREGATE and a single top row is wanted (``limit(1)``), it frames the other
+        columns by that aggregate — *"Find <columns> with the highest <aggregate>"* — so the tuple
+        reads as a sentence instead of a code-like *"the highest (a, b)"*. Truly unrelated columns, or
+        a top-*n* (``n > 1``) listing, keep the bracketed tuple (they are genuinely a tuple of rows).
+
+        >>> from dataclasses import dataclass
+        >>> from krrood.entity_query_language.predicate import (
+        ...     SymbolicFunction, functional_form)
+        >>> @dataclass(eq=False)
+        ... class Parity(SymbolicFunction):
+        ...     number: int
+        ...     def __call__(self) -> int:
+        ...         return self.number % 2
+        >>> parity = functional_form(Parity)
+        >>> numbers = variable(int, [])
+        >>> key = parity(numbers)
+        >>> total = sum(numbers)
+        >>> verbalize_expression(a(set_of(key, total).grouped_by(key)
+        ...     .ordered_by(total, descending=True).limit(1)))
+        'Find the parity of an Integer with the highest sum of Integers'
+        """
+        aggregate = self._ranked_aggregate_column(node, plan.ranking)
+        if aggregate is None or plan.ranking.limit_number != 1:
+            return self._query_body(
+                node,
+                plan,
+                self._selections.parenthesised(node._selected_variables_),
+                where_items=[self._where_clause(plan)],
+                find_header=self._set_of_header(plan),
+            )
+        columns = [
+            selection
+            for selection in node._selected_variables_
+            if selection._id_ != aggregate._id_
+        ]
+        modifier = self._highest_aggregate_modifier(aggregate, plan.ranking.direction)
+        body = (
+            PhraseFragment(parts=[self._selections.prose(columns), modifier])
+            if columns
+            else modifier
+        )
+        return self._query_body(
+            node,
+            plan,
+            body,
+            where_items=[self._where_clause(plan)],
+            find_header=Keywords.FIND.as_fragment(),
         )
 
     def _tuple_subject(self, node: SetOf, plan: QueryPlan) -> Optional[Variable]:
@@ -507,18 +566,49 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 where_items=[self._where_clause(plan)],
                 find_header=self._sentence_initial(Keywords.REPORT.as_fragment()),
             )
-        selection = PhraseFragment(
-            parts=[
-                GroupingPhrases.ALL.as_fragment(),
-                self._selections.prose(report.columns, number=GrammaticalNumber.PLURAL),
-            ]
-        )
         return self._query_body(
             node,
             plan,
-            selection,
+            self._grouped_columns(report.columns),
             where_items=[self._where_clause(plan)],
             find_header=self._for_each_header(report.group_keys),
+        )
+
+    def _grouped_columns(
+        self, columns: List[SymbolicExpression]
+    ) -> VerbalizationFragment:
+        """:return: the reported columns rendered by their cardinality — a scalar column reads
+        singular (*"the total of the revenue"*), a collection column as a quantified plural (*"all
+        the tasks"*); a mix joins the two. *"all"* is used only for the genuinely many-valued columns
+        (a collection in the path), not as a blanket prefix on every grouped column.
+
+        >>> employee = variable(Employee, [])
+        >>> verbalize_expression(a(set_of(employee.salary).grouped_by(employee.department)))
+        'For each department, report the salary of an Employee'
+
+        >>> worker = variable(Worker, [])
+        >>> verbalize_expression(a(set_of(worker.tasks).grouped_by(worker.name)))
+        'For each name, report all the tasks of a Worker'
+        """
+        by_cardinality = [(column, column_cardinality(column)) for column in columns]
+        one = [column for column, card in by_cardinality if card is Cardinality.ONE]
+        many = [column for column, card in by_cardinality if card is Cardinality.MANY]
+        parts: List[VerbalizationFragment] = []
+        if one:
+            parts.append(self._selections.prose(one, number=GrammaticalNumber.SINGULAR))
+        if many:
+            parts.append(
+                PhraseFragment(
+                    parts=[
+                        GroupingPhrases.ALL.as_fragment(),
+                        self._selections.prose(many, number=GrammaticalNumber.PLURAL),
+                    ]
+                )
+            )
+        return (
+            parts[0]
+            if len(parts) == 1
+            else oxford_comma(parts, Conjunctions.AND.as_fragment())
         )
 
     def _distinct_keys(self, keys: List[SymbolicExpression]) -> VerbalizationFragment:
@@ -579,6 +669,18 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         if isinstance(key, Attribute):
             return RoleFragment.for_attribute(
                 key._owner_class_, key._attribute_name_, number=number
+            )
+        if (
+            isinstance(key, InstantiatedVariable)
+            and isinstance(key._type_, type)
+            and issubclass(key._type_, SymbolicCallable)
+        ):
+            # A symbolic-operation group key is named by the value it computes ("quarter"), a bare
+            # label like an attribute key, not the raw callable.
+            return RoleFragment.for_type(
+                key._type_,
+                number=number,
+                text=value_function_noun(key._type_.__name__),
             )
         return RoleFragment.for_type(key._type_, number=number)
 
@@ -647,7 +749,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         'Report Employees ordered by their salaries from lowest to highest'
         """
         if plan.ranking is not None:
-            return ranking_surface(RankingRequest(plan=plan.ranking)).number
+            return ranking_number(plan.ranking)
         if plan.report is not None and plan.report.kind in (
             ReportKind.ORDERING,
             ReportKind.GROUPING,
@@ -712,8 +814,29 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         >>> employee = variable(Employee, [])
         >>> verbalize_expression(entity(employee).ordered_by(employee.salary, descending=True).limit(3))
         'Find the top three Employees by salary'
+
+        A chain selection (``p.period``) ranked so the key trails as a modifier renders the chain as
+        its own noun, with the ranking modifier attached:
+
+        >>> p = variable(BankTransaction, [])
+        >>> verbalize_expression(an(entity(p.amount_details).ordered_by(
+        ...     p.booking_date, descending=True).limit(1)))
+        'Find the amount_details of a BankTransaction with the highest booking_date'
         """
-        surface = ranking_surface(RankingRequest(plan=plan.ranking))
+        ranking = plan.ranking
+        # A single result whose key trails as a "with the highest …" / "with the latest …" modifier:
+        # for a chain selection (p.period) render the chain as its own noun and attach the modifier,
+        # rather than the bare type word the variable form below uses. The head is rendered before the
+        # ranking surface so the root's first mention is here and the key pronominalises back to it.
+        key_trails = ranking.limit_number == 1 and ranking.relation in (
+            RankingKeyRelation.ATTRIBUTE,
+            RankingKeyRelation.SIBLING,
+        )
+        if not isinstance(variable, Variable) and key_trails:
+            head = self.context.child(variable)
+            surface = ranking_surface(RankingRequest(plan=ranking, context=self.context))
+            return PhraseFragment(parts=[head, *surface.modifiers])
+        surface = ranking_surface(RankingRequest(plan=ranking, context=self.context))
         return NounPhrase(
             head=RoleFragment.for_variable(
                 plan.selected_type, variable, number=surface.number
@@ -772,6 +895,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         plan = self.plan(entity)
         variable = entity.selected_variable
         definiteness = Definiteness.UNIQUE if plan.is_the else Definiteness.INDEFINITE
+        # The caller's number flows through: an aggregated population reads plural ("the number of
+        # periods such that ...") while an ordinary nested noun stays singular ("a Worker whose ...").
+        number = self.context.options.number
 
         modifiers: List[VerbalizationFragment] = []
         rendered = ClauseComposer(self.context).restriction(plan)
@@ -782,17 +908,20 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             if rendered.whose is not None:
                 modifiers.append(rendered.whose)
             if rendered.residual is not None:
+                # A plural population reads "... such that ..."; a singular nested noun reads "where".
+                connective = (
+                    Keywords.SUCH_THAT if number is GrammaticalNumber.PLURAL else Keywords.WHERE
+                )
                 modifiers.append(
-                    PhraseFragment(
-                        parts=[Keywords.WHERE.as_fragment(), rendered.residual]
-                    )
+                    PhraseFragment(parts=[connective.as_fragment(), rendered.residual])
                 )
 
         # A referring noun phrase is the subject of its own modifiers (the coreference pass infers
         # this from the modifiers slot), so no scope marker is emitted here.
         return NounPhrase(
-            head=RoleFragment.for_variable(plan.selected_type, variable),
+            head=RoleFragment.for_variable(plan.selected_type, variable, number=number),
             definiteness=definiteness,
+            number=number,
             referent_id=subject_referent_id(variable),
             modifiers=modifiers,
         )
