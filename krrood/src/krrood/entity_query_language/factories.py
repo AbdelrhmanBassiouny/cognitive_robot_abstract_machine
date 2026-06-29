@@ -9,7 +9,7 @@ import operator
 from inspect import isclass
 from uuid import UUID
 
-from typing_extensions import Iterable, List, overload
+from typing_extensions import Iterable, List, overload, TYPE_CHECKING
 
 from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
@@ -68,6 +68,10 @@ from krrood.entity_query_language.rules.conclusion_selector import (
 )
 from krrood.entity_query_language.utils import is_iterable
 from krrood.symbol_graph.symbol_graph import Symbol, SymbolGraph
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.causality.causal_model import CausalModel
+    from krrood.entity_query_language.questions.why import Why
 
 ConditionType = Union[SymbolicExpression, bool, Predicate, TruthValueOperator]
 """
@@ -854,3 +858,29 @@ def is_class(obj: Any) -> bool:
 @symbolic_function
 def type_(obj: Any) -> Type:
     return obj.__class__
+
+
+# %% Question Operators
+
+
+def why(target: Union[T, Query], *, causal_model: Optional[CausalModel] = None) -> Why:
+    """
+    Ask why the bindings produced by *target* were inferred.
+
+    Evaluating the returned operator yields, for each instance *target* produces, the cause set
+    that explains its inference (the satisfied conditions and their bindings).
+
+    :param target: The expression whose bindings are to be explained; wrapped in an entity when it
+        is not already a query.
+    :param causal_model: The causal model consulted for explanations; defaults to introspecting
+        inference explanations.
+    :return: The ``Why`` operator over *target*.
+    """
+    from krrood.entity_query_language.questions.why import Why
+
+    child = target if isinstance(target, Query) else entity(target)
+    explained_proposition = child.selected_variable if isinstance(child, Entity) else None
+    keyword_arguments = {"explained_proposition": explained_proposition}
+    if causal_model is not None:
+        keyword_arguments["causal_model"] = causal_model
+    return Why(child, **keyword_arguments)
