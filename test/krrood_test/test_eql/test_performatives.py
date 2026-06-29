@@ -27,11 +27,9 @@ from krrood.entity_query_language.performatives import (
     Warn,
 )
 from krrood.entity_query_language.verbalization.example_domain import (
-    Department,
     IsReachable,
     Location,
-    StaffMember,
-    WorksIn,
+    Robot,
 )
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.exceptions import DataclassException
@@ -55,8 +53,8 @@ def _reachable():
     return IsReachable(variable(Location, []))
 
 
-def _works_in():
-    return WorksIn(variable(StaffMember, []), variable(Department, []))
+def _operational():
+    return variable(Robot, []).operational
 
 
 # ── atomic acts frame the EQL description with their force ────────────────────────
@@ -95,34 +93,34 @@ def test_warn_without_a_suggestion_omits_it():
 
 
 def test_sequential_interleaves_then():
-    text = Sequential([Inform(_reachable()), Inform(_works_in())]).verbalize()
+    text = Sequential([Inform(_reachable()), Inform(_operational())]).verbalize()
     assert text == (
-        "a Location is reachable, then a StaffMember works in a Department"
+        "a Location is reachable, then a Robot is operational"
     )
 
 
 def test_parallel_coordinates_with_and_and_marks_concurrency():
-    text = Parallel([Inform(_reachable()), Inform(_works_in())]).verbalize()
+    text = Parallel([Inform(_reachable()), Inform(_operational())]).verbalize()
     assert text.endswith(" simultaneously")
     assert " and " in text
 
 
 def test_parallel_of_three_uses_oxford_comma():
     text = Parallel(
-        [Inform(_reachable()), Inform(_works_in()), Inform(_reachable())]
+        [Inform(_reachable()), Inform(_operational()), Inform(_reachable())]
     ).verbalize()
     assert ", and " in text                              # the And-rule's Oxford comma, reused
     assert text.endswith(" simultaneously")
 
 
 def test_try_in_order_is_an_ordered_fallback():
-    text = TryInOrder([Inform(_reachable()), Inform(_works_in())]).verbalize()
+    text = TryInOrder([Inform(_reachable()), Inform(_operational())]).verbalize()
     assert text.startswith("try ")
     assert ", otherwise " in text
 
 
 def test_try_all_is_a_parallel_disjunction():
-    text = TryAll([Inform(_reachable()), Inform(_works_in())]).verbalize()
+    text = TryAll([Inform(_reachable()), Inform(_operational())]).verbalize()
     assert text.startswith("try ")
     assert " or " in text
     assert text.endswith(" simultaneously")

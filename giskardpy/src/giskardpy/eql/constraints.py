@@ -12,9 +12,16 @@ inequality constraint -- the very :class:`~krrood.symbolic_math.symbolic_math.Sc
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import krrood.symbolic_math.symbolic_math as sm
+from krrood.entity_query_language.verbalization.fragments.base import (
+    PhraseFragment,
+    VerbalizationFragment,
+    WordFragment,
+)
+from krrood.entity_query_language.verbalization.fragments.features import Separator
 from giskardpy.qp.constraint_collection import ConstraintCollection
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 
@@ -81,3 +88,58 @@ class MinDistanceConstraint:
             quadratic_weight=self.quadratic_weight,
         )
         return collection
+
+
+@dataclass
+class GiskardGoal(ABC):
+    """A declarative motion goal: it both verbalizes and compiles into giskard QP constraints.
+
+    This is the content an ``Achieve`` speech act drives -- the bridge that lets a robot *state* its goal
+    in natural language and *solve* it through the same object.
+    """
+
+    @abstractmethod
+    def as_fragment(self) -> VerbalizationFragment:
+        """:return: the goal as a verbalization fragment (the proposition the act asserts)."""
+
+    @abstractmethod
+    def compile_into(self, collection: ConstraintCollection) -> ConstraintCollection:
+        """Add this goal's constraints to *collection*.
+
+        :return: the same collection, for chaining.
+        """
+
+
+@dataclass
+class MinClearance(GiskardGoal):
+    """Keep two bodies at least a minimum distance apart -- a *"keep clear"* motion goal."""
+
+    body_a: str
+    """The name of the first body."""
+
+    body_b: str
+    """The name of the second body."""
+
+    minimum: float
+    """The minimum allowed distance between the bodies, in metres."""
+
+    def as_fragment(self) -> VerbalizationFragment:
+        return PhraseFragment(
+            parts=[
+                WordFragment(text="the distance between"),
+                WordFragment(text=self.body_a),
+                WordFragment(text="and"),
+                WordFragment(text=self.body_b),
+                WordFragment(text="is at least"),
+                WordFragment(text=f"{self.minimum} metres"),
+            ],
+            separator=Separator.SPACE,
+        )
+
+    def compile_into(self, collection: ConstraintCollection) -> ConstraintCollection:
+        quantity = MinDistance(
+            PosedEntity.symbolic(self.body_a), PosedEntity.symbolic(self.body_b)
+        )
+        return MinDistanceConstraint(quantity, lower_bound=self.minimum).compile_into(
+            collection
+        )
