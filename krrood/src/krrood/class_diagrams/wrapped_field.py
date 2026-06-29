@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import inspect
 import logging
+import re
 import sys
 from collections.abc import Sequence
 from copy import copy
@@ -11,7 +12,7 @@ from datetime import datetime
 from functools import cached_property, lru_cache
 from inspect import isclass
 from types import NoneType
-from typing import Generic
+from typing import Generic, Any
 
 from typing_extensions import (
     get_origin,
@@ -26,7 +27,7 @@ from typing_extensions import (
 
 from krrood.class_diagrams.exceptions import MissingContainedTypeOfContainer
 from krrood.class_diagrams.utils import (
-    behaves_like_a_built_in_class,
+    behaves_like_a_built_in_type,
     common_base_class,
     get_type_hints_of_object,
 )
@@ -101,6 +102,33 @@ class WrappedField:
     def __repr__(self):
         return f"{module_and_class_name(self.clazz.clazz)}.{self.field.name}"
 
+    def type_at_definer(self, defining_base: type) -> Any:
+        """Return the type annotation of this field as declared on defining_base.
+
+        Falls back to raw ``__annotations__`` inspection when ``get_type_hints``
+        raises ``TypeError`` (e.g. when SubClassSafeGeneric injects a narrowed
+        TypeVar that confuses the resolver).
+
+        :param defining_base: The ancestor class whose declaration is authoritative.
+        :return: The resolved type annotation, or ``self.field.type`` as a fallback.
+        """
+        try:
+            return get_type_hints_of_object(defining_base).get(
+                self.field.name, self.field.type
+            )
+        except TypeError:
+            raw = vars(defining_base).get("__annotations__", {}).get(self.field.name)
+            if raw is not None and not isinstance(raw, str):
+                return raw
+            if isinstance(raw, str):
+                module = inspect.getmodule(defining_base)
+                globalns = getattr(module, "__dict__", {}) if module is not None else {}
+                try:
+                    return eval(raw, globalns)  # noqa: S307
+                except Exception:
+                    pass
+            return self.field.type
+
     @cached_property
     def resolved_type(self):
         """
@@ -116,12 +144,7 @@ class WrappedField:
         local_namespace = self._build_initial_namespace()
 
         # If it's a specialized generic, use its origin for get_type_hints
-        clazz = self.clazz.clazz
-        # If the class itself is a specialized generic (typing.GenericAlias),
-        # get_type_hints will fail. We use the origin class instead.
-        origin = get_origin(clazz)
-        if origin is not None and not isinstance(clazz, type):
-            clazz = origin
+        clazz = self.clazz.class_to_introspect
 
         return get_type_hints_of_object(
             clazz, namespace=tuple(local_namespace.items())
@@ -134,7 +157,14 @@ class WrappedField:
         class_diagram = self.clazz._class_diagram
         if class_diagram is None:
             return {}
-        return {cls.clazz.__name__: cls.clazz for cls in class_diagram.wrapped_classes}
+        namespace = {}
+        for cls in class_diagram.wrapped_classes:
+            # Only add to namespace if it's a real type.
+            # Specialized generics (which have _GenericAlias as clazz) are skipped
+            # to avoid shadowing the origin classes.
+            if isinstance(cls.clazz, type):
+                namespace[cls.name] = cls.clazz
+        return namespace
 
     def _find_class_by_name(self, class_name: str) -> Type:
         """
@@ -166,7 +196,7 @@ class WrappedField:
     @cached_property
     def is_collection_of_builtins(self):
         return self.is_container and all(
-            behaves_like_a_built_in_class(field_type)
+            behaves_like_a_built_in_type(field_type)
             for field_type in get_args(self.resolved_type)
         )
 
@@ -188,7 +218,20 @@ class WrappedField:
             return get_args(self.resolved_type)[0]
         else:
             try:
-                return get_args(self.resolved_type)[0]
+                args = get_args(self.resolved_type)
+                if len(args) > 1:
+                    # TypeVarTuple expansion produces list[A, B, ...] — use the LCA
+                    lowest_common_base_class = common_base_class(list(args))
+                    if lowest_common_base_class is not None:
+                        return lowest_common_base_class
+                arg = args[0]
+                # Explicit Union contained type e.g. list[Union[A, B]] — resolve to LCA
+                if get_origin(arg) is Union:
+                    non_none = [t for t in get_args(arg) if t is not NoneType]
+                    lowest_common_base_class = common_base_class(non_none)
+                    if lowest_common_base_class is not None:
+                        return lowest_common_base_class
+                return arg
             except IndexError:
                 if self.resolved_type is Type:
                     return self.resolved_type
@@ -240,12 +283,37 @@ class WrappedField:
 
     @cached_property
     def is_role_taker(self) -> bool:
-        return (
-            self.is_many_to_one_relationship
-            and not self.is_optional
-            and self.field.default == MISSING
-            and self.field.default_factory == MISSING
-        )
+        # Imported lazily: RoleTakerField lives with the Role class, and importing it at module
+        # level would close an import cycle through symbol_graph -> class_diagram -> wrapped_field.
+        from krrood.patterns.role import RoleTakerField
+
+        return isinstance(self.field, RoleTakerField)
+
+    @property
+    def type_name(self) -> str:
+        """
+        Return the string representation of the field's type.
+        """
+        if self.resolved_type is NoneType:
+            return "None"
+
+        # For generic types like List[Person], str() often includes the full path of the generic arguments.
+        # We use a regex to strip module paths and keep only the class names.
+        if get_origin(self.resolved_type) is not None:
+            res = str(self.resolved_type)
+            # Strip prefixes like 'typing.', 'test.pkg.', etc.
+            return re.sub(r"(\w+\.)+(\w+)", r"\2", res)
+
+        if hasattr(self.resolved_type, "__name__"):
+            return self.resolved_type.__name__
+        return re.sub(r"(\w+\.)+(\w+)", r"\2", str(self.resolved_type))
+
+    @property
+    def is_required(self) -> bool:
+        """
+        Check if the field is required (has no default or default_factory).
+        """
+        return self.field.default is MISSING and self.field.default_factory is MISSING
 
     @cached_property
     def is_instantiation_of_generic_class(self) -> bool:
@@ -260,7 +328,10 @@ class WrappedField:
             return False
         if not isclass(origin) or not issubclass(origin, Generic):
             return False
-        return len(get_args(self.type_endpoint)) > 0
+        return (
+            len(get_args(self.type_endpoint)) > 0
+            and len(self.type_endpoint.__parameters__) == 0
+        )
 
     @cached_property
     def is_underspecified_generic(self) -> bool:
@@ -270,11 +341,13 @@ class WrappedField:
 
         :return: True if the type hint is an underspecified generic class.
         """
-        # If it's a class and it inherits from Generic but has no arguments
+        # A class is underspecified only if it still has free TypeVar parameters.
+        # Concrete subclasses of generic parents (e.g. HSRBMobileBase(MobileBase, HasTorso[HSRBTorso]))
+        # are subclasses of Generic but have __parameters__ == (), so they must not be skipped.
         if inspect.isclass(self.type_endpoint) and issubclass(
             self.type_endpoint, Generic
         ):
-            return True
+            return len(getattr(self.type_endpoint, "__parameters__", ())) > 0
 
         # Also check if it's a GenericAlias with empty args (though usually origin is used then)
         origin = get_origin(self.type_endpoint)

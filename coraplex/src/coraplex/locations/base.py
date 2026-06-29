@@ -15,9 +15,10 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Noun,
 )
 from coraplex.datastructures.dataclasses import Context
-from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
-    VizMarkerPublisher,
-)
+try:
+    from semantic_digital_twin.adapters.ros.visualization.viz_marker import VizMarkerPublisher
+except ImportError:
+    VizMarkerPublisher = None
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
     AllowSelfCollisions,

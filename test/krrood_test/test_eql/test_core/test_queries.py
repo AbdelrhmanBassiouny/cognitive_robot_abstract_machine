@@ -49,6 +49,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Preposition,
     Verb,
 )
+from krrood.patterns.role_predicates import IsSameEntity
 from krrood.entity_query_language.query.quantifiers import (
     ResultQuantificationConstraint,
     Exactly,
@@ -697,6 +698,25 @@ def test_select_predicate(handles_and_containers_world):
     assert (
         handle1.body.name == "Handle1"
     ), "The generated handle should have the expected name."
+
+
+def test_is_same_entity_predicate_in_query(handles_and_containers_world):
+    """
+    ``IsSameEntity`` is a regular EQL predicate: used symbolically in a ``where`` clause it
+    is bound and evaluated by the query engine like any other predicate. Only the literal
+    target itself is the same entity as the target, so exactly one solution is returned.
+    """
+    world = handles_and_containers_world
+    target = world.bodies[0]
+
+    body = variable(type_=Body, domain=world.bodies)
+    same = IsSameEntity(body, target)
+    query = the(entity(same).where(same))
+
+    matches = query.tolist()
+    assert len(matches) == 1
+    assert isinstance(matches[0], IsSameEntity)
+    assert matches[0].entity_1 is target
 
 
 def test_literal_predicate(handles_and_containers_world):
