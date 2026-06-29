@@ -1,10 +1,10 @@
 """
-Demo + tests for the performative (speech-act) layer.
+Demo + tests for the framework-agnostic performative (speech-act) layer.
 
-A performative applies a force (find / achieve / observe / inform / explain / warn) to an EQL description,
-and verbalizes as a natural-language utterance; compositions (sequential / parallel / try) join their
-children. These tests assert the layer's contribution -- the speech-act framing -- on top of the existing
-EQL verbalization, over the verbalization example domain.
+A performative applies a force (find / inform / explain / warn) to an EQL description and verbalizes via
+real fragments; compositions (sequential / parallel / try) join their children with the verbalization
+engine's own coordination (``oxford_comma`` / connectives), not string concatenation. Motion acts
+(``Achieve`` / ``Observe``) live in giskardpy and are tested there.
 """
 
 from __future__ import annotations
@@ -13,14 +13,12 @@ from dataclasses import dataclass
 
 import pytest
 
-from krrood.entity_query_language.factories import an, entity, variable
+from krrood.entity_query_language.factories import a, an, entity, variable
 from krrood.entity_query_language.performatives import (
-    Achieve,
     Composition,
     Explain,
     Find,
     Inform,
-    Observe,
     Parallel,
     Performable,
     Sequential,
@@ -65,21 +63,10 @@ def _works_in():
 
 
 def test_find_is_the_query_speech_act_and_evaluates():
-    query = an(entity(location := variable(Location, [])).where(IsReachable(location)))
+    query = a(entity(location := variable(Location, [])).where(IsReachable(location)))
     find = Find(query)
     assert find.verbalize() == verbalize_expression(query)   # the query already opens with "Find …"
     assert isinstance(find.perform(), list)                  # find evaluates (empty domain → [])
-
-
-def test_achieve_frames_the_description():
-    reachable = _reachable()
-    assert Achieve(reachable).verbalize() == f"Achieve that {verbalize_expression(reachable)}"
-    assert "reachable" in Achieve(reachable).verbalize()
-
-
-def test_observe_frames_the_description():
-    reachable = _reachable()
-    assert Observe(reachable).verbalize() == f"Observe whether {verbalize_expression(reachable)}"
 
 
 def test_inform_asserts_the_proposition():
@@ -104,48 +91,55 @@ def test_warn_without_a_suggestion_omits_it():
     assert Warn(situation="something is off").verbalize() == "Warning: something is off"
 
 
-# ── compositions join their children with connectives ────────────────────────────
+# ── compositions join their children with the engine's coordination ──────────────
 
 
-def test_sequential_joins_with_then():
-    sequence = Sequential([Achieve(_reachable()), Achieve(_works_in())])
-    text = sequence.verbalize()
-    assert ", then " in text
-    assert text.startswith("Achieve that")
-
-
-def test_parallel_marks_concurrency():
-    assert Parallel([Achieve(_reachable()), Observe(_works_in())]).verbalize().endswith(
-        "simultaneously"
+def test_sequential_interleaves_then():
+    text = Sequential([Inform(_reachable()), Inform(_works_in())]).verbalize()
+    assert text == (
+        "a Location is reachable, then a StaffMember works in a Department"
     )
 
 
+def test_parallel_coordinates_with_and_and_marks_concurrency():
+    text = Parallel([Inform(_reachable()), Inform(_works_in())]).verbalize()
+    assert text.endswith(" simultaneously")
+    assert " and " in text
+
+
+def test_parallel_of_three_uses_oxford_comma():
+    text = Parallel(
+        [Inform(_reachable()), Inform(_works_in()), Inform(_reachable())]
+    ).verbalize()
+    assert ", and " in text                              # the And-rule's Oxford comma, reused
+    assert text.endswith(" simultaneously")
+
+
 def test_try_in_order_is_an_ordered_fallback():
-    text = TryInOrder([Achieve(_reachable()), Achieve(_works_in())]).verbalize()
+    text = TryInOrder([Inform(_reachable()), Inform(_works_in())]).verbalize()
     assert text.startswith("try ")
-    assert "; otherwise " in text
+    assert ", otherwise " in text
 
 
 def test_try_all_is_a_parallel_disjunction():
-    text = TryAll([Achieve(_reachable()), Achieve(_works_in())]).verbalize()
+    text = TryAll([Inform(_reachable()), Inform(_works_in())]).verbalize()
     assert text.startswith("try ")
-    assert text.endswith(" in parallel")
+    assert " or " in text
+    assert text.endswith(" simultaneously")
 
 
-# ── the shared protocol + honest execution boundaries ────────────────────────────
+# ── the shared interface + honest execution boundaries ───────────────────────────
 
 
 def test_acts_and_compositions_conform_to_performable():
     assert isinstance(Find(an(entity(variable(Location, [])))), Performable)
-    assert isinstance(Achieve(_reachable()), Performable)
+    assert isinstance(Inform(_reachable()), Performable)
     assert isinstance(Warn(situation="x"), Performable)
-    assert isinstance(Sequential([Achieve(_reachable())]), Performable)
+    assert isinstance(Sequential([Inform(_reachable())]), Performable)
 
 
-def test_motion_and_composition_execution_is_delegated_to_backends():
+def test_unsupported_execution_is_delegated_not_faked():
     with pytest.raises(NotImplementedError):
-        Achieve(_reachable()).perform()
+        Explain(_reachable()).perform()
     with pytest.raises(NotImplementedError):
-        Observe(_reachable()).perform()
-    with pytest.raises(NotImplementedError):
-        Sequential([Achieve(_reachable())]).perform()
+        Sequential([Inform(_reachable())]).perform()

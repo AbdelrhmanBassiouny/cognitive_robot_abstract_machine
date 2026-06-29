@@ -2,18 +2,19 @@
 Performatives -- speech acts over EQL descriptions.
 
 A *performative* applies an illocutionary force (Searle 1976; cf. the FIPA-ACL / KQML performatives) to a
-propositional *content* expressed as an EQL :class:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`.
-The force decides what is *done* with the description -- found, achieved, observed, explained, asserted,
-warned -- while the description stays a reusable, verbalizable query.
+propositional *content* expressed as an EQL
+:class:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`. The force decides what is
+*done* with the description -- found, asserted, explained, warned -- while the description stays a reusable,
+verbalizable query.
 
-Atomic acts (:class:`Performative`) and their compositions (:class:`Composition`: sequential / parallel /
-try) share the :class:`Performable` interface, so a plan is a tree of speech acts that both executes
-(:meth:`Performable.perform`) and verbalizes (:meth:`Performable.verbalize`).
+This module owns the **framework-agnostic** layer: the :class:`Performable` interface, the atomic acts that
+need only EQL evaluation / verbalization / exceptions (:class:`Find`, :class:`Inform`, :class:`Explain`,
+:class:`Warn`), and the :class:`Composition` combinators. Acts that need a solver or a robot -- ``Achieve``,
+``Observe``, ``Perform`` -- live in the framework that owns that capability (giskardpy, coraplex) and
+subclass :class:`Performative` there, declaring their own directive opener via :meth:`Performative.framed_fragment`.
 
-..note:: This module owns the *specification* and *verbalization* of acts. Executing a motion act
-    (:class:`Achieve`/:class:`Observe`) needs a solver/monitor backend, and executing a composition needs
-    the plan layer; those ``perform`` methods raise :class:`NotImplementedError` here until a backend
-    provides them.
+Every act renders through real verbalization **fragments** (a single :meth:`Performable.as_fragment` tree),
+so coordination and punctuation are produced by the verbalization engine rather than string concatenation.
 """
 
 from __future__ import annotations
@@ -21,38 +22,73 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Any, List, Protocol, runtime_checkable
+from typing_extensions import Any, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
+from krrood.entity_query_language.verbalization.fragments.base import (
+    PhraseFragment,
+    VerbalizationFragment,
+    WordFragment,
+    flatten_fragment_to_plain_text,
+    oxford_comma,
+)
+from krrood.entity_query_language.verbalization.fragments.features import Separator
+from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Conjunctions,
+    PerformativeDirective,
+    PlanConnectives,
+)
+from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 from krrood.exceptions import DataclassException
 
 
-@runtime_checkable
-class Performable(Protocol):
-    """A speech act that can be performed and verbalized: an atomic act or a composition of them."""
-
-    def perform(self) -> Any:
-        """Carry out the act (evaluate / solve / monitor / compose) and return its result."""
-
-    def verbalize(self) -> str:
-        """:return: the act rendered as a natural-language utterance."""
-
-
 @dataclass
-class Performative(ABC):
-    """An atomic speech act applied to an EQL description."""
+class Performable(ABC):
+    """A speech act: something that can be performed and rendered as a verbalization fragment.
 
-    content: SymbolicExpression
-    """The propositional content -- the EQL description the force is applied to."""
+    Atomic acts (:class:`Performative`), warnings (:class:`Warn`), and compositions
+    (:class:`Composition`) all share this interface, so a plan is a tree of performables that both
+    executes (:meth:`perform`) and verbalizes (:meth:`verbalize`).
+    """
 
     @abstractmethod
     def perform(self) -> Any:
         """Carry out the act and return its result."""
 
     @abstractmethod
+    def as_fragment(self) -> VerbalizationFragment:
+        """:return: the act as a verbalization fragment, composed from its content and its force."""
+
     def verbalize(self) -> str:
-        """:return: the act as a natural-language utterance."""
+        """:return: the act rendered as a natural-language utterance."""
+        return flatten_fragment_to_plain_text(self.as_fragment())
+
+
+@dataclass
+class Performative(Performable, ABC):
+    """An atomic speech act applied to an EQL description."""
+
+    content: SymbolicExpression
+    """The propositional content -- the EQL description the force is applied to."""
+
+    def framed_fragment(
+        self, opener: VocabEnum, introducer: VocabEnum
+    ) -> VerbalizationFragment:
+        """Frame the content with a directive opener and a clause introducer.
+
+        :param opener: The illocutionary-force verb (e.g. ``PerformativeDirective.ACHIEVE``).
+        :param introducer: The clause introducer (e.g. ``PlanConnectives.THAT``).
+        :return: A fragment reading *"<opener> <introducer> <content>"* (e.g. *"Achieve that …"*).
+        """
+        return PhraseFragment(
+            parts=[
+                opener.as_fragment(),
+                introducer.as_fragment(),
+                fragment_for_expression(self.content),
+            ],
+            separator=Separator.SPACE,
+        )
 
 
 @dataclass
@@ -62,34 +98,8 @@ class Find(Performative):
     def perform(self) -> List[Any]:
         return list(self.content.evaluate())
 
-    def verbalize(self) -> str:
-        return verbalize_expression(self.content)
-
-
-@dataclass
-class Achieve(Performative):
-    """Bring about the described state -- a motion goal compiled to a solver by a backend."""
-
-    def perform(self) -> Any:
-        raise NotImplementedError(
-            "Achieve is executed by a motion/solver backend (see the giskard prototype)."
-        )
-
-    def verbalize(self) -> str:
-        return f"Achieve that {verbalize_expression(self.content)}"
-
-
-@dataclass
-class Observe(Performative):
-    """Monitor whether the described condition holds -- a monitor provided by a backend."""
-
-    def perform(self) -> Any:
-        raise NotImplementedError(
-            "Observe is executed by a monitor backend (see the giskard prototype)."
-        )
-
-    def verbalize(self) -> str:
-        return f"Observe whether {verbalize_expression(self.content)}"
+    def as_fragment(self) -> VerbalizationFragment:
+        return fragment_for_expression(self.content)
 
 
 @dataclass
@@ -99,8 +109,8 @@ class Inform(Performative):
     def perform(self) -> str:
         return self.verbalize()
 
-    def verbalize(self) -> str:
-        return verbalize_expression(self.content)
+    def as_fragment(self) -> VerbalizationFragment:
+        return fragment_for_expression(self.content)
 
 
 @dataclass
@@ -112,17 +122,16 @@ class Explain(Performative):
             "Explain is provided by the EQL explanation machinery (future integration)."
         )
 
-    def verbalize(self) -> str:
-        return f"Explain why {verbalize_expression(self.content)}"
+    def as_fragment(self) -> VerbalizationFragment:
+        return self.framed_fragment(PerformativeDirective.EXPLAIN, PlanConnectives.WHY)
 
 
 @dataclass
-class Warn:
+class Warn(Performable):
     """A warning: an assertion of an illegal state plus a suggested remedy.
 
-    Conforms to :class:`Performable` without an EQL content: a warning's situation and remedy are the very
-    things a :class:`~krrood.exceptions.DataclassException` already carries, so :meth:`of` lifts any such
-    exception into the speech-act layer.
+    Carries the situation and remedy a :class:`~krrood.exceptions.DataclassException` already holds, so
+    :meth:`of` lifts any such exception into the speech-act layer.
     """
 
     situation: str
@@ -142,14 +151,22 @@ class Warn:
     def perform(self) -> "Warn":
         return self
 
-    def verbalize(self) -> str:
-        if not self.suggestion:
-            return f"Warning: {self.situation}"
-        return f"Warning: {self.situation} Suggestion: {self.suggestion}"
+    def as_fragment(self) -> VerbalizationFragment:
+        parts: List[VerbalizationFragment] = [
+            PerformativeDirective.WARNING.as_fragment(),
+            WordFragment(text=f": {self.situation}"),
+        ]
+        if self.suggestion:
+            parts.append(
+                WordFragment(
+                    text=f" {PerformativeDirective.SUGGESTION.text}: {self.suggestion}"
+                )
+            )
+        return PhraseFragment(parts=parts, separator=Separator.NONE)
 
 
 @dataclass
-class Composition(ABC):
+class Composition(Performable, ABC):
     """A composite act: a control structure over child performables (a Searle commissive).
 
     ..note:: Verbalization is owned here; *executing* a composition (ordering, parallelism, failure
@@ -159,45 +176,88 @@ class Composition(ABC):
     children: List[Performable]
     """The performables this composition coordinates."""
 
-    @abstractmethod
-    def verbalize(self) -> str:
-        """:return: the composition as a natural-language utterance joining its children."""
-
     def perform(self) -> Any:
         raise NotImplementedError(
             "Executing a composition is provided by the coraplex plan layer."
         )
 
+    def _interleave(
+        self, connective: PlanConnectives, lead: Optional[VocabEnum] = None
+    ) -> VerbalizationFragment:
+        """Join the children, placing *connective* before every child after the first.
+
+        :param connective: The word inserted between steps (e.g. ``PlanConnectives.THEN``).
+        :param lead: An optional opening word placed before the first child (e.g. ``PlanConnectives.TRY``).
+        :return: A fragment reading *"[lead] A, <connective> B, <connective> C"*.
+        """
+        head, *rest = [child.as_fragment() for child in self.children]
+        parts: List[VerbalizationFragment] = []
+        if lead is not None:
+            parts.extend([lead.as_fragment(), WordFragment(text=Separator.SPACE)])
+        parts.append(head)
+        for fragment in rest:
+            parts.append(WordFragment(text=f"{Separator.COMMA}{connective.text} "))
+            parts.append(fragment)
+        return PhraseFragment(parts=parts, separator=Separator.NONE)
+
+    def _coordinate(
+        self,
+        conjunction: Conjunctions,
+        lead: Optional[VocabEnum] = None,
+        tail: Optional[VocabEnum] = None,
+    ) -> VerbalizationFragment:
+        """Join the children as an Oxford-comma coordination, reusing the And/Or coordination.
+
+        :param conjunction: ``Conjunctions.AND`` (parallel) or ``Conjunctions.OR`` (try-all).
+        :param lead: An optional opening word (e.g. ``PlanConnectives.TRY``).
+        :param tail: An optional closing word (e.g. ``PlanConnectives.SIMULTANEOUSLY``).
+        :return: A fragment reading *"[lead] A, B, <conjunction> C [tail]"*.
+        """
+        joined = oxford_comma(
+            [child.as_fragment() for child in self.children], conjunction.as_fragment()
+        )
+        parts: List[VerbalizationFragment] = []
+        if lead is not None:
+            parts.append(lead.as_fragment())
+        parts.append(joined)
+        if tail is not None:
+            parts.append(tail.as_fragment())
+        return PhraseFragment(parts=parts, separator=Separator.SPACE)
+
 
 @dataclass
 class Sequential(Composition):
-    """Do the children one after another -- a temporal conjunction."""
+    """Do the children one after another -- a temporal conjunction (*"A, then B"*)."""
 
-    def verbalize(self) -> str:
-        return ", then ".join(child.verbalize() for child in self.children)
+    def as_fragment(self) -> VerbalizationFragment:
+        return self._interleave(PlanConnectives.THEN)
 
 
 @dataclass
 class Parallel(Composition):
-    """Do the children at the same time -- a conjunction with concurrency."""
+    """Do the children at the same time -- a conjunction with concurrency (*"A and B simultaneously"*)."""
 
-    def verbalize(self) -> str:
-        return f"{', and '.join(child.verbalize() for child in self.children)} simultaneously"
+    def as_fragment(self) -> VerbalizationFragment:
+        return self._coordinate(Conjunctions.AND, tail=PlanConnectives.SIMULTANEOUSLY)
 
 
 @dataclass
 class TryInOrder(Composition):
-    """Try the children in order, falling through on failure -- an ordered disjunction."""
+    """Try the children in order, falling through on failure -- an ordered disjunction
+    (*"try A, otherwise B"*)."""
 
-    def verbalize(self) -> str:
-        head, *rest = [child.verbalize() for child in self.children]
-        return "; otherwise ".join([f"try {head}", *rest])
+    def as_fragment(self) -> VerbalizationFragment:
+        return self._interleave(PlanConnectives.OTHERWISE, lead=PlanConnectives.TRY)
 
 
 @dataclass
 class TryAll(Composition):
-    """Try the children at once, succeeding if any does -- a disjunction with concurrency."""
+    """Try the children at once, succeeding if any does -- a disjunction with concurrency
+    (*"try A, B, or C simultaneously"*)."""
 
-    def verbalize(self) -> str:
-        attempts = ", ".join(child.verbalize() for child in self.children)
-        return f"try {attempts} in parallel"
+    def as_fragment(self) -> VerbalizationFragment:
+        return self._coordinate(
+            Conjunctions.OR,
+            lead=PlanConnectives.TRY,
+            tail=PlanConnectives.SIMULTANEOUSLY,
+        )

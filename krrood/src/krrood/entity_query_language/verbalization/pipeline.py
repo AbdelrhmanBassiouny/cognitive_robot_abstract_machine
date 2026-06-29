@@ -116,12 +116,29 @@ class VerbalizationPipeline:
         >>> VerbalizationPipeline.plain().verbalize(a(entity(variable(Robot, []))))
         'Find a Robot'
         """
+        return self.verbalize_fragment(self.build_fragment(expression, services))
+
+    def build_fragment(
+        self,
+        expression: SymbolicExpression,
+        services: Optional[MicroplanningServices] = None,
+    ) -> VerbalizationFragment:
+        """
+        Build the realized fragment tree for *expression* — the build half of :meth:`verbalize`.
+
+        :param expression: Any EQL expression or query.
+        :param services: Shared verbalization state; created automatically when omitted.
+        :return: The fragment tree, fully realized, ready to render or to embed in a larger fragment.
+
+        >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
+        >>> flatten_fragment_to_plain_text(VerbalizationPipeline.plain().build_fragment(a(entity(variable(Robot, [])))))
+        'Find a Robot'
+        """
         if isinstance(expression, Match):
             expression.expression.build()
         elif isinstance(expression, Query):
             expression.build()
-        fragment = self._verbalizer.build(expression, services)
-        return self.verbalize_fragment(fragment)
+        return self._verbalizer.build(expression, services)
 
     def _is_html_renderer(self) -> bool:
         """:return: ``True`` when this pipeline's renderer emits HTML."""
@@ -272,3 +289,17 @@ def verbalize_expression(expression: SymbolicExpression) -> str:
     'Find a Robot whose battery is greater than 50'
     """
     return _PLAIN_PIPELINE.verbalize(expression)
+
+
+def fragment_for_expression(expression: SymbolicExpression) -> VerbalizationFragment:
+    """
+    Build the realized verbalization fragment for an EQL expression.
+
+    Unlike :func:`verbalize_expression`, which renders to a string, this returns the fragment tree so a
+    larger structure -- such as a speech act framing its content -- can embed it and render the whole
+    once.
+
+    :param expression: Any EQL expression or query.
+    :return: The realized fragment tree for *expression*.
+    """
+    return _PLAIN_PIPELINE.build_fragment(expression)
