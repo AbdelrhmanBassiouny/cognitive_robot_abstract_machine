@@ -143,3 +143,42 @@ class MinClearance(GiskardGoal):
         return MinDistanceConstraint(quantity, lower_bound=self.minimum).compile_into(
             collection
         )
+
+
+@dataclass
+class ReachPosition(GiskardGoal):
+    """Bring a tip to within a tolerance of a target -- a *reach* motion goal (vs. a *keep-clear*
+    constraint)."""
+
+    tip: str
+    """The name of the moving body (e.g. the gripper tip)."""
+
+    target: str
+    """The name of the target the tip should reach."""
+
+    tolerance: float = 0.0
+    """The allowed distance from the target at the goal, in metres."""
+
+    def as_fragment(self) -> VerbalizationFragment:
+        return PhraseFragment(
+            parts=[
+                WordFragment(text=self.tip),
+                WordFragment(text="is at"),
+                WordFragment(text=self.target),
+            ],
+            separator=Separator.SPACE,
+        )
+
+    def compile_into(self, collection: ConstraintCollection) -> ConstraintCollection:
+        distance = MinDistance(
+            PosedEntity.symbolic(self.tip), PosedEntity.symbolic(self.target)
+        ).symbolic_value()
+        collection.add_inequality_constraint(
+            name=f"reach/{self.tip}-{self.target}",
+            task_expression=distance,
+            lower_error=sm.Scalar(-1e6),
+            upper_error=sm.Scalar(self.tolerance) - distance,
+            reference_velocity=0.2,
+            quadratic_weight=1.0,
+        )
+        return collection
