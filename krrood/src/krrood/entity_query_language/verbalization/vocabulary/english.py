@@ -223,7 +223,7 @@ class PerformativeDirective(VocabEnum):
     """
 
     ACHIEVE = KeyWord("Achieve")
-    OBSERVE = KeyWord("Observe")
+    MONITOR = KeyWord("Monitor")
     EXPLAIN = KeyWord("Explain")
     PERFORM = KeyWord("Perform")
     WARNING = KeyWord("Warning")
