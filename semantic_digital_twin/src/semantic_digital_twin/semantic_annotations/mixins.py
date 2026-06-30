@@ -208,23 +208,12 @@ class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
         return self._world.get_connections_of_branch(self.root)
 
     def _kinematic_structure_entities(
-        self, visited_or_type
+        self, visited: Set[int]
     ) -> list[KinematicStructureEntity]:
-        if isinstance(visited_or_type, set):
-            visited = visited_or_type
-        else:
-            visited = set()
-
         if id(self) in visited:
             return []
         visited.add(id(self))
-
-        entities = self._world.get_kinematic_structure_entities_of_branch(self.root)
-
-        if not isinstance(visited_or_type, set) and isinstance(visited_or_type, type):
-            entities = [x for x in entities if isinstance(x, visited_or_type)]
-
-        return entities
+        return self._world.get_kinematic_structure_entities_of_branch(self.root)
 
 
 @dataclass(eq=False)
