@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from abc import abstractmethod, ABC
+from abc import ABC
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -13,7 +13,12 @@ import tqdm
 from typing_extensions import Union
 
 from giskardpy.motion_statechart.graph_node import Task
+from krrood.entity_query_language.performatives import Performable
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.verbalization.context import MicroplanningServices
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 
 from coraplex.datastructures.enums import TaskStatus
 from coraplex.plans.failures import PlanFailure
@@ -39,10 +44,23 @@ def sort_by_layer_index(nodes: Iterable[PlanNode]) -> Iterable[PlanNode]:
 
 
 @dataclass(eq=False)
-class PlanNode(PlanEntity):
+class PlanNode(PlanEntity, Performable):
     """
     A node in the plan.
+
+    A node both *executes* (:meth:`perform`) and *verbalizes* (:meth:`as_fragment`): it is a
+    :class:`~krrood.entity_query_language.performatives.Performable`, so one plan tree drives both
+    behaviour and natural-language rendering. Concrete node types provide :meth:`as_fragment`; the
+    base default declares it unsupported, mirroring how a composition's :meth:`perform` is owned by
+    the layer that can do it.
     """
+
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        raise NotImplementedError(
+            f"Verbalization is not defined for {type(self).__name__}."
+        )
 
     status: TaskStatus = TaskStatus.CREATED
     """
@@ -293,10 +311,14 @@ class PlanNode(PlanEntity):
         """
         pass
 
-    @abstractmethod
     def _perform(self):
         """
         Perform the node without managing the fields of this node.
+
+        The base node does nothing; concrete node types override this. It is a no-op (not abstract)
+        so a bare :class:`PlanNode` stays instantiable as a generic graph node, as it was before
+        :class:`PlanNode` became a :class:`~krrood.entity_query_language.performatives.Performable`
+        (whose ``ABC`` base would otherwise enforce the abstraction and break direct construction).
         """
 
 
