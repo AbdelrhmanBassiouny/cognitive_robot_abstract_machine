@@ -26,7 +26,7 @@ from giskardpy.eql.performatives import Monitor
 
 def _navigate_and_raise_torso() -> Sequential:
     robot = variable(AbstractRobot, [])
-    target = Pose()
+    target = variable(Pose, [])   # the target is a bound pose, shared across the navigate and the monitor
     return Sequential(
         [
             Perform(a(NavigateAction)(target_location=target)),
@@ -37,12 +37,13 @@ def _navigate_and_raise_torso() -> Sequential:
 
 
 def test_the_plan_composes_real_actions_a_predicate_monitor_across_frameworks():
-    # coraplex actions -> Perform (the a(Action) idiom); the sdt SymbolicFunction predicate
-    # is_pose_free_for_robot -> Monitor, verbalizing as a clean clause ("a Pose is free for ...").
+    # Perform (coraplex actions) verbalizes in the imperative register ("such that"); the sdt
+    # SymbolicFunction predicate is_pose_free_for_robot -> Monitor, reading as a clean clause; and the pose
+    # shared between the navigate and the monitor corefers ("a Pose" then "the Pose").
     assert _navigate_and_raise_torso().verbalize() == (
-        "Perform a NavigateAction given that its target_location is a specific Pose, "
-        "then Monitor whether a specific Pose is free for an AbstractRobot, "
-        "then Perform a MoveTorsoAction given that its torso_state is HIGH"
+        "Perform a NavigateAction such that its target_location is a Pose, "
+        "then Monitor whether the Pose is free for an AbstractRobot, "
+        "then Perform a MoveTorsoAction such that its torso_state is HIGH"
     )
 
 

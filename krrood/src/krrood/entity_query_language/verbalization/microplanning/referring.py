@@ -133,6 +133,24 @@ class ReferringExpressions:
         return cls(disambiguation_map=labels, numbered_labels=numbered)
 
     @classmethod
+    def from_expressions(
+        cls, expressions: List[SymbolicExpression]
+    ) -> ReferringExpressions:
+        """Build the disambiguation map over several expressions at once.
+
+        Verbalizing each expression then shares this map, so a referent appearing in more than one (e.g.
+        the same pose in a navigate act and a monitor act) is named once and corefers across them.
+
+        :param expressions: The expressions to scan together, in order.
+        :return: An instance whose disambiguation map spans all of *expressions*.
+        """
+        for expression in expressions:
+            if isinstance(expression, Query):
+                expression.build()
+        labels, numbered = cls._group_referents_over(expressions).labels()
+        return cls(disambiguation_map=labels, numbered_labels=numbered)
+
+    @classmethod
     def _build_disambiguation_map(
         cls, expression: SymbolicExpression
     ) -> Tuple[Dict[uuid.UUID, str], Dict[uuid.UUID, str]]:
@@ -165,16 +183,29 @@ class ReferringExpressions:
         """:return: Every numberable referent grouped under its canonical entity, in type-then-
         encounter order. Literal nodes, already-seen ids, and aggregation sources are skipped; an
         ``==``-unified pair shares one canonical (so it is named once)."""
-        suppressed = cls._aggregation_source_ids(expression)
-        aliases = referent_aliases(expression)
+        return cls._group_referents_over([expression])
+
+    @classmethod
+    def _group_referents_over(
+        cls, expressions: List[SymbolicExpression]
+    ) -> _CanonicalReferentGrouping:
+        """Group the numberable referents across *expressions* into one grouping, so a referent shared
+        across them is named once and numbering stays consistent (used to verbalize a composed plan).
+
+        :param expressions: The expressions to scan together, in order.
+        :return: The combined canonical-referent grouping.
+        """
         grouping = _CanonicalReferentGrouping()
         seen: Set[uuid.UUID] = set()
-        for node in expression._all_expressions_:
-            type_name = cls._numberable_type_name(node)
-            if type_name is None or node._id_ in suppressed or node._id_ in seen:
-                continue
-            seen.add(node._id_)
-            grouping.add(node._id_, aliases.get(node._id_, node._id_), type_name)
+        for expression in expressions:
+            suppressed = cls._aggregation_source_ids(expression)
+            aliases = referent_aliases(expression)
+            for node in expression._all_expressions_:
+                type_name = cls._numberable_type_name(node)
+                if type_name is None or node._id_ in suppressed or node._id_ in seen:
+                    continue
+                seen.add(node._id_)
+                grouping.add(node._id_, aliases.get(node._id_, node._id_), type_name)
         return grouping
 
     @staticmethod

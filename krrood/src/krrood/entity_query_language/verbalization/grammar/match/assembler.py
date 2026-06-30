@@ -76,7 +76,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         inline_predict = self._inline_predict(predict_groups, plan)
 
         header_parts: List[VerbalizationFragment] = [
-            Directive.for_underspecified(plan.underspecified).as_fragment(),
+            self.context.register.opener_fragment(plan.underspecified),
             self.context.child(plan.selection),
         ]
         if inline_predict is not None:
@@ -179,7 +179,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         if not points:
             return None
         return BlockFragment(
-            header=Keywords.GIVEN_THAT.as_fragment(),
+            header=self.context.register.binding_connective.as_fragment(),
             items=points,
             conjunction=Conjunctions.AND.as_fragment(),
         )

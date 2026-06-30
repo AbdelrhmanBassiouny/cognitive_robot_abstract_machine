@@ -333,7 +333,7 @@ class SiblingKeyForm(LeadingRankForm):
         if plan.limit_number == 1:
             superlative = (
                 RankingWords.LOWEST
-                if plan.direction is RankingDirection.ASCENDING
+                if plan.direction is SortDirection.ASCENDING
                 else RankingWords.HIGHEST
             )
             parts = [
@@ -352,7 +352,7 @@ class SiblingKeyForm(LeadingRankForm):
             )
         quality = (
             RankingWords.BOTTOM
-            if plan.direction is RankingDirection.ASCENDING
+            if plan.direction is SortDirection.ASCENDING
             else RankingWords.TOP
         )
         pre_head = PhraseFragment(parts=[quality.as_fragment(), _cardinal(plan.limit_number)])
