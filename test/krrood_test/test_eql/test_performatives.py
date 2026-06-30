@@ -100,18 +100,17 @@ def test_sequential_interleaves_then():
     )
 
 
-def test_parallel_coordinates_with_and_and_marks_concurrency():
+def test_parallel_states_the_rest_as_concurrent_while_clauses():
     text = Parallel([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text.endswith(" simultaneously")
-    assert " and " in text
+    assert ", while simultaneously " in text
 
 
-def test_parallel_of_three_uses_oxford_comma():
+def test_parallel_of_three_joins_the_concurrent_acts_with_and():
     text = Parallel(
         [Inform(_reachable()), Inform(_operational()), Inform(_reachable())]
     ).verbalize()
-    assert ", and " in text                              # the And-rule's Oxford comma, reused
-    assert text.endswith(" simultaneously")
+    assert ", while simultaneously " in text
+    assert " and " in text                               # the And-rule's coordination, reused
 
 
 def test_try_in_order_is_an_ordered_fallback():

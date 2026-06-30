@@ -236,6 +236,7 @@ class PlanConnectives(VocabEnum):
     THEN = PlainWord("then")
     OTHERWISE = PlainWord("otherwise")
     SIMULTANEOUSLY = PlainWord("simultaneously")
+    WHILE = PlainWord("while")
     TRY = PlainWord("try")
     THAT = PlainWord("that")
     WHETHER = PlainWord("whether")
