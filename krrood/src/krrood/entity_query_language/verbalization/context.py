@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from typing_extensions import TYPE_CHECKING, List, Optional
+
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.microplanning.binding_scope import (
     BindingScope,
 )
@@ -15,6 +18,9 @@ from krrood.entity_query_language.verbalization.microplanning.microplan import (
 from krrood.entity_query_language.verbalization.microplanning.referring import (
     ReferringExpressions,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.vocabulary.register import Register
 
 
 @dataclass
@@ -38,6 +44,10 @@ class MicroplanningServices:
     microplan: Microplan = field(default_factory=Microplan)
     """The plan read model — each node's plan computed once and shared (lazy / memoised)."""
 
+    register: Optional[Register] = None
+    """The register a description is verbalized in (query opener + *"given that"*, or an imperative
+    opener + *"such that"*). ``None`` means the default query register."""
+
     @classmethod
     def from_expression(cls, expression: SymbolicExpression) -> MicroplanningServices:
         """
@@ -47,3 +57,21 @@ class MicroplanningServices:
         :return: A fresh context whose referring service has its disambiguation map populated.
         """
         return cls(referring=ReferringExpressions.from_expression(expression))
+
+    @classmethod
+    def from_expressions(
+        cls, expressions: List[SymbolicExpression]
+    ) -> MicroplanningServices:
+        """Create a context whose disambiguation map spans *expressions* together.
+
+        Verbalizing each with this shared context makes a referent that appears in more than one corefer
+        across them (e.g. the same pose in a navigate act and a monitor act).
+
+        :param expressions: The expressions or matches to scan together, in order.
+        :return: A fresh context with the combined disambiguation map.
+        """
+        scan_targets = [
+            expression.expression if isinstance(expression, Match) else expression
+            for expression in expressions
+        ]
+        return cls(referring=ReferringExpressions.from_expressions(scan_targets))

@@ -3,10 +3,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
-from typing_extensions import Optional, Any, Dict
+from typing_extensions import Optional, Any, Dict, Self
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.factories import variable_from, and_
+from krrood.entity_query_language.predicate import Verbalizable
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    clause,
+    Noun,
+    Preposition,
+    Verb,
+)
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
 from coraplex.plans.factories import execute_single
@@ -20,7 +27,7 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 
 @dataclass
-class NavigateAction(ActionDescription):
+class NavigateAction(ActionDescription, Verbalizable):
     """
     Navigates the Robot to a position.
     """
@@ -34,6 +41,20 @@ class NavigateAction(ActionDescription):
     """
     Keep the joint states of the robot the same during the navigation.
     """
+
+    @classmethod
+    def _verbalization_fragment_(cls, operands: Self):
+        """:return: *"navigate to the target location"* -- the action stated as its own verb phrase.
+
+        The destination is named by its field name (its role in the action), not its ``Pose`` type,
+        and that alias is shared across the plan so a monitor watching the same pose reads *"the
+        target location"* too.
+        """
+        return clause(
+            Verb("navigate"),
+            Preposition.TO,
+            Noun(operands.target_location.by_field_name()),
+        )
 
     def execute(self) -> None:
         self.add_subplan(

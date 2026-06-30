@@ -8,7 +8,7 @@ from regular Python functions when variables are present.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import MISSING, dataclass, fields
+from dataclasses import MISSING, dataclass, fields, replace
 
 from typing_extensions import (
     Callable,
@@ -27,7 +27,9 @@ from typing_extensions import (
 )
 
 if TYPE_CHECKING:
-    from krrood.entity_query_language.verbalization.fragments.base import VerbalizationFragment
+    from krrood.entity_query_language.verbalization.fragments.base import (
+        VerbalizationFragment,
+    )
 
 from krrood.entity_query_language.utils import T, merge_args_and_kwargs
 from krrood.entity_query_language.core.variable import (
@@ -80,7 +82,8 @@ class VerbalizationField:
 
     def as_fragment(self) -> "VerbalizationFragment":
         """:return: the field's rendered fragment, so a :class:`VerbalizationField` is a clause constituent like
-        the part-of-speech elements — ``clause(field)`` and ``Noun(field)`` both work."""
+        the part-of-speech elements — ``clause(field)`` and ``Noun(field)`` both work.
+        """
         return self.fragment
 
 
@@ -128,13 +131,36 @@ class Operand:
     _expression_: Any
     """The EXISTING child expression this operand wraps."""
 
-    _render_: "Callable[[Any], VerbalizationFragment]"
-    """Renders an expression to a fragment in the current context (coreference, determiners)."""
+    _render_: "Callable[..., VerbalizationFragment]"
+    """Renders an expression to a fragment in the current context (coreference, determiners),
+    optionally given a field-name alias for the variable."""
+
+    _field_name_: Optional[str] = None
+    """The declared field name this operand is bound under (``target_location``); used as the bound
+    variable's alias only when :meth:`by_field_name` opts in."""
+
+    _alias_by_field_name_: bool = False
+    """Whether to render the bound variable by its :attr:`_field_name_` (an opt-in alias) instead of
+    its type noun. Set via :meth:`by_field_name`."""
 
     def as_fragment(self) -> "VerbalizationFragment":
         """:return: the operand's rendered fragment, so an :class:`Operand` is a clause constituent
-        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work."""
+        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work.
+        """
+        if self._alias_by_field_name_ and self._field_name_ is not None:
+            return self._render_(self._expression_, self._field_name_)
         return self._render_(self._expression_)
+
+    def by_field_name(self) -> "Operand":
+        """:return: this operand set to render its variable by its field name (humanised) as an
+        alias -- *"the target location"* rather than the type *"a Pose"* -- shared across every
+        mention of the variable, so coreference and pronominalisation use the alias too.
+
+        Opt in where the field name reads as the variable's role (``target_location`` ->
+        *"target location"*); leave the default type noun where the type reads better (``body`` ->
+        *"a Location"*).
+        """
+        return replace(self, _alias_by_field_name_=True)
 
     @property
     def _value_of_operand_(self) -> Any:
@@ -173,11 +199,11 @@ class OperandView:
     _child_expressions_: "Mapping[str, Any]"
     """The EXISTING child expression for each operand field, keyed by field name."""
 
-    _render_: "Callable[[Any], VerbalizationFragment]"
-    """Renders an expression to a fragment in the current context."""
+    _render_: "Callable[[Any, Optional[str]], VerbalizationFragment]"
+    """Renders an expression to a fragment in the current context, given the field name as alias."""
 
     def _operand_for_(self, field_name: str) -> Operand:
-        return Operand(self._child_expressions_[field_name], self._render_)
+        return Operand(self._child_expressions_[field_name], self._render_, field_name)
 
     def __getattr__(self, field_name: str) -> Operand:
         if field_name.startswith("_"):
@@ -232,6 +258,19 @@ class Verbalizable(ABC):
         :param operands: The typed view of the operation's operands (``operands.<field>``).
         :return: The operation's verbalization fragment.
         """
+
+    @classmethod
+    def has_custom_fragment(cls, type_: Any) -> bool:
+        """:return: ``True`` when *type_* is a :class:`Verbalizable` that supplies its own
+        ``_verbalization_fragment_`` (rather than inheriting the abstract one), so it should render
+        through that fragment wherever it appears -- whether called (an ``InstantiatedVariable``) or
+        constructed (a match selection)."""
+        return (
+            isinstance(type_, type)
+            and issubclass(type_, Verbalizable)
+            and type_._verbalization_fragment_.__func__
+            is not Verbalizable._verbalization_fragment_.__func__
+        )
 
 
 @dataclass(eq=False)
@@ -304,7 +343,9 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
         'the length of iterable'
         """
         # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
-        from krrood.entity_query_language.verbalization.fragments.base import WordFragment
+        from krrood.entity_query_language.verbalization.fragments.base import (
+            WordFragment,
+        )
         from krrood.entity_query_language.verbalization.rendering.realization import (
             realize_subtree,
         )
@@ -324,7 +365,9 @@ class SymbolicCallable(Symbol, Verbalizable, ABC):
             and field.default_factory is MISSING
         ]
 
-        def render(placeholder: str) -> "VerbalizationFragment":
+        def render(
+            placeholder: str, alias: Optional[str] = None
+        ) -> "VerbalizationFragment":
             return Noun(WordFragment(text=placeholder)).as_fragment()
 
         # No query behind a preview, so each operand is a placeholder named after its field; the
@@ -364,7 +407,9 @@ class Predicate(SymbolicCallable, ABC):
         return bool(self.__call__())
 
     @classmethod
-    def _verbalization_fragment_(cls, operands: "OperandView") -> "VerbalizationFragment":
+    def _verbalization_fragment_(
+        cls, operands: "OperandView"
+    ) -> "VerbalizationFragment":
         """Default boolean surface — a clause read off the class name: copular for an ``Is…`` name
         (``IsReachable`` → *"<subject> is reachable"*), verb-first otherwise (``ConnectsTo`` →
         *"<subject> connects to <object>"*), so every predicate reads sensibly without extra code.
@@ -401,7 +446,9 @@ class SymbolicFunction(SymbolicCallable, ABC):
         return cls._construct_normally_(**kwargs)()
 
     @classmethod
-    def _verbalization_fragment_(cls, operands: "OperandView") -> "VerbalizationFragment":
+    def _verbalization_fragment_(
+        cls, operands: "OperandView"
+    ) -> "VerbalizationFragment":
         """Default value surface — *"the <name> of <arguments>"* read off the class name
         (``NodeId`` → *"the node id of …"*), so every value function reads sensibly without extra code.
 

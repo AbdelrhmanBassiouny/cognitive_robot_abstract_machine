@@ -75,6 +75,20 @@ class ReferringExpressions:
     Relational referents carry no rule-resolved label — their relative-clause noun phrase is built
     deep in the microplanner — so the coreference pass applies these to number them *"Robot 1"*."""
 
+    alias_map: Dict[uuid.UUID, str] = field(default_factory=dict)
+    """Display aliases registered during verbalization — a variable an operand renders by its field
+    name (*"target location"*). The alias overrides the type-name label for *every* mention of that
+    referent, so coreference and pronominalisation reuse it (*"a target location … the target
+    location"*). Registered by the first aliased mention (see :meth:`register_alias`)."""
+
+    def register_alias(self, variable_id: uuid.UUID, alias: str) -> None:
+        """Register *alias* as the display label for *variable_id*, unless one is already set.
+
+        :param variable_id: The referent the alias names.
+        :param alias: The display label (a humanised operand field name).
+        """
+        self.alias_map.setdefault(variable_id, alias)
+
     @classmethod
     def from_expression(cls, expression: SymbolicExpression) -> ReferringExpressions:
         """
@@ -87,6 +101,24 @@ class ReferringExpressions:
         'Robot 1'
         """
         labels, numbered = cls._build_disambiguation_map(expression)
+        return cls(disambiguation_map=labels, numbered_labels=numbered)
+
+    @classmethod
+    def from_expressions(
+        cls, expressions: List[SymbolicExpression]
+    ) -> ReferringExpressions:
+        """Build the disambiguation map over several expressions at once.
+
+        Verbalizing each expression then shares this map, so a referent appearing in more than one (e.g.
+        the same pose in a navigate act and a monitor act) is named once and corefers across them.
+
+        :param expressions: The expressions to scan together, in order.
+        :return: An instance whose disambiguation map spans all of *expressions*.
+        """
+        for expression in expressions:
+            if isinstance(expression, Query):
+                expression.build()
+        labels, numbered = cls._group_referents_over(expressions)
         return cls(disambiguation_map=labels, numbered_labels=numbered)
 
     @classmethod
@@ -114,24 +146,41 @@ class ReferringExpressions:
         if isinstance(expression, Query):
             expression.build()
 
-        suppressed = cls._aggregation_source_ids(expression)
-        aliases = referent_aliases(expression)
+        return cls._group_referents_over([expression])
 
+    @classmethod
+    def _group_referents_over(
+        cls, expressions: List[SymbolicExpression]
+    ) -> Tuple[Dict[uuid.UUID, str], Dict[uuid.UUID, str]]:
+        """Group the numberable referents across *expressions* into one ``(labels, numbered)`` map, so
+        a referent shared across them is named once and numbering stays consistent (used to verbalize a
+        composed plan). A single-element list reproduces the per-expression numbering.
+
+        :param expressions: The expressions to scan together, in order.
+        :return: ``(labels, numbered)`` spanning all of *expressions*.
+        """
         members_by_canonical: Dict[uuid.UUID, List[uuid.UUID]] = defaultdict(list)
         canonicals_by_type: Dict[str, List[uuid.UUID]] = defaultdict(list)
         type_of_canonical: Dict[uuid.UUID, str] = {}
         seen_ids: Set[uuid.UUID] = set()
 
-        for node in expression._all_expressions_:
-            type_name = cls._numberable_type_name(node)
-            if type_name is None or node._id_ in suppressed or node._id_ in seen_ids:
-                continue
-            seen_ids.add(node._id_)
-            canonical = aliases.get(node._id_, node._id_)
-            if canonical not in type_of_canonical:
-                type_of_canonical[canonical] = type_name
-                canonicals_by_type[type_name].append(canonical)
-            members_by_canonical[canonical].append(node._id_)
+        for expression in expressions:
+            suppressed = cls._aggregation_source_ids(expression)
+            aliases = referent_aliases(expression)
+            for node in expression._all_expressions_:
+                type_name = cls._numberable_type_name(node)
+                if (
+                    type_name is None
+                    or node._id_ in suppressed
+                    or node._id_ in seen_ids
+                ):
+                    continue
+                seen_ids.add(node._id_)
+                canonical = aliases.get(node._id_, node._id_)
+                if canonical not in type_of_canonical:
+                    type_of_canonical[canonical] = type_name
+                    canonicals_by_type[type_name].append(canonical)
+                members_by_canonical[canonical].append(node._id_)
 
         labels: Dict[uuid.UUID, str] = {}
         numbered: Dict[uuid.UUID, str] = {}
@@ -216,6 +265,10 @@ class ReferringExpressions:
         'Robot 2'
         """
         type_name = self._variable_type_label(variable)
+        alias = self.alias_map.get(variable._id_)
+        if alias is not None:
+            self.seen.add(variable._id_)
+            return NumberedLabel(alias, is_numbered=False)
         label = self.disambiguation_map.get(variable._id_, type_name)
         self.seen.add(variable._id_)
         return NumberedLabel(label, label != type_name)

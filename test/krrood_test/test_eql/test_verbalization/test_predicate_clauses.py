@@ -9,12 +9,19 @@ copula with suppletion.
 
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass
 
 import pytest
 from typing_extensions import Any
 
-from krrood.entity_query_language.factories import an, entity, for_all, variable
+from krrood.entity_query_language.factories import (
+    an,
+    and_,
+    entity,
+    for_all,
+    variable,
+)
 from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.verbalization import morphology
@@ -197,6 +204,52 @@ def test_clause_subject_keeps_noun_phrase_outside_a_subject_scope():
     assert verbalize_expression(IsReachable(variable(Location, []))) == (
         "a Location is reachable"
     )
+
+
+# ── opt-in: render an operand variable by its field name ─────────────────────────
+
+
+@dataclass(eq=False)
+class _Approaches(Predicate):
+    """A predicate that names its operand by its field name (its role), not its type."""
+
+    target_location: Any
+    """The place approached — verbalized as *"target location"*, not its type name."""
+
+    def __call__(self) -> bool:
+        return True
+
+    @classmethod
+    def _verbalization_fragment_(cls, operands: Any) -> Any:
+        return clause(Verb("approach"), Noun(operands.target_location.by_field_name()))
+
+
+def test_operand_renders_by_field_name_when_opted_in():
+    """``by_field_name`` names the operand variable by its humanised field name, not its type."""
+    assert verbalize_expression(_Approaches(variable(Location, []))) == (
+        "approaches a target location"
+    )
+
+
+def test_field_name_alias_is_shared_across_mentions_with_coreference():
+    """The alias is the variable's display name everywhere, so a re-mention corefers to it
+    (*"a target location … the target location"*), not to the type noun."""
+    location = variable(Location, [])
+    assert verbalize_expression(and_(_Approaches(location), IsReachable(location))) == (
+        "approaches a target location, and the target location is reachable"
+    )
+
+
+class _Mode(enum.Enum):
+    HIGH = 1
+    LOW = 2
+
+
+def test_noun_renders_a_raw_value_through_the_value_lexicon():
+    """``Noun`` accepts a raw value (not only a head word or constituent), lexicalising it the same
+    way the value lexicon does — an enum member as its name."""
+    assert flatten_fragment_to_plain_text(Noun(_Mode.HIGH).as_fragment()) == "HIGH"
+    assert flatten_fragment_to_plain_text(Noun(42).as_fragment()) == "42"
 
 
 # ── fragments are required ───────────────────────────────────────────────────────

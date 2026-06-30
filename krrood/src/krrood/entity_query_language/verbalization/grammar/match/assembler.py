@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from typing_extensions import List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.predicate import OperandView, Verbalizable
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
+    map_structural_children,
     VerbalizationFragment,
     oxford_comma,
     OwnedAttributes,
@@ -14,6 +18,10 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     RoleFragment,
     WordFragment,
 )
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.grammar.conditions.assembler import (
     ConditionAssembler,
 )
@@ -34,7 +42,6 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
     Conjunctions,
     Copulas,
-    Directive,
     Keywords,
     Prepositions,
 )
@@ -42,6 +49,16 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 #: The most attribute values coordinated under one *"… are 1, 2, and 3 respectively"* point before
 #: each is said separately — beyond this the reader can no longer reliably zip attributes to values.
 _MAX_RESPECTIVELY = 3
+
+
+def _as_imperative(fragment: VerbalizationFragment) -> VerbalizationFragment:
+    """:return: *fragment* with every finite verb marked for the bare imperative (*"navigate"*, not
+    *"navigates"*) -- realised by tagging each verb plural, the number the morphology pass renders as
+    the bare lemma."""
+    if isinstance(fragment, RoleFragment) and fragment.role is SemanticRole.VERB:
+        return replace(fragment, number=GrammaticalNumber.PLURAL)
+    rebuilt = map_structural_children(fragment, _as_imperative)
+    return rebuilt if rebuilt is not None else fragment
 
 
 class MatchAssembler(Assembler[Match, MatchPlan]):
@@ -72,11 +89,15 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         >>> verbalize_expression(underspecified(Mission)(assigned_to=underspecified(Robot)(name="R2")))
         "Generate a Mission given that the name of the Robot to which it is assigned is 'R2'"
         """
+        verbalizable = self._verbalizable_selection_fragment(plan)
+        if verbalizable is not None:
+            return self._verbalizable_block(node, plan, verbalizable)
+
         predict_groups = [group for group in plan.groups if group.predicted]
         inline_predict = self._inline_predict(predict_groups, plan)
 
         header_parts: List[VerbalizationFragment] = [
-            Directive.for_underspecified(plan.underspecified).as_fragment(),
+            self.context.register.opener_fragment(plan.underspecified),
             self.context.child(plan.selection),
         ]
         if inline_predict is not None:
@@ -97,6 +118,50 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             items=items,
             source=node.expression,
         )
+
+    # %% self-verbalizing selection
+
+    def _verbalizable_selection_fragment(
+        self, plan: MatchPlan
+    ) -> Optional[VerbalizationFragment]:
+        """:return: the selection's own clause when the constructed type supplies a verbalization
+        fragment -- its construction kwargs become the operands -- else ``None`` for the generic
+        *"a TypeName given that …"* surface.
+
+        This is the same dispatch :class:`InstantiatedVerbalizableRule` makes for a *called* operation
+        (``IsReachable(body)`` → *"a Robot is reachable"*), extended to a *constructed* one
+        (``a(NavigateAction)(target_location=p)`` → *"navigate to a Pose"*).
+        """
+        selection = plan.selection
+        if not Verbalizable.has_custom_fragment(selection._type_):
+            return None
+        operands = OperandView(
+            _child_expressions_={
+                assignment.attribute._attribute_name_: assignment.value
+                for group in plan.groups
+                if group.object is selection
+                for assignment in group.assignments
+            },
+            _render_=lambda expression, alias=None: self.context.child(
+                expression, alias=alias, as_value=True
+            ),
+        )
+        fragment = selection._type_._verbalization_fragment_(operands)
+        if self.context.register.imperative:
+            fragment = _as_imperative(fragment)
+        return fragment
+
+    def _verbalizable_block(
+        self, node: Match, plan: MatchPlan, header: VerbalizationFragment
+    ) -> VerbalizationFragment:
+        """:return: the self-verbalizing selection's clause, with any free ``where`` conditions kept as
+        a trailing block. The type's verb is the utterance's verb, so no directive opener is added.
+        """
+        items: List[VerbalizationFragment] = []
+        where = self._where_block(plan)
+        if where is not None:
+            items.append(where)
+        return BlockFragment(header=header, items=items, source=node.expression)
 
     # %% predict
 
@@ -179,7 +244,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         if not points:
             return None
         return BlockFragment(
-            header=Keywords.GIVEN_THAT.as_fragment(),
+            header=self.context.register.binding_connective.as_fragment(),
             items=points,
             conjunction=Conjunctions.AND.as_fragment(),
         )

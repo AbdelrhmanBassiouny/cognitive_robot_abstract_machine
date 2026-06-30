@@ -30,6 +30,9 @@ from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Query
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.vocabulary.register import Register
+
+if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.rendering.source_link_resolver import (
         SourceLinkResolver,
     )
@@ -116,12 +119,29 @@ class VerbalizationPipeline:
         >>> VerbalizationPipeline.plain().verbalize(a(entity(variable(Robot, []))))
         'Find a Robot'
         """
+        return self.verbalize_fragment(self.build_fragment(expression, services))
+
+    def build_fragment(
+        self,
+        expression: SymbolicExpression,
+        services: Optional[MicroplanningServices] = None,
+    ) -> VerbalizationFragment:
+        """
+        Build the realized fragment tree for *expression* — the build half of :meth:`verbalize`.
+
+        :param expression: Any EQL expression or query.
+        :param services: Shared verbalization state; created automatically when omitted.
+        :return: The fragment tree, fully realized, ready to render or to embed in a larger fragment.
+
+        >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
+        >>> flatten_fragment_to_plain_text(VerbalizationPipeline.plain().build_fragment(a(entity(variable(Robot, [])))))
+        'Find a Robot'
+        """
         if isinstance(expression, Match):
             expression.expression.build()
         elif isinstance(expression, Query):
             expression.build()
-        fragment = self._verbalizer.build(expression, services)
-        return self.verbalize_fragment(fragment)
+        return self._verbalizer.build(expression, services)
 
     def _is_html_renderer(self) -> bool:
         """:return: ``True`` when this pipeline's renderer emits HTML."""
@@ -272,3 +292,33 @@ def verbalize_expression(expression: SymbolicExpression) -> str:
     'Find a Robot whose battery is greater than 50'
     """
     return _PLAIN_PIPELINE.verbalize(expression)
+
+
+def fragment_for_expression(
+    expression: SymbolicExpression,
+    services: Optional[MicroplanningServices] = None,
+    register: Optional[Register] = None,
+) -> VerbalizationFragment:
+    """
+    Build the realized verbalization fragment for an EQL expression.
+
+    Unlike :func:`verbalize_expression`, which renders to a string, this returns the fragment tree so a
+    larger structure -- such as a speech act framing its content -- can embed it and render the whole
+    once.
+
+    :param expression: Any EQL expression or query.
+    :param services: Shared microplanning services; pass the same instance across expressions so repeated
+        mentions corefer (*"a Pose … the Pose"*). Created per-expression when omitted.
+    :param register: The register to verbalize in (e.g. an imperative *"Perform … such that …"*); the
+        default query register when omitted.
+    :return: The realized fragment tree for *expression*.
+    """
+    if services is None:
+        scan_target = (
+            expression.expression if isinstance(expression, Match) else expression
+        )
+        services = MicroplanningServices.from_expression(scan_target)
+    # Assign unconditionally: on shared services, this resets a prior act's register so each act is
+    # rendered in its own (``None`` ⇒ the default query register).
+    services.register = register
+    return _PLAIN_PIPELINE.build_fragment(expression, services)
