@@ -162,5 +162,6 @@ def test_a_new_acts_opener_derives_from_its_class_name():
         def as_fragment(self, services=None):
             return self.framed_fragment(Complementizers.THAT, services)
 
-    assert Suggest.opener.text == "Suggest"
-    assert Suggest(_reachable()).verbalize().startswith("Suggest that ")
+    suggestion = Suggest(_reachable())
+    assert suggestion.opener.text == "Suggest"
+    assert suggestion.verbalize().startswith("Suggest that ")

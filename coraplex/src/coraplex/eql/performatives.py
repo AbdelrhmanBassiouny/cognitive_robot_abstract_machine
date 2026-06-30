@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import TYPE_CHECKING, ClassVar, Optional
+from typing_extensions import TYPE_CHECKING, Optional
 
 from krrood.entity_query_language.performatives import Performative
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
@@ -40,10 +40,17 @@ class Perform(Performative):
     self-verbalizing), and executing it builds and runs the corresponding coraplex plan node.
     """
 
-    register: ClassVar[Register]
-    """The imperative register this act verbalizes its description in: an imperative command
-    (*"navigate to …"*) for a self-verbalizing action, or *"Perform … such that …"* otherwise. Built
-    below from the act's own opener, so there is no separate global register lying around."""
+    @property
+    def register(self) -> Register:
+        """:return: the imperative register this act verbalizes its description in -- an imperative
+        command (*"navigate to …"*) for a self-verbalizing action, or *"Perform … such that …"*
+        otherwise. Derived from the act's own :attr:`opener`, so there is no separate global register
+        lying around and no register declaration to keep in sync."""
+        return Register(
+            binding_connective=Keywords.SUCH_THAT,
+            fixed_opener=self.opener,
+            imperative=True,
+        )
 
     def perform(self) -> PlanNode:
         from coraplex.plans.factories import execute_single
@@ -54,11 +61,3 @@ class Perform(Performative):
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return fragment_for_expression(self.content, services, register=self.register)
-
-
-# Built after the class so it can read ``Perform.opener`` (set by ``Performative.__init_subclass__``).
-Perform.register = Register(
-    binding_connective=Keywords.SUCH_THAT,
-    fixed_opener=Perform.opener,
-    imperative=True,
-)

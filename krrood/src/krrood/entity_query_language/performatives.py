@@ -117,15 +117,12 @@ class Performative(Performable, ABC):
     content: SymbolicExpression
     """The propositional content -- the EQL description the force is applied to."""
 
-    opener: ClassVar[KeyWord]
-    """The illocutionary-force verb that opens the act. Defaults to the act's class name (so the
-    class *is* the directive -- *"Explain"*, *"Achieve"*); a subclass needs no central registry."""
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        """Default each act's :attr:`opener` to its class name, unless the subclass declares one."""
-        super().__init_subclass__(**kwargs)
-        if "opener" not in cls.__dict__:
-            cls.opener = KeyWord(cls.__name__)
+    @property
+    def opener(self) -> KeyWord:
+        """:return: the illocutionary-force verb that opens the act -- its class name, so the class
+        *is* the directive (*"Explain"*, *"Achieve"*). Deriving it from the class means a new act
+        needs no central registry and no opener declaration of its own (Open/Closed)."""
+        return KeyWord(type(self).__name__)
 
     def eql_scan_targets(self) -> List[SymbolicExpression]:
         return [self.content]
@@ -260,7 +257,7 @@ class Composition(Performable, ABC):
 
     def _interleave(
         self,
-        connective: VocabEnum,
+        connective: Adverbs,
         services: Optional[MicroplanningServices],
         lead: Optional[VerbalizationFragment] = None,
     ) -> VerbalizationFragment:
@@ -283,7 +280,7 @@ class Composition(Performable, ABC):
 
     def _coordinate(
         self,
-        conjunction: VocabEnum,
+        conjunction: Conjunctions,
         services: Optional[MicroplanningServices],
         lead: Optional[VerbalizationFragment] = None,
         tail: Optional[VerbalizationFragment] = None,
