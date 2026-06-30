@@ -1,10 +1,11 @@
 """
-Tests for the giskardpy motion speech acts (``Achieve`` / ``Monitor``) and their composition with the
-framework-agnostic krrood combinators.
+Tests for the giskardpy motion speech acts (``Achieve`` / ``Monitor``).
 
-``Achieve`` drives a motion goal/task (it compiles to QP constraints); ``Monitor`` watches a predicate or
-constraint (a runtime monitor). Lives in its own directory (not ``giskardpy_test``) so it runs in the lean
-container without the ``giskardpy_test`` conftest that requires real ROS.
+Both are :class:`~krrood.entity_query_language.performatives.Performative` acts over an EQL description:
+``Achieve`` drives a description to satisfaction, ``Monitor`` watches one hold over time. They verbalize
+through the shared EQL pipeline and compose with the framework-agnostic krrood combinators; executing them
+is delegated to the giskard motion runtime (a seam that needs the ROS execution stack). Lives in its own
+directory (not ``giskardpy_test``) so it runs in the lean container without the ROS conftest.
 """
 
 from __future__ import annotations
@@ -13,67 +14,63 @@ import pytest
 
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.performatives import Performable, Sequential
-from semantic_digital_twin.reasoning.robot_predicates import is_pose_free_for_robot
+from semantic_digital_twin.reasoning.robot_predicates import (
+    is_pose_free_for_robot,
+    robot_holds_body,
+)
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-from giskardpy.eql.constraints import MinClearance, ReachPosition
+from semantic_digital_twin.world_description.world_entity import Body
 from giskardpy.eql.performatives import Achieve, Monitor
 
 
-def _reach():
-    return ReachPosition(tip="the gripper tip", target="the target pose")
+def _holds():
+    """A reach-like motion goal as an EQL description: the robot holds the body."""
+    return robot_holds_body(variable(AbstractRobot, []), variable(Body, []))
 
 
-def _keep_clear():
-    return MinClearance(body_a="the gripper", body_b="the table", minimum=0.01)
+def _pose_free():
+    """A condition to watch as an EQL predicate: the pose is free for the robot."""
+    return is_pose_free_for_robot(variable(AbstractRobot, []), variable(Pose, []))
 
 
-# ── Achieve: a motion goal that compiles to a QP constraint ──────────────────────
+# ── Achieve: a motion description, framed as a goal ──────────────────────────────
 
 
-def test_achieve_verbalizes_the_motion_goal():
-    assert Achieve(_reach()).verbalize() == (
-        "Achieve that the gripper tip is at the target pose"
-    )
+def test_achieve_verbalizes_its_description_as_a_goal():
+    text = Achieve(_holds()).verbalize()
+    assert text.startswith("Achieve that ")
+    assert "hold" in text
 
 
-def test_achieve_compiles_its_goal_into_a_giskard_inequality():
-    collection = Achieve(_reach()).perform()
-    inequalities = collection.inequality_constraints
-    assert len(inequalities) == 1
-    assert not inequalities[0].expression.is_constant()   # the symbolic distance flows into the QP
+def test_achieve_execution_is_delegated_to_the_motion_runtime():
+    with pytest.raises(NotImplementedError):
+        Achieve(_holds()).perform()
 
 
-# ── Monitor: a constraint or predicate, watched at runtime ───────────────────────
+# ── Monitor: an EQL condition, watched at runtime ────────────────────────────────
 
 
-def test_monitor_watches_a_constraint():
-    assert Monitor(_keep_clear()).verbalize() == (
-        "Monitor whether the distance between the gripper and the table is at least 0.01 metres"
-    )
-
-
-def test_monitor_watches_an_eql_predicate():
-    condition = is_pose_free_for_robot(variable(AbstractRobot, []), variable(Pose, []))
-    assert Monitor(condition).verbalize().startswith("Monitor whether ")
+def test_monitor_verbalizes_the_watched_condition():
+    text = Monitor(_pose_free()).verbalize()
+    assert text.startswith("Monitor whether ")
+    assert "free" in text
 
 
 def test_monitor_execution_is_delegated_to_the_runtime_monitor():
     with pytest.raises(NotImplementedError):
-        Monitor(_keep_clear()).perform()
+        Monitor(_pose_free()).perform()
 
 
 # ── shared interface + cross-framework composition ───────────────────────────────
 
 
 def test_motion_acts_conform_to_performable():
-    assert isinstance(Achieve(_reach()), Performable)
-    assert isinstance(Monitor(_keep_clear()), Performable)
+    assert isinstance(Achieve(_holds()), Performable)
+    assert isinstance(Monitor(_pose_free()), Performable)
 
 
 def test_krrood_composition_spans_giskard_acts():
-    plan = Sequential([Achieve(_reach()), Monitor(_keep_clear())])
-    assert plan.verbalize() == (
-        "Achieve that the gripper tip is at the target pose, "
-        "then Monitor whether the distance between the gripper and the table is at least 0.01 metres"
-    )
+    text = Sequential([Achieve(_holds()), Monitor(_pose_free())]).verbalize()
+    assert text.startswith("Achieve that ")
+    assert ", then Monitor whether " in text

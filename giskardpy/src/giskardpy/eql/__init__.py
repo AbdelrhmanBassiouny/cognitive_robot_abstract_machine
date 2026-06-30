@@ -1,1 +1,1 @@
-"""Prototype bridge from declarative EQL-style constraint quantities to giskard QP constraints."""
+"""The giskardpy half of the EQL performative layer: the motion speech acts ``Achieve`` / ``Monitor``."""

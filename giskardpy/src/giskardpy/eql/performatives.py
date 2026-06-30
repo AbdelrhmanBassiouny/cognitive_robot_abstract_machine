@@ -3,94 +3,62 @@ Motion speech acts -- the giskardpy half of the performative layer.
 
 ``Achieve`` and ``Monitor`` are the directives that need a solver / monitor, so they live here (the
 framework that owns that capability) rather than in krrood, which keeps only the framework-agnostic acts.
-Both are :class:`~krrood.entity_query_language.performatives.Performable`, so a krrood
-:class:`~krrood.entity_query_language.performatives.Composition` composes them alongside acts from any
-other framework, and both verbalize through the shared fragment vocabulary.
+Both are :class:`~krrood.entity_query_language.performatives.Performative` acts over an EQL description, so
+a krrood :class:`~krrood.entity_query_language.performatives.Composition` composes them alongside acts from
+any other framework and both verbalize through the shared EQL pipeline.
 
-The division of labour follows the goal/condition split: ``Achieve`` drives a **motion goal or task** to
-satisfaction (it compiles to QP constraints), while ``Monitor`` watches a **predicate or constraint** hold
-over time (a runtime monitor).
+The division of labour follows the goal/condition split: ``Achieve`` drives a description to satisfaction
+(*"Achieve that …"*), while ``Monitor`` watches a description hold over time (*"Monitor whether …"*).
+Executing either is delegated to the giskard motion runtime (a seam that needs the ROS execution stack);
+the toy QP-constraint bridge that once stood in for it has been removed.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Optional, Union
+from typing_extensions import NoReturn, Optional
 
-from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.performatives import Performable
+from krrood.entity_query_language.performatives import Performative
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.fragments.base import (
-    PhraseFragment,
     VerbalizationFragment,
 )
-from krrood.entity_query_language.verbalization.fragments.features import Separator
-from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     PerformativeDirective,
     PlanConnectives,
 )
 
-from giskardpy.eql.constraints import GiskardGoal
-from giskardpy.qp.constraint_collection import ConstraintCollection
-
 
 @dataclass
-class Achieve(Performable):
-    """Bring about a motion goal or task by compiling it into giskard QP constraints."""
+class Achieve(Performative):
+    """Drive an EQL-described motion goal to satisfaction (*"Achieve that …"*)."""
 
-    goal: GiskardGoal
-    """The motion goal to drive to satisfaction."""
-
-    def perform(self) -> ConstraintCollection:
-        return self.goal.compile_into(ConstraintCollection())
+    def perform(self) -> NoReturn:
+        raise NotImplementedError(
+            "Achieve is executed by the giskard motion runtime (needs the ROS execution stack)."
+        )
 
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return PhraseFragment(
-            parts=[
-                PerformativeDirective.ACHIEVE.as_fragment(),
-                PlanConnectives.THAT.as_fragment(),
-                self.goal.as_fragment(),
-            ],
-            separator=Separator.SPACE,
+        return self.framed_fragment(
+            PerformativeDirective.ACHIEVE, PlanConnectives.THAT, services
         )
 
 
 @dataclass
-class Monitor(Performable):
-    """Watch whether a predicate or constraint holds throughout the motion -- a runtime monitor."""
+class Monitor(Performative):
+    """Watch whether an EQL-described condition holds throughout the motion (*"Monitor whether …"*)."""
 
-    condition: Union[SymbolicExpression, GiskardGoal]
-    """The condition to watch: an EQL predicate, or a constraint (a :class:`GiskardGoal`)."""
-
-    def perform(self) -> None:
+    def perform(self) -> NoReturn:
         raise NotImplementedError(
             "Monitor is executed by a giskard monitor at runtime (needs the ROS execution stack)."
         )
 
-    def eql_scan_targets(self) -> List[SymbolicExpression]:
-        if isinstance(self.condition, GiskardGoal):
-            return []
-        return [self.condition]
-
-    def _condition_fragment(
-        self, services: Optional[MicroplanningServices]
-    ) -> VerbalizationFragment:
-        if isinstance(self.condition, GiskardGoal):
-            return self.condition.as_fragment()
-        return fragment_for_expression(self.condition, services)
-
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return PhraseFragment(
-            parts=[
-                PerformativeDirective.MONITOR.as_fragment(),
-                PlanConnectives.WHETHER.as_fragment(),
-                self._condition_fragment(services),
-            ],
-            separator=Separator.SPACE,
+        return self.framed_fragment(
+            PerformativeDirective.MONITOR, PlanConnectives.WHETHER, services
         )
