@@ -23,6 +23,10 @@ from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 if TYPE_CHECKING:
     from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
+    from semantic_digital_twin.robots.robot_parts import (
+        AbstractRobot,
+        AbstractRobotPart,
+    )
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.geometry import Scale
     from semantic_digital_twin.world_description.world_entity import (
@@ -1259,13 +1263,4 @@ class DuplicateKinematicStructureEntityError(UsageError):
             f"but kinematic structure entity names must be unique within a world. "
             f"Give entities from different sources distinct prefixes, e.g. PrefixedName(name, prefix='robot1')."
         )
-
-
-class AbstractRobot:
-    pass
-
-
-class AbstractRobotPart:
-    pass
-
 

@@ -59,7 +59,7 @@ from semantic_digital_twin.exceptions import (
     MismatchingWorld,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
-# from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
     ForwardKinematicsManager,
 )
@@ -392,10 +392,7 @@ class WorldModelManager:
         """
         self.version += 1
         for callback in list(self.model_change_callbacks):
-            if hasattr(callback, "notify_model_change"):
-                callback.notify_model_change(**kwargs)
-            else:
-                callback.notify(**kwargs)
+            callback.notify_model_change(**kwargs)
 
     def flush_pending_publications(self) -> None:
         """
@@ -614,11 +611,19 @@ class World(HasSimulatorProperties):
 
     @property
     def robot_bodies_with_collision(self) -> List[Body]:
-        return []
+        return [
+            body
+            for robot in self.get_semantic_annotations_by_type(AbstractRobot)
+            for body in robot.bodies_with_collision
+        ]
 
     @property
-    def robot_body_to_robot_mapping(self) -> dict[Body, Any]:
-        return {}
+    def robot_body_to_robot_mapping(self) -> dict[Body, AbstractRobot]:
+        return {
+            body: robot
+            for robot in self.get_semantic_annotations_by_type(AbstractRobot)
+            for body in robot.bodies
+        }
 
     @property
     def bodies(self) -> List[Body]:
@@ -2004,10 +2009,7 @@ class World(HasSimulatorProperties):
             crashes if its not the case. Also using this in a method that is called a lot, it may cause performance
             issues because of unnecessary recompilations.
         """
-        if hasattr(self._forward_kinematic_manager, "notify_model_change"):
-            self._forward_kinematic_manager.notify_model_change()
-        else:
-            self._forward_kinematic_manager._notify()
+        self._forward_kinematic_manager.notify_model_change()
         self._forward_kinematic_manager.recompute()
 
     def _manually_compute_entity_a_T_entity_b(
