@@ -77,7 +77,7 @@ if TYPE_CHECKING:
         Door,
         Handle,
         Aperture,
-        ShelfLayer,
+        MechanicalJoint,
         Leg,
     )
     from semantic_digital_twin.world import World
@@ -208,12 +208,23 @@ class HasRootKinematicStructureEntity(SemanticAnnotation, ABC):
         return self._world.get_connections_of_branch(self.root)
 
     def _kinematic_structure_entities(
-        self, visited: Set[int]
+        self, visited_or_type
     ) -> list[KinematicStructureEntity]:
+        if isinstance(visited_or_type, set):
+            visited = visited_or_type
+        else:
+            visited = set()
+
         if id(self) in visited:
             return []
         visited.add(id(self))
-        return self._world.get_kinematic_structure_entities_of_branch(self.root)
+
+        entities = self._world.get_kinematic_structure_entities_of_branch(self.root)
+
+        if not isinstance(visited_or_type, set) and isinstance(visited_or_type, type):
+            entities = [x for x in entities if isinstance(x, visited_or_type)]
+
+        return entities
 
 
 @dataclass(eq=False)
@@ -422,7 +433,11 @@ class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
 
         [match] = matches
         part._mount_strategy(self)
-        if match.is_many_to_many_relationship:
+        is_many = (
+            getattr(match, "is_many_to_many_relationship", False) or
+            getattr(match, "is_one_to_many_relationship", False)
+        )
+        if is_many:
             getattr(self, match.field.name).append(part)
         else:
             setattr(self, match.field.name, part)
@@ -456,8 +471,13 @@ class HasMechanicalJoint(HasRootBody, PartWholeRelationship, ABC):
     """
 
     def _kinematic_structure_entities(
-        self, visited: Set[int]
+        self, visited_or_type
     ) -> list[KinematicStructureEntity]:
+        if isinstance(visited_or_type, set):
+            visited = visited_or_type
+        else:
+            visited = set()
+
         if id(self) in visited:
             return []
         visited.add(id(self))
@@ -466,6 +486,10 @@ class HasMechanicalJoint(HasRootBody, PartWholeRelationship, ABC):
         )
         if self.mechanical_joint is not None:
             kinematic_structure_entities.append(self.mechanical_joint.root)
+
+        if not isinstance(visited_or_type, set) and isinstance(visited_or_type, type):
+            kinematic_structure_entities = [x for x in kinematic_structure_entities if isinstance(x, visited_or_type)]
+
         return kinematic_structure_entities
 
 
@@ -498,52 +522,7 @@ class HasDoors(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasLegs(HasRootKinematicStructureEntity, ABC):
-    """
-    A mixin class for semantic annotations that have legs.
-    """
-
-    legs: List[Leg] = field(default_factory=list, hash=False, kw_only=True)
-    """
-    The legs of the semantic annotation.
-    """
-
-    @synchronized_attribute_modification
-    def add_leg(self, leg: Leg):
-        self._attach_child_entity_in_kinematic_structure(leg.root)
-        self.legs.append(leg)
-
-
-@dataclass(eq=False)
-class HasShelfLayers(HasRootBody, ABC):
-    """
-    A mixin class for semantic annotations that have shelf layers.
-    """
-
-    shelf_layers: List[ShelfLayer] = field(
-        default_factory=list, hash=False, kw_only=True
-    )
-    """
-    The shelf layers of the semantic annotation.
-    """
-
-    @synchronized_attribute_modification
-    def add_shelf_layer(
-        self,
-        shelf_layer: ShelfLayer,
-    ):
-        """
-        Add a shelf layer to the semantic annotation.
-
-        :param shelf_layer: The shelf layer to add.
-        """
-
-        self._attach_child_entity_in_kinematic_structure(shelf_layer.root)
-        self.shelf_layers.append(shelf_layer)
-
-
-@dataclass(eq=False)
-class HasHandle(HasRootBody, ABC):
+class HasHandle(HasRootBody, PartWholeRelationship, ABC):
     """
     A mixin class for semantic annotations that have a handle.
     """
@@ -551,6 +530,20 @@ class HasHandle(HasRootBody, ABC):
     handle: Optional[Handle] = part_whole_relationship_field(default=None)
     """
     The handle of the semantic annotation.
+    """
+
+
+@dataclass(eq=False)
+class HasLegs(PartWholeRelationship, ABC):
+    """
+    A mixin class for semantic annotations that have legs.
+    """
+
+    legs: List[Leg] = part_whole_relationship_field(
+        default_factory=list, hash=False, kw_only=True
+    )
+    """
+    The legs of the semantic annotation.
     """
 
 
@@ -996,3 +989,20 @@ class HasCaseAsRootBody(HasSupportingSurface, ABC):
         container_event = outer_box.as_composite_set() - inner_box.as_composite_set()
 
         return container_event
+
+
+# Backwards compatibility definitions for ORM interfaces
+@dataclass(eq=False)
+class HasHinge(HasMechanicalJoint, ABC):
+    pass
+
+
+@dataclass(eq=False)
+class HasSlider(HasMechanicalJoint, ABC):
+    pass
+
+
+@dataclass(eq=False)
+class HasStorageSpace(IsStorageSpace, ABC):
+    pass
+

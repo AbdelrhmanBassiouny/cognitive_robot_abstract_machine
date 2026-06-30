@@ -31,6 +31,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     IsPerceivable,
     HasRootBody,
     IsStorageSpace,
+    HasLegs,
 )
 from semantic_digital_twin.spatial_types import (
     Point3,
@@ -254,10 +255,9 @@ class MechanicalJoint(HasRootBody):
         self._world.move_branch(
             self.root,
             main_has_root_body_annotation.root.parent_kinematic_structure_entity,
-            enable_unsafe_inside_world_block=True,
         )
         main_has_root_body_annotation._world.move_branch(
-            main_has_root_body_annotation.root, self.root, True
+            main_has_root_body_annotation.root, self.root
         )
 
 
@@ -444,7 +444,7 @@ class ShelfLayer(HasSupportingSurface):
 
 
 @dataclass(eq=False)
-class Table(Furniture, HasSupportingSurface):
+class Table(Furniture, HasSupportingSurface, HasLegs):
     """
     A semantic annotation that represents a table.
     """
@@ -458,30 +458,30 @@ class CounterTop(Furniture, HasSupportingSurface):
 
 
 @dataclass(eq=False)
-class Cabinet(Furniture, HasCaseAsRootBody, HasHandle):
+class Cabinet(Furniture, HasCaseAsRootBody, HasHandle, HasDoors, HasDrawers):
     @classproperty
     def hole_direction(self) -> Vector3:
         return Vector3.NEGATIVE_X()
 
 
 @dataclass(eq=False)
-class Fridge(Cabinet, HasDoors, HasDrawers): ...
+class Fridge(Cabinet): ...
 
 
 @dataclass(eq=False)
-class Oven(HasRootBody): ...
+class Oven(HasRootBody, HasDoors): ...
 
 
 @dataclass(eq=False)
-class Dresser(Cabinet, HasDrawers, HasDoors): ...
+class Dresser(Cabinet): ...
 
 
 @dataclass(eq=False)
-class Cupboard(Cabinet, HasDoors, HasDrawers): ...
+class Cupboard(Cabinet): ...
 
 
 @dataclass(eq=False)
-class Wardrobe(Cabinet, HasDrawers, HasDoors): ...
+class Wardrobe(Cabinet): ...
 
 
 @dataclass(eq=False)

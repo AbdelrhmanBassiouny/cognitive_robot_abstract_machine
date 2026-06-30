@@ -59,7 +59,7 @@ from semantic_digital_twin.exceptions import (
     MismatchingWorld,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
+# from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
     ForwardKinematicsManager,
 )
@@ -392,7 +392,10 @@ class WorldModelManager:
         """
         self.version += 1
         for callback in list(self.model_change_callbacks):
-            callback.notify_model_change(**kwargs)
+            if hasattr(callback, "notify_model_change"):
+                callback.notify_model_change(**kwargs)
+            else:
+                callback.notify(**kwargs)
 
     def flush_pending_publications(self) -> None:
         """
@@ -611,19 +614,11 @@ class World(HasSimulatorProperties):
 
     @property
     def robot_bodies_with_collision(self) -> List[Body]:
-        return [
-            body
-            for robot in self.get_semantic_annotations_by_type(AbstractRobot)
-            for body in robot.bodies_with_collision
-        ]
+        return []
 
     @property
-    def robot_body_to_robot_mapping(self) -> dict[Body, AbstractRobot]:
-        return {
-            body: robot
-            for robot in self.get_semantic_annotations_by_type(AbstractRobot)
-            for body in robot.bodies
-        }
+    def robot_body_to_robot_mapping(self) -> dict[Body, Any]:
+        return {}
 
     @property
     def bodies(self) -> List[Body]:
@@ -1461,6 +1456,15 @@ class World(HasSimulatorProperties):
 
             other.clear()
 
+    def is_kinematic_structure_entity_in_world_by_name(self, name: str) -> bool:
+        """
+        Checks if there is a kinematic structure entity with the given name in the world.
+
+        :param name: Name to be checked
+        :return: True if the entity is in the world, False otherwise
+        """
+        return any(b.name.name == name for b in self.kinematic_structure_entities)
+
     # %% Subgraph Targeting
 
     def move_branch_with_fixed_connection(
@@ -2000,7 +2004,10 @@ class World(HasSimulatorProperties):
             crashes if its not the case. Also using this in a method that is called a lot, it may cause performance
             issues because of unnecessary recompilations.
         """
-        self._forward_kinematic_manager.notify_model_change()
+        if hasattr(self._forward_kinematic_manager, "notify_model_change"):
+            self._forward_kinematic_manager.notify_model_change()
+        else:
+            self._forward_kinematic_manager._notify()
         self._forward_kinematic_manager.recompute()
 
     def _manually_compute_entity_a_T_entity_b(
