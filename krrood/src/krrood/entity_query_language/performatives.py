@@ -20,24 +20,24 @@ so coordination and punctuation are produced by the verbalization engine rather 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from typing_extensions import Any, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.verbalization import morphology
+from krrood.entity_query_language.verbalization.composition import (
+    concurrent,
+    coordinate,
+    interleave,
+)
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.fragments.base import (
-    BlockFragment,
     PhraseFragment,
-    RoleFragment,
     VerbalizationFragment,
     WordFragment,
     flatten_fragment_to_plain_text,
-    oxford_comma,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Separator
-from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
@@ -48,25 +48,6 @@ from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnu
 from krrood.exceptions import DataclassException
 
 
-def _as_participle(fragment: VerbalizationFragment) -> VerbalizationFragment:
-    """:return: *fragment* with its leading verb / directive opener as a present participle
-    (*"monitor whether …"* → *"monitoring whether …"*), so a concurrent act reads as a *"while …-ing"*
-    clause. A fragment with no leading verb (a bare assertion) is returned unchanged."""
-    if isinstance(fragment, RoleFragment) and fragment.role in (
-        SemanticRole.VERB,
-        SemanticRole.KEYWORD,
-    ):
-        return replace(fragment, text=morphology.present_participle(fragment.text))
-    if isinstance(fragment, BlockFragment) and fragment.header is not None:
-        return replace(fragment, header=_as_participle(fragment.header))
-    if isinstance(fragment, PhraseFragment) and fragment.parts:
-        return replace(
-            fragment, parts=[_as_participle(fragment.parts[0]), *fragment.parts[1:]]
-        )
-    return fragment
-
-
-@dataclass
 class Performable(ABC):
     """A speech act: something that can be performed and rendered as a verbalization fragment.
 
@@ -241,55 +222,11 @@ class Composition(Performable, ABC):
     def eql_scan_targets(self) -> List[SymbolicExpression]:
         return [target for child in self.children for target in child.eql_scan_targets()]
 
-    def _interleave(
-        self,
-        connective: PlanConnectives,
-        services: Optional[MicroplanningServices],
-        lead: Optional[VocabEnum] = None,
-    ) -> VerbalizationFragment:
-        """Join the children, placing *connective* before every child after the first.
-
-        :param connective: The word inserted between steps (e.g. ``PlanConnectives.THEN``).
-        :param services: Shared microplanning services threaded to each child (coreference across acts).
-        :param lead: An optional opening word placed before the first child (e.g. ``PlanConnectives.TRY``).
-        :return: A fragment reading *"[lead] A, <connective> B, <connective> C"*.
-        """
-        head, *rest = [child.as_fragment(services) for child in self.children]
-        parts: List[VerbalizationFragment] = []
-        if lead is not None:
-            parts.extend([lead.as_fragment(), WordFragment(text=Separator.SPACE)])
-        parts.append(head)
-        for fragment in rest:
-            parts.append(WordFragment(text=f"{Separator.COMMA}{connective.text} "))
-            parts.append(fragment)
-        return PhraseFragment(parts=parts, separator=Separator.NONE)
-
-    def _coordinate(
-        self,
-        conjunction: Conjunctions,
-        services: Optional[MicroplanningServices],
-        lead: Optional[VocabEnum] = None,
-        tail: Optional[VocabEnum] = None,
-    ) -> VerbalizationFragment:
-        """Join the children as an Oxford-comma coordination, reusing the And/Or coordination.
-
-        :param conjunction: ``Conjunctions.AND`` (parallel) or ``Conjunctions.OR`` (try-all).
-        :param services: Shared microplanning services threaded to each child (coreference across acts).
-        :param lead: An optional opening word (e.g. ``PlanConnectives.TRY``).
-        :param tail: An optional closing word (e.g. ``PlanConnectives.SIMULTANEOUSLY``).
-        :return: A fragment reading *"[lead] A, B, <conjunction> C [tail]"*.
-        """
-        joined = oxford_comma(
-            [child.as_fragment(services) for child in self.children],
-            conjunction.as_fragment(),
-        )
-        parts: List[VerbalizationFragment] = []
-        if lead is not None:
-            parts.append(lead.as_fragment())
-        parts.append(joined)
-        if tail is not None:
-            parts.append(tail.as_fragment())
-        return PhraseFragment(parts=parts, separator=Separator.SPACE)
+    def _child_fragments(
+        self, services: Optional[MicroplanningServices]
+    ) -> List[VerbalizationFragment]:
+        """:return: each child's fragment, with *services* threaded so referents corefer across them."""
+        return [child.as_fragment(services) for child in self.children]
 
 
 @dataclass
@@ -299,7 +236,7 @@ class Sequential(Composition):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self._interleave(PlanConnectives.THEN, services)
+        return interleave(self._child_fragments(services), PlanConnectives.THEN)
 
 
 @dataclass
@@ -310,20 +247,7 @@ class Parallel(Composition):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        head, *rest = [child.as_fragment(services) for child in self.children]
-        if not rest:
-            return head
-        concurrent = oxford_comma(
-            [_as_participle(fragment) for fragment in rest],
-            Conjunctions.AND.as_fragment(),
-        )
-        connective = WordFragment(
-            text=f"{Separator.COMMA}{PlanConnectives.WHILE.text} "
-            f"{PlanConnectives.SIMULTANEOUSLY.text} "
-        )
-        return PhraseFragment(
-            parts=[head, connective, concurrent], separator=Separator.NONE
-        )
+        return concurrent(self._child_fragments(services))
 
 
 @dataclass
@@ -334,8 +258,10 @@ class TryInOrder(Composition):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self._interleave(
-            PlanConnectives.OTHERWISE, services, lead=PlanConnectives.TRY
+        return interleave(
+            self._child_fragments(services),
+            PlanConnectives.OTHERWISE,
+            lead=PlanConnectives.TRY,
         )
 
 
@@ -347,9 +273,9 @@ class TryAll(Composition):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self._coordinate(
+        return coordinate(
+            self._child_fragments(services),
             Conjunctions.OR,
-            services,
             lead=PlanConnectives.TRY,
             tail=PlanConnectives.SIMULTANEOUSLY,
         )
