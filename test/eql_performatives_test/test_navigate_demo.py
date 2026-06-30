@@ -52,7 +52,7 @@ def test_actions_verbalize_as_their_own_verb_phrases():
     assert _navigate_and_raise_torso().verbalize() == (
         "Navigate to a target location, "
         "while simultaneously monitoring whether the target location is free for an AbstractRobot, "
-        "then move the torso to a high state"
+        "then move the torso to HIGH"
     )
     assert "NavigateAction" not in _navigate_and_raise_torso().verbalize()
 
@@ -70,4 +70,20 @@ def test_each_step_uses_the_act_that_fits_it():
         Monitor(is_pose_free_for_robot(robot, target))
         .verbalize()
         .startswith("Monitor whether ")
+    )
+
+
+def test_torso_state_goes_through_the_general_value_choices():
+    # MoveTorsoAction names its torso_state through the standard value rendering (no enum
+    # special-casing): a concrete state names itself, and a domain-bound variable lists its options.
+    assert (
+        Perform(match(MoveTorsoAction)(torso_state=TorsoState.HIGH)).verbalize()
+        == "Move the torso to HIGH"
+    )
+    domain_state = variable(
+        TorsoState, [TorsoState.HIGH, TorsoState.MID, TorsoState.LOW]
+    )
+    assert (
+        Perform(match(MoveTorsoAction)(torso_state=domain_state)).verbalize()
+        == "Move the torso to one of HIGH, MID, or LOW"
     )

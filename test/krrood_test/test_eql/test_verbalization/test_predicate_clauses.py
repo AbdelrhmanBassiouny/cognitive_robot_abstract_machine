@@ -9,6 +9,7 @@ copula with suppletion.
 
 from __future__ import annotations
 
+import enum
 from dataclasses import dataclass
 
 import pytest
@@ -237,6 +238,18 @@ def test_field_name_alias_is_shared_across_mentions_with_coreference():
     assert verbalize_expression(and_(_Approaches(location), IsReachable(location))) == (
         "approaches a target location, and the target location is reachable"
     )
+
+
+class _Mode(enum.Enum):
+    HIGH = 1
+    LOW = 2
+
+
+def test_noun_renders_a_raw_value_through_the_value_lexicon():
+    """``Noun`` accepts a raw value (not only a head word or constituent), lexicalising it the same
+    way the value lexicon does — an enum member as its name."""
+    assert flatten_fragment_to_plain_text(Noun(_Mode.HIGH).as_fragment()) == "HIGH"
+    assert flatten_fragment_to_plain_text(Noun(42).as_fragment()) == "42"
 
 
 # ── fragments are required ───────────────────────────────────────────────────────

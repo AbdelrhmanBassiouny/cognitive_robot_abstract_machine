@@ -143,7 +143,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
                 for assignment in group.assignments
             },
             _render_=lambda expression, alias=None: self.context.child(
-                expression, alias=alias
+                expression, alias=alias, as_value=True
             ),
         )
         fragment = selection._type_._verbalization_fragment_(operands)
