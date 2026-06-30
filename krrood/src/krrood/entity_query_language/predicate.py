@@ -233,6 +233,19 @@ class Verbalizable(ABC):
         :return: The operation's verbalization fragment.
         """
 
+    @classmethod
+    def has_custom_fragment(cls, type_: Any) -> bool:
+        """:return: ``True`` when *type_* is a :class:`Verbalizable` that supplies its own
+        ``_verbalization_fragment_`` (rather than inheriting the abstract one), so it should render
+        through that fragment wherever it appears -- whether called (an ``InstantiatedVariable``) or
+        constructed (a match selection)."""
+        return (
+            isinstance(type_, type)
+            and issubclass(type_, Verbalizable)
+            and type_._verbalization_fragment_.__func__
+            is not Verbalizable._verbalization_fragment_.__func__
+        )
+
 
 @dataclass(eq=False)
 class SymbolicCallable(Symbol, Verbalizable, ABC):
