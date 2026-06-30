@@ -22,7 +22,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, ClassVar, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.verbalization import morphology
@@ -41,10 +41,12 @@ from krrood.entity_query_language.verbalization.fragments.roles import SemanticR
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
-    PerformativeDirective,
     PlanConnectives,
 )
-from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
+from krrood.entity_query_language.verbalization.vocabulary.words import (
+    KeyWord,
+    VocabEnum,
+)
 from krrood.exceptions import DataclassException
 
 
@@ -112,25 +114,33 @@ class Performative(Performable, ABC):
     content: SymbolicExpression
     """The propositional content -- the EQL description the force is applied to."""
 
+    opener: ClassVar[KeyWord]
+    """The illocutionary-force verb that opens the act. Defaults to the act's class name (so the
+    class *is* the directive -- *"Explain"*, *"Achieve"*); a subclass needs no central registry."""
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Default each act's :attr:`opener` to its class name, unless the subclass declares one."""
+        super().__init_subclass__(**kwargs)
+        if "opener" not in cls.__dict__:
+            cls.opener = KeyWord(cls.__name__)
+
     def eql_scan_targets(self) -> List[SymbolicExpression]:
         return [self.content]
 
     def framed_fragment(
         self,
-        opener: VocabEnum,
         introducer: VocabEnum,
         services: Optional[MicroplanningServices],
     ) -> VerbalizationFragment:
-        """Frame the content with a directive opener and a clause introducer.
+        """Frame the content with this act's :attr:`opener` verb and a clause introducer.
 
-        :param opener: The illocutionary-force verb (e.g. ``PerformativeDirective.ACHIEVE``).
         :param introducer: The clause introducer (e.g. ``PlanConnectives.THAT``).
         :param services: Shared microplanning services (coreference across acts), or ``None``.
         :return: A fragment reading *"<opener> <introducer> <content>"* (e.g. *"Achieve that …"*).
         """
         return PhraseFragment(
             parts=[
-                opener.as_fragment(),
+                self.opener.as_fragment(),
                 introducer.as_fragment(),
                 fragment_for_expression(self.content, services),
             ],
@@ -176,9 +186,7 @@ class Explain(Performative):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self.framed_fragment(
-            PerformativeDirective.EXPLAIN, PlanConnectives.WHY, services
-        )
+        return self.framed_fragment(PlanConnectives.WHY, services)
 
 
 @dataclass
@@ -188,6 +196,12 @@ class Warn(Performable):
     Carries the situation and remedy a :class:`~krrood.exceptions.DataclassException` already holds, so
     :meth:`of` lifts any such exception into the speech-act layer.
     """
+
+    opener: ClassVar[KeyWord] = KeyWord("Warning")
+    """The directive verb that opens the warning (its surface differs from the class name)."""
+
+    suggestion_label: ClassVar[KeyWord] = KeyWord("Suggestion")
+    """The label introducing the remedy."""
 
     situation: str
     """A human-readable description of what is wrong."""
@@ -210,14 +224,12 @@ class Warn(Performable):
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         parts: List[VerbalizationFragment] = [
-            PerformativeDirective.WARNING.as_fragment(),
+            self.opener.as_fragment(),
             WordFragment(text=f": {self.situation}"),
         ]
         if self.suggestion:
             parts.append(
-                WordFragment(
-                    text=f" {PerformativeDirective.SUGGESTION.text}: {self.suggestion}"
-                )
+                WordFragment(text=f" {self.suggestion_label.text}: {self.suggestion}")
             )
         return PhraseFragment(parts=parts, separator=Separator.NONE)
 
@@ -239,7 +251,9 @@ class Composition(Performable, ABC):
         )
 
     def eql_scan_targets(self) -> List[SymbolicExpression]:
-        return [target for child in self.children for target in child.eql_scan_targets()]
+        return [
+            target for child in self.children for target in child.eql_scan_targets()
+        ]
 
     def _interleave(
         self,
@@ -305,7 +319,8 @@ class Sequential(Composition):
 @dataclass
 class Parallel(Composition):
     """Do the children at the same time -- the first act as the main clause, the rest as concurrent
-    *"while …-ing"* clauses (*"navigate to X, while simultaneously monitoring whether …"*)."""
+    *"while …-ing"* clauses (*"navigate to X, while simultaneously monitoring whether …"*).
+    """
 
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None

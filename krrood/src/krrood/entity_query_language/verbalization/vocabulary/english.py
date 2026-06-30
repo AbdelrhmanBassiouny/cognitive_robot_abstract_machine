@@ -215,21 +215,6 @@ class Directive(VocabEnum):
         return cls.GENERATE if underspecified else cls.FIND
 
 
-class PerformativeDirective(VocabEnum):
-    """The verb that opens a non-query speech act -- *"Achieve"*, *"Observe"*, *"Explain"*, *"Perform"*.
-
-    These are the illocutionary-force openers of the performative layer, the siblings of the query
-    :class:`Directive` (*"Find"* / *"Generate"*); generic English words carrying no domain meaning.
-    """
-
-    ACHIEVE = KeyWord("Achieve")
-    MONITOR = KeyWord("Monitor")
-    EXPLAIN = KeyWord("Explain")
-    PERFORM = KeyWord("Perform")
-    WARNING = KeyWord("Warning")
-    SUGGESTION = KeyWord("Suggestion")
-
-
 class PlanConnectives(VocabEnum):
     """The connective words that join or introduce the parts of a composed plan or a speech act."""
 

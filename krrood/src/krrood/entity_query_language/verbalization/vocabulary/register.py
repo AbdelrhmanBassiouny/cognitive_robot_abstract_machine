@@ -36,8 +36,8 @@ class Register:
     """The keyword that introduces the field bindings -- *"given that"* (query) or *"such that"* (imperative)."""
 
     fixed_opener: Optional[VocabEnum] = None
-    """A fixed opener verb (e.g. ``PerformativeDirective.PERFORM``), or ``None`` to choose *"Find"* /
-    *"Generate"* by the description's specificity."""
+    """A fixed opener verb (e.g. an act's ``opener``, such as *"Perform"*), or ``None`` to choose
+    *"Find"* / *"Generate"* by the description's specificity."""
 
     imperative: bool = False
     """Whether the description is a command -- its finite verb is realised in the bare imperative

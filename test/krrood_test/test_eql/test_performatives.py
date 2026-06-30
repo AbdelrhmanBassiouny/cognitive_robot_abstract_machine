@@ -63,8 +63,10 @@ def _operational():
 def test_find_is_the_query_speech_act_and_evaluates():
     query = a(entity(location := variable(Location, [])).where(IsReachable(location)))
     find = Find(query)
-    assert find.verbalize() == verbalize_expression(query)   # the query already opens with "Find …"
-    assert isinstance(find.perform(), list)                  # find evaluates (empty domain → [])
+    assert find.verbalize() == verbalize_expression(
+        query
+    )  # the query already opens with "Find …"
+    assert isinstance(find.perform(), list)  # find evaluates (empty domain → [])
 
 
 def test_inform_asserts_the_proposition():
@@ -75,7 +77,10 @@ def test_inform_asserts_the_proposition():
 
 def test_explain_frames_the_description():
     reachable = _reachable()
-    assert Explain(reachable).verbalize() == f"Explain why {verbalize_expression(reachable)}"
+    assert (
+        Explain(reachable).verbalize()
+        == f"Explain why {verbalize_expression(reachable)}"
+    )
 
 
 def test_warn_lifts_an_exception_into_a_speech_act():
@@ -95,9 +100,7 @@ def test_warn_without_a_suggestion_omits_it():
 
 def test_sequential_interleaves_then():
     text = Sequential([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text == (
-        "A Location is reachable, then a Robot is operational"
-    )
+    assert text == ("A Location is reachable, then a Robot is operational")
 
 
 def test_parallel_states_the_rest_as_concurrent_while_clauses():
@@ -110,7 +113,7 @@ def test_parallel_of_three_joins_the_concurrent_acts_with_and():
         [Inform(_reachable()), Inform(_operational()), Inform(_reachable())]
     ).verbalize()
     assert ", while simultaneously " in text
-    assert " and " in text                               # the And-rule's coordination, reused
+    assert " and " in text  # the And-rule's coordination, reused
 
 
 def test_try_in_order_is_an_ordered_fallback():
@@ -141,3 +144,23 @@ def test_unsupported_execution_is_delegated_not_faked():
         Explain(_reachable()).perform()
     with pytest.raises(NotImplementedError):
         Sequential([Inform(_reachable())]).perform()
+
+
+def test_a_new_acts_opener_derives_from_its_class_name():
+    """A new performative's directive opener is its class name — adding an act needs no edit to any
+    central directive registry (the duplication the old ``PerformativeDirective`` enum carried).
+    """
+    from krrood.entity_query_language.performatives import Performative
+    from krrood.entity_query_language.verbalization.vocabulary.english import (
+        PlanConnectives,
+    )
+
+    @dataclass
+    class Suggest(Performative):
+        def perform(self) -> None: ...
+
+        def as_fragment(self, services=None):
+            return self.framed_fragment(PlanConnectives.THAT, services)
+
+    assert Suggest.opener.text == "Suggest"
+    assert Suggest(_reachable()).verbalize().startswith("Suggest that ")

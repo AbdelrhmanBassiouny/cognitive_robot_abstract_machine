@@ -25,7 +25,6 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    PerformativeDirective,
     PlanConnectives,
 )
 
@@ -42,9 +41,7 @@ class Achieve(Performative):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self.framed_fragment(
-            PerformativeDirective.ACHIEVE, PlanConnectives.THAT, services
-        )
+        return self.framed_fragment(PlanConnectives.THAT, services)
 
 
 @dataclass
@@ -59,6 +56,4 @@ class Monitor(Performative):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self.framed_fragment(
-            PerformativeDirective.MONITOR, PlanConnectives.WHETHER, services
-        )
+        return self.framed_fragment(PlanConnectives.WHETHER, services)
