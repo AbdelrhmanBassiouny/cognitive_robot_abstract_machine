@@ -40,9 +40,12 @@ from krrood.entity_query_language.verbalization.fragments.features import Separa
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Adverbs,
     Conjunctions,
-    PlanConnectives,
+    QuestionWords,
+    SubordinatingConjunctions,
 )
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import Verb
 from krrood.entity_query_language.verbalization.vocabulary.words import (
     KeyWord,
     VocabEnum,
@@ -134,7 +137,7 @@ class Performative(Performable, ABC):
     ) -> VerbalizationFragment:
         """Frame the content with this act's :attr:`opener` verb and a clause introducer.
 
-        :param introducer: The clause introducer (e.g. ``PlanConnectives.THAT``).
+        :param introducer: The clause introducer (e.g. ``Complementizers.THAT``).
         :param services: Shared microplanning services (coreference across acts), or ``None``.
         :return: A fragment reading *"<opener> <introducer> <content>"* (e.g. *"Achieve that …"*).
         """
@@ -186,7 +189,7 @@ class Explain(Performative):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self.framed_fragment(PlanConnectives.WHY, services)
+        return self.framed_fragment(QuestionWords.WHY, services)
 
 
 @dataclass
@@ -257,21 +260,21 @@ class Composition(Performable, ABC):
 
     def _interleave(
         self,
-        connective: PlanConnectives,
+        connective: VocabEnum,
         services: Optional[MicroplanningServices],
-        lead: Optional[VocabEnum] = None,
+        lead: Optional[VerbalizationFragment] = None,
     ) -> VerbalizationFragment:
         """Join the children, placing *connective* before every child after the first.
 
-        :param connective: The word inserted between steps (e.g. ``PlanConnectives.THEN``).
+        :param connective: The adverb inserted between steps (e.g. ``Adverbs.THEN``).
         :param services: Shared microplanning services threaded to each child (coreference across acts).
-        :param lead: An optional opening word placed before the first child (e.g. ``PlanConnectives.TRY``).
+        :param lead: An optional opening fragment placed before the first child (e.g. the *"try"* verb).
         :return: A fragment reading *"[lead] A, <connective> B, <connective> C"*.
         """
         head, *rest = [child.as_fragment(services) for child in self.children]
         parts: List[VerbalizationFragment] = []
         if lead is not None:
-            parts.extend([lead.as_fragment(), WordFragment(text=Separator.SPACE)])
+            parts.extend([lead, WordFragment(text=Separator.SPACE)])
         parts.append(head)
         for fragment in rest:
             parts.append(WordFragment(text=f"{Separator.COMMA}{connective.text} "))
@@ -280,17 +283,17 @@ class Composition(Performable, ABC):
 
     def _coordinate(
         self,
-        conjunction: Conjunctions,
+        conjunction: VocabEnum,
         services: Optional[MicroplanningServices],
-        lead: Optional[VocabEnum] = None,
-        tail: Optional[VocabEnum] = None,
+        lead: Optional[VerbalizationFragment] = None,
+        tail: Optional[VerbalizationFragment] = None,
     ) -> VerbalizationFragment:
         """Join the children as an Oxford-comma coordination, reusing the And/Or coordination.
 
         :param conjunction: ``Conjunctions.AND`` (parallel) or ``Conjunctions.OR`` (try-all).
         :param services: Shared microplanning services threaded to each child (coreference across acts).
-        :param lead: An optional opening word (e.g. ``PlanConnectives.TRY``).
-        :param tail: An optional closing word (e.g. ``PlanConnectives.SIMULTANEOUSLY``).
+        :param lead: An optional opening fragment (e.g. the *"try"* verb).
+        :param tail: An optional closing fragment (e.g. ``Adverbs.SIMULTANEOUSLY``).
         :return: A fragment reading *"[lead] A, B, <conjunction> C [tail]"*.
         """
         joined = oxford_comma(
@@ -299,10 +302,10 @@ class Composition(Performable, ABC):
         )
         parts: List[VerbalizationFragment] = []
         if lead is not None:
-            parts.append(lead.as_fragment())
+            parts.append(lead)
         parts.append(joined)
         if tail is not None:
-            parts.append(tail.as_fragment())
+            parts.append(tail)
         return PhraseFragment(parts=parts, separator=Separator.SPACE)
 
 
@@ -313,7 +316,7 @@ class Sequential(Composition):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self._interleave(PlanConnectives.THEN, services)
+        return self._interleave(Adverbs.THEN, services)
 
 
 @dataclass
@@ -333,8 +336,8 @@ class Parallel(Composition):
             Conjunctions.AND.as_fragment(),
         )
         connective = WordFragment(
-            text=f"{Separator.COMMA}{PlanConnectives.WHILE.text} "
-            f"{PlanConnectives.SIMULTANEOUSLY.text} "
+            text=f"{Separator.COMMA}{SubordinatingConjunctions.WHILE.text} "
+            f"{Adverbs.SIMULTANEOUSLY.text} "
         )
         return PhraseFragment(
             parts=[head, connective, concurrent], separator=Separator.NONE
@@ -346,11 +349,14 @@ class TryInOrder(Composition):
     """Try the children in order, falling through on failure -- an ordered disjunction
     (*"try A, otherwise B"*)."""
 
+    lead_verb: ClassVar[Verb] = Verb("try")
+    """The imperative verb that opens the ordered fallback."""
+
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return self._interleave(
-            PlanConnectives.OTHERWISE, services, lead=PlanConnectives.TRY
+            Adverbs.OTHERWISE, services, lead=self.lead_verb.as_fragment()
         )
 
 
@@ -359,12 +365,15 @@ class TryAll(Composition):
     """Try the children at once, succeeding if any does -- a disjunction with concurrency
     (*"try A, B, or C simultaneously"*)."""
 
+    lead_verb: ClassVar[Verb] = Verb("try")
+    """The imperative verb that opens the concurrent disjunction."""
+
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return self._coordinate(
             Conjunctions.OR,
             services,
-            lead=PlanConnectives.TRY,
-            tail=PlanConnectives.SIMULTANEOUSLY,
+            lead=self.lead_verb.as_fragment(),
+            tail=Adverbs.SIMULTANEOUSLY.as_fragment(),
         )

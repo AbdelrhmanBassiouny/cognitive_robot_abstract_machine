@@ -152,7 +152,7 @@ def test_a_new_acts_opener_derives_from_its_class_name():
     """
     from krrood.entity_query_language.performatives import Performative
     from krrood.entity_query_language.verbalization.vocabulary.english import (
-        PlanConnectives,
+        Complementizers,
     )
 
     @dataclass
@@ -160,7 +160,7 @@ def test_a_new_acts_opener_derives_from_its_class_name():
         def perform(self) -> None: ...
 
         def as_fragment(self, services=None):
-            return self.framed_fragment(PlanConnectives.THAT, services)
+            return self.framed_fragment(Complementizers.THAT, services)
 
     assert Suggest.opener.text == "Suggest"
     assert Suggest(_reachable()).verbalize().startswith("Suggest that ")

@@ -215,15 +215,30 @@ class Directive(VocabEnum):
         return cls.GENERATE if underspecified else cls.FIND
 
 
-class PlanConnectives(VocabEnum):
-    """The connective words that join or introduce the parts of a composed plan or a speech act."""
+class Adverbs(VocabEnum):
+    """Connective adverbs that sequence or qualify clauses (*"A, then B"*, *"…, otherwise …"*,
+    *"… simultaneously"*)."""
 
     THEN = PlainWord("then")
     OTHERWISE = PlainWord("otherwise")
     SIMULTANEOUSLY = PlainWord("simultaneously")
+
+
+class SubordinatingConjunctions(VocabEnum):
+    """Conjunctions that introduce a subordinate clause (*"…, while …"*)."""
+
     WHILE = PlainWord("while")
-    TRY = PlainWord("try")
+
+
+class Complementizers(VocabEnum):
+    """Words that introduce a declarative complement clause (*"Achieve that …"*)."""
+
     THAT = PlainWord("that")
+
+
+class QuestionWords(VocabEnum):
+    """Interrogatives that introduce an embedded question (*"Monitor whether …"*, *"Explain why …"*)."""
+
     WHETHER = PlainWord("whether")
     WHY = PlainWord("why")
 
