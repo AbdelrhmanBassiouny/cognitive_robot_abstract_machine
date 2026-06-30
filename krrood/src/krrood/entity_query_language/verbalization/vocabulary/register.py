@@ -48,7 +48,3 @@ class Register:
         if self.fixed_opener is not None:
             return self.fixed_opener.as_fragment()
         return Directive.for_underspecified(underspecified).as_fragment()
-
-
-QUERY_REGISTER = Register()
-"""The default register: *"Find"* / *"Generate"* openers and *"given that"* field bindings."""

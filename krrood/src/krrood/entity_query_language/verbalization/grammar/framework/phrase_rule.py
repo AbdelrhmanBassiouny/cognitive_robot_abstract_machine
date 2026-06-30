@@ -140,10 +140,10 @@ class RuleContext:
     def register(self) -> Register:
         """:return: The register to verbalize in -- the default query register when none is set."""
         from krrood.entity_query_language.verbalization.vocabulary.register import (
-            QUERY_REGISTER,
+            Register,
         )
 
-        return self.services.register or QUERY_REGISTER
+        return self.services.register or Register()
 
 
 class PhraseRule(ABC):
