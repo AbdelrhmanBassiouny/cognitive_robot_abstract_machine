@@ -30,6 +30,9 @@ from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Query
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.vocabulary.register import Register
+
+if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.rendering.source_link_resolver import (
         SourceLinkResolver,
     )
@@ -291,7 +294,11 @@ def verbalize_expression(expression: SymbolicExpression) -> str:
     return _PLAIN_PIPELINE.verbalize(expression)
 
 
-def fragment_for_expression(expression: SymbolicExpression) -> VerbalizationFragment:
+def fragment_for_expression(
+    expression: SymbolicExpression,
+    services: Optional[MicroplanningServices] = None,
+    register: Optional[Register] = None,
+) -> VerbalizationFragment:
     """
     Build the realized verbalization fragment for an EQL expression.
 
@@ -300,6 +307,18 @@ def fragment_for_expression(expression: SymbolicExpression) -> VerbalizationFrag
     once.
 
     :param expression: Any EQL expression or query.
+    :param services: Shared microplanning services; pass the same instance across expressions so repeated
+        mentions corefer (*"a Pose … the Pose"*). Created per-expression when omitted.
+    :param register: The register to verbalize in (e.g. an imperative *"Perform … such that …"*); the
+        default query register when omitted.
     :return: The realized fragment tree for *expression*.
     """
-    return _PLAIN_PIPELINE.build_fragment(expression)
+    if services is None:
+        scan_target = (
+            expression.expression if isinstance(expression, Match) else expression
+        )
+        services = MicroplanningServices.from_expression(scan_target)
+    # Assign unconditionally: on shared services, this resets a prior act's register so each act is
+    # rendered in its own (``None`` ⇒ the default query register).
+    services.register = register
+    return _PLAIN_PIPELINE.build_fragment(expression, services)

@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.microplanning.referring import (
         ReferringExpressions,
     )
+    from krrood.entity_query_language.verbalization.vocabulary.register import Register
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,15 @@ class RuleContext:
     def microplan(self) -> Microplan:
         """:return: The plan read model (each node's plan computed once and shared)."""
         return self.services.microplan
+
+    @property
+    def register(self) -> Register:
+        """:return: The register to verbalize in -- the default query register when none is set."""
+        from krrood.entity_query_language.verbalization.vocabulary.register import (
+            QUERY_REGISTER,
+        )
+
+        return self.services.register or QUERY_REGISTER
 
 
 class PhraseRule(ABC):

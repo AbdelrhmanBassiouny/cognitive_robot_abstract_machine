@@ -20,13 +20,13 @@ so coordination and punctuation are produced by the verbalization engine rather 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from typing_extensions import Any, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.fragments.base import (
-    BlockFragment,
     PhraseFragment,
     VerbalizationFragment,
     WordFragment,
@@ -37,39 +37,18 @@ from krrood.entity_query_language.verbalization.fragments.features import Separa
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
+    Keywords,
     PerformativeDirective,
     PlanConnectives,
 )
+from krrood.entity_query_language.verbalization.vocabulary.register import Register
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 from krrood.exceptions import DataclassException
 
-
-def _reframe_directive(
-    fragment: VerbalizationFragment, directive: VocabEnum
-) -> VerbalizationFragment:
-    """Replace the leading query directive of a match fragment (*"Find"* / *"Generate"*) with *directive*.
-
-    A query verbalizes with its own opener; an act over a query (e.g. *"Perform a NavigateAction …"*) wants
-    its own force in that slot instead. The match fragment is a
-    :class:`~krrood.entity_query_language.verbalization.fragments.base.BlockFragment` whose header opens
-    with the directive, so this swaps that one token.
-
-    :return: a fragment opening with *directive*; if *fragment* carries no directive header, it is framed
-        as *"<directive> <fragment>"* instead.
-    """
-    if (
-        isinstance(fragment, BlockFragment)
-        and isinstance(fragment.header, PhraseFragment)
-        and fragment.header.parts
-    ):
-        reframed_header = replace(
-            fragment.header,
-            parts=[directive.as_fragment(), *fragment.header.parts[1:]],
-        )
-        return replace(fragment, header=reframed_header)
-    return PhraseFragment(
-        parts=[directive.as_fragment(), fragment], separator=Separator.SPACE
-    )
+#: The register an action speech act verbalizes its description in: *"Perform … such that …"*.
+PERFORM_REGISTER = Register(
+    binding_connective=Keywords.SUCH_THAT, fixed_opener=PerformativeDirective.PERFORM
+)
 
 
 @dataclass
@@ -86,12 +65,28 @@ class Performable(ABC):
         """Carry out the act and return its result."""
 
     @abstractmethod
-    def as_fragment(self) -> VerbalizationFragment:
-        """:return: the act as a verbalization fragment, composed from its content and its force."""
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        """:return: the act as a verbalization fragment, composed from its content and its force.
+
+        :param services: Shared microplanning services threaded through a composition so repeated
+            mentions corefer across acts; built per-act when omitted.
+        """
+
+    def eql_scan_targets(self) -> List[SymbolicExpression]:
+        """:return: the EQL contents this act (and its children) verbalize, for a shared coreference
+        map. Empty for acts whose content is not an EQL expression (e.g. a warning)."""
+        return []
 
     def verbalize(self) -> str:
-        """:return: the act rendered as a natural-language utterance."""
-        return flatten_fragment_to_plain_text(self.as_fragment())
+        """:return: the act rendered as a natural-language utterance.
+
+        Builds one coreference map over all the EQL contents in this act's tree, so a referent shared
+        across composed acts is named once and corefers (*"a Pose … the Pose"*).
+        """
+        services = MicroplanningServices.from_expressions(self.eql_scan_targets())
+        return flatten_fragment_to_plain_text(self.as_fragment(services))
 
 
 @dataclass
@@ -101,20 +96,27 @@ class Performative(Performable, ABC):
     content: SymbolicExpression
     """The propositional content -- the EQL description the force is applied to."""
 
+    def eql_scan_targets(self) -> List[SymbolicExpression]:
+        return [self.content]
+
     def framed_fragment(
-        self, opener: VocabEnum, introducer: VocabEnum
+        self,
+        opener: VocabEnum,
+        introducer: VocabEnum,
+        services: Optional[MicroplanningServices],
     ) -> VerbalizationFragment:
         """Frame the content with a directive opener and a clause introducer.
 
         :param opener: The illocutionary-force verb (e.g. ``PerformativeDirective.ACHIEVE``).
         :param introducer: The clause introducer (e.g. ``PlanConnectives.THAT``).
+        :param services: Shared microplanning services (coreference across acts), or ``None``.
         :return: A fragment reading *"<opener> <introducer> <content>"* (e.g. *"Achieve that …"*).
         """
         return PhraseFragment(
             parts=[
                 opener.as_fragment(),
                 introducer.as_fragment(),
-                fragment_for_expression(self.content),
+                fragment_for_expression(self.content, services),
             ],
             separator=Separator.SPACE,
         )
@@ -127,8 +129,10 @@ class Find(Performative):
     def perform(self) -> List[Any]:
         return list(self.content.evaluate())
 
-    def as_fragment(self) -> VerbalizationFragment:
-        return fragment_for_expression(self.content)
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return fragment_for_expression(self.content, services)
 
 
 @dataclass
@@ -138,8 +142,10 @@ class Inform(Performative):
     def perform(self) -> str:
         return self.verbalize()
 
-    def as_fragment(self) -> VerbalizationFragment:
-        return fragment_for_expression(self.content)
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return fragment_for_expression(self.content, services)
 
 
 @dataclass
@@ -151,16 +157,20 @@ class Explain(Performative):
             "Explain is provided by the EQL explanation machinery (future integration)."
         )
 
-    def as_fragment(self) -> VerbalizationFragment:
-        return self.framed_fragment(PerformativeDirective.EXPLAIN, PlanConnectives.WHY)
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return self.framed_fragment(
+            PerformativeDirective.EXPLAIN, PlanConnectives.WHY, services
+        )
 
 
 @dataclass
 class Perform(Performative):
     """Carry out the described action -- the directive that drives a plan.
 
-    The content is an action description (e.g. ``a(NavigateAction)(...).where(...)``); it verbalizes with
-    *"Perform"* in place of the query's *"Generate"*, and executing it is delegated to the plan layer.
+    The content is an action description (e.g. ``a(NavigateAction)(...).where(...)``); it verbalizes in the
+    imperative register (*"Perform … such that …"*), and executing it is delegated to the plan layer.
     """
 
     def perform(self) -> Any:
@@ -168,9 +178,11 @@ class Perform(Performative):
             "Perform is executed by the coraplex plan layer."
         )
 
-    def as_fragment(self) -> VerbalizationFragment:
-        return _reframe_directive(
-            fragment_for_expression(self.content), PerformativeDirective.PERFORM
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return fragment_for_expression(
+            self.content, services, register=PERFORM_REGISTER
         )
 
 
@@ -199,7 +211,9 @@ class Warn(Performable):
     def perform(self) -> "Warn":
         return self
 
-    def as_fragment(self) -> VerbalizationFragment:
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
         parts: List[VerbalizationFragment] = [
             PerformativeDirective.WARNING.as_fragment(),
             WordFragment(text=f": {self.situation}"),
@@ -229,16 +243,23 @@ class Composition(Performable, ABC):
             "Executing a composition is provided by the coraplex plan layer."
         )
 
+    def eql_scan_targets(self) -> List[SymbolicExpression]:
+        return [target for child in self.children for target in child.eql_scan_targets()]
+
     def _interleave(
-        self, connective: PlanConnectives, lead: Optional[VocabEnum] = None
+        self,
+        connective: PlanConnectives,
+        services: Optional[MicroplanningServices],
+        lead: Optional[VocabEnum] = None,
     ) -> VerbalizationFragment:
         """Join the children, placing *connective* before every child after the first.
 
         :param connective: The word inserted between steps (e.g. ``PlanConnectives.THEN``).
+        :param services: Shared microplanning services threaded to each child (coreference across acts).
         :param lead: An optional opening word placed before the first child (e.g. ``PlanConnectives.TRY``).
         :return: A fragment reading *"[lead] A, <connective> B, <connective> C"*.
         """
-        head, *rest = [child.as_fragment() for child in self.children]
+        head, *rest = [child.as_fragment(services) for child in self.children]
         parts: List[VerbalizationFragment] = []
         if lead is not None:
             parts.extend([lead.as_fragment(), WordFragment(text=Separator.SPACE)])
@@ -251,18 +272,21 @@ class Composition(Performable, ABC):
     def _coordinate(
         self,
         conjunction: Conjunctions,
+        services: Optional[MicroplanningServices],
         lead: Optional[VocabEnum] = None,
         tail: Optional[VocabEnum] = None,
     ) -> VerbalizationFragment:
         """Join the children as an Oxford-comma coordination, reusing the And/Or coordination.
 
         :param conjunction: ``Conjunctions.AND`` (parallel) or ``Conjunctions.OR`` (try-all).
+        :param services: Shared microplanning services threaded to each child (coreference across acts).
         :param lead: An optional opening word (e.g. ``PlanConnectives.TRY``).
         :param tail: An optional closing word (e.g. ``PlanConnectives.SIMULTANEOUSLY``).
         :return: A fragment reading *"[lead] A, B, <conjunction> C [tail]"*.
         """
         joined = oxford_comma(
-            [child.as_fragment() for child in self.children], conjunction.as_fragment()
+            [child.as_fragment(services) for child in self.children],
+            conjunction.as_fragment(),
         )
         parts: List[VerbalizationFragment] = []
         if lead is not None:
@@ -277,16 +301,22 @@ class Composition(Performable, ABC):
 class Sequential(Composition):
     """Do the children one after another -- a temporal conjunction (*"A, then B"*)."""
 
-    def as_fragment(self) -> VerbalizationFragment:
-        return self._interleave(PlanConnectives.THEN)
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return self._interleave(PlanConnectives.THEN, services)
 
 
 @dataclass
 class Parallel(Composition):
     """Do the children at the same time -- a conjunction with concurrency (*"A and B simultaneously"*)."""
 
-    def as_fragment(self) -> VerbalizationFragment:
-        return self._coordinate(Conjunctions.AND, tail=PlanConnectives.SIMULTANEOUSLY)
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return self._coordinate(
+            Conjunctions.AND, services, tail=PlanConnectives.SIMULTANEOUSLY
+        )
 
 
 @dataclass
@@ -294,8 +324,12 @@ class TryInOrder(Composition):
     """Try the children in order, falling through on failure -- an ordered disjunction
     (*"try A, otherwise B"*)."""
 
-    def as_fragment(self) -> VerbalizationFragment:
-        return self._interleave(PlanConnectives.OTHERWISE, lead=PlanConnectives.TRY)
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return self._interleave(
+            PlanConnectives.OTHERWISE, services, lead=PlanConnectives.TRY
+        )
 
 
 @dataclass
@@ -303,9 +337,12 @@ class TryAll(Composition):
     """Try the children at once, succeeding if any does -- a disjunction with concurrency
     (*"try A, B, or C simultaneously"*)."""
 
-    def as_fragment(self) -> VerbalizationFragment:
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
         return self._coordinate(
             Conjunctions.OR,
+            services,
             lead=PlanConnectives.TRY,
             tail=PlanConnectives.SIMULTANEOUSLY,
         )

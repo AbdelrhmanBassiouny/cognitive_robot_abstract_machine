@@ -16,10 +16,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Union
+from typing_extensions import List, Optional, Union
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.performatives import Performable
+from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     VerbalizationFragment,
@@ -45,7 +46,9 @@ class Achieve(Performable):
     def perform(self) -> ConstraintCollection:
         return self.goal.compile_into(ConstraintCollection())
 
-    def as_fragment(self) -> VerbalizationFragment:
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
         return PhraseFragment(
             parts=[
                 PerformativeDirective.ACHIEVE.as_fragment(),
@@ -68,17 +71,26 @@ class Monitor(Performable):
             "Monitor is executed by a giskard monitor at runtime (needs the ROS execution stack)."
         )
 
-    def _condition_fragment(self) -> VerbalizationFragment:
+    def eql_scan_targets(self) -> List[SymbolicExpression]:
+        if isinstance(self.condition, GiskardGoal):
+            return []
+        return [self.condition]
+
+    def _condition_fragment(
+        self, services: Optional[MicroplanningServices]
+    ) -> VerbalizationFragment:
         if isinstance(self.condition, GiskardGoal):
             return self.condition.as_fragment()
-        return fragment_for_expression(self.condition)
+        return fragment_for_expression(self.condition, services)
 
-    def as_fragment(self) -> VerbalizationFragment:
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
         return PhraseFragment(
             parts=[
                 PerformativeDirective.MONITOR.as_fragment(),
                 PlanConnectives.WHETHER.as_fragment(),
-                self._condition_fragment(),
+                self._condition_fragment(services),
             ],
             separator=Separator.SPACE,
         )
