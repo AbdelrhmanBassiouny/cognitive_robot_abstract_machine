@@ -14,7 +14,13 @@ from dataclasses import dataclass
 import pytest
 from typing_extensions import Any
 
-from krrood.entity_query_language.factories import an, entity, for_all, variable
+from krrood.entity_query_language.factories import (
+    an,
+    and_,
+    entity,
+    for_all,
+    variable,
+)
 from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.verbalization import morphology
@@ -196,6 +202,40 @@ def test_clause_subject_keeps_noun_phrase_outside_a_subject_scope():
     """A plain predicate (no enclosing subject) keeps its first-mention noun phrase — *"a Location"*."""
     assert verbalize_expression(IsReachable(variable(Location, []))) == (
         "a Location is reachable"
+    )
+
+
+# ── opt-in: render an operand variable by its field name ─────────────────────────
+
+
+@dataclass(eq=False)
+class _Approaches(Predicate):
+    """A predicate that names its operand by its field name (its role), not its type."""
+
+    target_location: Any
+    """The place approached — verbalized as *"target location"*, not its type name."""
+
+    def __call__(self) -> bool:
+        return True
+
+    @classmethod
+    def _verbalization_fragment_(cls, operands: Any) -> Any:
+        return clause(Verb("approach"), Noun(operands.target_location.by_field_name()))
+
+
+def test_operand_renders_by_field_name_when_opted_in():
+    """``by_field_name`` names the operand variable by its humanised field name, not its type."""
+    assert verbalize_expression(_Approaches(variable(Location, []))) == (
+        "approaches a target location"
+    )
+
+
+def test_field_name_alias_is_shared_across_mentions_with_coreference():
+    """The alias is the variable's display name everywhere, so a re-mention corefers to it
+    (*"a target location … the target location"*), not to the type noun."""
+    location = variable(Location, [])
+    assert verbalize_expression(and_(_Approaches(location), IsReachable(location))) == (
+        "approaches a target location, and the target location is reachable"
     )
 
 

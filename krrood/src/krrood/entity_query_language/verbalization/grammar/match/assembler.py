@@ -142,7 +142,9 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
                 if group.object is selection
                 for assignment in group.assignments
             },
-            _render_=lambda expression: self.context.child(expression),
+            _render_=lambda expression, alias=None: self.context.child(
+                expression, alias=alias
+            ),
         )
         fragment = selection._type_._verbalization_fragment_(operands)
         if self.context.register.imperative:

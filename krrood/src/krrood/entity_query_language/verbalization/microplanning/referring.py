@@ -75,6 +75,20 @@ class ReferringExpressions:
     Relational referents carry no rule-resolved label — their relative-clause noun phrase is built
     deep in the microplanner — so the coreference pass applies these to number them *"Robot 1"*."""
 
+    alias_map: Dict[uuid.UUID, str] = field(default_factory=dict)
+    """Display aliases registered during verbalization — a variable an operand renders by its field
+    name (*"target location"*). The alias overrides the type-name label for *every* mention of that
+    referent, so coreference and pronominalisation reuse it (*"a target location … the target
+    location"*). Registered by the first aliased mention (see :meth:`register_alias`)."""
+
+    def register_alias(self, variable_id: uuid.UUID, alias: str) -> None:
+        """Register *alias* as the display label for *variable_id*, unless one is already set.
+
+        :param variable_id: The referent the alias names.
+        :param alias: The display label (a humanised operand field name).
+        """
+        self.alias_map.setdefault(variable_id, alias)
+
     @classmethod
     def from_expression(cls, expression: SymbolicExpression) -> ReferringExpressions:
         """
@@ -155,7 +169,11 @@ class ReferringExpressions:
             aliases = referent_aliases(expression)
             for node in expression._all_expressions_:
                 type_name = cls._numberable_type_name(node)
-                if type_name is None or node._id_ in suppressed or node._id_ in seen_ids:
+                if (
+                    type_name is None
+                    or node._id_ in suppressed
+                    or node._id_ in seen_ids
+                ):
                     continue
                 seen_ids.add(node._id_)
                 canonical = aliases.get(node._id_, node._id_)
@@ -247,6 +265,10 @@ class ReferringExpressions:
         'Robot 2'
         """
         type_name = self._variable_type_label(variable)
+        alias = self.alias_map.get(variable._id_)
+        if alias is not None:
+            self.seen.add(variable._id_)
+            return NumberedLabel(alias, is_numbered=False)
         label = self.disambiguation_map.get(variable._id_, type_name)
         self.seen.add(variable._id_)
         return NumberedLabel(label, label != type_name)

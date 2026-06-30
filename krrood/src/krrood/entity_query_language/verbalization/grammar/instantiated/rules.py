@@ -81,7 +81,9 @@ class InstantiatedVerbalizableRule(PhraseRule):
         """
         operands = OperandView(
             _child_expressions_=node._child_vars_,
-            _render_=lambda expression: context.child(expression),
+            _render_=lambda expression, alias=None: context.child(
+                expression, alias=alias
+            ),
         )
         fragment = node._type_._verbalization_fragment_(operands)
         if not isinstance(fragment, VerbalizationFragment):

@@ -11,6 +11,7 @@ from krrood.entity_query_language.core.variable import (
     Literal,
     Variable,
 )
+from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
@@ -70,6 +71,8 @@ class VariableRule(PhraseRule):
             choice = self._domain_choice(node, context)
             if choice is not None:
                 return choice
+        if context.alias is not None:
+            context.refer.register_alias(node._id_, camel_case_to_words(context.alias))
         if context.number is GrammaticalNumber.PLURAL:
             return self._plural(node, context)
         noun_form = context.refer.noun_for_parts(node)
