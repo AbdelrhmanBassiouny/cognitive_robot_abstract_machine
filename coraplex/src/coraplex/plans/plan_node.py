@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from abc import abstractmethod, ABC
+from abc import ABC
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -311,10 +311,14 @@ class PlanNode(PlanEntity, Performable):
         """
         pass
 
-    @abstractmethod
     def _perform(self):
         """
         Perform the node without managing the fields of this node.
+
+        The base node does nothing; concrete node types override this. It is a no-op (not abstract)
+        so a bare :class:`PlanNode` stays instantiable as a generic graph node, as it was before
+        :class:`PlanNode` became a :class:`~krrood.entity_query_language.performatives.Performable`
+        (whose ``ABC`` base would otherwise enforce the abstraction and break direct construction).
         """
 
 
