@@ -4,6 +4,7 @@ from typing_extensions import List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.predicate import OperandView, Verbalizable
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
@@ -72,6 +73,10 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         >>> verbalize_expression(an(Mission)(assigned_to=an(Robot)(name="R2")))
         "Generate a Mission given that the name of the Robot to which it is assigned is 'R2'"
         """
+        verbalizable = self._verbalizable_selection_fragment(plan)
+        if verbalizable is not None:
+            return self._verbalizable_block(node, plan, verbalizable)
+
         predict_groups = [group for group in plan.groups if group.predicted]
         inline_predict = self._inline_predict(predict_groups, plan)
 
@@ -97,6 +102,44 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             items=items,
             source=node.expression,
         )
+
+    # %% self-verbalizing selection
+
+    def _verbalizable_selection_fragment(
+        self, plan: MatchPlan
+    ) -> Optional[VerbalizationFragment]:
+        """:return: the selection's own clause when the constructed type supplies a verbalization
+        fragment -- its construction kwargs become the operands -- else ``None`` for the generic
+        *"a TypeName given that …"* surface.
+
+        This is the same dispatch :class:`InstantiatedVerbalizableRule` makes for a *called* operation
+        (``IsReachable(body)`` → *"a Robot is reachable"*), extended to a *constructed* one
+        (``a(NavigateAction)(target_location=p)`` → *"navigate to a Pose"*).
+        """
+        selection = plan.selection
+        if not Verbalizable.has_custom_fragment(selection._type_):
+            return None
+        operands = OperandView(
+            _child_expressions_={
+                assignment.attribute._attribute_name_: assignment.value
+                for group in plan.groups
+                if group.object is selection
+                for assignment in group.assignments
+            },
+            _render_=lambda expression: self.context.child(expression),
+        )
+        return selection._type_._verbalization_fragment_(operands)
+
+    def _verbalizable_block(
+        self, node: Match, plan: MatchPlan, header: VerbalizationFragment
+    ) -> VerbalizationFragment:
+        """:return: the self-verbalizing selection's clause, with any free ``where`` conditions kept as
+        a trailing block. The type's verb is the utterance's verb, so no directive opener is added."""
+        items: List[VerbalizationFragment] = []
+        where = self._where_block(plan)
+        if where is not None:
+            items.append(where)
+        return BlockFragment(header=header, items=items, source=node.expression)
 
     # %% predict
 

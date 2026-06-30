@@ -4,10 +4,17 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Tuple, List, Optional, Any
 
-from typing_extensions import Optional, Dict, Any
+from typing_extensions import Optional, Dict, Any, Self
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.predicate import Verbalizable
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    clause,
+    Noun,
+    Preposition,
+    Verb,
+)
 from coraplex.datastructures.dataclasses import Context
 from coraplex.robot_plans import MoveManipulatorMotion
 from semantic_digital_twin.reasoning.predicates import allclose
@@ -30,7 +37,7 @@ from semantic_digital_twin.datastructures.definitions import (
 
 
 @dataclass
-class MoveTorsoAction(ActionDescription):
+class MoveTorsoAction(ActionDescription, Verbalizable):
     """
     Move the torso of the robot up and down.
     """
@@ -39,6 +46,16 @@ class MoveTorsoAction(ActionDescription):
     """
     The state of the torso that should be set
     """
+
+    @classmethod
+    def _verbalization_fragment_(cls, operands: Self):
+        """:return: *"move the torso to <torso_state>"* -- the action as its own verb phrase."""
+        return clause(
+            Verb("move"),
+            Noun.the("torso"),
+            Preposition.TO,
+            Noun(operands.torso_state),
+        )
 
     def execute(self) -> None:
         joint_state = self.robot.get_torso().get_joint_state_by_type(self.torso_state)

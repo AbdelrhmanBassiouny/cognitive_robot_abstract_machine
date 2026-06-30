@@ -99,13 +99,7 @@ class InstantiatedPlanner(Planner[InstantiatedVariable, InstantiatedPlan]):
         >>> InstantiatedPlanner.has_fragment(inference(Drawer)(container=connection.parent, handle=connection.child))
         False
         """
-        type_ = node._type_
-        return (
-            isinstance(type_, type)
-            and issubclass(type_, Verbalizable)
-            and type_._verbalization_fragment_.__func__
-            is not Verbalizable._verbalization_fragment_.__func__
-        )
+        return Verbalizable.has_custom_fragment(node._type_)
 
     @staticmethod
     def renders_as_predicate_clause(node: InstantiatedVariable) -> bool:
