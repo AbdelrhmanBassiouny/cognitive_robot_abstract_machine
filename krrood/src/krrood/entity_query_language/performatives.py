@@ -41,21 +41,11 @@ from krrood.entity_query_language.verbalization.fragments.roles import SemanticR
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
-    Keywords,
     PerformativeDirective,
     PlanConnectives,
 )
-from krrood.entity_query_language.verbalization.vocabulary.register import Register
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 from krrood.exceptions import DataclassException
-
-#: The register an action speech act verbalizes its description in: an imperative command
-#: (*"navigate to …"*) for a self-verbalizing action, or *"Perform … such that …"* otherwise.
-PERFORM_REGISTER = Register(
-    binding_connective=Keywords.SUCH_THAT,
-    fixed_opener=PerformativeDirective.PERFORM,
-    imperative=True,
-)
 
 
 def _as_participle(fragment: VerbalizationFragment) -> VerbalizationFragment:
@@ -188,27 +178,6 @@ class Explain(Performative):
     ) -> VerbalizationFragment:
         return self.framed_fragment(
             PerformativeDirective.EXPLAIN, PlanConnectives.WHY, services
-        )
-
-
-@dataclass
-class Perform(Performative):
-    """Carry out the described action -- the directive that drives a plan.
-
-    The content is an action description (e.g. ``a(NavigateAction)(...).where(...)``); it verbalizes in the
-    imperative register (*"Perform … such that …"*), and executing it is delegated to the plan layer.
-    """
-
-    def perform(self) -> Any:
-        raise NotImplementedError(
-            "Perform is executed by the coraplex plan layer."
-        )
-
-    def as_fragment(
-        self, services: Optional[MicroplanningServices] = None
-    ) -> VerbalizationFragment:
-        return fragment_for_expression(
-            self.content, services, register=PERFORM_REGISTER
         )
 
 
