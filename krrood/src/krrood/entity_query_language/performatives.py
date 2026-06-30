@@ -8,8 +8,9 @@ propositional *content* expressed as an EQL
 verbalizable query.
 
 This module owns the **framework-agnostic** layer: the :class:`Performable` interface, the atomic acts that
-need only EQL evaluation / verbalization / exceptions (:class:`Find`, :class:`Inform`, :class:`Explain`,
-:class:`Warn`), and the :class:`Composition` combinators. Acts that need a solver or a robot -- ``Achieve``,
+need only EQL evaluation / verbalization / exceptions (the query acts :class:`Find` / :class:`Generate` /
+:class:`Report`, plus :class:`Inform`, :class:`Explain`, :class:`Warn`), and the :class:`Composition`
+combinators. Acts that need a solver or a robot -- ``Achieve``,
 ``Observe``, ``Perform`` -- live in the framework that owns that capability (giskardpy, coraplex) and
 subclass :class:`Performative` there, declaring their own directive opener via :meth:`Performative.framed_fragment`.
 
@@ -149,16 +150,43 @@ class Performative(Performable, ABC):
 
 
 @dataclass
-class Find(Performative):
-    """Search the world for the values matching the description -- the existing query speech act."""
+class QuerySpeechAct(Performative, ABC):
+    """A query speech act: a force applied to an EQL query whose surface opener (*"Find"* /
+    *"Generate"* / *"Report"*) the verbalization engine already chooses from the query's shape.
 
-    def perform(self) -> List[Any]:
-        return list(self.content.evaluate())
+    So the act simply verbalizes its content -- the opener it would carry is the one the bare query
+    carries, which is this act's class name -- and a new query force is a new subclass, with no
+    central opener registry to edit (Open/Closed).
+    """
+
+    def perform(self) -> Any:
+        """:return: the result of evaluating the query content."""
+        return self.content.evaluate()
 
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return fragment_for_expression(self.content, services)
+
+
+@dataclass
+class Find(QuerySpeechAct):
+    """Search the world for the values matching the description -- the query speech act."""
+
+    def perform(self) -> List[Any]:
+        return list(self.content.evaluate())
+
+
+@dataclass
+class Generate(QuerySpeechAct):
+    """Generate the underspecified instance the description leaves open (an *"a"* / *"an"* /
+    underspecified query, verbalized as *"Generate …"*)."""
+
+
+@dataclass
+class Report(QuerySpeechAct):
+    """Present the results the description computes -- a grouped or aggregating query, verbalized as
+    *"Report …"* / *"For each …, report …"*."""
 
 
 @dataclass

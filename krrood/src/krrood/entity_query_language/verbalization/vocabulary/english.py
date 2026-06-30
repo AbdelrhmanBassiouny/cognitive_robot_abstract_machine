@@ -173,12 +173,11 @@ class CommonGroupKeyWord(PlainWord):
 
 
 class Keywords(VocabEnum):
-    """EQL structural keywords (IF, THEN, FIND, WHERE, etc.)."""
+    """EQL structural keywords (IF, THEN, WHERE, etc.). The query opener verbs (*"Find"* /
+    *"Generate"* / *"Report"*) live on :class:`QueryOpener`, not here."""
 
     IF = KeyWord("If")
     THEN = KeyWord("then")
-    FIND = KeyWord("Find")
-    REPORT = KeyWord("report")
     FOR = KeyWord("for")
     FOR_EACH = KeyWord("For each")
     SUCH_THAT = KeyWord("such that")
@@ -196,20 +195,36 @@ class Keywords(VocabEnum):
     TRUE = KeyWord("true")
 
 
-class Directive(VocabEnum):
-    """The imperative verb that opens a request: *"Find"* a match in the domain, or *"Generate"*
-    an underspecified one."""
+class QueryOpener(VocabEnum):
+    """The verb that opens a query, naming what the query *does*. The single source of the three
+    query openers -- each the class name of the matching
+    :class:`~krrood.entity_query_language.performatives.QuerySpeechAct`:
+
+    - ``FIND`` -- search the domain for the matches a description names (the default).
+    - ``GENERATE`` -- construct the underspecified instance a generative request leaves open.
+    - ``REPORT`` -- present the results a query computes or groups.
+
+    Each assembler picks the member its plan shape calls for -- a match opens with ``GENERATE`` vs
+    ``FIND`` by :meth:`for_underspecified`; a query opens with ``REPORT`` when it presents results
+    else ``FIND`` -- so the opener words live here in one place rather than split across this enum,
+    ``Keywords``, and the speech-act classes.
+    """
 
     FIND = KeyWord("Find")
+    """Search the domain for matches (*"Find a Robot …"*)."""
     GENERATE = KeyWord("Generate")
+    """Construct an underspecified instance (*"Generate a Position …"*)."""
+    REPORT = KeyWord("report")
+    """Present computed or grouped results (*"Report the distinct departments"*); capitalised by the
+    sentence-initial pass, lower-case mid-sentence (*"For each department, report …"*)."""
 
     @classmethod
-    def for_underspecified(cls, underspecified: bool) -> "Directive":
+    def for_underspecified(cls, underspecified: bool) -> "QueryOpener":
         """:return: ``GENERATE`` for an underspecified (generative) request, else ``FIND``.
 
-        >>> Directive.for_underspecified(True).text
+        >>> QueryOpener.for_underspecified(True).text
         'Generate'
-        >>> Directive.for_underspecified(False).text
+        >>> QueryOpener.for_underspecified(False).text
         'Find'
         """
         return cls.GENERATE if underspecified else cls.FIND

@@ -13,20 +13,30 @@ from dataclasses import dataclass
 
 import pytest
 
-from krrood.entity_query_language.factories import a, an, entity, variable
+from krrood.entity_query_language.factories import (
+    a,
+    an,
+    entity,
+    set_of,
+    underspecified,
+    variable,
+)
 from krrood.entity_query_language.performatives import (
     Composition,
     Explain,
     Find,
+    Generate,
     Inform,
     Parallel,
     Performable,
+    Report,
     Sequential,
     TryAll,
     TryInOrder,
     Warn,
 )
 from krrood.entity_query_language.verbalization.example_domain import (
+    Employee,
     IsReachable,
     Location,
     Robot,
@@ -67,6 +77,29 @@ def test_find_is_the_query_speech_act_and_evaluates():
         query
     )  # the query already opens with "Find …"
     assert isinstance(find.perform(), list)  # find evaluates (empty domain → [])
+
+
+def test_generate_is_the_underspecified_query_speech_act():
+    """``Generate`` is the speech act over an underspecified (generative) query; its opener derives
+    from its class name and it verbalizes exactly like its bare query (which already opens with
+    *"Generate"*)."""
+    query = underspecified(Robot)(battery=50)
+    generate = Generate(query)
+    assert generate.opener.text == "Generate"
+    assert generate.verbalize() == verbalize_expression(query)
+    assert verbalize_expression(query).startswith("Generate ")
+
+
+def test_report_is_the_presentation_query_speech_act():
+    """``Report`` is the speech act over a query that presents results (a grouped / aggregating
+    query); its opener derives from its class name and it verbalizes exactly like its bare query
+    (which already opens with *"Report"*)."""
+    employee = variable(Employee, domain=None)
+    query = a(set_of(employee.department).grouped_by(employee.department))
+    report = Report(query)
+    assert report.opener.text == "Report"
+    assert report.verbalize() == verbalize_expression(query)
+    assert verbalize_expression(query).startswith("Report ")
 
 
 def test_inform_asserts_the_proposition():

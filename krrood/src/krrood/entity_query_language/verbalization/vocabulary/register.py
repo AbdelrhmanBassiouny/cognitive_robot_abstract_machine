@@ -22,8 +22,8 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Directive,
     Keywords,
+    QueryOpener,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 
@@ -47,4 +47,4 @@ class Register:
         """:return: the opener fragment -- the fixed verb, or *"Find"* / *"Generate"* by *underspecified*."""
         if self.fixed_opener is not None:
             return self.fixed_opener.as_fragment()
-        return Directive.for_underspecified(underspecified).as_fragment()
+        return QueryOpener.for_underspecified(underspecified).as_fragment()
