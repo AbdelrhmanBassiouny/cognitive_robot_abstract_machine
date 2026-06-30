@@ -13,20 +13,30 @@ from dataclasses import dataclass
 
 import pytest
 
-from krrood.entity_query_language.factories import a, an, entity, variable
+from krrood.entity_query_language.factories import (
+    a,
+    an,
+    entity,
+    set_of,
+    underspecified,
+    variable,
+)
 from krrood.entity_query_language.performatives import (
     Composition,
     Explain,
     Find,
+    Generate,
     Inform,
     Parallel,
     Performable,
+    Report,
     Sequential,
     TryAll,
     TryInOrder,
     Warn,
 )
 from krrood.entity_query_language.verbalization.example_domain import (
+    Employee,
     IsReachable,
     Location,
     Robot,
@@ -63,8 +73,33 @@ def _operational():
 def test_find_is_the_query_speech_act_and_evaluates():
     query = a(entity(location := variable(Location, [])).where(IsReachable(location)))
     find = Find(query)
-    assert find.verbalize() == verbalize_expression(query)   # the query already opens with "Find …"
-    assert isinstance(find.perform(), list)                  # find evaluates (empty domain → [])
+    assert find.verbalize() == verbalize_expression(
+        query
+    )  # the query already opens with "Find …"
+    assert isinstance(find.perform(), list)  # find evaluates (empty domain → [])
+
+
+def test_generate_is_the_underspecified_query_speech_act():
+    """``Generate`` is the speech act over an underspecified (generative) query; its opener derives
+    from its class name and it verbalizes exactly like its bare query (which already opens with
+    *"Generate"*)."""
+    query = underspecified(Robot)(battery=50)
+    generate = Generate(query)
+    assert generate.opener.text == "Generate"
+    assert generate.verbalize() == verbalize_expression(query)
+    assert verbalize_expression(query).startswith("Generate ")
+
+
+def test_report_is_the_presentation_query_speech_act():
+    """``Report`` is the speech act over a query that presents results (a grouped / aggregating
+    query); its opener derives from its class name and it verbalizes exactly like its bare query
+    (which already opens with *"Report"*)."""
+    employee = variable(Employee, domain=None)
+    query = a(set_of(employee.department).grouped_by(employee.department))
+    report = Report(query)
+    assert report.opener.text == "Report"
+    assert report.verbalize() == verbalize_expression(query)
+    assert verbalize_expression(query).startswith("Report ")
 
 
 def test_inform_asserts_the_proposition():
@@ -75,7 +110,10 @@ def test_inform_asserts_the_proposition():
 
 def test_explain_frames_the_description():
     reachable = _reachable()
-    assert Explain(reachable).verbalize() == f"Explain why {verbalize_expression(reachable)}"
+    assert (
+        Explain(reachable).verbalize()
+        == f"Explain why {verbalize_expression(reachable)}"
+    )
 
 
 def test_warn_lifts_an_exception_into_a_speech_act():
@@ -95,9 +133,7 @@ def test_warn_without_a_suggestion_omits_it():
 
 def test_sequential_interleaves_then():
     text = Sequential([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text == (
-        "A Location is reachable, then a Robot is operational"
-    )
+    assert text == ("A Location is reachable, then a Robot is operational")
 
 
 def test_parallel_states_the_rest_as_concurrent_while_clauses():
@@ -110,7 +146,7 @@ def test_parallel_of_three_joins_the_concurrent_acts_with_and():
         [Inform(_reachable()), Inform(_operational()), Inform(_reachable())]
     ).verbalize()
     assert ", while simultaneously " in text
-    assert " and " in text                               # the And-rule's coordination, reused
+    assert " and " in text  # the And-rule's coordination, reused
 
 
 def test_try_in_order_is_an_ordered_fallback():
@@ -141,3 +177,24 @@ def test_unsupported_execution_is_delegated_not_faked():
         Explain(_reachable()).perform()
     with pytest.raises(NotImplementedError):
         Sequential([Inform(_reachable())]).perform()
+
+
+def test_a_new_acts_opener_derives_from_its_class_name():
+    """A new performative's directive opener is its class name — adding an act needs no edit to any
+    central directive registry (the duplication the old ``PerformativeDirective`` enum carried).
+    """
+    from krrood.entity_query_language.performatives import Performative
+    from krrood.entity_query_language.verbalization.vocabulary.english import (
+        Complementizers,
+    )
+
+    @dataclass
+    class Suggest(Performative):
+        def perform(self) -> None: ...
+
+        def as_fragment(self, services=None):
+            return self.framed_fragment(Complementizers.THAT, services)
+
+    suggestion = Suggest(_reachable())
+    assert suggestion.opener.text == "Suggest"
+    assert suggestion.verbalize().startswith("Suggest that ")

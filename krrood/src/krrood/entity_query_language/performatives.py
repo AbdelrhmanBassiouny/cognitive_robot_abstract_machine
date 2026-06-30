@@ -8,8 +8,9 @@ propositional *content* expressed as an EQL
 verbalizable query.
 
 This module owns the **framework-agnostic** layer: the :class:`Performable` interface, the atomic acts that
-need only EQL evaluation / verbalization / exceptions (:class:`Find`, :class:`Inform`, :class:`Explain`,
-:class:`Warn`), and the :class:`Composition` combinators. Acts that need a solver or a robot -- ``Achieve``,
+need only EQL evaluation / verbalization / exceptions (the query acts :class:`Find` / :class:`Generate` /
+:class:`Report`, plus :class:`Inform`, :class:`Explain`, :class:`Warn`), and the :class:`Composition`
+combinators. Acts that need a solver or a robot -- ``Achieve``,
 ``Observe``, ``Perform`` -- live in the framework that owns that capability (giskardpy, coraplex) and
 subclass :class:`Performative` there, declaring their own directive opener via :meth:`Performative.framed_fragment`.
 
@@ -22,7 +23,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Any, List, Optional
+from typing_extensions import Any, ClassVar, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.verbalization.composition import (
@@ -40,11 +41,15 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.fragments.features import Separator
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Adverbs,
     Conjunctions,
-    PerformativeDirective,
-    PlanConnectives,
+    QuestionWords,
 )
-from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import Verb
+from krrood.entity_query_language.verbalization.vocabulary.words import (
+    KeyWord,
+    VocabEnum,
+)
 from krrood.exceptions import DataclassException
 
 
@@ -93,25 +98,30 @@ class Performative(Performable, ABC):
     content: SymbolicExpression
     """The propositional content -- the EQL description the force is applied to."""
 
+    @property
+    def opener(self) -> KeyWord:
+        """:return: the illocutionary-force verb that opens the act -- its class name, so the class
+        *is* the directive (*"Explain"*, *"Achieve"*). Deriving it from the class means a new act
+        needs no central registry and no opener declaration of its own (Open/Closed)."""
+        return KeyWord(type(self).__name__)
+
     def eql_scan_targets(self) -> List[SymbolicExpression]:
         return [self.content]
 
     def framed_fragment(
         self,
-        opener: VocabEnum,
         introducer: VocabEnum,
         services: Optional[MicroplanningServices],
     ) -> VerbalizationFragment:
-        """Frame the content with a directive opener and a clause introducer.
+        """Frame the content with this act's :attr:`opener` verb and a clause introducer.
 
-        :param opener: The illocutionary-force verb (e.g. ``PerformativeDirective.ACHIEVE``).
-        :param introducer: The clause introducer (e.g. ``PlanConnectives.THAT``).
+        :param introducer: The clause introducer (e.g. ``Complementizers.THAT``).
         :param services: Shared microplanning services (coreference across acts), or ``None``.
         :return: A fragment reading *"<opener> <introducer> <content>"* (e.g. *"Achieve that …"*).
         """
         return PhraseFragment(
             parts=[
-                opener.as_fragment(),
+                self.opener.as_fragment(),
                 introducer.as_fragment(),
                 fragment_for_expression(self.content, services),
             ],
@@ -120,16 +130,43 @@ class Performative(Performable, ABC):
 
 
 @dataclass
-class Find(Performative):
-    """Search the world for the values matching the description -- the existing query speech act."""
+class QuerySpeechAct(Performative, ABC):
+    """A query speech act: a force applied to an EQL query whose surface opener (*"Find"* /
+    *"Generate"* / *"Report"*) the verbalization engine already chooses from the query's shape.
 
-    def perform(self) -> List[Any]:
-        return list(self.content.evaluate())
+    So the act simply verbalizes its content -- the opener it would carry is the one the bare query
+    carries, which is this act's class name -- and a new query force is a new subclass, with no
+    central opener registry to edit (Open/Closed).
+    """
+
+    def perform(self) -> Any:
+        """:return: the result of evaluating the query content."""
+        return self.content.evaluate()
 
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return fragment_for_expression(self.content, services)
+
+
+@dataclass
+class Find(QuerySpeechAct):
+    """Search the world for the values matching the description -- the query speech act."""
+
+    def perform(self) -> List[Any]:
+        return list(self.content.evaluate())
+
+
+@dataclass
+class Generate(QuerySpeechAct):
+    """Generate the underspecified instance the description leaves open (an *"a"* / *"an"* /
+    underspecified query, verbalized as *"Generate …"*)."""
+
+
+@dataclass
+class Report(QuerySpeechAct):
+    """Present the results the description computes -- a grouped or aggregating query, verbalized as
+    *"Report …"* / *"For each …, report …"*."""
 
 
 @dataclass
@@ -157,9 +194,7 @@ class Explain(Performative):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self.framed_fragment(
-            PerformativeDirective.EXPLAIN, PlanConnectives.WHY, services
-        )
+        return self.framed_fragment(QuestionWords.WHY, services)
 
 
 @dataclass
@@ -169,6 +204,12 @@ class Warn(Performable):
     Carries the situation and remedy a :class:`~krrood.exceptions.DataclassException` already holds, so
     :meth:`of` lifts any such exception into the speech-act layer.
     """
+
+    opener: ClassVar[KeyWord] = KeyWord("Warning")
+    """The directive verb that opens the warning (its surface differs from the class name)."""
+
+    suggestion_label: ClassVar[KeyWord] = KeyWord("Suggestion")
+    """The label introducing the remedy."""
 
     situation: str
     """A human-readable description of what is wrong."""
@@ -191,14 +232,12 @@ class Warn(Performable):
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         parts: List[VerbalizationFragment] = [
-            PerformativeDirective.WARNING.as_fragment(),
+            self.opener.as_fragment(),
             WordFragment(text=f": {self.situation}"),
         ]
         if self.suggestion:
             parts.append(
-                WordFragment(
-                    text=f" {PerformativeDirective.SUGGESTION.text}: {self.suggestion}"
-                )
+                WordFragment(text=f" {self.suggestion_label.text}: {self.suggestion}")
             )
         return PhraseFragment(parts=parts, separator=Separator.NONE)
 
@@ -220,7 +259,9 @@ class Composition(Performable, ABC):
         )
 
     def eql_scan_targets(self) -> List[SymbolicExpression]:
-        return [target for child in self.children for target in child.eql_scan_targets()]
+        return [
+            target for child in self.children for target in child.eql_scan_targets()
+        ]
 
     def _child_fragments(
         self, services: Optional[MicroplanningServices]
@@ -236,13 +277,14 @@ class Sequential(Composition):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return interleave(self._child_fragments(services), PlanConnectives.THEN)
+        return interleave(self._child_fragments(services), Adverbs.THEN)
 
 
 @dataclass
 class Parallel(Composition):
     """Do the children at the same time -- the first act as the main clause, the rest as concurrent
-    *"while …-ing"* clauses (*"navigate to X, while simultaneously monitoring whether …"*)."""
+    *"while …-ing"* clauses (*"navigate to X, while simultaneously monitoring whether …"*).
+    """
 
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
@@ -255,13 +297,16 @@ class TryInOrder(Composition):
     """Try the children in order, falling through on failure -- an ordered disjunction
     (*"try A, otherwise B"*)."""
 
+    lead_verb: ClassVar[Verb] = Verb("try")
+    """The imperative verb that opens the ordered fallback."""
+
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return interleave(
             self._child_fragments(services),
-            PlanConnectives.OTHERWISE,
-            lead=PlanConnectives.TRY,
+            Adverbs.OTHERWISE,
+            lead=self.lead_verb.as_fragment(),
         )
 
 
@@ -270,12 +315,15 @@ class TryAll(Composition):
     """Try the children at once, succeeding if any does -- a disjunction with concurrency
     (*"try A, B, or C simultaneously"*)."""
 
+    lead_verb: ClassVar[Verb] = Verb("try")
+    """The imperative verb that opens the concurrent disjunction."""
+
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return coordinate(
             self._child_fragments(services),
             Conjunctions.OR,
-            lead=PlanConnectives.TRY,
-            tail=PlanConnectives.SIMULTANEOUSLY,
+            lead=self.lead_verb.as_fragment(),
+            tail=Adverbs.SIMULTANEOUSLY.as_fragment(),
         )

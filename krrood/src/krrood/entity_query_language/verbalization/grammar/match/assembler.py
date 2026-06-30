@@ -42,7 +42,6 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
     Conjunctions,
     Copulas,
-    Directive,
     Keywords,
     Prepositions,
 )
@@ -143,7 +142,9 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
                 if group.object is selection
                 for assignment in group.assignments
             },
-            _render_=lambda expression: self.context.child(expression),
+            _render_=lambda expression, alias=None: self.context.child(
+                expression, alias=alias, as_value=True
+            ),
         )
         fragment = selection._type_._verbalization_fragment_(operands)
         if self.context.register.imperative:
@@ -154,7 +155,8 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         self, node: Match, plan: MatchPlan, header: VerbalizationFragment
     ) -> VerbalizationFragment:
         """:return: the self-verbalizing selection's clause, with any free ``where`` conditions kept as
-        a trailing block. The type's verb is the utterance's verb, so no directive opener is added."""
+        a trailing block. The type's verb is the utterance's verb, so no directive opener is added.
+        """
         items: List[VerbalizationFragment] = []
         where = self._where_block(plan)
         if where is not None:

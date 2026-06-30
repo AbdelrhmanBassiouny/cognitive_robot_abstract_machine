@@ -24,8 +24,9 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.fragments.features import Separator
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Adverbs,
     Conjunctions,
-    PlanConnectives,
+    SubordinatingConjunctions,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 
@@ -51,19 +52,20 @@ def _as_participle(fragment: VerbalizationFragment) -> VerbalizationFragment:
 def interleave(
     child_fragments: List[VerbalizationFragment],
     connective: VocabEnum,
-    lead: Optional[VocabEnum] = None,
+    lead: Optional[VerbalizationFragment] = None,
 ) -> VerbalizationFragment:
     """Join children, placing *connective* before every child after the first.
 
     :param child_fragments: The already-built fragments to join.
-    :param connective: The word inserted between steps (e.g. ``PlanConnectives.THEN``).
-    :param lead: An optional opening word placed before the first child (e.g. ``PlanConnectives.TRY``).
+    :param connective: The adverb inserted between steps (e.g. ``Adverbs.THEN``).
+    :param lead: An optional already-built opening fragment placed before the first child (e.g. the
+        *"try"* verb).
     :return: A fragment reading *"[lead] A, <connective> B, <connective> C"*.
     """
     head, *rest = child_fragments
     parts: List[VerbalizationFragment] = []
     if lead is not None:
-        parts.extend([lead.as_fragment(), WordFragment(text=Separator.SPACE)])
+        parts.extend([lead, WordFragment(text=Separator.SPACE)])
     parts.append(head)
     for fragment in rest:
         parts.append(WordFragment(text=f"{Separator.COMMA}{connective.text} "))
@@ -74,24 +76,24 @@ def interleave(
 def coordinate(
     child_fragments: List[VerbalizationFragment],
     conjunction: VocabEnum,
-    lead: Optional[VocabEnum] = None,
-    tail: Optional[VocabEnum] = None,
+    lead: Optional[VerbalizationFragment] = None,
+    tail: Optional[VerbalizationFragment] = None,
 ) -> VerbalizationFragment:
     """Join children as an Oxford-comma coordination, reusing the And/Or coordination.
 
     :param child_fragments: The already-built fragments to join.
     :param conjunction: ``Conjunctions.AND`` (parallel) or ``Conjunctions.OR`` (try-all).
-    :param lead: An optional opening word (e.g. ``PlanConnectives.TRY``).
-    :param tail: An optional closing word (e.g. ``PlanConnectives.SIMULTANEOUSLY``).
+    :param lead: An optional already-built opening fragment (e.g. the *"try"* verb).
+    :param tail: An optional already-built closing fragment (e.g. ``Adverbs.SIMULTANEOUSLY``).
     :return: A fragment reading *"[lead] A, B, <conjunction> C [tail]"*.
     """
     joined = oxford_comma(child_fragments, conjunction.as_fragment())
     parts: List[VerbalizationFragment] = []
     if lead is not None:
-        parts.append(lead.as_fragment())
+        parts.append(lead)
     parts.append(joined)
     if tail is not None:
-        parts.append(tail.as_fragment())
+        parts.append(tail)
     return PhraseFragment(parts=parts, separator=Separator.SPACE)
 
 
@@ -113,7 +115,7 @@ def concurrent(
         Conjunctions.AND.as_fragment(),
     )
     connective = WordFragment(
-        text=f"{Separator.COMMA}{PlanConnectives.WHILE.text} "
-        f"{PlanConnectives.SIMULTANEOUSLY.text} "
+        text=f"{Separator.COMMA}{SubordinatingConjunctions.WHILE.text} "
+        f"{Adverbs.SIMULTANEOUSLY.text} "
     )
     return PhraseFragment(parts=[head, connective, joined], separator=Separator.NONE)

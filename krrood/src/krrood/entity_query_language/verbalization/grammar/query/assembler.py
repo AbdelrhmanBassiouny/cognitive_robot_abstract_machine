@@ -72,6 +72,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Keywords,
     Prepositions,
     Punctuation,
+    QueryOpener,
     RankingWords,
 )
 
@@ -236,7 +237,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 self._sentence_initial(Keywords.FOR.as_fragment()),
                 subject_noun,
                 Punctuation.COMMA.as_fragment(),
-                Keywords.REPORT.as_fragment(),
+                QueryOpener.REPORT.as_fragment(),
             ]
         )
         return self._query_body(
@@ -372,11 +373,11 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 plan,
                 subject_noun,
                 where_items=[self._where_clause(plan)],
-                find_header=self._sentence_initial(Keywords.REPORT.as_fragment()),
+                find_header=self._sentence_initial(QueryOpener.REPORT.as_fragment()),
             )
         header = PhraseFragment(
             parts=[
-                self._sentence_initial(Keywords.REPORT.as_fragment()),
+                self._sentence_initial(QueryOpener.REPORT.as_fragment()),
                 Punctuation.COMMA.as_fragment(),
                 Keywords.FOR.as_fragment(),
                 subject_noun,
@@ -397,7 +398,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             find_header=header,
         )
 
-    def _assemble_subjectless_ranked_set_of(self, node: SetOf, plan: QueryPlan) -> VerbalizationFragment:
+    def _assemble_subjectless_ranked_set_of(
+        self, node: SetOf, plan: QueryPlan
+    ) -> VerbalizationFragment:
         """:return: a ranked set-of whose columns share no single variable subject. When the ranking
         is by a SELECTED AGGREGATE and a single top row is wanted (``limit(1)``), it frames the other
         columns by that aggregate — *"Find <columns> with the highest <aggregate>"* — so the tuple
@@ -445,7 +448,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             plan,
             body,
             where_items=[self._where_clause(plan)],
-            find_header=Keywords.FIND.as_fragment(),
+            find_header=QueryOpener.FIND.as_fragment(),
         )
 
     def _tuple_subject(self, node: SetOf, plan: QueryPlan) -> Optional[Variable]:
@@ -536,7 +539,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         header = (
             self._for_each_header(report.group_keys)
             if report.is_grouped
-            else self._sentence_initial(Keywords.REPORT.as_fragment())
+            else self._sentence_initial(QueryOpener.REPORT.as_fragment())
         )
         return self._query_body(
             node,
@@ -564,7 +567,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 plan,
                 self._distinct_keys(report.group_keys),
                 where_items=[self._where_clause(plan)],
-                find_header=self._sentence_initial(Keywords.REPORT.as_fragment()),
+                find_header=self._sentence_initial(QueryOpener.REPORT.as_fragment()),
             )
         return self._query_body(
             node,
@@ -648,7 +651,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 Keywords.FOR_EACH.as_fragment(),
                 labels,
                 Punctuation.COMMA.as_fragment(),
-                Keywords.REPORT.as_fragment(),
+                QueryOpener.REPORT.as_fragment(),
             ]
         )
 
@@ -715,7 +718,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         surface = ranking_surface(RankingRequest(plan=plan.ranking))
         return PhraseFragment(
             parts=[
-                Keywords.FIND.as_fragment(),
+                QueryOpener.FIND.as_fragment(),
                 Articles.THE.as_fragment(),
                 surface.pre_head,
             ]
@@ -733,8 +736,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         'Report Employees ordered by their salaries from lowest to highest'
         """
         if plan.report is not None:
-            return self._sentence_initial(Keywords.REPORT.as_fragment())
-        return Keywords.FIND.as_fragment()
+            return self._sentence_initial(QueryOpener.REPORT.as_fragment())
+        return QueryOpener.FIND.as_fragment()
 
     def _subject_number(self, plan: QueryPlan) -> GrammaticalNumber:
         """:return: the grammatical number of the rendered subject — plural for a ranking of several
@@ -834,7 +837,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         )
         if not isinstance(variable, Variable) and key_trails:
             head = self.context.child(variable)
-            surface = ranking_surface(RankingRequest(plan=ranking, context=self.context))
+            surface = ranking_surface(
+                RankingRequest(plan=ranking, context=self.context)
+            )
             return PhraseFragment(parts=[head, *surface.modifiers])
         surface = ranking_surface(RankingRequest(plan=ranking, context=self.context))
         return NounPhrase(
@@ -910,7 +915,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             if rendered.residual is not None:
                 # A plural population reads "... such that ..."; a singular nested noun reads "where".
                 connective = (
-                    Keywords.SUCH_THAT if number is GrammaticalNumber.PLURAL else Keywords.WHERE
+                    Keywords.SUCH_THAT
+                    if number is GrammaticalNumber.PLURAL
+                    else Keywords.WHERE
                 )
                 modifiers.append(
                     PhraseFragment(parts=[connective.as_fragment(), rendered.residual])

@@ -22,8 +22,8 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Directive,
     Keywords,
+    QueryOpener,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 
@@ -36,8 +36,8 @@ class Register:
     """The keyword that introduces the field bindings -- *"given that"* (query) or *"such that"* (imperative)."""
 
     fixed_opener: Optional[VocabEnum] = None
-    """A fixed opener verb (e.g. ``PerformativeDirective.PERFORM``), or ``None`` to choose *"Find"* /
-    *"Generate"* by the description's specificity."""
+    """A fixed opener verb (e.g. an act's ``opener``, such as *"Perform"*), or ``None`` to choose
+    *"Find"* / *"Generate"* by the description's specificity."""
 
     imperative: bool = False
     """Whether the description is a command -- its finite verb is realised in the bare imperative
@@ -47,8 +47,4 @@ class Register:
         """:return: the opener fragment -- the fixed verb, or *"Find"* / *"Generate"* by *underspecified*."""
         if self.fixed_opener is not None:
             return self.fixed_opener.as_fragment()
-        return Directive.for_underspecified(underspecified).as_fragment()
-
-
-QUERY_REGISTER = Register()
-"""The default register: *"Find"* / *"Generate"* openers and *"given that"* field bindings."""
+        return QueryOpener.for_underspecified(underspecified).as_fragment()

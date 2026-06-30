@@ -56,6 +56,11 @@ class RenderOptions:
     match assignment's value), so a domain-constrained value-type ``Variable`` renders as its
     candidate set (*"one of A, B, or C"*) rather than as a subject noun (*"an int"*)."""
 
+    alias: Optional[str] = None
+    """A label to name this node's variable by instead of its type noun -- the field name an operand
+    binds it under (*"target location"* for a ``Pose``), humanised by the variable rule. ``None``
+    leaves the type-name label."""
+
 
 @dataclass
 class RuleContext:
@@ -84,6 +89,7 @@ class RuleContext:
         number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
         inline: bool = False,
         as_value: bool = False,
+        alias: Optional[str] = None,
     ) -> VerbalizationFragment:
         """Recurse on a sub-expression, requesting its render flags (all reset by default — they do
         not inherit from this node).
@@ -92,13 +98,16 @@ class RuleContext:
         :param number: Grammatical number to build the child under.
         :param inline: Fold the child in chain-root (inline-noun) position.
         :param as_value: Fold the child in value position (domain variables list their candidates).
+        :param alias: A label to name the child's variable by instead of its type noun (an operand's
+            field name); ``None`` keeps the type-name label.
         :return: The child's fragment.
 
         >>> verbalize_expression(variable(BankTransaction, []).amount_details.amount)
         'the amount of the amount_details of a BankTransaction'
         """
         return self.recurse(
-            node, RenderOptions(number=number, inline=inline, as_value=as_value)
+            node,
+            RenderOptions(number=number, inline=inline, as_value=as_value, alias=alias),
         )
 
     @property
@@ -115,6 +124,11 @@ class RuleContext:
     def as_value(self) -> bool:
         """:return: Whether this node is folded in value position."""
         return self.options.as_value
+
+    @property
+    def alias(self) -> Optional[str]:
+        """:return: The label to name this node's variable by, or ``None`` for the type-name label."""
+        return self.options.alias
 
     @property
     def refer(self) -> ReferringExpressions:
@@ -140,10 +154,10 @@ class RuleContext:
     def register(self) -> Register:
         """:return: The register to verbalize in -- the default query register when none is set."""
         from krrood.entity_query_language.verbalization.vocabulary.register import (
-            QUERY_REGISTER,
+            Register,
         )
 
-        return self.services.register or QUERY_REGISTER
+        return self.services.register or Register()
 
 
 class PhraseRule(ABC):

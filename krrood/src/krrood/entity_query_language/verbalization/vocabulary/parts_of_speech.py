@@ -76,7 +76,8 @@ class Noun(ClauseElement):
     def as_fragment(self) -> VerbalizationFragment:
         """:return: an indefinite (or definite) noun phrase for a literal head — so the article is
         chosen by the determiner pass (*"a"* / *"an"*) and the head pluralises and reduces with
-        coreference — else the constituent's own fragment.
+        coreference — a constituent's own fragment, or a literal value lexicalised (an enum member
+        as its name, *"HIGH"*).
 
         >>> Noun("instance").as_fragment().definiteness
         <Definiteness.INDEFINITE: 'indefinite'>
@@ -85,7 +86,12 @@ class Noun(ClauseElement):
             return NounPhrase(
                 head=WordFragment(text=self.content), definiteness=self.definiteness
             )
-        return self.content.as_fragment()
+        if isinstance(
+            self.content,
+            (VerbalizationFragment, ClauseElement, Operand, VerbalizationField),
+        ):
+            return self.content.as_fragment()
+        return RoleFragment.for_literal(self.content)
 
     @classmethod
     def the(cls, head: str) -> "Noun":
@@ -334,7 +340,9 @@ def value_function_noun(name: str) -> str:
     return " ".join(words)
 
 
-def value_function_phrase(name: str, *operands: ClauseConstituent) -> VerbalizationFragment:
+def value_function_phrase(
+    name: str, *operands: ClauseConstituent
+) -> VerbalizationFragment:
     """Build *"the &lt;noun&gt; of &lt;operands&gt;"* for a value function — the counterpart of
     :func:`predicate_clause` for an operation that computes a value rather than a truth.
 
@@ -424,7 +432,10 @@ def predicate_clause(
         # period is, not the begin). State only what is certain: the named condition holds for ALL the
         # operands. *"one month holds for the begin and the end of its period"*.
         operands = oxford_comma(
-            [Noun(subject).as_fragment(), *(Noun(obj).as_fragment() for obj in objects)],
+            [
+                Noun(subject).as_fragment(),
+                *(Noun(obj).as_fragment() for obj in objects),
+            ],
             Conjunctions.AND.as_fragment(),
         )
         return clause(

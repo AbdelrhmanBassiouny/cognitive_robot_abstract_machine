@@ -24,22 +24,11 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
-from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Keywords,
-    PerformativeDirective,
-)
+from krrood.entity_query_language.verbalization.vocabulary.english import Keywords
 from krrood.entity_query_language.verbalization.vocabulary.register import Register
 
 if TYPE_CHECKING:
     from coraplex.plans.plan_node import PlanNode
-
-#: The register an action speech act verbalizes its description in: an imperative command
-#: (*"navigate to …"*) for a self-verbalizing action, or *"Perform … such that …"* otherwise.
-PERFORM_REGISTER = Register(
-    binding_connective=Keywords.SUCH_THAT,
-    fixed_opener=PerformativeDirective.PERFORM,
-    imperative=True,
-)
 
 
 @dataclass
@@ -51,6 +40,18 @@ class Perform(Performative):
     self-verbalizing), and executing it builds and runs the corresponding coraplex plan node.
     """
 
+    @property
+    def register(self) -> Register:
+        """:return: the imperative register this act verbalizes its description in -- an imperative
+        command (*"navigate to …"*) for a self-verbalizing action, or *"Perform … such that …"*
+        otherwise. Derived from the act's own :attr:`opener`, so there is no separate global register
+        lying around and no register declaration to keep in sync."""
+        return Register(
+            binding_connective=Keywords.SUCH_THAT,
+            fixed_opener=self.opener,
+            imperative=True,
+        )
+
     def perform(self) -> PlanNode:
         from coraplex.plans.factories import execute_single
 
@@ -59,6 +60,4 @@ class Perform(Performative):
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return fragment_for_expression(
-            self.content, services, register=PERFORM_REGISTER
-        )
+        return fragment_for_expression(self.content, services, register=self.register)
