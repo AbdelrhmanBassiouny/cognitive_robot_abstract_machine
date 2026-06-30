@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+from enum import Enum
 from typing import Tuple, List, Optional, Any
 
 from typing_extensions import Optional, Dict, Any, Self
@@ -49,12 +50,21 @@ class MoveTorsoAction(ActionDescription, Verbalizable):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        """:return: *"move the torso to <torso_state>"* -- the action as its own verb phrase."""
+        """:return: *"move the torso to a <state> state"* -- the action as its own verb phrase.
+
+        The torso state is an enum, so the action frames it as *"a <name> state"* (the framing is the
+        action's concern); a non-concrete state falls back to the operand's own rendering.
+        """
+        state = operands.torso_state._value_of_operand_
+        if isinstance(state, Enum):
+            return clause(
+                Verb("move"),
+                Noun.the("torso"),
+                Preposition.TO,
+                Noun(f"{state.name.lower()} state"),
+            )
         return clause(
-            Verb("move"),
-            Noun.the("torso"),
-            Preposition.TO,
-            Noun(operands.torso_state),
+            Verb("move"), Noun.the("torso"), Preposition.TO, Noun(operands.torso_state)
         )
 
     def execute(self) -> None:

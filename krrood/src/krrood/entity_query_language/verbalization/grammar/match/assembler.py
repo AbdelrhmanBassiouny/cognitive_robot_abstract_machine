@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from typing_extensions import List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -8,6 +10,7 @@ from krrood.entity_query_language.predicate import OperandView, Verbalizable
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
+    map_structural_children,
     VerbalizationFragment,
     oxford_comma,
     OwnedAttributes,
@@ -15,6 +18,10 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     RoleFragment,
     WordFragment,
 )
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.grammar.conditions.assembler import (
     ConditionAssembler,
 )
@@ -43,6 +50,16 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 #: The most attribute values coordinated under one *"… are 1, 2, and 3 respectively"* point before
 #: each is said separately — beyond this the reader can no longer reliably zip attributes to values.
 _MAX_RESPECTIVELY = 3
+
+
+def _as_imperative(fragment: VerbalizationFragment) -> VerbalizationFragment:
+    """:return: *fragment* with every finite verb marked for the bare imperative (*"navigate"*, not
+    *"navigates"*) -- realised by tagging each verb plural, the number the morphology pass renders as
+    the bare lemma."""
+    if isinstance(fragment, RoleFragment) and fragment.role is SemanticRole.VERB:
+        return replace(fragment, number=GrammaticalNumber.PLURAL)
+    rebuilt = map_structural_children(fragment, _as_imperative)
+    return rebuilt if rebuilt is not None else fragment
 
 
 class MatchAssembler(Assembler[Match, MatchPlan]):
@@ -128,7 +145,10 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             },
             _render_=lambda expression: self.context.child(expression),
         )
-        return selection._type_._verbalization_fragment_(operands)
+        fragment = selection._type_._verbalization_fragment_(operands)
+        if self.context.register.imperative:
+            fragment = _as_imperative(fragment)
+        return fragment
 
     def _verbalizable_block(
         self, node: Match, plan: MatchPlan, header: VerbalizationFragment

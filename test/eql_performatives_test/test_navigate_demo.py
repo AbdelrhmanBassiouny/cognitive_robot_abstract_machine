@@ -37,24 +37,23 @@ def _navigate_and_raise_torso() -> Sequential:
 
 
 def test_actions_verbalize_as_their_own_verb_phrases():
-    # Each action is Verbalizable, so it states itself as a verb phrase (NavigateAction ->
-    # "navigate(s) to …", MoveTorsoAction -> "move(s) the torso to …") instead of the generic
-    # "Perform a NavigateAction such that …".
-    text = _navigate_and_raise_torso().verbalize()
-    assert "navigate" in text and "move" in text and "the torso" in text
-    assert "NavigateAction" not in text and "MoveTorsoAction" not in text
-    # the sdt SymbolicFunction predicate reads as a clean clause under Monitor
-    assert ", then Monitor whether " in text and "is free for an AbstractRobot" in text
-    # the pose shared by the navigate and the monitor corefers ("a Pose" then "the Pose")
-    assert "the Pose is free" in text
+    # Each action is Verbalizable, so it states itself as an imperative verb phrase (NavigateAction ->
+    # "navigate to …", MoveTorsoAction -> "move the torso to a … state") instead of the generic
+    # "Perform a NavigateAction such that …"; the shared pose corefers ("a Pose" then "the Pose").
+    assert _navigate_and_raise_torso().verbalize() == (
+        "Navigate to a Pose, "
+        "then Monitor whether the Pose is free for an AbstractRobot, "
+        "then move the torso to a high state"
+    )
+    assert "NavigateAction" not in _navigate_and_raise_torso().verbalize()
 
 
 def test_each_step_uses_the_act_that_fits_it():
     robot = variable(AbstractRobot, [])
     target = variable(Pose, [])
-    # the performed action states itself as a verb phrase, not "Perform a NavigateAction"
+    # the performed action states itself as an imperative verb phrase, not "Perform a NavigateAction"
     assert Perform(a(NavigateAction)(target_location=target)).verbalize().startswith(
-        "navigate"
+        "Navigate"
     )
     assert Monitor(is_pose_free_for_robot(robot, target)).verbalize().startswith(
         "Monitor whether "
