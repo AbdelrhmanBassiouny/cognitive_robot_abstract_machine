@@ -20,7 +20,7 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from krrood.entity_query_language.factories import a, variable
-from krrood.entity_query_language.performatives import Perform, Sequential
+from krrood.entity_query_language.performatives import Parallel, Perform, Sequential
 from giskardpy.eql.performatives import Monitor
 
 
@@ -29,8 +29,12 @@ def _navigate_and_raise_torso() -> Sequential:
     target = variable(Pose, [])   # the target is a bound pose, shared across the navigate and the monitor
     return Sequential(
         [
-            Perform(a(NavigateAction)(target_location=target)),
-            Monitor(is_pose_free_for_robot(robot, target)),
+            Parallel(
+                [
+                    Perform(a(NavigateAction)(target_location=target)),
+                    Monitor(is_pose_free_for_robot(robot, target)),
+                ]
+            ),
             Perform(a(MoveTorsoAction)(torso_state=TorsoState.HIGH)),
         ]
     )
@@ -38,11 +42,12 @@ def _navigate_and_raise_torso() -> Sequential:
 
 def test_actions_verbalize_as_their_own_verb_phrases():
     # Each action is Verbalizable, so it states itself as an imperative verb phrase (NavigateAction ->
-    # "navigate to …", MoveTorsoAction -> "move the torso to a … state") instead of the generic
-    # "Perform a NavigateAction such that …"; the shared pose corefers ("a Pose" then "the Pose").
+    # "navigate to …", MoveTorsoAction -> "move the torso to a … state"); the navigate and the monitor
+    # run in parallel ("… while simultaneously monitoring …"); the shared pose corefers ("a Pose" / "the
+    # Pose").
     assert _navigate_and_raise_torso().verbalize() == (
         "Navigate to a Pose, "
-        "then Monitor whether the Pose is free for an AbstractRobot, "
+        "while simultaneously monitoring whether the Pose is free for an AbstractRobot, "
         "then move the torso to a high state"
     )
     assert "NavigateAction" not in _navigate_and_raise_torso().verbalize()

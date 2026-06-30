@@ -20,20 +20,24 @@ so coordination and punctuation are produced by the verbalization engine rather 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from typing_extensions import Any, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.fragments.base import (
+    BlockFragment,
     PhraseFragment,
+    RoleFragment,
     VerbalizationFragment,
     WordFragment,
     flatten_fragment_to_plain_text,
     oxford_comma,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Separator
+from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
@@ -52,6 +56,24 @@ PERFORM_REGISTER = Register(
     fixed_opener=PerformativeDirective.PERFORM,
     imperative=True,
 )
+
+
+def _as_participle(fragment: VerbalizationFragment) -> VerbalizationFragment:
+    """:return: *fragment* with its leading verb / directive opener as a present participle
+    (*"monitor whether …"* → *"monitoring whether …"*), so a concurrent act reads as a *"while …-ing"*
+    clause. A fragment with no leading verb (a bare assertion) is returned unchanged."""
+    if isinstance(fragment, RoleFragment) and fragment.role in (
+        SemanticRole.VERB,
+        SemanticRole.KEYWORD,
+    ):
+        return replace(fragment, text=morphology.present_participle(fragment.text))
+    if isinstance(fragment, BlockFragment) and fragment.header is not None:
+        return replace(fragment, header=_as_participle(fragment.header))
+    if isinstance(fragment, PhraseFragment) and fragment.parts:
+        return replace(
+            fragment, parts=[_as_participle(fragment.parts[0]), *fragment.parts[1:]]
+        )
+    return fragment
 
 
 @dataclass
@@ -313,13 +335,25 @@ class Sequential(Composition):
 
 @dataclass
 class Parallel(Composition):
-    """Do the children at the same time -- a conjunction with concurrency (*"A and B simultaneously"*)."""
+    """Do the children at the same time -- the first act as the main clause, the rest as concurrent
+    *"while …-ing"* clauses (*"navigate to X, while simultaneously monitoring whether …"*)."""
 
     def as_fragment(
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
-        return self._coordinate(
-            Conjunctions.AND, services, tail=PlanConnectives.SIMULTANEOUSLY
+        head, *rest = [child.as_fragment(services) for child in self.children]
+        if not rest:
+            return head
+        concurrent = oxford_comma(
+            [_as_participle(fragment) for fragment in rest],
+            Conjunctions.AND.as_fragment(),
+        )
+        connective = WordFragment(
+            text=f"{Separator.COMMA}{PlanConnectives.WHILE.text} "
+            f"{PlanConnectives.SIMULTANEOUSLY.text} "
+        )
+        return PhraseFragment(
+            parts=[head, connective, concurrent], separator=Separator.NONE
         )
 
 

@@ -90,6 +90,23 @@ def third_person_singular(lemma: str) -> str:
     return forms[0] if forms else lemma + "s"
 
 
+def present_participle(word: str) -> str:
+    """
+    :param word: An English verb (a lemma or any surface form).
+    :return: The present-participle / gerund form (*"monitor"* → *"monitoring"*, *"navigate"* →
+        *"navigating"*, *"run"* → *"running"*), via ``lemminflect``'s ``VBG`` inflection; falls back
+        to ``lemma + "ing"`` for an unknown word.
+
+    >>> present_participle("monitor")
+    'monitoring'
+    >>> present_participle("navigate")
+    'navigating'
+    """
+    lemma = verb_lemma(word)
+    forms = getInflection(lemma, tag="VBG")
+    return forms[0] if forms else lemma + "ing"
+
+
 def verb_lemma(word: str) -> str:
     """
     :param word: An English verb surface form.
