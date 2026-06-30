@@ -44,8 +44,17 @@ class NavigateAction(ActionDescription, Verbalizable):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        """:return: *"navigate to <target_location>"* -- the action stated as its own verb phrase."""
-        return clause(Verb("navigate"), Preposition.TO, Noun(operands.target_location))
+        """:return: *"navigate to the target location"* -- the action stated as its own verb phrase.
+
+        The destination is named by its field name (its role in the action), not its ``Pose`` type,
+        and that alias is shared across the plan so a monitor watching the same pose reads *"the
+        target location"* too.
+        """
+        return clause(
+            Verb("navigate"),
+            Preposition.TO,
+            Noun(operands.target_location.by_field_name()),
+        )
 
     def execute(self) -> None:
         self.add_subplan(
