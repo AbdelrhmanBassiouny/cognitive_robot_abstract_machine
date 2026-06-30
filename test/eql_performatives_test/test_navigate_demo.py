@@ -20,8 +20,9 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from krrood.entity_query_language.factories import a, variable
-from krrood.entity_query_language.performatives import Parallel, Perform, Sequential
+from krrood.entity_query_language.performatives import Parallel, Sequential
 from giskardpy.eql.performatives import Monitor
+from coraplex.eql.performatives import Perform
 
 
 def _navigate_and_raise_torso() -> Sequential:
