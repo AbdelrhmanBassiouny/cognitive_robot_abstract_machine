@@ -19,7 +19,7 @@ from semantic_digital_twin.reasoning.robot_predicates import is_pose_free_for_ro
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
-from krrood.entity_query_language.factories import a, variable
+from krrood.entity_query_language.factories import match, variable
 from krrood.entity_query_language.performatives import Parallel, Sequential
 from giskardpy.eql.performatives import Monitor
 from coraplex.eql.performatives import Perform
@@ -32,11 +32,11 @@ def _navigate_and_raise_torso() -> Sequential:
         [
             Parallel(
                 [
-                    Perform(a(NavigateAction)(target_location=target)),
+                    Perform(match(NavigateAction)(target_location=target)),
                     Monitor(is_pose_free_for_robot(robot, target)),
                 ]
             ),
-            Perform(a(MoveTorsoAction)(torso_state=TorsoState.HIGH)),
+            Perform(match(MoveTorsoAction)(torso_state=TorsoState.HIGH)),
         ]
     )
 
@@ -58,7 +58,7 @@ def test_each_step_uses_the_act_that_fits_it():
     robot = variable(AbstractRobot, [])
     target = variable(Pose, [])
     # the performed action states itself as an imperative verb phrase, not "Perform a NavigateAction"
-    assert Perform(a(NavigateAction)(target_location=target)).verbalize().startswith(
+    assert Perform(match(NavigateAction)(target_location=target)).verbalize().startswith(
         "Navigate"
     )
     assert Monitor(is_pose_free_for_robot(robot, target)).verbalize().startswith(

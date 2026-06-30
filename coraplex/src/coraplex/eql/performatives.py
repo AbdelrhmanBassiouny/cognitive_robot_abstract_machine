@@ -8,7 +8,7 @@ plan execution, rather than in krrood (which keeps only the framework-agnostic a
 framework, and it verbalizes through the shared fragment vocabulary.
 
 Its content is an action description -- an EQL :class:`~krrood.entity_query_language.query.match.Match`
-(e.g. ``a(NavigateAction)(...)``), which coraplex's plan layer already accepts as an ``ActionLike`` -- so
+(e.g. ``match(NavigateAction)(...)``), which coraplex's plan layer already accepts as an ``ActionLike`` -- so
 executing the act builds and runs the corresponding plan node.
 """
 
@@ -46,7 +46,7 @@ PERFORM_REGISTER = Register(
 class Perform(Performative):
     """Carry out the described action -- the directive that drives a plan.
 
-    The content is an action description (e.g. ``a(NavigateAction)(...).where(...)``); it verbalizes in the
+    The content is an action description (e.g. ``match(NavigateAction)(...).where(...)``); it verbalizes in the
     imperative register (*"navigate to …"*, or *"Perform … such that …"* when the action is not
     self-verbalizing), and executing it builds and runs the corresponding coraplex plan node.
     """
