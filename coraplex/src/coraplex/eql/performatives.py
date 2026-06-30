@@ -3,13 +3,13 @@ Action speech acts -- the coraplex half of the performative layer.
 
 ``Perform`` is the directive that *carries out* an action, so it lives here, in the framework that owns
 plan execution, rather than in krrood (which keeps only the framework-agnostic acts). It is a
-:class:`~krrood.entity_query_language.performatives.Performable`, so a krrood
-:class:`~krrood.entity_query_language.performatives.Composition` composes it alongside acts from any other
-framework, and it verbalizes through the shared fragment vocabulary.
+:class:`~krrood.entity_query_language.performatives.Performable`, so a coraplex plan node composes it, as a
+plan, alongside acts from any other framework, and it verbalizes through the shared fragment vocabulary.
 
 Its content is an action description -- an EQL :class:`~krrood.entity_query_language.query.match.Match`
 (e.g. ``a(NavigateAction)(...)``), which coraplex's plan layer already accepts as an ``ActionLike`` -- so
-executing the act builds and runs the corresponding plan node.
+executing the act builds and runs the corresponding plan node. ``Perform`` makes the *carry out* force
+explicit; putting the action ``Match`` directly in a plan reads the same way.
 """
 
 from __future__ import annotations
@@ -24,22 +24,12 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
-from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Keywords,
-    PerformativeDirective,
+from krrood.entity_query_language.verbalization.vocabulary.register import (
+    ACTION_COMMAND_REGISTER,
 )
-from krrood.entity_query_language.verbalization.vocabulary.register import Register
 
 if TYPE_CHECKING:
     from coraplex.plans.plan_node import PlanNode
-
-#: The register an action speech act verbalizes its description in: an imperative command
-#: (*"navigate to …"*) for a self-verbalizing action, or *"Perform … such that …"* otherwise.
-PERFORM_REGISTER = Register(
-    binding_connective=Keywords.SUCH_THAT,
-    fixed_opener=PerformativeDirective.PERFORM,
-    imperative=True,
-)
 
 
 @dataclass
@@ -60,5 +50,5 @@ class Perform(Performative):
         self, services: Optional[MicroplanningServices] = None
     ) -> VerbalizationFragment:
         return fragment_for_expression(
-            self.content, services, register=PERFORM_REGISTER
+            self.content, services, register=ACTION_COMMAND_REGISTER
         )

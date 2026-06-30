@@ -24,6 +24,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Directive,
     Keywords,
+    PerformativeDirective,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 
@@ -52,3 +53,11 @@ class Register:
 
 QUERY_REGISTER = Register()
 """The default register: *"Find"* / *"Generate"* openers and *"given that"* field bindings."""
+
+ACTION_COMMAND_REGISTER = Register(
+    binding_connective=Keywords.SUCH_THAT,
+    fixed_opener=PerformativeDirective.PERFORM,
+    imperative=True,
+)
+"""The register for an action stated as a command: an imperative verb phrase (*"navigate to …"*) for a
+self-verbalizing action, else *"Perform … such that …"*."""

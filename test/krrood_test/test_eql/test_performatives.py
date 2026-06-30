@@ -15,21 +15,25 @@ import pytest
 
 from krrood.entity_query_language.factories import a, an, entity, variable
 from krrood.entity_query_language.performatives import (
-    Composition,
     Explain,
     Find,
     Inform,
-    Parallel,
     Performable,
-    Sequential,
-    TryAll,
-    TryInOrder,
     Warn,
+)
+from krrood.entity_query_language.verbalization.composition import (
+    parallel_shape,
+    sequential_shape,
+    try_all_shape,
+    try_in_order_shape,
 )
 from krrood.entity_query_language.verbalization.example_domain import (
     IsReachable,
     Location,
     Robot,
+)
+from krrood.entity_query_language.verbalization.fragments.base import (
+    flatten_fragment_to_plain_text,
 )
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.exceptions import DataclassException
@@ -90,38 +94,43 @@ def test_warn_without_a_suggestion_omits_it():
     assert Warn(situation="something is off").verbalize() == "Warning: something is off"
 
 
-# ── compositions join their children with the engine's coordination ──────────────
+# ── composition shapes join child fragments with the engine's coordination ───────
+#
+# The shapes are the reusable verbalization machinery; the plan layer (coraplex) verbalizes its plan
+# nodes through them, so composing *acts* end-to-end is exercised there. Here we verify the shapes over
+# real act fragments.
 
 
-def test_sequential_interleaves_then():
-    text = Sequential([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text == (
-        "A Location is reachable, then a Robot is operational"
-    )
+def _fragments():
+    return [Inform(_reachable()).as_fragment(), Inform(_operational()).as_fragment()]
 
 
-def test_parallel_states_the_rest_as_concurrent_while_clauses():
-    text = Parallel([Inform(_reachable()), Inform(_operational())]).verbalize()
+def test_sequential_shape_interleaves_then():
+    text = flatten_fragment_to_plain_text(sequential_shape(_fragments()))
+    assert text == "a Location is reachable, then a Robot is operational"
+
+
+def test_parallel_shape_states_the_rest_as_concurrent_while_clauses():
+    text = flatten_fragment_to_plain_text(parallel_shape(_fragments()))
     assert ", while simultaneously " in text
 
 
-def test_parallel_of_three_joins_the_concurrent_acts_with_and():
-    text = Parallel(
-        [Inform(_reachable()), Inform(_operational()), Inform(_reachable())]
-    ).verbalize()
+def test_parallel_shape_of_three_joins_the_concurrent_acts_with_and():
+    fragments = _fragments() + [Inform(_reachable()).as_fragment()]
+    text = flatten_fragment_to_plain_text(parallel_shape(fragments))
     assert ", while simultaneously " in text
     assert " and " in text                               # the And-rule's coordination, reused
 
 
-def test_try_in_order_is_an_ordered_fallback():
-    text = TryInOrder([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text.startswith("Try ")
+def test_try_in_order_shape_is_an_ordered_fallback():
+    text = flatten_fragment_to_plain_text(try_in_order_shape(_fragments()))
+    assert text.startswith("try ")
     assert ", otherwise " in text
 
 
-def test_try_all_is_a_parallel_disjunction():
-    text = TryAll([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text.startswith("Try ")
+def test_try_all_shape_is_a_parallel_disjunction():
+    text = flatten_fragment_to_plain_text(try_all_shape(_fragments()))
+    assert text.startswith("try ")
     assert " or " in text
     assert text.endswith(" simultaneously")
 
@@ -129,15 +138,12 @@ def test_try_all_is_a_parallel_disjunction():
 # ── the shared interface + honest execution boundaries ───────────────────────────
 
 
-def test_acts_and_compositions_conform_to_performable():
+def test_acts_conform_to_performable():
     assert isinstance(Find(an(entity(variable(Location, [])))), Performable)
     assert isinstance(Inform(_reachable()), Performable)
     assert isinstance(Warn(situation="x"), Performable)
-    assert isinstance(Sequential([Inform(_reachable())]), Performable)
 
 
 def test_unsupported_execution_is_delegated_not_faked():
     with pytest.raises(NotImplementedError):
         Explain(_reachable()).perform()
-    with pytest.raises(NotImplementedError):
-        Sequential([Inform(_reachable())]).perform()

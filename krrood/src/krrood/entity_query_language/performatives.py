@@ -7,11 +7,14 @@ propositional *content* expressed as an EQL
 *done* with the description -- found, asserted, explained, warned -- while the description stays a reusable,
 verbalizable query.
 
-This module owns the **framework-agnostic** layer: the :class:`Performable` interface, the atomic acts that
-need only EQL evaluation / verbalization / exceptions (:class:`Find`, :class:`Inform`, :class:`Explain`,
-:class:`Warn`), and the :class:`Composition` combinators. Acts that need a solver or a robot -- ``Achieve``,
-``Observe``, ``Perform`` -- live in the framework that owns that capability (giskardpy, coraplex) and
-subclass :class:`Performative` there, declaring their own directive opener via :meth:`Performative.framed_fragment`.
+This module owns the **framework-agnostic** layer: the :class:`Performable` interface and the atomic acts
+that need only EQL evaluation / verbalization / exceptions (:class:`Find`, :class:`Inform`,
+:class:`Explain`, :class:`Warn`). Acts that need a solver or a robot -- ``Achieve``, ``Monitor``,
+``Perform`` -- live in the framework that owns that capability (giskardpy, coraplex) and subclass
+:class:`Performative` there. Compositions (control structures over child performables -- sequential,
+parallel, try) are the plan layer's plan nodes (coraplex), which verbalize through the shared
+:mod:`~krrood.entity_query_language.verbalization.composition` shapes; each act's framing comes from its
+own opener via :meth:`Performative.framed_fragment`.
 
 Every act renders through real verbalization **fragments** (a single :meth:`Performable.as_fragment` tree),
 so coordination and punctuation are produced by the verbalization engine rather than string concatenation.
@@ -20,27 +23,21 @@ so coordination and punctuation are produced by the verbalization engine rather 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from typing_extensions import Any, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.fragments.base import (
-    BlockFragment,
     PhraseFragment,
-    RoleFragment,
     VerbalizationFragment,
     WordFragment,
     flatten_fragment_to_plain_text,
-    oxford_comma,
 )
 from krrood.entity_query_language.verbalization.fragments.features import Separator
-from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Conjunctions,
     PerformativeDirective,
     PlanConnectives,
 )
@@ -48,30 +45,14 @@ from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnu
 from krrood.exceptions import DataclassException
 
 
-def _as_participle(fragment: VerbalizationFragment) -> VerbalizationFragment:
-    """:return: *fragment* with its leading verb / directive opener as a present participle
-    (*"monitor whether …"* → *"monitoring whether …"*), so a concurrent act reads as a *"while …-ing"*
-    clause. A fragment with no leading verb (a bare assertion) is returned unchanged."""
-    if isinstance(fragment, RoleFragment) and fragment.role in (
-        SemanticRole.VERB,
-        SemanticRole.KEYWORD,
-    ):
-        return replace(fragment, text=morphology.present_participle(fragment.text))
-    if isinstance(fragment, BlockFragment) and fragment.header is not None:
-        return replace(fragment, header=_as_participle(fragment.header))
-    if isinstance(fragment, PhraseFragment) and fragment.parts:
-        return replace(
-            fragment, parts=[_as_participle(fragment.parts[0]), *fragment.parts[1:]]
-        )
-    return fragment
-
-
-@dataclass
 class Performable(ABC):
     """A speech act: something that can be performed and rendered as a verbalization fragment.
 
-    Atomic acts (:class:`Performative`), warnings (:class:`Warn`), and compositions
-    (:class:`Composition`) all share this interface, so a plan is a tree of performables that both
+    A pure interface (no fields, so not a dataclass): this keeps it free of a generated ``__eq__`` that
+    would otherwise shadow the identity equality of a subclass that wants it (e.g. a plan node in a graph).
+
+    Atomic acts (:class:`Performative`), warnings (:class:`Warn`), and the plan layer's compositions
+    (coraplex plan nodes) all share this interface, so a plan is a tree of performables that both
     executes (:meth:`perform`) and verbalizes (:meth:`verbalize`).
     """
 
@@ -220,136 +201,3 @@ class Warn(Performable):
                 )
             )
         return PhraseFragment(parts=parts, separator=Separator.NONE)
-
-
-@dataclass
-class Composition(Performable, ABC):
-    """A composite act: a control structure over child performables (a Searle commissive).
-
-    ..note:: Verbalization is owned here; *executing* a composition (ordering, parallelism, failure
-        fall-through) is the plan layer's responsibility, so :meth:`perform` raises here.
-    """
-
-    children: List[Performable]
-    """The performables this composition coordinates."""
-
-    def perform(self) -> Any:
-        raise NotImplementedError(
-            "Executing a composition is provided by the coraplex plan layer."
-        )
-
-    def eql_scan_targets(self) -> List[SymbolicExpression]:
-        return [target for child in self.children for target in child.eql_scan_targets()]
-
-    def _interleave(
-        self,
-        connective: PlanConnectives,
-        services: Optional[MicroplanningServices],
-        lead: Optional[VocabEnum] = None,
-    ) -> VerbalizationFragment:
-        """Join the children, placing *connective* before every child after the first.
-
-        :param connective: The word inserted between steps (e.g. ``PlanConnectives.THEN``).
-        :param services: Shared microplanning services threaded to each child (coreference across acts).
-        :param lead: An optional opening word placed before the first child (e.g. ``PlanConnectives.TRY``).
-        :return: A fragment reading *"[lead] A, <connective> B, <connective> C"*.
-        """
-        head, *rest = [child.as_fragment(services) for child in self.children]
-        parts: List[VerbalizationFragment] = []
-        if lead is not None:
-            parts.extend([lead.as_fragment(), WordFragment(text=Separator.SPACE)])
-        parts.append(head)
-        for fragment in rest:
-            parts.append(WordFragment(text=f"{Separator.COMMA}{connective.text} "))
-            parts.append(fragment)
-        return PhraseFragment(parts=parts, separator=Separator.NONE)
-
-    def _coordinate(
-        self,
-        conjunction: Conjunctions,
-        services: Optional[MicroplanningServices],
-        lead: Optional[VocabEnum] = None,
-        tail: Optional[VocabEnum] = None,
-    ) -> VerbalizationFragment:
-        """Join the children as an Oxford-comma coordination, reusing the And/Or coordination.
-
-        :param conjunction: ``Conjunctions.AND`` (parallel) or ``Conjunctions.OR`` (try-all).
-        :param services: Shared microplanning services threaded to each child (coreference across acts).
-        :param lead: An optional opening word (e.g. ``PlanConnectives.TRY``).
-        :param tail: An optional closing word (e.g. ``PlanConnectives.SIMULTANEOUSLY``).
-        :return: A fragment reading *"[lead] A, B, <conjunction> C [tail]"*.
-        """
-        joined = oxford_comma(
-            [child.as_fragment(services) for child in self.children],
-            conjunction.as_fragment(),
-        )
-        parts: List[VerbalizationFragment] = []
-        if lead is not None:
-            parts.append(lead.as_fragment())
-        parts.append(joined)
-        if tail is not None:
-            parts.append(tail.as_fragment())
-        return PhraseFragment(parts=parts, separator=Separator.SPACE)
-
-
-@dataclass
-class Sequential(Composition):
-    """Do the children one after another -- a temporal conjunction (*"A, then B"*)."""
-
-    def as_fragment(
-        self, services: Optional[MicroplanningServices] = None
-    ) -> VerbalizationFragment:
-        return self._interleave(PlanConnectives.THEN, services)
-
-
-@dataclass
-class Parallel(Composition):
-    """Do the children at the same time -- the first act as the main clause, the rest as concurrent
-    *"while …-ing"* clauses (*"navigate to X, while simultaneously monitoring whether …"*)."""
-
-    def as_fragment(
-        self, services: Optional[MicroplanningServices] = None
-    ) -> VerbalizationFragment:
-        head, *rest = [child.as_fragment(services) for child in self.children]
-        if not rest:
-            return head
-        concurrent = oxford_comma(
-            [_as_participle(fragment) for fragment in rest],
-            Conjunctions.AND.as_fragment(),
-        )
-        connective = WordFragment(
-            text=f"{Separator.COMMA}{PlanConnectives.WHILE.text} "
-            f"{PlanConnectives.SIMULTANEOUSLY.text} "
-        )
-        return PhraseFragment(
-            parts=[head, connective, concurrent], separator=Separator.NONE
-        )
-
-
-@dataclass
-class TryInOrder(Composition):
-    """Try the children in order, falling through on failure -- an ordered disjunction
-    (*"try A, otherwise B"*)."""
-
-    def as_fragment(
-        self, services: Optional[MicroplanningServices] = None
-    ) -> VerbalizationFragment:
-        return self._interleave(
-            PlanConnectives.OTHERWISE, services, lead=PlanConnectives.TRY
-        )
-
-
-@dataclass
-class TryAll(Composition):
-    """Try the children at once, succeeding if any does -- a disjunction with concurrency
-    (*"try A, B, or C simultaneously"*)."""
-
-    def as_fragment(
-        self, services: Optional[MicroplanningServices] = None
-    ) -> VerbalizationFragment:
-        return self._coordinate(
-            Conjunctions.OR,
-            services,
-            lead=PlanConnectives.TRY,
-            tail=PlanConnectives.SIMULTANEOUSLY,
-        )

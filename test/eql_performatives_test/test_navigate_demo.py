@@ -1,13 +1,15 @@
 """
-Demo: a real robot plan, re-expressed as verbalizable speech acts composed across frameworks.
+Demo: a real robot plan that is one tree -- executable *and* verbalizable -- composed across frameworks.
 
-Two real coraplex actions (``NavigateAction``, ``MoveTorsoAction``) as *Perform* acts, with a real
-semantic_digital_twin predicate (``is_pose_free_for_robot``) watched by a *Monitor*, all composed under one
-krrood ``Sequential`` -- the payoff of the performative layer: one description language, one composition
-language, one verbalization, across planning / perception / motion frameworks.
+Two real coraplex actions (``NavigateAction``, ``MoveTorsoAction``) and a real semantic_digital_twin
+predicate (``is_pose_free_for_robot``) watched by a giskardpy ``Monitor``, composed with coraplex's own
+plan combinators (``sequential`` / ``parallel``). Each plan node is a krrood ``Performable``, so the *same*
+tree the plan layer executes also verbalizes -- through the shared verbalization shapes, not a second
+verbalizer. The payoff of the unified performative layer: one description language, one composition
+language, one verbalization, across planning / perception / motion.
 
-Uses existing predicates and actions so the demo reads as a real plan. Runs in the lean container (builds
-and verbalizes the plan without ROS); executing the motion is the ROS-CI step.
+Runs in the lean container (builds and verbalizes the plan without ROS); executing the motion is the
+ROS-CI step.
 """
 
 from __future__ import annotations
@@ -20,30 +22,30 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from krrood.entity_query_language.factories import a, variable
-from krrood.entity_query_language.performatives import Parallel, Sequential
 from giskardpy.eql.performatives import Monitor
-from coraplex.eql.performatives import Perform
+from coraplex.plans.factories import make_node, parallel, sequential
+from coraplex.plans.plan_node import PlanNode
 
 
-def _navigate_and_raise_torso() -> Sequential:
+def _navigate_and_raise_torso() -> PlanNode:
     robot = variable(AbstractRobot, [])
     target = variable(Pose, [])   # the target is a bound pose, shared across the navigate and the monitor
-    return Sequential(
+    return sequential(
         [
-            Parallel(
+            parallel(
                 [
-                    Perform(a(NavigateAction)(target_location=target)),
+                    a(NavigateAction)(target_location=target),
                     Monitor(is_pose_free_for_robot(robot, target)),
                 ]
             ),
-            Perform(a(MoveTorsoAction)(torso_state=TorsoState.HIGH)),
+            a(MoveTorsoAction)(torso_state=TorsoState.HIGH),
         ]
     )
 
 
-def test_actions_verbalize_as_their_own_verb_phrases():
-    # Each action is Verbalizable, so it states itself as an imperative verb phrase (NavigateAction ->
-    # "navigate to …", MoveTorsoAction -> "move the torso to a … state"); the navigate and the monitor
+def test_the_plan_tree_verbalizes_as_one_sentence():
+    # The action nodes are Verbalizable, so each states itself as an imperative verb phrase (NavigateAction
+    # -> "navigate to …", MoveTorsoAction -> "move the torso to a … state"); the navigate and the monitor
     # run in parallel ("… while simultaneously monitoring …"); the shared pose corefers ("a Pose" / "the
     # Pose").
     assert _navigate_and_raise_torso().verbalize() == (
@@ -57,9 +59,11 @@ def test_actions_verbalize_as_their_own_verb_phrases():
 def test_each_step_uses_the_act_that_fits_it():
     robot = variable(AbstractRobot, [])
     target = variable(Pose, [])
-    # the performed action states itself as an imperative verb phrase, not "Perform a NavigateAction"
-    assert Perform(a(NavigateAction)(target_location=target)).verbalize().startswith(
-        "Navigate"
+    # an action node states itself as an imperative verb phrase, not "Perform a NavigateAction"
+    assert (
+        make_node(a(NavigateAction)(target_location=target))
+        .verbalize()
+        .startswith("Navigate")
     )
     assert Monitor(is_pose_free_for_robot(robot, target)).verbalize().startswith(
         "Monitor whether "

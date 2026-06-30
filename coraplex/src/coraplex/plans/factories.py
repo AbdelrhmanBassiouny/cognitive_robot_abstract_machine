@@ -124,11 +124,13 @@ def _make_plan_from_type_and_children(
 
 
 def make_node(action_like: ActionLike) -> PlanNode:
+    from krrood.entity_query_language.performatives import Performable
     from coraplex.plans.plan_node import (
         PlanNode,
         UnderspecifiedNode,
         ActionNode,
         MotionNode,
+        PerformativeNode,
     )
     from coraplex.robot_plans.actions.base import ActionDescription
     from coraplex.robot_plans import BaseMotion
@@ -142,5 +144,7 @@ def make_node(action_like: ActionLike) -> PlanNode:
         return ActionNode(designator=action_like)
     elif isinstance(action_like, BaseMotion):
         return MotionNode(designator=action_like)
+    elif isinstance(action_like, Performable):
+        return PerformativeNode(act=action_like)
     else:
         assert_never(action_like)

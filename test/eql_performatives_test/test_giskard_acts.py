@@ -1,6 +1,6 @@
 """
-Tests for the giskardpy motion speech acts (``Achieve`` / ``Monitor``) and their composition with the
-framework-agnostic krrood combinators.
+Tests for the giskardpy motion speech acts (``Achieve`` / ``Monitor``) and their composition, as plan
+nodes, with the coraplex plan combinators.
 
 ``Achieve`` drives a motion goal/task (it compiles to QP constraints); ``Monitor`` watches a predicate or
 constraint (a runtime monitor). Lives in its own directory (not ``giskardpy_test``) so it runs in the lean
@@ -12,12 +12,13 @@ from __future__ import annotations
 import pytest
 
 from krrood.entity_query_language.factories import variable
-from krrood.entity_query_language.performatives import Performable, Sequential
+from krrood.entity_query_language.performatives import Performable
 from semantic_digital_twin.reasoning.robot_predicates import is_pose_free_for_robot
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from giskardpy.eql.constraints import MinClearance, ReachPosition
 from giskardpy.eql.performatives import Achieve, Monitor
+from coraplex.plans.factories import sequential
 
 
 def _reach():
@@ -71,8 +72,9 @@ def test_motion_acts_conform_to_performable():
     assert isinstance(Monitor(_keep_clear()), Performable)
 
 
-def test_krrood_composition_spans_giskard_acts():
-    plan = Sequential([Achieve(_reach()), Monitor(_keep_clear())])
+def test_plan_composition_spans_giskard_acts():
+    # the giskard acts compose, as plan nodes, in a coraplex plan and verbalize through the shared shapes
+    plan = sequential([Achieve(_reach()), Monitor(_keep_clear())])
     assert plan.verbalize() == (
         "Achieve that the gripper tip is at the target pose, "
         "then Monitor whether the distance between the gripper and the table is at least 0.01 metres"

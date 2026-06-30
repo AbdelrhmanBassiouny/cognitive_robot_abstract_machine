@@ -3,9 +3,9 @@ Motion speech acts -- the giskardpy half of the performative layer.
 
 ``Achieve`` and ``Monitor`` are the directives that need a solver / monitor, so they live here (the
 framework that owns that capability) rather than in krrood, which keeps only the framework-agnostic acts.
-Both are :class:`~krrood.entity_query_language.performatives.Performable`, so a krrood
-:class:`~krrood.entity_query_language.performatives.Composition` composes them alongside acts from any
-other framework, and both verbalize through the shared fragment vocabulary.
+Both are :class:`~krrood.entity_query_language.performatives.Performable`, so a coraplex plan node composes
+them, as a plan, alongside acts from any other framework, and both verbalize through the shared fragment
+vocabulary.
 
 The division of labour follows the goal/condition split: ``Achieve`` drives a **motion goal or task** to
 satisfaction (it compiles to QP constraints), while ``Monitor`` watches a **predicate or constraint** hold

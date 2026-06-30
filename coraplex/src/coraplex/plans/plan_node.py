@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from abc import abstractmethod, ABC
+from abc import ABC
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -13,7 +13,21 @@ import tqdm
 from typing_extensions import Union
 
 from giskardpy.motion_statechart.graph_node import Task
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.performatives import Performable
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.verbalization.composition import sequential_shape
+from krrood.entity_query_language.verbalization.context import MicroplanningServices
+from krrood.entity_query_language.verbalization.fragments.base import (
+    NounPhrase,
+    VerbalizationFragment,
+    WordFragment,
+)
+from krrood.entity_query_language.verbalization.pipeline import fragment_for_expression
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
+from krrood.entity_query_language.verbalization.vocabulary.register import (
+    ACTION_COMMAND_REGISTER,
+)
 
 from coraplex.datastructures.enums import TaskStatus
 from coraplex.plans.failures import PlanFailure
@@ -39,9 +53,14 @@ def sort_by_layer_index(nodes: Iterable[PlanNode]) -> Iterable[PlanNode]:
 
 
 @dataclass(eq=False)
-class PlanNode(PlanEntity):
+class PlanNode(PlanEntity, Performable):
     """
     A node in the plan.
+
+    A plan node is also a :class:`~krrood.entity_query_language.performatives.Performable`: it both
+    executes (:meth:`perform`) and verbalizes (:meth:`as_fragment` / :meth:`verbalize`), so one plan tree
+    is the single, executable *and* verbalizable form -- the verbalization shapes a composition reads in
+    are shared with krrood rather than duplicated here.
     """
 
     status: TaskStatus = TaskStatus.CREATED
@@ -293,11 +312,27 @@ class PlanNode(PlanEntity):
         """
         pass
 
-    @abstractmethod
     def _perform(self):
         """
         Perform the node without managing the fields of this node.
+
+        The default is a no-op; nodes that drive behaviour (actions, motions, language nodes) override it.
         """
+
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        """:return: this node as a verbalization fragment. The default reads its children as a temporal
+        sequence (*"A, then B"*); leaf nodes and control nodes override it."""
+        children = self.children
+        if not children:
+            return WordFragment(text="")
+        return sequential_shape([child.as_fragment(services) for child in children])
+
+    def eql_scan_targets(self) -> List[SymbolicExpression]:
+        return [
+            target for child in self.children for target in child.eql_scan_targets()
+        ]
 
 
 @dataclass(eq=False, repr=False)
@@ -325,6 +360,17 @@ class UnderspecifiedNode(PlanNode):
     @property
     def designator_type(self) -> Type:
         return self.underspecified_action.type
+
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        """:return: the underspecified action stated as a command (*"navigate to a Pose"*)."""
+        return fragment_for_expression(
+            self.underspecified_action, services, register=ACTION_COMMAND_REGISTER
+        )
+
+    def eql_scan_targets(self) -> List[SymbolicExpression]:
+        return [self.underspecified_action]
 
     def _perform(self):
         if self._action_iterator is None:
@@ -358,6 +404,13 @@ class DesignatorNode(PlanNode, ABC):
 
     def __post_init__(self):
         self.designator.plan_node = self
+
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        """:return: the grounded designator named by its type (*"a NavigateAction"*). The rich,
+        field-level reading belongs to the underspecified spec (a ``Match``), not the grounded node."""
+        return NounPhrase(head=WordFragment(text=type_noun(type(self.designator))))
 
     def __repr__(self):
         return f"{type(self.designator).__name__}"
@@ -488,4 +541,27 @@ class MotionNode(DesignatorNode):
         return None
 
 
-ActionLike = Union[Match, Designator, PlanNode]
+@dataclass(eq=False, repr=False)
+class PerformativeNode(PlanNode):
+    """A plan node that wraps a framework speech act (e.g. ``Monitor``, ``Achieve``) so the act composes
+    in a plan alongside native nodes -- it executes and verbalizes through the act it carries."""
+
+    act: Performable = field(kw_only=True)
+    """The speech act this node performs and verbalizes."""
+
+    def _perform(self):
+        return self.act.perform()
+
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return self.act.as_fragment(services)
+
+    def eql_scan_targets(self) -> List[SymbolicExpression]:
+        return self.act.eql_scan_targets()
+
+    def __repr__(self):
+        return type(self.act).__name__
+
+
+ActionLike = Union[Match, Designator, PlanNode, Performable]

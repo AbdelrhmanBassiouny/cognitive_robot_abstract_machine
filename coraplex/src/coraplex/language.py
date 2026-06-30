@@ -17,6 +17,16 @@ from typing_extensions import (
     Union,
 )
 
+from krrood.entity_query_language.verbalization.composition import (
+    parallel_shape,
+    try_all_shape,
+    try_in_order_shape,
+)
+from krrood.entity_query_language.verbalization.context import MicroplanningServices
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
+
 from coraplex.datastructures.enums import TaskStatus, MonitorBehavior
 from coraplex.plans.failures import PlanFailure, AllChildrenFailed
 from coraplex.fluent import Fluent
@@ -103,6 +113,11 @@ class ParallelNode(ExecutesInParallel):
         for child in self.children:
             if child.status == TaskStatus.FAILED:
                 raise child.reason
+
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return parallel_shape([child.as_fragment(services) for child in self.children])
 
 
 @dataclass(eq=False)
@@ -197,6 +212,13 @@ class TryInOrderNode(ExecutesSequentially):
         if failed:
             raise AllChildrenFailed(self)
 
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return try_in_order_shape(
+            [child.as_fragment(services) for child in self.children]
+        )
+
 
 @dataclass(eq=False)
 class TryAllNode(ExecutesInParallel):
@@ -210,6 +232,11 @@ class TryAllNode(ExecutesInParallel):
         failed = all([child.status == TaskStatus.FAILED for child in self.children])
         if failed:
             raise AllChildrenFailed(self)
+
+    def as_fragment(
+        self, services: Optional[MicroplanningServices] = None
+    ) -> VerbalizationFragment:
+        return try_all_shape([child.as_fragment(services) for child in self.children])
 
 
 @dataclass
