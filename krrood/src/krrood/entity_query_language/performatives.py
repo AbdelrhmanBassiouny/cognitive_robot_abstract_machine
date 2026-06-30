@@ -45,9 +45,12 @@ from krrood.entity_query_language.verbalization.vocabulary.register import Regis
 from krrood.entity_query_language.verbalization.vocabulary.words import VocabEnum
 from krrood.exceptions import DataclassException
 
-#: The register an action speech act verbalizes its description in: *"Perform … such that …"*.
+#: The register an action speech act verbalizes its description in: an imperative command
+#: (*"navigate to …"*) for a self-verbalizing action, or *"Perform … such that …"* otherwise.
 PERFORM_REGISTER = Register(
-    binding_connective=Keywords.SUCH_THAT, fixed_opener=PerformativeDirective.PERFORM
+    binding_connective=Keywords.SUCH_THAT,
+    fixed_opener=PerformativeDirective.PERFORM,
+    imperative=True,
 )
 
 
@@ -80,13 +83,14 @@ class Performable(ABC):
         return []
 
     def verbalize(self) -> str:
-        """:return: the act rendered as a natural-language utterance.
+        """:return: the act rendered as a natural-language utterance, capitalised as a sentence.
 
         Builds one coreference map over all the EQL contents in this act's tree, so a referent shared
         across composed acts is named once and corefers (*"a Pose … the Pose"*).
         """
         services = MicroplanningServices.from_expressions(self.eql_scan_targets())
-        return flatten_fragment_to_plain_text(self.as_fragment(services))
+        text = flatten_fragment_to_plain_text(self.as_fragment(services))
+        return text[:1].upper() + text[1:]
 
 
 @dataclass

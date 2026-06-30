@@ -69,7 +69,8 @@ def test_find_is_the_query_speech_act_and_evaluates():
 
 def test_inform_asserts_the_proposition():
     reachable = _reachable()
-    assert Inform(reachable).verbalize() == verbalize_expression(reachable)
+    proposition = verbalize_expression(reachable)
+    assert Inform(reachable).verbalize() == proposition[:1].upper() + proposition[1:]
 
 
 def test_explain_frames_the_description():
@@ -95,7 +96,7 @@ def test_warn_without_a_suggestion_omits_it():
 def test_sequential_interleaves_then():
     text = Sequential([Inform(_reachable()), Inform(_operational())]).verbalize()
     assert text == (
-        "a Location is reachable, then a Robot is operational"
+        "A Location is reachable, then a Robot is operational"
     )
 
 
@@ -115,13 +116,13 @@ def test_parallel_of_three_uses_oxford_comma():
 
 def test_try_in_order_is_an_ordered_fallback():
     text = TryInOrder([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text.startswith("try ")
+    assert text.startswith("Try ")
     assert ", otherwise " in text
 
 
 def test_try_all_is_a_parallel_disjunction():
     text = TryAll([Inform(_reachable()), Inform(_operational())]).verbalize()
-    assert text.startswith("try ")
+    assert text.startswith("Try ")
     assert " or " in text
     assert text.endswith(" simultaneously")
 

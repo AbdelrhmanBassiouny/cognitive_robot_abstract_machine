@@ -39,6 +39,10 @@ class Register:
     """A fixed opener verb (e.g. ``PerformativeDirective.PERFORM``), or ``None`` to choose *"Find"* /
     *"Generate"* by the description's specificity."""
 
+    imperative: bool = False
+    """Whether the description is a command -- its finite verb is realised in the bare imperative
+    (*"navigate to …"*, not *"navigates to …"*), and the opener is the verb itself."""
+
     def opener_fragment(self, underspecified: bool) -> VerbalizationFragment:
         """:return: the opener fragment -- the fixed verb, or *"Find"* / *"Generate"* by *underspecified*."""
         if self.fixed_opener is not None:
