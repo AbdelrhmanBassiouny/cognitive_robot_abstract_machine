@@ -298,7 +298,7 @@ def test_subclass_safe_generic_flags_a_lost_concrete_binding():
     T_local = TypeVar("T_local")
 
     assert (
-        SubClassSafeGeneric._concrete_binding_was_lost({T_local: int}) is True
+        SubClassSafeGeneric._substitutions_bind_a_concrete_type({T_local: int}) is True
     )
 
 
@@ -310,10 +310,10 @@ def test_subclass_safe_generic_does_not_flag_a_typevar_only_rename():
     Renamed = TypeVar("Renamed")
 
     assert (
-        SubClassSafeGeneric._concrete_binding_was_lost({T_local: Renamed})
+        SubClassSafeGeneric._substitutions_bind_a_concrete_type({T_local: Renamed})
         is False
     )
-    assert SubClassSafeGeneric._concrete_binding_was_lost({}) is False
+    assert SubClassSafeGeneric._substitutions_bind_a_concrete_type({}) is False
 
 
 def test_subclass_safe_generic_inherited_default_factory_survives_type_update():

@@ -98,20 +98,17 @@ class SubClassSafeGeneric(ABC):
                 )
             )
         except TRANSIENT_TYPE_RESOLUTION_ERRORS as error:
-            # A field's type could not be imported/resolved yet (typically a circular import during
-            # module load). The class must still be definable; such fields are narrowed later, when a
-            # subclass binds the parameter to a concrete type. Only warn when a concrete binding was
-            # actually lost; a failed pure type-variable rename is a no-op, logged at debug to avoid
-            # noise.
-            log = (
-                logger.warning
-                if cls._concrete_binding_was_lost(substitutions)
-                else logger.debug
+            # The annotation is not resolvable yet (typically a circular import at module load). The
+            # class must stay definable; the field is narrowed later when a subclass binds the
+            # parameter to a concrete type.
+            message = (
+                f"SubClassSafeGeneric: could not resolve type hints for {cls}; "
+                f"field types will not be updated. Cause: {error}"
             )
-            log(
-                f"SubClassSafeGeneric: could not resolve type hints for {cls} — field "
-                f"types will not be updated. Cause: {error}"
-            )
+            if cls._substitutions_bind_a_concrete_type(substitutions):
+                logger.warning(message)
+            else:
+                logger.debug(message)
             return
         for name, result in resolution_results.items():
             if not result.resolved:
@@ -119,15 +116,19 @@ class SubClassSafeGeneric(ABC):
             cls._update_field_kwargs(name, {"type": result.resolved_type})
 
     @staticmethod
-    def _concrete_binding_was_lost(
+    def _substitutions_bind_a_concrete_type(
         substitutions: Dict[Any, ResolvableType],
     ) -> bool:
         """
-        Decide whether a failed substitution dropped information worth surfacing.
+        Report whether the substitution map assigns at least one type parameter to a concrete type,
+        rather than only renaming type variables.
+
+        When resolution fails, this distinguishes a genuine loss (a field would have been narrowed
+        to a concrete type — worth a warning) from a pure type-variable rename (a no-op).
 
         :param substitutions: The substitution map that could not be applied.
-        :return: True if any substitution maps to a concrete type, False when every substitution
-            only renames a type variable (a no-op not worth warning about).
+        :return: True if any substitution assigns a concrete type; False if every substitution only
+            renames a type variable, or the map is empty.
         """
         return any(
             not isinstance(value, (TypeVar, TypeVarTuple))
