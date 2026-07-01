@@ -19,7 +19,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
 )
-from krrood.patterns.field_metadata import KRROODFieldMetadata
+from krrood.patterns.field_metadata import FieldMetadata
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
     GrammaticalNumber,
@@ -43,7 +43,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
 )
 
 #: Field names tried, in order, to identify a concrete object whose class marks no field with
-#: :attr:`KRROODFieldMetadata.is_identifying_attribute` — the first one present names it (*"a specific
+#: :attr:`FieldMetadata.is_identifying_attribute` — the first one present names it (*"a specific
 #: Body with name 'door'"*). Conventional identity fields, so the heuristic is deterministic.
 _CONVENTIONAL_ID_FIELDS = ("name", "id", "label", "key", "uuid")
 
@@ -182,7 +182,7 @@ class LiteralRule(PhraseRule):
     ) -> VerbalizationFragment:
         """:return: *"a specific <Type>"* for a concrete object literal — identity, not its (possibly
         huge) repr — qualified by its identifying field(s) when any are known (*"a specific Body with
-        name 'door'"*). The fields are those marked with :attr:`KRROODFieldMetadata.is_identifying_attribute`,
+        name 'door'"*). The fields are those marked with :attr:`FieldMetadata.is_identifying_attribute`,
         else the first present :data:`conventional identity field <_CONVENTIONAL_ID_FIELDS>`.
 
         This method builds the whole *"a specific Robot with name 'R2D2'"* noun phrase — the
@@ -242,7 +242,7 @@ class LiteralRule(PhraseRule):
     @staticmethod
     def _declared_identifying_names(value: Any) -> List[str]:
         """:return: The identifying attribute names for *value* — the dataclass fields its class marks
-        with :attr:`KRROODFieldMetadata.is_identifying_attribute`, else the first present conventional
+        with :attr:`FieldMetadata.is_identifying_attribute`, else the first present conventional
         identity field."""
         marked = LiteralRule._identifying_attribute_fields(value)
         return (
@@ -259,7 +259,7 @@ class LiteralRule(PhraseRule):
         return [
             data_field.name
             for data_field in fields(value)
-            if (metadata := KRROODFieldMetadata.of_field(data_field)) is not None
+            if (metadata := FieldMetadata.of_field(data_field)) is not None
             and metadata.is_identifying_attribute
         ]
 

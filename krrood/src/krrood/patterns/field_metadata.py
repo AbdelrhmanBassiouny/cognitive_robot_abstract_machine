@@ -6,7 +6,7 @@ from typing_extensions import ClassVar, Dict, Optional
 
 
 @dataclass(frozen=True)
-class KRROODFieldMetadata:
+class FieldMetadata:
     """Krrood-specific metadata carried inside a dataclass field's ``metadata`` mapping.
 
     Attach it to a field with :meth:`as_dict` so krrood can read per-field hints (such as
@@ -29,8 +29,8 @@ class KRROODFieldMetadata:
         *,
         is_identifying_attribute: bool = False,
         is_part_whole_relationship: bool = False,
-    ) -> Dict[str, KRROODFieldMetadata]:
-        """:return: A dataclass-field ``metadata`` mapping carrying a :class:`KRROODFieldMetadata`
+    ) -> Dict[str, FieldMetadata]:
+        """:return: A dataclass-field ``metadata`` mapping carrying a :class:`FieldMetadata`
         with the given hints under :attr:`METADATA_KEY`, ready to pass to ``field(metadata=...)``.
         """
         return {
@@ -41,7 +41,7 @@ class KRROODFieldMetadata:
         }
 
     @classmethod
-    def of_field(cls, field: Field) -> Optional[KRROODFieldMetadata]:
-        """:return: The :class:`KRROODFieldMetadata` attached to *field*, or ``None`` when it carries
+    def of_field(cls, field: Field) -> Optional[FieldMetadata]:
+        """:return: The :class:`FieldMetadata` attached to *field*, or ``None`` when it carries
         none."""
         return field.metadata.get(cls.METADATA_KEY)
