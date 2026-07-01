@@ -906,9 +906,9 @@ class ClassDiagram:
         role_taker_clazz = role_taker_assoc.source
         association_path = []
         role_association_chain = list(self.role_chain_starting_from_node(role_clazz))
-        for a in role_association_chain:
-            association_path.append(a)
-            if a.target is role_taker_clazz:
+        for role_association in role_association_chain:
+            association_path.append(role_association)
+            if role_association.target is role_taker_clazz:
                 break
         association_path.append(role_taker_assoc)
         self.add_relation(
@@ -1020,8 +1020,15 @@ class ClassDiagram:
         graph: Optional[rx.PyDiGraph] = None,
         without_inherited_associations: bool = True,
     ):
-        import pydot
+        """
+        Convert the given graph or the current one if none is given to a dot file that can be converted to the given
+        specified output format.
 
+        :param filepath: Filepath to save the output file in.
+        :param format_: Format of the output file.
+        :param graph: Graph to save the output file to.
+        :param without_inherited_associations: Whether to remove association relations that are inherited or not.
+        """
         if graph is None:
             if without_inherited_associations:
                 graph = (
@@ -1030,8 +1037,25 @@ class ClassDiagram:
             else:
                 graph = self._dependency_graph
 
+        self.graph_to_dot(filepath, graph, format_)
+
+    @staticmethod
+    def graph_to_dot(filepath: str, graph: rx.PyDiGraph, format_: str = "dot"):
+        """
+        Convert the given graph to a dot file then output it in the given format. The format is `dot` by default which
+        will output the raw dot file.
+
+        :param filepath: Filepath to save the output file in.
+        :param graph: Graph to save the output file to.
+        :param format_: Format of the output file.
+        """
+        import pydot
         if not filepath.endswith(f".{format_}"):
             filepath += f".{format_}"
+
+        # `raw` is the correct name to give to graphviz to tell it to output the dot file.
+        format_ = 'raw' if format_ == "dot" else format_
+
         dot_str = graph.to_dot(
             lambda node: dict(
                 color="black",

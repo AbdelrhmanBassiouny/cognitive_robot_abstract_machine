@@ -102,33 +102,6 @@ class WrappedField:
     def __repr__(self):
         return f"{module_and_class_name(self.clazz.clazz)}.{self.field.name}"
 
-    def type_at_definer(self, defining_base: type) -> Any:
-        """Return the type annotation of this field as declared on defining_base.
-
-        Falls back to raw ``__annotations__`` inspection when ``get_type_hints``
-        raises ``TypeError`` (e.g. when SubClassSafeGeneric injects a narrowed
-        TypeVar that confuses the resolver).
-
-        :param defining_base: The ancestor class whose declaration is authoritative.
-        :return: The resolved type annotation, or ``self.field.type`` as a fallback.
-        """
-        try:
-            return get_type_hints_of_object(defining_base).get(
-                self.field.name, self.field.type
-            )
-        except TypeError:
-            raw = vars(defining_base).get("__annotations__", {}).get(self.field.name)
-            if raw is not None and not isinstance(raw, str):
-                return raw
-            if isinstance(raw, str):
-                module = inspect.getmodule(defining_base)
-                globalns = getattr(module, "__dict__", {}) if module is not None else {}
-                try:
-                    return eval(raw, globalns)  # noqa: S307
-                except Exception:
-                    pass
-            return self.field.type
-
     @cached_property
     def resolved_type(self):
         """

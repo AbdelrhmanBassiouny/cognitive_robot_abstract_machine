@@ -63,7 +63,7 @@ class Role(Symbol, SubClassSafeGeneric[T]):
     <krrood.patterns.role_predicates.IsSameEntity>` predicate, which unwraps roles to their
     :attr:`root_persistent_entity`:
     >>> from dataclasses import dataclass
-    >>> from krrood.patterns.role_predicates import IsSameEntity
+    >>> from krrood.patterns.role_predicates import IsSameSemanticEntity
     >>> @dataclass(unsafe_hash=True)
     ... class Person:
     ...     name: str
@@ -80,7 +80,7 @@ class Role(Symbol, SubClassSafeGeneric[T]):
     False
     >>> len({person, student})
     2
-    >>> bool(IsSameEntity(person, student))
+    >>> bool(IsSameSemanticEntity(person, student))
     True
     """
 
@@ -295,12 +295,16 @@ class Role(Symbol, SubClassSafeGeneric[T]):
                 return takers
             current = current.role_taker
 
-    # A role is equal only to itself (identity), never to its taker; "same underlying entity?"
-    # is answered by the ``IsSameEntity`` predicate instead. ``__eq__`` returns ``False`` rather
-    # than ``NotImplemented`` so Python cannot fall back to the taker's (possibly lenient) equality
-    # via the reflected operand. ``__hash__`` is set explicitly because defining ``__eq__`` here,
-    # like the plain-dataclass base, would otherwise reset it to ``None`` (unhashable).
+
     def __eq__(self, other: Any) -> bool:
+        """
+        A role is equal only to itself (identity), never to its taker; "same underlying entity?"
+         is answered by the ``IsSameEntity`` predicate instead.
+        """
         return self is other
 
     __hash__ = object.__hash__
+    """
+    ``__hash__`` is set explicitly because defining ``__eq__`` here,
+         like the plain-dataclass base, would otherwise reset it to ``None`` (unhashable).
+    """
