@@ -18,7 +18,7 @@ from krrood.class_diagrams.utils import resolve_type, get_type_hints_of_object
 from krrood.utils import (
     module_and_class_name,
     own_dataclass_fields,
-    memoize,
+    memoize, T,
 )
 
 try:
@@ -241,26 +241,36 @@ class ParseError(TypeError):
     For instance, Union types
     """
 
-    pass
-
-
-T = TypeVar("T")
-
 
 @dataclass
 class WrappedClass(Generic[T], SubClassSafeGeneric):
     """A node wrapper around a Python class used in the class diagram graph."""
 
     index: Optional[int] = dataclass_field(init=False, default=None)
+    """
+    The class unique index in the graph.
+    """
     clazz: Type[T]
+    """
+    The class to be wrapped.
+    """
     _class_diagram: Optional[ClassDiagram] = dataclass_field(
         init=False, hash=False, default=None, repr=False
     )
+    """
+    The class diagram where this class is part of.
+    """
     _wrapped_field_name_map_: Dict[str, WrappedField] = dataclass_field(
         init=False, hash=False, default_factory=dict, repr=False
     )
+    """
+    A mapping from field name to its WrappedField instance.
+    """
 
     def _get_introspector(self) -> AttributeIntrospector:
+        """
+        :return: The introspector to use for finding the fields to wrap in a WrappedField.
+        """
         if self._class_diagram is None:
             introspector = DataclassOnlyIntrospector()
         else:
