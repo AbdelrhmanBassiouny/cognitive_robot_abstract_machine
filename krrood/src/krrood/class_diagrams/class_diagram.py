@@ -7,7 +7,7 @@ from abc import ABC
 from copy import copy
 from dataclasses import dataclass, is_dataclass
 from dataclasses import field
-from functools import cached_property, lru_cache
+from functools import cached_property
 from typing import _GenericAlias
 
 import rustworkx as rx
@@ -18,7 +18,9 @@ from krrood.class_diagrams.utils import resolve_type, get_type_hints_of_object
 from krrood.utils import (
     module_and_class_name,
     own_dataclass_fields,
-    memoize, T,
+    memoize,
+    clear_memoization_cache,
+    T,
 )
 
 try:
@@ -135,7 +137,10 @@ class Association(ClassRelation):
     @cached_property
     def many_to_many(self) -> bool:
         """Whether the association is one-to-many (True) or many-to-one (False)."""
-        return self.wrapped_field.is_many_to_many_relationship and not self.wrapped_field.is_type_type
+        return (
+            self.wrapped_field.is_many_to_many_relationship
+            and not self.wrapped_field.is_type_type
+        )
 
     def get_key(self, include_field_name: bool = False) -> tuple:
         """
@@ -201,7 +206,7 @@ class AssociationThroughRoleTaker(Association):
         self.field_path = [assoc.wrapped_field for assoc in self.association_path]
         self.wrapped_field = self.field_path[-1]
 
-    @lru_cache(maxsize=None)
+    @memoize
     def get_original_source_instance_given_this_relation_source_instance(
         self, source_instance: Any
     ):
@@ -676,7 +681,7 @@ class ClassDiagram:
                 )
         return assoc_keys_by_source
 
-    @lru_cache(maxsize=None)
+    @memoize
     def to_subdiagram_without_inherited_associations(
         self,
         include_field_name: bool = False,
@@ -983,7 +988,7 @@ class ClassDiagram:
         )
         return inheritance_graph
 
-    @lru_cache(maxsize=None)
+    @memoize
     def role_chain_starting_from_node(self, node: WrappedClass) -> Tuple[HasRoleTaker]:
         """
         :return: The role chain starting from the given node following HasRoleTaker edges.
@@ -1064,11 +1069,12 @@ class ClassDiagram:
         :param format_: Format of the output file.
         """
         import pydot
+
         if not filepath.endswith(f".{format_}"):
             filepath += f".{format_}"
 
         # `raw` is the correct name to give to graphviz to tell it to output the dot file.
-        format_ = 'raw' if format_ == "dot" else format_
+        format_ = "raw" if format_ == "dot" else format_
 
         dot_str = graph.to_dot(
             lambda node: dict(
@@ -1094,9 +1100,11 @@ class ClassDiagram:
 
     def clear(self):
         self._dependency_graph.clear()
-        AssociationThroughRoleTaker.get_original_source_instance_given_this_relation_source_instance.cache_clear()
-        self.__class__.role_chain_starting_from_node.cache_clear()
-        self.__class__.to_subdiagram_without_inherited_associations.cache_clear()
+        # ``role_chain_starting_from_node`` and ``to_subdiagram_without_inherited_associations`` are
+        # memoized on this instance, so clearing its ``__memo__`` invalidates them once the graph
+        # changes. The per-association ``get_original_source_instance_...`` memo is scoped to each
+        # association instance and is dropped with the graph, so it needs no explicit clearing.
+        clear_memoization_cache(self)
 
     def __hash__(self):
         return hash(id(self))
@@ -1235,9 +1243,7 @@ def make_specialized_dataclass(alias: _GenericAlias) -> Type:
             kwargs.pop("default")
         if kwargs["default_factory"] is dataclasses.MISSING:
             kwargs.pop("default_factory")
-        new_fields.append(
-            (f.name, type_resolution.resolved_type, field(**kwargs))
-        )
+        new_fields.append((f.name, type_resolution.resolved_type, field(**kwargs)))
 
     # Name and namespace
     arg_names = [getattr(a, "__name__", repr(a)) for a in args]

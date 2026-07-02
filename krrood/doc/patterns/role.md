@@ -13,15 +13,63 @@ kernelspec:
 
 # Role Pattern — User Guide
 
-The Role pattern lets an existing object take on a new semantic context — adding context-specific
-attributes and behaviour — without changing the original object's type or identity. A role is an
-**ordinary object with its own identity**: it is equal only to itself. When
-you need to ask whether two objects refer to the same underlying entity, use the `IsSameEntity`
-predicate, which sees through role chains to the root entity.
+## The Problem Roles Solve
 
-This guide uses a university domain as its running example. A `Person` is a persistent entity
-with a name. Over time that person may become a `CEO` or a `Professor`. These are roles: they
-add context-specific data, but the person's identity never changes.
+Sometimes an object needs to take on a new **semantic context** — extra, context-specific
+attributes and behaviour — that does not belong to its permanent type. A `Person` may, over time,
+act as a `CEO` or a `Professor`: each context adds its own data (the company they head, the courses
+they teach), but none of it changes *who the person is*. Modelling this with subclassing or by
+piling optional fields onto `Person` is awkward — the context is temporary, an entity may play
+several contexts at once, and the extra data pollutes the base type.
+
+The **Role pattern** solves this: it lets an existing object take on a new context — adding
+context-specific attributes and behaviour — **without changing the original object's type or
+identity**.
+
+Reach for it when:
+
+- an object needs context-specific attributes/behaviour that do not logically belong to the
+  original type;
+- the context is temporary or situational — the entity may gain and lose it over its lifetime;
+- the same entity can play multiple semantic contexts simultaneously;
+- any part of the system must be able to ask "does this entity have role X?" without scanning all
+  instances;
+- the role and the original object should be recognizable as the **same underlying entity** while
+  remaining **distinct objects**.
+
+When the pattern is the wrong fit, see *When Not to Use the Role Pattern* and the *Decision Guide*
+at the end of this guide.
+
+## What Is a Role?
+
+A **role** adds a semantic context to an existing object — the **role taker** — without altering
+the taker's type or identity. A role is an **ordinary object with its own identity**: it is equal
+only to itself, never to its taker. When you need to ask whether two objects refer to the same
+underlying entity, the `IsSameSemanticEntity` predicate answers that — it sees through role chains
+to the root entity.
+
+This guide uses a university domain as its running example. A `Person` is a persistent entity with
+a name. Over time that person may become a `CEO` or a `Professor`. These are roles: they add
+context-specific data, but the person's identity never changes.
+
+## Classes and Instances: the Mental Model
+
+Roles live on two layers — the **types** you define and the **objects** you create. Keeping them
+straight removes most of the early confusion about "is a role taker a class or an instance?":
+
+- There is one abstract base class, **`Role`** — you never use it directly.
+- You **define a role type** by subclassing it as **`Role[T]`** — `CEO`, `Professor`,
+  `Representative`. Each subclass is a *class*: "the CEO role type", "the Professor role type".
+- A **role taker** is an *instance* of any class in your model — `alice = Person(name="Alice")`.
+  It is a normal object and does not need to know anything about roles.
+- A **role** is an *instance* of one of your `Role` subclasses, attached to a taker —
+  `CEO(role_taker=alice, ...)`.
+- One taker *instance* can hold **many role instances** at once: different types (`alice` as both a
+  `CEO` and a `Professor`), several of the *same* type (`alice` heading two companies), and even
+  **layered** ones — a role's taker can itself be a role (`Representative(role_taker=ceo)`).
+
+So both "role taker" and "role" are *instances*; `Role` and its subclasses are the *classes*. The
+sections below build this up one step at a time using `alice`.
 
 ## Defining a Role Taker
 
@@ -34,7 +82,7 @@ from dataclasses import dataclass, field
 from typing_extensions import List, Optional
 
 from krrood.entity_query_language.predicate import Symbol
-from krrood.patterns.role_predicates import IsSameEntity
+from krrood.patterns.role_predicates import IsSameSemanticEntity
 
 
 @dataclass(eq=False)
@@ -108,9 +156,19 @@ lookups below.
 
 ## Distinct Identity
 
-A role is a distinct object from its role taker: they do not compare equal and do not share a
-hash, so a role and its taker — and multiple roles on one taker — stay separate in sets and
-dictionaries.
+A role and its role taker each carry **different, extra information** — the taker holds the
+entity's persistent data, and each role adds its own context — so they must stay **distinct members
+of sets and dictionaries**: a role, its taker, and multiple roles on one taker should never collapse
+into a single entry.
+
+Python ties equality and hashing together with one rule: *objects that compare equal must have the
+same hash value*
+([`object.__hash__`](https://docs.python.org/3/reference/datamodel.html#object.__hash__) in the
+Python Data Model). Keeping a role and its taker distinct means they need different hashes, and by
+that rule anything with a different hash must also compare unequal. So a `Role` deliberately uses
+**identity** for both: it hashes by object identity (`__hash__ = object.__hash__`) and is equal only
+to itself (`self is other`). (Defining `__eq__` on a class otherwise resets its `__hash__` to
+`None`, making instances unhashable; the same Data Model page is why `Role` restores it explicitly.)
 
 ```{code-cell} ipython3
 print("alice == ceo:", alice == ceo)
@@ -118,12 +176,13 @@ print("alice is ceo:", alice is ceo)
 print("set size:", len({alice, ceo}))
 ```
 
-To ask whether two objects refer to the same underlying entity, use the `IsSameEntity`
-predicate. It unwraps any role to its root entity before comparing, so a role and its taker
-count as the same entity:
+Because "are these equal?" now means strictly "are these the very same object?", the separate
+question "do these refer to the same underlying entity?" is answered by the `IsSameSemanticEntity`
+predicate. It unwraps any role to its root entity before comparing, so a role and its taker count as
+the same entity:
 
 ```{code-cell} ipython3
-print("IsSameEntity(alice, ceo):", bool(IsSameEntity(alice, ceo)))
+print("IsSameSemanticEntity(alice, ceo):", bool(IsSameSemanticEntity(alice, ceo)))
 ```
 
 ## Attribute Access
@@ -217,8 +276,8 @@ cs_101 = Course(name="CS 101")
 professor = Professor(role_taker=alice, teaches=[cs_101])
 
 print("ceo == professor:", ceo == professor)
-print("IsSameEntity(ceo, professor):", bool(IsSameEntity(ceo, professor)))
-print("IsSameEntity(professor, alice):", bool(IsSameEntity(professor, alice)))
+print("IsSameSemanticEntity(ceo, professor):", bool(IsSameSemanticEntity(ceo, professor)))
+print("IsSameSemanticEntity(professor, alice):", bool(IsSameSemanticEntity(professor, alice)))
 print("set size:", len({alice, ceo, professor}))
 
 # Each role preserves its own context-specific data
@@ -245,7 +304,7 @@ print("companies headed:", sorted(role.head_of.name for role in same_type_roles)
 
 # They are distinct objects, yet the same underlying entity
 print("ceo is ceo_of_globex:", ceo is ceo_of_globex)
-print("IsSameEntity(ceo, ceo_of_globex):", bool(IsSameEntity(ceo, ceo_of_globex)))
+print("IsSameSemanticEntity(ceo, ceo_of_globex):", bool(IsSameSemanticEntity(ceo, ceo_of_globex)))
 ```
 
 ## Role Chaining
@@ -264,8 +323,8 @@ class Representative(Role[CEO]):
 rep = Representative(role_taker=ceo, represents=acme)
 
 print("rep == ceo:", rep == ceo)
-print("IsSameEntity(rep, ceo):", bool(IsSameEntity(rep, ceo)))
-print("IsSameEntity(rep, alice):", bool(IsSameEntity(rep, alice)))
+print("IsSameSemanticEntity(rep, ceo):", bool(IsSameSemanticEntity(rep, ceo)))
+print("IsSameSemanticEntity(rep, alice):", bool(IsSameSemanticEntity(rep, alice)))
 print("set size:", len({alice, ceo, professor, rep}))
 ```
 
@@ -296,21 +355,10 @@ print("root type:", Representative.get_root_role_taker_type())
 | Retrieve all roles | `Role.roles_for(taker)` |
 | Access the immediate role taker | `role.role_taker` |
 | Access the root non-role entity | `role.root_persistent_entity` |
-| Check two objects are the same entity | `IsSameEntity(a, b)` (sees through role chains) |
+| Check two objects are the same entity | `IsSameSemanticEntity(a, b)` (sees through role chains) |
 | Find the root role-taker type | `MyRole.get_root_role_taker_type()` |
 | Read taker attributes via role | Use the role instance directly — read delegation is automatic |
 | Change a taker attribute | Assign through `role.role_taker` |
-
-## When to Use the Role Pattern
-
-- An object needs context-specific attributes that do not logically belong to the original type.
-- The additional context is temporary or situational — the entity may gain and lose the role
-  over its lifetime.
-- The same entity can play multiple semantic roles simultaneously.
-- Any part of the system must be able to ask "does this entity have role X?" without scanning
-  all instances.
-- The role and the original object should be recognizable as the same underlying entity (via
-  `IsSameEntity`) while remaining distinct objects.
 
 ## When Not to Use the Role Pattern
 
@@ -329,7 +377,7 @@ its original properties like its state of matter from liquid to solid.
 flowchart TD
     Q1{"Should the wrapper and<br/>the original object represent<br/>the same underlying persistent entity?"}
     Q2{"Is this a temporary<br/>contextual situation, or does it<br/>change persistent identity or properites?"}
-    ROLE["<b>Role[T]</b><br/>Same-entity via IsSameEntity, role registry,<br/>optional chaining."]
+    ROLE["<b>Role[T]</b><br/>Same-entity via IsSameSemanticEntity, role registry,<br/>optional chaining."]
     SUBCLASS["<b>Subclass</b><br/>The new class has its own<br/>persistent identifying properties."]
     ASSOCIATION["<b>Association</b><br/>The new class is a different kind<br/>of thing from the original."]
 
@@ -345,7 +393,7 @@ flowchart TD
 
 - **Developer guide**: {doc}`developer/role` — design decisions, architecture, and extension points.
 - **API reference**: `krrood.patterns.role` — `Role`; `krrood.patterns.role_registry` —
-  `RoleRegistry`; `krrood.patterns.role_predicates` — `IsSameEntity`.
+  `RoleRegistry`; `krrood.patterns.role_predicates` — `IsSameSemanticEntity`.
 - **Source**: `krrood/src/krrood/patterns/role.py`
 - **Tests**: `test/krrood_test/test_patterns/test_role.py` and the dataset under
   `test/krrood_test/dataset/role_and_ontology/`.
