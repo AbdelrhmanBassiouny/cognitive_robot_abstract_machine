@@ -7,7 +7,7 @@ from krrood.parametrization.exceptions import InvalidEllipsis
 from ..dataset.semantic_world_like_classes import Body
 from krrood.entity_query_language.factories import (
     variable,
-    underspecified,
+    an,
 )
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.interval import singleton, reals
@@ -26,7 +26,7 @@ def test_enum_domain():
     """
     Test that a KRROOD variable with an Enum domain is correctly handled.
     """
-    prob_q = underspecified(EnumAction)(
+    prob_q = an(EnumAction)(
         obj=Body(name="body"),
         enum=variable(
             TestEnum, [TestEnum.OPTION_A, TestEnum.OPTION_B, TestEnum.OPTION_C]
@@ -40,7 +40,7 @@ def test_enum_domain():
 
 
 def test_invalid_ellipsis():
-    prob_q = underspecified(EnumAction)(
+    prob_q = an(EnumAction)(
         obj=...,
         enum=variable(
             TestEnum, [TestEnum.OPTION_A, TestEnum.OPTION_B, TestEnum.OPTION_C]
@@ -54,9 +54,7 @@ def test_assignments_for_conditioning():
     """
     Test that assignments_for_conditioning returns only literal facts.
     """
-    prob_q = underspecified(KRROODPosition)(
-        x=1.0, y=..., z=variable(float, domain=[2.0, 3.0])
-    )
+    prob_q = an(KRROODPosition)(x=1.0, y=..., z=variable(float, domain=[2.0, 3.0]))
     parameters = UnderspecifiedParameters(prob_q)
     assignments = parameters.conditioning_assignments_from_literal_values
 
@@ -70,7 +68,7 @@ def test_assignments_for_conditioning():
 
 
 def test_union_types_easy():
-    prob_q = underspecified(KRROODPosition)(x=..., y=..., z=...)
+    prob_q = an(KRROODPosition)(x=..., y=..., z=...)
     prob_q.resolve()
     prob_q.where(
         prob_q.variable.x < 5.0,
@@ -81,9 +79,7 @@ def test_union_types_easy():
 
 
 def test_union_types():
-    prob_q = underspecified(KRROODPosition)(
-        x=..., y=..., z=variable(int, domain=[10, 20])
-    )
+    prob_q = an(KRROODPosition)(x=..., y=..., z=variable(int, domain=[10, 20]))
     prob_q.resolve()
     prob_q.where(prob_q.variable.x < 5.0)
 
