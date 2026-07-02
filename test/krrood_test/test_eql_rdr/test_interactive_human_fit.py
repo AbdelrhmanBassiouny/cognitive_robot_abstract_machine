@@ -27,6 +27,7 @@ RDR backend).
 """
 
 import os
+import sys
 import unittest
 
 from krrood.entity_query_language.factories import underspecified
@@ -61,8 +62,8 @@ def _ipython_available() -> bool:
 
 
 @unittest.skipUnless(
-    True,
-    "human-interactive: set to True and run with `pytest -s`",
+    sys.stdin.isatty(),
+    "human-interactive: only runs with a real user at an interactive terminal (`pytest -s` in a TTY)",
 )
 @unittest.skipUnless(_ipython_available(), "IPython not installed")
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")

@@ -16,6 +16,7 @@ once the human-authored model file exists, loading it and verifying full accurac
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import unittest
 
@@ -213,8 +214,8 @@ class TestCorrectDrawerNoTargetFit(unittest.TestCase):
 
 
 @unittest.skipUnless(
-    False,
-    "human-interactive: set to True and run with `pytest -s`",
+    sys.stdin.isatty(),
+    "human-interactive: only runs with a real user at an interactive terminal (`pytest -s` in a TTY)",
 )
 @unittest.skipUnless(_ipython_available(), "IPython not installed")
 class TestCorrectFitDrawerAsHumanExpert(unittest.TestCase):
