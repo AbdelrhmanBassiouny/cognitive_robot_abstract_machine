@@ -25,7 +25,7 @@ from krrood.patterns.role_registry import RoleRegistry
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from typing_extensions import Generic
 from krrood.symbol_graph.symbol_graph import Symbol
-from krrood.utils import get_generic_type_params
+from krrood.utils import get_generic_type_parameters
 
 
 @dataclass(eq=False)
@@ -36,8 +36,8 @@ class Role(Symbol, Generic[T], SubClassSafeGeneric):
     A role adds context-specific attributes and behaviour to an existing object (the *role
     taker*) without altering the role taker's identity. A role is an ordinary object with
     its own identity: it is equal only to itself and is **not** equal to its role taker. To
-    ask whether two objects refer to the same underlying entity, use the :class:`IsSameEntity
-    <krrood.patterns.role_predicates.IsSameEntity>` predicate.
+    ask whether two objects refer to the same underlying entity, use the :class:`IsSameSemanticEntity
+    <krrood.patterns.role_predicates.IsSameSemanticEntity>` predicate.
 
     **Pure composition.** A role class must not inherit from its role taker type. Role
     membership is expressed through :meth:`has_role` and :meth:`roles_for`, not through
@@ -60,8 +60,8 @@ class Role(Symbol, Generic[T], SubClassSafeGeneric):
     **Distinct identity.** A role is a distinct object from its role taker: they do not
     compare equal and do not share a hash, so multiple roles (even of the same type) on one
     taker stay distinct in sets and dicts. Semantic equivalence ("same underlying entity")
-    is expressed through the :class:`IsSameEntity
-    <krrood.patterns.role_predicates.IsSameEntity>` predicate, which unwraps roles to their
+    is expressed through the :class:`IsSameSemanticEntity
+    <krrood.patterns.role_predicates.IsSameSemanticEntity>` predicate, which unwraps roles to their
     :attr:`root_persistent_entity`:
     >>> from dataclasses import dataclass
     >>> from krrood.patterns.role_predicates import IsSameSemanticEntity
@@ -118,7 +118,7 @@ class Role(Symbol, Generic[T], SubClassSafeGeneric):
         """
         :return: The concrete type of this role's role taker.
         """
-        type_ = get_generic_type_params(cls, Role)[0]
+        type_ = get_generic_type_parameters(cls, Role)[0]
         if isinstance(type_, str):
             module_namespace = sys.modules[cls.__module__].__dict__
             if type_ in module_namespace:
@@ -296,11 +296,10 @@ class Role(Symbol, Generic[T], SubClassSafeGeneric):
                 return takers
             current = current.role_taker
 
-
     def __eq__(self, other: Any) -> bool:
         """
         A role is equal only to itself (identity), never to its taker; "same underlying entity?"
-         is answered by the ``IsSameEntity`` predicate instead.
+         is answered by the ``IsSameSemanticEntity`` predicate instead.
         """
         return self is other
 

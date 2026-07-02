@@ -4,7 +4,7 @@ from abc import ABC
 from copy import copy
 from dataclasses import dataclass, Field
 from inspect import isclass
-from typing import Tuple
+from typing import Tuple, Union, List
 
 from typing_extensions import (
     TypeVar,
@@ -27,7 +27,7 @@ from krrood.class_diagrams.utils import (
 )
 from krrood.exceptions import MismatchingNumberOfGenericParametersAndResolvedTypes
 from krrood.utils import (
-    get_generic_type_params,
+    get_generic_type_parameters,
     ensure_hashable,
     get_existing_field_by_name,
 )
@@ -114,6 +114,14 @@ class SubClassSafeGeneric(ABC):
             if not result.resolved:
                 continue
             cls._update_field_kwargs(name, {"type": result.resolved_type})
+
+    @classmethod
+    def get_generic_type_parameters(cls) -> List[Type]:
+        """
+        :return: The generic type parameters of this class.
+        """
+        return get_generic_type_parameters(cls, SubClassSafeGeneric)
+
 
     @staticmethod
     def _substitutions_bind_a_concrete_type(
@@ -232,7 +240,7 @@ class SubClassSafeGeneric(ABC):
         :param resolved_types: The resolved types to match against the base origin's generic parameters.
         :return: A dictionary of resolved type substitutions.
         """
-        root_parameters = get_generic_type_params(
+        root_parameters = get_generic_type_parameters(
             base_origin,
             SubClassSafeGeneric,
             include_root_generic_base=True,

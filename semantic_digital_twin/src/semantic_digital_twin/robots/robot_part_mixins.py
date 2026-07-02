@@ -19,7 +19,7 @@ from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.patterns.subclass_safe_generic import (
     SubClassSafeGeneric,
 )
-from krrood.utils import get_generic_type_params
+from krrood.utils import get_generic_type_parameters
 from semantic_digital_twin.reasoning.predicates import LeftOf, RightOf
 from semantic_digital_twin.semantic_annotations.mixins import HasRootBody
 from semantic_digital_twin.world_description.world_modification import (
@@ -87,7 +87,7 @@ class HasFingers(
 
     @property
     def thumb(self) -> TGenericThumb:
-        concrete_thumb_class = get_generic_type_params(self, HasFingers)[0]
+        concrete_thumb_class = get_generic_type_parameters(self, HasFingers)[0]
         [thumb] = [
             finger
             for finger in self.fingers
@@ -114,7 +114,7 @@ class HasTwoFingers(
 
     @property
     def finger(self) -> Union[TGenericLeftFinger, TGenericRightFinger]:
-        concrete_thumb_class = get_generic_type_params(self, HasFingers)[0]
+        concrete_thumb_class = get_generic_type_parameters(self, HasFingers)[0]
 
         [finger] = [
             finger

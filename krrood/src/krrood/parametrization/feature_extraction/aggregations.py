@@ -17,7 +17,7 @@ from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from typing_extensions import Generic
 from random_events.variable import Variable, Symbolic
 from krrood.entity_query_language.factories import variable
-from krrood.utils import T, recursive_subclasses, get_generic_type_params
+from krrood.utils import T, recursive_subclasses, get_generic_type_parameters
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ def get_aggregation_class(owner: Type) -> Optional[Type[AggregationStatistic]]:
     subclasses = list(recursive_subclasses(AggregationStatistic))
     for ancestor in owner.__mro__:
         for subclass in subclasses:
-            bound = get_generic_type_params(subclass, AggregationStatistic)
+            bound = get_generic_type_parameters(subclass, AggregationStatistic)
             if bound and bound[0] == ancestor:
                 return subclass
     return None

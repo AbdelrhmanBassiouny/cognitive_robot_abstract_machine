@@ -20,7 +20,7 @@ class IsSameSemanticEntity(Predicate):
     layered on top of it, and the root taker itself all count as the same entity.
 
     Like every :class:`~krrood.entity_query_language.predicate.Predicate` it can be used
-    both as a direct boolean on concrete operands (``bool(IsSameEntity(a, b))``) and
+    both as a direct boolean on concrete operands (``bool(IsSameSemanticEntity(a, b))``) and
     symbolically inside an entity-query-language ``where`` clause.
     """
 
