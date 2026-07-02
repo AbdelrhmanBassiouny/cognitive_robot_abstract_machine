@@ -14,7 +14,7 @@ try:
 except ImportError as e:
     RDRCaseViewer = None
 
-from test_ripple_down_rules.datasets import load_zoo_dataset, Species, load_zoo_cases
+from .datasets import load_zoo_dataset, Species, load_zoo_cases
 
 TEST_RESULTS_DIR: str = os.path.join(os.path.dirname(__file__), "test_results")
 CACHE_FILE: str = os.path.join(TEST_RESULTS_DIR, "zoo_dataset.pkl")

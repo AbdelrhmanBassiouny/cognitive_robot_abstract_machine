@@ -32,7 +32,9 @@ class SQLAlchemyGenerator:
 
     def __post_init__(self):
         self._generator = CodeGenerator(
-            template_dir=os.path.join(os.path.dirname(__file__), "templates"),
+            template_dir=os.path.join(
+                os.path.dirname(__file__), "..", "jinja_templates"
+            ),
         )
 
     def to_sqlalchemy_file(self, file: TextIO):
