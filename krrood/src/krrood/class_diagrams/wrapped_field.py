@@ -95,9 +95,11 @@ class WrappedField:
         return hash((self.clazz.clazz, self.field))
 
     def __eq__(self, other):
+        if not isinstance(other, WrappedField):
+            return False
         return (self.clazz.clazz, self.field) == (
             other.clazz.clazz,
-            other.wrapped_field,
+            other.field,
         )
 
     def __repr__(self):
