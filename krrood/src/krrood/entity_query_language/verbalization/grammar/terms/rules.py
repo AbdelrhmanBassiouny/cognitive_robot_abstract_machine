@@ -259,8 +259,7 @@ class LiteralRule(PhraseRule):
         return [
             data_field.name
             for data_field in fields(value)
-            if (metadata := FieldMetadata.of_field(data_field)) is not None
-            and (grammar := metadata.get_metadata_by_type(GrammarMetadata)) is not None
+            if (grammar := GrammarMetadata.of_field(value, data_field.name)) is not None
             and grammar.is_identifying_field
         ]
 

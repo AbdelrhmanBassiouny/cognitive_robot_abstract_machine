@@ -28,8 +28,9 @@ from semantic_digital_twin.semantic_annotations.mixins import (
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasCaseAsRootBody,
+    IsPartWholeRelationship
 )
-from krrood.patterns.field_metadata import FieldMetadata, IsPartWholeRelationship
+from krrood.patterns.field_metadata import FieldMetadata
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     DoubleDoor,
     Floor,

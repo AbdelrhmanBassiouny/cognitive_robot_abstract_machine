@@ -114,8 +114,9 @@ plain `field(...)` on the same class is simply *not* one and is ignored by `add`
 from dataclasses import dataclass, field
 from typing import Optional
 
-from krrood.patterns.field_metadata import FieldMetadata, IsPartWholeRelationship
+from krrood.patterns.field_metadata import FieldMetadata
 from semantic_digital_twin.semantic_annotations.mixins import (
+    IsPartWholeRelationship,
     PartWholeRelationship,
     HasRootBody,
 )

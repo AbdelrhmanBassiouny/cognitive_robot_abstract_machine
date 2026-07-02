@@ -1,20 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import Field, dataclass, field
+from dataclasses import field, fields
 
-from typing_extensions import ClassVar, Dict, List, Optional, Type, TypeVar
-
-MetadataType = TypeVar("MetadataType", bound="FieldMetadata")
+from typing_extensions import ClassVar, Dict, List, Optional, Type, TypeVar, Self
 
 
-@dataclass(frozen=True)
 class FieldMetadata:
     """Krrood-specific metadata carried inside a dataclass field's ``metadata`` mapping.
 
     A field carries a single :class:`FieldMetadata` under :attr:`METADATA_KEY` (attach it with
-    :meth:`as_dict`). Specific, typed hints are held as sub-metadatas in :attr:`other_metadata` and
-    read back by type via :meth:`get_metadata_by_type`, so krrood reads per-field hints without the
-    owning class implementing any protocol.
+    :meth:`as_dict`). Specific metadata classes are held as sub-metadatas in :attr:`other_metadata` and
+    read back by type via :meth:`get_metadata_by_type`.
     """
 
     METADATA_KEY: ClassVar[str] = "krrood_field_metadata"
@@ -31,7 +27,7 @@ class FieldMetadata:
         return {self.METADATA_KEY: self}
 
     def get_metadata_by_type(
-        self, metadata_type: Type[MetadataType]
+            self, metadata_type: Type[MetadataType]
     ) -> Optional[MetadataType]:
         """:return: the first sub-metadata in :attr:`other_metadata` that is an instance of
         *metadata_type*, or ``None`` when none is present.
@@ -42,25 +38,26 @@ class FieldMetadata:
         return None
 
     @classmethod
-    def of_field(cls, dataclass_field: Field) -> Optional[FieldMetadata]:
+    def of_field(cls, clazz: Type, field_name: str) -> Optional[Self]:
         """:return: The :class:`FieldMetadata` attached to *dataclass_field*, or ``None`` when it
         carries none."""
-        return dataclass_field.metadata.get(cls.METADATA_KEY)
+        field_ = next(f for f in fields(clazz) if f.name == field_name)
+        field_metadata: Optional[FieldMetadata] = field_.metadata.get(cls.METADATA_KEY)
+        if field_metadata is None:
+            return None
+        if cls is FieldMetadata:
+            return field_metadata
+        return field_metadata.get_metadata_by_type(cls)
 
 
-@dataclass(frozen=True)
+MetadataType = TypeVar("MetadataType", bound=FieldMetadata)
+"""
+A type that is a subclass of :class:`FieldMetadata`.
+"""
+
 class GrammarMetadata(FieldMetadata):
     """Grammar / verbalization hints for a field."""
 
     is_identifying_field: bool = False
     """``True`` when this field identifies its instance for verbalization
     (*"a specific <Type> with <field> '<value>'"*)."""
-
-
-@dataclass(frozen=True)
-class IsPartWholeRelationship(FieldMetadata):
-    """Marks a field as holding a structural *part* of its owner (the part-whole relation).
-
-    The relation is signalled by the mere presence of an instance of this class in a field's
-    :attr:`~FieldMetadata.other_metadata`; it carries no further data.
-    """

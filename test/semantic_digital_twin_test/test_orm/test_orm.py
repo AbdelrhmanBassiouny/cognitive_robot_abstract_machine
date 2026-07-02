@@ -36,10 +36,11 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 )
 from semantic_digital_twin.semantic_annotations.mixins import (
     _wrapped_part_whole_relationship_fields,
+    IsPartWholeRelationship
 )
 from semantic_digital_twin.orm.ormatic_interface import *
 from krrood.ormatic.data_access_objects.helper import to_dao
-from krrood.patterns.field_metadata import FieldMetadata, IsPartWholeRelationship
+from krrood.patterns.field_metadata import FieldMetadata
 
 
 import pytest
@@ -171,18 +172,10 @@ def test_pr2_semantic_annotation_and_safe_to_db(
     session.commit()
 
 
-def _field(annotation_type, field_name):
-    """Return the dataclass ``Field`` object for ``field_name`` on ``annotation_type``."""
-    return {f.name: f for f in dataclasses.fields(annotation_type)}[field_name]
-
-
 def _is_part_whole_relationship(annotation_type, field_name):
     """Return whether ``field_name`` on ``annotation_type`` is marked as a part-whole relationship."""
-    metadata = FieldMetadata.of_field(_field(annotation_type, field_name))
-    return (
-        metadata is not None
-        and metadata.get_metadata_by_type(IsPartWholeRelationship) is not None
-    )
+    metadata = IsPartWholeRelationship.of_field(annotation_type, field_name)
+    return metadata is not None
 
 
 def test_part_whole_relationship_field_survives_deepcopy():
