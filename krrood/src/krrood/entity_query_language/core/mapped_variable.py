@@ -121,31 +121,6 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
     def __hash__(self):
         return super().__hash__()
 
-    def __dir__(self) -> List[str]:
-        """
-        Surface the wrapped value type's attributes for interactive completion.
-
-        ``__getattr__`` already makes *every* name a valid (symbolic) attribute, but
-        completion engines list ``__dir__`` only — which would otherwise show just this
-        expression's own members. We union those with the public attributes of the
-        value type so e.g. ``case_variable.<tab>`` offers the case type's fields.
-
-        ``_type_`` is read from ``__dict__`` directly (never ``getattr``, which routes
-        through ``__getattr__`` and would return a :class:`MappedVariable` instead of
-        ``None``). This does not affect attribute resolution in any way.
-        """
-        names = set(super().__dir__())
-        type_ = self.__dict__.get("_type_")
-        if isinstance(type_, type):
-            names.update(
-                n for n in dir(type_) if not (n.startswith("__") and n.endswith("__"))
-            )
-            # Annotated-but-undefaulted fields (the common dataclass case) live only in
-            # ``__annotations__``, not in ``dir(type_)``; walk the MRO to surface them.
-            for klass in type_.__mro__:
-                names.update(getattr(klass, "__annotations__", {}).keys())
-        return sorted(names)
-
 
 @dataclass(eq=False, repr=False)
 class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
