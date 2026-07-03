@@ -15,6 +15,7 @@ import typing_extensions
 from typing_extensions import (
     Any,
     Dict,
+    get_origin,
     List,
     Optional,
     Tuple,
