@@ -2,9 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any
+from typing_extensions import Any, Mapping
 
 from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    Copula,
+    Noun,
+    clause,
+)
 from krrood.patterns.role import Role
 
 
@@ -39,3 +47,14 @@ class IsSameSemanticEntity(Predicate):
         :return: ``value``'s root persistent entity when it is a role, otherwise ``value``.
         """
         return value.root_persistent_entity if isinstance(value, Role) else value
+
+    @classmethod
+    def _verbalization_fragment_(
+        cls, fields: Mapping[str, VerbalizationFragment]
+    ) -> VerbalizationFragment:
+        return clause(
+            Noun(fields["entity_1"]),
+            Copula(),
+            Noun("the same entity as"),
+            Noun(fields["entity_2"]),
+        )
