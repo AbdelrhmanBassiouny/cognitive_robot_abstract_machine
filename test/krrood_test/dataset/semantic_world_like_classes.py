@@ -4,7 +4,19 @@ from dataclasses import dataclass, field
 
 from typing_extensions import ClassVar, List, Mapping, Optional, Type, Iterable
 
+from krrood.entity_query_language.factories import (
+    an,
+    deduced_variable,
+    entity,
+    inference,
+    variable,
+)
 from krrood.entity_query_language.predicate import Symbol, Predicate
+from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.rdr.recognition.candidate_generator import (
+    CandidateGenerator,
+)
+from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
@@ -90,6 +102,42 @@ class Drawer(View):
             and self.container == other.container
             and self.world == other.world
         )
+
+    @classmethod
+    def candidates(cls, world: World) -> Query:
+        """Over-generating structural proposal of drawer candidates, as an unevaluated query.
+
+        The recall-oriented half of recognition (:cite:t:`erman1980hearsay`); a
+        :class:`~krrood.entity_query_language.rdr.recognition.definition.Definition`
+        judges which candidates are genuine drawers.
+        """
+        return DrawerCandidateGenerator().generate(world)
+
+
+@dataclass
+class DrawerCandidateGenerator(CandidateGenerator["Drawer"]):
+    """Proposes drawer candidates from connection topology.
+
+    A candidate is a container fixed to a handle and mounted on a prismatic joint.
+    Deliberately over-generates: correctness is left to the drawer definition.
+    """
+
+    def generate(self, world: World) -> Query:
+        container = variable(Container, domain=world.bodies)
+        handle = variable(Handle, domain=world.bodies)
+        fixed_connection = variable(FixedConnection, domain=world.connections)
+        prismatic_connection = variable(PrismaticConnection, domain=world.connections)
+        candidates = deduced_variable(Drawer)
+        query = an(
+            entity(candidates).where(
+                container == fixed_connection.parent,
+                handle == fixed_connection.child,
+                container == prismatic_connection.child,
+            )
+        )
+        with query:
+            Add(candidates, inference(Drawer)(handle=handle, container=container))
+        return query
 
 
 @dataclass
