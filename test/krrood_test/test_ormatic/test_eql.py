@@ -1,4 +1,5 @@
 import pytest
+
 from sqlalchemy import select, func, case
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import aliased
@@ -53,8 +54,6 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.ormatic.eql_interface import eql_to_sql
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.orm.ormatic_interface import PickUpActionDAO, GraspDescriptionDAO
 from krrood.entity_query_language.query.query import UnificationDict
 
 
