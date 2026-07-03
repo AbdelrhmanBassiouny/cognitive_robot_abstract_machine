@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import pytest
+
 from krrood.entity_query_language.factories import (
     contains,
     entity,
@@ -83,6 +85,19 @@ class ExampleInsideOf(Predicate):
         return self.compute_containment_ratio() > 0.0
 
 
+@dataclass
+class ExampleDrawerAssembly(Symbol):
+    """A view wrapping a drawer — lets an outer inference nest over a filtered inner drawer query."""
+
+    drawer: ExampleDrawer
+
+    def __hash__(self) -> int:
+        return hash((self.__class__.__name__, self.drawer))
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, ExampleDrawerAssembly) and self.drawer == other.drawer
+
+
 def _connections() -> list:
     """A cabinet with four sliding children: two are 'drawer'-named and well-contained (should
     match), one is a 'drawer' but poorly contained (fails the ratio), one is not a drawer.
@@ -126,6 +141,58 @@ def test_predicate_method_call_in_where_filters_and_infers_drawers():
 
     assert all(isinstance(drawer, ExampleDrawer) for drawer in drawers)
     assert sorted(drawer.root.name.name for drawer in drawers) == [
+        "Drawer_Left",
+        "drawer_top",
+    ]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Binding propagation is lost when an outer inference wraps an inner "
+        "entity(...).where(...) that shares the prismatic_connection variable: the shared binding "
+        "is not correlated across the nested-query (slim-bindings) boundary, so the result is a 3x3 "
+        "cross product (9, incl. the non-'drawer' shelf) instead of the correlated 2. Same root "
+        "cause as test_inference_binding_loss.py. Remove this marker once fixed."
+    ),
+    strict=True,
+)
+def test_binding_propagates_through_nested_inference_sharing_a_variable():
+    """Deeper nesting — the historically fragile case (cf. ``test_inference_binding_loss.py``).
+
+    An outer inference wraps an inner ``entity(...).where(...)`` (which emits *slim* bindings), and
+    **both** the inner where (a predicate-method comparison) and the outer where (a name check)
+    constrain the *same* ``prismatic_connection`` variable. The shared variable's binding must stay
+    consistent across the nested-query boundary, so each assembly wraps the drawer rooted at the
+    connection that its own conditions matched — no cross-product blow-up and no lost bindings.
+
+    Currently ``xfail``: the shared binding is dropped and the query returns a 3x3 cross product.
+    """
+    connections = _connections()
+    prismatic_connection = variable(ExamplePrismaticConnection, domain=connections)
+
+    # Inner query: a drawer inferred from the connection's child, kept only when well-contained.
+    well_contained_drawer = entity(
+        inference(ExampleDrawer)(root=prismatic_connection.child)
+    ).where(
+        ExampleInsideOf(
+            prismatic_connection.child, prismatic_connection.parent
+        ).compute_containment_ratio()
+        > 0.7
+    )
+
+    # Outer inference wraps that inner query and adds a name check on the SAME connection.
+    assemblies = (
+        entity(inference(ExampleDrawerAssembly)(drawer=well_contained_drawer))
+        .where(contains(prismatic_connection.child.name.name.lower(), "drawer"))
+        .tolist()
+    )
+
+    assert all(isinstance(a, ExampleDrawerAssembly) for a in assemblies)
+    # shelf (ratio 0.95) passes the inner ratio filter but fails the outer name filter;
+    # drawer_tiny (ratio 0.3) passes the name filter but fails the inner ratio filter.
+    # Only drawer_top and Drawer_Left satisfy both across the nesting, and each assembly wraps the
+    # drawer rooted at *its own* connection's child — proving the shared binding survived.
+    assert sorted(a.drawer.root.name.name for a in assemblies) == [
         "Drawer_Left",
         "drawer_top",
     ]
