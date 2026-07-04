@@ -430,7 +430,7 @@ class TestLabellingFiredAnchorSectionApplicable(unittest.TestCase):
             species=None,
         )
         rdr.fit_case(fish_case, Species.fish, fish_expert)
-        trace = rdr._trace(case)
+        trace = rdr.trace(case)
         self.assertIsNotNone(trace.firing_anchor)
 
         ctx = CaseContext(

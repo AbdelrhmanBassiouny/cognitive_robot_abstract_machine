@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Generic, Tuple, Type, TypeVar
 
+from krrood.entity_query_language.rdr.observer import ClassificationTrace
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 ViewType = TypeVar("ViewType")
@@ -41,3 +42,15 @@ class Definition(Generic[ViewType]):
             ``False`` when it concludes otherwise or no rule fires.
         """
         return self.classifier.classify(candidate) is True
+
+    def explain(self, candidate: ViewType) -> ClassificationTrace:
+        """Explain why ``candidate`` received its judgment.
+
+        The boolean :meth:`judge` collapses the decision; this surfaces the full provenance
+        — the firing rule, the satisfied conditions, and the conclusion — for when the reason
+        is wanted (e.g. answering "why was this judged genuine?").
+
+        :param candidate: The candidate view to explain.
+        :return: The classification trace produced by the underlying RDR.
+        """
+        return self.classifier.trace(candidate)

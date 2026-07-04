@@ -23,6 +23,7 @@ from krrood.entity_query_language.rdr.recognition.exceptions import (
 from krrood.entity_query_language.rdr.recognition.registry import DefinitionRegistry
 from krrood.entity_query_language.rdr.serialization import load_rdr, save_rdr
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
+from krrood.entity_query_language.rdr.utils import UNSET
 
 from ..dataset.semantic_world_like_classes import Cabinet, Drawer
 from ..test_eql.conf.world.handles_and_containers import HandlesAndContainersWorld
@@ -115,6 +116,20 @@ def test_registry_rejects_dependency_cycle():
     registry.register(Cabinet, cabinet_definition)
     with pytest.raises(CyclicDefinitionDependency):
         registry.in_dependency_order()
+
+
+def test_definition_explains_why_a_candidate_was_judged(handles_and_containers_world):
+    candidates = _candidates(handles_and_containers_world)
+    definition = _fit_drawer_definition(candidates)
+    by_container = {candidate.container.name: candidate for candidate in candidates}
+
+    genuine = definition.explain(by_container["Container1"])
+    assert genuine.conclusion is True
+    assert genuine.firing_anchor is not None
+
+    rejected = definition.explain(by_container["Container3"])
+    assert rejected.conclusion is UNSET
+    assert rejected.firing_anchor is None
 
 
 def test_definition_survives_serialization_round_trip(

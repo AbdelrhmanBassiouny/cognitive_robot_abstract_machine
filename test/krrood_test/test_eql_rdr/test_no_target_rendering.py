@@ -248,7 +248,7 @@ class TestFiredOnLineWithTrace(unittest.TestCase):
         rdr.fit_case(fish_case, Species.fish, fish_expert)
 
         # Now get a trace for our test case (backbone=True → fires fish rule).
-        trace = rdr._trace(case)
+        trace = rdr.trace(case)
         self.assertIsNotNone(
             trace.firing_anchor,
             "Expected firing_anchor to be set after fitting a backbone rule",
