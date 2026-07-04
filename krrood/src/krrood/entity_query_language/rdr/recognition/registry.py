@@ -6,28 +6,23 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Dict, List, Set, Type
 
-from krrood.entity_query_language.rdr.recognition.candidate_generator import (
-    CandidateGenerator,
-)
 from krrood.entity_query_language.rdr.recognition.definition import Definition
 from krrood.entity_query_language.rdr.recognition.exceptions import (
     CyclicDefinitionDependency,
     UnregisteredView,
 )
+from krrood.entity_query_language.rdr.recognition.has_candidates import HasCandidates
 
 
 @dataclass
 class RecognizableView:
-    """A view type together with the generator and definition that recognize it."""
+    """A recognizable view type together with the definition that judges its candidates."""
 
-    view_type: Type
-    """The view type recognized by this entry."""
-
-    generator: CandidateGenerator
-    """Proposes candidate instances of ``view_type``."""
+    view_type: Type[HasCandidates]
+    """The view type recognized by this entry; it proposes its own candidates."""
 
     definition: Definition
-    """Judges which candidates are genuine instances."""
+    """Judges which of the view's candidates are genuine instances."""
 
 
 @dataclass
@@ -42,12 +37,15 @@ class DefinitionRegistry:
 
     def register(
         self,
-        view_type: Type,
-        generator: CandidateGenerator,
+        view_type: Type[HasCandidates],
         definition: Definition,
     ) -> None:
-        """Register the generator and definition that recognize ``view_type``."""
-        self._entries[view_type] = RecognizableView(view_type, generator, definition)
+        """Register the definition that judges ``view_type``'s candidates.
+
+        :param view_type: A view type that provides its own candidates (``HasCandidates``).
+        :param definition: The definition that judges which candidates are genuine.
+        """
+        self._entries[view_type] = RecognizableView(view_type, definition)
 
     def get(self, view_type: Type) -> RecognizableView:
         """Look up the recognizer for ``view_type``.
@@ -80,6 +78,14 @@ class DefinitionRegistry:
         ordered: List[RecognizableView],
         visited: Set[Type],
     ) -> None:
+        """Post-order depth-first visit that appends ``view_type`` after its references.
+
+        :param view_type: The view type currently being visited.
+        :param path: The referencing chain leading here, used to detect cycles.
+        :param ordered: The accumulating dependency-ordered result.
+        :param visited: View types already appended, so each is emitted once.
+        :raises CyclicDefinitionDependency: If ``view_type`` is already on ``path``.
+        """
         if view_type in visited:
             return
         if view_type in path:

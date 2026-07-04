@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from typing_extensions import FrozenSet, Generic, Type, TypeVar
+from typing_extensions import Generic, Tuple, Type, TypeVar
 
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 ViewType = TypeVar("ViewType")
+"""The view type this definition judges (e.g. ``Drawer``)."""
 
 
 @dataclass
@@ -25,7 +26,7 @@ class Definition(Generic[ViewType]):
     classifier: EQLSingleClassRDR
     """The single-class RDR that classifies the candidate's judgment attribute."""
 
-    referenced_conclusions: FrozenSet[Type] = field(default_factory=frozenset)
+    referenced_conclusions: Tuple[Type, ...] = ()
     """View types whose conclusions this definition reads.
 
     The engine supplies these bottom-up (inversion of control): a definition

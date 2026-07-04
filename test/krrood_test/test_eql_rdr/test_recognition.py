@@ -1,29 +1,31 @@
 """Tests for the OO recognition layer applied to the semantic-world doubles.
 
-A candidate generator over-generates drawer candidates from connection topology; a
-definition (a single-class RDR) judges which are genuine; the engine composes them.
+``Drawer.candidates`` over-generates drawer candidates from a weak structural signal
+(a container on a prismatic joint, handle optional); a ``Definition`` (a single-class
+RDR) judges which are genuine; the ``RecognitionEngine`` composes them into one query.
 """
+
+import sys
+import unittest
 
 import pytest
 
 from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.interface import FunctionInterface
-from krrood.entity_query_language.rdr.recognition import (
+from krrood.entity_query_language.rdr.recognition.definition import Definition
+from krrood.entity_query_language.rdr.recognition.engine import RecognitionEngine
+from krrood.entity_query_language.rdr.recognition.exceptions import (
     CyclicDefinitionDependency,
-    Definition,
-    DefinitionRegistry,
-    RecognitionEngine,
 )
+from krrood.entity_query_language.rdr.recognition.registry import DefinitionRegistry
 from krrood.entity_query_language.rdr.serialization import load_rdr, save_rdr
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
-from ..dataset.semantic_world_like_classes import (
-    Cabinet,
-    Drawer,
-    DrawerCandidateGenerator,
-)
+from ..dataset.semantic_world_like_classes import Cabinet, Drawer
+from ..test_eql.conf.world.handles_and_containers import HandlesAndContainersWorld
 
 GENUINE_DRAWER_CONTAINER = "Container1"
 """Container name of the candidate treated as the genuine drawer in these tests."""
@@ -54,13 +56,21 @@ def _candidates(world):
     return list(Drawer.candidates(world).evaluate())
 
 
-def test_generator_returns_query_not_results(handles_and_containers_world):
+def _drawer_registry(candidates) -> DefinitionRegistry:
+    registry = DefinitionRegistry()
+    registry.register(Drawer, _fit_drawer_definition(candidates))
+    return registry
+
+
+def test_candidates_returns_query_not_results(handles_and_containers_world):
     assert isinstance(Drawer.candidates(handles_and_containers_world), Query)
 
 
-def test_generator_over_generates_both_candidates(handles_and_containers_world):
+def test_candidates_over_generate_handle_less_drawers(handles_and_containers_world):
     candidates = _candidates(handles_and_containers_world)
     assert all(isinstance(candidate, Drawer) for candidate in candidates)
+    # Broadened recall: proposed from the prismatic joint alone, so handles are absent.
+    assert all(candidate.handle is None for candidate in candidates)
     assert {candidate.container.name for candidate in candidates} == {
         "Container1",
         "Container3",
@@ -75,29 +85,34 @@ def test_definition_judges_only_the_genuine_candidate(handles_and_containers_wor
     assert definition.judge(by_container["Container3"]) is False
 
 
-def test_engine_recognizes_only_positively_judged(handles_and_containers_world):
-    candidates = _candidates(handles_and_containers_world)
-    registry = DefinitionRegistry()
-    registry.register(
-        Drawer, DrawerCandidateGenerator(), _fit_drawer_definition(candidates)
+def test_recognition_query_is_a_query(handles_and_containers_world):
+    registry = _drawer_registry(_candidates(handles_and_containers_world))
+    query = RecognitionEngine(registry).recognition_query(
+        Drawer, handles_and_containers_world
     )
-    recognized = RecognitionEngine(registry).recognize(handles_and_containers_world)
+    assert isinstance(query, Query)
+
+
+def test_engine_recognizes_only_positively_judged(handles_and_containers_world):
+    registry = _drawer_registry(_candidates(handles_and_containers_world))
+    recognized = list(
+        RecognitionEngine(registry).recognize(handles_and_containers_world)
+    )
     assert [drawer.container.name for drawer in recognized] == ["Container1"]
 
 
 def test_registry_rejects_dependency_cycle():
-    generator = DrawerCandidateGenerator()
     drawer_definition = Definition(
         EQLSingleClassRDR(Drawer, "correct"),
-        referenced_conclusions=frozenset({Cabinet}),
+        referenced_conclusions=(Cabinet,),
     )
     cabinet_definition = Definition(
         EQLSingleClassRDR(Cabinet, "container"),
-        referenced_conclusions=frozenset({Drawer}),
+        referenced_conclusions=(Drawer,),
     )
     registry = DefinitionRegistry()
-    registry.register(Drawer, generator, drawer_definition)
-    registry.register(Cabinet, generator, cabinet_definition)
+    registry.register(Drawer, drawer_definition)
+    registry.register(Cabinet, cabinet_definition)
     with pytest.raises(CyclicDefinitionDependency):
         registry.in_dependency_order()
 
@@ -117,3 +132,36 @@ def test_definition_survives_serialization_round_trip(
     by_container = {candidate.container.name: candidate for candidate in candidates}
     assert reloaded.judge(by_container["Container1"]) is True
     assert reloaded.judge(by_container["Container3"]) is False
+
+
+def _ipython_available() -> bool:
+    try:
+        import IPython  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+@unittest.skipUnless(
+    sys.stdin.isatty(),
+    "human-interactive: only runs with a real user at a terminal (`pytest -s` in a TTY)",
+)
+@unittest.skipUnless(_ipython_available(), "IPython not installed")
+class TestFitDrawerDefinitionAsHumanExpert(unittest.TestCase):
+    """A human expert fits the drawer definition through the real IPython shell.
+
+    The deterministic twin is the ``FunctionInterface``-based tests above; this class
+    only runs with a real user at a TTY.
+    """
+
+    def test_fit_and_recognize_interactively(self):
+        world = HandlesAndContainersWorld().create()
+        candidates = list(Drawer.candidates(world).evaluate())
+        classifier = EQLSingleClassRDR(Drawer, "correct")
+        for candidate in candidates:
+            classifier.fit_case(candidate, expert=Expert(interface=IPythonInterface()))
+        registry = DefinitionRegistry()
+        registry.register(Drawer, Definition(classifier))
+        recognized = list(RecognitionEngine(registry).recognize(world))
+        self.assertTrue(all(isinstance(view, Drawer) for view in recognized))

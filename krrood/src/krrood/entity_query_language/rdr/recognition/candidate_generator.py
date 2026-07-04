@@ -15,6 +15,7 @@ from typing_extensions import Any, Generic, TypeVar
 from krrood.entity_query_language.query.query import Query
 
 ViewType = TypeVar("ViewType")
+"""The view type whose candidates the generator proposes (e.g. ``Drawer``)."""
 
 
 @dataclass
@@ -24,7 +25,11 @@ class CandidateGenerator(ABC, Generic[ViewType]):
     This is the data-abstraction / hypothesise half of heuristic classification
     (:cite:t:`clancey1985heuristic`) and the generation step of hypothesise-and-test
     recognition (:cite:t:`erman1980hearsay`). It deliberately over-generates and
-    encodes no expert judgment.
+    encodes no expert judgment; a view's ``candidates`` classmethod (see
+    :class:`~krrood.entity_query_language.rdr.recognition.has_candidates.HasCandidates`)
+    delegates to a generator, and a
+    :class:`~krrood.entity_query_language.rdr.recognition.definition.Definition`
+    supplies the precision.
     """
 
     @abstractmethod

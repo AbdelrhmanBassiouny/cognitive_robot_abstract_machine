@@ -68,7 +68,7 @@ def drawer_case_queries(handles_and_containers_world) -> List[CaseQuery]:
     world = handles_and_containers_world
     for handle in [body for body in world.bodies if isinstance(body, Handle)]:
         for container in [body for body in world.bodies if isinstance(body, Container)]:
-            view = Drawer(handle, container, world=world)
+            view = Drawer(handle=handle, container=container, world=world)
             all_possible_drawers.append(view)
     case_queries = [
         CaseQuery(possible_drawer, "correct", (bool,), True, default_value=False)

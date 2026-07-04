@@ -16,6 +16,7 @@ from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.rdr.recognition.candidate_generator import (
     CandidateGenerator,
 )
+from krrood.entity_query_language.rdr.recognition.has_candidates import HasCandidates
 from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
@@ -86,9 +87,9 @@ class View(WorldEntity): ...
 
 
 @dataclass
-class Drawer(View):
-    handle: Handle
+class Drawer(View, HasCandidates):
     container: Container
+    handle: Optional[Handle] = None
     correct: Optional[bool] = None
 
     def __hash__(self):
@@ -116,27 +117,25 @@ class Drawer(View):
 
 @dataclass
 class DrawerCandidateGenerator(CandidateGenerator["Drawer"]):
-    """Proposes drawer candidates from connection topology.
+    """Proposes drawer candidates from a weak structural signal.
 
-    A candidate is a container fixed to a handle and mounted on a prismatic joint.
-    Deliberately over-generates: correctness is left to the drawer definition.
+    A candidate is any container mounted on a prismatic joint (drawers slide). The
+    handle is deliberately not required, so handle-less drawers are still proposed;
+    precision — including whether a handle is present — is left to the drawer
+    definition (:cite:t:`clancey1985heuristic`).
     """
 
     def generate(self, world: World) -> Query:
         container = variable(Container, domain=world.bodies)
-        handle = variable(Handle, domain=world.bodies)
-        fixed_connection = variable(FixedConnection, domain=world.connections)
         prismatic_connection = variable(PrismaticConnection, domain=world.connections)
         candidates = deduced_variable(Drawer)
         query = an(
             entity(candidates).where(
-                container == fixed_connection.parent,
-                handle == fixed_connection.child,
                 container == prismatic_connection.child,
             )
         )
         with query:
-            Add(candidates, inference(Drawer)(handle=handle, container=container))
+            Add(candidates, inference(Drawer)(container=container))
         return query
 
 
