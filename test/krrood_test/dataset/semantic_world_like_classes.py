@@ -6,18 +6,16 @@ from typing_extensions import ClassVar, List, Mapping, Optional, Type, Iterable
 
 from krrood.entity_query_language.factories import (
     an,
-    deduced_variable,
     entity,
-    inference,
+    underspecified,
     variable,
 )
 from krrood.entity_query_language.predicate import Symbol, Predicate
-from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.rdr.recognition.candidate_generator import (
     CandidateGenerator,
 )
 from krrood.entity_query_language.rdr.recognition.has_candidates import HasCandidates
-from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
@@ -81,6 +79,13 @@ class World(Symbol):
             return False
         return self.id == other.id
 
+    def add_view(self, view: View) -> None:
+        """Record a recognized view so dependent view types can query it.
+
+        The double's analogue of a world model absorbing an inferred annotation.
+        """
+        self.views.append(view)
+
 
 @dataclass(unsafe_hash=True)
 class View(WorldEntity): ...
@@ -105,12 +110,12 @@ class Drawer(View, HasCandidates):
         )
 
     @classmethod
-    def candidates(cls, world: World) -> Query:
-        """Over-generating structural proposal of drawer candidates, as an unevaluated query.
+    def candidates(cls, world: World) -> Match:
+        """Over-generating structural proposal of drawer candidates, as an underspecified view.
 
         The recall-oriented half of recognition (:cite:t:`erman1980hearsay`); a
         :class:`~krrood.entity_query_language.rdr.recognition.definition.Definition`
-        judges which candidates are genuine drawers.
+        judges which constructed candidates are genuine drawers.
         """
         return DrawerCandidateGenerator().generate(world)
 
@@ -125,24 +130,26 @@ class DrawerCandidateGenerator(CandidateGenerator["Drawer"]):
     definition (:cite:t:`clancey1985heuristic`).
     """
 
-    def generate(self, world: World) -> Query:
+    def generate(self, world: World) -> Match:
+        return underspecified(Drawer)(
+            container=variable(Container, domain=self._prismatic_child_containers(world))
+        )
+
+    @staticmethod
+    def _prismatic_child_containers(world: World) -> List[Container]:
+        """The containers mounted as the child of a prismatic connection (the recall signal)."""
         container = variable(Container, domain=world.bodies)
         prismatic_connection = variable(PrismaticConnection, domain=world.connections)
-        candidates = deduced_variable(Drawer)
-        query = an(
-            entity(candidates).where(
-                container == prismatic_connection.child,
-            )
+        return list(
+            an(entity(container).where(container == prismatic_connection.child)).evaluate()
         )
-        with query:
-            Add(candidates, inference(Drawer)(container=container))
-        return query
 
 
 @dataclass
-class Cabinet(View):
+class Cabinet(View, HasCandidates):
     container: Container
     drawers: List[Drawer] = field(default_factory=list)
+    correct: Optional[bool] = None
 
     def __hash__(self):
         return hash((self.__class__.__name__, self.container))
@@ -154,6 +161,55 @@ class Cabinet(View):
             self.container == other.container
             and self.drawers == other.drawers
             and self.world == other.world
+        )
+
+    @classmethod
+    def candidates(cls, world: World) -> Match:
+        """Propose cabinet candidates from recognized drawers (a referenced conclusion).
+
+        Reads recognized :class:`Drawer` views from the world, so the engine must recognize
+        drawers first; the cabinet definition declares ``Drawer`` as a referenced conclusion.
+        """
+        return CabinetCandidateGenerator().generate(world)
+
+
+@dataclass
+class CabinetCandidateGenerator(CandidateGenerator["Cabinet"]):
+    """Proposes a cabinet from the drawers already recognized in the world.
+
+    A candidate is a container that is the prismatic parent of a recognized drawer's
+    container, constructed holding those recognized drawers — a dependent view built from
+    another view's conclusions (the "conclusions as case attributes" loop of GRDR).
+
+    .. note::
+        The proof double assumes a single cabinet body; per-body drawer grouping for the
+        general multi-cabinet case is left to the real integration.
+    """
+
+    def generate(self, world: World) -> Match:
+        return underspecified(Cabinet)(
+            container=variable(Container, domain=self._cabinet_bodies(world)),
+            drawers=self._recognized_drawers(world),
+        )
+
+    @staticmethod
+    def _recognized_drawers(world: World) -> List[Drawer]:
+        """The drawers already recognized into the world."""
+        return list(an(entity(variable(Drawer, domain=world.views))).evaluate())
+
+    @staticmethod
+    def _cabinet_bodies(world: World) -> List[Container]:
+        """Containers that are the prismatic parent of a recognized drawer's container."""
+        container = variable(Container, domain=world.bodies)
+        prismatic_connection = variable(PrismaticConnection, domain=world.connections)
+        drawer = variable(Drawer, domain=world.views)
+        return list(
+            an(
+                entity(container).where(
+                    container == prismatic_connection.parent,
+                    prismatic_connection.child == drawer.container,
+                )
+            ).evaluate()
         )
 
 

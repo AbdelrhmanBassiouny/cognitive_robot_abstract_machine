@@ -26,8 +26,10 @@ from typing_extensions import (
     Union, Self,
 )
 
+from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
@@ -46,13 +48,28 @@ def key_from_attribute(attribute: Attribute) -> ModelKey:
 
 
 @dataclass
-class RDRBackend:
-    """Infers underspecified (``...``) attributes on existing instances via RDR models."""
+class RDRBackend(QueryBackend):
+    """Infers underspecified (``...``) attributes on existing instances via RDR models.
+
+    Conforms to :class:`~krrood.entity_query_language.backends.QueryBackend` so a caller can
+    select RDR reasoning through the same ``evaluate`` frontend as the selective and generative
+    backends. It is neither selective (it needs an underspecified ``Match``, not any query) nor
+    generative (it completes existing instances rather than constructing new ones), so it
+    conforms to the base backend directly.
+    """
 
     expert: Optional[Expert] = None
     """Authors rule conditions (and, in fit mode without ground truth, conclusions too)."""
     models: Dict[ModelKey, EQLSingleClassRDR] = field(default_factory=dict)
     """One single-class RDR per ``(case type, attribute)`` the backend has learned."""
+
+    def evaluate(self, expression: Match) -> Iterator[Any]:
+        """Answer an underspecified ``Match`` through the shared backend frontend.
+
+        :param expression: The underspecified ``Match`` whose ``...`` attribute to infer.
+        :return: The same lazy iterator of :class:`UnificationDict` as :meth:`infer`.
+        """
+        return self.infer(expression)
 
     def fit(
         self, query: Any, ground_truth: Optional[GroundTruth] = None
