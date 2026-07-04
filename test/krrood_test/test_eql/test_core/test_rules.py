@@ -510,3 +510,37 @@ def test_doc_example(rule_tree_doc_example_connections, alternative_code, result
     results = query.tolist()
     assert len(results) == len(result_set)
     assert set(results) == result_set
+
+
+def test_filtering_a_reselected_generative_subquery_preserves_bindings(
+    handles_and_containers_world,
+):
+    """Reselecting a generative subquery (a ``deduced_variable`` filled by ``Add``) inside
+    another query and filtering it must keep the constructed instances, exactly as a
+    non-generative subquery does.
+
+    Regression for a bug where the generative subquery's post-``Add`` bindings were lost,
+    so the outer filter matched nothing and the query yielded no results.
+    """
+    world = handles_and_containers_world
+    container = variable(Container, domain=world.bodies)
+    handle = variable(Handle, domain=world.bodies)
+    fixed_connection = variable(FixedConnection, domain=world.connections)
+    prismatic_connection = variable(PrismaticConnection, domain=world.connections)
+    drawers = deduced_variable(Drawer)
+    candidate_query = an(
+        entity(drawers).where(
+            container == fixed_connection.parent,
+            handle == fixed_connection.child,
+            container == prismatic_connection.child,
+        )
+    )
+    with candidate_query:
+        Add(drawers, inference(Drawer)(handle=handle, container=container))
+
+    filtered = an(
+        entity(candidate_query).where(candidate_query.container.name == "Container1")
+    )
+
+    result = [drawer.container.name for drawer in filtered.evaluate()]
+    assert result == ["Container1"]

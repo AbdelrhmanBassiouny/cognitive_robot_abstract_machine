@@ -325,9 +325,11 @@ class SymbolicExpression(ABC):
 
         :param current_result: The current result of this expression.
         """
-        # Only evaluate the conclusions at the root condition expression (i.e. after all conditions have been evaluated)
-        # and when the result truth value is True.
-        if not (self._conditions_root_ is self) or current_result.is_condition_false:
+        # Fire the conclusions at each (sub)query's own conditions root — i.e. after that
+        # query's conditions have all been evaluated — and only when the result is True. Using
+        # the per-query conditions root (not the single tree-global one) lets a nested subquery
+        # fire its own conclusions instead of only the outermost query.
+        if not self._is_a_query_conditions_root_() or current_result.is_condition_false:
             return current_result
         for conclusion in self._conclusions_:
             current_result.bindings = next(
@@ -418,6 +420,46 @@ class SymbolicExpression(ABC):
             ),
             self._root_,
         )
+
+    def _is_a_query_conditions_root_(self) -> bool:
+        """
+        :return: Whether this node is the conditions root of its own (sub)query, i.e. the
+            condition of some ``Filter`` in the tree.
+
+        Conclusions attached to such a node fire there, so nested subqueries each fire their
+        own conclusions rather than only the single outermost query.
+        """
+        return self._id_ in self._all_conditions_root_ids_
+
+    @property
+    def _all_conditions_root_ids_(self) -> Set[uuid.UUID]:
+        """
+        :return: The ids of every ``Filter``'s condition in the tree (each query's conditions root).
+
+        Memoized per tree during an active evaluation, like :attr:`_conditions_root_`.
+        """
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is None:
+            return self._compute_all_conditions_root_ids_()
+        cache_key = ("all_conditions_root_ids", self._root_._id_)
+        cache = evaluation_context.structural_cache
+        if cache_key not in cache:
+            cache[cache_key] = self._compute_all_conditions_root_ids_()
+        return cache[cache_key]
+
+    def _compute_all_conditions_root_ids_(self) -> Set[uuid.UUID]:
+        """
+        :return: The ids of all ``Filter`` conditions found by scanning the tree, or the tree
+            root's id when there is no ``Filter`` (a bare condition evaluated directly).
+
+        Mirrors :meth:`_compute_conditions_root_`'s root fallback, generalized to every query.
+        """
+        filter_condition_ids = {
+            expr.condition._id_
+            for expr in self._all_expressions_
+            if isinstance(expr, Filter)
+        }
+        return filter_condition_ids or {self._root_._id_}
 
     @property
     def _root_(self) -> SymbolicExpression:
