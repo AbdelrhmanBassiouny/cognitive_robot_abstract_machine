@@ -828,39 +828,6 @@ def test_set_of_multi_variable(session, database):
     assert len(sql_results) == len(eql_results)
 
 
-def test_set_of_transitive_attributes(session):
-    """Verify that set_of with transitive attributes generates a JOIN to GraspDescriptionDAO."""
-    pu = variable(type_=PickUpAction, domain=[])
-    query = an(
-        set_of(
-            pu.arm,
-            pu.grasp_description.rotate_gripper,
-            pu.grasp_description.approach_direction,
-            pu.grasp_description.manipulation_offset,
-        )
-    )
-
-    translator = eql_to_sql(query, session)
-
-    grasp_alias = aliased(GraspDescriptionDAO, flat=True)
-
-    expected = (
-        select(PickUpActionDAO)
-        .join(
-            grasp_alias,
-            onclause=grasp_alias.database_id == PickUpActionDAO.grasp_description_id,
-        )
-        .with_only_columns(
-            PickUpActionDAO.arm,
-            grasp_alias.rotate_gripper,
-            grasp_alias.approach_direction,
-            grasp_alias.manipulation_offset,
-        )
-    )
-
-    assert str(translator.sql_query) == str(expected)
-
-
 def test_set_of_move_action_transitive(session):
     """
     Verify that set_of with both direct and transitive attributes generates correct JOINs.

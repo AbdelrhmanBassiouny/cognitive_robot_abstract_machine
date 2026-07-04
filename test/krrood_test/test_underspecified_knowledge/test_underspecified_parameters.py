@@ -6,8 +6,9 @@ import pytest
 from krrood.parametrization.exceptions import InvalidEllipsis
 from ..dataset.semantic_world_like_classes import Body
 from krrood.entity_query_language.factories import (
-    variable,
     an,
+    underspecified,
+    variable,
 )
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.interval import singleton, reals
