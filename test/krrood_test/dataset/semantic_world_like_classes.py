@@ -7,7 +7,6 @@ from typing_extensions import ClassVar, List, Mapping, Optional, Type, Iterable
 from krrood.entity_query_language.factories import (
     an,
     entity,
-    underspecified,
     variable,
 )
 from krrood.entity_query_language.predicate import Symbol, Predicate
@@ -131,7 +130,7 @@ class DrawerCandidateGenerator(CandidateGenerator["Drawer"]):
     """
 
     def generate(self, world: World) -> Match:
-        return underspecified(Drawer)(
+        return an(Drawer)(
             container=variable(Container, domain=self._prismatic_child_containers(world))
         )
 
@@ -187,7 +186,7 @@ class CabinetCandidateGenerator(CandidateGenerator["Cabinet"]):
     """
 
     def generate(self, world: World) -> Match:
-        return underspecified(Cabinet)(
+        return an(Cabinet)(
             container=variable(Container, domain=self._cabinet_bodies(world)),
             drawers=self._recognized_drawers(world),
         )

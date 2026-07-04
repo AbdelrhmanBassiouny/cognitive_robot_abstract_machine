@@ -72,7 +72,7 @@ def _fit_drawer_definition(candidates) -> Definition:
 
 def _construct(match) -> list:
     """Construct the candidates an underspecified-view match proposes."""
-    return list(EntityQueryLanguageGenerativeBackend().evaluate(match))
+    return list(match.evaluate(backend=EntityQueryLanguageGenerativeBackend()))
 
 
 def _candidates(world):

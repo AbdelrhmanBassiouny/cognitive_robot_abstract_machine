@@ -70,9 +70,7 @@ class RecognitionEngine:
         :return: An iterator over the recognized view instances.
         """
         for entry in self.registry.in_dependency_order():
-            recognized = list(
-                self.backend.evaluate(self.recognition_query(entry.view_type, world))
-            )
-            for view in recognized:
+            query = self.recognition_query(entry.view_type, world)
+            for view in query.evaluate(backend=self.backend):
                 world.add_view(view)
-            yield from recognized
+                yield view

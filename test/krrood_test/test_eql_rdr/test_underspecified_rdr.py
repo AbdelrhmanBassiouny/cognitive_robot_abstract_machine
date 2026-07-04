@@ -247,20 +247,13 @@ class TestRDRBackendConformsToQueryBackend(unittest.TestCase):
     def test_rdr_backend_is_a_query_backend(self):
         self.assertIsInstance(self._fitted_backend(), QueryBackend)
 
-    def test_evaluate_matches_infer(self):
-        backend = self._fitted_backend()
-        query = underspecified(Animal, domain=animals)(species=...)
-        evaluated = list(backend.evaluate(query))
-        self.assertTrue(all(isinstance(result, UnificationDict) for result in evaluated))
-        self.assertEqual(
-            [result[query.variable.species] for result in evaluated], list(targets)
-        )
-
-    def test_evaluate_selected_via_evaluable_frontend(self):
-        # A caller can pick the RDR backend through Evaluable.evaluate(backend=...).
+    def test_evaluate_via_frontend_matches_infer(self):
+        # A caller selects the RDR backend through Evaluable.evaluate(backend=...); the result
+        # is the same lazy UnificationDicts as infer().
         backend = self._fitted_backend()
         query = underspecified(Animal, domain=animals)(species=...)
         evaluated = list(query.evaluate(backend=backend))
+        self.assertTrue(all(isinstance(result, UnificationDict) for result in evaluated))
         self.assertEqual(
             [result[query.variable.species] for result in evaluated], list(targets)
         )
