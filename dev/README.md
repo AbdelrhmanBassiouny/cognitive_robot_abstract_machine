@@ -25,14 +25,19 @@ DORA/*Accelerate*, Reinertsen, Theory of Constraints.)
   - `python dev/stack.py next --porcelain` — machine-readable `next`: prints only
     `name<TAB>pr<TAB>pr_repo` for the branch to promote (or nothing). For autonomous callers such as
     the promote Routine, which must act deterministically on "is there a branch to submit right now".
+  - `python dev/stack.py restack-plan` — prints the bottom-up restack plan as JSON (one
+    `{branch, parent, strategy}` per not-yet-landed fork branch). Feed it straight into the `restack`
+    workflow's `args` so the stack lives **only** in the ledger — no hand-mirroring into the script.
   - add `--live` to any command to **derive status from live GitHub PR state** (via `gh`) instead of
     the ledger's `status` column: a PR you flip to *draft* / *ready-for-review* on GitHub updates
     what the tool shows. GitHub becomes the source of truth for the gate; the ledger then only needs
     to carry structure (branch, parent, strategy, pr, pr_repo). Requires an authenticated `gh`.
 - **`../.claude/workflows/restack.js`** — the Claude Workflow that actually restacks: one
   worktree-isolated agent per branch, bottom-up, resolving conflicts + greening the targeted tests
-  + pushing. Run it with the `Workflow` tool / `/workflows`. Stops at the first branch it can't
-  restack safely (downstream depends on it); re-running caches completed branches.
+  + pushing. It has **no hardcoded stack** — it reads the plan from `args`, so launch it as
+  `Workflow({ scriptPath: ".claude/workflows/restack.js", args: <output of dev/stack.py restack-plan> })`.
+  Stops at the first branch it can't restack safely (downstream depends on it); re-running caches
+  completed branches.
 
 ## The state machine (your approval gate)
 
@@ -58,10 +63,10 @@ cram2 without your sign-off. The fork PR is where that review happens.
 
 - **One branch ⇄ one session.** Never point two live sessions at the same branch (force-push races).
 - **The branch is the durable state** — commit + push often; cloud containers are ephemeral.
-- **Keep `.claude/workflows/restack.js`'s `STACK` array in sync with `stack.toml`** (workflow
-  scripts can't read files, so the order is mirrored).
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature — land the parent first.
+- **The ledger is the only stack definition.** `restack.js` takes its stack from `args` (via
+  `dev/stack.py restack-plan`), so there is nothing to keep in sync by hand.
 
 ## The cloud Routine (paste into claude.ai/code/routines)
 

@@ -307,7 +307,39 @@ def cmd_next_porcelain(ledger: Ledger) -> None:
         print(f"{branch.name}\t{branch.pr}\t{branch.pr_repo}")
 
 
-COMMANDS = {"status": cmd_status, "check": cmd_check, "next": cmd_next}
+def _restack_parent(ledger: Ledger, parent: str) -> str:
+    """Map a ledger parent to the branch name the restack workflow resolves under the fork remote.
+
+    The upstream base (``cram2/main``) becomes its bare branch (``main``, i.e. ``origin/main``);
+    every other parent is a fork branch used verbatim.
+    """
+    if parent == f"{ledger.upstream_remote}/{ledger.upstream_base}":
+        return ledger.upstream_base
+    return parent
+
+
+def restack_plan(ledger: Ledger) -> list[dict[str, str]]:
+    """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
+
+    One entry per fork branch that still needs cascading (everything not yet ``merged`` or already
+    submitted and ``in-review`` on cram2), in parent-before-child order.
+    """
+    return [
+        {"branch": branch.name, "parent": _restack_parent(ledger, branch.parent), "strategy": branch.strategy}
+        for branch in _order(ledger)
+        if branch.status not in {"merged", "in-review"}
+    ]
+
+
+def cmd_restack_plan(ledger: Ledger) -> None:
+    """Print the restack plan as JSON — pipe it into the ``restack`` workflow's ``args`` so the stack
+    is defined only in the ledger and never hand-mirrored into the workflow script."""
+    import json
+
+    print(json.dumps(restack_plan(ledger), indent=2))
+
+
+COMMANDS = {"status": cmd_status, "check": cmd_check, "next": cmd_next, "restack-plan": cmd_restack_plan}
 
 
 def main() -> int:

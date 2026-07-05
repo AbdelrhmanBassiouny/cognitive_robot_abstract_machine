@@ -1,19 +1,20 @@
 export const meta = {
   name: 'restack',
   description:
-    'Rebase/merge each fork-stack branch onto its updated parent in dependency order, green the targeted tests, and push. Mirrors dev/stack.toml.',
+    'Rebase/merge each fork-stack branch onto its updated parent in dependency order, green the targeted tests, and push. Stack comes from dev/stack.toml via args.',
   phases: [{ title: 'Restack', detail: 'one worktree-isolated agent per branch, bottom-up' }],
 }
 
-// Workflow scripts have no filesystem access, so the stack is mirrored from dev/stack.toml.
-// KEEP IN SYNC with the ledger. Order is bottom-up: a parent is restacked before its children.
-const STACK = [
-  { branch: 'eql-arithmetic', parent: 'main', strategy: 'merge' },
-  { branch: 'eql-verbalization-extensions', parent: 'main', strategy: 'merge' },
-  { branch: 'claude/performatives-clean', parent: 'eql-arithmetic', strategy: 'merge' },
-  { branch: 'claude/eql-performatives-unify', parent: 'claude/performatives-clean', strategy: 'merge' },
-  { branch: 'claude/eql-roboknerd-why-acts', parent: 'main', strategy: 'merge' },
-]
+// Workflow scripts have no filesystem access, so the ledger is the single source of truth: the
+// caller runs `python dev/stack.py restack-plan` and passes its JSON as `args`. No hand-mirroring.
+// args may be the plan array directly, or { stack: [...] }. Each entry: { branch, parent, strategy }.
+const STACK = Array.isArray(args) ? args : Array.isArray(args?.stack) ? args.stack : []
+if (!STACK.length) {
+  throw new Error(
+    'restack: no stack provided. Launch with the ledger-derived plan, e.g.\n' +
+      '  Workflow({ scriptPath: ".claude/workflows/restack.js", args: <output of `python dev/stack.py restack-plan`> })',
+  )
+}
 
 const RESULT = {
   type: 'object',
