@@ -46,7 +46,6 @@ from krrood.entity_query_language.core.mapped_variable import (
 from krrood.entity_query_language.core.variable import Literal, DomainType, Variable
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
-    NoKwargsInMatchVar,
     CalledMatchMultipleTimes,
     MatchTypeCannotBeDetermined,
 )
@@ -209,7 +208,7 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
         >>> @dataclass
         >>> class Drawer:
         >>>     body: Body
-        >>> drawer = an(Drawer, domain=world.views)(body=an(Body)(name="drawer_1"))
+        >>> drawer = an(Drawer)(body=an(Body)(name="drawer_1")).from_(world.views)
 
     .. warning::
         Match can take a factory as a mean to construct `T`. If the keyword argument names of the match are not
@@ -246,6 +245,12 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     """
     The result quantifier applied when this match is materialized into a runnable query.
     Defaults to ``An`` (zero or more results); set to ``The`` when built via ``the(...)``.
+    """
+
+    domain: Optional[DomainType] = field(default=None, kw_only=True)
+    """
+    The instances the match ranges over. ``None`` constructs from scratch (an underspecified,
+    generative request); a domain makes it a search over those existing instances.
     """
 
     def __post_init__(self):
@@ -310,7 +315,7 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     def _resolve(
         self,
         variable: Optional[Selectable] = None,
-        parent: Optional[MatchVariable] = None,
+        parent: Optional[Match] = None,
     ):
         """
         Resolve the match by creating the variable and conditions expressions in-place.
@@ -337,7 +342,7 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
 
     def _create_attribute_match_and_resolve(
         self,
-        parent: MatchVariable,
+        parent: Match,
         attribute_name: str,
         assigned_value: Any,
         index_access: Optional[Any] = None,
@@ -363,7 +368,7 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
         return attr_match
 
     def _resolve_list_like_value(
-        self, key: str, value: Union[list, tuple], parent: MatchVariable
+        self, key: str, value: Union[list, tuple], parent: Match
     ):
         """
         Resolves list-like values by iterating over their elements and creating attribute
@@ -442,6 +447,27 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
         self.expression.build()
         return self
 
+    def from_(self, domain: DomainType) -> Self:
+        """Range the match over ``domain`` instead of over all instances of its type.
+
+        A domain does not commit the match to selection: the chosen backend decides what to do
+        with it (a selective backend finds the matching existing instances, a generative backend
+        constructs or completes them), so this stays a :class:`Match`. Use :attr:`expression` to
+        get the lowered selection query when you need symbolic attribute access (``.parent`` /
+        ``.child``), ``the(...)`` or ``set_of(...)``.
+
+        .. note::
+            ``__call__`` eagerly creates a subject variable before the domain is known (and with
+            no domain that is a SymbolGraph-wide variable for Symbol types). The subject is rebuilt
+            here so the ``variable`` factory re-scopes the domain to instances of the match's type.
+
+        :param domain: The instances the match ranges over.
+        :return: This match, for chaining.
+        """
+        self.domain = domain
+        self.create_variable()
+        return self
+
     def _update_kwargs_from_literal_values(self):
         """
         Update the kwargs dictionary with values from this statements leaves.
@@ -466,27 +492,6 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
             return result[0]
         else:
             raise KeyError(f"Multiple variables with name {name}")
-
-
-@dataclass(eq=False)
-class MatchVariable(Match[T]):
-    """
-    Represents a match variable that operates within a specified domain.
-
-    A class designed to create and manage a variable constrained by a defined
-    domain. It provides functionality to add additional constraints via
-    keyword arguments and return an expression representing the resolved
-    constraints. The ``domain`` field is inherited from :class:`Match`.
-    """
-
-    def __call__(self, **kwargs) -> Union[Entity[T], T]:
-        """
-        Add kwargs constraints and return the resolved expression as An() instance.
-        """
-        if not kwargs:
-            raise NoKwargsInMatchVar(self)
-        super().__call__(**kwargs)
-        return self.expression
 
 
 @dataclass(eq=False)
@@ -676,6 +681,12 @@ def construct_graph_and_get_root(
 def is_underspecified(instance: Any) -> bool:
     """
     :param instance: The instance to check.
-    :return: Rather, it's an underspecified statement or not.
+    :return: Whether ``instance`` is a :class:`Match` — a query still to be resolved by a
+        backend, as opposed to an already-concrete value.
+
+    .. note::
+        Whether resolving a match *selects* existing instances or *constructs* new ones is the
+        chosen backend's concern (the ``QueryBackend`` strategy), not a property of the match,
+        so this is a purely structural check.
     """
-    return isinstance(instance, Match) and not isinstance(instance, MatchVariable)
+    return isinstance(instance, Match)
