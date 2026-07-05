@@ -100,9 +100,6 @@ def eql_factory_namespace() -> Dict[str, Any]:
         # variable declaration
         "variable": f.variable,
         "variable_from": f.variable_from,
-        "match": f.match,
-        "match_variable": f.match_variable,
-        "underspecified": f.underspecified,
         "inference": f.inference,
         # logical operators
         "and_": f.and_,
