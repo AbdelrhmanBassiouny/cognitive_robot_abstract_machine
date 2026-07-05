@@ -124,8 +124,14 @@ SETUP
    (AbdelrhmanBassiouny/cognitive_robot_abstract_machine) and `cram2` the upstream. A fresh cloud
    clone may have them named differently — check `git remote -v` and rename/add so `origin`=fork,
    `cram2`=upstream before continuing.
-1. `git fetch origin && git fetch cram2 main`.
-2. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
+1. UPDATE FORK MAIN FIRST — before anything else. Every `base=main` comparison (both GitHub's PR
+   diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
+   inflates every root branch's diff. Fast-forward it to the upstream trunk:
+     `git fetch cram2 main && git push origin cram2/main:main`
+   This MUST be a fast-forward. If GitHub rejects it as non-fast-forward (fork main has unique
+   commits), STOP and report — do NOT force.
+2. `git fetch origin`.
+3. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
    to see the derived stack. There is no `--live` flag; state comes from board.json + git.
 
