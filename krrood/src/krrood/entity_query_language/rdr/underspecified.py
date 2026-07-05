@@ -4,7 +4,7 @@ Adapter from an underspecified EQL ``Match`` to RDR attribute inference.
 An underspecified query marks the attributes to infer with ``...`` (Ellipsis) and may
 carry concrete attribute constraints plus a domain of instances, e.g.::
 
-    underspecified(Animal, domain=animals)(hair=True, species=...)
+    an(Animal)(hair=True, species=...).from_(animals)
 
 This adapter reads that query: it locates the ``...`` inference targets, keeps the
 concrete attributes as an ordinary EQL filter (the ellipsis conditions stripped out), and

@@ -247,12 +247,6 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     Defaults to ``An`` (zero or more results); set to ``The`` when built via ``the(...)``.
     """
 
-    domain: Optional[DomainType] = field(default=None, kw_only=True)
-    """
-    The instances the match ranges over. ``None`` constructs from scratch (an underspecified,
-    generative request); a domain makes it a search over those existing instances.
-    """
-
     def __post_init__(self):
         if self.type_ is None:
             self._initialize_type_()
