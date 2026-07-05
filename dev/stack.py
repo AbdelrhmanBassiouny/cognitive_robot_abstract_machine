@@ -245,16 +245,12 @@ def cmd_next(ledger: Ledger) -> None:
     print(f"  (+{len(exempt)} not counted: {', '.join(b.name for b in exempt)})" if exempt else "")
     print()
 
-    def parent_landed(branch: Branch) -> bool:
-        parent = by_name.get(branch.parent)
-        return parent is None or parent.status in {"in-review", "merged"}
-
     # The gate: only branches YOU marked "ready" (self-reviewed on the fork) may be promoted.
     promotable = [
-        b for b in _order(ledger) if b.status == "ready" and parent_landed(b)
+        b for b in _order(ledger) if b.status == "ready" and _parent_landed(ledger, b, by_name)
     ]
     ready_but_blocked = [
-        b for b in ledger.branches if b.status == "ready" and not parent_landed(b)
+        b for b in ledger.branches if b.status == "ready" and not _parent_landed(ledger, b, by_name)
     ]
     approvable = [b for b in _order(ledger) if b.status == "draft"]
 
@@ -279,18 +275,53 @@ def cmd_next(ledger: Ledger) -> None:
         print(f"  (then, once approved: {', '.join(b.name for b in promotable[1:])})")
 
 
+def _parent_landed(ledger: Ledger, branch: Branch, by_name: dict[str, Branch]) -> bool:
+    """Whether a branch's parent has reached cram2 (merged or in-review), so it can be promoted."""
+    parent = by_name.get(branch.parent)
+    return parent is None or parent.status in {"in-review", "merged"}
+
+
+def next_to_promote(ledger: Ledger) -> Branch | None:
+    """The single branch to submit to cram2 next, or None if the cap is full or nothing is ready.
+
+    Encodes the whole policy: approved (``ready``) + parent landed + under the (bug-exempt) WIP cap.
+    """
+    counted = [
+        b for b in ledger.branches if b.status == "in-review" and ledger.counts_against_wip(b)
+    ]
+    if len(counted) >= ledger.wip_cap:
+        return None
+    by_name = {b.name: b for b in ledger.branches}
+    for branch in _order(ledger):
+        if branch.status == "ready" and _parent_landed(ledger, branch, by_name):
+            return branch
+    return None
+
+
+def cmd_next_porcelain(ledger: Ledger) -> None:
+    """Machine-readable :func:`next`: print ``name<TAB>pr<TAB>pr_repo`` for the branch to promote,
+    or nothing. For autonomous callers (e.g. the promote Routine) that must act deterministically."""
+    fetch(ledger)
+    branch = next_to_promote(ledger)
+    if branch is not None:
+        print(f"{branch.name}\t{branch.pr}\t{branch.pr_repo}")
+
+
 COMMANDS = {"status": cmd_status, "check": cmd_check, "next": cmd_next}
 
 
 def main() -> int:
     args = sys.argv[1:]
     live = "--live" in args
-    args = [a for a in args if a != "--live"]
+    porcelain = "--porcelain" in args
+    args = [a for a in args if a not in ("--live", "--porcelain")]
     if len(args) != 1 or args[0] not in COMMANDS:
         print(
-            f"usage: python dev/stack.py [{' | '.join(COMMANDS)}] [--live]\n"
+            f"usage: python dev/stack.py [{' | '.join(COMMANDS)}] [--live] [--porcelain]\n"
             "  --live: derive each branch's status from its live GitHub PR (needs `gh`), "
-            "so the draft/ready gate follows GitHub instead of the ledger.",
+            "so the draft/ready gate follows GitHub instead of the ledger.\n"
+            "  --porcelain (with `next`): print only 'name<TAB>pr<TAB>pr_repo' for the branch to "
+            "promote, or nothing — for autonomous callers.",
             file=sys.stderr,
         )
         return 2
@@ -305,7 +336,10 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 3
-    COMMANDS[args[0]](ledger)
+    if porcelain and args[0] == "next":
+        cmd_next_porcelain(ledger)
+    else:
+        COMMANDS[args[0]](ledger)
     return 0
 
 

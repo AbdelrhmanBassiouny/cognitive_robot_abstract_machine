@@ -22,6 +22,9 @@ DORA/*Accelerate*, Reinertsen, Theory of Constraints.)
     (fast, non-mutating `git merge-tree` probe)?
   - `python dev/stack.py next` — which branch to submit to cram2 next, honouring dependency order
     and the WIP cap. **This is your "what goes to cram2 next" answer.**
+  - `python dev/stack.py next --porcelain` — machine-readable `next`: prints only
+    `name<TAB>pr<TAB>pr_repo` for the branch to promote (or nothing). For autonomous callers such as
+    the promote Routine, which must act deterministically on "is there a branch to submit right now".
   - add `--live` to any command to **derive status from live GitHub PR state** (via `gh`) instead of
     the ledger's `status` column: a PR you flip to *draft* / *ready-for-review* on GitHub updates
     what the tool shows. GitHub becomes the source of truth for the gate; the ledger then only needs
