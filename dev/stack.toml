@@ -1,0 +1,62 @@
+# Stacked-PR ledger — the single source of truth for the fork-staging / cram2-review workflow.
+#
+# Model: this fork ("origin") holds the FULL stack of branches. cram2 is the slow REVIEW queue.
+# You promote the *bottom* of the stack to cram2 one at a time, never exceeding `wip_cap` PRs
+# in review at once. `stack.py` reads this file to answer: is the stack clean, and what's next.
+#
+# Edit this by hand as you add branches or as PRs change state. Nothing writes to it.
+
+wip_cap = 3            # max branches simultaneously in review on cram2
+fork_remote = "origin" # where the full stack lives
+upstream_remote = "cram2"
+upstream_base = "main"
+
+# Each branch: name, its intended parent (the ref it rebases/merges onto), the integration
+# strategy, the tracking PR number, and its lifecycle status.
+#   parent    : a bare name => a fork branch (origin/<name>); "<remote>/<x>" => that exact ref.
+#   strategy  : "rebase" (default, clean linear history) or "merge" (preserve, for far-diverged branches).
+#   status    : "staging"   -> on the fork only, not yet submitted upstream
+#               "in-review" -> open PR on cram2, awaiting review
+#               "merged"    -> landed in cram2/main
+
+[[branch]]
+name = "eql_verbalization"
+parent = "cram2/main"
+strategy = "rebase"
+pr = 346
+status = "in-review"
+
+[[branch]]
+name = "eql-symbolic-arithmetic"
+parent = "eql_verbalization"
+strategy = "rebase"
+pr = 11
+status = "staging"
+
+[[branch]]
+name = "eql-verbalization-extensions"
+parent = "eql_verbalization"
+strategy = "rebase"
+pr = 10
+status = "staging"
+
+[[branch]]
+name = "claude/performatives-clean"
+parent = "eql-symbolic-arithmetic"
+strategy = "rebase"
+pr = 14
+status = "staging"
+
+[[branch]]
+name = "claude/eql-performatives-unify"
+parent = "claude/performatives-clean"
+strategy = "rebase"
+pr = 15
+status = "staging"
+
+[[branch]]
+name = "claude/eql-roboknerd-why-acts"
+parent = "eql_verbalization"
+strategy = "merge"
+pr = 12
+status = "staging"
