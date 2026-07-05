@@ -30,7 +30,7 @@ import os
 import sys
 import unittest
 
-from krrood.entity_query_language.factories import underspecified
+from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.rdr import ChainConditionResolver, ResolutionMode
 from krrood.entity_query_language.rdr.backend import RDRBackend
 from krrood.entity_query_language.rdr.expert import Expert
@@ -102,7 +102,7 @@ class TestLoadHumanFittedModel(unittest.TestCase):
         # Usable through the underspecified backend with no further fitting.
         backend = RDRBackend()
         backend.models[(Animal, "species")] = rdr
-        query = underspecified(Animal, domain=animals)(species=...)
+        query = an(Animal)(species=...).from_(animals)
         inferred = [r[query.variable.species] for r in backend.infer(query)]
 
         # The backend reproduces the model's direct classifications exactly.

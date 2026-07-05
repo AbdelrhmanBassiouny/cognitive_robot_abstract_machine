@@ -15,7 +15,7 @@ import unittest
 
 from typing_extensions import List, Optional
 
-from krrood.entity_query_language.factories import and_, underspecified
+from krrood.entity_query_language.factories import and_, an
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.rdr.backend import RDRBackend
 from krrood.entity_query_language.rdr.expert import Expert
@@ -91,7 +91,7 @@ def setUpModule():
         return
     backend = RDRBackend(expert=maximally_specific_expert())
     backend.fit(
-        underspecified(Animal, domain=animals)(species=...),
+        an(Animal)(species=...).from_(animals),
         ground_truth=lambda a: target_by_name[a.name],
     )
     _ZOO_MODEL_CACHE = backend.models.get((Animal, "species"))
@@ -100,37 +100,37 @@ def setUpModule():
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestUnderspecifiedMatchAdapter(unittest.TestCase):
     def test_discovers_single_inference_target(self):
-        stmt = UnderspecifiedMatch(underspecified(Animal, domain=animals)(species=...))
+        stmt = UnderspecifiedMatch(an(Animal)(species=...).from_(animals))
         self.assertEqual(stmt.target_attribute_name, "species")
         self.assertEqual(stmt.case_type, Animal)
 
     def test_concrete_kwargs_filter_ellipsis_stripped(self):
         # milk=True filters the domain; species=... must NOT filter (it is the target).
         stmt = UnderspecifiedMatch(
-            underspecified(Animal, domain=animals)(milk=True, species=...)
+            an(Animal)(milk=True, species=...).from_(animals)
         )
         cases = list(stmt.filtered_cases())
         self.assertEqual(len(cases), sum(1 for a in animals if a.milk))
         self.assertTrue(all(c.milk for c in cases))
 
     def test_no_filter_streams_whole_domain(self):
-        stmt = UnderspecifiedMatch(underspecified(Animal, domain=animals)(species=...))
+        stmt = UnderspecifiedMatch(an(Animal)(species=...).from_(animals))
         self.assertEqual(len(list(stmt.filtered_cases())), len(animals))
 
     def test_no_inference_target_raises(self):
-        stmt = UnderspecifiedMatch(underspecified(Animal, domain=animals)(milk=True))
+        stmt = UnderspecifiedMatch(an(Animal)(milk=True).from_(animals))
         with self.assertRaises(NoInferenceTarget):
             stmt.single_target()
 
     def test_multiple_inference_targets_raises(self):
         stmt = UnderspecifiedMatch(
-            underspecified(Animal, domain=animals)(species=..., legs=...)
+            an(Animal)(species=..., legs=...).from_(animals)
         )
         with self.assertRaises(MultipleInferenceTargets):
             stmt.single_target()
 
     def test_unbounded_iterable_target_rejected(self):
-        stmt = UnderspecifiedMatch(underspecified(Bag, domain=[])(items=...))
+        stmt = UnderspecifiedMatch(an(Bag)(items=...).from_([]))
         with self.assertRaises(UnsupportedInferenceTarget):
             stmt.single_target()
 
@@ -138,7 +138,7 @@ class TestUnderspecifiedMatchAdapter(unittest.TestCase):
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
 class TestFromUnderspecified(unittest.TestCase):
     def test_derives_case_type_and_attribute(self):
-        rdr = EQLSingleClassRDR.from_underspecified(underspecified(Animal)(species=...))
+        rdr = EQLSingleClassRDR.from_underspecified(an(Animal)(species=...))
         self.assertIs(rdr.case_type, Animal)
         self.assertEqual(rdr.conclusion_attribute_name, "species")
 
@@ -156,12 +156,12 @@ class TestRDRBackendInfer(unittest.TestCase):
 
     def test_infer_is_lazy(self):
         backend = self._fitted_backend()
-        gen = backend.infer(underspecified(Animal, domain=animals)(species=...))
+        gen = backend.infer(an(Animal)(species=...).from_(animals))
         self.assertIsInstance(gen, types.GeneratorType)
 
     def test_infer_yields_unification_dicts_by_default(self):
         backend = self._fitted_backend()
-        query = underspecified(Animal, domain=animals)(species=...)
+        query = an(Animal)(species=...).from_(animals)
         results = list(backend.infer(query))
         self.assertTrue(all(isinstance(r, UnificationDict) for r in results))
         # Inferred values readable via the query's attribute; instances unchanged.
@@ -175,7 +175,7 @@ class TestRDRBackendInfer(unittest.TestCase):
     def test_fill_in_place_mutates_and_yields_instances(self):
         backend = self._fitted_backend()
         subset = animals[:5]
-        query = underspecified(Animal, domain=subset)(species=...)
+        query = an(Animal)(species=...).from_(subset)
         yielded = list(backend.infer(query, fill_in_place=True))
         self.assertEqual([a.name for a in yielded], [a.name for a in subset])
         for a in subset:
@@ -186,7 +186,7 @@ class TestRDRBackendInfer(unittest.TestCase):
 
     def test_infer_respects_concrete_filter(self):
         backend = self._fitted_backend()
-        query = underspecified(Animal, domain=animals)(milk=True, species=...)
+        query = an(Animal)(milk=True, species=...).from_(animals)
         results = list(backend.infer(query))
         self.assertEqual(len(results), sum(1 for a in animals if a.milk))
         self.assertTrue(
@@ -202,14 +202,14 @@ class TestRDRBackendFitModes(unittest.TestCase):
             return
         backend = RDRBackend(expert=maximally_specific_expert())
         backend.fit(
-            underspecified(Animal, domain=_SMALL_MILK_ANIMALS)(milk=True, species=...),
+            an(Animal)(milk=True, species=...).from_(_SMALL_MILK_ANIMALS),
             ground_truth=Species.mammal,
         )
         cls._mammal_backend = backend
 
     def test_constant_ground_truth(self):
         # Every milk-bearing animal is a mammal: a single ground-truth value for the subset.
-        out = underspecified(Animal, domain=_SMALL_MILK_ANIMALS)(milk=True, species=...)
+        out = an(Animal)(milk=True, species=...).from_(_SMALL_MILK_ANIMALS)
         self.assertTrue(
             all(r[out.variable.species] == Species.mammal for r in self._mammal_backend.infer(out))
         )
@@ -217,7 +217,7 @@ class TestRDRBackendFitModes(unittest.TestCase):
     def test_auto_fit_mode_without_ground_truth_uses_ask_for_rule(self):
         # Fresh backend, no model -> infer triggers fit mode; expert labels via ask_for_rule.
         backend = RDRBackend(expert=labelling_expert())
-        query = underspecified(Animal, domain=animals[:12])(species=...)
+        query = an(Animal)(species=...).from_(animals[:12])
         results = list(backend.infer(query))
         for r, (a, t) in zip(results, list(zip(animals, targets))[:12]):
             self.assertEqual(r[query.variable.species], t, a.name)
@@ -225,7 +225,7 @@ class TestRDRBackendFitModes(unittest.TestCase):
     def test_missing_expert_without_ground_truth_errors(self):
         backend = RDRBackend(expert=None)
         with self.assertRaises((ValueError, NotImplementedError)):
-            list(backend.infer(underspecified(Animal, domain=animals[:3])(species=...)))
+            list(backend.infer(an(Animal)(species=...).from_(animals[:3])))
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -246,8 +246,8 @@ class TestUnderspecifiedEndToEnd(unittest.TestCase):
         reloaded_backend = RDRBackend()
         reloaded_backend.models[(Animal, "species")] = loaded
 
-        q1 = underspecified(Animal, domain=animals)(species=...)
-        q2 = underspecified(Animal, domain=animals)(species=...)
+        q1 = an(Animal)(species=...).from_(animals)
+        q2 = an(Animal)(species=...).from_(animals)
         before = [r[q1.variable.species] for r in original_backend.infer(q1)]
         after = [r[q2.variable.species] for r in reloaded_backend.infer(q2)]
         self.assertEqual(before, after)

@@ -10,7 +10,7 @@ from krrood.entity_query_language.core.expression_structure import walk_chain
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.operators.comparator import Comparator
-from krrood.entity_query_language.query.match import Match, is_underspecified
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
     group_by_owner,
@@ -55,7 +55,7 @@ class AttributeGroup:
         """:return: The assignments with a concrete value (the *"given that …"* part).
 
         >>> from krrood.entity_query_language.verbalization.grammar.match.planner import MatchPlanner
-        >>> plan = MatchPlanner(underspecified(Robot)(name="R2", battery=...)).plan()
+        >>> plan = MatchPlanner(an(Robot)(name="R2", battery=...)).plan()
         >>> len(plan.groups[0].concrete)
         1
         """
@@ -66,7 +66,7 @@ class AttributeGroup:
         """:return: The Ellipsis assignments (the *"predict …"* part).
 
         >>> from krrood.entity_query_language.verbalization.grammar.match.planner import MatchPlanner
-        >>> plan = MatchPlanner(underspecified(Robot)(name="R2", battery=...)).plan()
+        >>> plan = MatchPlanner(an(Robot)(name="R2", battery=...)).plan()
         >>> len(plan.groups[0].predicted)
         1
         """
@@ -106,14 +106,14 @@ class MatchPlanner(Planner[Match, MatchPlan]):
 
     Reference: :cite:t:`reiter2000building` — content determination + aggregation (microplanning).
 
-    >>> MatchPlanner(underspecified(Robot)(name="R2", battery=80)).plan().underspecified
+    >>> MatchPlanner(an(Robot)(name="R2", battery=80)).plan().underspecified
     True
     """
 
     def plan(self) -> MatchPlan:
         """:return: The match plan.
 
-        >>> plan = MatchPlanner(underspecified(Robot)(name="R2", battery=80)).plan()
+        >>> plan = MatchPlanner(an(Robot)(name="R2", battery=80)).plan()
         >>> (type(plan.selection).__name__, len(plan.groups))
         ('Variable', 1)
         """
@@ -129,7 +129,7 @@ class MatchPlanner(Planner[Match, MatchPlan]):
             for group in owner_groups
         ]
         return MatchPlan(
-            underspecified=is_underspecified(match),
+            underspecified=match.domain is None,
             selection=match.variable,
             groups=groups,
             other_conditions=other,
