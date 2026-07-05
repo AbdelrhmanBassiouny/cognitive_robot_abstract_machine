@@ -1,0 +1,474 @@
+<title>Stack Board</title>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --panel: #ffffff;
+    --panel-2: #f9fafd;
+    --ink: #191c26;
+    --muted: #5c6478;
+    --faint: #8b93a7;
+    --line: #e3e7f0;
+    --line-strong: #cdd4e3;
+    --accent: #4d5dff;
+    --accent-soft: #eceeffe0;
+
+    --draft: #64748b;
+    --ready: #2f9e6b;
+    --review: #bd820f;
+    --merged: #8b6cd9;
+    --blocked: #d1495b;
+
+    --draft-bg: #eef1f6;
+    --ready-bg: #e6f5ee;
+    --review-bg: #faf1dd;
+    --merged-bg: #f0eafb;
+    --blocked-bg: #fae8ea;
+
+    --radius: 11px;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1016;
+      --panel: #161a23;
+      --panel-2: #1b202b;
+      --ink: #e7eaf2;
+      --muted: #9aa2b6;
+      --faint: #6b7288;
+      --line: #262c39;
+      --line-strong: #333b4c;
+      --accent: #7d8bff;
+      --accent-soft: #1e2337;
+
+      --draft: #8b93a7;
+      --ready: #4bbd88;
+      --review: #dCa23f;
+      --merged: #a888e6;
+      --blocked: #e56c7d;
+
+      --draft-bg: #1e232e;
+      --ready-bg: #14261e;
+      --review-bg: #2a2415;
+      --merged-bg: #231a33;
+      --blocked-bg: #2c1a1e;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f4f6fb; --panel: #ffffff; --panel-2: #f9fafd; --ink: #191c26;
+    --muted: #5c6478; --faint: #8b93a7; --line: #e3e7f0; --line-strong: #cdd4e3;
+    --accent: #4d5dff; --accent-soft: #eceeffe0;
+    --draft: #64748b; --ready: #2f9e6b; --review: #bd820f; --merged: #8b6cd9; --blocked: #d1495b;
+    --draft-bg: #eef1f6; --ready-bg: #e6f5ee; --review-bg: #faf1dd; --merged-bg: #f0eafb; --blocked-bg: #fae8ea;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1016; --panel: #161a23; --panel-2: #1b202b; --ink: #e7eaf2;
+    --muted: #9aa2b6; --faint: #6b7288; --line: #262c39; --line-strong: #333b4c;
+    --accent: #7d8bff; --accent-soft: #1e2337;
+    --draft: #8b93a7; --ready: #4bbd88; --review: #dca23f; --merged: #a888e6; --blocked: #e56c7d;
+    --draft-bg: #1e232e; --ready-bg: #14261e; --review-bg: #2a2415; --merged-bg: #231a33; --blocked-bg: #2c1a1e;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 1200px; margin: 0 auto; padding: 32px 24px 64px;
+    display: grid; grid-template-columns: 272px 1fr; gap: 28px;
+    align-items: start;
+  }
+  @media (max-width: 820px) { .wrap { grid-template-columns: 1fr; } }
+
+  header.top {
+    grid-column: 1 / -1; display: flex; justify-content: space-between;
+    align-items: baseline; flex-wrap: wrap; gap: 8px 16px;
+    padding-bottom: 18px; border-bottom: 1px solid var(--line);
+  }
+  header.top h1 {
+    margin: 0; font-size: 1.32rem; font-weight: 640; letter-spacing: -0.015em;
+  }
+  header.top .sub { color: var(--muted); font-size: 0.83rem; }
+  header.top .sub code { font-family: var(--mono); color: var(--accent); }
+
+  /* ── summary rail ── */
+  .rail { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 18px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px 16px 17px;
+  }
+  .card h2 {
+    margin: 0 0 12px; font-size: 0.68rem; text-transform: uppercase;
+    letter-spacing: 0.09em; color: var(--faint); font-weight: 620;
+  }
+  .wip-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .wip-head .big { font-size: 1.9rem; font-weight: 680; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .wip-head .cap { color: var(--muted); font-size: 0.9rem; }
+  .wip-bar { display: flex; gap: 5px; }
+  .wip-seg { height: 8px; flex: 1; border-radius: 3px; background: var(--line); }
+  .wip-seg.filled { background: var(--review); }
+  .wip-note { margin-top: 10px; font-size: 0.78rem; color: var(--muted); }
+  .wip-note b { color: var(--ink); font-weight: 600; }
+
+  .counts { display: flex; flex-direction: column; gap: 2px; }
+  .count-row {
+    display: flex; align-items: center; gap: 9px; padding: 5px 4px;
+    border-radius: 7px; cursor: default; font-size: 0.86rem;
+  }
+  .count-row .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .count-row .lbl { flex: 1; color: var(--muted); }
+  .count-row .n { font-variant-numeric: tabular-nums; font-weight: 620; }
+
+  .next-box { font-size: 0.86rem; }
+  .next-box .none { color: var(--muted); }
+  .next-box .hint { margin-top: 8px; font-size: 0.78rem; color: var(--faint); line-height: 1.45; }
+  .next-box .hint code { font-family: var(--mono); color: var(--accent); font-size: 0.92em; }
+
+  .controls { display: flex; gap: 8px; align-items: center; font-size: 0.82rem; color: var(--muted); }
+  .toggle {
+    appearance: none; -webkit-appearance: none; width: 34px; height: 19px; border-radius: 20px;
+    background: var(--line-strong); position: relative; cursor: pointer; transition: background .15s; flex: none;
+  }
+  .toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px;
+    border-radius: 50%; background: #fff; transition: transform .15s;
+  }
+  .toggle:checked { background: var(--accent); }
+  .toggle:checked::after { transform: translateX(15px); }
+  .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ── canvas ── */
+  .canvas { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .root-label {
+    display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono);
+    font-size: 0.8rem; color: var(--muted); padding: 3px 10px; border-radius: 20px;
+    border: 1px dashed var(--line-strong); background: var(--panel-2); align-self: flex-start;
+  }
+  .root-label .glyph { color: var(--accent); font-weight: 700; }
+
+  ul.tree, ul.tree ul { list-style: none; margin: 0; padding: 0; }
+  ul.tree ul { margin-left: 20px; border-left: 1.5px solid var(--line); padding-left: 0; }
+  ul.tree li { position: relative; padding-left: 20px; margin-top: 8px; }
+  ul.tree > li { padding-left: 0; }
+  ul.tree ul > li::before {
+    content: ""; position: absolute; left: 0; top: 22px; width: 18px; height: 1.5px; background: var(--line);
+  }
+
+  .node {
+    display: grid; grid-template-columns: 4px 1fr auto; align-items: stretch;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden; cursor: pointer; transition: border-color .13s, box-shadow .13s, transform .06s;
+  }
+  .node:hover { border-color: var(--line-strong); }
+  .node:active { transform: translateY(0.5px); }
+  .node .stripe { background: var(--s); }
+  .node .body { padding: 9px 13px; min-width: 0; }
+  .node .row1 { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .node .name { font-family: var(--mono); font-size: 0.9rem; font-weight: 600; letter-spacing: -0.01em; }
+  .node .row2 { display: flex; align-items: center; gap: 10px; margin-top: 3px; font-size: 0.75rem; color: var(--faint); }
+  .node .row2 .strat { font-family: var(--mono); }
+  .node .meta { padding: 9px 13px; display: flex; align-items: center; gap: 7px; }
+
+  .pr {
+    font-family: var(--mono); font-size: 0.78rem; font-weight: 600; color: var(--muted);
+    text-decoration: none; padding: 1px 7px; border-radius: 6px; background: var(--panel-2);
+    border: 1px solid var(--line); white-space: nowrap;
+  }
+  .pr .repo { color: var(--faint); font-weight: 500; }
+  a.pr:hover { border-color: var(--accent); color: var(--accent); }
+
+  .pill {
+    font-size: 0.7rem; font-weight: 640; letter-spacing: 0.02em; text-transform: uppercase;
+    padding: 2px 9px; border-radius: 20px; white-space: nowrap;
+    color: var(--s); background: var(--sbg);
+  }
+  .tag {
+    font-size: 0.66rem; font-weight: 640; letter-spacing: 0.04em; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 5px; white-space: nowrap;
+  }
+  .tag.next { color: #fff; background: var(--accent); }
+  .tag.blocked { color: var(--blocked); background: var(--blocked-bg); border: 1px solid var(--blocked); }
+  .tag.bug { color: var(--blocked); background: var(--blocked-bg); }
+
+  /* lineage highlight */
+  ul.tree.dim .node { opacity: 0.34; filter: saturate(0.6); }
+  ul.tree.dim .node.lit { opacity: 1; filter: none; box-shadow: 0 0 0 2px var(--accent-soft), 0 2px 10px rgba(0,0,0,0.08); border-color: var(--accent); }
+
+  .node.merged { opacity: 0.7; }
+  .node.merged .name { text-decoration: line-through; text-decoration-color: var(--faint); }
+  li.hidden { display: none; }
+
+  footer.foot {
+    grid-column: 1 / -1; margin-top: 10px; padding-top: 16px; border-top: 1px solid var(--line);
+    color: var(--faint); font-size: 0.78rem; line-height: 1.55;
+  }
+  footer.foot code { font-family: var(--mono); color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Stack Board</h1>
+      <div class="sub">fork staging &rarr; <code>cram2/main</code> review queue &middot; derived from <code>dev/board.json</code></div>
+    </div>
+    <div class="sub" id="stamp"></div>
+  </header>
+
+  <aside class="rail">
+    <div class="card">
+      <h2>Review capacity</h2>
+      <div class="wip-head">
+        <span class="big" id="wip-used">0</span><span class="cap" id="wip-cap">/ 3 slots</span>
+      </div>
+      <div class="wip-bar" id="wip-bar"></div>
+      <div class="wip-note" id="wip-note"></div>
+    </div>
+
+    <div class="card">
+      <h2>Next to promote</h2>
+      <div class="next-box" id="next-box"></div>
+    </div>
+
+    <div class="card">
+      <h2>By state</h2>
+      <div class="counts" id="counts"></div>
+    </div>
+
+    <div class="card">
+      <h2>View</h2>
+      <label class="controls">
+        <input type="checkbox" class="toggle" id="show-merged" />
+        <span>Show merged branches</span>
+      </label>
+      <label class="controls" style="margin-top:10px;">
+        <input type="checkbox" class="toggle" id="trace" checked />
+        <span>Click a node to trace lineage</span>
+      </label>
+    </div>
+  </aside>
+
+  <main class="canvas" id="canvas"></main>
+
+  <footer class="foot">
+    Read-only visualization &mdash; a hosted page can't write to GitHub. You drive the stack on GitHub:
+    the <b>base branch</b> is the parent, the <b>draft toggle</b> is the ready gate, and the
+    <code>in-review</code>/<code>bug</code> labels carry review state. Status here is derived from those
+    PR facts exactly as <code>dev/stack.py</code> derives it &mdash; nothing is hand-set.
+  </footer>
+</div>
+
+<script>
+// Config + the fork-PR export (dev/board.json). The routine refreshes board.json from live PRs;
+// this snapshot mirrors it. Status is DERIVED here exactly as dev/stack.py derives it — the board
+// only knows PR facts (base, draft, labels), never a hand-set status.
+const CONFIG = { wip_cap: 3, wip_exempt_labels: ["bug"], in_review_label: "in-review", rebase_label: "rebase", base: "main" };
+const PULL_REQUESTS = [
+  {number:1,  head:"claude/eql-field-metadata",          base:"main",                        draft:true,  labels:[]},
+  {number:3,  head:"query-interface-refactor",           base:"main",                        draft:false, labels:["in-review"]},
+  {number:4,  head:"match-where-without-resolve",        base:"query-interface-refactor",    draft:false, labels:["in-review"]},
+  {number:5,  head:"query-class-refactor",               base:"match-where-without-resolve", draft:true,  labels:[]},
+  {number:7,  head:"claude/gendered-pronouns",           base:"main",                        draft:true,  labels:[]},
+  {number:10, head:"eql-verbalization-extensions",       base:"main",                        draft:true,  labels:[]},
+  {number:11, head:"eql-arithmetic",                     base:"main",                        draft:false, labels:[]},
+  {number:12, head:"claude/eql-roboknerd-why-acts",      base:"match-where-without-resolve", draft:true,  labels:[]},
+  {number:14, head:"claude/performatives-clean",         base:"eql-arithmetic",              draft:true,  labels:[]},
+  {number:15, head:"claude/eql-performatives-unify",     base:"claude/performatives-clean",  draft:true,  labels:[]},
+  {number:18, head:"fix/inference-explanation-typehint", base:"main",                        draft:false, labels:["in-review","bug"]},
+  {number:19, head:"rdr/eql-integration",                base:"rdr_refactor",                draft:true,  labels:[]},
+  {number:20, head:"rdr/oo-plan",                        base:"rdr/eql-integration",         draft:true,  labels:[]},
+  {number:21, head:"rdr/oo-recognition",                 base:"rdr/oo-plan",                 draft:true,  labels:[]},
+  {number:22, head:"rdr/backend-unification",            base:"rdr/oo-recognition",          draft:true,  labels:[]},
+  {number:24, head:"rdr_refactor",                       base:"main",                        draft:true,  labels:[]},
+];
+// merged = branch is an ancestor of cram2/main (git-derived server-side). None among open PRs now.
+const MERGED = new Set([]);
+
+function deriveStatus(pr) {
+  if (MERGED.has(pr.head)) return "merged";
+  if (pr.labels.includes(CONFIG.in_review_label)) return "in-review";
+  return pr.draft ? "draft" : "ready";
+}
+const BOARD = {
+  wip_cap: CONFIG.wip_cap,
+  wip_exempt_labels: CONFIG.wip_exempt_labels,
+  branches: PULL_REQUESTS.map(pr => ({
+    name: pr.head,
+    parent: pr.base === CONFIG.base ? "cram2/main" : pr.base,
+    pr: pr.number,
+    pr_repo: "fork",
+    status: deriveStatus(pr),
+    strategy: pr.labels.includes(CONFIG.rebase_label) ? "rebase" : "merge",
+    labels: pr.labels,
+  })),
+};
+
+const STATUS = {
+  draft:     {label:"draft",     s:"var(--draft)",  bg:"var(--draft-bg)"},
+  ready:     {label:"ready",     s:"var(--ready)",  bg:"var(--ready-bg)"},
+  "in-review":{label:"in review",s:"var(--review)", bg:"var(--review-bg)"},
+  merged:    {label:"merged",    s:"var(--merged)", bg:"var(--merged-bg)"},
+};
+const REPO = "AbdelrhmanBassiouny/cognitive_robot_abstract_machine";
+const UPSTREAM = "cram2/cognitive_robot_abstract_machine";
+
+const byName = new Map(BOARD.branches.map(b => [b.name, b]));
+const isExempt = b => b.labels.some(l => BOARD.wip_exempt_labels.includes(l));
+const landed = b => b.status === "in-review" || b.status === "merged";
+const parentLanded = b => { const p = byName.get(b.parent); return !p || landed(p); };
+const children = name => BOARD.branches.filter(b => b.parent === name);
+
+// ── summary ──
+const counted = BOARD.branches.filter(b => b.status === "in-review" && !isExempt(b));
+const exempt  = BOARD.branches.filter(b => b.status === "in-review" && isExempt(b));
+document.getElementById("wip-used").textContent = counted.length;
+document.getElementById("wip-cap").textContent = `/ ${BOARD.wip_cap} slots`;
+const bar = document.getElementById("wip-bar");
+for (let i = 0; i < BOARD.wip_cap; i++) {
+  const seg = document.createElement("div");
+  seg.className = "wip-seg" + (i < counted.length ? " filled" : "");
+  bar.appendChild(seg);
+}
+document.getElementById("wip-note").innerHTML =
+  `<b>${counted.length}</b> counted &middot; <b>${exempt.length}</b> exempt (${exempt.map(b=>b.name.split("/").pop()).join(", ")||"none"}) &middot; ` +
+  (counted.length >= BOARD.wip_cap ? "cap full" : `<b>${BOARD.wip_cap - counted.length}</b> free`);
+
+// next to promote: ready + parent landed, under cap
+const promotable = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b));
+const readyBlocked = BOARD.branches.filter(b => b.status === "ready" && !parentLanded(b));
+const nextBox = document.getElementById("next-box");
+if (counted.length >= BOARD.wip_cap && promotable.length) {
+  nextBox.innerHTML = `<div><b>${promotable[0].name}</b></div><div class="hint">approved, but the cap is full — waiting for a slot.</div>`;
+} else if (promotable.length) {
+  const n = promotable[0];
+  nextBox.innerHTML = `<div style="font-family:var(--mono);font-weight:600">${n.name}</div><div class="hint">approved &amp; unblocked &middot; <code>PR #${n.pr}</code></div>`;
+} else {
+  const draftCands = BOARD.branches.filter(b => b.status === "draft" && !landed(b));
+  nextBox.innerHTML = `<div class="none">Nothing ready.</div><div class="hint">` +
+    (readyBlocked.length ? `Approved but waiting on a parent: <b>${readyBlocked.map(b=>b.name).join(", ")}</b>. ` : "") +
+    `The gate: self-review a fork PR, then mark it <code>ready</code> (undraft on GitHub). ` +
+    `${draftCands.length} draft branch${draftCands.length===1?"":"es"} in the backlog.</div>`;
+}
+
+// counts by state
+const order = ["in-review","ready","draft","merged"];
+const countsEl = document.getElementById("counts");
+order.forEach(st => {
+  const n = BOARD.branches.filter(b => b.status === st).length;
+  if (!n) return;
+  const row = document.createElement("div");
+  row.className = "count-row";
+  row.innerHTML = `<span class="dot" style="background:${STATUS[st].s}"></span>` +
+    `<span class="lbl">${STATUS[st].label}</span><span class="n">${n}</span>`;
+  countsEl.appendChild(row);
+});
+
+// ── tree ──
+const canvas = document.getElementById("canvas");
+const roots = BOARD.branches.filter(b => b.parent === "cram2/main");
+
+function nodeEl(b) {
+  const st = STATUS[b.status];
+  const li = document.createElement("li");
+  li.dataset.name = b.name;
+  if (b.status === "merged") li.dataset.merged = "1";
+
+  const blocked = b.status === "ready" && !parentLanded(b);
+  const isNext = promotable.length && promotable[0].name === b.name && counted.length < BOARD.wip_cap;
+
+  const repoSlug = b.pr_repo === "upstream" ? UPSTREAM : REPO;
+  const prLink = b.pr ? `https://github.com/${repoSlug}/pull/${b.pr}` : null;
+  const repoTag = b.pr_repo === "upstream" ? "cram2" : "fork";
+
+  const tags = [];
+  if (isNext) tags.push(`<span class="tag next">next</span>`);
+  if (blocked) tags.push(`<span class="tag blocked">blocked</span>`);
+  if (isExempt(b)) tags.push(`<span class="tag bug">bug</span>`);
+
+  li.innerHTML =
+    `<div class="node ${b.status==='merged'?'merged':''}" style="--s:${st.s};--sbg:${st.bg}" tabindex="0" role="button">
+       <div class="stripe"></div>
+       <div class="body">
+         <div class="row1">
+           <span class="name">${b.name}</span>
+           <span class="pill">${st.label}</span>
+           ${tags.join("")}
+         </div>
+         <div class="row2">
+           ${prLink ? `<a class="pr" href="${prLink}" target="_blank" rel="noopener">#${b.pr} <span class="repo">${repoTag}</span></a>`
+                    : `<span class="pr">no PR</span>`}
+           <span class="strat">${b.strategy} onto ${b.parent.replace('cram2/','')}</span>
+         </div>
+       </div>
+     </div>`;
+
+  const kids = children(b.name);
+  if (kids.length) {
+    const ul = document.createElement("ul");
+    kids.forEach(k => ul.appendChild(nodeEl(k)));
+    li.appendChild(ul);
+  }
+  return li;
+}
+
+roots.forEach(r => {
+  const label = document.createElement("div");
+  label.className = "root-label";
+  label.innerHTML = `<span class="glyph">&#9650;</span> cram2/main`;
+  const ul = document.createElement("ul");
+  ul.className = "tree";
+  ul.appendChild(nodeEl(r));
+  canvas.appendChild(label);
+  canvas.appendChild(ul);
+});
+
+// ── interactions ──
+function lineage(name) {
+  const set = new Set();
+  let cur = byName.get(name);
+  while (cur) { set.add(cur.name); cur = byName.get(cur.parent); }
+  // include descendants
+  const stack = [name];
+  while (stack.length) {
+    const n = stack.pop();
+    children(n).forEach(c => { set.add(c.name); stack.push(c.name); });
+  }
+  return set;
+}
+let traceOn = true;
+document.getElementById("trace").addEventListener("change", e => { traceOn = e.target.checked; clearTrace(); });
+function clearTrace() {
+  document.querySelectorAll("ul.tree").forEach(t => t.classList.remove("dim"));
+  document.querySelectorAll(".node.lit").forEach(n => n.classList.remove("lit"));
+}
+canvas.addEventListener("click", e => {
+  const node = e.target.closest(".node");
+  if (!node || e.target.closest("a")) return;
+  if (!traceOn) return;
+  const li = node.closest("li");
+  const name = li.dataset.name;
+  const lit = document.querySelector(".node.lit") && li.querySelector(":scope > .node").classList.contains("lit");
+  clearTrace();
+  if (lit) return;
+  const set = lineage(name);
+  li.closest("ul.tree").classList.add("dim");
+  set.forEach(n => {
+    const el = document.querySelector(`li[data-name="${CSS.escape(n)}"] > .node`);
+    if (el) el.classList.add("lit");
+  });
+});
+
+// show/hide merged
+const showMerged = document.getElementById("show-merged");
+function applyMerged() {
+  document.querySelectorAll('li[data-merged="1"]').forEach(li => {
+    li.classList.toggle("hidden", !showMerged.checked);
+  });
+}
+showMerged.addEventListener("change", applyMerged);
+applyMerged();
+
+document.getElementById("stamp").textContent =
+  `${BOARD.branches.length} branches · ${roots.length} roots`;
+</script>

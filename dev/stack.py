@@ -1,169 +1,235 @@
 #!/usr/bin/env python3
 """Stacked-PR helper for the fork-staging / cram2-review workflow.
 
-Reads ``dev/stack.toml`` and answers three questions without ever mutating your branches:
+GitHub is the single source of truth. The stack is **not** declared in a ledger: it is read from a
+``board.json`` export of the fork's pull requests (refreshed by the routine via the GitHub MCP, or by
+``stack.py export`` where ``gh`` is available) combined with plain ``git``:
 
-  status  -- the whole stack at a glance: each branch, its parent, lifecycle state, and how far
-             it has drifted (ahead/behind its parent, behind cram2/main).
-  check   -- would each branch integrate cleanly onto its declared parent right now? (a fast,
-             non-mutating conflict probe via ``git merge-tree``).
-  next    -- which branch to submit to cram2 next, honouring dependency order and the WIP cap.
+  * dependency tree = each fork PR's **base branch** (base = parent);
+  * ``draft`` <-> ``ready`` = the fork PR's draft flag;
+  * ``in-review`` = the ``in_review_label`` on the fork PR (cram2 is not readable from the cloud);
+  * ``merged`` = the branch is an ancestor of ``<upstream_remote>/<upstream_base>``.
 
-Run with the repo root as the working directory::
+``stack.toml`` carries only configuration (WIP cap, label names, remotes).
 
-    python dev/stack.py status
-    python dev/stack.py check
-    python dev/stack.py next
+Commands (run from the repo root)::
+
+    python dev/stack.py status        # the whole stack: parent, state, drift
+    python dev/stack.py check         # would each branch merge cleanly onto its parent now?
+    python dev/stack.py next          # which branch to submit to cram2 next (gate + deps + WIP cap)
+    python dev/stack.py next --porcelain   # machine-readable: 'name<TAB>pr' or nothing
+    python dev/stack.py restack-plan  # bottom-up restack plan as JSON, for the `restack` workflow
+    python dev/stack.py export        # (re)write board.json from live fork PRs via `gh`
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-LEDGER_PATH = Path(__file__).with_name("stack.toml")
+CONFIG_PATH = Path(__file__).with_name("stack.toml")
+BOARD_PATH = Path(__file__).with_name("board.json")
+
+DRAFT = "draft"
+READY = "ready"
+IN_REVIEW = "in-review"
+MERGED = "merged"
+
+
+@dataclass
+class Config:
+    """Static configuration for the workflow (everything that is not derivable from GitHub)."""
+
+    wip_cap: int
+    """Maximum feature branches simultaneously in review on the upstream."""
+
+    wip_exempt_labels: list[str]
+    """PR labels whose presence excludes a PR from the WIP count (e.g. a standalone bug fix)."""
+
+    in_review_label: str
+    """Fork-PR label marking a branch as promoted to the upstream and under review."""
+
+    rebase_label: str
+    """Fork-PR label opting a branch into the rebase strategy instead of the default merge."""
+
+    fork_remote: str
+    """Git remote for the fork that holds the full stack."""
+
+    upstream_remote: str
+    """Git remote for the upstream review repository."""
+
+    upstream_base: str
+    """The upstream base branch every stack ultimately targets."""
+
+
+@dataclass
+class PullRequest:
+    """One fork pull request as exported into ``board.json``."""
+
+    number: int
+    """The pull request number on the fork."""
+
+    head: str
+    """The PR's head branch — the branch this stack node names."""
+
+    base: str
+    """The PR's base branch — its parent in the stack (``base = parent``)."""
+
+    draft: bool
+    """Whether the PR is a draft (not yet approved for review)."""
+
+    labels: list[str] = field(default_factory=list)
+    """Labels currently on the PR."""
 
 
 @dataclass
 class Branch:
-    """One entry in the stack ledger."""
+    """A stack node derived from a fork PR plus git state."""
 
     name: str
+    """The branch name (the PR head)."""
+
     parent: str
-    strategy: str
-    pr: int | None
+    """The parent branch (the PR base)."""
+
+    pr: int
+    """The fork PR number."""
+
     status: str
-    pr_repo: str  # "fork" (origin) or "upstream" (cram2) — which repo the PR lives in
-    labels: list[str] = field(default_factory=list)
+    """Lifecycle status: ``draft`` / ``ready`` / ``in-review`` / ``merged``."""
+
+    strategy: str
+    """Integration strategy onto the parent: ``merge`` (default) or ``rebase``."""
+
+    labels: list[str]
+    """Labels carried by the PR (used for WIP exemption)."""
 
 
 @dataclass
-class Ledger:
-    """The parsed stack ledger."""
+class Stack:
+    """The whole stack: configuration plus the branches derived from GitHub and git."""
 
-    wip_cap: int
-    wip_exempt_labels: list[str]
-    fork_remote: str
-    upstream_remote: str
-    upstream_base: str
+    config: Config
+    """The static configuration."""
+
     branches: list[Branch]
+    """The derived stack nodes."""
 
     def counts_against_wip(self, branch: Branch) -> bool:
         """Whether a branch occupies a review slot (labelled-exempt PRs, e.g. bugs, do not)."""
-        return not any(label in self.wip_exempt_labels for label in branch.labels)
+        return not any(label in self.config.wip_exempt_labels for label in branch.labels)
 
 
 def _git(*args: str) -> str:
     """Run a git command and return its stripped stdout (empty string on failure)."""
-    result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
-    )
+    result = subprocess.run(["git", *args], capture_output=True, text=True, cwd=Path.cwd())
     return result.stdout.strip()
 
 
-def load_ledger() -> Ledger:
-    """Parse ``stack.toml`` into a :class:`Ledger`."""
-    data = tomllib.loads(LEDGER_PATH.read_text())
-    branches = [
-        Branch(
-            name=entry["name"],
-            parent=entry["parent"],
-            strategy=entry.get("strategy", "merge"),
-            pr=entry.get("pr"),
-            status=entry.get("status", "draft"),
-            pr_repo=entry.get("pr_repo", "fork"),
-            labels=list(entry.get("labels", [])),
-        )
-        for entry in data["branch"]
-    ]
-    return Ledger(
+def load_config(path: Path = CONFIG_PATH) -> Config:
+    """Parse ``stack.toml`` into a :class:`Config`."""
+    data = tomllib.loads(path.read_text())
+    return Config(
         wip_cap=data.get("wip_cap", 3),
         wip_exempt_labels=list(data.get("wip_exempt_labels", ["bug"])),
+        in_review_label=data.get("in_review_label", "in-review"),
+        rebase_label=data.get("rebase_label", "rebase"),
         fork_remote=data.get("fork_remote", "origin"),
         upstream_remote=data.get("upstream_remote", "cram2"),
         upstream_base=data.get("upstream_base", "main"),
-        branches=branches,
     )
 
 
-def resolve_ref(ledger: Ledger, name: str) -> str:
-    """Resolve a ledger name to a git ref: a bare name is a fork branch, a ``a/b`` name is verbatim."""
-    return name if "/" in name else f"{ledger.fork_remote}/{name}"
+class BoardUnavailable(RuntimeError):
+    """Raised when ``board.json`` is missing — run ``stack.py export`` or the refresh routine first."""
 
 
-class LiveStatusUnavailable(RuntimeError):
-    """Raised when the GitHub PR state cannot be read (e.g. ``gh`` missing/unauthenticated)."""
+def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
+    """Parse ``board.json`` into the list of fork pull requests."""
+    if not path.exists():
+        raise BoardUnavailable(f"{path.name} not found — run `python dev/stack.py export` first")
+    data = json.loads(path.read_text())
+    return [
+        PullRequest(
+            number=pr["number"],
+            head=pr["head"],
+            base=pr["base"],
+            draft=bool(pr["draft"]),
+            labels=list(pr.get("labels", [])),
+        )
+        for pr in data["pull_requests"]
+    ]
 
 
-def derive_status(state: str, is_draft: bool, merged: bool, is_upstream: bool) -> str:
-    """Map a GitHub PR's raw state to a ledger lifecycle status.
+def derive_status(draft: bool, merged: bool, in_review: bool) -> str:
+    """Map a PR's raw facts to a lifecycle status.
 
-    A merged PR is ``merged``. An open non-draft PR is ``in-review`` upstream (actively reviewed on
-    cram2) or ``ready`` on the fork (self-approved). An open *draft* PR is ``ready`` upstream (staged
-    on cram2, not yet opened for review) or ``draft`` on the fork (still WIP). Anything else
-    (closed-unmerged, no PR) is ``draft``.
+    Precedence: a merged branch is ``merged``; an ``in-review``-labelled branch is ``in-review``; an
+    un-drafted branch is ``ready`` (self-approved for promotion); otherwise ``draft``.
     """
-    if merged or state == "MERGED":
-        return "merged"
-    if state != "OPEN":
-        return "draft"
-    if is_upstream:
-        return "in-review" if not is_draft else "ready"
-    return "ready" if not is_draft else "draft"
+    if merged:
+        return MERGED
+    if in_review:
+        return IN_REVIEW
+    return READY if not draft else DRAFT
 
 
-def _repo_slug(remote: str) -> str:
-    """Return the ``owner/repo`` slug for a git remote (from its fetch URL)."""
-    url = _git("remote", "get-url", remote)
-    return "/".join(url.removesuffix(".git").rstrip("/").split("/")[-2:])
+def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
+    """Assemble the :class:`Stack` from the PR export and a merged-branch predicate.
+
+    ``is_merged`` maps a branch name to whether it has landed upstream; it is injected so the pure
+    assembly logic can be tested without git.
+    """
+    branches = [
+        Branch(
+            name=pr.head,
+            parent=pr.base,
+            pr=pr.number,
+            status=derive_status(pr.draft, is_merged(pr.head), config.in_review_label in pr.labels),
+            strategy="rebase" if config.rebase_label in pr.labels else "merge",
+            labels=pr.labels,
+        )
+        for pr in prs
+    ]
+    return Stack(config=config, branches=branches)
 
 
-def _pr_state(slug: str, pr: int) -> tuple[str, bool, bool, list[str]]:
-    """Return ``(state, is_draft, merged, labels)`` for a PR via ``gh``. Raises if ``gh`` is missing."""
-    import json as _json
+def _merged_predicate(config: Config):
+    """Return a predicate testing whether a fork branch is an ancestor of the upstream base."""
+    upstream = f"{config.upstream_remote}/{config.upstream_base}"
 
-    try:
+    def is_merged(name: str) -> bool:
+        ref = f"{config.fork_remote}/{name}"
         result = subprocess.run(
-            ["gh", "pr", "view", str(pr), "--repo", slug, "--json", "state,isDraft,mergedAt,labels"],
+            ["git", "merge-base", "--is-ancestor", ref, upstream],
             capture_output=True,
             text=True,
         )
-    except FileNotFoundError as error:
-        raise LiveStatusUnavailable("`gh` is not installed") from error
-    if result.returncode != 0:
-        raise LiveStatusUnavailable(result.stderr.strip() or "gh not available")
-    data = _json.loads(result.stdout)
-    labels = [label["name"] for label in data.get("labels", [])]
-    return data["state"], bool(data["isDraft"]), data.get("mergedAt") is not None, labels
+        return result.returncode == 0
+
+    return is_merged
 
 
-def apply_live(ledger: Ledger) -> None:
-    """Overwrite each branch's ledger status with its live GitHub PR status.
-
-    GitHub becomes the source of truth: flip a PR to draft / ready-for-review on GitHub and the tool
-    reflects it. Branches without a PR keep their ledger status.
-    """
-    slugs = {
-        "fork": _repo_slug(ledger.fork_remote),
-        "upstream": _repo_slug(ledger.upstream_remote),
-    }
-    for branch in ledger.branches:
-        if branch.pr is None:
-            continue
-        state, is_draft, merged, labels = _pr_state(slugs[branch.pr_repo], branch.pr)
-        branch.labels = labels
-        branch.status = derive_status(
-            state, is_draft, merged, is_upstream=branch.pr_repo == "upstream"
-        )
+def load_stack() -> Stack:
+    """Load the full live stack: config + board export + git merged-detection."""
+    config = load_config()
+    prs = load_board()
+    fetch(config, [pr.head for pr in prs])
+    return build_stack(config, prs, _merged_predicate(config))
 
 
-def fetch(ledger: Ledger) -> None:
-    """Refresh the refs the ledger references so drift numbers are current."""
-    fork_branches = [b.name for b in ledger.branches if "/" not in b.parent or True]
-    _git("fetch", ledger.upstream_remote, ledger.upstream_base, "-q")
-    _git("fetch", ledger.fork_remote, "-q", *[b.name for b in ledger.branches])
+def resolve_ref(config: Config, name: str) -> str:
+    """Resolve a branch/parent name to its ref on the fork remote."""
+    return f"{config.fork_remote}/{name}"
+
+
+def fetch(config: Config, branches: list[str]) -> None:
+    """Refresh the refs the stack references so drift and merged-detection are current."""
+    _git("fetch", config.upstream_remote, config.upstream_base, "-q")
+    _git("fetch", config.fork_remote, "-q", *branches)
 
 
 def _count(rev_range: str) -> int | None:
@@ -172,208 +238,220 @@ def _count(rev_range: str) -> int | None:
     return int(out) if out.isdigit() else None
 
 
-def _order(ledger: Ledger) -> list[Branch]:
+def order(stack: Stack) -> list[Branch]:
     """Topologically order branches so a parent always precedes its children."""
-    by_name = {b.name: b for b in ledger.branches}
+    by_name = {b.name: b for b in stack.branches}
     ordered: list[Branch] = []
     seen: set[str] = set()
 
     def visit(branch: Branch) -> None:
         if branch.name in seen:
             return
+        seen.add(branch.name)
         parent = by_name.get(branch.parent)
         if parent is not None:
             visit(parent)
-        seen.add(branch.name)
         ordered.append(branch)
 
-    for branch in ledger.branches:
+    for branch in stack.branches:
         visit(branch)
     return ordered
 
 
-def cmd_status(ledger: Ledger) -> None:
-    fetch(ledger)
-    upstream = f"{ledger.upstream_remote}/{ledger.upstream_base}"
-    print(f"Stack ({len(ledger.branches)} branches, WIP cap {ledger.wip_cap}) vs {upstream}\n")
-    print(f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind main")
+def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> bool:
+    """Whether a branch's parent has reached the upstream (merged or in-review), so it can promote.
+
+    A root branch (base is the upstream base, so it has no tracked parent PR) is always unblocked.
+    """
+    parent = by_name.get(branch.parent)
+    return parent is None or parent.status in {IN_REVIEW, MERGED}
+
+
+def next_to_promote(stack: Stack) -> Branch | None:
+    """The single branch to submit to the upstream next, or None if blocked or nothing is ready.
+
+    Encodes the whole policy: approved (``ready``) + parent landed + under the (bug-exempt) WIP cap.
+    """
+    counted = [
+        b for b in stack.branches if b.status == IN_REVIEW and stack.counts_against_wip(b)
+    ]
+    if len(counted) >= stack.config.wip_cap:
+        return None
+    by_name = {b.name: b for b in stack.branches}
+    for branch in order(stack):
+        if branch.status == READY and parent_landed(stack, branch, by_name):
+            return branch
+    return None
+
+
+def restack_plan(stack: Stack) -> list[dict[str, str]]:
+    """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
+
+    One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
+    included so they pick up a moved parent; their ``merge`` strategy keeps that update conflict-free
+    and force-push-free, so an open review is never disrupted.
+    """
+    return [
+        {"branch": b.name, "parent": b.parent, "strategy": b.strategy}
+        for b in order(stack)
+        if b.status != MERGED
+    ]
+
+
+def cmd_status(stack: Stack) -> None:
+    config = stack.config
+    upstream = f"{config.upstream_remote}/{config.upstream_base}"
+    print(f"Stack ({len(stack.branches)} branches, WIP cap {config.wip_cap}) vs {upstream}\n")
+    print(f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base")
     print("-" * 92)
-    for branch in _order(ledger):
-        ref = resolve_ref(ledger, branch.name)
-        parent_ref = resolve_ref(ledger, branch.parent)
+    for branch in order(stack):
+        ref = resolve_ref(config, branch.name)
+        parent_ref = resolve_ref(config, branch.parent)
         ahead = _count(f"{parent_ref}..{ref}")
         behind_parent = _count(f"{ref}..{parent_ref}")
-        behind_main = _count(f"{ref}..{upstream}")
-        pr = f"#{branch.pr}" if branch.pr else "-"
+        behind_base = _count(f"{ref}..{upstream}")
         drift = f"+{ahead}/-{behind_parent} ({branch.strategy} onto {branch.parent})"
-        print(
-            f"{branch.name:<38} {branch.status:<10} {pr:>4}  {drift:<28} {behind_main}"
-        )
+        print(f"{branch.name:<38} {branch.status:<10} #{branch.pr:<3}  {drift:<28} {behind_base}")
 
 
-def cmd_check(ledger: Ledger) -> None:
-    fetch(ledger)
+def cmd_check(stack: Stack) -> None:
+    config = stack.config
     print("Integration probe — would each branch merge cleanly onto its parent right now?\n")
-    for branch in _order(ledger):
-        ref = resolve_ref(ledger, branch.name)
-        parent_ref = resolve_ref(ledger, branch.parent)
+    for branch in order(stack):
+        ref = resolve_ref(config, branch.name)
+        parent_ref = resolve_ref(config, branch.parent)
         result = subprocess.run(
-            ["git", "merge-tree", "--write-tree", parent_ref, ref],
-            capture_output=True,
-            text=True,
+            ["git", "merge-tree", "--write-tree", parent_ref, ref], capture_output=True, text=True
         )
         if result.returncode == 0:
             verdict = "CLEAN"
         elif result.returncode == 1:
-            conflicts = [
-                line for line in result.stdout.splitlines() if line and "\t" not in line
-            ]
             verdict = f"CONFLICTS onto {branch.parent}"
         else:
             verdict = f"UNKNOWN (ref missing: {parent_ref} / {ref})"
         print(f"  {branch.name:<40} {verdict}")
 
 
-def cmd_next(ledger: Ledger) -> None:
-    fetch(ledger)
-    by_name = {b.name: b for b in ledger.branches}
-    in_review = [b for b in ledger.branches if b.status == "in-review"]
-    counted = [b for b in in_review if ledger.counts_against_wip(b)]
-    exempt = [b for b in in_review if not ledger.counts_against_wip(b)]
-    print(f"In review on {ledger.upstream_remote}: {len(counted)}/{ledger.wip_cap}", end="")
+def cmd_next(stack: Stack) -> None:
+    config = stack.config
+    in_review = [b for b in stack.branches if b.status == IN_REVIEW]
+    counted = [b for b in in_review if stack.counts_against_wip(b)]
+    exempt = [b for b in in_review if not stack.counts_against_wip(b)]
+    print(f"In review on {config.upstream_remote}: {len(counted)}/{config.wip_cap}", end="")
     print(f"  [{', '.join(b.name for b in counted) or 'none'}]", end="")
-    print(f"  (+{len(exempt)} not counted: {', '.join(b.name for b in exempt)})" if exempt else "")
+    print(f"  (+{len(exempt)} exempt: {', '.join(b.name for b in exempt)})" if exempt else "")
     print()
 
-    # The gate: only branches YOU marked "ready" (self-reviewed on the fork) may be promoted.
+    by_name = {b.name: b for b in stack.branches}
     promotable = [
-        b for b in _order(ledger) if b.status == "ready" and _parent_landed(ledger, b, by_name)
+        b for b in order(stack) if b.status == READY and parent_landed(stack, b, by_name)
     ]
-    ready_but_blocked = [
-        b for b in ledger.branches if b.status == "ready" and not _parent_landed(ledger, b, by_name)
+    ready_blocked = [
+        b for b in stack.branches if b.status == READY and not parent_landed(stack, b, by_name)
     ]
-    approvable = [b for b in _order(ledger) if b.status == "draft"]
+    draft_candidates = [b for b in order(stack) if b.status == DRAFT]
 
     if not promotable:
         print("Nothing to promote — no branch is both approved and unblocked.")
-        if ready_but_blocked:
-            names = ", ".join(b.name for b in ready_but_blocked)
-            print(f"  Approved but waiting on their parent to land: {names}")
-        if approvable:
+        if ready_blocked:
+            print(f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}")
+        if draft_candidates:
             print(
-                "  Your gate: self-review a fork PR, then set its status to \"ready\" in "
-                f"stack.toml. Candidates (draft): {approvable[0].name}"
+                "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
+                f"Draft candidates: {draft_candidates[0].name}"
             )
         return
-    if len(counted) >= ledger.wip_cap:
+    if len(counted) >= config.wip_cap:
         print(f"WIP cap reached. Approved and waiting for a slot: {promotable[0].name}")
         return
     nxt = promotable[0]
-    print(f"NEXT to submit to {ledger.upstream_remote}: {nxt.name} (PR #{nxt.pr})")
+    print(f"NEXT to submit to {config.upstream_remote}: {nxt.name} (PR #{nxt.pr})")
     print(f"  -> you approved it, and its parent '{nxt.parent}' has landed, so the diff is minimal.")
     if len(promotable) > 1:
         print(f"  (then, once approved: {', '.join(b.name for b in promotable[1:])})")
 
 
-def _parent_landed(ledger: Ledger, branch: Branch, by_name: dict[str, Branch]) -> bool:
-    """Whether a branch's parent has reached cram2 (merged or in-review), so it can be promoted."""
-    parent = by_name.get(branch.parent)
-    return parent is None or parent.status in {"in-review", "merged"}
-
-
-def next_to_promote(ledger: Ledger) -> Branch | None:
-    """The single branch to submit to cram2 next, or None if the cap is full or nothing is ready.
-
-    Encodes the whole policy: approved (``ready``) + parent landed + under the (bug-exempt) WIP cap.
-    """
-    counted = [
-        b for b in ledger.branches if b.status == "in-review" and ledger.counts_against_wip(b)
-    ]
-    if len(counted) >= ledger.wip_cap:
-        return None
-    by_name = {b.name: b for b in ledger.branches}
-    for branch in _order(ledger):
-        if branch.status == "ready" and _parent_landed(ledger, branch, by_name):
-            return branch
-    return None
-
-
-def cmd_next_porcelain(ledger: Ledger) -> None:
-    """Machine-readable :func:`next`: print ``name<TAB>pr<TAB>pr_repo`` for the branch to promote,
-    or nothing. For autonomous callers (e.g. the promote Routine) that must act deterministically."""
-    fetch(ledger)
-    branch = next_to_promote(ledger)
+def cmd_next_porcelain(stack: Stack) -> None:
+    """Machine-readable :func:`next`: print ``name<TAB>pr`` for the branch to promote, or nothing."""
+    branch = next_to_promote(stack)
     if branch is not None:
-        print(f"{branch.name}\t{branch.pr}\t{branch.pr_repo}")
+        print(f"{branch.name}\t{branch.pr}")
 
 
-def _restack_parent(ledger: Ledger, parent: str) -> str:
-    """Map a ledger parent to the branch name the restack workflow resolves under the fork remote.
+def cmd_restack_plan(stack: Stack) -> None:
+    """Print the restack plan as JSON — pipe it into the ``restack`` workflow's ``args``."""
+    print(json.dumps(restack_plan(stack), indent=2))
 
-    The upstream base (``cram2/main``) becomes its bare branch (``main``, i.e. ``origin/main``);
-    every other parent is a fork branch used verbatim.
+
+def export_board(config: Config, path: Path = BOARD_PATH) -> int:
+    """Write ``board.json`` from the fork's open PRs via ``gh``. Returns the number of PRs exported.
+
+    Where ``gh`` is unavailable (e.g. the cloud routine), the caller refreshes ``board.json`` through
+    the GitHub MCP instead; this command is the local convenience path.
     """
-    if parent == f"{ledger.upstream_remote}/{ledger.upstream_base}":
-        return ledger.upstream_base
-    return parent
-
-
-def restack_plan(ledger: Ledger) -> list[dict[str, str]]:
-    """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
-
-    One entry per fork branch that still needs cascading — everything not yet ``merged``, in
-    parent-before-child order. In-review branches are included so they pick up their parent's new
-    commits when it moves; their ``merge`` strategy keeps that update conflict-free and force-push-free
-    so an open review is never disrupted.
-    """
-    return [
-        {"branch": branch.name, "parent": _restack_parent(ledger, branch.parent), "strategy": branch.strategy}
-        for branch in _order(ledger)
-        if branch.status != "merged"
+    slug = "/".join(
+        _git("remote", "get-url", config.fork_remote).removesuffix(".git").rstrip("/").split("/")[-2:]
+    )
+    result = subprocess.run(
+        ["gh", "pr", "list", "--repo", slug, "--state", "open", "--limit", "200",
+         "--json", "number,headRefRefName,baseRefName,isDraft,labels"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise BoardUnavailable(result.stderr.strip() or "gh not available")
+    raw = json.loads(result.stdout)
+    prs = [
+        {
+            "number": pr["number"],
+            "head": pr.get("headRefRefName") or pr.get("headRefName"),
+            "base": pr["baseRefName"],
+            "draft": pr["isDraft"],
+            "labels": [label["name"] for label in pr.get("labels", [])],
+        }
+        for pr in raw
     ]
+    path.write_text(json.dumps({"pull_requests": prs}, indent=2) + "\n")
+    return len(prs)
 
 
-def cmd_restack_plan(ledger: Ledger) -> None:
-    """Print the restack plan as JSON — pipe it into the ``restack`` workflow's ``args`` so the stack
-    is defined only in the ledger and never hand-mirrored into the workflow script."""
-    import json
-
-    print(json.dumps(restack_plan(ledger), indent=2))
-
-
-COMMANDS = {"status": cmd_status, "check": cmd_check, "next": cmd_next, "restack-plan": cmd_restack_plan}
+COMMANDS = {
+    "status": cmd_status,
+    "check": cmd_check,
+    "next": cmd_next,
+    "restack-plan": cmd_restack_plan,
+}
 
 
 def main() -> int:
     args = sys.argv[1:]
-    live = "--live" in args
     porcelain = "--porcelain" in args
-    args = [a for a in args if a not in ("--live", "--porcelain")]
+    args = [a for a in args if a != "--porcelain"]
+
+    if args == ["export"]:
+        config = load_config()
+        count = export_board(config)
+        print(f"Wrote {BOARD_PATH.name} ({count} open fork PRs).")
+        return 0
+
     if len(args) != 1 or args[0] not in COMMANDS:
         print(
-            f"usage: python dev/stack.py [{' | '.join(COMMANDS)}] [--live] [--porcelain]\n"
-            "  --live: derive each branch's status from its live GitHub PR (needs `gh`), "
-            "so the draft/ready gate follows GitHub instead of the ledger.\n"
-            "  --porcelain (with `next`): print only 'name<TAB>pr<TAB>pr_repo' for the branch to "
-            "promote, or nothing — for autonomous callers.",
+            f"usage: python dev/stack.py [{' | '.join(COMMANDS)} | export] [--porcelain]\n"
+            "  export: (re)write board.json from live fork PRs via `gh`.\n"
+            "  --porcelain (with `next`): print only 'name<TAB>pr' for the branch to promote.",
             file=sys.stderr,
         )
         return 2
-    ledger = load_ledger()
-    if live:
-        try:
-            apply_live(ledger)
-        except LiveStatusUnavailable as error:
-            print(
-                f"--live unavailable ({error}). Install/authenticate `gh`, or drop --live to use "
-                "the ledger's status column.",
-                file=sys.stderr,
-            )
-            return 3
+
+    try:
+        stack = load_stack()
+    except BoardUnavailable as error:
+        print(f"{error}", file=sys.stderr)
+        return 3
+
     if porcelain and args[0] == "next":
-        cmd_next_porcelain(ledger)
+        cmd_next_porcelain(stack)
     else:
-        COMMANDS[args[0]](ledger)
+        COMMANDS[args[0]](stack)
     return 0
 
 

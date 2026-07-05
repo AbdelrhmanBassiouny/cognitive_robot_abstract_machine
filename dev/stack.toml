@@ -1,149 +1,22 @@
-# Stacked-PR ledger — the single source of truth for the fork-staging / cram2-review workflow.
+# Stacked-PR config — the fork-staging / cram2-review workflow.
 #
-# Model: this fork ("origin") holds the FULL set of in-flight branches. cram2 is the slow REVIEW
-# queue. You promote the *bottom* of each stack to cram2 one at a time, never exceeding `wip_cap`
-# PRs in review at once. `stack.py` reads this file to answer: is a branch clean, and what's next.
+# This file is now CONFIG ONLY. The stack itself (which branches exist, how they depend on each
+# other, and their review state) is read live from GitHub, not declared here:
 #
-# Edit this by hand as branches / PRs change. Nothing writes to it.
-# NOTE: some parent links are logical (from the PR "depends on" notes) and differ from the current
-# git ancestry — those are the branches that still need a restack. Tune parents to your intent.
+#   * the dependency TREE  = each fork PR's BASE branch (base = parent). Set it on GitHub.
+#   * draft <-> ready      = the fork PR's draft toggle. Un-draft to approve for review.
+#   * in-review            = the `in_review_label` on the fork PR (set at promote time; cram2 itself
+#                            is not readable from the cloud, so the label carries that fact).
+#   * merged               = branch is an ancestor of `<upstream_remote>/<upstream_base>` (pure git).
+#   * WIP-exempt (bugs)    = any `wip_exempt_labels` label on the PR.
+#
+# `stack.py` reads a `board.json` export of the fork PRs (refreshed by the routine via the GitHub
+# MCP, or by `stack.py export` where `gh` is available) plus git — so you never hand-edit a ledger.
 
-wip_cap = 3            # max branches simultaneously in review on cram2
-wip_exempt_labels = ["bug"]  # PRs carrying any of these labels do NOT count against wip_cap
+wip_cap = 3                    # max feature branches simultaneously in review on cram2
+wip_exempt_labels = ["bug"]    # PRs with any of these labels do NOT count against wip_cap
+in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
+rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
 fork_remote = "origin"
 upstream_remote = "cram2"
 upstream_base = "main"
-
-# Fields:
-#   parent   : bare name => a fork branch (origin/<name>); "<remote>/<x>" => that exact ref.
-#   strategy : "merge" (DEFAULT — resolves conflicts once, no force-push, cheap; the merge commits
-#              get flattened anyway if cram2 squash/rebase-merges) | "rebase" (linear history, but
-#              re-resolves conflicts per commit and force-pushes — only worth it for a small,
-#              not-yet-reviewed branch you want pristine).
-#   pr       : the tracking PR number (on cram2 if in-review, else the fork PR).
-#   status   : the lifecycle + YOUR approval gate:
-#              "draft"     -> on the fork (or a cram2 draft PR); NOT yet approved for review.
-#              "ready"     -> you reviewed its fork PR and approve it for cram2 (the gate; hand-set).
-#              "in-review" -> open, non-draft PR on cram2, awaiting their review.
-#              "merged"    -> landed in cram2/main.
-
-# ── Stack 1: EQL core (bottom is ready — #377 it depends on is already merged) ───────────────
-[[branch]]
-name = "query-interface-refactor"
-parent = "cram2/main"
-strategy = "merge"
-pr = 380
-pr_repo = "upstream"
-status = "in-review"
-
-[[branch]]
-name = "match-where-without-resolve"
-parent = "query-interface-refactor"
-strategy = "merge"
-pr = 381
-pr_repo = "upstream"
-status = "in-review"
-
-# ── Stack 1b: the broader query-class refactor (lands on top of Stack 1) ──────────────────────
-# A separate, larger take on the EQL Query (spec/product lifecycle, subquery scoping). It goes in
-# AFTER match-where-without-resolve, so its logical parent is that branch. Its current tip branched
-# off cram2/main independently and does NOT yet contain #380/#381 — it needs restacking onto
-# match-where-without-resolve before promotion. #9 (eql-subquery-scoping-spike) was the identical-SHA
-# spike and is now closed as a duplicate of this.
-[[branch]]
-name = "query-class-refactor"
-parent = "match-where-without-resolve"
-strategy = "merge"
-pr = 5
-status = "draft"
-
-# ── Stack 2: verbalization trunk + performatives/extensions ──────────────────────────────────
-[[branch]]
-name = "eql_verbalization"
-parent = "cram2/main"       # logically may sit above the EQL-core PRs; confirm before landing
-strategy = "merge"
-pr = 346
-pr_repo = "upstream"
-status = "merged"
-
-[[branch]]
-name = "eql-arithmetic"
-parent = "cram2/main"       # eql_verbalization has merged, so this rebuilds directly on main
-strategy = "merge"
-pr = 11
-status = "draft"
-
-[[branch]]
-name = "eql-verbalization-extensions"
-parent = "cram2/main"       # eql_verbalization has merged, so this rebuilds directly on main
-strategy = "merge"
-pr = 10
-status = "draft"
-
-[[branch]]
-name = "claude/performatives-clean"
-parent = "eql-arithmetic"
-strategy = "merge"
-pr = 14
-status = "draft"
-
-[[branch]]
-name = "claude/eql-performatives-unify"
-parent = "claude/performatives-clean"
-strategy = "merge"
-pr = 15
-status = "draft"
-
-[[branch]]
-name = "claude/eql-roboknerd-why-acts"
-parent = "cram2/main"       # eql_verbalization has merged, so this rebuilds directly on main
-strategy = "merge"
-pr = 12
-status = "draft"
-
-# ── Stack 3: RDR refactor — a clean 5-branch fork sub-stack ───────────────────────────────────
-[[branch]]
-name = "rdr_refactor"
-parent = "cram2/main"          # tracked on the fork (#24); the cram2 draft #404 was closed as noise
-strategy = "merge"
-pr = 24
-pr_repo = "fork"
-status = "draft"
-
-[[branch]]
-name = "rdr/eql-integration"
-parent = "rdr_refactor"
-strategy = "merge"
-pr = 19
-status = "draft"
-
-[[branch]]
-name = "rdr/oo-plan"
-parent = "rdr/eql-integration"
-strategy = "merge"
-pr = 20
-status = "draft"
-
-[[branch]]
-name = "rdr/oo-recognition"
-parent = "rdr/oo-plan"
-strategy = "merge"
-pr = 21
-status = "draft"
-
-[[branch]]
-name = "rdr/backend-unification"
-parent = "rdr/oo-recognition"
-strategy = "merge"
-pr = 22
-status = "draft"
-
-# ── Independent bug fix (single branch, no stack) ────────────────────────────────────────────
-[[branch]]
-name = "fix/inference-explanation-typehint"
-parent = "cram2/main"
-strategy = "merge"
-pr = 412
-pr_repo = "upstream"
-status = "in-review"
-labels = ["bug"]   # excluded from the WIP count
