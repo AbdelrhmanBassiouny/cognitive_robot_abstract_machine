@@ -22,6 +22,10 @@ DORA/*Accelerate*, Reinertsen, Theory of Constraints.)
     (fast, non-mutating `git merge-tree` probe)?
   - `python dev/stack.py next` — which branch to submit to cram2 next, honouring dependency order
     and the WIP cap. **This is your "what goes to cram2 next" answer.**
+  - add `--live` to any command to **derive status from live GitHub PR state** (via `gh`) instead of
+    the ledger's `status` column: a PR you flip to *draft* / *ready-for-review* on GitHub updates
+    what the tool shows. GitHub becomes the source of truth for the gate; the ledger then only needs
+    to carry structure (branch, parent, strategy, pr, pr_repo). Requires an authenticated `gh`.
 - **`../.claude/workflows/restack.js`** — the Claude Workflow that actually restacks: one
   worktree-isolated agent per branch, bottom-up, resolving conflicts + greening the targeted tests
   + pushing. Run it with the `Workflow` tool / `/workflows`. Stops at the first branch it can't

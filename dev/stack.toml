@@ -29,6 +29,7 @@ name = "query-interface-refactor"
 parent = "cram2/main"
 strategy = "rebase"
 pr = 380
+pr_repo = "upstream"
 status = "in-review"
 
 [[branch]]
@@ -36,6 +37,7 @@ name = "match-where-without-resolve"
 parent = "query-interface-refactor"
 strategy = "rebase"
 pr = 381
+pr_repo = "upstream"
 status = "in-review"
 
 # ── Stack 2: verbalization trunk + performatives/extensions ──────────────────────────────────
@@ -44,6 +46,7 @@ name = "eql_verbalization"
 parent = "cram2/main"       # logically may sit above the EQL-core PRs; confirm before landing
 strategy = "rebase"
 pr = 346
+pr_repo = "upstream"
 status = "in-review"
 
 [[branch]]
@@ -89,6 +92,7 @@ name = "rdr_refactor"
 parent = "eql_verbalization"   # per #404 "depends on #346"; git currently has it on cram2/main
 strategy = "merge"
 pr = 404
+pr_repo = "upstream"
 status = "draft"
 
 # ── Independent bug fix (single branch, no stack) ────────────────────────────────────────────
@@ -97,4 +101,5 @@ name = "fix/inference-explanation-typehint"
 parent = "cram2/main"
 strategy = "rebase"
 pr = 412
+pr_repo = "upstream"
 status = "in-review"

@@ -35,6 +35,7 @@ class Branch:
     strategy: str
     pr: int | None
     status: str
+    pr_repo: str  # "fork" (origin) or "upstream" (cram2) — which repo the PR lives in
 
 
 @dataclass
@@ -65,7 +66,8 @@ def load_ledger() -> Ledger:
             parent=entry["parent"],
             strategy=entry.get("strategy", "rebase"),
             pr=entry.get("pr"),
-            status=entry.get("status", "staging"),
+            status=entry.get("status", "draft"),
+            pr_repo=entry.get("pr_repo", "fork"),
         )
         for entry in data["branch"]
     ]
@@ -81,6 +83,70 @@ def load_ledger() -> Ledger:
 def resolve_ref(ledger: Ledger, name: str) -> str:
     """Resolve a ledger name to a git ref: a bare name is a fork branch, a ``a/b`` name is verbatim."""
     return name if "/" in name else f"{ledger.fork_remote}/{name}"
+
+
+class LiveStatusUnavailable(RuntimeError):
+    """Raised when the GitHub PR state cannot be read (e.g. ``gh`` missing/unauthenticated)."""
+
+
+def derive_status(state: str, is_draft: bool, merged: bool, is_upstream: bool) -> str:
+    """Map a GitHub PR's raw state to a ledger lifecycle status.
+
+    A merged PR is ``merged``. An open non-draft PR is ``in-review`` upstream (actively reviewed on
+    cram2) or ``ready`` on the fork (self-approved). An open *draft* PR is ``ready`` upstream (staged
+    on cram2, not yet opened for review) or ``draft`` on the fork (still WIP). Anything else
+    (closed-unmerged, no PR) is ``draft``.
+    """
+    if merged or state == "MERGED":
+        return "merged"
+    if state != "OPEN":
+        return "draft"
+    if is_upstream:
+        return "in-review" if not is_draft else "ready"
+    return "ready" if not is_draft else "draft"
+
+
+def _repo_slug(remote: str) -> str:
+    """Return the ``owner/repo`` slug for a git remote (from its fetch URL)."""
+    url = _git("remote", "get-url", remote)
+    return "/".join(url.removesuffix(".git").rstrip("/").split("/")[-2:])
+
+
+def _pr_state(slug: str, pr: int) -> tuple[str, bool, bool]:
+    """Return ``(state, is_draft, merged)`` for a PR via ``gh``. Raises if ``gh`` is unavailable."""
+    import json as _json
+
+    try:
+        result = subprocess.run(
+            ["gh", "pr", "view", str(pr), "--repo", slug, "--json", "state,isDraft,mergedAt"],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError as error:
+        raise LiveStatusUnavailable("`gh` is not installed") from error
+    if result.returncode != 0:
+        raise LiveStatusUnavailable(result.stderr.strip() or "gh not available")
+    data = _json.loads(result.stdout)
+    return data["state"], bool(data["isDraft"]), data.get("mergedAt") is not None
+
+
+def apply_live(ledger: Ledger) -> None:
+    """Overwrite each branch's ledger status with its live GitHub PR status.
+
+    GitHub becomes the source of truth: flip a PR to draft / ready-for-review on GitHub and the tool
+    reflects it. Branches without a PR keep their ledger status.
+    """
+    slugs = {
+        "fork": _repo_slug(ledger.fork_remote),
+        "upstream": _repo_slug(ledger.upstream_remote),
+    }
+    for branch in ledger.branches:
+        if branch.pr is None:
+            continue
+        state, is_draft, merged = _pr_state(slugs[branch.pr_repo], branch.pr)
+        branch.status = derive_status(
+            state, is_draft, merged, is_upstream=branch.pr_repo == "upstream"
+        )
 
 
 def fetch(ledger: Ledger) -> None:
@@ -203,10 +269,29 @@ COMMANDS = {"status": cmd_status, "check": cmd_check, "next": cmd_next}
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
-        print(f"usage: python dev/stack.py [{' | '.join(COMMANDS)}]", file=sys.stderr)
+    args = sys.argv[1:]
+    live = "--live" in args
+    args = [a for a in args if a != "--live"]
+    if len(args) != 1 or args[0] not in COMMANDS:
+        print(
+            f"usage: python dev/stack.py [{' | '.join(COMMANDS)}] [--live]\n"
+            "  --live: derive each branch's status from its live GitHub PR (needs `gh`), "
+            "so the draft/ready gate follows GitHub instead of the ledger.",
+            file=sys.stderr,
+        )
         return 2
-    COMMANDS[sys.argv[1]](load_ledger())
+    ledger = load_ledger()
+    if live:
+        try:
+            apply_live(ledger)
+        except LiveStatusUnavailable as error:
+            print(
+                f"--live unavailable ({error}). Install/authenticate `gh`, or drop --live to use "
+                "the ledger's status column.",
+                file=sys.stderr,
+            )
+            return 3
+    COMMANDS[args[0]](ledger)
     return 0
 
 
