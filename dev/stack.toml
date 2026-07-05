@@ -44,6 +44,17 @@ pr = 381
 pr_repo = "upstream"
 status = "in-review"
 
+# ── Stack 1b: the broader query-class refactor (independent of Stack 1) ───────────────────────
+# A separate, larger take on the EQL Query (spec/product lifecycle, subquery scoping). Branches off
+# cram2/main and does NOT overlap query-interface-refactor / match-where-without-resolve. #9
+# (eql-subquery-scoping-spike) was the identical-SHA spike and is now closed as a duplicate of this.
+[[branch]]
+name = "query-class-refactor"
+parent = "cram2/main"
+strategy = "merge"
+pr = 5
+status = "draft"
+
 # ── Stack 2: verbalization trunk + performatives/extensions ──────────────────────────────────
 [[branch]]
 name = "eql_verbalization"
