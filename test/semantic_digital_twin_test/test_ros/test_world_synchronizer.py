@@ -126,13 +126,13 @@ def create_dummy_world(w: Optional[World] = None) -> World:
             Connection6DoF(
                 parent=b1,
                 child=b2,
-                x_id=x_dof.id,
-                y_id=y_dof.id,
-                z_id=z_dof.id,
-                qx_id=qx_dof.id,
-                qy_id=qy_dof.id,
-                qz_id=qz_dof.id,
-                qw_id=qw_dof.id,
+                x=x_dof,
+                y=y_dof,
+                z=z_dof,
+                qx=qx_dof,
+                qy=qy_dof,
+                qz=qz_dof,
+                qw=qw_dof,
             )
         )
     return w
@@ -468,7 +468,6 @@ def test_callback_pausing(rclpy_node):
 
 
 def test_ChangeDifHasHardwareInterface(rclpy_node):
-
     w1 = World(name="w1")
     w2 = World(name="w2")
 
@@ -481,38 +480,44 @@ def test_ChangeDifHasHardwareInterface(rclpy_node):
         _world=w2,
     )
 
-    with w1.modify_world():
-        body1 = Body(name=PrefixedName("b1"))
-        body2 = Body(name=PrefixedName("b2"))
-        w1.add_kinematic_structure_entity(body1)
-        w1.add_kinematic_structure_entity(body2)
-        dof = DegreeOfFreedom(name=PrefixedName("dof"))
-        w1.add_degree_of_freedom(dof)
-        connection = PrismaticConnection(
-            dof_id=dof.id, parent=body1, child=body2, axis=Vector3(1, 1, 1)
-        )
-        w1.add_connection(connection)
-    assert len(w1.kinematic_structure_entities) == 2
-    assert len(w1.connections) == 1
+    try:
 
-    time.sleep(0.2)
-    assert len(w1.kinematic_structure_entities) == 2
-    assert len(w2.kinematic_structure_entities) == 2
-    assert len(w2.connections) == 1
-    assert not w2.connections[0].dof.has_hardware_interface
-    assert not w2.connections[0].dof.has_hardware_interface
+        with w1.modify_world():
+            body1 = Body(name=PrefixedName("b1"))
+            body2 = Body(name=PrefixedName("b2"))
+            w1.add_kinematic_structure_entity(body1)
+            w1.add_kinematic_structure_entity(body2)
+            dof = DegreeOfFreedom(name=PrefixedName("dof"))
+            w1.add_degree_of_freedom(dof)
+            connection = PrismaticConnection(
+                raw_dof=dof, parent=body1, child=body2, axis=Vector3(1, 1, 1)
+            )
+            w1.add_connection(connection)
 
-    assert w2.get_kinematic_structure_entity_by_name("b2")
+        w1_ids, w2_ids = wait_for_sync_kse_and_return_ids(w1, w2)
 
-    with w1.modify_world():
-        w1.set_dofs_has_hardware_interface(w1.degrees_of_freedom, True)
+        assert len(w1.kinematic_structure_entities) == 2
+        assert len(w1.connections) == 1
 
-    time.sleep(0.2)
-    assert w1.connections[0].dof.has_hardware_interface
-    assert w2.connections[0].dof.has_hardware_interface
+        time.sleep(0.2)
+        assert len(w1.kinematic_structure_entities) == 2
+        assert len(w2.kinematic_structure_entities) == 2
+        assert len(w2.connections) == 1
+        assert not w2.connections[0].dof.has_hardware_interface
+        assert not w2.connections[0].dof.has_hardware_interface
 
-    synchronizer_1.close()
-    synchronizer_2.close()
+        assert w2.get_kinematic_structure_entity_by_name("b2")
+
+        with w1.modify_world():
+            w1.set_dofs_has_hardware_interface(w1.degrees_of_freedom, True)
+
+        time.sleep(0.2)
+        assert w1.connections[0].dof.has_hardware_interface
+        assert w2.connections[0].dof.has_hardware_interface
+
+    finally:
+        synchronizer_1.close()
+        synchronizer_2.close()
 
 
 def test_semantic_annotation_modifications(rclpy_node):
@@ -640,7 +645,7 @@ def test_synchronize_6dof(rclpy_node):
     time.sleep(1)
     c2 = w2.get_connection_by_name(c1.name)
     assert isinstance(c2, Connection6DoF)
-    assert w1.state[c1.qw_id].position == w2.state[c2.qw_id].position
+    assert w1.state[c1.qw.id].position == w2.state[c2.qw.id].position
     np.testing.assert_array_almost_equal(w1.state._data, w2.state._data)
 
     ws1.close()
@@ -2042,7 +2047,7 @@ def test_apply_missed_messages_interleaved_model_and_state(rclpy_node):
 
     time.sleep(0.2)
 
-    world_1.state[prismatic_connection.dof_id].position = 3.5
+    world_1.state[prismatic_connection.dof.id].position = 3.5
     world_1.notify_state_change()
 
     time.sleep(0.2)
@@ -2652,7 +2657,7 @@ def test_combined_update_model_and_state_applied_atomically(rclpy_node):
         source_world.add_connection(connection)
 
     model_block = source_world.get_world_model_manager().model_modification_blocks[-1]
-    new_dof_id = connection.dof_id
+    new_dof_id = connection.dof.id
 
     source_meta = MetaData(node_name="atomic_src", process_id=0, world_id=uuid4())
     combined_update = WorldUpdate(
