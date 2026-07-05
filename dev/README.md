@@ -127,10 +127,36 @@ If it prints nothing, the cap is full or nothing is ready — do not promote. `b
 count against the cap.
 
 FINISH
-Refresh `board.json` again and commit it if it changed. Summarise: what you closed, restacked,
-promoted, and anything you stopped on.
+Refresh `board.json` again and commit it if it changed. Then run `python dev/stack.py board` and
+redeploy `dev/board.html` to the fixed board Artifact URL so the phone board stays live. Summarise:
+what you closed, restacked, promoted, and anything you stopped on.
 ```
 
 The promote step is gated by `stack.py next`, which only ever names an un-drafted branch under the cap
 — so the Routine can never flood cram2, and never promotes something you haven't approved by
 un-drafting its fork PR.
+
+### Triggers (set at claude.ai/code/routines)
+
+Install the Claude GitHub app on the **fork** (it's yours), then give the routine both a **schedule**
+(e.g. hourly, so nothing goes stale even with no events) and **fork PR-event triggers**. The events
+that map to your asks:
+
+| You want it to run when… | GitHub `pull_request` event |
+|---|---|
+| a new PR is opened | `opened` |
+| you un-draft a PR (approve it) | `ready_for_review` |
+| you add/remove a label (`in-review`, `bug`) | `labeled` / `unlabeled` |
+| a PR is retargeted (parent changed) | `edited` |
+
+The exact event checkboxes appear in the routine's trigger config; tick those. (cram2 stays
+untouched — you don't need the app there; merges are detected from the fork by git ancestry.)
+
+### The phone board (one tap)
+
+The board is a hosted Artifact at a **fixed URL**. On your phone, open that URL once and **Add to Home
+Screen** (Safari: Share → *Add to Home Screen*; Chrome: ⋮ → *Add to Home screen*). That icon is your
+one-tap button. Because the routine redeploys the page to the *same* URL each run, the tap always
+shows current state — the header carries the "generated" timestamp so you can see how fresh it is.
+The board is read-only; you act by tapping a PR (it links straight to the GitHub PR, where you
+un-draft / label / retarget).

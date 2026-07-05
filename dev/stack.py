@@ -32,6 +32,7 @@ from pathlib import Path
 
 CONFIG_PATH = Path(__file__).with_name("stack.toml")
 BOARD_PATH = Path(__file__).with_name("board.json")
+BOARD_HTML_PATH = Path(__file__).with_name("board.html")
 
 DRAFT = "draft"
 READY = "ready"
@@ -414,6 +415,50 @@ def export_board(config: Config, path: Path = BOARD_PATH) -> int:
     return len(prs)
 
 
+def render_board_html(config: Config, prs: list[PullRequest], merged: list[str], generated: str) -> str:
+    """Bake the current board data into ``board.html`` and return the new page source.
+
+    Replaces the ``#board-data`` JSON block; the page derives every status from it client-side, so the
+    routine can regenerate the page and redeploy it to the same Artifact URL to keep the phone board live.
+    """
+    import re
+
+    data = {
+        "generated": generated,
+        "config": {
+            "wip_cap": config.wip_cap,
+            "wip_exempt_labels": config.wip_exempt_labels,
+            "in_review_label": config.in_review_label,
+            "rebase_label": config.rebase_label,
+            "base": config.upstream_base,
+        },
+        "merged": merged,
+        "pull_requests": [
+            {"number": pr.number, "head": pr.head, "base": pr.base, "draft": pr.draft, "labels": pr.labels}
+            for pr in prs
+        ],
+    }
+    block = f'<script id="board-data" type="application/json">\n{json.dumps(data)}\n</script>'
+    template = BOARD_HTML_PATH.read_text()
+    return re.sub(
+        r'<script id="board-data" type="application/json">.*?</script>',
+        lambda _: block,
+        template,
+        count=1,
+        flags=re.DOTALL,
+    )
+
+
+def cmd_board(config: Config, generated: str) -> None:
+    """Regenerate ``board.html`` in place from the current ``board.json`` + git merged-detection."""
+    prs = load_board()
+    fetch(config, [pr.head for pr in prs])
+    is_merged = _merged_predicate(config)
+    merged = [pr.head for pr in prs if is_merged(pr.head)]
+    BOARD_HTML_PATH.write_text(render_board_html(config, prs, merged, generated))
+    print(f"Wrote {BOARD_HTML_PATH.name} ({len(prs)} PRs, {len(merged)} merged).")
+
+
 COMMANDS = {
     "status": cmd_status,
     "check": cmd_check,
@@ -433,10 +478,21 @@ def main() -> int:
         print(f"Wrote {BOARD_PATH.name} ({count} open fork PRs).")
         return 0
 
+    if args == ["board"]:
+        from datetime import datetime, timezone
+
+        try:
+            cmd_board(load_config(), datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
+        except BoardUnavailable as error:
+            print(f"{error}", file=sys.stderr)
+            return 3
+        return 0
+
     if len(args) != 1 or args[0] not in COMMANDS:
         print(
-            f"usage: python dev/stack.py [{' | '.join(COMMANDS)} | export] [--porcelain]\n"
+            f"usage: python dev/stack.py [{' | '.join(COMMANDS)} | export | board] [--porcelain]\n"
             "  export: (re)write board.json from live fork PRs via `gh`.\n"
+            "  board:  regenerate board.html from board.json (for the phone Artifact).\n"
             "  --porcelain (with `next`): print only 'name<TAB>pr' for the branch to promote.",
             file=sys.stderr,
         )
