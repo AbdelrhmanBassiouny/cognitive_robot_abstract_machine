@@ -16,7 +16,10 @@ upstream_base = "main"
 
 # Fields:
 #   parent   : bare name => a fork branch (origin/<name>); "<remote>/<x>" => that exact ref.
-#   strategy : "rebase" (clean linear history) | "merge" (preserve, for far-diverged branches).
+#   strategy : "merge" (DEFAULT — resolves conflicts once, no force-push, cheap; the merge commits
+#              get flattened anyway if cram2 squash/rebase-merges) | "rebase" (linear history, but
+#              re-resolves conflicts per commit and force-pushes — only worth it for a small,
+#              not-yet-reviewed branch you want pristine).
 #   pr       : the tracking PR number (on cram2 if in-review, else the fork PR).
 #   status   : the lifecycle + YOUR approval gate:
 #              "draft"     -> on the fork (or a cram2 draft PR); NOT yet approved for review.
@@ -28,7 +31,7 @@ upstream_base = "main"
 [[branch]]
 name = "query-interface-refactor"
 parent = "cram2/main"
-strategy = "rebase"
+strategy = "merge"
 pr = 380
 pr_repo = "upstream"
 status = "in-review"
@@ -36,7 +39,7 @@ status = "in-review"
 [[branch]]
 name = "match-where-without-resolve"
 parent = "query-interface-refactor"
-strategy = "rebase"
+strategy = "merge"
 pr = 381
 pr_repo = "upstream"
 status = "in-review"
@@ -45,7 +48,7 @@ status = "in-review"
 [[branch]]
 name = "eql_verbalization"
 parent = "cram2/main"       # logically may sit above the EQL-core PRs; confirm before landing
-strategy = "rebase"
+strategy = "merge"
 pr = 346
 pr_repo = "upstream"
 status = "in-review"
@@ -53,28 +56,28 @@ status = "in-review"
 [[branch]]
 name = "eql-symbolic-arithmetic"
 parent = "eql_verbalization"
-strategy = "rebase"
+strategy = "merge"
 pr = 11
 status = "draft"
 
 [[branch]]
 name = "eql-verbalization-extensions"
 parent = "eql_verbalization"
-strategy = "rebase"
+strategy = "merge"
 pr = 10
 status = "draft"
 
 [[branch]]
 name = "claude/performatives-clean"
 parent = "eql-symbolic-arithmetic"
-strategy = "rebase"
+strategy = "merge"
 pr = 14
 status = "draft"
 
 [[branch]]
 name = "claude/eql-performatives-unify"
 parent = "claude/performatives-clean"
-strategy = "rebase"
+strategy = "merge"
 pr = 15
 status = "draft"
 
@@ -100,7 +103,7 @@ status = "draft"
 [[branch]]
 name = "fix/inference-explanation-typehint"
 parent = "cram2/main"
-strategy = "rebase"
+strategy = "merge"
 pr = 412
 pr_repo = "upstream"
 status = "in-review"

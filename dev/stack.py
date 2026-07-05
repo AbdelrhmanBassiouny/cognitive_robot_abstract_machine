@@ -70,7 +70,7 @@ def load_ledger() -> Ledger:
         Branch(
             name=entry["name"],
             parent=entry["parent"],
-            strategy=entry.get("strategy", "rebase"),
+            strategy=entry.get("strategy", "merge"),
             pr=entry.get("pr"),
             status=entry.get("status", "draft"),
             pr_repo=entry.get("pr_repo", "fork"),
