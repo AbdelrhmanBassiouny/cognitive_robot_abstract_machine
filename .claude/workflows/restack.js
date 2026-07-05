@@ -36,7 +36,7 @@ function instructions(step) {
     `Restack one branch of a stacked-PR chain on the 'origin' fork.\n` +
     `1. Fetch origin. Check out origin/${step.branch} as local '${step.branch}'.\n` +
     `2. ${integrate} Resolve conflicts faithfully. If a generated ormatic_interface.py conflicts, do NOT hand-edit it — run scripts/regenerate_all_orm.py.\n` +
-    `3. Source ROS: 'source /opt/ros/jazzy/setup.bash && source /opt/ros/overlay_ws/install/setup.bash'. Run ONLY the suites this branch touches (eql verbalization / performatives) with /opt/ros/cram-env/bin/python. Do NOT run the full coraplex suite.\n` +
+    `3. Source ROS: 'source /opt/ros/jazzy/setup.bash && source /opt/ros/overlay_ws/install/setup.bash'. Run ONLY the tests this branch touches with /opt/ros/cram-env/bin/python. Do NOT run the full test suite.\n` +
     `4. Revert any per-run generated artifacts you did not intend to change.\n` +
     `5. If clean and green: ${step.strategy === 'merge' ? 'push' : 'force-push-with-lease'} origin/${step.branch}. ` +
     `If conflicts cannot be resolved safely, STOP without pushing and set unresolvedConflicts=true.\n` +
