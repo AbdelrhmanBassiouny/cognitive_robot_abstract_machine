@@ -523,28 +523,40 @@ class Query(
         """
         aggregated_variables = []
         non_aggregated_variables = []
-        for variable in self._selected_variables_:
-            if isinstance(variable, Aggregator):
-                aggregated_variables.append(variable)
-            elif isinstance(variable, InstantiatedVariable):
+
+        def _update_aggregated_and_non_aggregated_variables(
+            variable_: SymbolicExpression,
+        ):
+            """
+            Update the aggregated and non-aggregated variable collections based on the given variable.
+
+            :param variable_: The variable to check.
+            """
+            if isinstance(variable_, Aggregator):
+                aggregated_variables.append(variable_)
+            elif isinstance(variable_, InstantiatedVariable):
                 # A symbolic operation (a Predicate / SymbolicFunction applied to operands, e.g.
                 # quarter(month)) is a computed value: it is its own selectable unit, so it can be a
                 # GROUP BY key. An inference construction (a plain class applied to fields) is
                 # decomposed into its operands instead.
                 from krrood.entity_query_language.predicate import SymbolicCallable
 
-                type_ = variable._type_
+                type_ = variable_._type_
                 if isinstance(type_, type) and issubclass(type_, SymbolicCallable):
-                    non_aggregated_variables.append(variable)
+                    non_aggregated_variables.append(variable_)
                 else:
-                    non_aggregated_variables.extend(variable._operation_children_)
+                    for child in variable_._operation_children_:
+                        _update_aggregated_and_non_aggregated_variables(child)
             elif (
-                isinstance(variable, ExternallySetVariable)
-                and variable._domain_source_ == DomainSource.DEDUCTION
+                isinstance(variable_, ExternallySetVariable)
+                and variable_._domain_source_ == DomainSource.DEDUCTION
             ):
-                continue
+                pass
             else:
-                non_aggregated_variables.append(variable)
+                non_aggregated_variables.append(variable_)
+
+        for variable in self._selected_variables_:
+            _update_aggregated_and_non_aggregated_variables(variable)
         return aggregated_variables, non_aggregated_variables
 
     def aggregated_selections(
