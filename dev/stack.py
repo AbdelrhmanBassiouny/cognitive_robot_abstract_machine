@@ -165,26 +165,38 @@ def cmd_next(ledger: Ledger) -> None:
     print(f"In review on {ledger.upstream_remote}: {len(in_review)}/{ledger.wip_cap}", end="")
     print(f"  [{', '.join(b.name for b in in_review) or 'none'}]\n")
 
-    def parent_ready(branch: Branch) -> bool:
+    def parent_landed(branch: Branch) -> bool:
         parent = by_name.get(branch.parent)
         return parent is None or parent.status in {"in-review", "merged"}
 
+    # The gate: only branches YOU marked "ready" (self-reviewed on the fork) may be promoted.
     promotable = [
-        b for b in _order(ledger) if b.status == "staging" and parent_ready(b)
+        b for b in _order(ledger) if b.status == "ready" and parent_landed(b)
     ]
+    ready_but_blocked = [
+        b for b in ledger.branches if b.status == "ready" and not parent_landed(b)
+    ]
+    approvable = [b for b in _order(ledger) if b.status == "draft"]
+
     if not promotable:
-        print("Nothing promotable — the next branch's parent is still on the fork.")
+        print("Nothing to promote — no branch is both approved and unblocked.")
+        if ready_but_blocked:
+            names = ", ".join(b.name for b in ready_but_blocked)
+            print(f"  Approved but waiting on their parent to land: {names}")
+        if approvable:
+            print(
+                "  Your gate: self-review a fork PR, then set its status to \"ready\" in "
+                f"stack.toml. Candidates (draft): {approvable[0].name}"
+            )
         return
     if len(in_review) >= ledger.wip_cap:
-        print(
-            f"WIP cap reached. Wait for a review slot, then submit: {promotable[0].name}"
-        )
+        print(f"WIP cap reached. Approved and waiting for a slot: {promotable[0].name}")
         return
     nxt = promotable[0]
     print(f"NEXT to submit to {ledger.upstream_remote}: {nxt.name} (PR #{nxt.pr})")
-    print(f"  -> its parent '{nxt.parent}' is already merged/in-review, so the diff is minimal.")
+    print(f"  -> you approved it, and its parent '{nxt.parent}' has landed, so the diff is minimal.")
     if len(promotable) > 1:
-        print(f"  (then, in order: {', '.join(b.name for b in promotable[1:])})")
+        print(f"  (then, once approved: {', '.join(b.name for b in promotable[1:])})")
 
 
 COMMANDS = {"status": cmd_status, "check": cmd_check, "next": cmd_next}

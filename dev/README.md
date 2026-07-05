@@ -27,14 +27,23 @@ DORA/*Accelerate*, Reinertsen, Theory of Constraints.)
   + pushing. Run it with the `Workflow` tool / `/workflows`. Stops at the first branch it can't
   restack safely (downstream depends on it); re-running caches completed branches.
 
+## The state machine (your approval gate)
+
+`draft` → **`ready`** → `in-review` → `merged`. The `draft → ready` transition is **your gate**: you
+review a branch's *fork* PR and, if you approve it for upstream, set its `status = "ready"` in
+`stack.toml` by hand. `stack.py next` will **only** ever promote a `ready` branch — nothing reaches
+cram2 without your sign-off. The fork PR is where that review happens.
+
 ## The loop you run
 
 1. Code at full speed on top of your stack tip (never off `cram2/main` directly).
-2. `python dev/stack.py next` → submit that branch to cram2, mark it `in-review` in the ledger.
-3. When cram2 merges the bottom PR: mark it `merged`, then **run the `restack` workflow** to cascade
-   the new base up the stack. `status`/`check` confirm it's clean again.
-4. Keep in-review count ≤ `wip_cap`. If the cap is full, keep staging on the fork; don't flood
-   reviewers.
+2. **Self-review the bottom fork PR.** If good, set its `status = "ready"` in `stack.toml`. ← the gate.
+3. `python dev/stack.py next` → it names the approved, unblocked branch under the WIP cap. Open/retarget
+   its PR onto cram2 and set `status = "in-review"`.
+4. When cram2 merges it: set `status = "merged"`, then **run the `restack` workflow** to cascade the
+   new base up the stack. `status`/`check` confirm it's clean again.
+5. Keep in-review count ≤ `wip_cap`. If the cap is full, keep the rest `draft`/`ready` on the fork;
+   don't flood reviewers.
 
 ## Rules of hygiene
 

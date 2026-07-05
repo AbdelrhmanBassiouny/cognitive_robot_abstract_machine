@@ -15,9 +15,12 @@ upstream_base = "main"
 # strategy, the tracking PR number, and its lifecycle status.
 #   parent    : a bare name => a fork branch (origin/<name>); "<remote>/<x>" => that exact ref.
 #   strategy  : "rebase" (default, clean linear history) or "merge" (preserve, for far-diverged branches).
-#   status    : "staging"   -> on the fork only, not yet submitted upstream
-#               "in-review" -> open PR on cram2, awaiting review
-#               "merged"    -> landed in cram2/main
+#   status    : the lifecycle state machine, and YOUR approval gate:
+#               "draft"     -> on the fork, still WIP / not self-reviewed. NOT eligible for cram2.
+#               "ready"     -> you reviewed its fork PR and approve it for cram2. THIS is your gate:
+#                              flip a branch to "ready" by hand, and only then can `next` promote it.
+#               "in-review" -> open PR on cram2, awaiting their review.
+#               "merged"    -> landed in cram2/main.
 
 [[branch]]
 name = "eql_verbalization"
@@ -31,32 +34,32 @@ name = "eql-symbolic-arithmetic"
 parent = "eql_verbalization"
 strategy = "rebase"
 pr = 11
-status = "staging"
+status = "draft"
 
 [[branch]]
 name = "eql-verbalization-extensions"
 parent = "eql_verbalization"
 strategy = "rebase"
 pr = 10
-status = "staging"
+status = "draft"
 
 [[branch]]
 name = "claude/performatives-clean"
 parent = "eql-symbolic-arithmetic"
 strategy = "rebase"
 pr = 14
-status = "staging"
+status = "draft"
 
 [[branch]]
 name = "claude/eql-performatives-unify"
 parent = "claude/performatives-clean"
 strategy = "rebase"
 pr = 15
-status = "staging"
+status = "draft"
 
 [[branch]]
 name = "claude/eql-roboknerd-why-acts"
 parent = "eql_verbalization"
 strategy = "merge"
 pr = 12
-status = "staging"
+status = "draft"
