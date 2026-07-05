@@ -136,14 +136,14 @@ ancestor of cram2/main. For each OPEN fork PR with head branch B:
   with a comment noting it merged into cram2/main.
 - NEVER close a fork PR whose work has NOT landed. (Merged is the only close condition.)
 
-PHASE 2 — RESTACK
-Run `python dev/stack.py restack-plan` for the bottom-up plan. For each entry, if its parent moved,
-integrate the parent into the branch using its `strategy` (merge = default, no force-push; rebase =
-force-push-with-lease). Resolve conflicts faithfully. If a generated `ormatic_interface.py` conflicts,
-do NOT hand-edit it — run `scripts/regenerate_all_orm.py`. Source ROS
-(`source /opt/ros/jazzy/setup.bash && source /opt/ros/overlay_ws/install/setup.bash`) and run ONLY the
-tests that branch touches with `/opt/ros/cram-env/bin/python`. Push. Stop at the first branch you
-cannot integrate cleanly (downstream depends on its new SHA) and report it.
+PHASE 2 — RESTACK (mechanical, no ROS)
+This environment has no ROS, so do NOT run tests or regenerate ORM here — a clean merge is correct by
+construction; verification is left to fork CI and interactive ROS sessions. Run
+`python dev/stack.py restack-plan` for the bottom-up plan. For each entry, if its parent moved,
+integrate the parent using its `strategy` (merge = default, no force-push; rebase =
+force-push-with-lease) ONLY IF the merge is clean, then push. STOP and report a branch the moment it
+conflicts (including a generated `ormatic_interface.py` — regenerating needs ROS) and skip its
+descendants (they depend on its new SHA); a human resolves those in a ROS session.
 
 PHASE 3 — PROMOTE (obey the WIP cap)
 Run `python dev/stack.py next --porcelain`. It prints `name<TAB>pr` for the single branch that is
