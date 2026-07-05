@@ -154,8 +154,10 @@ count against the cap.
 
 FINISH
 Refresh `board.json` again and commit it if it changed. Then run `python dev/stack.py board` and
-redeploy `dev/board.html` to the fixed board Artifact URL so the phone board stays live. Summarise:
-what you closed, restacked, promoted, and anything you stopped on.
+redeploy `dev/board.html` to the EXISTING board Artifact at
+https://claude.ai/code/artifact/d53805e1-177c-4a0d-afd7-4fadc09f3877 (pass that URL so it updates in
+place — do NOT mint a new Artifact). Summarise: what you closed, restacked, promoted, and anything you
+stopped on.
 ```
 
 The promote step is gated by `stack.py next`, which only ever names an un-drafted branch under the cap
