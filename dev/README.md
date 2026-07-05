@@ -83,6 +83,27 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   it current with GitHub. `restack.js` takes its stack from `args` (via `restack-plan`), so there is
   nothing to keep in sync by hand.
 
+## The board: chips, priority, sessions
+
+`dev/board.html` (published as an Artifact) renders the tree with per-PR readiness chips, all derived —
+never hand-set:
+
+- **CI** — green/red/amber from the PR's check rollup (`ci` in `board.json`, filled by `export`). Grey
+  `—` when no CI has run.
+- **Short** — lines changed vs the parent (computed by `stack.py board` via git). Green under
+  `short_threshold_loc`, red over. A red *Short* usually means the branch is big **or** stale — split
+  or restack it.
+- **Conflicts** — would it merge cleanly onto its parent right now (git `merge-tree`)? Green `clean` /
+  red `yes`.
+- **priority** — set a `priority:high|medium|low` label on the fork PR. Among several ready branches,
+  `stack.py next` promotes the highest priority (ties fall back to dependency order).
+- **session** — a chip linking to the Claude session working the PR (parsed from the PR body). If none,
+  a `+ new` chip opens a fresh cloud session for that branch. Point `NEW_SESSION_URL` in `board.html`
+  at your internet-enabled environment deep-link so the new session gets fork + cram2 access.
+
+**Reload** shows the latest version the refresh routine published — a hosted page can't call GitHub
+itself. For a true "recapture now" button, wire a phone Shortcut to an API-triggered refresh routine.
+
 ## The cloud Routine (paste into claude.ai/code/routines)
 
 One autonomous cloud session that runs the whole loop hands-free on each trigger (a merge in the

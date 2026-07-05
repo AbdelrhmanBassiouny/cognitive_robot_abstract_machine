@@ -56,6 +56,12 @@ class Config:
     rebase_label: str
     """Fork-PR label opting a branch into the rebase strategy instead of the default merge."""
 
+    priority_labels: list[str]
+    """Fork-PR priority labels, highest first; a branch's rank is its label's index here."""
+
+    short_threshold_loc: int
+    """A branch changing more than this many lines is flagged as not-short (advisory)."""
+
     fork_remote: str
     """Git remote for the fork that holds the full stack."""
 
@@ -85,6 +91,12 @@ class PullRequest:
     labels: list[str] = field(default_factory=list)
     """Labels currently on the PR."""
 
+    ci: str | None = None
+    """Latest CI conclusion on the PR head: ``success`` / ``failure`` / ``pending`` / None."""
+
+    session: str | None = None
+    """URL of the Claude session working this PR, parsed from the PR body (None if none)."""
+
 
 @dataclass
 class Branch:
@@ -107,6 +119,15 @@ class Branch:
 
     labels: list[str]
     """Labels carried by the PR (used for WIP exemption)."""
+
+    ci: str | None = None
+    """Latest CI conclusion on the PR head."""
+
+    session: str | None = None
+    """URL of the Claude session working this PR, if any."""
+
+    priority: int | None = None
+    """Priority rank from the PR's priority label (0 = highest); None if unprioritised."""
 
 
 @dataclass
@@ -138,6 +159,8 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
         wip_exempt_labels=list(data.get("wip_exempt_labels", ["bug"])),
         in_review_label=data.get("in_review_label", "in-review"),
         rebase_label=data.get("rebase_label", "rebase"),
+        priority_labels=list(data.get("priority_labels", ["priority:high", "priority:medium", "priority:low"])),
+        short_threshold_loc=data.get("short_threshold_loc", 400),
         fork_remote=data.get("fork_remote", "origin"),
         upstream_remote=data.get("upstream_remote", "cram2"),
         upstream_base=data.get("upstream_base", "main"),
@@ -160,9 +183,17 @@ def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
             base=pr["base"],
             draft=bool(pr["draft"]),
             labels=list(pr.get("labels", [])),
+            ci=pr.get("ci"),
+            session=pr.get("session"),
         )
         for pr in data["pull_requests"]
     ]
+
+
+def priority_rank(config: Config, labels: list[str]) -> int | None:
+    """Return the priority rank (0 = highest) from a PR's priority label, or None if unprioritised."""
+    ranks = [config.priority_labels.index(label) for label in labels if label in config.priority_labels]
+    return min(ranks) if ranks else None
 
 
 def derive_status(draft: bool, merged: bool, in_review: bool) -> str:
@@ -192,6 +223,9 @@ def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
             status=derive_status(pr.draft, is_merged(pr.head), config.in_review_label in pr.labels),
             strategy="rebase" if config.rebase_label in pr.labels else "merge",
             labels=pr.labels,
+            ci=pr.ci,
+            session=pr.session,
+            priority=priority_rank(config, pr.labels),
         )
         for pr in prs
     ]
@@ -272,6 +306,8 @@ def next_to_promote(stack: Stack) -> Branch | None:
     """The single branch to submit to the upstream next, or None if blocked or nothing is ready.
 
     Encodes the whole policy: approved (``ready``) + parent landed + under the (bug-exempt) WIP cap.
+    Among several eligible branches, the highest **priority** wins (an explicit ``priority:*`` label
+    beats an unprioritised branch); ties fall back to dependency order (a parent before its child).
     """
     counted = [
         b for b in stack.branches if b.status == IN_REVIEW and stack.counts_against_wip(b)
@@ -279,10 +315,17 @@ def next_to_promote(stack: Stack) -> Branch | None:
     if len(counted) >= stack.config.wip_cap:
         return None
     by_name = {b.name: b for b in stack.branches}
-    for branch in order(stack):
-        if branch.status == READY and parent_landed(stack, branch, by_name):
-            return branch
-    return None
+    eligible = [
+        (index, branch)
+        for index, branch in enumerate(order(stack))
+        if branch.status == READY and parent_landed(stack, branch, by_name)
+    ]
+    if not eligible:
+        return None
+    unprioritised = len(stack.config.priority_labels)
+    return min(
+        eligible, key=lambda pair: (pair[1].priority if pair[1].priority is not None else unprioritised, pair[0])
+    )[1]
 
 
 def restack_plan(stack: Stack) -> list[dict[str, str]]:
@@ -395,7 +438,7 @@ def export_board(config: Config, path: Path = BOARD_PATH) -> int:
     )
     result = subprocess.run(
         ["gh", "pr", "list", "--repo", slug, "--state", "open", "--limit", "200",
-         "--json", "number,headRefRefName,baseRefName,isDraft,labels"],
+         "--json", "number,headRefName,baseRefName,isDraft,labels,statusCheckRollup,body"],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -404,10 +447,12 @@ def export_board(config: Config, path: Path = BOARD_PATH) -> int:
     prs = [
         {
             "number": pr["number"],
-            "head": pr.get("headRefRefName") or pr.get("headRefName"),
+            "head": pr["headRefName"],
             "base": pr["baseRefName"],
             "draft": pr["isDraft"],
             "labels": [label["name"] for label in pr.get("labels", [])],
+            "ci": _ci_conclusion(pr.get("statusCheckRollup") or []),
+            "session": _session_url(pr.get("body") or ""),
         }
         for pr in raw
     ]
@@ -415,11 +460,59 @@ def export_board(config: Config, path: Path = BOARD_PATH) -> int:
     return len(prs)
 
 
+def _ci_conclusion(rollup: list[dict]) -> str | None:
+    """Reduce a PR's status-check rollup to ``success`` / ``failure`` / ``pending`` / None."""
+    if not rollup:
+        return None
+    states = set()
+    for check in rollup:
+        states.add(check.get("conclusion") or check.get("state") or check.get("status") or "")
+    normalized = {s.upper() for s in states}
+    if normalized & {"FAILURE", "ERROR", "CANCELLED", "TIMED_OUT"}:
+        return "failure"
+    if normalized & {"PENDING", "IN_PROGRESS", "QUEUED", ""}:
+        return "pending"
+    return "success"
+
+
+def _session_url(body: str) -> str | None:
+    """Extract the first Claude session URL referenced in a PR body, if any."""
+    import re
+
+    match = re.search(r"https://claude\.ai/code/session_[\w-]+", body)
+    return match.group(0) if match else None
+
+
+def _loc_changed(config: Config, base: str, head: str) -> int | None:
+    """Lines changed (additions + deletions) of a branch versus its parent, via git, or None."""
+    import re
+
+    out = _git("diff", "--shortstat", f"{resolve_ref(config, base)}...{resolve_ref(config, head)}")
+    if not out:
+        return 0
+    return sum(int(n) for n in re.findall(r"(\d+) (?:insertion|deletion)", out))
+
+
+def _conflicts_onto(config: Config, base: str, head: str) -> bool | None:
+    """Whether the branch would conflict merging onto its parent now (via git merge-tree), or None."""
+    result = subprocess.run(
+        ["git", "merge-tree", "--write-tree", resolve_ref(config, base), resolve_ref(config, head)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        return False
+    if result.returncode == 1:
+        return True
+    return None
+
+
 def render_board_html(config: Config, prs: list[PullRequest], merged: list[str], generated: str) -> str:
     """Bake the current board data into ``board.html`` and return the new page source.
 
-    Replaces the ``#board-data`` JSON block; the page derives every status from it client-side, so the
-    routine can regenerate the page and redeploy it to the same Artifact URL to keep the phone board live.
+    Replaces the ``#board-data`` JSON block; the page derives every status/chip from it client-side, so
+    the routine can regenerate the page and redeploy it to the same Artifact URL to keep the board live.
+    ``loc`` and ``conflicts`` are computed from local git; ``ci``/``session`` come from ``board.json``.
     """
     import re
 
@@ -430,11 +523,23 @@ def render_board_html(config: Config, prs: list[PullRequest], merged: list[str],
             "wip_exempt_labels": config.wip_exempt_labels,
             "in_review_label": config.in_review_label,
             "rebase_label": config.rebase_label,
+            "priority_labels": config.priority_labels,
+            "short_threshold_loc": config.short_threshold_loc,
             "base": config.upstream_base,
         },
         "merged": merged,
         "pull_requests": [
-            {"number": pr.number, "head": pr.head, "base": pr.base, "draft": pr.draft, "labels": pr.labels}
+            {
+                "number": pr.number,
+                "head": pr.head,
+                "base": pr.base,
+                "draft": pr.draft,
+                "labels": pr.labels,
+                "ci": pr.ci,
+                "session": pr.session,
+                "loc": _loc_changed(config, pr.base, pr.head),
+                "conflicts": _conflicts_onto(config, pr.base, pr.head),
+            }
             for pr in prs
         ],
     }

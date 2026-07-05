@@ -17,6 +17,10 @@ wip_cap = 3                    # max feature branches simultaneously in review o
 wip_exempt_labels = ["bug"]    # PRs with any of these labels do NOT count against wip_cap
 in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
+# Priority labels, highest first — when several branches are ready, `next` promotes the top-priority
+# one. Assign by labelling the fork PR (an unlabelled branch ranks below every labelled one).
+priority_labels = ["priority:high", "priority:medium", "priority:low"]
+short_threshold_loc = 400      # a branch changing more lines than this is flagged not-"short" (advisory)
 fork_remote = "origin"
 upstream_remote = "cram2"
 upstream_base = "main"

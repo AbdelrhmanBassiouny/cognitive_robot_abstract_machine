@@ -25,6 +25,8 @@ def make_config(wip_cap: int = 3) -> Config:
         wip_exempt_labels=["bug"],
         in_review_label="in-review",
         rebase_label="rebase",
+        priority_labels=["priority:high", "priority:medium", "priority:low"],
+        short_threshold_loc=400,
         fork_remote="origin",
         upstream_remote="cram2",
         upstream_base="main",
@@ -130,6 +132,47 @@ def test_ready_child_promotable_once_parent_in_review():
         PullRequest(2, "child", "parent", draft=False),
     ]
     assert next_to_promote(build(prs)).name == "child"
+
+
+# ── priority among several ready branches ──────────────────────────────────
+
+def test_priority_label_wins_over_dependency_order():
+    prs = [
+        PullRequest(1, "first-declared", "main", draft=False),
+        PullRequest(2, "urgent", "main", draft=False, labels=["priority:high"]),
+    ]
+    assert next_to_promote(build(prs)).name == "urgent"
+
+
+def test_higher_priority_beats_lower():
+    prs = [
+        PullRequest(1, "low", "main", draft=False, labels=["priority:low"]),
+        PullRequest(2, "high", "main", draft=False, labels=["priority:high"]),
+    ]
+    assert next_to_promote(build(prs)).name == "high"
+
+
+def test_prioritised_beats_unprioritised():
+    prs = [
+        PullRequest(1, "plain", "main", draft=False),
+        PullRequest(2, "ranked", "main", draft=False, labels=["priority:low"]),
+    ]
+    assert next_to_promote(build(prs)).name == "ranked"
+
+
+def test_priority_falls_back_to_dependency_order_on_tie():
+    prs = [
+        PullRequest(3, "child", "parent", draft=False, labels=["priority:high"]),
+        PullRequest(2, "parent", "main", draft=False, labels=["priority:high"]),
+    ]
+    # equal priority → parent (earlier in dependency order) promotes first
+    assert next_to_promote(build(prs)).name == "parent"
+
+
+def test_ci_and_session_carried_onto_branch():
+    stack = build([PullRequest(11, "f", "main", draft=False, ci="failure", session="https://claude.ai/code/session_x")])
+    assert stack.branches[0].ci == "failure"
+    assert stack.branches[0].session == "https://claude.ai/code/session_x"
 
 
 # ── restack plan ───────────────────────────────────────────────────────────
