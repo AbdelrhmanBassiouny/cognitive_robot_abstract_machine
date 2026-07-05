@@ -95,7 +95,7 @@ def test_domain_object_with_exchangeable_parts_but_no_aggregation_mixin_is_skipp
     """
     container = Container(name="container")
     cabinet = Cabinet(container=container)
-    prob_q = underspecified(ActionWithMissingAggregationsMixin)(
+    prob_q = an(ActionWithMissingAggregationsMixin)(
         domain_object=variable(Cabinet, [cabinet])
     )
     parameters = UnderspecifiedParameters(prob_q)
@@ -120,7 +120,7 @@ def test_iterable_of_primitives_produces_indexed_variables():
     class FloatMeasurements:
         readings: List[Any]
 
-    prob_q = underspecified(FloatMeasurements)(readings=[1.0, 2.0, 3.0])
+    prob_q = an(FloatMeasurements)(readings=[1.0, 2.0, 3.0])
     parameters = UnderspecifiedParameters(prob_q)
 
     assert "FloatMeasurements.readings[0]" in parameters.variables
@@ -141,7 +141,7 @@ def test_list_of_enum_field_produces_indexed_variables():
     indistinguishable, so assigning a list to the former raised ``TypeError``
     instead of forwarding to ``_extract_variables_from_iterable_literal``.
     """
-    prob_q = underspecified(ListOfEnum)(
+    prob_q = an(ListOfEnum)(
         list_of_enum=[TestEnum.OPTION_A, TestEnum.OPTION_B]
     )
     parameters = UnderspecifiedParameters(prob_q)
