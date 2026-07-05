@@ -62,3 +62,52 @@ cram2 without your sign-off. The fork PR is where that review happens.
   scripts can't read files, so the order is mirrored).
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature — land the parent first.
+
+## The cloud Routine (paste into claude.ai/code/routines)
+
+One autonomous cloud session that runs the whole loop hands-free on each trigger (a merge in the
+fork, or a schedule). It uses **plain sequential git** — no Workflow tool, no permission prompts — and
+`dev/stack.py` as the source of truth. It never exceeds `wip_cap`, and it auto-closes fork PRs whose
+work has already landed upstream. Keep the prompt generic (no feature names).
+
+```text
+You maintain a stacked-PR fork-staging workflow. `origin` is my fork (the full stack); `cram2` is the
+slow upstream review queue. Work only from the ledger in `dev/`. Do NOT use the Workflow tool. Use
+plain git and gh. Never force-push a branch that has an open cram2 PR unless its strategy is "rebase".
+
+SETUP
+1. `git fetch origin && git fetch cram2 main`.
+2. Read `dev/stack.toml` (the ledger) and use `python dev/stack.py --live status`.
+
+PHASE 1 — AUTO-CLOSE LANDED FORK PRs
+For each OPEN pull request on the fork (origin), look at its head branch B:
+- If `gh pr list --repo cram2/cognitive_robot_abstract_machine --head AbdelrhmanBassiouny:B --state merged`
+  returns a merged PR, OR `git merge-base --is-ancestor origin/B cram2/main` succeeds,
+  then B's work has landed upstream → CLOSE the fork PR with a comment linking the merged cram2 PR.
+- NEVER close a fork PR whose cram2 equivalent (same head branch) is still OPEN. Those are being
+  reviewed; leave them exactly as they are.
+- Set that branch's `status = "merged"` in `dev/stack.toml`.
+
+PHASE 2 — RESTACK
+For each branch in `dev/stack.toml`, bottom-up (parent before child), if its parent moved:
+integrate the parent into the branch using the branch's `strategy` (merge = default, no force-push;
+rebase = force-push-with-lease). Resolve conflicts faithfully. If a generated `ormatic_interface.py`
+conflicts, do NOT hand-edit it — run `scripts/regenerate_all_orm.py`. Source ROS
+(`source /opt/ros/jazzy/setup.bash && source /opt/ros/overlay_ws/install/setup.bash`) and run ONLY
+the tests that branch touches with `/opt/ros/cram-env/bin/python`. Push. Stop at the first branch you
+cannot integrate cleanly (downstream depends on its new SHA) and report it.
+
+PHASE 3 — PROMOTE (obey the WIP cap)
+Run `python dev/stack.py next --porcelain`. It prints `name<TAB>pr<TAB>pr_repo` for the single branch
+that is approved (status "ready"), unblocked, and under `wip_cap` — or nothing. If it prints a branch:
+open (or retarget onto `cram2/main`) that branch's cram2 PR with an updated description, then set its
+`status = "in-review"` in the ledger. If it prints nothing, the cap is full or nothing is ready — do
+not promote. Bug-labelled PRs (`wip_exempt_labels`) never count against the cap.
+
+FINISH
+Commit any `dev/stack.toml` edits. Summarise: what you closed, what you restacked, what you promoted,
+and anything you stopped on.
+```
+
+The promote step is gated by `stack.py next`, which only ever names a `ready` branch under the cap —
+so the Routine can never flood cram2, and never promotes something you haven't approved.
