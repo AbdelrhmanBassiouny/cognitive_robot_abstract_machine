@@ -51,7 +51,7 @@ parent = "cram2/main"       # logically may sit above the EQL-core PRs; confirm 
 strategy = "merge"
 pr = 346
 pr_repo = "upstream"
-status = "in-review"
+status = "merged"
 
 [[branch]]
 name = "eql-symbolic-arithmetic"
@@ -88,15 +88,41 @@ strategy = "merge"
 pr = 12
 status = "draft"
 
-# ── Stack 3: RDR refactor (cram2 PR #404 is a DRAFT, "depends on #346") ───────────────────────
-# Its own fork sub-stack (branches built on rdr_refactor) is not yet pushed to origin — add the
-# children here once you push them.
+# ── Stack 3: RDR refactor — a clean 5-branch fork sub-stack ───────────────────────────────────
 [[branch]]
 name = "rdr_refactor"
-parent = "eql_verbalization"   # per #404 "depends on #346"; git currently has it on cram2/main
+parent = "cram2/main"          # #404 (cram2 draft); trunk now merged, so it rebuilds on main
 strategy = "merge"
 pr = 404
 pr_repo = "upstream"
+status = "draft"
+
+[[branch]]
+name = "rdr/eql-integration"
+parent = "rdr_refactor"
+strategy = "merge"
+pr = 19
+status = "draft"
+
+[[branch]]
+name = "rdr/oo-plan"
+parent = "rdr/eql-integration"
+strategy = "merge"
+pr = 20
+status = "draft"
+
+[[branch]]
+name = "rdr/oo-recognition"
+parent = "rdr/oo-plan"
+strategy = "merge"
+pr = 21
+status = "draft"
+
+[[branch]]
+name = "rdr/backend-unification"
+parent = "rdr/oo-recognition"
+strategy = "merge"
+pr = 22
 status = "draft"
 
 # ── Independent bug fix (single branch, no stack) ────────────────────────────────────────────
