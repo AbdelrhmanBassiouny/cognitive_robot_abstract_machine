@@ -129,6 +129,18 @@ SETUP
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
    to see the derived stack. There is no `--live` flag; state comes from board.json + git.
 
+KEEP THE BOARD LIVE (do this after EVERY state change, in every phase)
+The moment a PR's state changes — closed as merged (Phase 1), a branch restacked + pushed (Phase 2),
+or a branch promoted / its cram2 PR opened + `in-review` label added (Phase 3) — immediately refresh
+the board so I watch it update in real time:
+  a. update `dev/board.json` for just the affected PR via the GitHub MCP (add/remove a label, drop a
+     closed PR);
+  b. run `python dev/stack.py board` (recomputes status, conflicts, LOC from git);
+  c. redeploy `dev/board.html` to the EXISTING Artifact at
+     https://claude.ai/code/artifact/d53805e1-177c-4a0d-afd7-4fadc09f3877 (update in place, do NOT
+     mint a new one).
+Do this PER EVENT, not only at the end — one refresh per branch as it finishes.
+
 PHASE 1 — AUTO-CLOSE LANDED FORK PRs
 cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an
 ancestor of cram2/main. For each OPEN fork PR with head branch B:
