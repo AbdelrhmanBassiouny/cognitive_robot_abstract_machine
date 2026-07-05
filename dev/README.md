@@ -120,9 +120,14 @@ ancestor of cram2/main is merged. Do NOT use the Workflow tool. Use plain git + 
 force-push a branch that has an open cram2 PR unless it carries the `rebase` label.
 
 SETUP
+0. Ensure remotes match the config: `origin` must be the fork
+   (AbdelrhmanBassiouny/cognitive_robot_abstract_machine) and `cram2` the upstream. A fresh cloud
+   clone may have them named differently — check `git remote -v` and rename/add so `origin`=fork,
+   `cram2`=upstream before continuing.
 1. `git fetch origin && git fetch cram2 main`.
-2. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels) via the
-   GitHub MCP, then run `python dev/stack.py status` to see the derived stack.
+2. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
+   the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
+   to see the derived stack. There is no `--live` flag; state comes from board.json + git.
 
 PHASE 1 — AUTO-CLOSE LANDED FORK PRs
 cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an
