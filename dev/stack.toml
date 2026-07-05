@@ -104,10 +104,10 @@ status = "draft"
 # ── Stack 3: RDR refactor — a clean 5-branch fork sub-stack ───────────────────────────────────
 [[branch]]
 name = "rdr_refactor"
-parent = "cram2/main"          # #404 (cram2 draft); trunk now merged, so it rebuilds on main
+parent = "cram2/main"          # tracked on the fork (#24); the cram2 draft #404 was closed as noise
 strategy = "merge"
-pr = 404
-pr_repo = "upstream"
+pr = 24
+pr_repo = "fork"
 status = "draft"
 
 [[branch]]

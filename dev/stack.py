@@ -321,13 +321,15 @@ def _restack_parent(ledger: Ledger, parent: str) -> str:
 def restack_plan(ledger: Ledger) -> list[dict[str, str]]:
     """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
 
-    One entry per fork branch that still needs cascading (everything not yet ``merged`` or already
-    submitted and ``in-review`` on cram2), in parent-before-child order.
+    One entry per fork branch that still needs cascading — everything not yet ``merged``, in
+    parent-before-child order. In-review branches are included so they pick up their parent's new
+    commits when it moves; their ``merge`` strategy keeps that update conflict-free and force-push-free
+    so an open review is never disrupted.
     """
     return [
         {"branch": branch.name, "parent": _restack_parent(ledger, branch.parent), "strategy": branch.strategy}
         for branch in _order(ledger)
-        if branch.status not in {"merged", "in-review"}
+        if branch.status != "merged"
     ]
 
 
