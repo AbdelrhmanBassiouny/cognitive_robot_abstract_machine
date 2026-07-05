@@ -20,7 +20,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 LEDGER_PATH = Path(__file__).with_name("stack.toml")
@@ -36,6 +36,7 @@ class Branch:
     pr: int | None
     status: str
     pr_repo: str  # "fork" (origin) or "upstream" (cram2) — which repo the PR lives in
+    labels: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -43,10 +44,15 @@ class Ledger:
     """The parsed stack ledger."""
 
     wip_cap: int
+    wip_exempt_labels: list[str]
     fork_remote: str
     upstream_remote: str
     upstream_base: str
     branches: list[Branch]
+
+    def counts_against_wip(self, branch: Branch) -> bool:
+        """Whether a branch occupies a review slot (labelled-exempt PRs, e.g. bugs, do not)."""
+        return not any(label in self.wip_exempt_labels for label in branch.labels)
 
 
 def _git(*args: str) -> str:
@@ -68,11 +74,13 @@ def load_ledger() -> Ledger:
             pr=entry.get("pr"),
             status=entry.get("status", "draft"),
             pr_repo=entry.get("pr_repo", "fork"),
+            labels=list(entry.get("labels", [])),
         )
         for entry in data["branch"]
     ]
     return Ledger(
         wip_cap=data.get("wip_cap", 3),
+        wip_exempt_labels=list(data.get("wip_exempt_labels", ["bug"])),
         fork_remote=data.get("fork_remote", "origin"),
         upstream_remote=data.get("upstream_remote", "cram2"),
         upstream_base=data.get("upstream_base", "main"),
@@ -112,13 +120,13 @@ def _repo_slug(remote: str) -> str:
     return "/".join(url.removesuffix(".git").rstrip("/").split("/")[-2:])
 
 
-def _pr_state(slug: str, pr: int) -> tuple[str, bool, bool]:
-    """Return ``(state, is_draft, merged)`` for a PR via ``gh``. Raises if ``gh`` is unavailable."""
+def _pr_state(slug: str, pr: int) -> tuple[str, bool, bool, list[str]]:
+    """Return ``(state, is_draft, merged, labels)`` for a PR via ``gh``. Raises if ``gh`` is missing."""
     import json as _json
 
     try:
         result = subprocess.run(
-            ["gh", "pr", "view", str(pr), "--repo", slug, "--json", "state,isDraft,mergedAt"],
+            ["gh", "pr", "view", str(pr), "--repo", slug, "--json", "state,isDraft,mergedAt,labels"],
             capture_output=True,
             text=True,
         )
@@ -127,7 +135,8 @@ def _pr_state(slug: str, pr: int) -> tuple[str, bool, bool]:
     if result.returncode != 0:
         raise LiveStatusUnavailable(result.stderr.strip() or "gh not available")
     data = _json.loads(result.stdout)
-    return data["state"], bool(data["isDraft"]), data.get("mergedAt") is not None
+    labels = [label["name"] for label in data.get("labels", [])]
+    return data["state"], bool(data["isDraft"]), data.get("mergedAt") is not None, labels
 
 
 def apply_live(ledger: Ledger) -> None:
@@ -143,7 +152,8 @@ def apply_live(ledger: Ledger) -> None:
     for branch in ledger.branches:
         if branch.pr is None:
             continue
-        state, is_draft, merged = _pr_state(slugs[branch.pr_repo], branch.pr)
+        state, is_draft, merged, labels = _pr_state(slugs[branch.pr_repo], branch.pr)
+        branch.labels = labels
         branch.status = derive_status(
             state, is_draft, merged, is_upstream=branch.pr_repo == "upstream"
         )
@@ -228,8 +238,12 @@ def cmd_next(ledger: Ledger) -> None:
     fetch(ledger)
     by_name = {b.name: b for b in ledger.branches}
     in_review = [b for b in ledger.branches if b.status == "in-review"]
-    print(f"In review on {ledger.upstream_remote}: {len(in_review)}/{ledger.wip_cap}", end="")
-    print(f"  [{', '.join(b.name for b in in_review) or 'none'}]\n")
+    counted = [b for b in in_review if ledger.counts_against_wip(b)]
+    exempt = [b for b in in_review if not ledger.counts_against_wip(b)]
+    print(f"In review on {ledger.upstream_remote}: {len(counted)}/{ledger.wip_cap}", end="")
+    print(f"  [{', '.join(b.name for b in counted) or 'none'}]", end="")
+    print(f"  (+{len(exempt)} not counted: {', '.join(b.name for b in exempt)})" if exempt else "")
+    print()
 
     def parent_landed(branch: Branch) -> bool:
         parent = by_name.get(branch.parent)
@@ -255,7 +269,7 @@ def cmd_next(ledger: Ledger) -> None:
                 f"stack.toml. Candidates (draft): {approvable[0].name}"
             )
         return
-    if len(in_review) >= ledger.wip_cap:
+    if len(counted) >= ledger.wip_cap:
         print(f"WIP cap reached. Approved and waiting for a slot: {promotable[0].name}")
         return
     nxt = promotable[0]

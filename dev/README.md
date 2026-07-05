@@ -47,7 +47,9 @@ cram2 without your sign-off. The fork PR is where that review happens.
 4. When cram2 merges it: set `status = "merged"`, then **run the `restack` workflow** to cascade the
    new base up the stack. `status`/`check` confirm it's clean again.
 5. Keep in-review count ≤ `wip_cap`. If the cap is full, keep the rest `draft`/`ready` on the fork;
-   don't flood reviewers.
+   don't flood reviewers. PRs carrying a `wip_exempt_labels` label (default `bug`) do **not** count
+   against the cap — a standalone bug fix shouldn't block feature throughput. With `--live`, labels
+   are read from GitHub, so labelling a PR `bug` there is enough.
 
 ## Rules of hygiene
 

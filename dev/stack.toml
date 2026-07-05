@@ -9,6 +9,7 @@
 # git ancestry — those are the branches that still need a restack. Tune parents to your intent.
 
 wip_cap = 3            # max branches simultaneously in review on cram2
+wip_exempt_labels = ["bug"]  # PRs carrying any of these labels do NOT count against wip_cap
 fork_remote = "origin"
 upstream_remote = "cram2"
 upstream_base = "main"
@@ -103,3 +104,4 @@ strategy = "rebase"
 pr = 412
 pr_repo = "upstream"
 status = "in-review"
+labels = ["bug"]   # excluded from the WIP count
