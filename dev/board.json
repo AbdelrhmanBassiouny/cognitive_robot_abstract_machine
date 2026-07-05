@@ -6,7 +6,7 @@
     {"number": 5, "head": "query-class-refactor", "base": "match-where-without-resolve", "draft": true, "labels": [], "ci": null, "session": null},
     {"number": 7, "head": "claude/gendered-pronouns", "base": "main", "draft": true, "labels": [], "ci": null, "session": "https://claude.ai/code/session_01SWb7gwXC2WdVKCM4Tnh36w"},
     {"number": 10, "head": "eql-verbalization-extensions", "base": "main", "draft": true, "labels": [], "ci": null, "session": null},
-    {"number": 11, "head": "eql-arithmetic", "base": "main", "draft": false, "labels": [], "ci": null, "session": null},
+    {"number": 11, "head": "eql-arithmetic", "base": "main", "draft": false, "labels": ["in-review"], "ci": null, "session": null},
     {"number": 12, "head": "claude/eql-roboknerd-why-acts", "base": "match-where-without-resolve", "draft": true, "labels": [], "ci": null, "session": null},
     {"number": 14, "head": "claude/performatives-clean", "base": "eql-arithmetic", "draft": true, "labels": [], "ci": null, "session": null},
     {"number": 15, "head": "claude/eql-performatives-unify", "base": "claude/performatives-clean", "draft": true, "labels": [], "ci": null, "session": null},
