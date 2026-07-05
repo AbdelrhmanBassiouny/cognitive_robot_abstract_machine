@@ -75,7 +75,7 @@ status = "draft"
 
 [[branch]]
 name = "eql-verbalization-extensions"
-parent = "eql_verbalization"
+parent = "cram2/main"       # eql_verbalization has merged, so this rebuilds directly on main
 strategy = "merge"
 pr = 10
 status = "draft"
@@ -96,7 +96,7 @@ status = "draft"
 
 [[branch]]
 name = "claude/eql-roboknerd-why-acts"
-parent = "eql_verbalization"
+parent = "cram2/main"       # eql_verbalization has merged, so this rebuilds directly on main
 strategy = "merge"
 pr = 12
 status = "draft"
