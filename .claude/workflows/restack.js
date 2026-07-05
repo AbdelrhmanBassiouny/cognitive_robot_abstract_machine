@@ -8,11 +8,11 @@ export const meta = {
 // Workflow scripts have no filesystem access, so the stack is mirrored from dev/stack.toml.
 // KEEP IN SYNC with the ledger. Order is bottom-up: a parent is restacked before its children.
 const STACK = [
-  { branch: 'eql-symbolic-arithmetic', parent: 'eql_verbalization', strategy: 'rebase' },
-  { branch: 'eql-verbalization-extensions', parent: 'eql_verbalization', strategy: 'rebase' },
-  { branch: 'claude/performatives-clean', parent: 'eql-symbolic-arithmetic', strategy: 'rebase' },
-  { branch: 'claude/eql-performatives-unify', parent: 'claude/performatives-clean', strategy: 'rebase' },
-  { branch: 'claude/eql-roboknerd-why-acts', parent: 'eql_verbalization', strategy: 'merge' },
+  { branch: 'eql-arithmetic', parent: 'main', strategy: 'merge' },
+  { branch: 'eql-verbalization-extensions', parent: 'main', strategy: 'merge' },
+  { branch: 'claude/performatives-clean', parent: 'eql-arithmetic', strategy: 'merge' },
+  { branch: 'claude/eql-performatives-unify', parent: 'claude/performatives-clean', strategy: 'merge' },
+  { branch: 'claude/eql-roboknerd-why-acts', parent: 'main', strategy: 'merge' },
 ]
 
 const RESULT = {
