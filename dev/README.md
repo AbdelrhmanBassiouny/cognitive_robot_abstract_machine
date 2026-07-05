@@ -80,10 +80,10 @@ SETUP
 2. Read `dev/stack.toml` (the ledger) and use `python dev/stack.py --live status`.
 
 PHASE 1 — AUTO-CLOSE LANDED FORK PRs
-For each OPEN pull request on the fork (origin), look at its head branch B:
-- If `gh pr list --repo cram2/cognitive_robot_abstract_machine --head AbdelrhmanBassiouny:B --state merged`
-  returns a merged PR, OR `git merge-base --is-ancestor origin/B cram2/main` succeeds,
-  then B's work has landed upstream → CLOSE the fork PR with a comment linking the merged cram2 PR.
+cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an
+ancestor of cram2/main. For each OPEN pull request on the fork (origin), look at its head branch B:
+- If `git merge-base --is-ancestor origin/B cram2/main` succeeds, B's work has landed upstream →
+  CLOSE the fork PR with a comment linking the merged cram2 PR.
 - NEVER close a fork PR whose cram2 equivalent (same head branch) is still OPEN. Those are being
   reviewed; leave them exactly as they are.
 - Set that branch's `status = "merged"` in `dev/stack.toml`.
