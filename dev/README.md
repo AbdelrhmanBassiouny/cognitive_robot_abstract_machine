@@ -52,6 +52,4 @@ cram2 without your sign-off. The fork PR is where that review happens.
 - **Keep `.claude/workflows/restack.js`'s `STACK` array in sync with `stack.toml`** (workflow
   scripts can't read files, so the order is mirrored).
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
-  unmerged trunk is premature — land the trunk first.
-- Carry the upstream review themes (dedupe; doc/typing conventions) into every restack, since they
-  span the whole verbalization surface.
+  unmerged parent is premature — land the parent first.

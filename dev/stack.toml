@@ -1,30 +1,47 @@
 # Stacked-PR ledger — the single source of truth for the fork-staging / cram2-review workflow.
 #
-# Model: this fork ("origin") holds the FULL stack of branches. cram2 is the slow REVIEW queue.
-# You promote the *bottom* of the stack to cram2 one at a time, never exceeding `wip_cap` PRs
-# in review at once. `stack.py` reads this file to answer: is the stack clean, and what's next.
+# Model: this fork ("origin") holds the FULL set of in-flight branches. cram2 is the slow REVIEW
+# queue. You promote the *bottom* of each stack to cram2 one at a time, never exceeding `wip_cap`
+# PRs in review at once. `stack.py` reads this file to answer: is a branch clean, and what's next.
 #
-# Edit this by hand as you add branches or as PRs change state. Nothing writes to it.
+# Edit this by hand as branches / PRs change. Nothing writes to it.
+# NOTE: some parent links are logical (from the PR "depends on" notes) and differ from the current
+# git ancestry — those are the branches that still need a restack. Tune parents to your intent.
 
 wip_cap = 3            # max branches simultaneously in review on cram2
-fork_remote = "origin" # where the full stack lives
+fork_remote = "origin"
 upstream_remote = "cram2"
 upstream_base = "main"
 
-# Each branch: name, its intended parent (the ref it rebases/merges onto), the integration
-# strategy, the tracking PR number, and its lifecycle status.
-#   parent    : a bare name => a fork branch (origin/<name>); "<remote>/<x>" => that exact ref.
-#   strategy  : "rebase" (default, clean linear history) or "merge" (preserve, for far-diverged branches).
-#   status    : the lifecycle state machine, and YOUR approval gate:
-#               "draft"     -> on the fork, still WIP / not self-reviewed. NOT eligible for cram2.
-#               "ready"     -> you reviewed its fork PR and approve it for cram2. THIS is your gate:
-#                              flip a branch to "ready" by hand, and only then can `next` promote it.
-#               "in-review" -> open PR on cram2, awaiting their review.
-#               "merged"    -> landed in cram2/main.
+# Fields:
+#   parent   : bare name => a fork branch (origin/<name>); "<remote>/<x>" => that exact ref.
+#   strategy : "rebase" (clean linear history) | "merge" (preserve, for far-diverged branches).
+#   pr       : the tracking PR number (on cram2 if in-review, else the fork PR).
+#   status   : the lifecycle + YOUR approval gate:
+#              "draft"     -> on the fork (or a cram2 draft PR); NOT yet approved for review.
+#              "ready"     -> you reviewed its fork PR and approve it for cram2 (the gate; hand-set).
+#              "in-review" -> open, non-draft PR on cram2, awaiting their review.
+#              "merged"    -> landed in cram2/main.
+
+# ── Stack 1: EQL core (bottom is ready — #377 it depends on is already merged) ───────────────
+[[branch]]
+name = "query-interface-refactor"
+parent = "cram2/main"
+strategy = "rebase"
+pr = 380
+status = "in-review"
 
 [[branch]]
+name = "match-where-without-resolve"
+parent = "query-interface-refactor"
+strategy = "rebase"
+pr = 381
+status = "in-review"
+
+# ── Stack 2: verbalization trunk + performatives/extensions ──────────────────────────────────
+[[branch]]
 name = "eql_verbalization"
-parent = "cram2/main"
+parent = "cram2/main"       # logically may sit above the EQL-core PRs; confirm before landing
 strategy = "rebase"
 pr = 346
 status = "in-review"
@@ -63,3 +80,21 @@ parent = "eql_verbalization"
 strategy = "merge"
 pr = 12
 status = "draft"
+
+# ── Stack 3: RDR refactor (cram2 PR #404 is a DRAFT, "depends on #346") ───────────────────────
+# Its own fork sub-stack (branches built on rdr_refactor) is not yet pushed to origin — add the
+# children here once you push them.
+[[branch]]
+name = "rdr_refactor"
+parent = "eql_verbalization"   # per #404 "depends on #346"; git currently has it on cram2/main
+strategy = "merge"
+pr = 404
+status = "draft"
+
+# ── Independent bug fix (single branch, no stack) ────────────────────────────────────────────
+[[branch]]
+name = "fix/inference-explanation-typehint"
+parent = "cram2/main"
+strategy = "rebase"
+pr = 412
+status = "in-review"
