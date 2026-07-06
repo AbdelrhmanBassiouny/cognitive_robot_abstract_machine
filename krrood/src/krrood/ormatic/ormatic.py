@@ -322,12 +322,20 @@ class ORMatic:
             or "krrood_test" not in am.original_class().__module__
         )
 
-        # keep only dataclasses that are not AlternativeMapping or DataAccessObject subclasses
+        # SymbolicCallable subclasses (Predicate / SymbolicFunction) are query behaviour, not
+        # persisted entities -- one may carry an unmappable field (e.g. a bare ``type``). Imported
+        # locally to keep the ORM layer free of an import-time dependency on the query language.
+        from krrood.entity_query_language.predicate import SymbolicCallable
+
+        # keep only dataclasses that are not AlternativeMapping, DataAccessObject, or SymbolicCallable
+        # subclasses
         all_classes = {
             c
             for c in all_classes
             if is_dataclass(c)
-            and not issubclass(c, (DataAccessObject, AlternativeMapping))
+            and not issubclass(
+                c, (DataAccessObject, AlternativeMapping, SymbolicCallable)
+            )
         }
 
         all_classes |= {am.original_class() for am in all_alternative_mappings}
