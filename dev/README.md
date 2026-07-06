@@ -140,6 +140,15 @@ review comments, or to make code changes that address review feedback — that i
 interactive session's work. Leave review threads untouched. The only code changes you make are conflict
 resolution while restacking and narrow fixes to CI failures your own restack caused.
 
+HARD RULES so you never drift into review work:
+- NEVER call `subscribe_pr_activity`, and never stay subscribed — you learn CI by POLLING (Phase 2/SETUP).
+- If a review, review-comment, issue-comment, or any `<github-webhook-activity>` event is ever delivered
+  to you, your ONLY valid action is to END THE TURN immediately: do not investigate it, do not draft or
+  post a plan, do not reply, do not ask the developer to confirm anything. The one exception is a CI/check
+  *status* you were polling for your own restack.
+- NEVER enter plan mode or post a "here's my plan" comment. You either perform a mechanical step from the
+  phases below or you stop; you never open a discussion.
+
 PRE-FLIGHT — before EVERY push, merge, or restack, no exceptions
 Never move commits from memory. First WRITE OUT these four lines and verify each with git; only then run
 the command:
@@ -176,12 +185,12 @@ SETUP
 3. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
    to see the derived stack. There is no `--live` flag; state comes from board.json + git.
-4. SUBSCRIBE TO CI AS VALIDATOR — AND ONLY CI. For every open fork PR, call `subscribe_pr_activity`
-   (GitHub MCP) so red/green is delivered to you — CI is the validator; never run the ROS (coraplex/SDT)
-   suites here. That feed also delivers human review comments and review threads: IGNORE them
-   completely. Consume ONLY the CI conclusion (success/failure). Do NOT read, answer, resolve, react to,
-   or make code changes to address the developer's review comments — code review is the developer's
-   interactive session's job, not yours. Your only reaction to this feed is to a CI status.
+4. CI IS THE VALIDATOR — POLL IT, NEVER SUBSCRIBE. When you need a branch's CI verdict, POLL it with
+   the GitHub MCP (`pull_request_read` → `get_check_runs` / `get_status`) and read only the
+   success/failure conclusion; never run the ROS (coraplex/SDT) suites here. Do NOT call
+   `subscribe_pr_activity` — a subscription delivers human review comments and review threads (not just
+   CI) and turns on the built-in per-event handler that makes you investigate, plan, and reply. That is
+   how you end up "responding to reviews"; polling avoids it entirely.
 
 THE BOARD PUBLISHES ITSELF
 You do not render or redeploy the board. A GitHub Action in the separate `stack-board` repo polls the
@@ -199,12 +208,12 @@ ancestor of cram2/main. For each OPEN fork PR with head branch B:
 PHASE 2 — RESTACK + VALIDATE (CI is the validator; ROS-free fix-first; work in parallel)
 Run `python dev/stack.py restack-plan` for the bottom-up plan. For each entry whose parent moved,
 integrate the parent using its `strategy` (merge = default, no force-push; rebase =
-force-push-with-lease) ONLY IF the merge is clean, then push, and subscribe to that PR's CI
-(`subscribe_pr_activity`). CI is the validator — never run the coraplex/SDT (ROS) suites here.
+force-push-with-lease) ONLY IF the merge is clean, then push. CI is the validator — never run the
+coraplex/SDT (ROS) suites here; poll the PR's checks with the GitHub MCP (do NOT subscribe).
 
 Don't block on CI: after pushing a branch, move on to the next independent branch and keep restacking
-/ promoting (Phase 3) in parallel, reacting to CI results as the subscription delivers them — never
-sit idle waiting on a ~20-minute run.
+/ promoting (Phase 3) in parallel — never sit idle waiting on a ~20-minute run. Poll the checks of the
+branches you pushed at the start of each pass (and on your next scheduled run) and react then.
 
 When a branch conflicts or its CI comes back RED, get around ROS as far as you can — never park a
 branch on a ROS dependency; resolve it non-blockingly and let CI be the final check:
