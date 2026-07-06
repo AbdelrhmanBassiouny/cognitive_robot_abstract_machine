@@ -2,7 +2,10 @@ from dataclasses import dataclass
 
 from typing_extensions import Optional, Tuple
 
-from krrood.entity_query_language.predicate import symbolic_function
+from krrood.entity_query_language.predicate import (
+    SymbolicFunction,
+    functional_form,
+)
 from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.robots.robot_parts import (
     EndEffector,
@@ -12,16 +15,28 @@ from semantic_digital_twin.robots.robot_parts import (
 )
 
 
+@dataclass(eq=False)
+class EndEffectorView(SymbolicFunction):
+    """The end effector of a robot's arm view, as a value operation."""
+
+    arm: Arms
+    """The arm to get the end effector for."""
+
+    robot_view: AbstractRobot
+    """The robot view to search in."""
+
+    def __call__(self) -> Optional[EndEffector]:
+        arm_view = ViewManager.get_arm_view(self.arm, self.robot_view)
+        return arm_view.end_effector
+
+
 @dataclass
 class ViewManager:
 
-    @staticmethod
-    @symbolic_function
-    def get_end_effector_view(
-        arm: Arms, robot_view: AbstractRobot
-    ) -> Optional[EndEffector]:
-        arm = ViewManager.get_arm_view(arm, robot_view)
-        return arm.end_effector
+    get_end_effector_view = staticmethod(functional_form(EndEffectorView))
+    """Returns the end effector of an arm view -- the class-form :class:`EndEffectorView` behind a
+    :func:`functional_form` wrapper, so a call returns the end effector for concrete arguments and a
+    symbolic expression when any argument is symbolic."""
 
     @staticmethod
     def get_arm_view(arm: Arms, robot_view: AbstractRobot) -> Optional[KinematicChain]:
