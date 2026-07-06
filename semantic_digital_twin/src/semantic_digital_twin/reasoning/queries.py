@@ -185,6 +185,21 @@ def filter_annotations_by_color(
     return entity(semantic_annotation).where(semantic_annotation.root == matching_body)
 
 
+@dataclass(eq=False)
+class ClassNameLowercased(SymbolicFunction):
+    """A class's own name, lowercased, for case-insensitive label matching."""
+
+    semantic_class: type
+    """The class whose name is lowercased."""
+
+    def __call__(self) -> str:
+        return self.semantic_class.__name__.lower()
+
+
+class_name_lowercased = functional_form(ClassNameLowercased)
+"""Functional form of :class:`ClassNameLowercased`."""
+
+
 def annotation_class_by_label(label: str) -> Optional[type]:
     """
     Finds the class whose name is contained within the given label.
@@ -193,11 +208,6 @@ def annotation_class_by_label(label: str) -> Optional[type]:
     :param label: The string input from perception (e.g., "bowl_collapsable_yellowgrey").
     :return: The matching class (e.g., Bowl) or None if no match is found.
     """
-    @symbolic_function
-    def class_name_lowercased(semantic_class: type) -> str:
-        """The class's own name, lowercased, for case-insensitive label matching."""
-        return semantic_class.__name__.lower()
-
     semantic_class = variable_from(recursive_subclasses(IsPerceivable))
     matching_class = an(
         entity(semantic_class).where(
