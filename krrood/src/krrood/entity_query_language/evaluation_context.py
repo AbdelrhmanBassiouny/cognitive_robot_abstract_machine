@@ -86,8 +86,12 @@ class EvaluationContext:
     structural_cache: Dict[Any, Any] = field(default_factory=dict)
     """
     Memoizes structural facts about the expression graph that are constant for the duration of an
-    evaluation (the tree is not mutated while it is being evaluated). Lets hot evaluation paths
-    answer structural questions once instead of re-walking the graph on every step.
+    evaluation, so hot paths answer them once instead of re-walking the graph on every step.
+
+    ..warning:: Never let a cached value strongly reference an expression node. A context can be
+        captured past its evaluation (for example by an inference explanation), so a strong
+        reference here would pin the whole query tree and its variables' domains. Cache booleans and
+        counts directly, and index nodes only through weak references.
     """
 
     def on_evaluate_enter(

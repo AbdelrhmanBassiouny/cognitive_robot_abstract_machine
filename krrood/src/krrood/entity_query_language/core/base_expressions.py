@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import itertools
 import uuid
+import weakref
 from abc import ABC, abstractmethod
 from collections import UserDict
 from copy import copy
@@ -130,7 +131,7 @@ class SymbolicExpression(ABC):
         if evaluation_scoped_index is not None:
             if id_ in evaluation_scoped_index:
                 self._expression_id_cache_[id_] = evaluation_scoped_index[id_]
-                return evaluation_scoped_index[id_]
+                return self._expression_id_cache_[id_]
             raise NoExpressionFoundForGivenID(self, id_)
 
         try:
@@ -383,22 +384,6 @@ class SymbolicExpression(ABC):
     def _conditions_root_(self) -> Optional[SymbolicExpression]:
         """
         :return: The root of the symbolic expression graph that contains conditions, or None if no conditions found.
-
-        The conditions root is a structural property of the whole tree, so within an active
-        evaluation it is memoized per tree to avoid re-scanning the graph on every evaluation step.
-        """
-        evaluation_context = get_evaluation_context()
-        if evaluation_context is None:
-            return self._compute_conditions_root_()
-        cache_key = ("conditions_root", self._root_._id_)
-        cache = evaluation_context.structural_cache
-        if cache_key not in cache:
-            cache[cache_key] = self._compute_conditions_root_()
-        return cache[cache_key]
-
-    def _compute_conditions_root_(self) -> Optional[SymbolicExpression]:
-        """
-        :return: The root of the symbolic expression graph that contains conditions, found by scanning the tree.
         """
         return next(
             (
@@ -452,13 +437,15 @@ class SymbolicExpression(ABC):
 
     def _evaluation_scoped_expression_index_(
         self,
-    ) -> Optional[Dict[uuid.UUID, SymbolicExpression]]:
+    ) -> Optional["weakref.WeakValueDictionary[uuid.UUID, SymbolicExpression]"]:
         """
         :return: An ``id -> node`` index of the whole tree, built once per evaluation, or ``None``
             when called outside an active evaluation.
 
         The tree is immutable while it is being evaluated, so the index is memoized on the evaluation
-        context (keyed by the tree root) and reused for every id lookup instead of re-scanning.
+        context (keyed by the tree root) and reused for every id lookup instead of re-scanning. The
+        values are held weakly so that a context outliving the evaluation cannot pin the tree or its
+        variables' domains; during the evaluation every node is kept alive by the tree itself.
         """
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:
@@ -466,9 +453,9 @@ class SymbolicExpression(ABC):
         cache_key = ("expression_index", self._root_._id_)
         cache = evaluation_context.structural_cache
         if cache_key not in cache:
-            cache[cache_key] = {
-                expression._id_: expression for expression in self._all_expressions_
-            }
+            cache[cache_key] = weakref.WeakValueDictionary(
+                {expression._id_: expression for expression in self._all_expressions_}
+            )
         return cache[cache_key]
 
     @property
@@ -505,9 +492,10 @@ class SymbolicExpression(ABC):
         :return: Whether this expression's subtree contains a descendant of the given type.
 
         Whether a subtree contains a node of some type is a structural fact that is constant for the
-        duration of an evaluation, so within an active evaluation it is memoized on the evaluation
-        context to avoid re-walking the subtree on every evaluation step. Outside an evaluation it is
-        computed directly.
+        duration of an evaluation, so within an active evaluation the boolean answer is memoized on
+        the evaluation context to avoid re-walking the subtree on every evaluation step (this is a
+        hot path: every comparator evaluation checks for a ``The`` quantifier). Only the boolean is
+        cached, never an expression, so the cache cannot outlive-pin the tree or its domains.
         """
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:
