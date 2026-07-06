@@ -82,6 +82,15 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 - **Refresh `board.json` before acting.** It's a snapshot; `stack.py export` (or the routine) brings
   it current with GitHub. `restack.js` takes its stack from `args` (via `restack-plan`), so there is
   nothing to keep in sync by hand.
+- **CI is the validator; validate ROS-free first.** Cloud containers have no ROS, so never try to run
+  the coraplex/SDT suites locally — **subscribe** to a PR's CI (GitHub MCP `subscribe_pr_activity`)
+  and treat its red/green as the oracle. Before deferring anything to a ROS session, get around ROS
+  as far as you can locally: reproduce the failure's *mechanism* in the ROS-free layer (`krrood`,
+  which runs locally) with a meaningful failing test — mimicking the offending pattern in the
+  `krrood` test datasets per `AGENTS.md` when the trigger lives in another package — fix it there,
+  and validate by running the local `krrood` suite before pushing. Then let fork CI confirm the
+  ROS-gated end-to-end behaviour. Only the residue that genuinely cannot be reproduced or validated
+  without ROS is handed to a ROS session. Never disable a leak/CI check to go green.
 
 ## The board: chips, priority, sessions
 
@@ -134,6 +143,8 @@ SETUP
 3. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
    to see the derived stack. There is no `--live` flag; state comes from board.json + git.
+4. SUBSCRIBE TO CI AS VALIDATOR. For every open fork PR, call `subscribe_pr_activity` (GitHub MCP) so
+   red/green is delivered to you — CI is the validator; never run the ROS (coraplex/SDT) suites here.
 
 KEEP THE BOARD LIVE (do this after EVERY state change, in every phase)
 The moment a PR's state changes — closed as merged (Phase 1), a branch restacked + pushed (Phase 2),
@@ -169,6 +180,19 @@ approved (un-drafted), unblocked, and under `wip_cap` — or nothing. If it prin
 cram2 PR (base cram2/main) with an updated description, then add the `in-review` label to its fork PR.
 If it prints nothing, the cap is full or nothing is ready — do not promote. `bug`-labelled PRs never
 count against the cap.
+
+PHASE 4 — CI VALIDATION (subscribe as validator; ROS-free fix-first)
+CI is the validator — you have no ROS, so do not run the coraplex/SDT suites here. Stay subscribed
+(SETUP step 4) to every open fork PR's CI. When a managed branch's CI comes back RED, investigate and
+get around ROS as far as you can locally before handing it to a ROS session:
+- Failure in the ROS-free layer (`krrood`): reproduce it locally with a meaningful failing test, fix
+  it, and validate by running the `krrood` suite locally before pushing — then let CI confirm.
+- ROS-gated failure (coraplex/SDT/ormatic regen): first try to localize the *mechanism* to `krrood`
+  and reproduce it there with a `krrood`-level test (mimic the offending pattern in the `krrood` test
+  datasets, per `AGENTS.md`); fix + validate locally, push, and let CI confirm end-to-end. Only the
+  residue that truly cannot be reproduced without ROS is deferred to a ROS session.
+Never disable a leak/CI check to go green. A generated `ormatic_interface.py` conflict still needs a
+ROS session to regenerate (Phase 2) — that is the one thing CI cannot validate around.
 
 FINISH
 Refresh `board.json` again and commit it if it changed. Then run `python dev/stack.py board` and
