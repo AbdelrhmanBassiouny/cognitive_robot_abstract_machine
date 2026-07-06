@@ -1,5 +1,6 @@
 import logging
 import os
+import tempfile
 from dataclasses import is_dataclass
 
 import pytest
@@ -32,8 +33,11 @@ from .dataset.example_classes import (
     ConceptType,
     JSONSerializableClass,
 )
-from .dataset.role_and_ontology import university_ontology_like_classes_without_descriptors, \
-    role_takers_in_another_module, classes_for_testing_role_recursion_error
+from .dataset.role_and_ontology import (
+    university_ontology_like_classes_without_descriptors,
+    role_takers_in_another_module,
+    classes_for_testing_role_recursion_error,
+)
 from .dataset.semantic_world_like_classes import *
 from .test_eql.conf.world.doors_and_drawers import DoorsAndDrawersWorld
 from .test_eql.conf.world.handles_and_containers import (
@@ -63,7 +67,9 @@ def generate_sqlalchemy_interface():
     all_classes |= set(classes_of_module(krrood.symbol_graph.symbol_graph))
     all_classes |= set(classes_of_module(example_classes))
     all_classes |= set(classes_of_module(semantic_world_like_classes))
-    all_classes |= set(classes_of_module(university_ontology_like_classes_without_descriptors))
+    all_classes |= set(
+        classes_of_module(university_ontology_like_classes_without_descriptors)
+    )
     all_classes |= set(classes_of_module(role_takers_in_another_module))
     all_classes |= set(classes_of_module(classes_for_testing_role_recursion_error))
     all_classes |= set(classes_of_module(alternative_mappings_construction_order))
@@ -100,8 +106,18 @@ def generate_sqlalchemy_interface():
         os.path.dirname(__file__), "dataset", "ormatic_interface.py"
     )
 
-    with open(file_path, "w") as f:
-        instance.to_sqlalchemy_file(f)
+    # Write atomically: under pytest-xdist every worker regenerates this shared file at import
+    # time, so a plain truncating write lets one worker read a half-written (or empty) file while
+    # another is still writing it, which surfaces as "cannot import name ..." at collection and
+    # "different tests collected between gw0 and gw1". Writing to a temporary file in the same
+    # directory and os.replace-ing it into place means every reader always sees a complete file.
+    directory = os.path.dirname(file_path)
+    with tempfile.NamedTemporaryFile(
+        "w", dir=directory, prefix="ormatic_interface.", suffix=".py.tmp", delete=False
+    ) as temporary_file:
+        instance.to_sqlalchemy_file(temporary_file)
+        temporary_path = temporary_file.name
+    os.replace(temporary_path, file_path)
 
     return instance
 

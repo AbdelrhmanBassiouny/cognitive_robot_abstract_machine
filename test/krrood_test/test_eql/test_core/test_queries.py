@@ -15,6 +15,7 @@ from krrood.entity_query_language.exceptions import (
     LiteralConditionError,
     UnsupportedExpressionTypeForDistinct,
     TryingToModifyAnAlreadyBuiltQuery,
+    SymbolicDunderAccessError,
 )
 from krrood.entity_query_language.factories import (
     entity,
@@ -39,6 +40,15 @@ from krrood.entity_query_language.predicate import (
     HasType,
     symbolic_function,
     Predicate,
+)
+from krrood.entity_query_language.verbalization.fragments.features import (
+    GrammaticalNumber,
+)
+from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    clause,
+    Noun,
+    Verb,
 )
 from krrood.patterns.role_predicates import IsSameSemanticEntity
 from krrood.entity_query_language.query.quantifiers import (
@@ -607,6 +617,18 @@ def test_generate_with_using_inherited_predicate(handles_and_containers_world):
         def __call__(self):
             return self.body1.name[0] == self.body2.name[0] == self.body3.name[0]
 
+        @classmethod
+        def _verbalization_fragment_(cls, fields):
+            return clause(
+                Noun(fields["body1"]),
+                Verb("share", number=GrammaticalNumber.PLURAL),
+                Noun("first character"),
+                Prepositions.WITH,
+                Noun(fields["body2"]),
+                Noun("and"),
+                Noun(fields["body3"]),
+            )
+
     body1 = variable(Body, world.bodies)
     body2 = variable(Body, world.bodies)
     body3 = variable(Body, world.bodies)
@@ -659,6 +681,15 @@ def test_select_predicate(handles_and_containers_world):
         def __call__(self):
             return self.body.name == self.name
 
+        @classmethod
+        def _verbalization_fragment_(cls, fields):
+            return clause(
+                Noun(fields["body"]),
+                Verb("have"),
+                Noun.the("name"),
+                Noun(fields["name"]),
+            )
+
     body = variable(Body, world.bodies)
     has_name = HasName(body, "Handle1")
     query = the(entity(has_name).where(has_name))
@@ -699,6 +730,15 @@ def test_literal_predicate(handles_and_containers_world):
 
         def __call__(self):
             return self.body.name == self.name
+
+        @classmethod
+        def _verbalization_fragment_(cls, fields):
+            return clause(
+                Noun(fields["body"]),
+                Verb("have"),
+                Noun.the("name"),
+                Noun(fields["name"]),
+            )
 
     has_name = HasName(world.bodies[0], world.bodies[0].name)
     with pytest.raises(LiteralConditionError):
@@ -1225,6 +1265,28 @@ def test_type_availability_in_mapped_variables(handles_and_containers_world):
     assert first_drawer_handle._type_ is Handle
 
 
+def test_accessing_a_dunder_attribute_symbolically_raises_a_helpful_error():
+    """Dunder attribute access on a variable raises a helpful, AttributeError-compatible error.
+
+    It must remain an :class:`AttributeError` so that ``copy``/``pickle`` machinery probing optional
+    dunder hooks still treats it as a missing attribute, while its message points at
+    ``@symbolic_function`` as the correct way to reach a dunder-named member.
+    """
+    var = variable(int, [1, 2, 3])
+
+    with pytest.raises(SymbolicDunderAccessError) as exception_info:
+        var.__name__
+
+    assert isinstance(exception_info.value, AttributeError)
+    assert exception_info.value.attribute_name == "__name__"
+    message = str(exception_info.value)
+    assert "__name__" in message
+    assert "symbolic_function" in message
+
+    # The AttributeError contract keeps optional-hook probing working.
+    assert getattr(var, "__name__", "fallback") == "fallback"
+
+
 def test_root_caches_all_descendant_ids_for_nested_queries():
     """
     Test that the root of a query has all descendant IDs in its _expression_id_cache_,
@@ -1319,17 +1381,6 @@ def test_indexing_2():
     body_tha_has_red_shape = list(body_tha_has_red_shape)
     assert len(body_tha_has_red_shape) == 1
     assert body_tha_has_red_shape[0].shapes[0].color == "red"
-
-
-def test_accessing_dunder_methods():
-    world_classes = [Body, Cabinet, Drawer, Handle, Container, Connection]
-    world_class = variable_from(world_classes)
-    world_class_starting_with_c = entity(world_class).where(
-        world_class.__name__.startswith("C")
-    )
-    results = world_class_starting_with_c.tolist()
-    assert len(results) == 3
-    assert set(results) == {c for c in world_classes if c.__name__.startswith("C")}
 
 
 def test_debugger_issue():
