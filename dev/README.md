@@ -181,18 +181,17 @@ cram2 PR (base cram2/main) with an updated description, then add the `in-review`
 If it prints nothing, the cap is full or nothing is ready — do not promote. `bug`-labelled PRs never
 count against the cap.
 
-PHASE 4 — CI VALIDATION (subscribe as validator; ROS-free fix-first)
-CI is the validator — you have no ROS, so do not run the coraplex/SDT suites here. Stay subscribed
-(SETUP step 4) to every open fork PR's CI. When a managed branch's CI comes back RED, investigate and
-get around ROS as far as you can locally before handing it to a ROS session:
-- Failure in the ROS-free layer (`krrood`): reproduce it locally with a meaningful failing test, fix
-  it, and validate by running the `krrood` suite locally before pushing — then let CI confirm.
-- ROS-gated failure (coraplex/SDT/ormatic regen): first try to localize the *mechanism* to `krrood`
-  and reproduce it there with a `krrood`-level test (mimic the offending pattern in the `krrood` test
-  datasets, per `AGENTS.md`); fix + validate locally, push, and let CI confirm end-to-end. Only the
-  residue that truly cannot be reproduced without ROS is deferred to a ROS session.
-Never disable a leak/CI check to go green. A generated `ormatic_interface.py` conflict still needs a
-ROS session to regenerate (Phase 2) — that is the one thing CI cannot validate around.
+PHASE 4 — CI VALIDATION (track only; do NOT fix or restack here)
+This routine is mechanical: it never runs suites, writes fixes, or restacks a red branch — it only
+tracks CI so the board is live and routes work to the right place. Stay subscribed (SETUP step 4) and
+record each PR's red/green on its board chip. When a branch is RED (a real CI failure) or BLOCKED (a
+Phase-2 `ormatic_interface.py` conflict), do NOT try to green it here and do NOT loosen Phase 2's
+skip — leave it deferred and make sure a per-branch dev session is (or gets) pointed at it via the
+board's `session` / `+ new` chip. Fixing red CI — including the "get around ROS by reproducing in
+`krrood` and validating locally" work (see the CI-is-the-validator hygiene rule) — is that dev
+session's job, not the routine's. A generated `ormatic_interface.py` regen genuinely needs ROS and
+cannot be reproduced in `krrood`, so it always stays a ROS-session task. Never disable a check to go
+green.
 
 FINISH
 Refresh `board.json` again and commit it if it changed. Then run `python dev/stack.py board` and
