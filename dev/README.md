@@ -214,21 +214,74 @@ The promote step is gated by `stack.py next`, which only ever names an un-drafte
 — so the Routine can never flood cram2, and never promotes something you haven't approved by
 un-drafting its fork PR.
 
+## The board-refresh Routine (paste into claude.ai/code/routines)
+
+A second, separate routine for high-frequency events (a PR opened, its CI starting or going red, a
+label added) where you only want the board to reflect reality — **not** to restack, promote, or
+autofix. It shares nothing with the restack Routine except the board Artifact URL. Keep it strictly
+read-only with respect to branches and PRs: the only things it writes are `dev/board.json` and the
+board Artifact.
+
+```text
+You keep the stacked-PR board in sync with reality. This routine ONLY refreshes the board and its
+hosted page. It NEVER closes a PR, restacks or pushes a feature branch, adds/removes a label, opens a
+cram2 PR, or attempts any CI fix. `origin` is my fork; `cram2` is upstream.
+
+SETUP
+0. Ensure remotes: `origin` = fork (AbdelrhmanBassiouny/cognitive_robot_abstract_machine),
+   `cram2` = upstream. Check `git remote -v` and rename/add if a fresh clone differs.
+1. `git fetch origin` and `git fetch cram2 main` (the merged-state chip is computed by git ancestry
+   against cram2/main).
+
+REFRESH (writes only dev/board.json + the Artifact — nothing else)
+2. Refresh `dev/board.json` from the fork's OPEN PRs via the GitHub MCP: for each PR record number,
+   head, base, isDraft, labels, statusCheckRollup (the CI chip) and body. Drop PRs that are no longer
+   open. Do NOT modify, push, or create any branch or PR.
+3. Run `python dev/stack.py board` (recomputes status, conflicts, LOC from git + board.json).
+4. Redeploy `dev/board.html` to the EXISTING Artifact at
+   https://claude.ai/code/artifact/d53805e1-177c-4a0d-afd7-4fadc09f3877 — pass that URL so it updates
+   in place; do NOT mint a new Artifact.
+5. If `dev/board.json` changed, commit it on the tooling branch (board data only) and push that
+   branch. Never touch a stack feature branch.
+
+FINISH
+One line: which PRs were added/removed, any CI chip transitions, any label changes. Nothing else —
+no restacking, no promotion, no fixes. If something looks like it needs restacking or promoting, say
+so in the summary and stop; the restack Routine (or I) will handle it.
+```
+
+Because it only ever writes `board.json` and redeploys the Artifact, running it on a red-CI or
+new-PR event is safe and cheap — it can never open a cram2 PR, force-push, or push a fix.
+
 ### Triggers (set at claude.ai/code/routines)
 
-Install the Claude GitHub app on the **fork** (it's yours), then give the routine both a **schedule**
-(e.g. hourly, so nothing goes stale even with no events) and **fork PR-event triggers**. The events
-that map to your asks:
+Install the Claude GitHub app on the **fork** (it's yours). You now have two routines with different
+trigger sets; the app is shared.
 
-| You want it to run when… | GitHub `pull_request` event |
+**Restack Routine** — give it a **schedule** (e.g. hourly, so nothing goes stale even with no events)
+plus the state-change events that warrant restacking/promoting:
+
+| Run restack when… | GitHub event |
 |---|---|
-| a new PR is opened | `opened` |
-| you un-draft a PR (approve it) | `ready_for_review` |
-| you add/remove a label (`in-review`, `bug`) | `labeled` / `unlabeled` |
-| a PR is retargeted (parent changed) | `edited` |
+| a new PR is opened | `pull_request: opened` |
+| you un-draft a PR (approve it) | `pull_request: ready_for_review` |
+| you add/remove a label (`in-review`, `bug`) | `pull_request: labeled` / `unlabeled` |
+| a PR is retargeted (parent changed) | `pull_request: edited` |
 
-The exact event checkboxes appear in the routine's trigger config; tick those. (cram2 stays
-untouched — you don't need the app there; merges are detected from the fork by git ancestry.)
+**Board-refresh Routine** — the high-frequency, side-effect-free events where you just want the board
+current:
+
+| Refresh the board when… | GitHub event |
+|---|---|
+| a new PR is opened | `pull_request: opened` |
+| a label is added/removed | `pull_request: labeled` / `unlabeled` |
+| CI starts | `check_suite: requested` (or `workflow_run: requested`) |
+| CI finishes (pass or fail) | `check_suite: completed` (or `workflow_run: completed`) |
+
+The `check_suite`/`workflow_run` events are what carry CI start/finish — `pull_request` events do not.
+Overlap on `opened`/`labeled` is fine: the board refresh is idempotent and cheap, and the restack
+Routine refreshes the board itself as part of its own run. (cram2 stays untouched — you don't need the
+app there; merges are detected from the fork by git ancestry.)
 
 ### The phone board (one tap)
 
