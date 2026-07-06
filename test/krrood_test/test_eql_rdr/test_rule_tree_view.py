@@ -167,14 +167,14 @@ class TestConclusionDeduplication(unittest.TestCase):
 class TestInsertAtCloning(unittest.TestCase):
     """Phase 2: ``insert_at`` clones parented condition nodes to prevent node-sharing."""
 
-    def test_fresh_expression_clones_with_new_id_and_no_parent(self):
-        from krrood.entity_query_language.rules.conclusion_selector import _fresh_expression
+    def test_clone_expression_clones_with_new_id_and_no_parent(self):
+        from krrood.entity_query_language.rules.conclusion_selector import _clone_expression
 
         animal = variable(Animal, domain=[])
         cond = animal.milk == True
         original_id = cond._id_
 
-        clone = _fresh_expression(cond)
+        clone = _clone_expression(cond)
         self.assertNotEqual(clone._id_, original_id)
         self.assertIsNone(clone._parent_)
         # Children are shared shallowly (same object references)
