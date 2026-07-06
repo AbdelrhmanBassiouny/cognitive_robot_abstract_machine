@@ -135,14 +135,12 @@ SETUP
    `cram2`=upstream before continuing.
 1. UPDATE FORK MAIN FIRST — before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
-   inflates every root branch's diff. Fork main carries exactly one fork-only commit on top of the
-   upstream trunk — `.github/workflows/board-dispatch.yml`, which pings the `stack-board` repo — so
-   refreshing it is a rebase of that single commit, not a plain fast-forward:
-     `git fetch cram2 main && git checkout main && git rebase cram2/main && git push --force-with-lease origin main`
-   The rebase must replay only that one workflow commit cleanly; if it reports anything else, STOP and
-   report — do NOT force past a conflict. (If you ever find fork main with no such commit, a plain
-   `git push origin cram2/main:main` fast-forward is correct.) This does not pollute PR diffs — a PR's
-   3-dot diff excludes commits that live only on its base.
+   inflates every root branch's diff. Fork main is a pristine mirror of the upstream trunk — keep it
+   that way, because root branches base on it and the restack merges it into them, so anything you add
+   here would flow into every branch and then into cram2. Fast-forward it:
+     `git fetch cram2 main && git push origin cram2/main:main`
+   This MUST be a fast-forward. If GitHub rejects it as non-fast-forward (fork main has unique
+   commits), STOP and report — do NOT force.
 2. `git fetch origin`.
 3. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
@@ -224,12 +222,12 @@ board repo's built-in `GITHUB_TOKEN` — the fork is public, so no PAT) then `py
 Pages. It has `contents: read` + `pages: write` only, and touches nothing on the fork or upstream.
 
 **A workflow only sees events in its own repo**, so the board Action runs on a **`schedule`** (polls
-the fork every ~10 min), **`workflow_dispatch`** (manual kick), and **`repository_dispatch`** (instant).
-That last one is fired by the fork's `.github/workflows/board-dispatch.yml`, which pings this repo on
-every PR / CI / label change so the board refreshes in seconds instead of on the poll. The sender
-carries no Pages — it only sends an API dispatch — so it never touches the docs Pages; it needs the
-`BOARD_DISPATCH_TOKEN` secret on the fork (a PAT with `Contents: R/W` on `stack-board`). The restack
-Routine keeps the *intelligence* (restack, promote, autofix); the Action keeps the *picture* current.
+the fork every ~10 min) plus **`workflow_dispatch`** (manual kick). Poll-only is deliberate: an
+instant `repository_dispatch` sender would have to live on the fork's `main` (only the default branch
+gets `check_suite` events), and since the restack merges `main` into every branch, that sender file
+would leak into the stack's PRs and up to cram2 — not worth a few minutes of latency. The restack
+Routine keeps the *intelligence* (restack, promote, autofix); the Action keeps the *picture* current
+within a poll.
 
 ### One-time setup (all in the `stack-board` repo)
 
