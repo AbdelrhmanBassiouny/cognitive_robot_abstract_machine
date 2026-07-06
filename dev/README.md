@@ -175,15 +175,24 @@ Don't block on CI: after pushing a branch, move on to the next independent branc
 / promoting (Phase 3) in parallel, reacting to CI results as the subscription delivers them — never
 sit idle waiting on a ~20-minute run.
 
-When a branch conflicts or its CI comes back RED, get around ROS as far as you can before deferring:
+When a branch conflicts or its CI comes back RED, get around ROS as far as you can — never park a
+branch on a ROS dependency; resolve it non-blockingly and let CI be the final check:
 - If the failure/mechanism lives in the ROS-free layer (`krrood`, which runs here), reproduce it
   locally with a meaningful failing test (mimic the offending pattern in the `krrood` test datasets
   per `AGENTS.md` when it originates in another package), fix it, and validate by running the
   `krrood` suite locally; push and let CI confirm end-to-end.
-- Only the residue that genuinely cannot be reproduced or validated without ROS is deferred to a ROS
-  session. A generated `ormatic_interface.py` conflict is exactly that: regenerating it needs ROS —
-  skip that branch and its descendants (they depend on its new SHA) and hand it to a ROS session,
-  then carry on with the independent branches.
+- A generated `ormatic_interface.py` conflict never blocks — the file is regenerated, not
+  hand-authored, so never skip the branch or its descendants over it. Resolve it and depend on CI:
+  - Package ORM (`{semantic_digital_twin,coraplex,experiments}/**/orm/ormatic_interface.py`) is
+    rebuilt from source by CI's `Build ORM` step, so its committed content is throwaway — resolve
+    the conflict by taking either side (`git checkout --ours`/`--theirs` that path), push, and let
+    CI regenerate and validate it.
+  - The `krrood` dataset ORM (`test/krrood_test/dataset/ormatic_interface.py`) regenerates locally
+    with no ROS: run the `krrood` suite (its conftest rebuilds it), commit the regenerated file, and
+    push.
+  - Never hand-edit an `ormatic_interface.py`; only take-a-side or regenerate.
+- Keep restacking / promoting the other branches in parallel while CI chews on the ones you pushed —
+  an ormatic-touching branch is never a reason to stall the rest of the stack.
 Never disable a leak/CI check to go green.
 
 PHASE 3 — PROMOTE (obey the WIP cap)
