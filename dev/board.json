@@ -64,12 +64,12 @@
       "session": "https://claude.ai/code/session_018bDvmf9UsQTgTJC1FwJqmg"
     },
     {
-      "number": 29,
+      "number": 38,
       "head": "rdr-engine",
       "base": "eql-core-prep",
       "draft": true,
       "labels": [],
-      "ci": "success",
+      "ci": null,
       "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo"
     },
     {
@@ -78,7 +78,7 @@
       "base": "main",
       "draft": true,
       "labels": [],
-      "ci": "success",
+      "ci": null,
       "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo"
     },
     {
