@@ -236,8 +236,7 @@ class Match(AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     domain: Optional[DomainType] = field(default=None, kw_only=True)
     """
     Optional domain of instances the match ranges over. When set, the created variable is
-    bound to this domain, which lets backends iterate the instances to infer/fill
-    underspecified attributes. ``None`` leaves the variable's domain unbound.
+    bound to this domain so it can be iterated. ``None`` leaves the variable's domain unbound.
     """
 
     def __post_init__(self):
