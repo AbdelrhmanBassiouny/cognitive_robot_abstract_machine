@@ -165,10 +165,10 @@ class EQLSingleClassRDR:
             self.query, self.case_variable, self.conclusion_variable, case
         )
 
-    def _trace(self, case: Any) -> ClassificationTrace:
+    def trace(self, case: Any) -> ClassificationTrace:
         """
-        Trace the classification process for a given case, returning a detailed trace of
-        the classification steps.
+        Trace the classification of ``case``, returning the firing rule, satisfied
+        conditions, and conclusion — the provenance of *why* the case was classified so.
 
         :param case: The case to trace.
         :return: A classification trace object.
@@ -201,7 +201,7 @@ class EQLSingleClassRDR:
         if self.query is None:
             return ""
         return render_rule_tree(
-            self._trace(case), head=head, tail=tail, use_color=use_color
+            self.trace(case), head=head, tail=tail, use_color=use_color
         )
 
     def fit_case(
@@ -222,7 +222,7 @@ class EQLSingleClassRDR:
             expert's conclusion).
         """
 
-        trace = None if self.query is None else self._trace(case)
+        trace = None if self.query is None else self.trace(case)
         current = trace.conclusion if trace is not None else UNSET
 
         if target is not UNSET and current == target:

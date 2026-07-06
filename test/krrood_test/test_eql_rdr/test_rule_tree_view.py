@@ -301,7 +301,7 @@ class TestStatusResolution(unittest.TestCase):
 
         rdr = load_rdr(str(model_path))
         for animal_case, _ in zip(animals, targets):
-            trace = rdr._trace(animal_case)
+            trace = rdr.trace(animal_case)
             rules = walk_rules(trace.rule_tree_root)
             statuses = [
                 resolve_status(

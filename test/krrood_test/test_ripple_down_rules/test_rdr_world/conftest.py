@@ -39,7 +39,7 @@ def get_possible_drawers() -> List[Drawer]:
     world = handles_and_containers_world()
     for handle in [body for body in world.bodies if isinstance(body, Handle)]:
         for container in [body for body in world.bodies if isinstance(body, Container)]:
-            view = Drawer(handle, container, world=world)
+            view = Drawer(handle=handle, container=container, world=world)
             all_possible_drawers.append(view)
     return all_possible_drawers
 

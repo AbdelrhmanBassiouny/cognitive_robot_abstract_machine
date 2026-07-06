@@ -30,6 +30,7 @@
 - Imports should always be absolute
 - Exception: within tests, importing another test module (for example a shared mimic or fixture from the test datasets) must use a relative import
 - Imports should always be global (top of module), except in very special cases (for example ORM interface imports)
+- Keep `__init__.py` files empty (a module docstring is fine); do not put imports, re-exports, `__all__`, or any other code in them. Import from the concrete modules instead.
 - Use stdlib type hints where possible, and for others use typing_extensions instead of typing
 - Whenever you would wrap types in strings for deferred resolution, use `from __future__ import annotations` instead.
 - use TYPE_CHECKING guard for type-only imports
@@ -46,7 +47,7 @@
   - Interface Segregation: Prefer many small interfaces over one large one.
   - Dependency Inversion: Depend on abstractions, not concrete implementations.
 - Code should be modular and decoupled
-- Create meaningful custom exceptions
+- Create meaningful custom exceptions. They must inherit from `krrood.exceptions.DataclassException` (as a `@dataclass`) and implement `error_message()` and `suggest_correction()`; never subclass `Exception` directly or hand-write `__str__`.
 - Eliminate YAGNI smells
 - Make interfaces hard to misuse
 - Reduce nesting and reduce complexity:

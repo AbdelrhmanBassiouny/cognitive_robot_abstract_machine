@@ -4,7 +4,20 @@ from dataclasses import dataclass, field
 
 from typing_extensions import ClassVar, List, Mapping, Optional, Type, Iterable
 
+from krrood.entity_query_language.factories import (
+    an,
+    deduced_variable,
+    entity,
+    inference,
+    variable,
+)
 from krrood.entity_query_language.predicate import Symbol, Predicate
+from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.rdr.recognition.candidate_generator import (
+    CandidateGenerator,
+)
+from krrood.entity_query_language.rdr.recognition.has_candidates import HasCandidates
+from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
 )
@@ -74,9 +87,9 @@ class View(WorldEntity): ...
 
 
 @dataclass
-class Drawer(View):
-    handle: Handle
+class Drawer(View, HasCandidates):
     container: Container
+    handle: Optional[Handle] = None
     correct: Optional[bool] = None
 
     def __hash__(self):
@@ -90,6 +103,40 @@ class Drawer(View):
             and self.container == other.container
             and self.world == other.world
         )
+
+    @classmethod
+    def candidates(cls, world: World) -> Query:
+        """Over-generating structural proposal of drawer candidates, as an unevaluated query.
+
+        The recall-oriented half of recognition (:cite:t:`erman1980hearsay`); a
+        :class:`~krrood.entity_query_language.rdr.recognition.definition.Definition`
+        judges which candidates are genuine drawers.
+        """
+        return DrawerCandidateGenerator().generate(world)
+
+
+@dataclass
+class DrawerCandidateGenerator(CandidateGenerator["Drawer"]):
+    """Proposes drawer candidates from a weak structural signal.
+
+    A candidate is any container mounted on a prismatic joint (drawers slide). The
+    handle is deliberately not required, so handle-less drawers are still proposed;
+    precision — including whether a handle is present — is left to the drawer
+    definition (:cite:t:`clancey1985heuristic`).
+    """
+
+    def generate(self, world: World) -> Query:
+        container = variable(Container, domain=world.bodies)
+        prismatic_connection = variable(PrismaticConnection, domain=world.connections)
+        candidates = deduced_variable(Drawer)
+        query = an(
+            entity(candidates).where(
+                container == prismatic_connection.child,
+            )
+        )
+        with query:
+            Add(candidates, inference(Drawer)(container=container))
+        return query
 
 
 @dataclass
