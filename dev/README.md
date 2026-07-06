@@ -132,6 +132,25 @@ DRAFT flag is the ready gate, an `in-review` label means promoted-to-cram2, and 
 ancestor of cram2/main is merged. Do NOT use the Workflow tool. Use plain git + the GitHub MCP. Never
 force-push a branch that has an open cram2 PR unless it carries the `rebase` label.
 
+PRE-FLIGHT — before EVERY push, merge, or restack, no exceptions
+Never move commits from memory. First WRITE OUT these four lines and verify each with git; only then run
+the command:
+  - ACTION: push | merge | restack.
+  - FROM (source): run `git branch --show-current` and `git rev-parse --short HEAD`. The checked-out
+    branch MUST be the one whose content you intend to move. NEVER push while checked out on a different
+    branch, and NEVER map a mismatched refspec — use `git push origin <branch>` or `<branch>:<branch>`
+    with identical names. A `git push origin HEAD:<other-branch>` or a `<src>:<dst>` where src≠dst is
+    FORBIDDEN unless you have explicitly written out and verified both sides.
+  - INTO (destination): the exact remote + branch (e.g. `origin/eql-core-prep`). Confirm the remote is
+    the fork (`origin`), never `cram2`. If force-pushing, confirm no open cram2 PR (or it carries
+    `rebase`) and use `--force-with-lease`.
+  - WHY: one sentence — what you are integrating and why it belongs on that destination branch.
+Then INTENT-CHECK the parentage before pushing: run `git log --oneline -5 <source>` and
+`git log --oneline -3 origin/<destination>`; the only new commits about to land on the destination must
+be the ones you expect. If a CHILD branch's commits would become ancestors of its PARENT, GitHub will
+auto-mark the child PR as merged — a false merge. STOP and do not push. (This exact mistake once pushed
+`rdr-engine`'s HEAD onto `eql-core-prep` and falsely merged the child PR #29.)
+
 SETUP
 0. Ensure remotes match the config: `origin` must be the fork
    (AbdelrhmanBassiouny/cognitive_robot_abstract_machine) and `cram2` the upstream. A fresh cloud
