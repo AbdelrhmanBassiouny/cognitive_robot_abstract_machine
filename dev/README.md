@@ -135,13 +135,10 @@ SETUP
    `cram2`=upstream before continuing.
 1. UPDATE FORK MAIN FIRST — before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
-   inflates every root branch's diff. Fork main carries exactly one fork-only commit on top of the
-   upstream trunk — `.github/workflows/board.yml`, the board's Pages publisher — so refreshing it is a
-   rebase of that single commit, not a plain fast-forward:
-     `git fetch cram2 main && git checkout main && git rebase cram2/main && git push --force-with-lease origin main`
-   If the rebase reports anything other than replaying that one workflow commit cleanly, STOP and
-   report — do NOT force past a conflict. (If you ever find fork main with no such commit, a plain
-   `git push origin cram2/main:main` fast-forward is correct.)
+   inflates every root branch's diff. Fast-forward it to the upstream trunk:
+     `git fetch cram2 main && git push origin cram2/main:main`
+   This MUST be a fast-forward. If GitHub rejects it as non-fast-forward (fork main has unique
+   commits), STOP and report — do NOT force.
 2. `git fetch origin`.
 3. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
@@ -150,10 +147,10 @@ SETUP
    red/green is delivered to you — CI is the validator; never run the ROS (coraplex/SDT) suites here.
 
 THE BOARD PUBLISHES ITSELF
-You do not render or redeploy the board. The `board` GitHub Action (`.github/workflows/board.yml`)
-rebuilds it on GitHub Pages whenever a PR, its CI, or a label changes — which is exactly what your
-state changes below produce (closing a PR, pushing a restacked branch, adding the `in-review` label).
-So make the state change and move on; the board follows. Never hand-redeploy an Artifact.
+You do not render or redeploy the board. A GitHub Action in the separate `stack-board` repo polls the
+fork and republishes the board to its own GitHub Pages site every few minutes. So make your state
+changes and move on; the board catches up on its next poll. Never render `board.html` or redeploy an
+Artifact here.
 
 PHASE 1 — AUTO-CLOSE LANDED FORK PRs
 cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an
@@ -208,49 +205,40 @@ The promote step is gated by `stack.py next`, which only ever names an un-drafte
 — so the Routine can never flood cram2, and never promotes something you haven't approved by
 un-drafting its fork PR.
 
-## The board GitHub Action (publishes to Pages)
+## The board GitHub Action (a separate `stack-board` repo → its own Pages)
 
 Board *refresh* is pure mechanics — fetch the fork's open PRs, render, publish — so it is a GitHub
-Action, not a routine. No LLM, no token cost, no Claude app: `.github/workflows/board.yml` runs
-`python dev/stack.py export` (fetches open PRs via `gh`, using the built-in `GITHUB_TOKEN`) then
-`python dev/stack.py board` (renders `dev/board.html` from `board.json` + git), and deploys the page
-to GitHub Pages. It has `contents: read` + `pages: write` only — it never touches a branch, PR, label,
-or the upstream. The restack Routine keeps the *intelligence* (restack, promote, autofix); the Action
-keeps the *picture* current between (and during) its runs.
+Action, not a routine. It lives in a **separate public repo** (`stack-board`) for one hard reason: a
+repo has exactly one GitHub Pages site, and the fork's Pages is already taken by the docs. A second
+`deploy-pages` in the fork would clobber the docs (and vice-versa), so the board gets its own repo and
+its own Pages URL.
 
-It fires on exactly the events you asked for:
+The Action (`.github/workflows/board.yml` in `stack-board`) checks out the fork's
+`claude/stack-workflow-tooling` branch, runs `python dev/stack.py export` (open PRs via `gh` + the
+board repo's built-in `GITHUB_TOKEN` — the fork is public, so no PAT) then `python dev/stack.py board`
+(renders `dev/board.html` from `board.json` + git), and deploys the page to the `stack-board` repo's
+Pages. It has `contents: read` + `pages: write` only, and touches nothing on the fork or upstream.
 
-| Refresh the board when… | GitHub event (in `board.yml`) |
-|---|---|
-| a PR is opened / closed / retargeted | `pull_request: opened, reopened, closed, edited` |
-| a branch is pushed (restacked) | `pull_request: synchronize` |
-| a label / draft state changes | `pull_request: labeled, unlabeled, ready_for_review, converted_to_draft` |
-| CI starts | `check_suite: requested` |
-| CI finishes (pass or fail) | `check_suite: completed` |
-| nothing happened for a while | `schedule: hourly` (safety net) |
+**It does not react to the fork's events** — a workflow only sees events in its own repo. So it runs on
+a **`schedule`** (polls the fork every ~10 min) plus **`workflow_dispatch`** (manual kick). A poll lag
+of a few minutes is fine for a review board; if you later want it instant on CI/label changes, add a
+tiny `repository_dispatch` sender workflow on the fork (that one carries no Pages, so it still won't
+touch the docs). The restack Routine keeps the *intelligence* (restack, promote, autofix); the Action
+keeps the *picture* current.
 
-`check_suite` is what carries CI start/finish — `pull_request` events do not — which is why CI
-transitions need the Action (a routine can't subscribe to them from GitHub's side). The workflow only
-publishes when `github.repository` is the fork, so it stays dormant if the branch ever reaches cram2.
+### One-time setup (all in the `stack-board` repo)
 
-### One-time setup
-
-1. **Put `board.yml` on the fork's default branch (`main`).** GitHub runs `check_suite`/`schedule`
-   workflows from the default branch only. This is the single fork-only commit on top of the upstream
-   trunk (SETUP step 1 of the Routine rebases it forward). It does **not** pollute PR diffs — a PR's
-   3-dot diff excludes commits that are only on its base.
-2. **Enable Pages:** repo **Settings → Pages → Source: GitHub Actions**. The first `board` run then
-   publishes to `https://<owner>.github.io/<repo>/`.
-3. **Visibility:** on a **private** repo, Pages is public unless you're on a plan with private Pages —
-   if the board must stay private, either make the repo public or keep the board as a routine-rendered
-   private Artifact instead. On a public fork there's nothing to do.
+1. **Add `.github/workflows/board.yml`** (contents below) to the `stack-board` repo.
+2. **Enable Pages:** `stack-board` → **Settings → Pages → Source: GitHub Actions**.
+3. Run the workflow once (**Actions → board → Run workflow**) to publish the first page. It then
+   self-refreshes on the schedule. Because the fork is public, no secrets/PATs are needed.
 
 ### The phone board (one tap)
 
-The board is a Pages site at a **fixed URL** (`https://<owner>.github.io/<repo>/`). On your phone,
+The board is a Pages site at a **fixed URL** (`https://<owner>.github.io/stack-board/`). On your phone,
 open it once and **Add to Home Screen** (Safari: Share → *Add to Home Screen*; Chrome: ⋮ → *Add to
-Home screen*). That icon is your one-tap button; the Action republishes the same URL on every event,
-so the tap always shows current state — the header carries the "generated" timestamp. The board is
+Home screen*). That icon is your one-tap button; the Action republishes the same URL on each poll, so
+the tap always shows current state — the header carries the "generated" timestamp. The board is
 read-only; you act by tapping a PR (it links straight to the GitHub PR, where you un-draft / label /
 retarget).
 
