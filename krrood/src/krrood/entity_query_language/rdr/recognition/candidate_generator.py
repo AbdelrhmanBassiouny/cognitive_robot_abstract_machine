@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Any, Generic, TypeVar
 
-from krrood.entity_query_language.query.query import Query
+from krrood.entity_query_language.query.match import Match
 
 ViewType = TypeVar("ViewType")
 """The view type whose candidates the generator proposes (e.g. ``Drawer``)."""
@@ -33,13 +33,16 @@ class CandidateGenerator(ABC, Generic[ViewType]):
     """
 
     @abstractmethod
-    def generate(self, world: Any) -> Query:
-        """Build, but do not evaluate, the query proposing candidate views.
+    def generate(self, world: Any) -> Match:
+        """Describe the candidate views as an underspecified view, without constructing them.
 
-        Returning the live query keeps generation lazy and composable: the engine
-        decides when to evaluate it, and the query stays introspectable.
+        Returning the underspecified :class:`~krrood.entity_query_language.query.match.Match`
+        keeps generation lazy and composable: a generative backend decides when to construct,
+        and the recall signal stays introspectable. Recall constraints belong in the candidate
+        variables' domains, leaving the match's single ``where`` free for the definition's
+        judgment (a ``Match`` locks after one ``where``).
 
         :param world: The structure to propose candidate views from.
-        :return: The unevaluated EQL query whose solutions are the candidate views.
+        :return: The underspecified ``Match`` a generative backend constructs into candidates.
         """
         ...

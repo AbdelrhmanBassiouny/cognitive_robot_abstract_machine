@@ -16,6 +16,7 @@ import unittest
 from typing_extensions import List, Optional
 
 from krrood.entity_query_language.factories import and_, an
+from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.rdr.backend import RDRBackend
 from krrood.entity_query_language.rdr.expert import Expert
@@ -226,6 +227,36 @@ class TestRDRBackendFitModes(unittest.TestCase):
         backend = RDRBackend(expert=None)
         with self.assertRaises((ValueError, NotImplementedError)):
             list(backend.infer(an(Animal)(species=...).from_(animals[:3])))
+
+
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestRDRBackendConformsToQueryBackend(unittest.TestCase):
+    """The RDR backend answers an underspecified ``Match`` through the shared
+    :meth:`~krrood.entity_query_language.backends.QueryBackend.evaluate` frontend, so it can be
+    selected like the selective and generative backends."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls._fitted_model = _ZOO_MODEL_CACHE
+
+    def _fitted_backend(self) -> RDRBackend:
+        backend = RDRBackend()
+        backend.models[(Animal, "species")] = self._fitted_model
+        return backend
+
+    def test_rdr_backend_is_a_query_backend(self):
+        self.assertIsInstance(self._fitted_backend(), QueryBackend)
+
+    def test_evaluate_via_frontend_matches_infer(self):
+        # A caller selects the RDR backend through Evaluable.evaluate(backend=...); the result
+        # is the same lazy UnificationDicts as infer().
+        backend = self._fitted_backend()
+        query = an(Animal)(species=...).from_(animals)
+        evaluated = list(query.evaluate(backend=backend))
+        self.assertTrue(all(isinstance(result, UnificationDict) for result in evaluated))
+        self.assertEqual(
+            [result[query.variable.species] for result in evaluated], list(targets)
+        )
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
