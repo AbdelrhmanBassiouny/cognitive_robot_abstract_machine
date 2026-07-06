@@ -29,9 +29,13 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 - **`stack.toml`** — **config only**: `wip_cap`, `wip_exempt_labels`, the label names, and the
   remotes. No branches, no per-PR state. You rarely touch it.
-- **`board.json`** — the fork-PR export (`number`, `head`, `base`, `draft`, `labels`) that `stack.py`
-  reads. Refreshed by the routine via the GitHub MCP, or locally with `python dev/stack.py export`
-  (uses `gh`). Machine-written — don't hand-edit.
+- **`board.json`** — the fork-PR export (`number`, `head`, `base`, `draft`, `labels`, `ci`, `session`)
+  that `stack.py` reads. **Generated and git-ignored, never committed**: `stack.py export` writes it
+  from live fork PRs via `gh`, the routine writes it as scratch via the GitHub MCP, and the
+  stack-board Action regenerates it on its own runner. It is fully reproducible from GitHub (`ci` from
+  the check rollup, `session` parsed from the PR body), so a committed copy would only go stale and
+  make `stack.py status` report wrong state. Machine-written — don't hand-edit; if it's missing, run
+  `export`.
 - **`stack.py`** — read-only status tool (never mutates branches). Reads `board.json` + git:
   - `python dev/stack.py status` — the whole stack, with ahead/behind drift per parent.
   - `python dev/stack.py check` — would each branch integrate cleanly onto its parent *now*

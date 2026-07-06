@@ -1,5 +1,10 @@
 tmp/
 .claude/worktrees/
+
+# Generated, non-authoritative fork-PR export — rewritten by `dev/stack.py export`, by the routine as
+# scratch, and by the stack-board publish workflow on its runner. Never commit it: a committed copy
+# only goes stale and misleads `dev/stack.py status`. Fully reproducible from GitHub via `export`.
+dev/board.json
 *.mypy_cache/
 build/
 data/
