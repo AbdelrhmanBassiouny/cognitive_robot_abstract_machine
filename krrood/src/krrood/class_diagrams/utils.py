@@ -22,6 +22,7 @@ from typing_extensions import (
     Type,
     TypeVar,
     TypeVarTuple,
+    get_origin,
 )
 
 from krrood import logger
