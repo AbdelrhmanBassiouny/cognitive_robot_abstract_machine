@@ -165,14 +165,26 @@ ancestor of cram2/main. For each OPEN fork PR with head branch B:
   with a comment noting it merged into cram2/main.
 - NEVER close a fork PR whose work has NOT landed. (Merged is the only close condition.)
 
-PHASE 2 — RESTACK (mechanical, no ROS)
-This environment has no ROS, so do NOT run tests or regenerate ORM here — a clean merge is correct by
-construction; verification is left to fork CI and interactive ROS sessions. Run
-`python dev/stack.py restack-plan` for the bottom-up plan. For each entry, if its parent moved,
+PHASE 2 — RESTACK + VALIDATE (CI is the validator; ROS-free fix-first; work in parallel)
+Run `python dev/stack.py restack-plan` for the bottom-up plan. For each entry whose parent moved,
 integrate the parent using its `strategy` (merge = default, no force-push; rebase =
-force-push-with-lease) ONLY IF the merge is clean, then push. STOP and report a branch the moment it
-conflicts (including a generated `ormatic_interface.py` — regenerating needs ROS) and skip its
-descendants (they depend on its new SHA); a human resolves those in a ROS session.
+force-push-with-lease) ONLY IF the merge is clean, then push, and subscribe to that PR's CI
+(`subscribe_pr_activity`). CI is the validator — never run the coraplex/SDT (ROS) suites here.
+
+Don't block on CI: after pushing a branch, move on to the next independent branch and keep restacking
+/ promoting (Phase 3) in parallel, reacting to CI results as the subscription delivers them — never
+sit idle waiting on a ~20-minute run.
+
+When a branch conflicts or its CI comes back RED, get around ROS as far as you can before deferring:
+- If the failure/mechanism lives in the ROS-free layer (`krrood`, which runs here), reproduce it
+  locally with a meaningful failing test (mimic the offending pattern in the `krrood` test datasets
+  per `AGENTS.md` when it originates in another package), fix it, and validate by running the
+  `krrood` suite locally; push and let CI confirm end-to-end.
+- Only the residue that genuinely cannot be reproduced or validated without ROS is deferred to a ROS
+  session. A generated `ormatic_interface.py` conflict is exactly that: regenerating it needs ROS —
+  skip that branch and its descendants (they depend on its new SHA) and hand it to a ROS session,
+  then carry on with the independent branches.
+Never disable a leak/CI check to go green.
 
 PHASE 3 — PROMOTE (obey the WIP cap)
 Run `python dev/stack.py next --porcelain`. It prints `name<TAB>pr` for the single branch that is
@@ -180,18 +192,6 @@ approved (un-drafted), unblocked, and under `wip_cap` — or nothing. If it prin
 cram2 PR (base cram2/main) with an updated description, then add the `in-review` label to its fork PR.
 If it prints nothing, the cap is full or nothing is ready — do not promote. `bug`-labelled PRs never
 count against the cap.
-
-PHASE 4 — CI VALIDATION (track only; do NOT fix or restack here)
-This routine is mechanical: it never runs suites, writes fixes, or restacks a red branch — it only
-tracks CI so the board is live and routes work to the right place. Stay subscribed (SETUP step 4) and
-record each PR's red/green on its board chip. When a branch is RED (a real CI failure) or BLOCKED (a
-Phase-2 `ormatic_interface.py` conflict), do NOT try to green it here and do NOT loosen Phase 2's
-skip — leave it deferred and make sure a per-branch dev session is (or gets) pointed at it via the
-board's `session` / `+ new` chip. Fixing red CI — including the "get around ROS by reproducing in
-`krrood` and validating locally" work (see the CI-is-the-validator hygiene rule) — is that dev
-session's job, not the routine's. A generated `ormatic_interface.py` regen genuinely needs ROS and
-cannot be reproduced in `krrood`, so it always stays a ROS-session task. Never disable a check to go
-green.
 
 FINISH
 Refresh `board.json` again and commit it if it changed. Then run `python dev/stack.py board` and
