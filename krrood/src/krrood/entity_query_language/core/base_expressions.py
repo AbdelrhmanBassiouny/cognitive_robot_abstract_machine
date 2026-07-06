@@ -112,6 +112,28 @@ class SymbolicExpression(ABC):
     def __post_init__(self):
         self._expression_ = self
 
+    def __copy__(self) -> SymbolicExpression:
+        """
+        :return: A clone of this expression that can be reused in a new tree position.
+
+        The clone gets a fresh identity and none of the original's parents, children, or conclusions,
+        so wiring it into a new position cannot overwrite the original's ``_parent_`` (which its old
+        parent still references) nor leak conclusions back into it. Children are not deep-copied — only
+        this node is cloned.
+
+        ..note:: :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable` nodes are
+            shared-identity singletons and override this to return themselves.
+        """
+        clone = self.__class__.__new__(self.__class__)
+        clone.__dict__.update(self.__dict__)
+        clone._id_ = uuid.uuid4()
+        clone._children_ = []
+        clone._parents_ = []
+        clone._parent__ = None
+        clone._expression_ = clone
+        clone._conclusions_ = set()
+        return clone
+
     def _get_expression_by_id_(self, id_: uuid.UUID) -> SymbolicExpression:
         """
         Retrieve the expression with the given ID from the collection of all expressions.
@@ -213,6 +235,21 @@ class SymbolicExpression(ABC):
         self._parents_.remove(parent)
         if parent is self._parent__:
             self._parent_ = None
+
+    def _last_parent_of_type_(
+        self, *types: Type[SymbolicExpression]
+    ) -> Optional[SymbolicExpression]:
+        """
+        :return: The most recently attached parent that is an instance of any of *types*, or ``None``.
+
+        Reads the full ``_parents_`` history rather than ``_parent_``, which tracks only the last parent
+        set and can be clobbered when a shared node is reused in more than one position (for example a
+        ``MappedVariable`` used both as a WHERE condition and inside a sibling condition).
+        """
+        return next(
+            (parent for parent in reversed(self._parents_) if isinstance(parent, types)),
+            None,
+        )
 
     def _update_children_(
             self, *children: SymbolicExpression

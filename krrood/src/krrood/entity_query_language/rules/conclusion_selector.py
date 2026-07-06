@@ -7,12 +7,12 @@ Alternative, and Next.
 
 from __future__ import annotations
 
-import uuid
 from abc import ABC, abstractmethod
 from copy import copy
 from dataclasses import dataclass
 from typing_extensions import Iterable, TYPE_CHECKING, Self, Optional
 
+from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
 from krrood.entity_query_language.rules.conclusion import Conclusion
 from krrood.entity_query_language.operators.set_operations import Union as EQLUnion
 from krrood.entity_query_language.operators.core_logical_operators import (
@@ -34,45 +34,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
 
 
-def _clone_expression(expr: SymbolicExpression) -> SymbolicExpression:
-    """Clone *expr* so it can be reused in a new tree position without parent corruption.
-
-    Creates a shallow copy with a new identity and no parent. Children are shared
-    (not deep-copied) — only the node itself gets a fresh ``_id_``.
-
-    This prevents :class:`BinaryExpression.__post_init__` from overwriting the
-    original's ``_parent_`` while the old parent still holds a reference, which
-    would create a node shared between two positions.
-
-    .. note::
-       :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
-       nodes (e.g. ``Attribute``) are shared identity singletons — they are returned
-       as-is rather than cloned. Only expression nodes (``Comparator``, ``Not``,
-       logical operators) carry evaluation state that needs a fresh identity.
-    """
-    from krrood.entity_query_language.core.mapped_variable import MappedVariable
-
-    if isinstance(expr, MappedVariable):
-        return expr
-
-    clone = copy(expr)
-    clone._id_ = uuid.uuid4()
-    # Give the clone its own lists instead of sharing the original's (shallow copy
-    # makes _children_ and _parents_ the SAME list object).  Assigning directly
-    # avoids the _parent_ setter, which would mutate the shared _parents_ list
-    # and wrench the original's parent out of it.
-    clone._children_ = []
-    clone._parents_ = []
-    clone._parent__ = None
-    # :meth:`_update_children_` returns ``v._expression_`` for each child, so the
-    # clone must point to itself — otherwise the ORIGINAL node gets wired in.
-    clone._expression_ = clone
-    # Shallow copy shares the same set object; reset so conclusions added via
-    # `with clone: add(...)` don't leak back into the original's _conclusions_.
-    clone._conclusions_ = set()
-    return clone
-
-
 @dataclass(eq=False)
 class ConclusionSelector(TruthValueOperator, ABC):
     """
@@ -83,20 +44,15 @@ class ConclusionSelector(TruthValueOperator, ABC):
     def _conditions_root_via_parents_(
         cls, current_context: SymbolicExpression
     ) -> SymbolicExpression:
-        """Return the conditions root, using ``_parents_`` to survive ``_parent_`` clobbering.
+        """Return the conditions root, recovering it from ``_parents_`` when ``_parent_`` was clobbered.
 
-        When the context node is a bare :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable`
-        used both as the WHERE condition and as a sub-expression inside an
-        ``alternative``/``next_rule`` condition (e.g. ``backbone`` in
-        ``where(backbone)`` and ``backbone == False``), Python evaluates the
-        argument expression before calling ``alternative()``, which overwrites
-        ``_parent_`` from the ``Filter`` to the new ``Comparator``.
-        ``_parents_`` (the full history list) still contains the ``Filter``, so
-        we can recover the correct anchor from there.
+        A node reused both as a WHERE condition and inside a sibling condition has its ``_parent_``
+        overwritten, so the ``Filter`` anchor is recovered from the full ``_parents_`` history via
+        :meth:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression._last_parent_of_type_`.
         """
-        for parent in reversed(current_context._parents_):
-            if isinstance(parent, Filter):
-                return parent.condition
+        filter_parent = current_context._last_parent_of_type_(Filter)
+        if filter_parent is not None:
+            return filter_parent.condition
         return current_context._conditions_root_
 
     @classmethod
@@ -133,45 +89,31 @@ class ConclusionSelector(TruthValueOperator, ABC):
         alternative after observing a misclassification). Conditions are chained with
         AND; the new branch is spliced in between ``anchor`` and its current parent.
 
-        Any condition that is already part of a tree (has a ``_parent_``) is cloned
-        to prevent node-sharing corruption — when :class:`BinaryExpression.__post_init__`
-        overwrites ``_parent_``, the old parent still holds a reference, creating a node
-        shared between two positions.
+        Any condition already in a tree (has a ``_parent_``) is copied via
+        :meth:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression.__copy__` so
+        splicing it in cannot corrupt the original's ``_parent_``.
 
         :param anchor: The existing condition node the new branch connects to.
         :param conditions: Conditions to chain with AND into the new branch.
         :returns: The newly created condition node (attach conclusions to it via ``with``).
         """
-        cleaned = []
-        for c in conditions:
-            if isinstance(c, SymbolicExpression) and c._parent_ is not None:
-                c = _clone_expression(c)
-            cleaned.append(c)
-        new_condition = chained_logic(AND, *cleaned)
-        # Single conditions returned directly by chained_logic may still carry a parent
-        # from the pre-cleaning step (e.g. one condition that was the only element).
-        # Clone again if needed — the idempotent clone is harmless.
+        cleaned_conditions = []
+        for condition in conditions:
+            if isinstance(condition, SymbolicExpression) and condition._parent_ is not None:
+                condition = copy(condition)
+            cleaned_conditions.append(condition)
+        new_condition = chained_logic(AND, *cleaned_conditions)
+        # A single condition returned directly by chained_logic may still carry a parent from the
+        # pre-cleaning step; copy again if needed — the copy is idempotent for a parentless node.
         if isinstance(new_condition, SymbolicExpression) and new_condition._parent_ is not None:
-            new_condition = _clone_expression(new_condition)
+            new_condition = copy(new_condition)
 
-        # anchor._parent_ tracks only the LAST parent set, so it can be wrong when a
-        # MappedVariable singleton (e.g. ``backbone``) is used both as the WHERE
-        # condition and as a sub-expression inside a sibling condition (e.g.
-        # ``backbone == False``): evaluating that sibling expression overwrites
-        # ``_parent_`` from the ``Filter``/``ConclusionSelector`` to the new
-        # ``Comparator`` before ``insert_at`` even runs.
-        # ``_parents_`` (a list) records every parent ever set; the most recently
-        # added structural parent — a ``ConclusionSelector`` for nodes already in a
-        # rule tree, or a ``Filter`` for nodes that are the direct WHERE condition —
-        # is always the correct splice target.
-        prev_parent = next(
-            (
-                p
-                for p in reversed(anchor._parents_)
-                if isinstance(p, (ConclusionSelector, Filter))
-            ),
-            anchor._parent_,
-        )
+        # Splice above the anchor's most recent structural parent — a ConclusionSelector for a node
+        # already in a rule tree, or a Filter for a direct WHERE condition — recovered from
+        # `_parents_` because `anchor._parent_` may have been clobbered (see `_last_parent_of_type_`).
+        previous_parent = anchor._last_parent_of_type_(ConclusionSelector, Filter)
+        if previous_parent is None:
+            previous_parent = anchor._parent_
 
         # Only raise when the anchor is already established in a rule tree (has parents).
         # A freshly-created anchor with no parents indicates _conditions_root_ returned the
@@ -179,13 +121,12 @@ class ConclusionSelector(TruthValueOperator, ABC):
         # MappedVariable), which is a different underlying issue — not the self-referential
         # insertion bug we guard against here.
         if new_condition is anchor and anchor._parents_:
-            from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
             raise SelfReferentialInsertionError(anchor=anchor)
 
         new_context = cls._create_between_two_expressions(anchor, new_condition)
 
-        if new_context is not anchor and prev_parent is not None:
-            prev_parent._replace_child_(anchor, new_context)
+        if new_context is not anchor and previous_parent is not None:
+            previous_parent._replace_child_(anchor, new_context)
 
         return new_condition
 

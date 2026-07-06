@@ -169,6 +169,10 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         super().__post_init__()
         self._update_type_()
 
+    def __copy__(self) -> MappedVariable:
+        """:return: This variable itself — mapped variables are shared-identity singletons, not cloned."""
+        return self
+
     def _update_type_(self) -> None:
         """
         Update the `_type_` attribute.
