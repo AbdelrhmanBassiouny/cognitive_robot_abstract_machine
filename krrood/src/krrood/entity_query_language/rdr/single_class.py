@@ -137,7 +137,7 @@ class EQLSingleClassRDR:
         Build an RDR from an underspecified ``Match`` template: the lone ``...`` attribute
         defines what the RDR predicts.
 
-        :param template: e.g. ``underspecified(Animal)(species=...)``.
+        :param template: e.g. ``an(Animal)(species=...)``.
         :return: An RDR with ``case_type`` and ``conclusion_attribute_name`` taken from the
             template's single underspecified slot.
         """

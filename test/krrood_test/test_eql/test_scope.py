@@ -98,8 +98,6 @@ def test_eql_factory_namespace_has_core_verbs():
         "entity",
         "an",
         "variable",
-        "match",
-        "underspecified",
         "and_",
         "or_",
         "not_",
