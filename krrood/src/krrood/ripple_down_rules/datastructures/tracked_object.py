@@ -6,16 +6,26 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field, Field, fields
 from enum import Enum
-from krrood.utils import memoize
+from krrood.utils import memoize, clear_memoization_cache
 
 import pydot
 import rustworkx as rx
-from typing_extensions import Any, Type, ClassVar, Dict, List, Optional, Tuple, Generator
+from typing_extensions import (
+    Any,
+    Type,
+    ClassVar,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Generator,
+)
 
 from krrood.ripple_down_rules.datastructures.field_info import FieldInfo
 from krrood.ripple_down_rules import logger
 from krrood.ripple_down_rules.rules import Rule
-from krrood.ripple_down_rules.utils import recursive_subclasses
+from krrood.ripple_down_rules.utils import recursive_subclasses, get_full_class_name
+from krrood.class_diagrams.utils import get_class_unique_name
 
 
 class Direction(Enum):
@@ -34,8 +44,14 @@ class TrackedObjectMixin:
     """
     A class that is used as a base class to all classes that needs to be tracked for RDR inference, and reasoning.
     """
-    _rdr_tracked_object_id: int = field(init=False, repr=False, hash=False,
-                                        compare=False, default_factory=lambda: uuid.uuid4().int)
+
+    _rdr_tracked_object_id: int = field(
+        init=False,
+        repr=False,
+        hash=False,
+        compare=False,
+        default_factory=lambda: uuid.uuid4().int,
+    )
     """
     The unique identifier of the conclusion.
     """
@@ -51,15 +67,16 @@ class TrackedObjectMixin:
     """
     All the edges indexed by relation type.
     """
-    _overridden_by: Type[TrackedObjectMixin] = field(init=False, repr=False, hash=False,
-                                                     compare=False, default=None)
+    _overridden_by: Type[TrackedObjectMixin] = field(
+        init=False, repr=False, hash=False, compare=False, default=None
+    )
     """
     Whether the class has been overridden by a subclass.
     This is used to only include the new class in the dependency graph, not the overridden class.
     """
-    _tracked_classes: ClassVar[List[Type]] = []
+    _tracked_classes: ClassVar[Dict[str, Type]] = {}
     """
-    A list of all tracked classes.
+    A dictionary of all tracked classes, indexed by their full name.
     """
 
     @classmethod
@@ -70,13 +87,29 @@ class TrackedObjectMixin:
         cls._dependency_graph = rx.PyDAG()
         cls._class_graph_indices = {}
         cls._edges = defaultdict(list)
-        cls.parse_fields.cache_clear()
-        cls.get_fields.cache_clear()
-        cls.parse_field.cache_clear()
+        cls._tracked_classes = {}
+        # Reset state for all subclasses (including Predicates)
+        for clazz in recursive_subclasses(cls):
+            clazz._reset_state()
+        cls._reset_memoization_caches()
 
     @classmethod
-    def _my_graph_idx(cls):
-        return cls._class_graph_indices[cls]
+    def _reset_state(cls) -> None:
+        """Base implementation for resetting class-level state."""
+        pass
+
+    @classmethod
+    def _reset_memoization_caches(cls) -> None:
+        """
+        Reset all memoization caches for the class.
+        """
+        clear_memoization_cache(cls.parse_fields)
+        clear_memoization_cache(cls.get_fields)
+        clear_memoization_cache(cls.parse_field)
+
+    @classmethod
+    def _my_graph_idx(cls) -> int:
+        return cls._class_graph_indices[get_class_unique_name(cls)]
 
     @classmethod
     def _get_classes_to_track(cls):
@@ -85,21 +118,26 @@ class TrackedObjectMixin:
             extra_classes = [Rule] + recursive_subclasses(Rule)
             for clazz in subclasses + extra_classes:
                 cls._track_class(clazz)
-        return cls._tracked_classes
+        return list(cls._tracked_classes.values())
 
     @classmethod
     def _track_class(cls, clazz):
-        if clazz in cls._tracked_classes:
+        full_name = get_class_unique_name(clazz)
+        if full_name in cls._tracked_classes:
             return
-        cls._tracked_classes.append(clazz)
+        cls._tracked_classes[full_name] = clazz
         if not issubclass(clazz, TrackedObjectMixin):
             clazz._overridden_by = None
 
     @classmethod
     def _inheritance_relations(cls):
         for clazz in cls._get_classes_to_track():
-            bases = [base for base in clazz.__bases__ if
-                     base.__module__ not in ["builtins"] and base in cls._get_classes_to_track()]
+            bases = [
+                base
+                for base in clazz.__bases__
+                if base.__module__ not in ["builtins"]
+                and base in cls._get_classes_to_track()
+            ]
 
             for base in bases:
                 if hasattr(base, "_overridden_by") and base._overridden_by is not clazz:
@@ -114,7 +152,11 @@ class TrackedObjectMixin:
 
     @staticmethod
     @memoize
-    def parse_fields(clazz) -> Generator[Tuple[Type[TrackedObjectMixin], Type[TrackedObjectMixin]], None, None]:
+    def parse_fields(
+        clazz,
+    ) -> Generator[
+        Tuple[Type[TrackedObjectMixin], Type[TrackedObjectMixin]], None, None
+    ]:
         for f in TrackedObjectMixin.get_fields(clazz):
 
             logger.debug("=" * 80)
@@ -132,21 +174,30 @@ class TrackedObjectMixin:
     @memoize
     def get_fields(clazz) -> List[Field]:
         skip_fields = []
-        bases = [base for base in clazz.__bases__ if issubclass(base, TrackedObjectMixin)]
+        bases = [
+            base for base in clazz.__bases__ if issubclass(base, TrackedObjectMixin)
+        ]
         for base in bases:
             skip_fields.extend(TrackedObjectMixin.get_fields(base))
 
-        result = [cls_field for cls_field in fields(clazz) if cls_field not in skip_fields]
+        result = [
+            cls_field for cls_field in fields(clazz) if cls_field not in skip_fields
+        ]
 
         return result
 
     @staticmethod
     @memoize
-    def parse_field(field_info: FieldInfo)\
-            -> Generator[Tuple[Type[TrackedObjectMixin], Type[TrackedObjectMixin]], None, None]:
+    def parse_field(
+        field_info: FieldInfo,
+    ) -> Generator[
+        Tuple[Type[TrackedObjectMixin], Type[TrackedObjectMixin]], None, None
+    ]:
         parent = field_info.clazz
         field_cls: Optional[Type[TrackedObjectMixin]] = None
-        if len(field_info.type) == 1 and issubclass(field_info.type[0], TrackedObjectMixin):
+        if len(field_info.type) == 1 and issubclass(
+            field_info.type[0], TrackedObjectMixin
+        ):
             field_cls = field_info.type[0]
         else:
             # TODO: Create a new TrackedObjectMixin class for new type
@@ -168,19 +219,24 @@ class TrackedObjectMixin:
         raise NotImplementedError
 
     @classmethod
-    def to_dot(cls, filepath: str, format='svg') -> None:
+    def to_dot(cls, filepath: str, format="svg") -> None:
         if not filepath.endswith(f".{format}"):
             filepath += f".{format}"
         dot_str = cls._dependency_graph.to_dot(
             lambda node: dict(
-                color='black', fillcolor='lightblue', style='filled', label=node.__name__),
-            lambda edge: dict(color='black', style='solid', label=edge))
+                color="black",
+                fillcolor="lightblue",
+                style="filled",
+                label=node.__name__,
+            ),
+            lambda edge: dict(color="black", style="solid", label=edge),
+        )
         dot = pydot.graph_from_dot_data(dot_str)[0]
         try:
             dot.write(filepath, format=format)
         except FileNotFoundError:
             tmp_filepath = filepath.replace(f".{format}", ".dot")
-            dot.write(tmp_filepath, format='raw')
+            dot.write(tmp_filepath, format="raw")
             try:
                 os.system(f"/usr/bin/dot -T{format} {tmp_filepath} -o {filepath}")
                 os.remove(tmp_filepath)
@@ -188,15 +244,21 @@ class TrackedObjectMixin:
                 logger.error(e)
 
     @classmethod
-    def _add_class_to_dependency_graph(cls, class_to_add: Type[TrackedObjectMixin]) -> None:
+    def _add_class_to_dependency_graph(
+        cls, class_to_add: Type[TrackedObjectMixin]
+    ) -> None:
         """
         Add a class to the dependency graph.
         """
-        if class_to_add not in cls._class_graph_indices:
-            cls_idx = cls._dependency_graph.add_node(class_to_add._overridden_by or class_to_add)
-            cls._class_graph_indices[class_to_add] = cls_idx
+        full_name = get_class_unique_name(class_to_add)
+        if full_name not in cls._class_graph_indices:
+            actual_class = class_to_add._overridden_by or class_to_add
+            cls_idx = cls._dependency_graph.add_node(actual_class)
+            cls._class_graph_indices[full_name] = cls_idx
             if class_to_add._overridden_by:
-                cls._class_graph_indices[class_to_add._overridden_by] = cls_idx
+                cls._class_graph_indices[
+                    get_class_unique_name(class_to_add._overridden_by)
+                ] = cls_idx
 
 
 annotations = TrackedObjectMixin.__annotations__

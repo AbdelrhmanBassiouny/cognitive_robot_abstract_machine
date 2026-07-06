@@ -2,7 +2,7 @@ import os.path
 import unittest
 
 from krrood.ripple_down_rules import logger
-from krrood.ripple_down_rules import app
+from krrood.ripple_down_rules import get_qt_app
 
 try:
     from krrood.ripple_down_rules.user_interface.gui import RDRCaseViewer, style
@@ -19,7 +19,7 @@ from ..test_object_diagram import Person, Address
 
 
 @unittest.skipIf(
-    app is None,
+    get_qt_app() is None,
     "GUI tests need PyQt6,"
     "and they need visual inspection by a user and cannot be run automatically.",
 )
@@ -41,30 +41,31 @@ class GUITestCase(unittest.TestCase):
         )
         cls.viewer = RDRCaseViewer()
         cls.person = Person("Ahmed", Address("Cairo"))
+        cls.app = get_qt_app()
 
     def test_change_title_text(self):
         self.viewer.show()
-        app.exec()
+        self.app.exec()
         self.viewer.title_label.setText(style("Changed Title", "o", 28, "bold"))
         self.viewer.show()
-        app.exec()
+        self.app.exec()
 
     def test_update_image(self):
         self.viewer.obj_diagram_viewer.update_image(
             f"{os.path.dirname(__file__)}/../test_helpers/object_diagram_case_query.png"
         )
         self.viewer.show()
-        app.exec()
+        self.app.exec()
         self.viewer.obj_diagram_viewer.update_image(
             f"{os.path.dirname(__file__)}/../test_helpers/object_diagram_person.png"
         )
         self.viewer.show()
-        app.exec()
+        self.app.exec()
 
     def test_update_for_obj(self):
         self.viewer.update_for_object(self.cq, "CaseQuery")
         self.viewer.show()
-        app.exec()
+        self.app.exec()
         self.viewer.update_for_object(self.person, "Person")
         self.viewer.show()
-        app.exec()
+        self.app.exec()

@@ -8,9 +8,9 @@ import sys
 from abc import ABC, abstractmethod
 from dataclasses import is_dataclass
 from textwrap import dedent, indent
-from typing_extensions import Tuple, Dict
 
 from typing_extensions import Optional, TYPE_CHECKING, List
+from typing_extensions import Tuple, Dict
 
 from krrood.ripple_down_rules.datastructures.callable_expression import (
     CallableExpression,
@@ -18,7 +18,10 @@ from krrood.ripple_down_rules.datastructures.callable_expression import (
 from krrood.ripple_down_rules.datastructures.case import show_current_and_corner_cases
 from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
 from krrood.ripple_down_rules.datastructures.enums import PromptFor
-from krrood.ripple_down_rules.exceptions import NoSavePathFoundForExpertAnswers, NoLoadPathFoundForExpertAnswers
+from krrood.ripple_down_rules.exceptions import (
+    NoSavePathFoundForExpertAnswers,
+    NoLoadPathFoundForExpertAnswers,
+)
 from krrood.ripple_down_rules.user_interface.template_file_creator import (
     TemplateFileCreator,
 )
@@ -57,24 +60,28 @@ class Expert(ABC):
     """
 
     def __init__(
-        self,
-        use_loaded_answers: bool = False,
-        append: bool = False,
-        answers_save_path: Optional[str] = None,
+            self,
+            use_loaded_answers: bool = False,
+            append: bool = False,
+            answers_save_path: Optional[str] = None,
     ):
         self.all_expert_answers = []
         self.use_loaded_answers = use_loaded_answers
         self.answers_save_path = answers_save_path
-        if answers_save_path is not None and os.path.exists(answers_save_path + ".py"):
+        if answers_save_path is not None and (
+                os.path.exists(answers_save_path + ".py") or os.path.exists(answers_save_path + ".json")):
             if use_loaded_answers:
                 self.load_answers(answers_save_path)
             if not append:
-                os.remove(answers_save_path + ".py")
+                try:
+                    os.remove(answers_save_path + ".py")
+                except FileNotFoundError:
+                    pass
         self.append = True
 
     @abstractmethod
     def ask_for_conditions(
-        self, case_query: CaseQuery, last_evaluated_rule: Optional[Rule] = None
+            self, case_query: CaseQuery, last_evaluated_rule: Optional[Rule] = None
     ) -> CallableExpression:
         """
         Ask the expert to provide the differentiating features between two cases or unique features for a case
@@ -114,9 +121,9 @@ class Expert(ABC):
         self.all_expert_answers = []
 
     def save_answers(
-        self,
-        path: Optional[str] = None,
-        expert_answers: Optional[List[Tuple[Dict, str]]] = None,
+            self,
+            path: Optional[str] = None,
+            expert_answers: Optional[List[Tuple[Dict, str]]] = None,
     ):
         """
         Save the expert answers to a file.
@@ -149,7 +156,7 @@ class Expert(ABC):
             json.dump(all_answers, f)
 
     def _save_to_python(
-        self, path: str, expert_answers: Optional[List[Tuple[Dict, str]]] = None
+            self, path: str, expert_answers: Optional[List[Tuple[Dict, str]]] = None
     ):
         """
         Save the expert answers to a Python file.
@@ -244,7 +251,7 @@ class AI(Expert):
         self.user_prompt = UserPrompt()
 
     def ask_for_conditions(
-        self, case_query: CaseQuery, last_evaluated_rule: Optional[Rule] = None
+            self, case_query: CaseQuery, last_evaluated_rule: Optional[Rule] = None
     ) -> CallableExpression:
         prompt_str = self.get_prompt_for_ai(case_query, PromptFor.Conditions)
         print(prompt_str)
@@ -254,7 +261,7 @@ class AI(Expert):
         prompt_str = self.get_prompt_for_ai(case_query, PromptFor.Conclusion)
         output_type_source = self.get_output_type_class_source(case_query)
         prompt_str = (
-            f"\n\n\nOutput type(s) class source:\n{output_type_source}\n\n" + prompt_str
+                f"\n\n\nOutput type(s) class source:\n{output_type_source}\n\n" + prompt_str
         )
         print(prompt_str)
         sys.exit()
@@ -336,11 +343,11 @@ class Human(Expert):
         self.user_prompt = UserPrompt()
 
     def ask_for_conditions(
-        self, case_query: CaseQuery, last_evaluated_rule: Optional[Rule] = None
+            self, case_query: CaseQuery, last_evaluated_rule: Optional[Rule] = None
     ) -> CallableExpression:
         data_to_show = None
         if (
-            not self.use_loaded_answers or len(self.all_expert_answers) == 0
+                not self.use_loaded_answers or len(self.all_expert_answers) == 0
         ) and self.user_prompt.viewer is None:
             data_to_show = show_current_and_corner_cases(
                 case_query.case,
@@ -350,7 +357,7 @@ class Human(Expert):
         return self._get_conditions(case_query, data_to_show)
 
     def _get_conditions(
-        self, case_query: CaseQuery, data_to_show: Optional[str] = None
+            self, case_query: CaseQuery, data_to_show: Optional[str] = None
     ) -> CallableExpression:
         """
         Ask the expert to provide the differentiating features between two cases or unique features for a case
@@ -361,9 +368,9 @@ class Human(Expert):
         """
         user_input = None
         if (
-            self.use_loaded_answers
-            and len(self.all_expert_answers) == 0
-            and self.append
+                self.use_loaded_answers
+                and len(self.all_expert_answers) == 0
+                and self.append
         ):
             self.use_loaded_answers = False
         if self.use_loaded_answers:
@@ -392,11 +399,11 @@ class Human(Expert):
         return condition
 
     def convert_json_answer_to_python_answer(
-        self,
-        case_query: CaseQuery,
-        user_input: str,
-        callable_expression: CallableExpression,
-        prompt_for: PromptFor,
+            self,
+            case_query: CaseQuery,
+            user_input: str,
+            callable_expression: CallableExpression,
+            prompt_for: PromptFor,
     ):
         """
         Convert a JSON answer to a Python answer and save it. This is used for backward compatibility for answers that
@@ -427,9 +434,9 @@ class Human(Expert):
         expression: Optional[CallableExpression] = None
         expert_input: Optional[str] = None
         if (
-            self.use_loaded_answers
-            and len(self.all_expert_answers) == 0
-            and self.append
+                self.use_loaded_answers
+                and len(self.all_expert_answers) == 0
+                and self.append
         ):
             self.use_loaded_answers = False
         if self.use_loaded_answers:
