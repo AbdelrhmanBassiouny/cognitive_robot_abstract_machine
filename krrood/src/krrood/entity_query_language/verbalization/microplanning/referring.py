@@ -4,22 +4,68 @@ import operator
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing_extensions import Dict, List, Optional, Set, Tuple
+from typing_extensions import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Variable, Literal
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.query.query import Entity, Query
+from krrood.entity_query_language.verbalization.fragments.base import (
+    NounPhrase,
+    PhraseFragment,
+    RoleFragment,
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.fragments.features import Definiteness
 from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.relational_attributes import (
     relational_verb,
 )
+from krrood.entity_query_language.verbalization.vocabulary.english import Keywords
 from krrood.entity_query_language.query.aggregation_structure import (
     aggregation_source_root,
     selected_aggregator,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.grammar.conditions.placement import (
+        RestrictionFragments,
+    )
+
+
+def referring_noun_with_restrictions(
+    variable: Variable,
+    selected_type: str,
+    definiteness: Definiteness,
+    restriction: Optional[RestrictionFragments],
+) -> NounPhrase:
+    """:return: a referring noun phrase for *variable* carrying *restriction* as post-nominal
+    modifiers — the shared assembly behind a nested entity noun (*"a Mission with priority greater
+    than 2"* / *"a Worker whose tasks contains a Task"*).
+
+    The pieces attach in reading order: inline modifiers and relative clauses hug the noun, the
+    coordinated *"whose"* block and a *"where"*-headed residual follow. A referring noun phrase is the
+    subject of its own modifiers, so the coreference pass pronominalises later mentions correctly.
+    """
+    modifiers: List[VerbalizationFragment] = []
+    if restriction is not None:
+        modifiers.extend(restriction.inline_modifiers)
+        modifiers.extend(restriction.relative_clauses)
+        if restriction.whose is not None:
+            modifiers.append(restriction.whose)
+        if restriction.residual is not None:
+            modifiers.append(
+                PhraseFragment(
+                    parts=[Keywords.WHERE.as_fragment(), restriction.residual]
+                )
+            )
+    return NounPhrase(
+        head=RoleFragment.for_variable(selected_type, variable),
+        definiteness=definiteness,
+        referent_id=variable._id_ if isinstance(variable, Variable) else None,
+        modifiers=modifiers,
+    )
 
 
 @dataclass

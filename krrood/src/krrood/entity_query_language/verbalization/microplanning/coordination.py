@@ -113,7 +113,7 @@ class CoindexedFold:
 class SharedSubjectComparisons:
     """Two or more value comparators on the *same* subject chain, factored so the subject and its
     copula are said once and only the predicate tails are coordinated — *"the battery of a Robot is
-    either greater than 50 or less than 10"* instead of repeating *"the battery of … is …"* per
+    greater than 50 or less than 10"* instead of repeating *"the battery of … is …"* per
     disjunct.
 
     This is coordination reduction over a shared subject: the disjunctive analogue of
@@ -134,7 +134,7 @@ class SharedSubjectComparisons:
 class SharedSubjectConjunction:
     """The conjunctive analogue of :class:`SharedSubjectComparisons`: two or more value comparisons
     on the *same bare variable*, said once as one shared-subject main clause — *"an Integer is
-    between 1 and 10 and is not 5"* — rather than repeating the subject per conjunct.
+    between 1 and 10 and not 5"* — rather than repeating the subject per conjunct.
 
     Scoped to a *bare variable* subject (not an attribute chain), so the shared subject and copula
     lead a single clause; an attribute-chain conjunction (*"the battery of a Robot"*) names a
@@ -146,7 +146,7 @@ class SharedSubjectConjunction:
 
     tails: List[Union[Comparator, RangeFold]]
     """The predicate tails in source order — a value :class:`Comparator` (its operator-and-value
-    tail, *"is not 5"*) or a folded :class:`RangeFold` (a *"between low and high"* tail), so a
+    tail, *"not 5"*) or a folded :class:`RangeFold` (a *"between low and high"* tail), so a
     complementary bound pair reads *"between 1 and 10"* within the clause."""
 
 

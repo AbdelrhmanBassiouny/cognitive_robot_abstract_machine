@@ -47,6 +47,33 @@ class RelationVerb:
         """
         return f"{self.participle} {self.preposition}"
 
+    @property
+    def is_agentive(self) -> bool:
+        """:return: ``True`` for an agentive relation — one whose preposition is *"by"*
+        (*"owned by"*, *"written by"*), whose owner is the agent of the action. Such a relation reads
+        naturally in the active voice (*"who owns"*) rather than the passive (*"by which … is
+        owned"*).
+
+        >>> RelationVerb(participle="owned", preposition="by").is_agentive
+        True
+        >>> RelationVerb(participle="assigned", preposition="to").is_agentive
+        False
+        """
+        return self.preposition == Prepositions.BY.text
+
+    @property
+    def active_verb(self) -> str:
+        """:return: The active present third-person-singular form of the relation's verb
+        (*"owned"* → *"owns"*, *"written"* → *"writes"*), for the active-voice reading of an agentive
+        relation (*"the Person who owns a Book"*).
+
+        >>> RelationVerb(participle="owned", preposition="by").active_verb
+        'owns'
+        >>> RelationVerb(participle="written", preposition="by").active_verb
+        'writes'
+        """
+        return morphology.third_person_singular(morphology.verb_lemma(self.participle))
+
 
 def relational_verb(attribute_name: str) -> Optional[RelationVerb]:
     """

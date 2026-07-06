@@ -14,11 +14,13 @@ from krrood.entity_query_language.verbalization.pipeline import verbalize_expres
 
 
 def test_relational_identity_collapses_to_active_predicate():
+    """When the identified entity also carries a restriction, the binding and the restriction fold
+    into one relative clause on the subject noun (the restriction nested onto the entity).
+    """
     robot, mission = variable(Robot, []), variable(Mission, [])
     query = an(entity(robot).where(mission.assigned_to == robot, mission.priority > 2))
     assert verbalize_expression(query) == (
-        "Find a Robot such that it is assigned to a Mission, "
-        "and the priority of the Mission is greater than 2"
+        "Find a Robot that is assigned to a Mission with priority greater than 2"
     )
 
 

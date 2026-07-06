@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from typing_extensions import List, Optional
+from dataclasses import replace
 
+from typing_extensions import List, Optional, TYPE_CHECKING
+
+from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.fragments.base import (
     NounPhrase,
@@ -15,7 +18,6 @@ from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
     GrammaticalNumber,
 )
-from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.vocabulary.countability import (
     NounCountability,
 )
@@ -28,6 +30,11 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Pronouns,
 )
 
+if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.relational_attributes import (
+        RelationVerb,
+    )
+
 
 def attribute_fragment(
     step: PathStep, number: GrammaticalNumber = GrammaticalNumber.SINGULAR
@@ -35,15 +42,57 @@ def attribute_fragment(
     """:return: A role-tagged attribute fragment for *step*, tagged with *number* for inflection
     (a single-hop possessive of a plural subject distributes — *"their salaries"*).
 
+    Routed through :meth:`RoleFragment.for_attribute` so a field's registered display name
+    (*"beginning"* for ``begin``) applies here just as it does for a standalone attribute leaf.
+
     >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
     >>> flatten_fragment_to_plain_text(attribute_fragment(PathStep("salary")))
     'salary'
     """
-    return RoleFragment(
-        text=step.name,
-        role=SemanticRole.ATTRIBUTE,
-        source_reference=step.source_reference,
-        number=number,
+    if step.source_reference is None:
+        return RoleFragment.for_attribute(None, step.name, number)
+    return RoleFragment.for_attribute(
+        step.source_reference.owner_type, step.source_reference.attribute, number
+    )
+
+
+def indexed_noun(
+    step: PathStep, number: GrammaticalNumber = GrammaticalNumber.SINGULAR
+) -> List[VerbalizationFragment]:
+    """:return: the ordinal followed by the singularized collection noun for an indexed hop — the
+    *"first task"* body of *"the first task of a Worker"*, without its article or owner.
+
+    The collection noun singularizes (*"tasks"* → *"task"*) because a single element is named, and
+    the ordinal precedes it as a modifier.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text, PhraseFragment
+    >>> step = PathStep("tasks", ordinal="first")
+    >>> flatten_fragment_to_plain_text(PhraseFragment(parts=indexed_noun(step)))
+    'first task'
+    """
+    noun = attribute_fragment(step, number)
+    singular_noun = replace(noun, text=morphology.singular(noun.text))
+    return [WordFragment(text=step.ordinal), singular_noun]
+
+
+def _ordinal_genitive_step(
+    step: PathStep, owner_fragment: VerbalizationFragment
+) -> VerbalizationFragment:
+    """:return: *"the <ordinal> <noun> of <owner>"* — an indexed collection hop naming one element
+    (*"the first task of a Worker"*).
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text, WordFragment
+    >>> step = PathStep("tasks", ordinal="first")
+    >>> flatten_fragment_to_plain_text(_ordinal_genitive_step(step, WordFragment(text="Worker")))
+    'the first task of Worker'
+    """
+    return PhraseFragment(
+        parts=[
+            Articles.THE.as_fragment(),
+            *indexed_noun(step),
+            Prepositions.OF.as_fragment(),
+            owner_fragment,
+        ]
     )
 
 
@@ -89,11 +138,11 @@ def _relative_clause(
     owner_fragment: VerbalizationFragment,
     owner_number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
 ) -> VerbalizationFragment:
-    """:return: *"the <Type> <preposition> which <owner> is <participle>"* — one relational hop
-    wrapping its owner as a relative clause (the preposition pied-piped before *which*: *"the Robot
-    to which a Mission is assigned"*). Keeping the owner the verb's subject means the meaning never
-    flips for agentive relations (*"the Person by which a Book is owned"*); the copula agrees with
-    the owner's *owner_number* (*"it is"* / *"they are"*).
+    """:return: one relational hop wrapping its owner as a relative clause. An agentive relation
+    reads in the active voice — *"the Person who owns a Book"* — with the related type as the verb's
+    subject; every other relation reads as the passive *"the <Type> <preposition> which <owner> is
+    <participle>"* (the preposition pied-piped before *which*: *"the Robot to which a Mission is
+    assigned"*), the copula agreeing with the owner's *owner_number* (*"it is"* / *"they are"*).
 
     The clause is a *referring* noun phrase headed by the related type, so a repeat mention of the
     same navigation reduces to a bare *"the <Type>"* during coreference (the relative clause is a
@@ -103,10 +152,16 @@ def _relative_clause(
     'the Robot to which a Mission is assigned'
     """
     relation = step.relation
-    return NounPhrase(
-        head=RoleFragment.for_type(relation.value_type),
-        definiteness=Definiteness.DEFINITE,
-        modifiers=[
+    if relation.is_agentive:
+        modifiers = [
+            Keywords.WHO.as_fragment(),
+            RoleFragment.for_attribute(
+                relation.owner_class, step.name, text=relation.active_verb
+            ),
+            owner_fragment,
+        ]
+    else:
+        modifiers = [
             WordFragment(text=relation.preposition),
             Keywords.WHICH.as_fragment(),
             owner_fragment,
@@ -114,9 +169,48 @@ def _relative_clause(
             RoleFragment.for_attribute(
                 relation.owner_class, step.name, text=relation.participle
             ),
-        ],
+        ]
+    return NounPhrase(
+        head=RoleFragment.for_type(relation.value_type),
+        definiteness=Definiteness.DEFINITE,
+        modifiers=modifiers,
         referent_id=relation.referent_id,
         relative_clause=True,
+    )
+
+
+def subject_relative_relation(
+    owner_class: type,
+    attribute_name: str,
+    relation: RelationVerb,
+    object_fragment: VerbalizationFragment,
+    number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+) -> VerbalizationFragment:
+    """:return: a *subject*-relative clause *"that is <participle> <preposition> <object>"* — the
+    subject noun this modifies stays the clause subject and *object_fragment* the object (*"a Robot
+    that is assigned to a Mission"*).
+
+    Always passive: a relational attribute is a past participle, so its owning subject is the verb's
+    *patient* (*"a Book that is owned by a Person"*), never the agent — an active reading would reverse
+    the meaning. This is the mirror of :func:`_relative_clause`, which instead heads on the related
+    type. The copula agrees with *number* (*"that are assigned to …"* for a plural subject).
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text, WordFragment
+    >>> from krrood.entity_query_language.verbalization.relational_attributes import relational_verb
+    >>> verb = relational_verb("assigned_to")
+    >>> flatten_fragment_to_plain_text(subject_relative_relation(object, "assigned_to", verb, WordFragment(text="a Mission")))
+    'that is assigned to a Mission'
+    """
+    return PhraseFragment(
+        parts=[
+            Keywords.THAT.as_fragment(),
+            Copulas.for_number(number),
+            RoleFragment.for_attribute(
+                owner_class, attribute_name, text=relation.participle
+            ),
+            WordFragment(text=relation.preposition),
+            object_fragment,
+        ]
     )
 
 
@@ -157,11 +251,11 @@ def _extend_hop(
     >>> flatten_fragment_to_plain_text(_extend_hop(PathStep("battery"), WordFragment(text="Robot")))
     'the battery of Robot'
     """
-    return (
-        _relative_clause(step, owner_fragment)
-        if step.is_relation
-        else _genitive_step(step, owner_fragment)
-    )
+    if step.is_relation:
+        return _relative_clause(step, owner_fragment)
+    if step.ordinal is not None:
+        return _ordinal_genitive_step(step, owner_fragment)
+    return _genitive_step(step, owner_fragment)
 
 
 def possessive_path(
@@ -208,6 +302,25 @@ def chain_head_number(
     return GrammaticalNumber.SINGULAR
 
 
+def _pronominal_first_hop(
+    first: PathStep,
+    possessive_pronoun: VerbalizationFragment,
+    nominative_pronoun: VerbalizationFragment,
+    subject_number: GrammaticalNumber,
+    attribute_number: GrammaticalNumber,
+) -> VerbalizationFragment:
+    """:return: the innermost hop rendered against the elided (pronominalised) root — the relative
+    clause *"the <Type> <prep> which it is <participle>"* for a relation, *"its first task"* for an
+    indexed collection, else the plain possessive *"its <attribute>"*."""
+    if first.is_relation:
+        return _relative_clause(first, nominative_pronoun, subject_number)
+    if first.ordinal is not None:
+        return PhraseFragment(parts=[possessive_pronoun, *indexed_noun(first)])
+    return PhraseFragment(
+        parts=[possessive_pronoun, attribute_fragment(first, attribute_number)]
+    )
+
+
 def pronominal_path(
     parts: List[PathStep], subject_number: GrammaticalNumber
 ) -> VerbalizationFragment:
@@ -237,12 +350,8 @@ def pronominal_path(
     attribute_number = (
         subject_number if first.is_scalar_value else GrammaticalNumber.SINGULAR
     )
-    owner: VerbalizationFragment = (
-        _relative_clause(first, nominative_pronoun, subject_number)
-        if first.is_relation
-        else PhraseFragment(
-            parts=[possessive_pronoun, attribute_fragment(first, attribute_number)]
-        )
+    owner = _pronominal_first_hop(
+        first, possessive_pronoun, nominative_pronoun, subject_number, attribute_number
     )
     for step in rest:
         owner = _extend_hop(step, owner)

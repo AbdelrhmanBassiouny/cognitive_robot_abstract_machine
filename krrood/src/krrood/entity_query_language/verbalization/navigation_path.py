@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, is_dataclass
+from dataclasses import dataclass, is_dataclass, replace
 
 from typing_extensions import TYPE_CHECKING, Callable, List, Optional
 
@@ -46,6 +46,15 @@ class RelationStep:
     entity, so a repeat mention of the same navigation reduces to a bare *"the <Type>"* (coreference)
     rather than repeating the whole *"the Robot to which it is assigned"*; ``None`` disables it."""
 
+    is_agentive: bool = False
+    """``True`` for an agentive relation (preposition *"by"*), read in the active voice (*"the Person
+    who owns a Book"*) instead of the passive relative clause (*"the Person by which a Book is
+    owned"*)."""
+
+    active_verb: str = ""
+    """The active present verb (*"owns"*) used for the active-voice reading of an agentive relation;
+    unused for a non-agentive relation."""
+
 
 @dataclass(frozen=True)
 class PathStep:
@@ -71,6 +80,18 @@ class PathStep:
     """``True`` when this hop's value is an atomic scalar (a number / string / date), not an entity.
     A scalar leaf possessed by a plural subject distributes (*"their salaries"*); an entity owner of
     further structure does not (*"the begin and end of their period"*)."""
+
+    ordinal: Optional[str] = None
+    """The ordinal phrase (*"first"*, *"last"*) when this attribute hop selects a single indexed
+    element of a collection: the collection noun singularizes and takes the ordinal (*"the first
+    task"* rather than *"the first of the tasks"*); ``None`` for a whole-collection hop."""
+
+    @property
+    def is_plain_attribute(self) -> bool:
+        """:return: ``True`` when this hop is a plain genitive attribute — it links to a source
+        attribute and is not a relative-clause relation, so an integer index can fold its ordinal
+        into it (*"the first task"*)."""
+        return self.source_reference is not None and self.relation is None
 
     @property
     def is_relation(self) -> bool:
@@ -99,9 +120,11 @@ def build_path_parts(
     * ``Attribute`` nodes appear as the attribute name, linked to their source reference. When
       *relation_verb* recognises the name as a verb relation (returns its split verb), the hop is
       flagged relational, so it renders as a relative clause instead of a genitive.
-    * Integer ``Index`` nodes appear as their ordinal word (``0`` → ``"first"``) with no source
-      reference, so the possessive path reads *"the first of the tasks of …"* rather than leaking a
-      raw subscript (``"tasks[0]"``). Non-integer keys keep the ``"[key]"`` bracket form.
+    * An integer ``Index`` node folds its ordinal (``0`` → ``"first"``) into the collection attribute
+      it subscripts, which singularizes: *"the first task of …"* rather than *"the first of the tasks
+      of …"* or a raw subscript (``"tasks[0]"``). An index that does not follow a plain attribute
+      (e.g. on a call result) stays a standalone ordinal hop. Non-integer keys keep the ``"[key]"``
+      bracket form.
     * ``Call`` nodes appear as ``"()"`` with no source reference.
     * ``FlatVariable`` nodes are skipped.
 
@@ -128,6 +151,8 @@ def build_path_parts(
                     verb.participle,
                     verb.preposition,
                     node._id_,
+                    is_agentive=verb.is_agentive,
+                    active_verb=verb.active_verb,
                 )
                 if verb is not None
                 else None
@@ -141,7 +166,7 @@ def build_path_parts(
                 )
             )
         elif isinstance(node, Index):
-            parts.append(_index_step(node._key_))
+            _append_index(parts, node)
         elif isinstance(node, Call):
             parts.append(PathStep("()", None))
         elif isinstance(node, FlatVariable):
@@ -159,13 +184,24 @@ def _is_scalar_value(value_type: Optional[type]) -> bool:
     return value_type is not None and not is_dataclass(value_type)
 
 
-def _index_step(key: object) -> PathStep:
-    """:return: An ordinal hop (*"first"*, *"last"* for a negative index) for an integer *key*, else
-    the bracketed *"[key]"* form.
+def _append_index(parts: List[PathStep], node: Index) -> None:
+    """Fold an integer index into the plain attribute hop it subscripts (*"the first task"*), else
+    append it as a standalone hop.
 
-    >>> _index_step(0).name, _index_step(-1).name, _index_step("a").name
-    ('first', 'last', "['a']")
+    An integer index selects one element of the preceding collection attribute, so its ordinal folds
+    into that hop and the noun singularizes. When the index does not follow a plain attribute (e.g.
+    a call result) it becomes a standalone ordinal hop; a non-integer key keeps the ``"[key]"`` form.
     """
-    if isinstance(key, int) and not isinstance(key, bool):
-        return PathStep(morphology.index_ordinal(key), None)
-    return PathStep(f"[{repr(key)}]", None)
+    key = node._key_
+    if not isinstance(key, int) or isinstance(key, bool):
+        parts.append(PathStep(f"[{repr(key)}]", None))
+        return
+    ordinal_phrase = morphology.index_ordinal(key)
+    if parts and parts[-1].is_plain_attribute and parts[-1].ordinal is None:
+        parts[-1] = replace(
+            parts[-1],
+            ordinal=ordinal_phrase,
+            is_scalar_value=_is_scalar_value(node._type_),
+        )
+        return
+    parts.append(PathStep(ordinal_phrase, None))

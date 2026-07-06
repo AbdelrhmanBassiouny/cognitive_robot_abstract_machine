@@ -150,6 +150,36 @@ class ConditionAssembler(Assembler[Comparator, None]):
             ]
         )
 
+    def with_attribute_modifier(
+        self, comparator: Comparator, subject: Variable
+    ) -> VerbalizationFragment:
+        """
+        :param comparator: An order comparison (``<``/``<=``/``>``/``>=``) on *subject*'s single-hop
+            attribute.
+        :param subject: The subject variable.
+        :return: The compact post-nominal modifier *"with <attribute> <comparison>"* — copula- and
+            article-less (*"with priority greater than 2"*), for an introduced entity noun where the
+            fuller *"whose … is …"* clause would read heavily.
+
+        It reuses the copula-less operator surface (:func:`~…predication.comparator_operator` with
+        ``compact``), so the operator reads *"greater than"* rather than *"is greater than"*.
+
+        >>> mission, robot = variable(Mission, []), variable(Robot, [])
+        >>> verbalize_expression(an(entity(mission).where(mission.assigned_to == robot, robot.battery > 50)))
+        'Find a Mission that is assigned to a Robot with battery greater than 50'
+        """
+        attribute = single_hop_attribute(comparator.left, subject)
+        return PhraseFragment(
+            parts=[
+                Prepositions.WITH.as_fragment(),
+                RoleFragment.for_attribute(
+                    attribute._owner_class_, attribute._attribute_name_
+                ),
+                comparator_operator(comparator, self.context.services, compact=True),
+                self.context.child(comparator.right, as_value=True),
+            ]
+        )
+
     def superlative_modifier(
         self, comparator: Comparator, subject: Variable
     ) -> VerbalizationFragment:

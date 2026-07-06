@@ -20,6 +20,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
     oxford_comma,
 )
+from krrood.entity_query_language.verbalization.fragments.features import Definiteness
 from krrood.entity_query_language.verbalization.grammar.conditions.assembler import (
     ConditionAssembler,
 )
@@ -33,6 +34,10 @@ from krrood.entity_query_language.verbalization.grammar.conditions.recognition i
 from krrood.entity_query_language.verbalization.grammar.conditions.predication import (
     render_absence,
 )
+from krrood.entity_query_language.verbalization.grammar.conditions.scoping import (
+    bind_relational_entities,
+    RelationalBindingFold,
+)
 from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule import (
     RuleContext,
 )
@@ -42,6 +47,15 @@ from krrood.entity_query_language.verbalization.grammar.framework.specificity im
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
     reduce_conjuncts,
     RangeFold,
+)
+from krrood.entity_query_language.verbalization.microplanning.possessive import (
+    subject_relative_relation,
+)
+from krrood.entity_query_language.verbalization.microplanning.referring import (
+    referring_noun_with_restrictions,
+)
+from krrood.entity_query_language.verbalization.relational_attributes import (
+    relational_verb,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
@@ -57,7 +71,11 @@ class SurfacePosition(Enum):
     caller maps to an actual position (a noun modifier vs. a standalone clause)."""
 
     SELECTION_MODIFIER = auto()
-    """A post-nominal prepositional phrase on the selection — *"<noun> with the maximum amount"*."""
+    """A post-nominal prepositional phrase on the selection — *"<noun> with the maximum amount"*,
+    *"<noun> with priority greater than 2"*."""
+    RELATIVE_CLAUSE = auto()
+    """A post-nominal subject-relative clause on the selection — *"<noun> that is assigned to a
+    Mission …"* (a relational binding to a nested entity)."""
     WHOSE = auto()
     """A bare predicate gathered under a shared *"whose …, and …"* envelope on the subject noun."""
     STANDALONE = auto()
@@ -68,8 +86,8 @@ class SurfacePosition(Enum):
 class Placement:
     """The request a :class:`ConditionForm` reads: one condition to say relative to a subject."""
 
-    item: Union[SymbolicExpression, RangeFold]
-    """The folded ``WHERE`` conjunct (a raw expression or a range fold)."""
+    item: Union[SymbolicExpression, RangeFold, RelationalBindingFold]
+    """The grouped ``WHERE`` conjunct — a raw expression, a range fold, or a relational binding."""
 
     subject: Variable
     """The variable the condition may attach to."""
@@ -77,6 +95,11 @@ class Placement:
     number: GrammaticalNumber = GrammaticalNumber.SINGULAR
     """The number the subject (and so the predicate) agrees with — singular for a query subject,
     plural for an aggregated inference antecedent (*"whose children are …"*)."""
+
+    compact: bool = False
+    """``True`` when the condition restricts an *introduced* entity noun (a nested binding), which
+    admits the compact *"with <attribute> <comparison>"* form; ``False`` for the query subject, which
+    keeps the full *"whose … is …"* clause."""
 
 
 @dataclass(frozen=True)
@@ -339,6 +362,86 @@ class AbsenceForm(StandaloneForm):
         return render_absence(request.item, context, number=request.number)
 
 
+_ORDER_OPERATORS = (operator.lt, operator.le, operator.gt, operator.ge)
+"""The order comparisons that read cleanly as a compact *"with <attribute> <comparison>"* modifier;
+equality/inequality keep the fuller *"whose … is …"* clause."""
+
+
+class WithAttributeForm(WhosePredicateForm):
+    """A single-hop order comparison on an *introduced* entity → the compact post-nominal *"with
+    <attribute> <comparison>"* (*"with battery greater than 50"*). Refines :class:`WhosePredicateForm`
+    so it wins only when the placement is compact and the operator is an order comparison; otherwise
+    the base *"whose"* form applies (top-level subjects, equality, non-order shapes).
+
+    >>> mission, robot = variable(Mission, []), variable(Robot, [])
+    >>> verbalize_expression(an(entity(mission).where(mission.assigned_to == robot, robot.battery > 50)))
+    'Find a Mission that is assigned to a Robot with battery greater than 50'
+    """
+
+    position = SurfacePosition.SELECTION_MODIFIER
+
+    @classmethod
+    def applies(cls, request: Placement) -> bool:
+        """Fires on a compact placement of a single-hop order comparison — the refinement over
+        :class:`WhosePredicateForm` that routes it to the compact *"with …"* modifier.
+        """
+        return (
+            request.compact
+            and super().applies(request)
+            and isinstance(request.item, Comparator)
+            and request.item.operation in _ORDER_OPERATORS
+        )
+
+    @classmethod
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
+        """Render the compact *"with <attribute> <comparison>"* modifier."""
+        return ConditionAssembler(context).with_attribute_modifier(
+            request.item, request.subject
+        )
+
+
+class RelationalBindingForm(StandaloneForm):
+    """A subject→entity relational binding grouped with the entity's restrictions → the post-nominal
+    subject-relative clause *"that is <participle> <preposition> <entity>"*, the entity carrying its
+    restrictions nested onto it (*"that is assigned to a Robot with battery greater than 50"*).
+
+    The entity's conjuncts are rendered by recursing through :func:`as_subject_restrictions` in
+    *compact* mode, so nesting generalises to arbitrary depth.
+
+    >>> mission, robot = variable(Mission, []), variable(Robot, [])
+    >>> verbalize_expression(an(entity(mission).where(mission.assigned_to == robot)))
+    'Find a Mission that is assigned to a Robot'
+    """
+
+    position = SurfacePosition.RELATIVE_CLAUSE
+
+    @classmethod
+    def applies(cls, request: Placement) -> bool:
+        """Fires on a :class:`RelationalBindingFold` — the artifact grouping produces."""
+        return isinstance(request.item, RelationalBindingFold)
+
+    @classmethod
+    def render(cls, request: Placement, context: RuleContext) -> VerbalizationFragment:
+        """Render *"that is <participle> <preposition> <entity-with-restrictions>"*."""
+        fold = request.item
+        nested = as_subject_restrictions(
+            fold.nested, fold.entity, context, compact=True
+        )
+        entity_noun = referring_noun_with_restrictions(
+            fold.entity,
+            fold.entity._type_.__name__,
+            Definiteness.INDEFINITE,
+            nested,
+        )
+        return subject_relative_relation(
+            fold.relation_hop._owner_class_,
+            fold.relation_hop._attribute_name_,
+            relational_verb(fold.relation_hop._attribute_name_),
+            entity_noun,
+            request.number,
+        )
+
+
 def place(request: Placement, context: RuleContext) -> Placed:
     """
     Render a condition relative to its subject and report the position it occupies — the single entry a
@@ -370,8 +473,13 @@ class RestrictionFragments:
     sentence position, so they are kept apart rather than pre-joined."""
 
     inline_modifiers: List[VerbalizationFragment] = field(default_factory=list)
-    """Superlative selection phrases (*"with the maximum amount"*) that attach inline, right after
-    the selection noun."""
+    """Post-nominal prepositional phrases that attach inline, right after the selection noun — a
+    superlative (*"with the maximum amount"*) or a compact attribute restriction (*"with battery
+    greater than 50"*)."""
+
+    relative_clauses: List[VerbalizationFragment] = field(default_factory=list)
+    """Subject-relative clauses on the selection noun — one per relational binding (*"that is
+    assigned to a Robot …"*). Empty when the subject binds no related entity."""
 
     whose: Optional[VerbalizationFragment] = None
     """The *"whose"* group as a coordinated block (header *"whose"*, one bare predicate per item,
@@ -388,24 +496,29 @@ def as_subject_restrictions(
     subject: Variable,
     context: RuleContext,
     number: GrammaticalNumber = GrammaticalNumber.SINGULAR,
+    *,
+    compact: bool = False,
 ) -> RestrictionFragments:
     """
     Say a subject's WHERE conjuncts as restrictions on its noun — the counterpart to
     :meth:`ConditionAssembler.as_statements` for when conditions attach to a subject rather than
     standing alone. Each conjunct is placed and the results bucketed by position into the pieces a
-    caller positions: superlative noun modifiers, the shared *"whose"* group, and the standalone
-    residual. This is the list form of :func:`place`.
+    caller positions: superlative / compact noun modifiers, relative-clause bindings, the shared
+    *"whose"* group, and the standalone residual. This is the list form of :func:`place`.
 
     The conjuncts are reduced here first (a complementary lower/upper bound pair on one chain
     becomes a single *"… is between …"*; co-indexed comparisons across two prefixes fold into one
-    *"… have the same …"*), so the caller hands over the raw conditions and never invokes the fold
-    itself — the same reduction :meth:`ConditionAssembler.as_statements` applies.
+    *"… have the same …"*), then a relational binding from *subject* to a secondary entity is grouped
+    with that entity's own conjuncts (:func:`~…scoping.bind_relational_entities`), so it renders as a
+    nested relative clause rather than an orphaned residual.
 
     :param conditions: The subject's WHERE conjuncts (an ``AND`` already flattened to a list).
     :param subject: The variable the restriction is on.
     :param context: The per-node context (recursion and services).
     :param number: The number the subject agrees with — singular for a query selection, plural for
         an aggregated inference antecedent.
+    :param compact: ``True`` when *subject* is an introduced entity noun (the recursive call for a
+        binding's nested conjuncts), enabling the compact *"with <attribute> <comparison>"* form.
     :return: The placed restriction pieces.
 
     Bucketing each placed conjunct by position is what splits the two conditions in the example: the
@@ -417,9 +530,13 @@ def as_subject_restrictions(
     >>> verbalize_expression(an(entity(robot).where(and_(robot.battery > 50, robot.name == None))))
     'Find a Robot whose battery is greater than 50, such that the Robot has no name'
     """
+    grouped = bind_relational_entities(reduce_conjuncts(list(conditions)), subject)
     placed = [
-        place(Placement(item=item, subject=subject, number=number), context)
-        for item in reduce_conjuncts(list(conditions))
+        place(
+            Placement(item=item, subject=subject, number=number, compact=compact),
+            context,
+        )
+        for item in grouped
     ]
     whose_clauses = [
         PhraseFragment(parts=[Keywords.WHOSE.as_fragment(), item.fragment])
@@ -440,6 +557,11 @@ def as_subject_restrictions(
             item.fragment
             for item in placed
             if item.position is SurfacePosition.SELECTION_MODIFIER
+        ],
+        relative_clauses=[
+            item.fragment
+            for item in placed
+            if item.position is SurfacePosition.RELATIVE_CLAUSE
         ],
         whose=whose,
         residual=_join_residual(

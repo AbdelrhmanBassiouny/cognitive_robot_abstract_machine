@@ -284,8 +284,9 @@ def test_verbalize_index_access_rendered_as_ordinal():
     r = variable(Robot, [])
     text = verbalize_expression(r.tasks[0])
     assert "Robot" in text
-    assert "tasks" in text
-    # An integer index reads as an ordinal ("the first of the tasks"), not a raw subscript leak.
+    assert "task" in text
+    # An integer index folds its ordinal into the singularized noun ("the first task"), not a raw
+    # subscript leak.
     assert "first" in text
     assert "[0]" not in text
 
@@ -296,11 +297,8 @@ def test_verbalize_negative_index_reads_from_the_end():
         tasks: list
 
     r = variable(Robot, [])
-    assert verbalize_expression(r.tasks[-1]) == "the last of the tasks of a Robot"
-    assert (
-        verbalize_expression(r.tasks[-2])
-        == "the second to last of the tasks of a Robot"
-    )
+    assert verbalize_expression(r.tasks[-1]) == "the last task of a Robot"
+    assert verbalize_expression(r.tasks[-2]) == "the second to last task of a Robot"
 
 
 def test_verbalize_index_then_attribute_is_ordinal_chain():
@@ -314,7 +312,7 @@ def test_verbalize_index_then_attribute_is_ordinal_chain():
 
     r = variable(Robot, [])
     text = verbalize_expression(r.tasks[0].name)
-    assert text == "the name of the first of the tasks of a Robot"
+    assert text == "the name of the first task of a Robot"
     assert "[0]" not in text
 
 
@@ -346,7 +344,7 @@ def test_verbalize_indexed_bool_attribute_predicative():
     r = variable(_Robot, [])
     text = verbalize_expression(r.tasks[0].completed)
     assert "first" in text
-    assert "tasks" in text
+    assert "task" in text
     assert "is" in text
     assert "completed" in text
     # must NOT be "completed of tasks[0] of …"
@@ -357,7 +355,7 @@ def test_verbalize_indexed_bool_attribute_negated():
     r = variable(_Robot, [])
     text = verbalize_expression(not_(r.tasks[0].completed))
     assert "first" in text
-    assert "tasks" in text
+    assert "task" in text
     assert "is not" in text
     assert "completed" in text
 
@@ -366,7 +364,7 @@ def test_verbalize_second_index_ordinal():
     r = variable(_Robot, [])
     text = verbalize_expression(r.tasks[1].completed)
     assert "second" in text
-    assert "tasks" in text
+    assert "task" in text
     assert "is" in text
     assert "completed" in text
 
@@ -459,16 +457,34 @@ def test_relational_navigation_standalone():
     )
 
 
-def test_relational_navigation_agentive_by_does_not_reverse():
-    """The relative-clause frame keeps the owner the verb's subject, so agentive *by* relations
-    read correctly rather than reversed (*not* "the Person owned by a Book")."""
+def test_relational_navigation_agentive_by_reads_active():
+    """An agentive *by* relation reads in the active voice with the related type as the verb's
+    subject (*"the Person who owns a Book"*), including for an irregular participle
+    (*"written"* → *"writes"*)."""
     assert (
         verbalize_expression(variable(_NavBook, []).owned_by)
-        == "the _NavPerson by which a _NavBook is owned"
+        == "the _NavPerson who owns a _NavBook"
     )
     assert (
         verbalize_expression(variable(_NavDoc, []).written_by)
-        == "the _NavAuthor by which a _NavDoc is written"
+        == "the _NavAuthor who writes a _NavDoc"
+    )
+
+
+def test_relational_navigation_agentive_by_pronominalises_owner():
+    """When the owner is the query subject, the active-voice agentive clause pronominalises it
+    (*"the Person who owns it"*)."""
+    book = variable(_NavBook, [])
+    text = verbalize_expression(an(entity(book).where(book.owned_by.name == "Bob")))
+    assert "the name of the _NavPerson who owns it is 'Bob'" in text
+
+
+def test_relational_navigation_goal_relation_stays_passive():
+    """A non-agentive *to* relation keeps the passive relative clause (only *by* relations go
+    active)."""
+    assert (
+        verbalize_expression(variable(_NavParcel, []).sent_to)
+        == "the _NavAddress to which a _NavParcel is sent"
     )
 
 
@@ -716,7 +732,7 @@ def test_verbalize_non_bool_indexed_attribute_possession():
     r = variable(_Robot, [])
     text = verbalize_expression(r.tasks[0].name)
     # name is a str — should use possession/of form, NOT "is"
-    assert "tasks" in text
+    assert "task" in text
     assert "name" in text
     assert " is " not in text
 
@@ -771,8 +787,8 @@ def test_verbalize_and_chain_flattening():
     cond = and_(x > 1, x < 10, x != 5)
     text = verbalize_expression(cond)
     # The flattened conjuncts on one bare variable factor into one shared-subject main clause; the
-    # complementary bound pair folds to "between".
-    assert text == "an Integer is between 1 and 10 and is not 5"
+    # complementary bound pair folds to "between", and the inequality tail shares the lead copula.
+    assert text == "an Integer is between 1 and 10 and not 5"
 
 
 def test_verbalize_and_stops_at_or():
@@ -780,14 +796,14 @@ def test_verbalize_and_stops_at_or():
     cond = and_(x > 1, or_(x < 10, x == 5))
     text = verbalize_expression(cond)
     assert "greater than" in text
-    assert "either" in text  # the inner OR produces "either ..."
+    assert " or " in text  # the inner OR renders as an (inclusive) disjunction
 
 
 def test_verbalize_or_chain():
     x = variable(int, [])
     cond = or_(x > 10, x < 0)
     text = verbalize_expression(cond)
-    assert "either" in text
+    assert " or " in text
     assert "greater than" in text
     assert "less than" in text
 
@@ -818,7 +834,7 @@ def test_verbalize_not_complex_fallback():
     x = variable(int, [])
     text = verbalize_expression(not_(or_(x > 50, x < 10)))
     assert text.startswith("not (")
-    assert "either" in text
+    assert " or " in text
 
 
 # ── Unit tests: aggregators ────────────────────────────────────────────────────
@@ -1187,7 +1203,7 @@ def test_verbalize_presentation_example():
     assert "is greater than" in text
     assert "50" in text
     assert "first" in text
-    assert "tasks" in text
+    assert "task" in text
     assert "is not completed" in text
 
 
@@ -1378,7 +1394,7 @@ def test_verbalize_condition_graph_example():
     text = verbalize_expression(query)
 
     assert "Item" in text
-    assert "either" in text
+    assert " or " in text
     # The bare-variable bound pair folds to "between" inside its relative clause.
     assert "between 5 and 10" in text
     assert "is 11" in text

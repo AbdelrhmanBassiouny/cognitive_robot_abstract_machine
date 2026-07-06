@@ -1,8 +1,8 @@
 """
 Tests for conjunction factoring: an AND whose conjuncts are all value comparisons on the *same bare
-variable* is said as one main clause — *"an Integer is greater than 1, less than 10, and is not 5"* —
+variable* is said as one main clause — *"an Integer is greater than 1, less than 10, and not 5"* —
 the subject and the lead copula stated once and only the predicate tails coordinated (the conjunctive
-analogue of the *"… is either … or …"* disjunction). Scoped to a bare variable; an attribute-chain
+analogue of the *"… is … or …"* disjunction). Scoped to a bare variable; an attribute-chain
 conjunction keeps its per-clause surface.
 """
 
@@ -18,7 +18,7 @@ def test_bare_variable_conjuncts_factor_into_a_relative_clause():
     x = variable(int, [])
     assert (
         verbalize_expression(and_(x > 1, x < 10, x != 5))
-        == "an Integer is between 1 and 10 and is not 5"
+        == "an Integer is between 1 and 10 and not 5"
     )
 
 
@@ -32,15 +32,15 @@ def test_unpaired_bounds_stay_spelled_out():
     x = variable(int, [])
     assert (
         verbalize_expression(and_(x > 1, x > 3, x != 9))
-        == "an Integer is greater than 1, greater than 3, and is not 9"
+        == "an Integer is greater than 1, greater than 3, and not 9"
     )
 
 
-def test_inequality_tail_keeps_its_copula():
-    """A ``!=`` tail re-introduces the copula (*"is not 5"*) since the negation cannot share the
-    affirmative lead *"is"*."""
+def test_inequality_tail_shares_the_lead_copula():
+    """A ``!=`` tail keeps its *"not"* but shares the affirmative lead *"is"*, so the copula is not
+    repeated (*"is greater than 1 and not 5"*)."""
     x = variable(int, [])
-    assert "and is not 5" in verbalize_expression(and_(x > 1, x != 5))
+    assert "and not 5" in verbalize_expression(and_(x > 1, x != 5))
 
 
 def test_attribute_chain_conjunction_is_not_factored():

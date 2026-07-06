@@ -104,7 +104,7 @@ class AndRule(PhraseRule):
     'the battery of a Robot is between 10 and 90'
     >>> x = variable(int, [])
     >>> verbalize_expression(and_(x > 1, x < 10, x != 5))
-    'an Integer is between 1 and 10 and is not 5'
+    'an Integer is between 1 and 10 and not 5'
     """
 
     construct = AND
@@ -243,19 +243,20 @@ class CoindexedFoldRule(PhraseRule):
 
 
 class SharedSubjectComparisonsRule(PhraseRule):
-    """Factored disjunction *"the <subject> is either <tail>, …, or <tail>"* — the
+    """Factored disjunction *"the <subject> is <tail>, …, or <tail>"* — the
     :class:`SharedSubjectComparisons` artifact produced when every disjunct of an ``OR`` is a value
     comparison on one shared subject chain.
 
     Saying the subject and its copula once and coordinating only the operator-and-value tails is
     coordination reduction over the shared subject (the disjunctive analogue of the *"between"* range
-    fold). Making it a first-class verbalizable means a caller that has folded its disjuncts renders
-    the result through the normal recursion (``context.child``) and never has to know a folding helper
-    exists.
+    fold). The disjunction is inclusive, so the tails are coordinated with a plain *"or"* and are
+    **not** fronted with *"either"* (which reads as exclusive-or). Making it a first-class
+    verbalizable means a caller that has folded its disjuncts renders the result through the normal
+    recursion (``context.child``) and never has to know a folding helper exists.
 
     >>> robot = variable(Robot, [])
     >>> verbalize_expression(or_(robot.battery > 50, robot.battery < 10))
-    'the battery of a Robot is either greater than 50 or less than 10'
+    'the battery of a Robot is greater than 50 or less than 10'
     """
 
     construct = SharedSubjectComparisons
@@ -263,9 +264,9 @@ class SharedSubjectComparisonsRule(PhraseRule):
     def build(
         self, node: SharedSubjectComparisons, context: RuleContext
     ) -> VerbalizationFragment:
-        """Say the factored disjunction — subject and copula once, tails coordinated under *either … or*.
+        """Say the factored disjunction — subject and copula once, tails coordinated under a plain *or*.
 
-        It owns the *is either … or …* framing: the shared subject and its copula are stated once and
+        It owns the *is … or …* framing: the shared subject and its copula are stated once and
         each comparator contributes only its copula-less operator-and-value tail (*greater than 50*),
         so the disjuncts read as one clause rather than repeating the subject per disjunct.
         """
@@ -274,7 +275,6 @@ class SharedSubjectComparisonsRule(PhraseRule):
             parts=[
                 context.child(node.subject_expression),
                 copula_with("", GrammaticalNumber.SINGULAR),
-                Logicals.EITHER.as_fragment(),
                 oxford_comma(tails, Conjunctions.OR.as_fragment()),
             ]
         )
@@ -299,12 +299,12 @@ class SharedSubjectConjunctionRule(PhraseRule):
     comparison on one shared *bare variable*.
 
     The subject and the leading copula are said once and the predicate tails coordinate as one main
-    clause; the conjunctive analogue of :class:`SharedSubjectComparisonsRule` (*"… is either … or …"*),
+    clause; the conjunctive analogue of :class:`SharedSubjectComparisonsRule` (*"… is … or …"*),
     so a conjunction and a disjunction over the same subject read with the same *"<subject> is …"* lead.
 
     >>> x = variable(int, [])
     >>> verbalize_expression(and_(x > 1, x < 10, x != 5))
-    'an Integer is between 1 and 10 and is not 5'
+    'an Integer is between 1 and 10 and not 5'
     """
 
     construct = SharedSubjectConjunction
@@ -317,7 +317,7 @@ class SharedSubjectConjunctionRule(PhraseRule):
 
         >>> x = variable(int, [])
         >>> verbalize_expression(and_(x > 5, x != 5))
-        'an Integer is greater than 5 and is not 5'
+        'an Integer is greater than 5 and not 5'
         """
         tails = [
             self._tail(tail, context, lead=index == 0)
@@ -335,8 +335,9 @@ class SharedSubjectConjunctionRule(PhraseRule):
         """:return: one relative-clause tail. A folded :class:`RangeFold` reads *"between low and
         high"* (with the lead copula when it leads); a :class:`Comparator` reads its
         operator-and-value tail. The lead tail carries the clause's copula (*"is greater than 1"*); a
-        negation re-introduces it (*"is not 5"*); a bare equality has an empty core, so it too keeps
-        the copula (*"is 5"*); every other positive tail shares the lead copula and drops it
+        negation drops the shared copula but keeps its *"not"* (*"not 5"*, giving *"is between 1 and
+        10 and not 5"*); a bare equality has an empty core, so it keeps the copula (*"is 5"*) to stay
+        unambiguous; every other positive tail shares the lead copula and drops it
         (*"less than 10"*)."""
         if isinstance(tail, RangeFold):
             return between_phrase(
@@ -346,11 +347,9 @@ class SharedSubjectConjunctionRule(PhraseRule):
             )
         value = context.child(tail.right, as_value=True)
         core = comparator_operator(tail, context.services, compact=False, copula=False)
-        keeps_copula = (
-            lead
-            or tail.operation is operator.ne
-            or not flatten_fragment_to_plain_text(core).strip()
-        )
+        if not lead and tail.operation is operator.ne:
+            return cls._negated_tail(core, value)
+        keeps_copula = lead or not flatten_fragment_to_plain_text(core).strip()
         if keeps_copula:
             copular = comparator_operator(
                 tail, context.services, compact=False, copula=True
@@ -358,29 +357,44 @@ class SharedSubjectConjunctionRule(PhraseRule):
             return PhraseFragment(parts=[copular, value])
         return PhraseFragment(parts=[core, value])
 
+    @staticmethod
+    def _negated_tail(
+        core: VerbalizationFragment, value: VerbalizationFragment
+    ) -> VerbalizationFragment:
+        """:return: a non-lead ``!=`` tail as *"not <core> <value>"* — the negation word is kept while
+        the shared lead copula is dropped, so *"is not 5"* reduces to *"not 5"* and the temporal
+        *"is not at <date>"* to *"not at <date>"*. The *core* is the copula-less operator remainder,
+        empty for the plain inequality."""
+        core_is_empty = not flatten_fragment_to_plain_text(core).strip()
+        parts = [Logicals.NOT.as_fragment()]
+        if not core_is_empty:
+            parts.append(core)
+        parts.append(value)
+        return PhraseFragment(parts=parts)
+
 
 class OrRule(PhraseRule):
-    """Disjunction *"either a, b, or c"*; flattens nested ORs. When every disjunct is a value
-    comparison on one shared subject chain it factors to *"the <subject> is either … or …"* via the
-    :class:`SharedSubjectComparisons` fold.
+    """Inclusive disjunction *"a, b, or c"*; flattens nested ORs. When every disjunct is a value
+    comparison on one shared subject chain it factors to *"the <subject> is … or …"* via the
+    :class:`SharedSubjectComparisons` fold. The disjunction is inclusive, so it is not fronted with
+    *"either"* (which reads as exclusive-or).
 
     >>> robot = variable(Robot, [])
     >>> verbalize_expression(or_(robot.battery > 50, robot.name == 'x'))
-    "either the battery of a Robot is greater than 50, or the name of the Robot is 'x'"
+    "the battery of a Robot is greater than 50, or the name of the Robot is 'x'"
     >>> verbalize_expression(or_(robot.battery > 50, robot.battery < 10))
-    'the battery of a Robot is either greater than 50 or less than 10'
+    'the battery of a Robot is greater than 50 or less than 10'
     """
 
     construct = OR
 
     def build(self, node: OR, context: RuleContext) -> VerbalizationFragment:
-        """Say the flattened disjuncts as *"either a, b, or c"*, or the factored *"… is either … or …"*
-        when they share a subject.
+        """Say the flattened disjuncts as *"a, b, or c"*, or the factored *"… is … or …"* when they
+        share a subject.
 
-        It owns the *either …, or …* framing around the disjuncts of the class example — the leading
-        *either* and the comma-*or* before the last — while the disjunct clauses come from the
-        recursion; a shared-subject disjunction is delegated to the :class:`SharedSubjectComparisons`
-        fold instead.
+        It owns the *…, or …* framing around the disjuncts of the class example — the comma-*or*
+        before the last — while the disjunct clauses come from the recursion; a shared-subject
+        disjunction is delegated to the :class:`SharedSubjectComparisons` fold instead.
         """
         operands = flatten_operands(node, OR)
         shared_subject = fold_shared_subject_comparisons(operands)
@@ -389,12 +403,11 @@ class OrRule(PhraseRule):
         parts = [context.child(conjunct) for conjunct in operands]
         if len(parts) == 1:
             return parts[0]
-        # "either a, b, or c": the head items are comma-joined, then a trailing comma that the
+        # "a, b, or c": the head items are comma-joined, then a trailing comma that the
         # orthography pass hugs to the last head item — no separator="" bookkeeping here.
         head = PhraseFragment(parts=parts[:-1], separator=Separator.COMMA)
         return PhraseFragment(
             parts=[
-                Logicals.EITHER.as_fragment(),
                 head,
                 Punctuation.COMMA.as_fragment(),
                 Conjunctions.OR.as_fragment(),
@@ -408,7 +421,7 @@ class NotRule(PhraseRule):
 
     >>> robot = variable(Robot, [])
     >>> verbalize_expression(Not(or_(robot.battery > 50, robot.name == 'x')))
-    "not (either the battery of a Robot is greater than 50, or the name of the Robot is 'x')"
+    "not (the battery of a Robot is greater than 50, or the name of the Robot is 'x')"
     """
 
     construct = Not

@@ -399,7 +399,7 @@ def comparator_operator(
     :param number: The grammatical number the predicative copula agrees with.
     :param copula: Keep the leading copula on the predicative (non-compact) surface. Pass ``False``
         for the bare core (*"greater than"*) when a shared copula is factored out across coordinated
-        tails (*"is either greater than 50 or less than 10"*); ignored when *compact*.
+        tails (*"is greater than 50 or less than 10"*); ignored when *compact*.
     :return: The operator fragment.
 
     Of the example sentence it supplies only the operator span *is greater than*; the surrounding

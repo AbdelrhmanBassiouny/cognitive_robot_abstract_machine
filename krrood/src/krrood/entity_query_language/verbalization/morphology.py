@@ -33,6 +33,23 @@ def ensure_plural(word: str) -> str:
     return word if _engine.singular_noun(word) else _engine.plural(word)
 
 
+def singular(word: str) -> str:
+    """
+    :param word: An English noun in either number.
+    :return: The singular form of *word*, leaving an already-singular word unchanged
+        (*"tasks"* → *"task"*, *"task"* → *"task"*).
+
+    >>> singular("tasks")
+    'task'
+    >>> singular("task")
+    'task'
+    >>> singular("children")
+    'child'
+    """
+    singularized = _engine.singular_noun(word)
+    return singularized if singularized else word
+
+
 def is_plural(word: str) -> bool:
     """
     :param word: An English noun.

@@ -34,10 +34,34 @@ def test_expanded_lexicon_covers_common_mass_nouns():
     collective/activity nouns that take no plural and no indefinite article."""
     countability = NounCountability()
     for mass_noun in (
-        "wood", "metal", "plastic", "leather", "wool", "cotton", "concrete",
-        "coffee", "tea", "wine", "bread", "butter", "cheese", "meat", "flour",
-        "love", "anger", "courage", "honesty", "freedom", "happiness", "wisdom",
-        "education", "transport", "accommodation", "luggage", "garbage", "jewellery",
+        "wood",
+        "metal",
+        "plastic",
+        "leather",
+        "wool",
+        "cotton",
+        "concrete",
+        "coffee",
+        "tea",
+        "wine",
+        "bread",
+        "butter",
+        "cheese",
+        "meat",
+        "flour",
+        "love",
+        "anger",
+        "courage",
+        "honesty",
+        "freedom",
+        "happiness",
+        "wisdom",
+        "education",
+        "transport",
+        "accommodation",
+        "luggage",
+        "garbage",
+        "jewellery",
     ):
         assert countability.is_uncountable(mass_noun), mass_noun
 

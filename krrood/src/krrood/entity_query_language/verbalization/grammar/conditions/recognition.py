@@ -232,8 +232,8 @@ def fold_shared_subject_conjunction(
 
     Bare-variable only — the relative pronoun of the *"<subject> that is …"* surface attaches
     unambiguously to the subject noun. Unlike the disjunctive fold this admits ``!=`` (the
-    relative-clause tail keeps its polarity, *"is not 5"*), and it range-folds a complementary bound
-    pair so the clause reads *"between 1 and 10 and is not 5"*.
+    relative-clause tail keeps its polarity but shares the lead copula, *"not 5"*), and it range-folds
+    a complementary bound pair so the clause reads *"between 1 and 10 and not 5"*.
 
     >>> x = variable(int, [])
     >>> fold_shared_subject_conjunction([x > 1, x < 10, x != 5]) is not None
