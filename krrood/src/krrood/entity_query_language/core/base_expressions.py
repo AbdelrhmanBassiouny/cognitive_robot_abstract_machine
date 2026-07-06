@@ -387,14 +387,7 @@ class SymbolicExpression(ABC):
         The conditions root is a structural property of the whole tree, so within an active
         evaluation it is memoized per tree to avoid re-scanning the graph on every evaluation step.
         """
-        evaluation_context = get_evaluation_context()
-        if evaluation_context is None:
-            return self._compute_conditions_root_()
-        cache_key = ("conditions_root", self._root_._id_)
-        cache = evaluation_context.structural_cache
-        if cache_key not in cache:
-            cache[cache_key] = self._compute_conditions_root_()
-        return cache[cache_key]
+        return self._compute_conditions_root_()
 
     def _compute_conditions_root_(self) -> Optional[SymbolicExpression]:
         """
@@ -463,13 +456,9 @@ class SymbolicExpression(ABC):
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:
             return None
-        cache_key = ("expression_index", self._root_._id_)
-        cache = evaluation_context.structural_cache
-        if cache_key not in cache:
-            cache[cache_key] = {
-                expression._id_: expression for expression in self._all_expressions_
-            }
-        return cache[cache_key]
+        return {
+            expression._id_: expression for expression in self._all_expressions_
+        }
 
     @property
     def _descendants_(self) -> Iterator[SymbolicExpression]:
@@ -512,11 +501,7 @@ class SymbolicExpression(ABC):
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:
             return self._compute_subtree_contains_(expression_type)
-        cache_key = (self._id_, expression_type)
-        cache = evaluation_context.structural_cache
-        if cache_key not in cache:
-            cache[cache_key] = self._compute_subtree_contains_(expression_type)
-        return cache[cache_key]
+        return self._compute_subtree_contains_(expression_type)
 
     def _compute_subtree_contains_(
         self, expression_type: Type[SymbolicExpression]
