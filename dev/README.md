@@ -24,6 +24,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 | `merged` | branch is an ancestor of `cram2/main` | nothing — pure git |
 | WIP-exempt | the **`bug`** label (`wip_exempt_labels`) | labelling on GitHub |
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
+| cram2 create-link emailed | the **`cram2-link-sent`** marker | nothing — the routine sets it when it emails you a create-link, and clears it once you promote (add `in-review`) |
 
 ## Files
 
@@ -225,21 +226,53 @@ branch on a ROS dependency; resolve it non-blockingly and let CI be the final ch
   an ormatic-touching branch is never a reason to stall the rest of the stack.
 Never disable a leak/CI check to go green.
 
-PHASE 3 — PROMOTE (obey the WIP cap)
-Run `python dev/stack.py next --porcelain`. It prints `name<TAB>pr` for the single branch that is
-approved (un-drafted), unblocked, and under `wip_cap` — or nothing. If it prints a branch: open its
-cram2 PR (base cram2/main) with an updated description, then add the `in-review` label to its fork PR.
-If it prints nothing, the cap is full or nothing is ready — do not promote. `bug`-labelled PRs never
-count against the cap.
+PHASE 3 — PROMOTE (open cram2 PRs, or email me the create-links)
+Housekeeping first: remove any `cram2-link-sent` label from a fork PR that is now `in-review` or
+merged — its link has been acted on.
+
+Collect the fork PRs to promote this run:
+- EVERY `bug`-labelled PR that is ready (un-drafted), not `in-review`, and not already
+  `cram2-link-sent` — bug PRs are cap-exempt, so all of them qualify; PLUS
+- the SINGLE branch `python dev/stack.py next --porcelain` names when a slot is free (approved,
+  unblocked, under `wip_cap`). If that branch already carries `cram2-link-sent`, a link is pending —
+  promote nothing else this run and wait for me to open it.
+
+For each collected fork PR (head branch B):
+1. Try to open its cram2 PR directly via the GitHub MCP — base `cram2/main`, head
+   `AbdelrhmanBassiouny:B`, with a filled title and description. If it succeeds, add the `in-review`
+   label to the fork PR and you're done with B.
+2. If opening it fails (the usual case — the GitHub app has no write access to cram2), build the
+   compare-and-create URL instead:
+     `https://github.com/cram2/cognitive_robot_abstract_machine/compare/main...AbdelrhmanBassiouny:B?expand=1&title=<url-encoded title>&body=<url-encoded description>`
+   Keep the prefilled body SHORT — one paragraph plus a link back to the fork PR for the full detail;
+   a compare URL has a length cap and a long body is silently dropped. Collect this link and add the
+   `cram2-link-sent` label to B so later runs don't re-send it. Do NOT add `in-review` — the cram2 PR
+   isn't open until I click Create; I add `in-review` then (the housekeeping step above clears
+   `cram2-link-sent`).
+
+After processing them all, if you collected any create-links, deliver them to me:
+- Send an email to bido.bassuny@gmail.com via the Gmail connector — subject e.g.
+  `stack-board: N cram2 PR(s) to create`, body listing each PR's number, title, branch, and its
+  one-click create-link.
+- If Gmail is unavailable this run (scheduled runs can lack an interactive-auth connector), instead
+  surface the same list prominently at the TOP of your FINISH summary. A link counts as delivered by
+  either channel, so the `cram2-link-sent` label stays either way.
+
+If `next` prints nothing and there are no such bug PRs, the cap is full or nothing is ready — promote
+nothing.
 
 FINISH
-Summarise: what you closed, restacked, promoted, and anything you stopped on. The board Action has
-already republished Pages from your state changes — you do not touch `board.html` or any Artifact.
+Summarise: what you closed, restacked, promoted, and any cram2 create-links awaiting me (if Gmail was
+unavailable, list them here). The board Action has already republished Pages from your state changes —
+you do not touch `board.html` or any Artifact.
 ```
 
 The promote step is gated by `stack.py next`, which only ever names an un-drafted branch under the cap
 — so the Routine can never flood cram2, and never promotes something you haven't approved by
-un-drafting its fork PR.
+un-drafting its fork PR. Because the app can't write to cram2, promotion usually can't open the PR
+directly; the Routine hands you a one-click **compare-and-create** link instead — for every ready,
+cap-exempt `bug` PR and for the one non-bug branch a free slot allows — emailed to you (falling back
+to its run summary), and marked `cram2-link-sent` so you're never sent the same link twice.
 
 ## The board GitHub Action (a separate `stack-board` repo → its own Pages)
 
