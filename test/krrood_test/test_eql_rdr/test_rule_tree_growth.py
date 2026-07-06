@@ -6,6 +6,7 @@ classifications as building the equivalent tree statically with ``with`` blocks.
 """
 
 import unittest
+from copy import copy
 
 from krrood.entity_query_language.factories import (
     add,
@@ -22,8 +23,6 @@ from krrood.entity_query_language.rdr.rule_tree import (
 )
 from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
-
-from krrood.entity_query_language.rules.conclusion_selector import _clone_expression
 
 from .animal import Animal, Species, make_animal
 from .zoo_loader import load_zoo_animals
@@ -188,9 +187,9 @@ class TestRuleTreeGrowth(unittest.TestCase):
 
     def test_clone_expression_does_not_corrupt_original_parents(self):
         """
-        Regression test: _clone_expression must NOT mutate the original expression's
-        ``_parents_`` list.  The bug was that ``copy(expr)`` does a shallow copy, so
-        ``clone._parents_`` was the **same list** as ``expr._parents_``.  Then
+        Regression test: ``copy(expr)`` must NOT mutate the original expression's
+        ``_parents_`` list.  The bug was that a shallow copy left
+        ``clone._parents_`` as the **same list** as ``expr._parents_``.  Then
         ``clone._parent_ = None`` (the old code) would go through the setter and
         wrench ``expr._parent__`` out of the **shared** ``_parents_`` list, leaving
         the original with an inconsistent ``_parent__`` that wasn't tracked in
@@ -216,8 +215,8 @@ class TestRuleTreeGrowth(unittest.TestCase):
         orig_parent = condition._parent__
         orig_parents_before = list(condition._parents_)
 
-        # Clone via _clone_expression — the path that used to corrupt.
-        clone = _clone_expression(condition)
+        # Clone via copy() — the path that used to corrupt.
+        clone = copy(condition)
 
         # The original must be untouched.
         self.assertIs(
@@ -349,7 +348,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
         )
 
     def test_clone_expression_resets_conclusions(self):
-        """Regression: _clone_expression must reset _conclusions_ so cloned nodes do not
+        """Regression: copy() must reset _conclusions_ so cloned nodes do not
         share the original's conclusion set."""
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.backbone)
@@ -365,7 +364,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
         not_eggs = not_(animal.eggs)
         insert_refinement(backbone, not_eggs, animal.species, Species.reptile)
         # not_eggs now has a parent and no direct conclusions, but we test the set isolation.
-        clone = _clone_expression(not_eggs)
+        clone = copy(not_eggs)
 
         self.assertIsNot(
             clone._conclusions_,
@@ -375,7 +374,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
         self.assertEqual(
             len(clone._conclusions_),
             0,
-            "Clone's _conclusions_ must be empty after _clone_expression",
+            "Clone's _conclusions_ must be empty after copy()",
         )
 
 
