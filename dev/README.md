@@ -94,8 +94,8 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 ## The board: chips, priority, sessions
 
-`dev/board.html` (published as an Artifact) renders the tree with per-PR readiness chips, all derived —
-never hand-set:
+`dev/board.html` (published to GitHub Pages by the `board` Action) renders the tree with per-PR
+readiness chips, all derived — never hand-set:
 
 - **CI** — green/red/amber from the PR's check rollup (`ci` in `board.json`, filled by `export`). Grey
   `—` when no CI has run.
@@ -135,10 +135,13 @@ SETUP
    `cram2`=upstream before continuing.
 1. UPDATE FORK MAIN FIRST — before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
-   inflates every root branch's diff. Fast-forward it to the upstream trunk:
-     `git fetch cram2 main && git push origin cram2/main:main`
-   This MUST be a fast-forward. If GitHub rejects it as non-fast-forward (fork main has unique
-   commits), STOP and report — do NOT force.
+   inflates every root branch's diff. Fork main carries exactly one fork-only commit on top of the
+   upstream trunk — `.github/workflows/board.yml`, the board's Pages publisher — so refreshing it is a
+   rebase of that single commit, not a plain fast-forward:
+     `git fetch cram2 main && git checkout main && git rebase cram2/main && git push --force-with-lease origin main`
+   If the rebase reports anything other than replaying that one workflow commit cleanly, STOP and
+   report — do NOT force past a conflict. (If you ever find fork main with no such commit, a plain
+   `git push origin cram2/main:main` fast-forward is correct.)
 2. `git fetch origin`.
 3. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
@@ -146,17 +149,11 @@ SETUP
 4. SUBSCRIBE TO CI AS VALIDATOR. For every open fork PR, call `subscribe_pr_activity` (GitHub MCP) so
    red/green is delivered to you — CI is the validator; never run the ROS (coraplex/SDT) suites here.
 
-KEEP THE BOARD LIVE (do this after EVERY state change, in every phase)
-The moment a PR's state changes — closed as merged (Phase 1), a branch restacked + pushed (Phase 2),
-or a branch promoted / its cram2 PR opened + `in-review` label added (Phase 3) — immediately refresh
-the board so I watch it update in real time:
-  a. update `dev/board.json` for just the affected PR via the GitHub MCP (add/remove a label, drop a
-     closed PR);
-  b. run `python dev/stack.py board` (recomputes status, conflicts, LOC from git);
-  c. redeploy `dev/board.html` to the EXISTING Artifact at
-     https://claude.ai/code/artifact/d53805e1-177c-4a0d-afd7-4fadc09f3877 (update in place, do NOT
-     mint a new one).
-Do this PER EVENT, not only at the end — one refresh per branch as it finishes.
+THE BOARD PUBLISHES ITSELF
+You do not render or redeploy the board. The `board` GitHub Action (`.github/workflows/board.yml`)
+rebuilds it on GitHub Pages whenever a PR, its CI, or a label changes — which is exactly what your
+state changes below produce (closing a PR, pushing a restacked branch, adding the `in-review` label).
+So make the state change and move on; the board follows. Never hand-redeploy an Artifact.
 
 PHASE 1 — AUTO-CLOSE LANDED FORK PRs
 cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an
@@ -203,63 +200,64 @@ If it prints nothing, the cap is full or nothing is ready — do not promote. `b
 count against the cap.
 
 FINISH
-Refresh `board.json` again and commit it if it changed. Then run `python dev/stack.py board` and
-redeploy `dev/board.html` to the EXISTING board Artifact at
-https://claude.ai/code/artifact/d53805e1-177c-4a0d-afd7-4fadc09f3877 (pass that URL so it updates in
-place — do NOT mint a new Artifact). Summarise: what you closed, restacked, promoted, and anything you
-stopped on.
+Summarise: what you closed, restacked, promoted, and anything you stopped on. The board Action has
+already republished Pages from your state changes — you do not touch `board.html` or any Artifact.
 ```
 
 The promote step is gated by `stack.py next`, which only ever names an un-drafted branch under the cap
 — so the Routine can never flood cram2, and never promotes something you haven't approved by
 un-drafting its fork PR.
 
-## The board-refresh Routine (paste into claude.ai/code/routines)
+## The board GitHub Action (publishes to Pages)
 
-A second, separate routine for high-frequency events (a PR opened, its CI starting or going red, a
-label added) where you only want the board to reflect reality — **not** to restack, promote, or
-autofix. It shares nothing with the restack Routine except the board Artifact URL. Keep it strictly
-read-only with respect to branches and PRs: the only things it writes are `dev/board.json` and the
-board Artifact.
+Board *refresh* is pure mechanics — fetch the fork's open PRs, render, publish — so it is a GitHub
+Action, not a routine. No LLM, no token cost, no Claude app: `.github/workflows/board.yml` runs
+`python dev/stack.py export` (fetches open PRs via `gh`, using the built-in `GITHUB_TOKEN`) then
+`python dev/stack.py board` (renders `dev/board.html` from `board.json` + git), and deploys the page
+to GitHub Pages. It has `contents: read` + `pages: write` only — it never touches a branch, PR, label,
+or the upstream. The restack Routine keeps the *intelligence* (restack, promote, autofix); the Action
+keeps the *picture* current between (and during) its runs.
 
-```text
-You keep the stacked-PR board in sync with reality. This routine ONLY refreshes the board and its
-hosted page. It NEVER closes a PR, restacks or pushes a feature branch, adds/removes a label, opens a
-cram2 PR, or attempts any CI fix. `origin` is my fork; `cram2` is upstream.
+It fires on exactly the events you asked for:
 
-SETUP
-0. Ensure remotes: `origin` = fork (AbdelrhmanBassiouny/cognitive_robot_abstract_machine),
-   `cram2` = upstream. Check `git remote -v` and rename/add if a fresh clone differs.
-1. `git fetch origin` and `git fetch cram2 main` (the merged-state chip is computed by git ancestry
-   against cram2/main).
+| Refresh the board when… | GitHub event (in `board.yml`) |
+|---|---|
+| a PR is opened / closed / retargeted | `pull_request: opened, reopened, closed, edited` |
+| a branch is pushed (restacked) | `pull_request: synchronize` |
+| a label / draft state changes | `pull_request: labeled, unlabeled, ready_for_review, converted_to_draft` |
+| CI starts | `check_suite: requested` |
+| CI finishes (pass or fail) | `check_suite: completed` |
+| nothing happened for a while | `schedule: hourly` (safety net) |
 
-REFRESH (writes only dev/board.json + the Artifact — nothing else)
-2. Refresh `dev/board.json` from the fork's OPEN PRs via the GitHub MCP: for each PR record number,
-   head, base, isDraft, labels, statusCheckRollup (the CI chip) and body. Drop PRs that are no longer
-   open. Do NOT modify, push, or create any branch or PR.
-3. Run `python dev/stack.py board` (recomputes status, conflicts, LOC from git + board.json).
-4. Redeploy `dev/board.html` to the EXISTING Artifact at
-   https://claude.ai/code/artifact/d53805e1-177c-4a0d-afd7-4fadc09f3877 — pass that URL so it updates
-   in place; do NOT mint a new Artifact.
-5. If `dev/board.json` changed, commit it on the tooling branch (board data only) and push that
-   branch. Never touch a stack feature branch.
+`check_suite` is what carries CI start/finish — `pull_request` events do not — which is why CI
+transitions need the Action (a routine can't subscribe to them from GitHub's side). The workflow only
+publishes when `github.repository` is the fork, so it stays dormant if the branch ever reaches cram2.
 
-FINISH
-One line: which PRs were added/removed, any CI chip transitions, any label changes. Nothing else —
-no restacking, no promotion, no fixes. If something looks like it needs restacking or promoting, say
-so in the summary and stop; the restack Routine (or I) will handle it.
-```
+### One-time setup
 
-Because it only ever writes `board.json` and redeploys the Artifact, running it on a red-CI or
-new-PR event is safe and cheap — it can never open a cram2 PR, force-push, or push a fix.
+1. **Put `board.yml` on the fork's default branch (`main`).** GitHub runs `check_suite`/`schedule`
+   workflows from the default branch only. This is the single fork-only commit on top of the upstream
+   trunk (SETUP step 1 of the Routine rebases it forward). It does **not** pollute PR diffs — a PR's
+   3-dot diff excludes commits that are only on its base.
+2. **Enable Pages:** repo **Settings → Pages → Source: GitHub Actions**. The first `board` run then
+   publishes to `https://<owner>.github.io/<repo>/`.
+3. **Visibility:** on a **private** repo, Pages is public unless you're on a plan with private Pages —
+   if the board must stay private, either make the repo public or keep the board as a routine-rendered
+   private Artifact instead. On a public fork there's nothing to do.
 
-### Triggers (set at claude.ai/code/routines)
+### The phone board (one tap)
 
-Install the Claude GitHub app on the **fork** (it's yours). You now have two routines with different
-trigger sets; the app is shared.
+The board is a Pages site at a **fixed URL** (`https://<owner>.github.io/<repo>/`). On your phone,
+open it once and **Add to Home Screen** (Safari: Share → *Add to Home Screen*; Chrome: ⋮ → *Add to
+Home screen*). That icon is your one-tap button; the Action republishes the same URL on every event,
+so the tap always shows current state — the header carries the "generated" timestamp. The board is
+read-only; you act by tapping a PR (it links straight to the GitHub PR, where you un-draft / label /
+retarget).
 
-**Restack Routine** — give it a **schedule** (e.g. hourly, so nothing goes stale even with no events)
-plus the state-change events that warrant restacking/promoting:
+### Restack Routine triggers (set at claude.ai/code/routines)
+
+Install the Claude GitHub app on the **fork** and give the restack Routine a **schedule** (e.g.
+hourly) plus the state-change events that warrant restacking/promoting:
 
 | Run restack when… | GitHub event |
 |---|---|
@@ -268,26 +266,5 @@ plus the state-change events that warrant restacking/promoting:
 | you add/remove a label (`in-review`, `bug`) | `pull_request: labeled` / `unlabeled` |
 | a PR is retargeted (parent changed) | `pull_request: edited` |
 
-**Board-refresh Routine** — the high-frequency, side-effect-free events where you just want the board
-current:
-
-| Refresh the board when… | GitHub event |
-|---|---|
-| a new PR is opened | `pull_request: opened` |
-| a label is added/removed | `pull_request: labeled` / `unlabeled` |
-| CI starts | `check_suite: requested` (or `workflow_run: requested`) |
-| CI finishes (pass or fail) | `check_suite: completed` (or `workflow_run: completed`) |
-
-The `check_suite`/`workflow_run` events are what carry CI start/finish — `pull_request` events do not.
-Overlap on `opened`/`labeled` is fine: the board refresh is idempotent and cheap, and the restack
-Routine refreshes the board itself as part of its own run. (cram2 stays untouched — you don't need the
-app there; merges are detected from the fork by git ancestry.)
-
-### The phone board (one tap)
-
-The board is a hosted Artifact at a **fixed URL**. On your phone, open that URL once and **Add to Home
-Screen** (Safari: Share → *Add to Home Screen*; Chrome: ⋮ → *Add to Home screen*). That icon is your
-one-tap button. Because the routine redeploys the page to the *same* URL each run, the tap always
-shows current state — the header carries the "generated" timestamp so you can see how fresh it is.
-The board is read-only; you act by tapping a PR (it links straight to the GitHub PR, where you
-un-draft / label / retarget).
+(cram2 stays untouched — you don't need the app there; merges are detected from the fork by git
+ancestry.)
