@@ -171,7 +171,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
         to the discourse subject (*"the Robot to which it is assigned"*) when one is in scope.
 
         >>> verbalize_expression(variable(Worker, []).tasks[0].completed)
-        'the first of the tasks of a Worker is completed'
+        'the first task of a Worker is completed'
         """
         terminal = plan.chain[-1]
         navigation_fragment = self.context.child(terminal._child_, inline=True)

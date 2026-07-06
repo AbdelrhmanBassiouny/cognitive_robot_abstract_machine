@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
 
 
-def _fresh_expression(expr: SymbolicExpression) -> SymbolicExpression:
+def _clone_expression(expr: SymbolicExpression) -> SymbolicExpression:
     """Clone *expr* so it can be reused in a new tree position without parent corruption.
 
     Creates a shallow copy with a new identity and no parent. Children are shared
@@ -145,14 +145,14 @@ class ConclusionSelector(TruthValueOperator, ABC):
         cleaned = []
         for c in conditions:
             if isinstance(c, SymbolicExpression) and c._parent_ is not None:
-                c = _fresh_expression(c)
+                c = _clone_expression(c)
             cleaned.append(c)
         new_condition = chained_logic(AND, *cleaned)
         # Single conditions returned directly by chained_logic may still carry a parent
         # from the pre-cleaning step (e.g. one condition that was the only element).
         # Clone again if needed — the idempotent clone is harmless.
         if isinstance(new_condition, SymbolicExpression) and new_condition._parent_ is not None:
-            new_condition = _fresh_expression(new_condition)
+            new_condition = _clone_expression(new_condition)
 
         # anchor._parent_ tracks only the LAST parent set, so it can be wrong when a
         # MappedVariable singleton (e.g. ``backbone``) is used both as the WHERE

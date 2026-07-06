@@ -437,7 +437,7 @@ class SymbolicExpression(ABC):
 
     def _evaluation_scoped_expression_index_(
         self,
-    ) -> Optional["weakref.WeakValueDictionary[uuid.UUID, SymbolicExpression]"]:
+    ) -> Optional[weakref.WeakValueDictionary[uuid.UUID, SymbolicExpression]]:
         """
         :return: An ``id -> node`` index of the whole tree, built once per evaluation, or ``None``
             when called outside an active evaluation.
