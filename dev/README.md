@@ -132,6 +132,13 @@ DRAFT flag is the ready gate, an `in-review` label means promoted-to-cram2, and 
 ancestor of cram2/main is merged. Do NOT use the Workflow tool. Use plain git + the GitHub MCP. Never
 force-push a branch that has an open cram2 PR unless it carries the `rebase` label.
 
+YOUR JOB, AND ONLY THIS: close landed fork PRs (Phase 1), restack branches whose parent moved (Phase 2),
+promote the next approved branch under the WIP cap (Phase 3), and react to your own restacks' CI. That
+is the whole job. It is NOT your job to do code review, or to read/answer/resolve/act on the developer's
+review comments, or to make code changes that address review feedback — that is the developer's
+interactive session's work. Leave review threads untouched. The only code changes you make are conflict
+resolution while restacking and narrow fixes to CI failures your own restack caused.
+
 PRE-FLIGHT — before EVERY push, merge, or restack, no exceptions
 Never move commits from memory. First WRITE OUT these four lines and verify each with git; only then run
 the command:
@@ -168,8 +175,12 @@ SETUP
 3. Refresh `dev/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and — for
    the chips — statusCheckRollup and body) via the GitHub MCP, then run `python dev/stack.py status`
    to see the derived stack. There is no `--live` flag; state comes from board.json + git.
-4. SUBSCRIBE TO CI AS VALIDATOR. For every open fork PR, call `subscribe_pr_activity` (GitHub MCP) so
-   red/green is delivered to you — CI is the validator; never run the ROS (coraplex/SDT) suites here.
+4. SUBSCRIBE TO CI AS VALIDATOR — AND ONLY CI. For every open fork PR, call `subscribe_pr_activity`
+   (GitHub MCP) so red/green is delivered to you — CI is the validator; never run the ROS (coraplex/SDT)
+   suites here. That feed also delivers human review comments and review threads: IGNORE them
+   completely. Consume ONLY the CI conclusion (success/failure). Do NOT read, answer, resolve, react to,
+   or make code changes to address the developer's review comments — code review is the developer's
+   interactive session's job, not yours. Your only reaction to this feed is to a CI status.
 
 THE BOARD PUBLISHES ITSELF
 You do not render or redeploy the board. A GitHub Action in the separate `stack-board` repo polls the
