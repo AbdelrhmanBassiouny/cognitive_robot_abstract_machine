@@ -259,29 +259,32 @@ For each collected fork PR (head branch B):
    isn't open until I click Create; I add `in-review` then (the housekeeping step above clears
    `cram2-link-sent`).
 
-After processing them all, if you collected any create-links, deliver them to me:
-- Send an email to bido.bassuny@gmail.com via the Gmail connector — subject e.g.
-  `stack-board: N cram2 PR(s) to create`, body listing each PR's number, title, branch, and its
-  one-click create-link.
-- If Gmail is unavailable this run (scheduled runs can lack an interactive-auth connector), instead
-  surface the same list prominently at the TOP of your FINISH summary. A link counts as delivered by
-  either channel, so the `cram2-link-sent` label stays either way.
+After processing them all, if you collected any create-links, deliver them to me by putting them at the
+very TOP of your FINISH summary — this routine is configured to EMAIL its result, so the summary IS the
+email. List each PR's number, title, branch, and its one-click create-link. This top-of-summary
+placement is REQUIRED and is what reaches me; set `cram2-link-sent` once a link is in the summary.
+(The Gmail connector can only draft, not send, so do NOT rely on it for delivery. If you want, you MAY
+additionally `create_draft` a copy to bido.bassuny@gmail.com — it lands in my Drafts, unsent — but the
+summary is the real delivery, never a draft.)
 
 If `next` prints nothing and there are no such bug PRs, the cap is full or nothing is ready — promote
 nothing.
 
 FINISH
-Summarise: what you closed, restacked, promoted, and any cram2 create-links awaiting me (if Gmail was
-unavailable, list them here). The board Action has already republished Pages from your state changes —
-you do not touch `board.html` or any Artifact.
+If you collected any cram2 create-links, they go FIRST, at the very top of this summary (that is how I
+receive them by email). Then summarise: what you closed, restacked, and promoted, and anything you
+stopped on. The board Action has already republished Pages from your state changes — you do not touch
+`board.html` or any Artifact.
 ```
 
 The promote step is gated by `stack.py next`, which only ever names an un-drafted branch under the cap
 — so the Routine can never flood cram2, and never promotes something you haven't approved by
 un-drafting its fork PR. Because the app can't write to cram2, promotion usually can't open the PR
 directly; the Routine hands you a one-click **compare-and-create** link instead — for every ready,
-cap-exempt `bug` PR and for the one non-bug branch a free slot allows — emailed to you (falling back
-to its run summary), and marked `cram2-link-sent` so you're never sent the same link twice.
+cap-exempt `bug` PR and for the one non-bug branch a free slot allows — placed at the top of its run
+summary. Enable the routine's **email-on-completion notification** at claude.ai/code/routines and that
+summary reaches you as an email (the Gmail connector can only draft, not send, so delivery rides on the
+routine's own notification). Each link is marked `cram2-link-sent` so you're never sent it twice.
 
 ## The board GitHub Action (a separate `stack-board` repo → its own Pages)
 
