@@ -155,7 +155,7 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
     """Parse ``stack.toml`` into a :class:`Config`."""
     data = tomllib.loads(path.read_text())
     return Config(
-        wip_cap=data.get("wip_cap", 3),
+        wip_cap=data.get("wip_cap", 1),
         wip_exempt_labels=list(data.get("wip_exempt_labels", ["bug"])),
         in_review_label=data.get("in_review_label", "in-review"),
         rebase_label=data.get("rebase_label", "rebase"),
