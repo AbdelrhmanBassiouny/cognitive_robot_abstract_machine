@@ -97,6 +97,10 @@ class PullRequest:
     session: str | None = None
     """URL of the Claude session working this PR, parsed from the PR body (None if none)."""
 
+    turn: int = 0
+    """How many times this branch's stack has already been promoted (a ``stack-turn: N`` marker in the
+    PR body; 0 for a fresh stack). Drives round-robin fairness so no one stack dominates promotions."""
+
 
 @dataclass
 class Branch:
@@ -128,6 +132,9 @@ class Branch:
 
     priority: int | None = None
     """Priority rank from the PR's priority label (0 = highest); None if unprioritised."""
+
+    turn: int = 0
+    """How many turns this branch's stack has already taken — the round-robin fairness key."""
 
 
 @dataclass
@@ -185,6 +192,7 @@ def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
             labels=list(pr.get("labels", [])),
             ci=pr.get("ci"),
             session=pr.get("session"),
+            turn=int(pr.get("turn", 0)),
         )
         for pr in data["pull_requests"]
     ]
@@ -226,6 +234,7 @@ def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
             ci=pr.ci,
             session=pr.session,
             priority=priority_rank(config, pr.labels),
+            turn=pr.turn,
         )
         for pr in prs
     ]
@@ -336,9 +345,12 @@ def next_to_promote(stack: Stack) -> Branch | None:
     Encodes the whole policy: approved (``ready``) + parent landed + under the WIP cap, where the cap
     counts **independent stacks** — the review slots must come from distinct stacks, so a branch is
     skipped while its own stack already holds an in-review branch. ``wip_exempt_labels`` (e.g. bugs)
-    bypass the cap and the independence rule. Among several eligible branches, the highest **priority**
-    wins (an explicit ``priority:*`` label beats an unprioritised branch); ties fall back to dependency
-    order (a parent before its child).
+    bypass the cap and the independence rule.
+
+    Among the eligible branches the choice is **round-robin fair** so no one stack dominates: the branch
+    whose stack has taken the fewest **turns** wins, so a freed slot goes to a stack that has been
+    promoted less, cycling back only once the others have caught up. Ties break by **priority** (an
+    explicit ``priority:*`` label beats an unprioritised branch), then by dependency order.
     """
     by_name = {b.name: b for b in stack.branches}
     reviewed_roots = reviewed_stack_roots(stack, by_name)
@@ -356,7 +368,12 @@ def next_to_promote(stack: Stack) -> Branch | None:
         return None
     unprioritised = len(stack.config.priority_labels)
     return min(
-        eligible, key=lambda pair: (pair[1].priority if pair[1].priority is not None else unprioritised, pair[0])
+        eligible,
+        key=lambda pair: (
+            pair[1].turn,
+            pair[1].priority if pair[1].priority is not None else unprioritised,
+            pair[0],
+        ),
     )[1]
 
 
@@ -500,6 +517,7 @@ def export_board(config: Config, path: Path = BOARD_PATH) -> int:
             "labels": [label["name"] for label in pr.get("labels", [])],
             "ci": _ci_conclusion(pr.get("statusCheckRollup") or []),
             "session": _session_url(pr.get("body") or ""),
+            "turn": _stack_turn(pr.get("body") or ""),
         }
         for pr in raw
     ]
@@ -528,6 +546,19 @@ def _session_url(body: str) -> str | None:
 
     match = re.search(r"https://claude\.ai/code/session_[\w-]+", body)
     return match.group(0) if match else None
+
+
+def _stack_turn(body: str) -> int:
+    """:return: the stack's promotion count from a ``stack-turn: N`` marker in the PR body (0 if absent).
+
+    The routine writes this marker when it reparents a child onto a merged parent (``child = parent + 1``),
+    so a stack that has been promoted more carries a higher number and yields its next slot to stacks
+    that have been promoted less.
+    """
+    import re
+
+    match = re.search(r"stack-turn:\s*(\d+)", body)
+    return int(match.group(1)) if match else 0
 
 
 def _loc_changed(config: Config, base: str, head: str) -> int | None:
@@ -584,6 +615,7 @@ def render_board_html(config: Config, prs: list[PullRequest], merged: list[str],
                 "labels": pr.labels,
                 "ci": pr.ci,
                 "session": pr.session,
+                "turn": pr.turn,
                 "loc": _loc_changed(config, pr.base, pr.head),
                 "conflicts": _conflicts_onto(config, pr.base, pr.head),
             }

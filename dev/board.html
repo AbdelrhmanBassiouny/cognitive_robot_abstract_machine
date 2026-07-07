@@ -341,6 +341,7 @@ const BOARD = {
     conflicts: (pr.conflicts ?? null),
     session: pr.session ?? null,
     priority: priorityOf(pr.labels),
+    turn: pr.turn ?? 0,
   })),
 };
 function priorityOf(labels) {
@@ -423,7 +424,8 @@ const UNPRIO = (CONFIG.priority_labels || []).length;
 const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b));
 const promotable = readyUnblocked
   .filter(b => isExempt(b) || (!capFull && !reviewedRoots.has(stackRoot(b))))
-  .sort((a, b) => (a.priority ?? UNPRIO) - (b.priority ?? UNPRIO));
+  // round-robin fair: fewest stack turns first, then priority, then order
+  .sort((a, b) => (a.turn - b.turn) || ((a.priority ?? UNPRIO) - (b.priority ?? UNPRIO)));
 const readyBlocked = BOARD.branches.filter(b => b.status === "ready" && !parentLanded(b));
 const nextBox = document.getElementById("next-box");
 if (promotable.length) {

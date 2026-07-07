@@ -198,20 +198,27 @@ fork and republishes the board to its own GitHub Pages site every few minutes. S
 changes and move on; the board catches up on its next poll. Never render `board.html` or redeploy an
 Artifact here.
 
-PHASE 1 — LANDED PARENTS: REPARENT CHILDREN, THEN AUTO-CLOSE
-cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an
-ancestor of cram2/main. A branch B is MERGED (not merely closed) iff
-`git merge-base --is-ancestor origin/B cram2/main` succeeds — that git-ancestry test, not the PR's
-open/closed state, is how you know a parent actually landed. For each OPEN fork PR with head branch B
-that is merged this way:
-- FIRST reparent its children: for every OTHER open fork PR whose BASE is B, retarget that PR's base to
-  `main` on GitHub (its parent's commits are now in main, so it should stack on main, not on a branch
-  about to disappear). Do this BEFORE closing B, so no child is ever orphaned. `dev/stack.py
-  restack-plan` already emits `parent: main` for these children, so Phase 2 rebases them onto main to
-  match. (Only reparent when B is merged by the ancestry test — a PR closed WITHOUT merging leaves its
-  children untouched, since their work still depends on B's unlanded commits.)
-- THEN CLOSE B's fork PR with a comment noting it merged into cram2/main.
-- NEVER close a fork PR whose work has NOT landed. (Merged is the only close condition.)
+PHASE 1 — LANDED PARENTS: REPARENT + CARRY TURN, LABEL `merged`, THEN CLOSE
+cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an ancestor
+of cram2/main. A branch B is MERGED (not merely closed) iff
+`git merge-base --is-ancestor origin/B cram2/main` succeeds — that git-ancestry test, NOT the PR's
+open/closed state, is how you know B actually landed in main. For each OPEN fork PR (head branch B) that
+is merged this way:
+- REPARENT its children first — for every OTHER open fork PR whose BASE is B:
+  * on GitHub retarget that child's base to `main` (B's commits are in main now, so the child stacks on
+    main, not on a branch about to disappear); and
+  * carry the round-robin turn forward — set the child PR body's `stack-turn: N` marker to
+    (B's `stack-turn`, default 0) + 1, so the child's stack is de-prioritised for the next free slot in
+    favour of stacks that have taken fewer turns.
+  Do this BEFORE closing B so no child is ever orphaned. `dev/stack.py restack-plan` already emits
+  `parent: main` for these children, so Phase 2 rebases them onto main to match. (Only when B is merged
+  by the ancestry test — a PR merely CLOSED without merging leaves its children and their turn alone.)
+- LABEL it `merged` — ALWAYS add the `merged` label to B's fork PR as the durable "this landed"
+  indicator, even when you then close it.
+- CLOSE it — close B's fork PR with a comment noting it merged into cram2/main. If you cannot close it,
+  leave it open: the `merged` label already flags it and I will close it myself.
+- NEVER label-`merged` or close a fork PR whose work has NOT landed. (The ancestry test is the only
+  condition.)
 
 PHASE 2 — RESTACK + VALIDATE (CI is the validator; ROS-free fix-first; work in parallel)
 Run `python dev/stack.py restack-plan` for the bottom-up plan. For each entry whose parent moved,

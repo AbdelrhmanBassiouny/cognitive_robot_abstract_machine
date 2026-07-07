@@ -202,6 +202,35 @@ def test_priority_falls_back_to_dependency_order_on_tie():
     assert next_to_promote(build(prs)).name == "parent"
 
 
+# ── round-robin fairness (turns) ───────────────────────────────────────────
+
+def test_round_robin_prefers_stack_with_fewer_turns():
+    # a freed slot goes to a fresh stack (turn 0), not the continuation of one that already went (turn 1)
+    prs = [
+        PullRequest(1, "a-next", "main", draft=False, turn=1),
+        PullRequest(2, "b-root", "main", draft=False, turn=0),
+    ]
+    assert next_to_promote(build(prs)).name == "b-root"
+
+
+def test_round_robin_turns_outrank_priority():
+    # fairness dominates: a fresh unprioritised stack still beats a higher-priority stack that already went
+    prs = [
+        PullRequest(1, "already-went", "main", draft=False, labels=["priority:high"], turn=1),
+        PullRequest(2, "fresh", "main", draft=False, turn=0),
+    ]
+    assert next_to_promote(build(prs)).name == "fresh"
+
+
+def test_round_robin_circles_back_when_turns_equal():
+    # once every stack has taken the same number of turns, order/priority decides again
+    prs = [
+        PullRequest(1, "a", "main", draft=False, turn=1),
+        PullRequest(2, "b", "main", draft=False, turn=1),
+    ]
+    assert next_to_promote(build(prs)).name == "a"
+
+
 def test_ci_and_session_carried_onto_branch():
     stack = build([PullRequest(11, "f", "main", draft=False, ci="failure", session="https://claude.ai/code/session_x")])
     assert stack.branches[0].ci == "failure"
