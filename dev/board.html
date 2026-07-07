@@ -364,6 +364,20 @@ const isExempt = b => b.labels.some(l => BOARD.wip_exempt_labels.includes(l));
 const landed = b => b.status === "in-review" || b.status === "merged";
 const parentLanded = b => { const p = byName.get(b.parent); return !p || landed(p); };
 const children = name => BOARD.branches.filter(b => b.parent === name);
+// Two branches are the same stack iff they share a root; the WIP cap counts distinct stacks, and the
+// review slots must be independent — a branch is not promotable while its own stack is already in review.
+const stackRoot = b => {
+  let cur = b, seen = new Set();
+  while (true) {
+    const p = byName.get(cur.parent);
+    if (!p || seen.has(p.name)) return cur.name;
+    seen.add(cur.name); cur = p;
+  }
+};
+const reviewedRoots = new Set(
+  BOARD.branches.filter(b => b.status === "in-review" && !isExempt(b)).map(stackRoot));
+const usedSlots = reviewedRoots.size;
+const capFull = usedSlots >= BOARD.wip_cap;
 
 // Open a fresh cloud Claude session for a branch that has none. Refine this URL to your
 // internet-enabled environment deep-link if you have one; it opens Claude Code on the web.
@@ -390,33 +404,35 @@ function sessionChip(b) {
   return `<a class="chip session new" href="${url}" target="_blank" rel="noopener" title="Open a new cloud Claude session for ${b.name} with access to your fork and cram2"><span class="lead">session</span> + new</a>`;
 }
 
-// ── summary ──
-const counted = BOARD.branches.filter(b => b.status === "in-review" && !isExempt(b));
-const exempt  = BOARD.branches.filter(b => b.status === "in-review" && isExempt(b));
-document.getElementById("wip-used").textContent = counted.length;
+// ── summary ── (slots count distinct independent stacks in review, bugs exempt)
+const exempt = BOARD.branches.filter(b => b.status === "in-review" && isExempt(b));
+document.getElementById("wip-used").textContent = usedSlots;
 document.getElementById("wip-cap").textContent = `/ ${BOARD.wip_cap} slots`;
 const bar = document.getElementById("wip-bar");
 for (let i = 0; i < BOARD.wip_cap; i++) {
   const seg = document.createElement("div");
-  seg.className = "wip-seg" + (i < counted.length ? " filled" : "");
+  seg.className = "wip-seg" + (i < usedSlots ? " filled" : "");
   bar.appendChild(seg);
 }
 document.getElementById("wip-note").innerHTML =
-  `<b>${counted.length}</b> counted &middot; <b>${exempt.length}</b> exempt (${exempt.map(b=>b.name.split("/").pop()).join(", ")||"none"}) &middot; ` +
-  (counted.length >= BOARD.wip_cap ? "cap full" : `<b>${BOARD.wip_cap - counted.length}</b> free`);
+  `<b>${usedSlots}</b> independent stack${usedSlots===1?"":"s"} in review &middot; <b>${exempt.length}</b> exempt (${exempt.map(b=>b.name.split("/").pop()).join(", ")||"none"}) &middot; ` +
+  (capFull ? "cap full" : `<b>${BOARD.wip_cap - usedSlots}</b> free`);
 
-// next to promote: ready + parent landed, under cap — highest priority first (ties keep order)
+// next to promote: ready + parent landed + (exempt, or a free slot in an independent stack)
 const UNPRIO = (CONFIG.priority_labels || []).length;
-const promotable = BOARD.branches
-  .filter(b => b.status === "ready" && parentLanded(b))
+const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b));
+const promotable = readyUnblocked
+  .filter(b => isExempt(b) || (!capFull && !reviewedRoots.has(stackRoot(b))))
   .sort((a, b) => (a.priority ?? UNPRIO) - (b.priority ?? UNPRIO));
 const readyBlocked = BOARD.branches.filter(b => b.status === "ready" && !parentLanded(b));
 const nextBox = document.getElementById("next-box");
-if (counted.length >= BOARD.wip_cap && promotable.length) {
-  nextBox.innerHTML = `<div><b>${promotable[0].name}</b></div><div class="hint">approved, but the cap is full — waiting for a slot.</div>`;
-} else if (promotable.length) {
+if (promotable.length) {
   const n = promotable[0];
-  nextBox.innerHTML = `<div style="font-family:var(--mono);font-weight:600">${n.name}</div><div class="hint">approved &amp; unblocked &middot; <code>PR #${n.pr}</code></div>`;
+  nextBox.innerHTML = `<div style="font-family:var(--mono);font-weight:600">${n.name}</div><div class="hint">approved &amp; unblocked &middot; independent stack &middot; <code>PR #${n.pr}</code></div>`;
+} else if (capFull && readyUnblocked.length) {
+  nextBox.innerHTML = `<div><b>${readyUnblocked[0].name}</b></div><div class="hint">cap full (${usedSlots} independent stacks) — waiting for a slot.</div>`;
+} else if (readyUnblocked.length) {
+  nextBox.innerHTML = `<div><b>${readyUnblocked[0].name}</b></div><div class="hint">approved, but its stack is already in review — waiting for it to merge.</div>`;
 } else {
   const draftCands = BOARD.branches.filter(b => b.status === "draft" && !landed(b));
   nextBox.innerHTML = `<div class="none">Nothing ready.</div><div class="hint">` +
@@ -457,7 +473,7 @@ function nodeEl(b, depth) {
   if (b.status === "merged") li.dataset.merged = "1";
 
   const blocked = b.status === "ready" && !parentLanded(b);
-  const isNext = promotable.length && promotable[0].name === b.name && counted.length < BOARD.wip_cap;
+  const isNext = promotable.length && promotable[0].name === b.name;
 
   const repoSlug = b.pr_repo === "upstream" ? UPSTREAM : REPO;
   const prLink = b.pr ? `https://github.com/${repoSlug}/pull/${b.pr}` : null;

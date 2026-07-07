@@ -126,12 +126,45 @@ def test_ready_child_blocked_until_parent_lands():
     assert next_to_promote(build(prs)) is None
 
 
-def test_ready_child_promotable_once_parent_in_review():
+def test_child_not_promotable_while_parent_in_review():
+    # independence: the review slots must be distinct stacks, so a child is not promoted while its own
+    # stack (here its parent) is still in review.
     prs = [
         PullRequest(1, "parent", "main", draft=False, labels=["in-review"]),
         PullRequest(2, "child", "parent", draft=False),
     ]
-    assert next_to_promote(build(prs)).name == "child"
+    assert next_to_promote(build(prs)) is None
+
+
+def test_child_promotable_once_parent_merged():
+    # once the parent has merged its stack no longer holds a review slot, so the child may promote.
+    prs = [
+        PullRequest(1, "parent", "main", draft=False),
+        PullRequest(2, "child", "parent", draft=False),
+    ]
+    assert next_to_promote(build(prs, merged={"parent"})).name == "child"
+
+
+def test_cap_counts_independent_stacks_not_prs():
+    # a single deep stack with several in-review branches occupies ONE slot, so an independent ready
+    # branch still promotes under the cap of 3.
+    prs = [
+        PullRequest(1, "a1", "main", draft=False, labels=["in-review"]),
+        PullRequest(2, "a2", "a1", draft=False, labels=["in-review"]),
+        PullRequest(3, "a3", "a2", draft=False, labels=["in-review"]),
+        PullRequest(4, "b1", "main", draft=False),
+    ]
+    assert next_to_promote(build(prs, wip_cap=3)).name == "b1"
+
+
+def test_three_independent_stacks_fill_the_cap():
+    prs = [
+        PullRequest(1, "a", "main", draft=False, labels=["in-review"]),
+        PullRequest(2, "b", "main", draft=False, labels=["in-review"]),
+        PullRequest(3, "c", "main", draft=False, labels=["in-review"]),
+        PullRequest(4, "d", "main", draft=False),
+    ]
+    assert next_to_promote(build(prs, wip_cap=3)) is None
 
 
 # ── priority among several ready branches ──────────────────────────────────
@@ -193,3 +226,14 @@ def test_restack_plan_carries_parent_and_strategy():
     prs = [PullRequest(2, "wip", "base-branch", draft=True, labels=["rebase"])]
     plan = restack_plan(build(prs))
     assert plan == [{"branch": "wip", "parent": "base-branch", "strategy": "rebase"}]
+
+
+def test_restack_plan_reparents_child_of_merged_parent_onto_base():
+    # parent merged into main -> its commits are in the base, so the child is reparented onto main
+    # (the routine mirrors this by retargeting the child PR's base on GitHub).
+    prs = [
+        PullRequest(1, "parent", "main", draft=False),
+        PullRequest(2, "child", "parent", draft=False),
+    ]
+    plan = restack_plan(build(prs, merged={"parent"}))
+    assert plan == [{"branch": "child", "parent": "main", "strategy": "merge"}]

@@ -155,7 +155,7 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
     """Parse ``stack.toml`` into a :class:`Config`."""
     data = tomllib.loads(path.read_text())
     return Config(
-        wip_cap=data.get("wip_cap", 1),
+        wip_cap=data.get("wip_cap", 3),
         wip_exempt_labels=list(data.get("wip_exempt_labels", ["bug"])),
         in_review_label=data.get("in_review_label", "in-review"),
         rebase_label=data.get("rebase_label", "rebase"),
@@ -302,24 +302,56 @@ def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> b
     return parent is None or parent.status in {IN_REVIEW, MERGED}
 
 
+def stack_root(branch: Branch, by_name: dict[str, Branch]) -> str:
+    """:return: the name of the branch at the bottom of *branch*'s stack (its topmost tracked ancestor).
+
+    Two branches belong to the same stack iff they share a root. A branch whose parent is the upstream
+    base — or a branch with no open PR — is its own root.
+    """
+    current = branch
+    seen: set[str] = set()
+    while True:
+        parent = by_name.get(current.parent)
+        if parent is None or parent.name in seen:
+            return current.name
+        seen.add(current.name)
+        current = parent
+
+
+def reviewed_stack_roots(stack: Stack, by_name: dict[str, Branch]) -> set[str]:
+    """:return: the distinct stack roots that currently hold a non-exempt in-review branch.
+
+    Each such stack occupies one review slot, so a fresh promotion must come from a *different* stack.
+    """
+    return {
+        stack_root(branch, by_name)
+        for branch in stack.branches
+        if branch.status == IN_REVIEW and stack.counts_against_wip(branch)
+    }
+
+
 def next_to_promote(stack: Stack) -> Branch | None:
     """The single branch to submit to the upstream next, or None if blocked or nothing is ready.
 
-    Encodes the whole policy: approved (``ready``) + parent landed + under the (bug-exempt) WIP cap.
-    Among several eligible branches, the highest **priority** wins (an explicit ``priority:*`` label
-    beats an unprioritised branch); ties fall back to dependency order (a parent before its child).
+    Encodes the whole policy: approved (``ready``) + parent landed + under the WIP cap, where the cap
+    counts **independent stacks** — the review slots must come from distinct stacks, so a branch is
+    skipped while its own stack already holds an in-review branch. ``wip_exempt_labels`` (e.g. bugs)
+    bypass the cap and the independence rule. Among several eligible branches, the highest **priority**
+    wins (an explicit ``priority:*`` label beats an unprioritised branch); ties fall back to dependency
+    order (a parent before its child).
     """
-    counted = [
-        b for b in stack.branches if b.status == IN_REVIEW and stack.counts_against_wip(b)
-    ]
-    if len(counted) >= stack.config.wip_cap:
-        return None
     by_name = {b.name: b for b in stack.branches}
-    eligible = [
-        (index, branch)
-        for index, branch in enumerate(order(stack))
-        if branch.status == READY and parent_landed(stack, branch, by_name)
-    ]
+    reviewed_roots = reviewed_stack_roots(stack, by_name)
+    cap_full = len(reviewed_roots) >= stack.config.wip_cap
+    eligible: list[tuple[int, Branch]] = []
+    for index, branch in enumerate(order(stack)):
+        if branch.status != READY or not parent_landed(stack, branch, by_name):
+            continue
+        if stack.counts_against_wip(branch) and (
+            cap_full or stack_root(branch, by_name) in reviewed_roots
+        ):
+            continue
+        eligible.append((index, branch))
     if not eligible:
         return None
     unprioritised = len(stack.config.priority_labels)
@@ -334,12 +366,27 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
     included so they pick up a moved parent; their ``merge`` strategy keeps that update conflict-free
     and force-push-free, so an open review is never disrupted.
+
+    When a branch's parent has **merged** into the upstream, its commits are already in the base, so the
+    child is reparented onto the upstream base: the restack rebases it there and it stops depending on a
+    landed (and about-to-be-closed) branch. The routine mirrors this by retargeting the child PR's base
+    to the upstream base on GitHub.
     """
-    return [
-        {"branch": b.name, "parent": b.parent, "strategy": b.strategy}
-        for b in order(stack)
-        if b.status != MERGED
-    ]
+    by_name = {b.name: b for b in stack.branches}
+    plan: list[dict[str, str]] = []
+    for branch in order(stack):
+        if branch.status == MERGED:
+            continue
+        parent = by_name.get(branch.parent)
+        effective_parent = (
+            stack.config.upstream_base
+            if parent is not None and parent.status == MERGED
+            else branch.parent
+        )
+        plan.append(
+            {"branch": branch.name, "parent": effective_parent, "strategy": branch.strategy}
+        )
+    return plan
 
 
 def cmd_status(stack: Stack) -> None:
@@ -378,41 +425,41 @@ def cmd_check(stack: Stack) -> None:
 
 def cmd_next(stack: Stack) -> None:
     config = stack.config
-    in_review = [b for b in stack.branches if b.status == IN_REVIEW]
-    counted = [b for b in in_review if stack.counts_against_wip(b)]
-    exempt = [b for b in in_review if not stack.counts_against_wip(b)]
-    print(f"In review on {config.upstream_remote}: {len(counted)}/{config.wip_cap}", end="")
-    print(f"  [{', '.join(b.name for b in counted) or 'none'}]", end="")
+    by_name = {b.name: b for b in stack.branches}
+    reviewed_roots = reviewed_stack_roots(stack, by_name)
+    exempt = [b for b in stack.branches if b.status == IN_REVIEW and not stack.counts_against_wip(b)]
+    print(f"Independent stacks in review on {config.upstream_remote}: {len(reviewed_roots)}/{config.wip_cap}", end="")
+    print(f"  [{', '.join(sorted(reviewed_roots)) or 'none'}]", end="")
     print(f"  (+{len(exempt)} exempt: {', '.join(b.name for b in exempt)})" if exempt else "")
     print()
 
-    by_name = {b.name: b for b in stack.branches}
-    promotable = [
-        b for b in order(stack) if b.status == READY and parent_landed(stack, b, by_name)
-    ]
+    nxt = next_to_promote(stack)
     ready_blocked = [
         b for b in stack.branches if b.status == READY and not parent_landed(stack, b, by_name)
     ]
     draft_candidates = [b for b in order(stack) if b.status == DRAFT]
 
-    if not promotable:
-        print("Nothing to promote — no branch is both approved and unblocked.")
-        if ready_blocked:
-            print(f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}")
-        if draft_candidates:
-            print(
-                "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
-                f"Draft candidates: {draft_candidates[0].name}"
-            )
+    if nxt is not None:
+        print(f"NEXT to submit to {config.upstream_remote}: {nxt.name} (PR #{nxt.pr})")
+        print(f"  -> approved, its parent '{nxt.parent}' has landed, and its stack is not already in review.")
         return
-    if len(counted) >= config.wip_cap:
-        print(f"WIP cap reached. Approved and waiting for a slot: {promotable[0].name}")
+
+    ready_unblocked = [b for b in stack.branches if b.status == READY and parent_landed(stack, b, by_name)]
+    if len(reviewed_roots) >= config.wip_cap and ready_unblocked:
+        print(f"WIP cap reached ({len(reviewed_roots)} independent stacks). Waiting for a slot: {ready_unblocked[0].name}")
         return
-    nxt = promotable[0]
-    print(f"NEXT to submit to {config.upstream_remote}: {nxt.name} (PR #{nxt.pr})")
-    print(f"  -> you approved it, and its parent '{nxt.parent}' has landed, so the diff is minimal.")
-    if len(promotable) > 1:
-        print(f"  (then, once approved: {', '.join(b.name for b in promotable[1:])})")
+    if ready_unblocked:
+        same = ", ".join(b.name for b in ready_unblocked)
+        print(f"Nothing new to promote — every approved+unblocked branch shares a stack already in review: {same}")
+        return
+    print("Nothing to promote — no branch is both approved and unblocked.")
+    if ready_blocked:
+        print(f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}")
+    if draft_candidates:
+        print(
+            "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
+            f"Draft candidates: {draft_candidates[0].name}"
+        )
 
 
 def cmd_next_porcelain(stack: Stack) -> None:
