@@ -10,7 +10,6 @@ from krrood.entity_query_language.factories import (
     an,
     entity,
     variable,
-    underspecified,
 )
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
@@ -85,7 +84,7 @@ class TransportAction(ActionDescription):
         handle = drawer_annotation[0].handle.root
 
         return [
-            underspecified(NavigateAction)(
+            an(NavigateAction)(
                 target_location=variable(
                     Pose,
                     domain=reachability_location(
@@ -113,7 +112,7 @@ class TransportAction(ActionDescription):
             [
                 ParkArmsAction(Arms.BOTH),
                 # Tries to find a pick-up position for the robot that uses the given arm
-                underspecified(NavigateAction)(
+                an(NavigateAction)(
                     target_location=variable(
                         Pose,
                         domain=DeferredLocation(
@@ -127,7 +126,7 @@ class TransportAction(ActionDescription):
                     ),
                     keep_joint_states=True,
                 ),
-                underspecified(PickUpAction)(
+                an(PickUpAction)(
                     object_designator=self.object_designator,
                     arm=self.arm,
                     grasp_description=self.grasp_description,
@@ -135,7 +134,7 @@ class TransportAction(ActionDescription):
                 ParkArmsAction(Arms.BOTH),
                 MoveTorsoAction(TorsoState.HIGH),
                 self._make_navigate_action_for_placing(self.grasp_description),
-                underspecified(PlaceAction)(
+                an(PlaceAction)(
                     object_designator=self.object_designator,
                     target_location=self.target_location,
                     arm=self.arm,
@@ -151,7 +150,7 @@ class TransportAction(ActionDescription):
         :param grasp_description: The grasp description that should be used for placing the object.
         :return: The navigate action that will be used to place the object.
         """
-        return underspecified(NavigateAction)(
+        return an(NavigateAction)(
             target_location=variable(
                 Pose,
                 domain=reachability_location(

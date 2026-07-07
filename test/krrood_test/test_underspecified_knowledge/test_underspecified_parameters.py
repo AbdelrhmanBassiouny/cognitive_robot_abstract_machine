@@ -7,7 +7,7 @@ from krrood.parametrization.exceptions import InvalidEllipsis
 from ..dataset.semantic_world_like_classes import Body
 from krrood.entity_query_language.factories import (
     variable,
-    underspecified,
+    an,
 )
 from krrood.parametrization.parameterizer import UnderspecifiedParameters
 from random_events.interval import singleton, reals
@@ -26,7 +26,7 @@ def test_enum_domain():
     """
     Test that a KRROOD variable with an Enum domain is correctly handled.
     """
-    prob_q = underspecified(EnumAction)(
+    prob_q = an(EnumAction)(
         obj=Body(name="body"),
         enum=variable(
             TestEnum, [TestEnum.OPTION_A, TestEnum.OPTION_B, TestEnum.OPTION_C]
@@ -40,7 +40,7 @@ def test_enum_domain():
 
 
 def test_invalid_ellipsis():
-    prob_q = underspecified(EnumAction)(
+    prob_q = an(EnumAction)(
         obj=...,
         enum=variable(
             TestEnum, [TestEnum.OPTION_A, TestEnum.OPTION_B, TestEnum.OPTION_C]
@@ -54,9 +54,7 @@ def test_assignments_for_conditioning():
     """
     Test that assignments_for_conditioning returns only literal facts.
     """
-    prob_q = underspecified(KRROODPosition)(
-        x=1.0, y=..., z=variable(float, domain=[2.0, 3.0])
-    )
+    prob_q = an(KRROODPosition)(x=1.0, y=..., z=variable(float, domain=[2.0, 3.0]))
     parameters = UnderspecifiedParameters(prob_q)
     assignments = parameters.conditioning_assignments_from_literal_values
 
@@ -70,8 +68,7 @@ def test_assignments_for_conditioning():
 
 
 def test_union_types_easy():
-    prob_q = underspecified(KRROODPosition)(x=..., y=..., z=...)
-    prob_q.resolve()
+    prob_q = an(KRROODPosition)(x=..., y=..., z=...)
     prob_q.where(
         prob_q.variable.x < 5.0,
     )
@@ -81,10 +78,7 @@ def test_union_types_easy():
 
 
 def test_union_types():
-    prob_q = underspecified(KRROODPosition)(
-        x=..., y=..., z=variable(int, domain=[10, 20])
-    )
-    prob_q.resolve()
+    prob_q = an(KRROODPosition)(x=..., y=..., z=variable(int, domain=[10, 20]))
     prob_q.where(prob_q.variable.x < 5.0)
 
     parameters = UnderspecifiedParameters(prob_q)
@@ -100,7 +94,7 @@ def test_domain_object_with_exchangeable_parts_but_no_aggregation_mixin_is_skipp
     """
     container = Container(name="container")
     cabinet = Cabinet(container=container)
-    prob_q = underspecified(ActionWithMissingAggregationsMixin)(
+    prob_q = an(ActionWithMissingAggregationsMixin)(
         domain_object=variable(Cabinet, [cabinet])
     )
     parameters = UnderspecifiedParameters(prob_q)
@@ -125,7 +119,7 @@ def test_iterable_of_primitives_produces_indexed_variables():
     class FloatMeasurements:
         readings: List[Any]
 
-    prob_q = underspecified(FloatMeasurements)(readings=[1.0, 2.0, 3.0])
+    prob_q = an(FloatMeasurements)(readings=[1.0, 2.0, 3.0])
     parameters = UnderspecifiedParameters(prob_q)
 
     assert "FloatMeasurements.readings[0]" in parameters.variables
@@ -146,7 +140,7 @@ def test_list_of_enum_field_produces_indexed_variables():
     indistinguishable, so assigning a list to the former raised ``TypeError``
     instead of forwarding to ``_extract_variables_from_iterable_literal``.
     """
-    prob_q = underspecified(ListOfEnum)(
+    prob_q = an(ListOfEnum)(
         list_of_enum=[TestEnum.OPTION_A, TestEnum.OPTION_B]
     )
     parameters = UnderspecifiedParameters(prob_q)

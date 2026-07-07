@@ -17,7 +17,6 @@ if TYPE_CHECKING:
         Query,
     )
     from krrood.entity_query_language.query.operations import GroupedBy
-    from krrood.entity_query_language.query.quantifiers import ResultQuantifier
     from krrood.entity_query_language.operators.aggregators import Aggregator
     from krrood.entity_query_language.query.builders import GroupedByBuilder
     from krrood.entity_query_language.core.base_expressions import (
@@ -43,9 +42,9 @@ class QuantificationNotSatisfiedError(DataclassException, ABC):
     For further details, see :doc:`/krrood/doc/eql/result_quantifiers`.
     """
 
-    expression: ResultQuantifier
+    expression: SymbolicExpression
     """
-    The result quantifier expression where the error occurred.
+    The query expression whose result count violated the quantification constraint.
     """
     expected_number: int
     """
@@ -373,23 +372,6 @@ class AggregatorInWhereConditionsError(AggregationUsageError):
             "if you want to filter using aggregators, use `QueryObjectquery.having()` instead, or wrap the "
             "aggregator in a subquery e.g. `an(entity(...).where(entity(eql.count(...)) > n))`."
         )
-
-
-@dataclass
-class NoKwargsInMatchVar(UsageError):
-    """
-    Raised when a match_variable is used without any keyword arguments.
-
-    For further details, see the notes on using `match_variable` vs `variable` in :doc:`/krrood/doc/eql/match`.
-    """
-
-    match_variable: Match
-
-    def error_message(self) -> str:
-        return f"The match variable {self.match_variable} was used without any keyword arguments."
-
-    def suggest_correction(self) -> str:
-        return "if you don't want to specify keyword arguments use variable() instead."
 
 
 @dataclass

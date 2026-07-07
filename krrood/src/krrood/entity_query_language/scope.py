@@ -18,10 +18,18 @@ import inspect
 
 from typing_extensions import Any, Dict, Optional
 
+from krrood.entity_query_language import factories as eql
+from krrood.entity_query_language.rules.conclusion import Add
+from krrood.entity_query_language.rules.conclusion_selector import (
+    Alternative,
+    Next,
+    Refinement,
+)
+
 EQL_PACKAGE = "krrood.entity_query_language"
 """Dotted prefix identifying frames internal to the EQL implementation."""
 
-_SCOPE_ATTR = "_definition_scope_"
+_SCOPE_ATTRIBUTE = "_definition_scope_"
 """Attribute name under which a captured scope snapshot is stashed on an object."""
 
 
@@ -83,40 +91,29 @@ def eql_factory_namespace() -> Dict[str, Any]:
         ``contains``, ``exists``, ``for_all``, and the rule-tree builders
         ``refinement``/``alternative``/``next_rule``/``add`` plus their classes).
     """
-    from krrood.entity_query_language import factories as f
-    from krrood.entity_query_language.rules.conclusion import Add
-    from krrood.entity_query_language.rules.conclusion_selector import (
-        Alternative,
-        Next,
-        Refinement,
-    )
-
     return {
         # query construction
-        "entity": f.entity,
-        "set_of": f.set_of,
-        "an": f.an,
-        "the": f.the,
+        "entity": eql.entity,
+        "set_of": eql.set_of,
+        "an": eql.an,
+        "the": eql.the,
         # variable declaration
-        "variable": f.variable,
-        "variable_from": f.variable_from,
-        "match": f.match,
-        "match_variable": f.match_variable,
-        "underspecified": f.underspecified,
-        "inference": f.inference,
+        "variable": eql.variable,
+        "variable_from": eql.variable_from,
+        "inference": eql.inference,
         # logical operators
-        "and_": f.and_,
-        "or_": f.or_,
-        "not_": f.not_,
-        "for_all": f.for_all,
-        "exists": f.exists,
-        "contains": f.contains,
-        "in_": f.in_,
+        "and_": eql.and_,
+        "or_": eql.or_,
+        "not_": eql.not_,
+        "for_all": eql.for_all,
+        "exists": eql.exists,
+        "contains": eql.contains,
+        "in_": eql.in_,
         # rule-tree builders (functions)
-        "add": f.add,
-        "refinement": f.refinement,
-        "alternative": f.alternative,
-        "next_rule": f.next_rule,
+        "add": eql.add,
+        "refinement": eql.refinement,
+        "alternative": eql.alternative,
+        "next_rule": eql.next_rule,
         # rule-tree primitives (classes)
         "Add": Add,
         "Refinement": Refinement,
@@ -136,7 +133,7 @@ def attach_definition_scope(obj: Any, scope: Optional[Dict[str, Any]] = None) ->
     if scope is None:
         scope = capture_caller_scope()
     try:
-        setattr(obj, _SCOPE_ATTR, scope)
+        setattr(obj, _SCOPE_ATTRIBUTE, scope)
     except (AttributeError, TypeError):
         # Object does not permit attribute assignment (e.g. has __slots__); skip silently.
         pass

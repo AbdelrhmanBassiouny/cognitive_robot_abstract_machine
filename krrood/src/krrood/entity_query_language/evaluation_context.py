@@ -8,11 +8,13 @@ circular dependency chain it carries.
 
 from __future__ import annotations
 
+import uuid
+import weakref
 from abc import ABC
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING
+from typing_extensions import Any, Dict, List, Optional, Tuple, Type, TYPE_CHECKING
 
 from krrood.entity_query_language.enums import EvaluationContextKey
 
@@ -83,15 +85,24 @@ class EvaluationContext:
     Observers should use well-known keys defined in :class:`~krrood.entity_query_language.enums.EvaluationContextKey`
     to avoid collisions.
     """
-    structural_cache: Dict[Any, Any] = field(default_factory=dict)
+    subtree_containment_cache: Dict[
+        Tuple[uuid.UUID, Type[SymbolicExpression]], bool
+    ] = field(default_factory=dict)
     """
-    Memoizes structural facts about the expression graph that are constant for the duration of an
-    evaluation, so hot paths answer them once instead of re-walking the graph on every step.
+    Memoizes, per ``(node id, expression type)``, whether a node's subtree contains a descendant of
+    that type — a structural fact constant for the duration of an evaluation, so the hot path answers
+    it once instead of re-walking the subtree on every step.
+    """
+    expression_index_cache: Dict[
+        uuid.UUID, weakref.WeakValueDictionary[uuid.UUID, SymbolicExpression]
+    ] = field(default_factory=dict)
+    """
+    Memoizes, per tree-root id, an ``id -> node`` index built once per evaluation and reused for
+    every lookup instead of re-scanning the tree.
 
-    ..warning:: Never let a cached value strongly reference an expression node. A context can be
-        captured past its evaluation (for example by an inference explanation), so a strong
-        reference here would pin the whole query tree and its variables' domains. Cache booleans and
-        counts directly, and index nodes only through weak references.
+    ..warning:: The index holds nodes only through weak references. A context can be captured past
+        its evaluation (for example by an inference explanation); strong references here would pin
+        the whole query tree and its variables' domains.
     """
 
     def on_evaluate_enter(

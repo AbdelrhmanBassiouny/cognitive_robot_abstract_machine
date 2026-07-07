@@ -27,7 +27,11 @@ def test_structural_cache_never_strongly_references_expressions():
     assert captured_contexts, "the capturing predicate never ran during evaluation"
     context = captured_contexts[0]
     assert context is not None
-    for cached_value in context.structural_cache.values():
+    cached_values = (
+        *context.subtree_containment_cache.values(),
+        *context.expression_index_cache.values(),
+    )
+    for cached_value in cached_values:
         assert not isinstance(cached_value, SymbolicExpression)
         if isinstance(cached_value, dict):
             assert not any(

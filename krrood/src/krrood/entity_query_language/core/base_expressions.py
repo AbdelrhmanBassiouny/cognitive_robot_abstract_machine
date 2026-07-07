@@ -167,28 +167,38 @@ class SymbolicExpression(ABC):
         return self._expression_id_cache_[id_]
 
     def tolist(
-            self,
+        self,
+        backend=None,
     ) -> list[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]]:
         """
         Evaluate and return the results as a list.
-        """
-        return make_list(self.evaluate())
 
-    def first(self) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]:
+        :param backend: Optional query backend; forwarded to :py:meth:`evaluate`.
+        """
+        return make_list(self.evaluate(backend=backend))
+
+    def first(
+        self, backend=None
+    ) -> TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]:
         """
         Evaluate and return the first result of the query object descriptor.
 
+        :param backend: Optional query backend; forwarded to :py:meth:`evaluate`.
         :return: The first result of the query object descriptor.
         :raises StopIteration: If no results are found.
         """
-        return next(self.evaluate())
+        return next(self.evaluate(backend=backend))
 
     def evaluate(
-            self,
+        self,
+        backend=None,
     ) -> Iterator[TypingUnion[T, Dict[TypingUnion[T, SymbolicExpression], T]]]:
         """
         Evaluate the query and map the results to the correct output data structure.
         This is the exposed evaluation method for users.
+
+        :param backend: Accepted for interface uniformity with ``Query``/``Match``; the base
+            symbolic-expression engine always evaluates natively and ignores this argument.
         """
         SymbolGraph().remove_dead_instances()
         results = (
@@ -268,9 +278,20 @@ class SymbolicExpression(ABC):
             v if isinstance(v, SymbolicExpression) else Literal(_value_=v)
             for v in children
         ]
-        for v in children:
-            v._parent_ = self
-        return tuple(v._expression_ for v in children)
+        embedded_children = tuple(v._as_embeddable_child_(self) for v in children)
+        for child in embedded_children:
+            child._parent_ = self
+        return embedded_children
+
+    def _as_embeddable_child_(self, parent: SymbolicExpression) -> SymbolicExpression:
+        """
+        :param parent: The expression about to take this expression as a child.
+        :return: The node that should be stored as ``parent``'s child, defaulting to this
+            expression's compiled form. Subclasses whose compiled form is mutable and shared (for
+            example :class:`~krrood.entity_query_language.query.query.Query`) override this to embed
+            an immutable snapshot instead.
+        """
+        return self._expression_
 
     def _ensure_children_ids_are_cached_(self, *children: SymbolicExpression) -> None:
         """
@@ -421,15 +442,25 @@ class SymbolicExpression(ABC):
     def _conditions_root_(self) -> Optional[SymbolicExpression]:
         """
         :return: The root of the symbolic expression graph that contains conditions, or None if no conditions found.
+
+        ..note:: When a node is reused both as a ``Filter`` condition and inside a sibling condition
+            its ``_parent_`` is clobbered, hiding the ``Filter`` from the graph walk; the owning
+            ``Filter`` is then recovered from the authoritative ``_parents_`` history.
         """
-        return next(
+        root_via_graph = next(
             (
                 expr.condition
                 for expr in self._all_expressions_
                 if isinstance(expr, Filter)
             ),
-            self._root_,
+            None,
         )
+        if root_via_graph is not None:
+            return root_via_graph
+        filter_parent = self._last_parent_of_type_(Filter)
+        if filter_parent is not None:
+            return filter_parent.condition
+        return self._root_
 
     @property
     def _root_(self) -> SymbolicExpression:
@@ -448,13 +479,10 @@ class SymbolicExpression(ABC):
         """
         from krrood.entity_query_language.query.query import Query
 
-        root = self._root_
-        root_query = None
-        for descendant in root._descendants_:
-            if isinstance(descendant, Query):
-                root_query = descendant
-                break
-        return root_query
+        for expression in self._all_expressions_:
+            if isinstance(expression, Query):
+                return expression
+        return None
 
     @property
     @abstractmethod
@@ -487,8 +515,8 @@ class SymbolicExpression(ABC):
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:
             return None
-        cache_key = ("expression_index", self._root_._id_)
-        cache = evaluation_context.structural_cache
+        cache_key = self._root_._id_
+        cache = evaluation_context.expression_index_cache
         if cache_key not in cache:
             cache[cache_key] = weakref.WeakValueDictionary(
                 {expression._id_: expression for expression in self._all_expressions_}
@@ -538,7 +566,7 @@ class SymbolicExpression(ABC):
         if evaluation_context is None:
             return self._compute_subtree_contains_(expression_type)
         cache_key = (self._id_, expression_type)
-        cache = evaluation_context.structural_cache
+        cache = evaluation_context.subtree_containment_cache
         if cache_key not in cache:
             cache[cache_key] = self._compute_subtree_contains_(expression_type)
         return cache[cache_key]
@@ -923,7 +951,7 @@ class Selectable(SymbolicExpression, Generic[T], ABC):
     A variable that is used if the child class to this class want to provide a variable to be tracked other than 
     itself, this is specially useful for child classes that holds a variable instead of being a variable and want
      to delegate the variable behaviour to the variable it has instead.
-    For example, this is the case for the ResultQuantifiers & QueryDescriptors that operate on a single selected
+    For example, this is the case for queries and derived references that operate on a single selected
     variable.
     """
 

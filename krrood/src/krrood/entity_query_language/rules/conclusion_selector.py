@@ -41,21 +41,6 @@ class ConclusionSelector(TruthValueOperator, ABC):
     """
 
     @classmethod
-    def _conditions_root_via_parents_(
-        cls, current_context: SymbolicExpression
-    ) -> SymbolicExpression:
-        """Return the conditions root, recovering it from ``_parents_`` when ``_parent_`` was clobbered.
-
-        A node reused both as a WHERE condition and inside a sibling condition has its ``_parent_``
-        overwritten, so the ``Filter`` anchor is recovered from the full ``_parents_`` history via
-        :meth:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression._last_parent_of_type_`.
-        """
-        filter_parent = current_context._last_parent_of_type_(Filter)
-        if filter_parent is not None:
-            return filter_parent.condition
-        return current_context._conditions_root_
-
-    @classmethod
     def create_and_update_rule_tree(
         cls,
         *conditions: ConditionType,
@@ -261,7 +246,7 @@ class Alternative(OR, ConclusionSelector):
             and current_context is current_context_parent.right
         ):
             return current_context
-        return cls._conditions_root_via_parents_(current_context)
+        return current_context._conditions_root_
 
     @classmethod
     def _create_between_two_expressions(
@@ -295,7 +280,7 @@ class Next(EQLUnion, ConclusionSelector):
         cls,
     ) -> ConditionType:
         current_context = SymbolicExpression._current_parent_in_context_stack_()
-        return cls._conditions_root_via_parents_(current_context)
+        return current_context._conditions_root_
 
     @classmethod
     def _create_between_two_expressions(
