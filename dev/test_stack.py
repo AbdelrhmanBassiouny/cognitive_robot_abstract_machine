@@ -209,6 +209,29 @@ def test_fresh_stack_does_not_preempt_a_stack_mid_rotation():
     assert next_to_promote(build(prs, wip_cap=3)).name == "advanced"
 
 
+def test_after_merge_continuation_yields_to_a_less_promoted_stack():
+    # A merged+closed branch is GONE from the board (open PRs only); the routine already carried its
+    # turn onto the reparented continuation (parent 1 -> child 2). So the just-advanced stack's
+    # continuation (turn 2) now waits behind a stack still at turn 1 — the rotation keeps circling.
+    prs = [
+        # 'a-parent' merged and was closed, so it is absent here.
+        PullRequest(1, "a-continuation", "main", draft=False, turn=2),
+        PullRequest(2, "b", "main", draft=False, turn=1),
+    ]
+    assert next_to_promote(build(prs)).name == "b"
+
+
+def test_frontier_uses_only_open_prs():
+    # closed PRs simply drop off the board, so the frontier (where a fresh stack queues) is recomputed
+    # from the surviving PRs each run — a fresh stack never sorts ahead of a lower-turn survivor.
+    prs = [
+        PullRequest(1, "low", "main", draft=False, turn=1),
+        PullRequest(2, "high", "main", draft=False, turn=3),   # frontier among the survivors
+        PullRequest(3, "fresh", "main", draft=False),          # eff = frontier = 3 -> back
+    ]
+    assert next_to_promote(build(prs, wip_cap=3)).name == "low"
+
+
 def test_ci_and_session_carried_onto_branch():
     stack = build([PullRequest(11, "f", "main", draft=False, ci="failure", session="https://claude.ai/code/session_x")])
     assert stack.branches[0].ci == "failure"
