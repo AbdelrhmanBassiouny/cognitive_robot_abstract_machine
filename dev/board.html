@@ -140,7 +140,7 @@
   .toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* ── canvas ── */
-  .canvas { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+  .canvas { display: flex; flex-direction: column; gap: 22px; min-width: 0; position: relative; padding-left: 22px; }
   .root-label {
     display: inline-flex; align-items: center; gap: 8px; font-family: var(--mono);
     font-size: 0.8rem; color: var(--muted); padding: 3px 10px; border-radius: 20px;
@@ -148,6 +148,11 @@
   }
   .root-label .glyph { color: var(--accent); font-weight: 700; }
   .root-label .detached { color: var(--muted); opacity: 0.75; font-style: italic; }
+  /* a stack deeper than MAX_DEPTH spills into a continuation root, linked back to its parent node */
+  .root-label.continuation { border-style: solid; border-color: var(--accent-soft); color: var(--accent); }
+  .tag.cont { color: var(--accent); background: var(--accent-soft); }
+  #connectors { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; z-index: 5; }
+  #connectors .connector { fill: none; stroke: var(--accent); stroke-width: 1.6px; stroke-dasharray: 4 3; opacity: 0.9; }
 
   ul.tree, ul.tree ul { list-style: none; margin: 0; padding: 0; }
   ul.tree ul { margin-left: 20px; border-left: 1.5px solid var(--line); padding-left: 0; }
@@ -441,7 +446,11 @@ const roots = BOARD.branches.filter(b => b.parent === "cram2/main");
 // branch's child, so render it as a detached root — no open PR is ever hidden.
 const orphanRoots = BOARD.branches.filter(b => b.parent !== "cram2/main" && !byName.has(b.parent));
 
-function nodeEl(b) {
+const MAX_DEPTH = 5;          // deepest nesting before a stack spills into a new rooted block
+const continuations = [];     // {branch, parentName} queued while rendering the current block
+const links = [];             // {parentName, childName} — one arrow per continuation root
+
+function nodeEl(b, depth) {
   const st = STATUS[b.status];
   const li = document.createElement("li");
   li.dataset.name = b.name;
@@ -485,26 +494,71 @@ function nodeEl(b) {
 
   const kids = children(b.name);
   if (kids.length) {
-    const ul = document.createElement("ul");
-    kids.forEach(k => ul.appendChild(nodeEl(k)));
-    li.appendChild(ul);
+    if (depth >= MAX_DEPTH) {
+      // Too deep to keep nesting: each child becomes its own rooted block below, linked back here.
+      li.querySelector(".row1").insertAdjacentHTML("beforeend", `<span class="tag cont">continues &#8595;</span>`);
+      kids.forEach(k => continuations.push({ branch: k, parentName: b.name }));
+    } else {
+      const ul = document.createElement("ul");
+      kids.forEach(k => ul.appendChild(nodeEl(k, depth + 1)));
+      li.appendChild(ul);
+    }
   }
   return li;
 }
 
-function appendRoot(branch, labelHtml) {
+function appendRootBlock(branch, labelHtml, parentName) {
+  const start = continuations.length;
   const label = document.createElement("div");
-  label.className = "root-label";
+  label.className = "root-label" + (parentName ? " continuation" : "");
   label.innerHTML = labelHtml;
   const ul = document.createElement("ul");
   ul.className = "tree";
-  ul.appendChild(nodeEl(branch));
+  ul.appendChild(nodeEl(branch, 1));
   canvas.appendChild(label);
   canvas.appendChild(ul);
+  if (parentName) links.push({ parentName, childName: branch.name });
+  // Render the blocks this one spilled directly under it, in order (each may spill again).
+  continuations.splice(start).forEach(c => appendRootBlock(
+    c.branch,
+    `<span class="glyph">&#8618;</span> continues <b>${c.parentName}</b>`,
+    c.parentName));
 }
-roots.forEach(r => appendRoot(r, `<span class="glyph">&#9650;</span> cram2/main`));
-orphanRoots.forEach(r => appendRoot(r,
-  `<span class="glyph">&#9650;</span> ${r.parent} <span class="detached">&middot; detached base</span>`));
+
+roots.forEach(r => appendRootBlock(r, `<span class="glyph">&#9650;</span> cram2/main`, null));
+orphanRoots.forEach(r => appendRootBlock(r,
+  `<span class="glyph">&#9650;</span> ${r.parent} <span class="detached">&middot; detached base</span>`, null));
+
+// Draw an arrow from the left of each continuation root up to the left of the node it hangs off.
+function drawConnectors() {
+  let svg = document.getElementById("connectors");
+  if (!svg) {
+    svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.id = "connectors";
+    svg.innerHTML = `<defs><marker id="arrowhead" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">` +
+      `<path d="M0,0 L7,3.5 L0,7 Z" fill="var(--accent)"/></marker></defs>`;
+    canvas.appendChild(svg);
+  }
+  while (svg.childNodes.length > 1) svg.removeChild(svg.lastChild);   // keep <defs>
+  svg.setAttribute("width", canvas.scrollWidth);
+  svg.setAttribute("height", canvas.scrollHeight);
+  const cr = canvas.getBoundingClientRect();
+  links.forEach(({ parentName, childName }) => {
+    const pn = document.querySelector(`li[data-name="${CSS.escape(parentName)}"] > .node`);
+    const cn = document.querySelector(`li[data-name="${CSS.escape(childName)}"] > .node`);
+    if (!pn || !cn) return;
+    const p = pn.getBoundingClientRect(), c = cn.getBoundingClientRect();
+    const px = p.left - cr.left, py = p.top - cr.top + p.height / 2;
+    const cx = c.left - cr.left, cy = c.top - cr.top + c.height / 2;
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", `M ${cx} ${cy} L 9 ${cy} L 9 ${py} L ${px} ${py}`);   // child-left → gutter → parent-left
+    path.setAttribute("class", "connector");
+    path.setAttribute("marker-end", "url(#arrowhead)");
+    svg.appendChild(path);
+  });
+}
+drawConnectors();
+window.addEventListener("resize", drawConnectors);
 
 // ── interactions ──
 function lineage(name) {
@@ -548,6 +602,7 @@ function applyMerged() {
   document.querySelectorAll('li[data-merged="1"]').forEach(li => {
     li.classList.toggle("hidden", !showMerged.checked);
   });
+  drawConnectors();
 }
 showMerged.addEventListener("change", applyMerged);
 applyMerged();
