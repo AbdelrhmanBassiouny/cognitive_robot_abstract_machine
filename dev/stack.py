@@ -342,8 +342,9 @@ def promotion_order(stack: Stack) -> list[Branch]:
     stack has taken the fewest **turns** is served first, so freed slots go to the stacks promoted least,
     cycling back only once the others have caught up. A fresh stack (no ``stack-turn`` marker) is treated
     as being at the **back of the current round** — its effective turn is the highest any stack has
-    reached — so a newly opened PR queues behind the stacks already in rotation. Ties fall back to
-    dependency order.
+    reached — so a newly opened PR queues behind the stacks already in rotation. Ties (including two fresh
+    stacks that share the frontier) break by **PR number**, so the older PR — the one that has waited
+    longer — is served first.
     """
     by_name = {b.name: b for b in stack.branches}
     reviewed_roots = reviewed_stack_roots(stack, by_name)
@@ -354,10 +355,8 @@ def promotion_order(stack: Stack) -> list[Branch]:
     def effective_turn(branch: Branch) -> int:
         return branch.turn if branch.turn is not None else frontier
 
-    ordered = order(stack)
-    index_of = {branch.name: index for index, branch in enumerate(ordered)}
-    ready = [b for b in ordered if b.status == READY and parent_landed(stack, b, by_name)]
-    ready.sort(key=lambda b: (effective_turn(b), index_of[b.name]))
+    ready = [b for b in order(stack) if b.status == READY and parent_landed(stack, b, by_name)]
+    ready.sort(key=lambda b: (effective_turn(b), b.pr))
 
     selected: list[Branch] = []
     claimed_roots = set(reviewed_roots)

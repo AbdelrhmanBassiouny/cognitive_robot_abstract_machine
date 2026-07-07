@@ -215,6 +215,17 @@ def test_promotion_order_includes_exempt_on_top_of_the_slots():
     assert names == ["bugfix"]
 
 
+def test_tied_fresh_stacks_order_by_pr_number_oldest_first():
+    # two unmarked roots share the frontier, so the round-robin can't separate them by turns; the older
+    # PR (lower number), which has waited longer, must come first — declared newest-first to prove the
+    # order is by PR number, not input order.
+    prs = [
+        PullRequest(44, "newer", "main", draft=False),
+        PullRequest(11, "older", "main", draft=False),
+    ]
+    assert [b.name for b in promotion_order(build(prs, wip_cap=3))] == ["older", "newer"]
+
+
 def test_promotion_order_is_round_robin_across_the_slots():
     # two free slots, three ready roots -> the two lowest-turn stacks win, in turn order
     prs = [

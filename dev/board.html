@@ -428,8 +428,10 @@ document.getElementById("wip-note").innerHTML =
 // slots as they free — this is the forward-looking order even when the cap is full. Ready `bug` PRs are
 // cap-exempt and promote on TOP of the slots. Mirrors stack.py promotion_order.
 const freeSlots = Math.max(0, BOARD.wip_cap - usedSlots);
+// round-robin by turn; ties (incl. two fresh stacks at the frontier) break by PR number so the older,
+// longer-waiting PR is served first.
 const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b))
-  .sort((a, b) => effTurn(a) - effTurn(b));
+  .sort((a, b) => effTurn(a) - effTurn(b) || a.pr - b.pr);
 const queue = [];
 const seenRoots = new Set(reviewedRoots);
 for (const b of readyUnblocked) {
