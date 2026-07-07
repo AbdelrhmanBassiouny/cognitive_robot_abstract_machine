@@ -414,17 +414,33 @@ document.getElementById("wip-note").innerHTML =
   `<b>${usedSlots}</b> independent stack${usedSlots===1?"":"s"} in review &middot; <b>${exempt.length}</b> exempt (${exempt.map(b=>b.name.split("/").pop()).join(", ")||"none"}) &middot; ` +
   (capFull ? "cap full" : `<b>${BOARD.wip_cap - usedSlots}</b> free`);
 
-// next to promote: ready + parent landed + (exempt, or a free slot in an independent stack)
-const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b));
-const promotable = readyUnblocked
-  .filter(b => isExempt(b) || (!capFull && !reviewedRoots.has(stackRoot(b))))
-  // round-robin fair: fewest stack turns first (fresh stacks sit at the back), then order
+// next to promote: fill every free slot (wip_cap minus stacks in review) from DISTINCT independent
+// stacks, in round-robin order (fewest stack turns first; fresh stacks sit at the back). Every ready
+// exempt branch (bugs) is always promotable on top of the slots. Mirrors stack.py promotion_order.
+const freeSlots = Math.max(0, BOARD.wip_cap - usedSlots);
+const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b))
   .sort((a, b) => effTurn(a) - effTurn(b));
+const promotable = [];
+const claimedRoots = new Set(reviewedRoots);
+let slotsLeft = freeSlots;
+for (const b of readyUnblocked) {
+  if (isExempt(b)) { promotable.push(b); continue; }
+  const root = stackRoot(b);
+  if (slotsLeft <= 0 || claimedRoots.has(root)) continue;
+  claimedRoots.add(root); slotsLeft--; promotable.push(b);
+}
+const nextNames = new Set(promotable.map(b => b.name));
 const readyBlocked = BOARD.branches.filter(b => b.status === "ready" && !parentLanded(b));
 const nextBox = document.getElementById("next-box");
 if (promotable.length) {
-  const n = promotable[0];
-  nextBox.innerHTML = `<div style="font-family:var(--mono);font-weight:600">${n.name}</div><div class="hint">approved &amp; unblocked &middot; independent stack &middot; <code>PR #${n.pr}</code></div>`;
+  nextBox.innerHTML = promotable.map((n, i) =>
+    `<div style="display:flex;align-items:baseline;gap:8px;${i?'margin-top:6px':''}">` +
+      `<span style="color:var(--faint);font-size:0.78rem;width:1.2em;text-align:right">${i+1}.</span>` +
+      `<span style="font-family:var(--mono);font-weight:600">${n.name}</span>` +
+      `<span class="hint" style="margin:0">&middot; ${isExempt(n) ? "exempt" : "independent stack"} &middot; <code>PR #${n.pr}</code></span>` +
+    `</div>`).join("") +
+    `<div class="hint">${promotable.length} branch${promotable.length===1?"":"es"} for ${freeSlots} free slot${freeSlots===1?"":"s"}` +
+    `${exempt.length||promotable.some(isExempt) ? " (bugs promote on top of the slots)" : ""}.</div>`;
 } else if (capFull && readyUnblocked.length) {
   nextBox.innerHTML = `<div><b>${readyUnblocked[0].name}</b></div><div class="hint">cap full (${usedSlots} independent stacks) — waiting for a slot.</div>`;
 } else if (readyUnblocked.length) {
@@ -469,7 +485,7 @@ function nodeEl(b, depth) {
   if (b.status === "merged") li.dataset.merged = "1";
 
   const blocked = b.status === "ready" && !parentLanded(b);
-  const isNext = promotable.length && promotable[0].name === b.name;
+  const isNext = nextNames.has(b.name);
 
   const repoSlug = b.pr_repo === "upstream" ? UPSTREAM : REPO;
   const prLink = b.pr ? `https://github.com/${repoSlug}/pull/${b.pr}` : null;

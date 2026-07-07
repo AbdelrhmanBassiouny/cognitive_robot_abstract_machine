@@ -15,6 +15,7 @@ from stack import (
     derive_status,
     next_to_promote,
     order,
+    promotion_order,
     restack_plan,
 )
 
@@ -164,6 +165,66 @@ def test_three_independent_stacks_fill_the_cap():
         PullRequest(4, "d", "main", draft=False),
     ]
     assert next_to_promote(build(prs, wip_cap=3)) is None
+
+
+# ── promotion_order: one branch per free slot ──────────────────────────────
+
+def test_promotion_order_fills_every_free_slot():
+    # no stacks in review yet, cap 3 -> all three independent ready roots promote at once
+    prs = [
+        PullRequest(1, "a", "main", draft=False),
+        PullRequest(2, "b", "main", draft=False),
+        PullRequest(3, "c", "main", draft=False),
+    ]
+    assert [b.name for b in promotion_order(build(prs, wip_cap=3))] == ["a", "b", "c"]
+
+
+def test_promotion_order_limited_to_the_free_slots():
+    # one slot already taken -> only two of the three ready roots fill the remaining slots
+    prs = [
+        PullRequest(1, "in", "main", draft=False, labels=["in-review"]),
+        PullRequest(2, "a", "main", draft=False),
+        PullRequest(3, "b", "main", draft=False),
+        PullRequest(4, "c", "main", draft=False),
+    ]
+    names = [b.name for b in promotion_order(build(prs, wip_cap=3))]
+    assert len(names) == 2 and names == ["a", "b"]
+
+
+def test_promotion_order_takes_at_most_one_branch_per_stack():
+    # a single stack with two independently-ready branches only offers its root to one slot
+    prs = [
+        PullRequest(1, "root", "main", draft=False),
+        PullRequest(2, "child", "root", draft=False),
+        PullRequest(3, "other", "main", draft=False),
+    ]
+    # child is blocked anyway (parent not landed), but the rule is one-per-stack regardless
+    names = [b.name for b in promotion_order(build(prs, wip_cap=3))]
+    assert names == ["root", "other"]
+
+
+def test_promotion_order_includes_exempt_on_top_of_the_slots():
+    # cap is full with two independent stacks, yet the ready bug still promotes alongside nothing else
+    prs = [
+        PullRequest(1, "s1", "main", draft=False, labels=["in-review"]),
+        PullRequest(2, "s2", "main", draft=False, labels=["in-review"]),
+        PullRequest(3, "bugfix", "main", draft=False, labels=["bug"]),
+        PullRequest(4, "feature", "main", draft=False),
+    ]
+    names = [b.name for b in promotion_order(build(prs, wip_cap=2))]
+    assert names == ["bugfix"]
+
+
+def test_promotion_order_is_round_robin_across_the_slots():
+    # two free slots, three ready roots -> the two lowest-turn stacks win, in turn order
+    prs = [
+        PullRequest(1, "high", "main", draft=False, turn=3),
+        PullRequest(2, "low", "main", draft=False, turn=1),
+        PullRequest(3, "mid", "main", draft=False, turn=2),
+        PullRequest(4, "taken", "main", draft=False, labels=["in-review"]),
+    ]
+    names = [b.name for b in promotion_order(build(prs, wip_cap=3))]
+    assert names == ["low", "mid"]
 
 
 # ── round-robin fairness (turns) ───────────────────────────────────────────

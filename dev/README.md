@@ -41,10 +41,11 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   - `python dev/stack.py status` — the whole stack, with ahead/behind drift per parent.
   - `python dev/stack.py check` — would each branch integrate cleanly onto its parent *now*
     (fast, non-mutating `git merge-tree` probe)?
-  - `python dev/stack.py next` — which branch to submit to cram2 next, honouring dependency order
-    and the WIP cap. **This is your "what goes to cram2 next" answer.**
-  - `python dev/stack.py next --porcelain` — machine-readable `next`: prints only `name<TAB>pr` for
-    the branch to promote (or nothing). For the autonomous promote Routine.
+  - `python dev/stack.py next` — which branches to submit to cram2 next: one per free slot (`wip_cap`
+    minus the stacks in review), from distinct stacks, in round-robin order, plus every ready bug.
+    **This is your "what goes to cram2 next" answer.**
+  - `python dev/stack.py next --porcelain` — machine-readable `next`: one `name<TAB>pr` line per branch
+    to promote (or nothing). For the autonomous promote Routine.
   - `python dev/stack.py restack-plan` — the bottom-up restack plan as JSON (one
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they pick up a
     moved parent via a conflict-free `merge`). Feed straight into the `restack` workflow's `args`.
@@ -109,11 +110,14 @@ readiness chips, all derived — never hand-set:
   or restack it.
 - **Conflicts** — would it merge cleanly onto its parent right now (git `merge-tree`)? Green `clean` /
   red `yes`.
-- **promotion order** — `stack.py next` is **round-robin fair**: among ready, independent, under-cap
-  branches it promotes the one whose stack has taken the fewest **turns** (a `stack-turn: N` marker the
-  routine writes on reparent), so no one stack dominates. A freshly opened PR carries no marker and
-  joins at the **back of the current round** (the routine stamps it with the current highest turn), so
-  it queues behind stacks already in rotation rather than jumping ahead. There is no manual priority.
+- **promotion order** — `stack.py next` fills **every free slot** at once (`wip_cap` minus the stacks
+  already in review), so a `next` tag appears on **each** branch that will fill a missing slot: two free
+  slots means two `next` tags. The slots are filled from **distinct** independent stacks and are
+  **round-robin fair** — the stacks that have taken the fewest **turns** win the slots (a `stack-turn: N`
+  marker the routine writes on reparent), so no one stack dominates. A freshly opened PR carries no marker
+  and joins at the **back of the current round** (the routine stamps it with the current highest turn), so
+  it queues behind stacks already in rotation rather than jumping ahead. Every ready `bug` promotes on
+  **top** of the slots (cap-exempt). There is no manual priority.
 - **session** — a chip linking to the Claude session working the PR (parsed from the PR body). If none,
   a `+ new` chip opens a fresh cloud session for that branch. Point `NEW_SESSION_URL` in `board.html`
   at your internet-enabled environment deep-link so the new session gets fork + cram2 access.
@@ -268,9 +272,10 @@ merged — its link has been acted on.
 Collect the fork PRs to promote this run:
 - EVERY `bug`-labelled PR that is ready (un-drafted), not `in-review`, and not already
   `cram2-link-sent` — bug PRs are cap-exempt, so all of them qualify; PLUS
-- the SINGLE branch `python dev/stack.py next --porcelain` names when a slot is free (approved,
-  unblocked, under `wip_cap`). If that branch already carries `cram2-link-sent`, a link is pending —
-  promote nothing else this run and wait for me to open it.
+- EVERY branch `python dev/stack.py next --porcelain` names — it prints ONE `name<TAB>pr` line per FREE
+  slot (`wip_cap` minus the stacks already in review), each from a distinct independent stack, in
+  round-robin order. If two slots are free it names two branches; promote them all. Skip any that
+  already carry `cram2-link-sent` (a link is already pending for it) — but still process the others.
 
 For each collected fork PR (head branch B):
 1. Try to open its cram2 PR directly via the GitHub MCP — base `cram2/main`, head
@@ -303,12 +308,12 @@ stopped on. The board Action has already republished Pages from your state chang
 `board.html` or any Artifact.
 ```
 
-The promote step is gated by `stack.py next`, which only ever names an un-drafted branch under the cap
-— so the Routine can never flood cram2, and never promotes something you haven't approved by
-un-drafting its fork PR. Because the app can't write to cram2, promotion usually can't open the PR
-directly; the Routine hands you a one-click **compare-and-create** link instead — for every ready,
-cap-exempt `bug` PR and for the one non-bug branch a free slot allows — placed at the top of its run
-summary. Enable the routine's **email-on-completion notification** at claude.ai/code/routines and that
+The promote step is gated by `stack.py next`, which only ever names un-drafted branches under the cap —
+one per free slot, from distinct stacks — so the Routine can never flood cram2, and never promotes
+something you haven't approved by un-drafting its fork PR. Because the app can't write to cram2,
+promotion usually can't open the PR directly; the Routine hands you a one-click **compare-and-create**
+link instead — for every ready, cap-exempt `bug` PR and for each non-bug branch a free slot allows —
+placed at the top of its run summary. Enable the routine's **email-on-completion notification** at claude.ai/code/routines and that
 summary reaches you as an email (the Gmail connector can only draft, not send, so delivery rides on the
 routine's own notification). Each link is marked `cram2-link-sent` so you're never sent it twice.
 

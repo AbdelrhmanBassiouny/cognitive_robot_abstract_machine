@@ -328,42 +328,60 @@ def reviewed_stack_roots(stack: Stack, by_name: dict[str, Branch]) -> set[str]:
     }
 
 
-def next_to_promote(stack: Stack) -> Branch | None:
-    """The single branch to submit to the upstream next, or None if blocked or nothing is ready.
+def promotion_order(stack: Stack) -> list[Branch]:
+    """The ordered branches to submit to the upstream next — one per **free review slot**, plus every
+    cap-exempt branch that is ready.
 
-    Encodes the whole policy: approved (``ready``) + parent landed + under the WIP cap, where the cap
-    counts **independent stacks** — the review slots must come from distinct stacks, so a branch is
-    skipped while its own stack already holds an in-review branch. ``wip_exempt_labels`` (e.g. bugs)
-    bypass the cap and the independence rule.
+    Encodes the whole policy: a branch is a candidate when it is approved (``ready``) and its parent has
+    landed. The WIP cap counts **independent stacks**, so the free slots (``wip_cap`` minus the stacks
+    already in review) are filled from **distinct** stacks — at most one branch per stack, and never from
+    a stack already in review. ``wip_exempt_labels`` (e.g. bugs) bypass the cap and the independence rule,
+    so every ready exempt branch is always included.
 
-    Among the eligible branches the choice is **round-robin fair** so no one stack dominates: the branch
-    whose stack has taken the fewest **turns** wins, so a freed slot goes to a stack that has been
-    promoted less, cycling back only once the others have caught up. A fresh stack (no ``stack-turn``
-    marker) is treated as being at the **back of the current round** — its effective turn is the highest
-    turn any stack has reached — so a newly opened PR queues behind the stacks already in rotation rather
-    than jumping ahead of them. Ties fall back to dependency order.
+    The candidates are drawn in **round-robin fair** order so no one stack dominates: the branch whose
+    stack has taken the fewest **turns** is served first, so freed slots go to the stacks promoted least,
+    cycling back only once the others have caught up. A fresh stack (no ``stack-turn`` marker) is treated
+    as being at the **back of the current round** — its effective turn is the highest any stack has
+    reached — so a newly opened PR queues behind the stacks already in rotation. Ties fall back to
+    dependency order.
     """
     by_name = {b.name: b for b in stack.branches}
     reviewed_roots = reviewed_stack_roots(stack, by_name)
-    cap_full = len(reviewed_roots) >= stack.config.wip_cap
+    free_slots = max(0, stack.config.wip_cap - len(reviewed_roots))
     marked = [b.turn for b in stack.branches if b.turn is not None]
     frontier = max(marked) if marked else 0
 
     def effective_turn(branch: Branch) -> int:
         return branch.turn if branch.turn is not None else frontier
 
-    eligible: list[tuple[int, Branch]] = []
-    for index, branch in enumerate(order(stack)):
-        if branch.status != READY or not parent_landed(stack, branch, by_name):
+    ordered = order(stack)
+    index_of = {branch.name: index for index, branch in enumerate(ordered)}
+    ready = [b for b in ordered if b.status == READY and parent_landed(stack, b, by_name)]
+    ready.sort(key=lambda b: (effective_turn(b), index_of[b.name]))
+
+    selected: list[Branch] = []
+    claimed_roots = set(reviewed_roots)
+    slots_left = free_slots
+    for branch in ready:
+        if not stack.counts_against_wip(branch):
+            selected.append(branch)
             continue
-        if stack.counts_against_wip(branch) and (
-            cap_full or stack_root(branch, by_name) in reviewed_roots
-        ):
+        root = stack_root(branch, by_name)
+        if slots_left <= 0 or root in claimed_roots:
             continue
-        eligible.append((index, branch))
-    if not eligible:
-        return None
-    return min(eligible, key=lambda pair: (effective_turn(pair[1]), pair[0]))[1]
+        claimed_roots.add(root)
+        slots_left -= 1
+        selected.append(branch)
+    return selected
+
+
+def next_to_promote(stack: Stack) -> Branch | None:
+    """The first branch to submit to the upstream next, or None if blocked or nothing is ready.
+
+    The head of :func:`promotion_order`; the round-robin, WIP-cap, and independence policy lives there.
+    """
+    ordered = promotion_order(stack)
+    return ordered[0] if ordered else None
 
 
 def restack_plan(stack: Stack) -> list[dict[str, str]]:
@@ -439,15 +457,18 @@ def cmd_next(stack: Stack) -> None:
     print(f"  (+{len(exempt)} exempt: {', '.join(b.name for b in exempt)})" if exempt else "")
     print()
 
-    nxt = next_to_promote(stack)
+    promote = promotion_order(stack)
     ready_blocked = [
         b for b in stack.branches if b.status == READY and not parent_landed(stack, b, by_name)
     ]
     draft_candidates = [b for b in order(stack) if b.status == DRAFT]
 
-    if nxt is not None:
-        print(f"NEXT to submit to {config.upstream_remote}: {nxt.name} (PR #{nxt.pr})")
-        print(f"  -> approved, its parent '{nxt.parent}' has landed, and its stack is not already in review.")
+    if promote:
+        free = max(0, config.wip_cap - len(reviewed_roots))
+        print(f"NEXT to submit to {config.upstream_remote} ({len(promote)} for {free} free slot{'s' if free != 1 else ''}):")
+        for branch in promote:
+            note = "exempt" if not stack.counts_against_wip(branch) else "independent stack"
+            print(f"  {branch.name} (PR #{branch.pr}) — approved, parent '{branch.parent}' landed, {note}")
         return
 
     ready_unblocked = [b for b in stack.branches if b.status == READY and parent_landed(stack, b, by_name)]
@@ -469,9 +490,9 @@ def cmd_next(stack: Stack) -> None:
 
 
 def cmd_next_porcelain(stack: Stack) -> None:
-    """Machine-readable :func:`next`: print ``name<TAB>pr`` for the branch to promote, or nothing."""
-    branch = next_to_promote(stack)
-    if branch is not None:
+    """Machine-readable :func:`next`: one ``name<TAB>pr`` line per branch to promote (one per free
+    slot, plus exempt), in promotion order, or nothing when the stack is blocked."""
+    for branch in promotion_order(stack):
         print(f"{branch.name}\t{branch.pr}")
 
 
