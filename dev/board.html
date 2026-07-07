@@ -147,6 +147,7 @@
     border: 1px dashed var(--line-strong); background: var(--panel-2); align-self: flex-start;
   }
   .root-label .glyph { color: var(--accent); font-weight: 700; }
+  .root-label .detached { color: var(--muted); opacity: 0.75; font-style: italic; }
 
   ul.tree, ul.tree ul { list-style: none; margin: 0; padding: 0; }
   ul.tree ul { margin-left: 20px; border-left: 1.5px solid var(--line); padding-left: 0; }
@@ -435,6 +436,10 @@ order.forEach(st => {
 // ── tree ──
 const canvas = document.getElementById("canvas");
 const roots = BOARD.branches.filter(b => b.parent === "cram2/main");
+// Orphans: an open PR whose base branch has no open PR of its own (an old PR whose parent was
+// closed/merged, or a base that isn't main). It is neither a cram2/main root nor any present
+// branch's child, so render it as a detached root — no open PR is ever hidden.
+const orphanRoots = BOARD.branches.filter(b => b.parent !== "cram2/main" && !byName.has(b.parent));
 
 function nodeEl(b) {
   const st = STATUS[b.status];
@@ -487,16 +492,19 @@ function nodeEl(b) {
   return li;
 }
 
-roots.forEach(r => {
+function appendRoot(branch, labelHtml) {
   const label = document.createElement("div");
   label.className = "root-label";
-  label.innerHTML = `<span class="glyph">&#9650;</span> cram2/main`;
+  label.innerHTML = labelHtml;
   const ul = document.createElement("ul");
   ul.className = "tree";
-  ul.appendChild(nodeEl(r));
+  ul.appendChild(nodeEl(branch));
   canvas.appendChild(label);
   canvas.appendChild(ul);
-});
+}
+roots.forEach(r => appendRoot(r, `<span class="glyph">&#9650;</span> cram2/main`));
+orphanRoots.forEach(r => appendRoot(r,
+  `<span class="glyph">&#9650;</span> ${r.parent} <span class="detached">&middot; detached base</span>`));
 
 // ── interactions ──
 function lineage(name) {

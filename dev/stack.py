@@ -437,7 +437,7 @@ def export_board(config: Config, path: Path = BOARD_PATH) -> int:
         _git("remote", "get-url", config.fork_remote).removesuffix(".git").rstrip("/").split("/")[-2:]
     )
     result = subprocess.run(
-        ["gh", "pr", "list", "--repo", slug, "--state", "open", "--limit", "200",
+        ["gh", "pr", "list", "--repo", slug, "--state", "open", "--limit", "1000",
          "--json", "number,headRefName,baseRefName,isDraft,labels,statusCheckRollup,body"],
         capture_output=True, text=True,
     )
