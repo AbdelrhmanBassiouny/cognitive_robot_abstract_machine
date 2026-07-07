@@ -125,6 +125,14 @@
   .next-box .none { color: var(--muted); }
   .next-box .hint { margin-top: 8px; font-size: 0.78rem; color: var(--faint); line-height: 1.45; }
   .next-box .hint code { font-family: var(--mono); color: var(--accent); font-size: 0.92em; }
+  .q-row { display: flex; align-items: center; gap: 7px; padding: 3px 0; }
+  .q-row + .q-row { border-top: 1px solid var(--hair); }
+  .q-rank { width: 1.3em; text-align: right; color: var(--faint); font-variant-numeric: tabular-nums; font-size: 0.78rem; flex: none; }
+  .q-name { flex: 1; font-family: var(--mono); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q-turn { font-size: 0.66rem; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+  .q-when { font-size: 0.62rem; font-weight: 640; letter-spacing: 0.03em; text-transform: uppercase; padding: 2px 6px; border-radius: 5px; flex: none; }
+  .q-when.now { color: #fff; background: var(--accent); }
+  .q-when.wait { color: var(--muted); background: var(--sbg, transparent); border: 1px solid var(--hair); }
 
   .controls { display: flex; gap: 8px; align-items: center; font-size: 0.82rem; color: var(--muted); }
   .toggle {
@@ -267,7 +275,7 @@
     </div>
 
     <div class="card">
-      <h2>Next to promote</h2>
+      <h2>Next up &middot; turn order</h2>
       <div class="next-box" id="next-box"></div>
     </div>
 
@@ -414,35 +422,48 @@ document.getElementById("wip-note").innerHTML =
   `<b>${usedSlots}</b> independent stack${usedSlots===1?"":"s"} in review &middot; <b>${exempt.length}</b> exempt (${exempt.map(b=>b.name.split("/").pop()).join(", ")||"none"}) &middot; ` +
   (capFull ? "cap full" : `<b>${BOARD.wip_cap - usedSlots}</b> free`);
 
-// next to promote: fill every free slot (wip_cap minus stacks in review) from DISTINCT independent
-// stacks, in round-robin order (fewest stack turns first; fresh stacks sit at the back). Every ready
-// exempt branch (bugs) is always promotable on top of the slots. Mirrors stack.py promotion_order.
+// The turn-taking QUEUE: independent ready stacks not already in review, one per stack root, in
+// round-robin order (fewest turns first; fresh stacks sit at the back). The first `freeSlots` of it are
+// promotable NOW (the "next now" head that fits today's free slots); the rest are on deck and take the
+// slots as they free — this is the forward-looking order even when the cap is full. Ready `bug` PRs are
+// cap-exempt and promote on TOP of the slots. Mirrors stack.py promotion_order.
 const freeSlots = Math.max(0, BOARD.wip_cap - usedSlots);
 const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b))
   .sort((a, b) => effTurn(a) - effTurn(b));
-const promotable = [];
-const claimedRoots = new Set(reviewedRoots);
-let slotsLeft = freeSlots;
+const queue = [];
+const seenRoots = new Set(reviewedRoots);
 for (const b of readyUnblocked) {
-  if (isExempt(b)) { promotable.push(b); continue; }
+  if (isExempt(b)) continue;
   const root = stackRoot(b);
-  if (slotsLeft <= 0 || claimedRoots.has(root)) continue;
-  claimedRoots.add(root); slotsLeft--; promotable.push(b);
+  if (seenRoots.has(root)) continue;
+  seenRoots.add(root); queue.push(b);
 }
+const readyBugs = readyUnblocked.filter(isExempt);
+// Promotable NOW = the queue head that fits the free slots, plus every ready bug. These get the `next` tag.
+const promotable = [...queue.slice(0, freeSlots), ...readyBugs];
 const nextNames = new Set(promotable.map(b => b.name));
 const readyBlocked = BOARD.branches.filter(b => b.status === "ready" && !parentLanded(b));
 const nextBox = document.getElementById("next-box");
-if (promotable.length) {
-  nextBox.innerHTML = promotable.map((n, i) =>
-    `<div style="display:flex;align-items:baseline;gap:8px;${i?'margin-top:6px':''}">` +
-      `<span style="color:var(--faint);font-size:0.78rem;width:1.2em;text-align:right">${i+1}.</span>` +
-      `<span style="font-family:var(--mono);font-weight:600">${n.name}</span>` +
-      `<span class="hint" style="margin:0">&middot; ${isExempt(n) ? "exempt" : "independent stack"} &middot; <code>PR #${n.pr}</code></span>` +
-    `</div>`).join("") +
-    `<div class="hint">${promotable.length} branch${promotable.length===1?"":"es"} for ${freeSlots} free slot${freeSlots===1?"":"s"}` +
-    `${exempt.length||promotable.some(isExempt) ? " (bugs promote on top of the slots)" : ""}.</div>`;
-} else if (capFull && readyUnblocked.length) {
-  nextBox.innerHTML = `<div><b>${readyUnblocked[0].name}</b></div><div class="hint">cap full (${usedSlots} independent stacks) — waiting for a slot.</div>`;
+const turnBadge = b => `<span class="q-turn">turn ${b.turn == null ? FRONTIER : b.turn}</span>`;
+if (queue.length || readyBugs.length) {
+  const shown = queue.slice(0, BOARD.wip_cap);
+  const rows = shown.map((b, i) => {
+    const now = i < freeSlots;
+    return `<div class="q-row" title="PR #${b.pr}">` +
+      `<span class="q-rank">${i + 1}</span><span class="q-name">${b.name}</span>` +
+      turnBadge(b) +
+      `<span class="q-when ${now ? "now" : "wait"}">${now ? "next now" : "waiting"}</span></div>`;
+  }).join("");
+  const bugRows = readyBugs.map(b =>
+    `<div class="q-row" title="PR #${b.pr}"><span class="q-rank">&#8226;</span>` +
+    `<span class="q-name">${b.name}</span><span class="tag bug">bug</span>` +
+    `<span class="q-when now">next now</span></div>`).join("");
+  const moreWaiting = queue.length - shown.length;
+  const note = capFull
+    ? "Cap full — these take the next freed slots, top down."
+    : `<b>${freeSlots}</b> free slot${freeSlots === 1 ? "" : "s"} now &middot; the rest wait their turn.`;
+  nextBox.innerHTML = rows + bugRows +
+    `<div class="hint">${note}${moreWaiting > 0 ? ` (+${moreWaiting} more queued)` : ""}</div>`;
 } else if (readyUnblocked.length) {
   nextBox.innerHTML = `<div><b>${readyUnblocked[0].name}</b></div><div class="hint">approved, but its stack is already in review — waiting for it to merge.</div>`;
 } else {
