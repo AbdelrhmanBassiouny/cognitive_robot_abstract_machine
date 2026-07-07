@@ -166,8 +166,6 @@ def test_three_independent_stacks_fill_the_cap():
     assert next_to_promote(build(prs, wip_cap=3)) is None
 
 
-# ── priority among several ready branches ──────────────────────────────────
-
 # ── round-robin fairness (turns) ───────────────────────────────────────────
 
 def test_round_robin_prefers_stack_with_fewer_turns():
