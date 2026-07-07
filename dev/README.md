@@ -97,7 +97,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   ROS-gated end-to-end behaviour. Only the residue that genuinely cannot be reproduced or validated
   without ROS is handed to a ROS session. Never disable a leak/CI check to go green.
 
-## The board: chips, priority, sessions
+## The board: chips, promotion order, sessions
 
 `dev/board.html` (published to GitHub Pages by the `board` Action) renders the tree with per-PR
 readiness chips, all derived — never hand-set:
@@ -109,8 +109,11 @@ readiness chips, all derived — never hand-set:
   or restack it.
 - **Conflicts** — would it merge cleanly onto its parent right now (git `merge-tree`)? Green `clean` /
   red `yes`.
-- **priority** — set a `priority:high|medium|low` label on the fork PR. Among several ready branches,
-  `stack.py next` promotes the highest priority (ties fall back to dependency order).
+- **promotion order** — `stack.py next` is **round-robin fair**: among ready, independent, under-cap
+  branches it promotes the one whose stack has taken the fewest **turns** (a `stack-turn: N` marker the
+  routine writes on reparent), so no one stack dominates. A freshly opened PR carries no marker and
+  joins at the **back of the current round** (the routine stamps it with the current highest turn), so
+  it queues behind stacks already in rotation rather than jumping ahead. There is no manual priority.
 - **session** — a chip linking to the Claude session working the PR (parsed from the PR body). If none,
   a `+ new` chip opens a fresh cloud session for that branch. Point `NEW_SESSION_URL` in `board.html`
   at your internet-enabled environment deep-link so the new session gets fork + cram2 access.
@@ -191,6 +194,13 @@ SETUP
    `subscribe_pr_activity` — a subscription delivers human review comments and review threads (not just
    CI) and turns on the built-in per-event handler that makes you investigate, plan, and reply. That is
    how you end up "responding to reviews"; polling avoids it entirely.
+5. STAMP NEW STACKS TO THE BACK. Promotion is round-robin fair by a `stack-turn: N` marker (fewest turns
+   promoted first). A brand-new PR has no marker, which would let it jump the queue — so for every OPEN
+   fork PR whose BASE is `main` and whose body has NO `stack-turn` marker, add `stack-turn: F` to its
+   body, where F = the largest `stack-turn` currently on any open fork PR (0 if none). This queues a new
+   stack behind the ones already in rotation; it then advances normally as others take their turns.
+   (Children never need this — they get their turn from the reparent step. Skip any PR that already has
+   a marker.)
 
 THE BOARD PUBLISHES ITSELF
 You do not render or redeploy the board. A GitHub Action in the separate `stack-board` repo polls the
@@ -208,8 +218,9 @@ is merged this way:
   * on GitHub retarget that child's base to `main` (B's commits are in main now, so the child stacks on
     main, not on a branch about to disappear); and
   * carry the round-robin turn forward — set the child PR body's `stack-turn: N` marker to
-    (B's `stack-turn`, default 0) + 1, so the child's stack is de-prioritised for the next free slot in
-    favour of stacks that have taken fewer turns.
+    (B's `stack-turn` if it has one, else the largest `stack-turn` on any open fork PR) + 1, so the
+    child's stack drops to the back for the next free slot in favour of stacks that have taken fewer
+    turns.
   Do this BEFORE closing B so no child is ever orphaned. `dev/stack.py restack-plan` already emits
   `parent: main` for these children, so Phase 2 rebases them onto main to match. (Only when B is merged
   by the ancestry test — a PR merely CLOSED without merging leaves its children and their turn alone.)

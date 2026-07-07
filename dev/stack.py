@@ -56,9 +56,6 @@ class Config:
     rebase_label: str
     """Fork-PR label opting a branch into the rebase strategy instead of the default merge."""
 
-    priority_labels: list[str]
-    """Fork-PR priority labels, highest first; a branch's rank is its label's index here."""
-
     short_threshold_loc: int
     """A branch changing more than this many lines is flagged as not-short (advisory)."""
 
@@ -97,9 +94,11 @@ class PullRequest:
     session: str | None = None
     """URL of the Claude session working this PR, parsed from the PR body (None if none)."""
 
-    turn: int = 0
+    turn: int | None = None
     """How many times this branch's stack has already been promoted (a ``stack-turn: N`` marker in the
-    PR body; 0 for a fresh stack). Drives round-robin fairness so no one stack dominates promotions."""
+    PR body; ``None`` for a fresh stack that has never been promoted). Drives round-robin fairness so no
+    one stack dominates promotions; a fresh stack joins at the back of the current round (see
+    :func:`next_to_promote`)."""
 
 
 @dataclass
@@ -130,11 +129,9 @@ class Branch:
     session: str | None = None
     """URL of the Claude session working this PR, if any."""
 
-    priority: int | None = None
-    """Priority rank from the PR's priority label (0 = highest); None if unprioritised."""
-
-    turn: int = 0
-    """How many turns this branch's stack has already taken — the round-robin fairness key."""
+    turn: int | None = None
+    """How many turns this branch's stack has already taken (``None`` = a fresh stack) — the round-robin
+    fairness key."""
 
 
 @dataclass
@@ -166,7 +163,6 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
         wip_exempt_labels=list(data.get("wip_exempt_labels", ["bug"])),
         in_review_label=data.get("in_review_label", "in-review"),
         rebase_label=data.get("rebase_label", "rebase"),
-        priority_labels=list(data.get("priority_labels", ["priority:high", "priority:medium", "priority:low"])),
         short_threshold_loc=data.get("short_threshold_loc", 400),
         fork_remote=data.get("fork_remote", "origin"),
         upstream_remote=data.get("upstream_remote", "cram2"),
@@ -192,16 +188,10 @@ def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
             labels=list(pr.get("labels", [])),
             ci=pr.get("ci"),
             session=pr.get("session"),
-            turn=int(pr.get("turn", 0)),
+            turn=pr.get("turn"),
         )
         for pr in data["pull_requests"]
     ]
-
-
-def priority_rank(config: Config, labels: list[str]) -> int | None:
-    """Return the priority rank (0 = highest) from a PR's priority label, or None if unprioritised."""
-    ranks = [config.priority_labels.index(label) for label in labels if label in config.priority_labels]
-    return min(ranks) if ranks else None
 
 
 def derive_status(draft: bool, merged: bool, in_review: bool) -> str:
@@ -233,7 +223,6 @@ def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
             labels=pr.labels,
             ci=pr.ci,
             session=pr.session,
-            priority=priority_rank(config, pr.labels),
             turn=pr.turn,
         )
         for pr in prs
@@ -349,12 +338,20 @@ def next_to_promote(stack: Stack) -> Branch | None:
 
     Among the eligible branches the choice is **round-robin fair** so no one stack dominates: the branch
     whose stack has taken the fewest **turns** wins, so a freed slot goes to a stack that has been
-    promoted less, cycling back only once the others have caught up. Ties break by **priority** (an
-    explicit ``priority:*`` label beats an unprioritised branch), then by dependency order.
+    promoted less, cycling back only once the others have caught up. A fresh stack (no ``stack-turn``
+    marker) is treated as being at the **back of the current round** — its effective turn is the highest
+    turn any stack has reached — so a newly opened PR queues behind the stacks already in rotation rather
+    than jumping ahead of them. Ties fall back to dependency order.
     """
     by_name = {b.name: b for b in stack.branches}
     reviewed_roots = reviewed_stack_roots(stack, by_name)
     cap_full = len(reviewed_roots) >= stack.config.wip_cap
+    marked = [b.turn for b in stack.branches if b.turn is not None]
+    frontier = max(marked) if marked else 0
+
+    def effective_turn(branch: Branch) -> int:
+        return branch.turn if branch.turn is not None else frontier
+
     eligible: list[tuple[int, Branch]] = []
     for index, branch in enumerate(order(stack)):
         if branch.status != READY or not parent_landed(stack, branch, by_name):
@@ -366,15 +363,7 @@ def next_to_promote(stack: Stack) -> Branch | None:
         eligible.append((index, branch))
     if not eligible:
         return None
-    unprioritised = len(stack.config.priority_labels)
-    return min(
-        eligible,
-        key=lambda pair: (
-            pair[1].turn,
-            pair[1].priority if pair[1].priority is not None else unprioritised,
-            pair[0],
-        ),
-    )[1]
+    return min(eligible, key=lambda pair: (effective_turn(pair[1]), pair[0]))[1]
 
 
 def restack_plan(stack: Stack) -> list[dict[str, str]]:
@@ -548,17 +537,19 @@ def _session_url(body: str) -> str | None:
     return match.group(0) if match else None
 
 
-def _stack_turn(body: str) -> int:
-    """:return: the stack's promotion count from a ``stack-turn: N`` marker in the PR body (0 if absent).
+def _stack_turn(body: str) -> int | None:
+    """:return: the stack's promotion count from a ``stack-turn: N`` marker in the PR body, or ``None``
+    when the marker is absent (a fresh stack that has never been promoted).
 
-    The routine writes this marker when it reparents a child onto a merged parent (``child = parent + 1``),
-    so a stack that has been promoted more carries a higher number and yields its next slot to stacks
-    that have been promoted less.
+    The routine writes this marker when it reparents a child onto a merged parent
+    (``child = parent's turn + 1``), so a stack that has been promoted more carries a higher number and
+    yields its next slot to stacks that have been promoted less. A fresh PR carries no marker and joins
+    at the back of the current round (see :func:`next_to_promote`).
     """
     import re
 
     match = re.search(r"stack-turn:\s*(\d+)", body)
-    return int(match.group(1)) if match else 0
+    return int(match.group(1)) if match else None
 
 
 def _loc_changed(config: Config, base: str, head: str) -> int | None:

@@ -25,7 +25,6 @@ def make_config(wip_cap: int = 3) -> Config:
         wip_exempt_labels=["bug"],
         in_review_label="in-review",
         rebase_label="rebase",
-        priority_labels=["priority:high", "priority:medium", "priority:low"],
         short_threshold_loc=400,
         fork_remote="origin",
         upstream_remote="cram2",
@@ -169,66 +168,45 @@ def test_three_independent_stacks_fill_the_cap():
 
 # ── priority among several ready branches ──────────────────────────────────
 
-def test_priority_label_wins_over_dependency_order():
-    prs = [
-        PullRequest(1, "first-declared", "main", draft=False),
-        PullRequest(2, "urgent", "main", draft=False, labels=["priority:high"]),
-    ]
-    assert next_to_promote(build(prs)).name == "urgent"
-
-
-def test_higher_priority_beats_lower():
-    prs = [
-        PullRequest(1, "low", "main", draft=False, labels=["priority:low"]),
-        PullRequest(2, "high", "main", draft=False, labels=["priority:high"]),
-    ]
-    assert next_to_promote(build(prs)).name == "high"
-
-
-def test_prioritised_beats_unprioritised():
-    prs = [
-        PullRequest(1, "plain", "main", draft=False),
-        PullRequest(2, "ranked", "main", draft=False, labels=["priority:low"]),
-    ]
-    assert next_to_promote(build(prs)).name == "ranked"
-
-
-def test_priority_falls_back_to_dependency_order_on_tie():
-    prs = [
-        PullRequest(3, "child", "parent", draft=False, labels=["priority:high"]),
-        PullRequest(2, "parent", "main", draft=False, labels=["priority:high"]),
-    ]
-    # equal priority → parent (earlier in dependency order) promotes first
-    assert next_to_promote(build(prs)).name == "parent"
-
-
 # ── round-robin fairness (turns) ───────────────────────────────────────────
 
 def test_round_robin_prefers_stack_with_fewer_turns():
-    # a freed slot goes to a fresh stack (turn 0), not the continuation of one that already went (turn 1)
+    # a freed slot goes to the stack that has taken fewer turns
     prs = [
         PullRequest(1, "a-next", "main", draft=False, turn=1),
-        PullRequest(2, "b-root", "main", draft=False, turn=0),
+        PullRequest(2, "b-next", "main", draft=False, turn=0),
     ]
-    assert next_to_promote(build(prs)).name == "b-root"
-
-
-def test_round_robin_turns_outrank_priority():
-    # fairness dominates: a fresh unprioritised stack still beats a higher-priority stack that already went
-    prs = [
-        PullRequest(1, "already-went", "main", draft=False, labels=["priority:high"], turn=1),
-        PullRequest(2, "fresh", "main", draft=False, turn=0),
-    ]
-    assert next_to_promote(build(prs)).name == "fresh"
+    assert next_to_promote(build(prs)).name == "b-next"
 
 
 def test_round_robin_circles_back_when_turns_equal():
-    # once every stack has taken the same number of turns, order/priority decides again
+    # once every stack has taken the same number of turns, dependency order decides again
     prs = [
         PullRequest(1, "a", "main", draft=False, turn=1),
         PullRequest(2, "b", "main", draft=False, turn=1),
     ]
     assert next_to_promote(build(prs)).name == "a"
+
+
+def test_fresh_stack_joins_the_back_of_the_current_round():
+    # a brand-new PR (no stack-turn marker) takes the frontier turn, so it queues behind a stack that is
+    # mid-rotation at a lower turn rather than jumping ahead of it.
+    prs = [
+        PullRequest(1, "mid-rotation", "main", draft=False, turn=0),   # round 0, still owed a turn
+        PullRequest(2, "fresh", "main", draft=False),                  # no marker
+        PullRequest(3, "advanced", "main", draft=False, turn=2),       # sets the frontier to 2
+    ]
+    # frontier = 2 → fresh's effective turn is 2, so mid-rotation (0) wins this slot
+    assert next_to_promote(build(prs, wip_cap=3)).name == "mid-rotation"
+
+
+def test_fresh_stack_does_not_preempt_a_stack_mid_rotation():
+    prs = [
+        PullRequest(1, "advanced", "main", draft=False, turn=2),
+        PullRequest(2, "fresh", "main", draft=False),
+    ]
+    # frontier 2; fresh's effective turn ties advanced at 2 → dependency order keeps advanced ahead
+    assert next_to_promote(build(prs, wip_cap=3)).name == "advanced"
 
 
 def test_ci_and_session_carried_onto_branch():

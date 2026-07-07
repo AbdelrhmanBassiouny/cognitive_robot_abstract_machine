@@ -223,10 +223,6 @@
   .chip.bad .dot  { background: var(--blocked); }
   .chip.warn .dot { background: var(--review); }
   .chip.mute .dot { background: var(--faint); }
-  .chip.prio { color: #fff; }
-  .chip.prio.p0 { background: var(--blocked); }
-  .chip.prio.p1 { background: var(--review); }
-  .chip.prio.p2 { background: var(--draft); }
   a.chip.session { color: var(--accent); background: var(--accent-soft); border-color: transparent; text-decoration: none; }
   a.chip.session:hover { border-color: var(--accent); }
   a.chip.session.new { color: var(--faint); background: var(--panel-2); border: 1px dashed var(--line-strong); }
@@ -299,7 +295,7 @@
     Read-only visualization &mdash; a hosted page can't reach GitHub, so <b>Reload</b> shows the latest
     version the refresh routine published (it recaptures live PR state each run). You drive the stack on
     GitHub: the <b>base branch</b> is the parent, the <b>draft toggle</b> is the ready gate, and
-    <code>in-review</code>/<code>bug</code>/<code>priority:*</code> labels carry the rest. Chips: <b>CI</b>
+    <code>in-review</code>/<code>bug</code> labels carry the rest. Chips: <b>CI</b>
     (from checks), <b>Short</b> (lines changed vs the parent), <b>Conflicts</b> (would it merge cleanly
     now). All derived exactly as <code>dev/stack.py</code> derives them &mdash; nothing is hand-set.
   </footer>
@@ -340,16 +336,15 @@ const BOARD = {
     loc: (pr.loc ?? null),
     conflicts: (pr.conflicts ?? null),
     session: pr.session ?? null,
-    priority: priorityOf(pr.labels),
-    turn: pr.turn ?? 0,
+    turn: (pr.turn ?? null),
   })),
 };
-function priorityOf(labels) {
-  const ranks = (CONFIG.priority_labels || []).map((l, i) => labels.includes(l) ? i : -1).filter(i => i >= 0);
-  return ranks.length ? Math.min(...ranks) : null;
-}
-const PRIORITY_NAMES = (CONFIG.priority_labels || []).map(l => l.split(":").pop());
 const SHORT_MAX = CONFIG.short_threshold_loc || 400;
+// A fresh stack (no turn marker) joins at the back of the current round: its effective turn is the
+// highest any stack has reached, so a newly opened PR queues behind stacks already in rotation.
+const _marked = BOARD.branches.map(b => b.turn).filter(t => t != null);
+const FRONTIER = _marked.length ? Math.max(..._marked) : 0;
+const effTurn = b => (b.turn == null ? FRONTIER : b.turn);
 
 const STATUS = {
   draft:     {label:"draft",     s:"var(--draft)",  bg:"var(--draft-bg)"},
@@ -420,12 +415,11 @@ document.getElementById("wip-note").innerHTML =
   (capFull ? "cap full" : `<b>${BOARD.wip_cap - usedSlots}</b> free`);
 
 // next to promote: ready + parent landed + (exempt, or a free slot in an independent stack)
-const UNPRIO = (CONFIG.priority_labels || []).length;
 const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b));
 const promotable = readyUnblocked
   .filter(b => isExempt(b) || (!capFull && !reviewedRoots.has(stackRoot(b))))
-  // round-robin fair: fewest stack turns first, then priority, then order
-  .sort((a, b) => (a.turn - b.turn) || ((a.priority ?? UNPRIO) - (b.priority ?? UNPRIO)));
+  // round-robin fair: fewest stack turns first (fresh stacks sit at the back), then order
+  .sort((a, b) => effTurn(a) - effTurn(b));
 const readyBlocked = BOARD.branches.filter(b => b.status === "ready" && !parentLanded(b));
 const nextBox = document.getElementById("next-box");
 if (promotable.length) {
@@ -485,7 +479,6 @@ function nodeEl(b, depth) {
   if (isNext) tags.push(`<span class="tag next">next</span>`);
   if (blocked) tags.push(`<span class="tag blocked">blocked</span>`);
   if (isExempt(b)) tags.push(`<span class="tag bug">bug</span>`);
-  if (b.priority != null) tags.push(`<span class="chip prio p${b.priority}">${PRIORITY_NAMES[b.priority] || "p"+b.priority}</span>`);
 
   li.innerHTML =
     `<div class="node ${b.status==='merged'?'merged':''}" style="--s:${st.s};--sbg:${st.bg}" tabindex="0" role="button">
