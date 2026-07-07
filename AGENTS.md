@@ -71,6 +71,11 @@
 ## Domain-Specific Conventions
 - When dealing with spatial types and connections, adhere to the style guide documented in `semantic_digital_twin/doc/style_guide.md`
 
+## Version Control
+- Commits must be authored in the name of the human user running the tool, using their own configured git `user.name` and `user.email`. Never author or amend a commit as an assistant/agent identity.
+- Do not add AI attribution to commits: no `Co-Authored-By:` trailer for Claude or any assistant, no `noreply@anthropic.com` (or similar) author/committer, and no "Generated with"/"Co-Authored-By" assistant lines in the commit message.
+- This applies to every contributor and every tool: a commit's authorship reflects the person responsible for it, not the assistant that helped write it.
+
 ## Misc
 - If you find a package that could be replaced by a more powerful one, let us know
 - Always use the Python interpreter that is set as the current project interpreter for running tests and commands
