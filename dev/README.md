@@ -25,6 +25,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 | WIP-exempt | the **`bug`** label (`wip_exempt_labels`) | labelling on GitHub |
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
 | cram2 create-link emailed | the **`cram2-link-sent`** marker | nothing — the routine sets it when it emails you a create-link, and clears it once you promote (add `in-review`) |
+| conflict/CI-red delegated | the **`needs-resolution`** label | nothing — the routine sets it when it delegates a restack conflict to the branch's owning session, and clears it once the restack goes clean again |
 
 ## Files
 
@@ -268,8 +269,28 @@ branch on a ROS dependency; resolve it non-blockingly and let CI be the final ch
     with no ROS: run the `krrood` suite (its conftest rebuilds it), commit the regenerated file, and
     push.
   - Never hand-edit an `ormatic_interface.py`; only take-a-side or regenerate.
+- Everything else — a real conflict, or CI-red that isn't ROS-only and isn't the throwaway ORM file —
+  is not yours to resolve. DELEGATE it to the branch's owning session, never silently skip it:
+  1. Find the owning session: search the fork PR body for a `https://claude.ai/code/session_...` link
+     (the same one the board's session chip parses — see `_session_url` in `stack.py`).
+  2. Post a comment on the fork PR, prefixed `🔴 ROUTINE — NEEDS RESOLUTION:`, stating what you were
+     doing (e.g. "restacking `<branch>` onto `<parent>` because `<parent>`'s PR just merged/moved"),
+     what happened (the conflicting files, or the failing check and its conclusion), and the ask
+     ("please resolve and push — I'll pick the branch back up automatically once it restacks clean").
+     This comment is the only channel available to you — there is no direct session-to-session
+     messaging here — but if that PR's session is still subscribed to its own PR activity (the normal
+     thing to do while babysitting a PR), the comment is delivered to it as a live event, not just text
+     sitting on GitHub.
+  3. Label the fork PR `needs-resolution` (union with its existing labels, per the LABELS ARE REPLACE
+     rule above) so the state is visible on the board even if no session is listening, and so you never
+     re-attempt the same failing restack on it every run — skip any branch carrying `needs-resolution`
+     in Phase 2 until the label is gone.
+  4. On a later run, once a `needs-resolution` branch restacks clean again, that means someone resolved
+     it: clear the label and proceed normally.
+  Record every branch you delegate this run — the FINISH summary must report it (below), since a
+  delegated comment is not guaranteed to be seen and I am always the fallback.
 - Keep restacking / promoting the other branches in parallel while CI chews on the ones you pushed —
-  an ormatic-touching branch is never a reason to stall the rest of the stack.
+  an ormatic-touching or delegated branch is never a reason to stall the rest of the stack.
 Never disable a leak/CI check to go green.
 
 PHASE 3 — PROMOTE (open cram2 PRs, or email me the create-links)
@@ -310,9 +331,13 @@ nothing.
 
 FINISH
 If you collected any cram2 create-links, they go FIRST, at the very top of this summary (that is how I
-receive them by email). Then summarise: what you closed, restacked, and promoted, and anything you
-stopped on. The board Action has already republished Pages from your state changes — you do not touch
-`board.html` or any Artifact.
+receive them by email). Right after them, list every branch you DELEGATED this run (Phase 2): its PR
+number and branch, the conflicting files or the failing check, the session link you addressed the
+comment to (or "no session link found in the PR body" if none), and a link to the comment you posted —
+this section is REQUIRED whenever you delegated anything, for the same reason as create-links: it's how
+I find out. Then summarise: what you closed, restacked, and promoted, and anything you stopped on. The
+board Action has already republished Pages from your state changes — you do not touch `board.html` or
+any Artifact.
 ```
 
 The promote step is gated by `stack.py next`, which only ever names un-drafted branches under the cap —
@@ -371,7 +396,7 @@ hourly) plus the state-change events that warrant restacking/promoting:
 |---|---|
 | a new PR is opened | `pull_request: opened` |
 | you un-draft a PR (approve it) | `pull_request: ready_for_review` |
-| you add/remove a label (`in-review`, `bug`) | `pull_request: labeled` / `unlabeled` |
+| you add/remove a label (`in-review`, `bug`, `needs-resolution`) | `pull_request: labeled` / `unlabeled` |
 | a PR is retargeted (parent changed) | `pull_request: edited` |
 
 (cram2 stays untouched — you don't need the app there; merges are detected from the fork by git
