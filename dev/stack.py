@@ -56,6 +56,10 @@ class Config:
     rebase_label: str
     """Fork-PR label opting a branch into the rebase strategy instead of the default merge."""
 
+    needs_resolution_label: str
+    """Fork-PR label marking a branch the routine could not restack and delegated to its owning
+    session; such a branch is withheld from promotion until the label is cleared."""
+
     short_threshold_loc: int
     """A branch changing more than this many lines is flagged as not-short (advisory)."""
 
@@ -148,6 +152,10 @@ class Stack:
         """Whether a branch occupies a review slot (labelled-exempt PRs, e.g. bugs, do not)."""
         return not any(label in self.config.wip_exempt_labels for label in branch.labels)
 
+    def needs_resolution(self, branch: Branch) -> bool:
+        """Whether the routine has delegated a restack conflict on this branch to its owning session."""
+        return self.config.needs_resolution_label in branch.labels
+
 
 def _git(*args: str) -> str:
     """Run a git command and return its stripped stdout (empty string on failure)."""
@@ -163,6 +171,7 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
         wip_exempt_labels=list(data.get("wip_exempt_labels", ["bug"])),
         in_review_label=data.get("in_review_label", "in-review"),
         rebase_label=data.get("rebase_label", "rebase"),
+        needs_resolution_label=data.get("needs_resolution_label", "needs-resolution"),
         short_threshold_loc=data.get("short_threshold_loc", 400),
         fork_remote=data.get("fork_remote", "origin"),
         upstream_remote=data.get("upstream_remote", "cram2"),
@@ -345,6 +354,10 @@ def promotion_order(stack: Stack) -> list[Branch]:
     reached — so a newly opened PR queues behind the stacks already in rotation. Ties (including two fresh
     stacks that share the frontier) break by **PR number**, so the older PR — the one that has waited
     longer — is served first.
+
+    A branch carrying ``needs_resolution_label`` is withheld regardless of its other state: the routine
+    delegated a restack conflict on it to its owning session, so it has not actually incorporated its
+    parent's latest changes and must not be promoted until that label is cleared.
     """
     by_name = {b.name: b for b in stack.branches}
     reviewed_roots = reviewed_stack_roots(stack, by_name)
@@ -355,7 +368,10 @@ def promotion_order(stack: Stack) -> list[Branch]:
     def effective_turn(branch: Branch) -> int:
         return branch.turn if branch.turn is not None else frontier
 
-    ready = [b for b in order(stack) if b.status == READY and parent_landed(stack, b, by_name)]
+    ready = [
+        b for b in order(stack)
+        if b.status == READY and parent_landed(stack, b, by_name) and not stack.needs_resolution(b)
+    ]
     ready.sort(key=lambda b: (effective_turn(b), b.pr))
 
     selected: list[Branch] = []
@@ -460,7 +476,15 @@ def cmd_next(stack: Stack) -> None:
     ready_blocked = [
         b for b in stack.branches if b.status == READY and not parent_landed(stack, b, by_name)
     ]
+    withheld = [
+        b for b in stack.branches
+        if b.status == READY and parent_landed(stack, b, by_name) and stack.needs_resolution(b)
+    ]
     draft_candidates = [b for b in order(stack) if b.status == DRAFT]
+
+    def report_withheld() -> None:
+        if withheld:
+            print(f"  Withheld (delegated, needs-resolution): {', '.join(b.name for b in withheld)}")
 
     if promote:
         free = max(0, config.wip_cap - len(reviewed_roots))
@@ -468,19 +492,26 @@ def cmd_next(stack: Stack) -> None:
         for branch in promote:
             note = "exempt" if not stack.counts_against_wip(branch) else "independent stack"
             print(f"  {branch.name} (PR #{branch.pr}) — approved, parent '{branch.parent}' landed, {note}")
+        report_withheld()
         return
 
-    ready_unblocked = [b for b in stack.branches if b.status == READY and parent_landed(stack, b, by_name)]
+    ready_unblocked = [
+        b for b in stack.branches
+        if b.status == READY and parent_landed(stack, b, by_name) and not stack.needs_resolution(b)
+    ]
     if len(reviewed_roots) >= config.wip_cap and ready_unblocked:
         print(f"WIP cap reached ({len(reviewed_roots)} independent stacks). Waiting for a slot: {ready_unblocked[0].name}")
+        report_withheld()
         return
     if ready_unblocked:
         same = ", ".join(b.name for b in ready_unblocked)
         print(f"Nothing new to promote — every approved+unblocked branch shares a stack already in review: {same}")
+        report_withheld()
         return
     print("Nothing to promote — no branch is both approved and unblocked.")
     if ready_blocked:
         print(f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}")
+    report_withheld()
     if draft_candidates:
         print(
             "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
@@ -612,6 +643,7 @@ def render_board_html(config: Config, prs: list[PullRequest], merged: list[str],
             "wip_exempt_labels": config.wip_exempt_labels,
             "in_review_label": config.in_review_label,
             "rebase_label": config.rebase_label,
+            "needs_resolution_label": config.needs_resolution_label,
             "short_threshold_loc": config.short_threshold_loc,
             "base": config.upstream_base,
         },

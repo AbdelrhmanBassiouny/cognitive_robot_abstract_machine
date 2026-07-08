@@ -26,6 +26,7 @@ def make_config(wip_cap: int = 3) -> Config:
         wip_exempt_labels=["bug"],
         in_review_label="in-review",
         rebase_label="rebase",
+        needs_resolution_label="needs-resolution",
         short_threshold_loc=400,
         fork_remote="origin",
         upstream_remote="cram2",
@@ -236,6 +237,17 @@ def test_promotion_order_is_round_robin_across_the_slots():
     ]
     names = [b.name for b in promotion_order(build(prs, wip_cap=3))]
     assert names == ["low", "mid"]
+
+
+def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
+    # a branch the routine delegated (needs-resolution) is stuck mid-restack, so it must not be
+    # promoted even though it is otherwise ready and unblocked; the free slot goes to the next one.
+    prs = [
+        PullRequest(1, "stuck", "main", draft=False, labels=["needs-resolution"]),
+        PullRequest(2, "fine", "main", draft=False),
+    ]
+    names = [b.name for b in promotion_order(build(prs, wip_cap=3))]
+    assert names == ["fine"]
 
 
 # ── round-robin fairness (turns) ───────────────────────────────────────────

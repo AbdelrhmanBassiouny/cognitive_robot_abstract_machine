@@ -203,7 +203,7 @@
     padding: 2px 7px; border-radius: 5px; white-space: nowrap;
   }
   .tag.next { color: #fff; background: var(--accent); }
-  .tag.blocked { color: var(--blocked); background: var(--blocked-bg); border: 1px solid var(--blocked); }
+  .tag.needs-resolution { color: var(--blocked); background: var(--blocked-bg); border: 1px solid var(--blocked); }
   .tag.bug { color: var(--blocked); background: var(--blocked-bg); }
 
   /* lineage highlight */
@@ -332,6 +332,7 @@ function deriveStatus(pr) {
 const BOARD = {
   wip_cap: CONFIG.wip_cap,
   wip_exempt_labels: CONFIG.wip_exempt_labels,
+  needs_resolution_label: CONFIG.needs_resolution_label,
   branches: PULL_REQUESTS.map(pr => ({
     name: pr.head,
     parent: pr.base === CONFIG.base ? "cram2/main" : pr.base,
@@ -365,6 +366,9 @@ const UPSTREAM = "cram2/cognitive_robot_abstract_machine";
 
 const byName = new Map(BOARD.branches.map(b => [b.name, b]));
 const isExempt = b => b.labels.some(l => BOARD.wip_exempt_labels.includes(l));
+// The routine delegated a restack conflict on this branch to its owning session; withheld from
+// promotion until the label clears. Mirrors stack.py's Stack.needs_resolution.
+const needsResolution = b => b.labels.includes(BOARD.needs_resolution_label);
 const landed = b => b.status === "in-review" || b.status === "merged";
 const parentLanded = b => { const p = byName.get(b.parent); return !p || landed(p); };
 const children = name => BOARD.branches.filter(b => b.parent === name);
@@ -429,8 +433,9 @@ document.getElementById("wip-note").innerHTML =
 // cap-exempt and promote on TOP of the slots. Mirrors stack.py promotion_order.
 const freeSlots = Math.max(0, BOARD.wip_cap - usedSlots);
 // round-robin by turn; ties (incl. two fresh stacks at the frontier) break by PR number so the older,
-// longer-waiting PR is served first.
-const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b))
+// longer-waiting PR is served first. A branch the routine delegated (needs-resolution) is withheld —
+// it hasn't actually incorporated its parent yet.
+const readyUnblocked = BOARD.branches.filter(b => b.status === "ready" && parentLanded(b) && !needsResolution(b))
   .sort((a, b) => effTurn(a) - effTurn(b) || a.pr - b.pr);
 const queue = [];
 const seenRoots = new Set(reviewedRoots);
@@ -507,7 +512,6 @@ function nodeEl(b, depth) {
   li.dataset.name = b.name;
   if (b.status === "merged") li.dataset.merged = "1";
 
-  const blocked = b.status === "ready" && !parentLanded(b);
   const isNext = nextNames.has(b.name);
 
   const repoSlug = b.pr_repo === "upstream" ? UPSTREAM : REPO;
@@ -516,7 +520,7 @@ function nodeEl(b, depth) {
 
   const tags = [];
   if (isNext) tags.push(`<span class="tag next">next</span>`);
-  if (blocked) tags.push(`<span class="tag blocked">blocked</span>`);
+  if (needsResolution(b)) tags.push(`<span class="tag needs-resolution">needs resolution</span>`);
   if (isExempt(b)) tags.push(`<span class="tag bug">bug</span>`);
 
   li.innerHTML =
