@@ -575,14 +575,13 @@ def test_unwrapped_value_returns_non_literal_right_unchanged(
 
 
 def test_rule_tree_anchors_when_where_condition_is_reused_in_a_sibling():
-    """A variable used as the bare WHERE condition and reused inside a sibling branch still anchors.
+    """A node used as the bare WHERE condition and reused inside a sibling branch must still anchor.
 
     ``drawer.correct`` is a shared node: it is the WHERE condition and also appears in the
-    ``alternative`` condition ``drawer.correct == False``. Python builds that comparator before
-    ``alternative()`` runs, overwriting the shared node's single ``_parent_`` pointer from the
-    ``Filter`` to the new comparator. The rule tree must recover the anchor from the authoritative
-    ``_parents_`` history; relying on the clobbered ``_parent_`` collapses the anchor onto the
-    comparator and yields nothing.
+    ``alternative`` condition ``drawer.correct == False``. Building that comparator adds it as an
+    extra parent of the shared node. Its primary ``_parent_`` must stay the structural (WHERE)
+    parent so rule-tree splicing still finds the anchor; when the reuse overwrote ``_parent_``
+    the splice navigated from the comparator instead and failed.
     """
     correct_drawer = Drawer(
         handle=Handle("Handle1"), container=Container("Container1"), correct=True
