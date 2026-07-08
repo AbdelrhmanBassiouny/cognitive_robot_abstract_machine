@@ -155,6 +155,13 @@ HARD RULES so you never drift into review work:
   *status* you were polling for your own restack.
 - NEVER enter plan mode or post a "here's my plan" comment. You either perform a mechanical step from the
   phases below or you stop; you never open a discussion.
+- LABELS ARE REPLACE, NOT ADD: the GitHub label-write call takes the PR's **entire** new label set — it
+  does not add to what's already there. "Add `in-review`" or "remove `cram2-link-sent`" NEVER means
+  calling it with just that one label. Every single label write, in every phase, is: (1) read the fork
+  PR's CURRENT labels, (2) compute the full new set — union with the label you're adding, or the current
+  set minus the label you're removing — (3) call the label write with that complete list. Skipping step 1
+  silently wipes every other label on the PR (this has happened before and deleted `in-review` off
+  already-promoted PRs, making the routine wrongly re-suggest branches that were already under review).
 
 PRE-FLIGHT — before EVERY push, merge, or restack, no exceptions
 Never move commits from memory. First WRITE OUT these four lines and verify each with git; only then run
