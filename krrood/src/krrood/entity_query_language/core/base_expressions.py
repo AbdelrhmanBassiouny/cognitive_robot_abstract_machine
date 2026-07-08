@@ -43,7 +43,7 @@ from krrood.entity_query_language.utils import make_list, T, make_set, is_iterab
 from krrood.symbol_graph.symbol_graph import SymbolGraph
 
 if TYPE_CHECKING:
-    from krrood.entity_query_language.rules.conclusion import Conclusion
+    from krrood.entity_query_language.rules.conclusion import Conclusion, ConclusionType
     from krrood.entity_query_language.core.variable import Variable
     from krrood.entity_query_language.query.query import Query
 
@@ -112,17 +112,18 @@ class SymbolicExpression(ABC):
     def __post_init__(self):
         self._expression_ = self
 
-    def __copy__(self) -> SymbolicExpression:
+    def _node_for_new_position_(self) -> SymbolicExpression:
         """
-        :return: A clone of this expression that can be reused in a new tree position.
+        :return: The node to wire into a new tree position without corrupting this one.
 
-        The clone gets a fresh identity and none of the original's parents, children, or conclusions,
-        so wiring it into a new position cannot overwrite the original's ``_parent_`` (which its old
-        parent still references) nor leak conclusions back into it. Children are not deep-copied — only
-        this node is cloned.
+        For a normal expression this is a fresh clone: it gets a new identity and none of the
+        original's parents, children, or conclusions, so wiring it into a new position cannot
+        overwrite the original's ``_parent_`` (which its old parent still references) nor leak
+        conclusions back into it. Children are not deep-copied — only this node is cloned.
 
         ..note:: :class:`~krrood.entity_query_language.core.mapped_variable.MappedVariable` nodes are
-            shared-identity singletons and override this to return themselves.
+            shared-identity singletons and override this to return themselves, since sharing them
+            across positions is intended and safe.
         """
         clone = self.__class__.__new__(self.__class__)
         clone.__dict__.update(self.__dict__)
@@ -252,9 +253,14 @@ class SymbolicExpression(ABC):
         """
         :return: The most recently attached parent that is an instance of any of *types*, or ``None``.
 
-        Reads the full ``_parents_`` history rather than ``_parent_``, which tracks only the last parent
-        set and can be clobbered when a shared node is reused in more than one position (for example a
-        ``MappedVariable`` used both as a WHERE condition and inside a sibling condition).
+        A node reused across the DAG has several parents at once, so there is no single "current"
+        parent. ``_parent_`` holds only the last parent set, and building an unrelated expression
+        over the node (for example ``node == False``) overwrites it with that operand parent,
+        hiding the structural rule-tree parent. This scans the full ``_parents_`` history and
+        returns the most recent parent restricted to the wanted structural *types* (``Filter`` /
+        ``ConclusionSelector``), skipping such incidental operand parents. The type filter is what
+        excludes the clobbering parent; "most recent" only breaks ties between several structural
+        parents, mirroring ``_parent_``'s own last-wins rule.
         """
         return next(
             (parent for parent in reversed(self._parents_) if isinstance(parent, types)),
@@ -390,6 +396,16 @@ class SymbolicExpression(ABC):
                 result=current_result,
             )
         return current_result
+
+    def conclusions_of_type(
+            self, conclusion_type: Type[ConclusionType]
+    ) -> List[ConclusionType]:
+        """:return: The conclusions attached to this expression that are instances of *conclusion_type*."""
+        return [
+            conclusion
+            for conclusion in self._conclusions_
+            if isinstance(conclusion, conclusion_type)
+        ]
 
     @abstractmethod
     def _evaluate__(
