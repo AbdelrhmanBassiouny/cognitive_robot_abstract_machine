@@ -16,7 +16,6 @@ from krrood.entity_query_language.core.base_expressions import (
     TruthValueOperator,
 )
 from krrood.entity_query_language.core.variable import InstantiatedVariable
-from krrood.entity_query_language.enums import EvaluationContextKey
 from krrood.entity_query_language.evaluation_context import (
     EvaluationContext,
     EvaluationObserver,
@@ -66,10 +65,21 @@ class EvaluationTracker(EvaluationObserver):
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:
             return
-        evaluated = evaluation_context.data.setdefault(
-            EvaluationContextKey.EVALUATED_IDS_KEY, OrderedSet()
-        )
-        evaluated.add(expression._id_)
+        evaluation_context.evaluated_expression_ids.record(expression._id_)
+
+        if isinstance(sources, OperationResult) and sources.evaluated_expression_ids:
+            evaluation_context.evaluated_expression_ids.merge(
+                sources.evaluated_expression_ids
+            )
+
+    def on_result_yielded(self, expression, result):
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is None:
+            return
+        if result.evaluated_expression_ids is None:
+            result.evaluated_expression_ids = (
+                evaluation_context.evaluated_expression_ids.snapshot()
+            )
 
 
 class SatisfiedConditionTracker(EvaluationObserver):
@@ -88,33 +98,27 @@ class SatisfiedConditionTracker(EvaluationObserver):
         if isinstance(sources, OperationResult):
             satisfied = sources.satisfied_condition_ids
         if satisfied is not None:
-            evaluation_context.data[EvaluationContextKey.SATISFIED_IDS_KEY] = satisfied
+            evaluation_context.satisfied_condition_ids = satisfied
 
     def on_result_yielded(self, expression, result):
         evaluation_context = get_evaluation_context()
         if evaluation_context is None:
             return
-        satisfied = evaluation_context.data.get(EvaluationContextKey.SATISFIED_IDS_KEY)
+        satisfied = evaluation_context.satisfied_condition_ids
         if satisfied is not None and result.satisfied_condition_ids is None:
             result.satisfied_condition_ids = satisfied
 
     def on_conclusions_processed(self, expression, result):
-
-        if expression._conditions_root_ is not expression:
-            return
+        # The caller (_evaluate_conclusions_and_update_bindings_) already established that
+        # `expression` is the active conditions root for this evaluation pass before invoking
+        # this hook, so no re-check is needed here.
         if result.is_false:
             return
         if expression._conditions_root_ is expression._root_:
             return
 
         evaluation_context = get_evaluation_context()
-        evaluated = (
-            evaluation_context.data.get(EvaluationContextKey.EVALUATED_IDS_KEY)
-            if evaluation_context is not None
-            else None
-        )
-        if evaluated is None:
-            return
+        evaluated = evaluation_context.evaluated_expression_ids
 
         # Build a truth map from the OperationResult chain: operand_id -> is_false.
         # This reflects the actual truth values from this specific evaluation path,
@@ -145,8 +149,7 @@ class SatisfiedConditionTracker(EvaluationObserver):
                     satisfied.add(expr_id)
 
         result.satisfied_condition_ids = satisfied
-        if evaluation_context is not None:
-            evaluation_context.data[EvaluationContextKey.SATISFIED_IDS_KEY] = satisfied
+        evaluation_context.satisfied_condition_ids = satisfied
 
 
 class InferenceRecorder(EvaluationObserver):

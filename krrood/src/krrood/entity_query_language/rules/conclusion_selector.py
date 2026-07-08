@@ -23,7 +23,6 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
-    Filter,
     OperationResult,
     SymbolicExpression,
     TruthValueOperator,
@@ -92,18 +91,14 @@ class ConclusionSelector(TruthValueOperator, ABC):
         if isinstance(new_condition, SymbolicExpression) and new_condition._parent_ is not None:
             new_condition = new_condition._node_for_new_position_()
 
-        # Splice above the anchor's most recent structural parent — a ConclusionSelector for a node
-        # already in a rule tree, or a Filter for a direct WHERE condition — recovered from
-        # `_parents_` because `anchor._parent_` may have been clobbered (see `_last_parent_of_type_`).
-        previous_parent = anchor._last_parent_of_type_(ConclusionSelector, Filter)
-        if previous_parent is None:
-            previous_parent = anchor._parent_
+        # Splice above the anchor's structural parent — a ConclusionSelector for a node already
+        # in a rule tree, or a Filter for a direct WHERE condition.
+        previous_parent = anchor._parent_
 
         # Only raise when the anchor is already established in a rule tree (has parents).
-        # A freshly-created anchor with no parents indicates _conditions_root_ returned the
-        # wrong node (e.g. _parent_ was clobbered by a Comparator created from the same
-        # MappedVariable), which is a different underlying issue — not the self-referential
-        # insertion bug we guard against here.
+        # A freshly-created anchor with no parents indicates _conditions_root_ returned a node
+        # from a different, unrelated part of the DAG, which is a different underlying issue —
+        # not the self-referential insertion bug we guard against here.
         if new_condition is anchor and anchor._parents_:
             raise SelfReferentialInsertionError(anchor=anchor)
 

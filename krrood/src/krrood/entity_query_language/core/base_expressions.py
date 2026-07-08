@@ -257,16 +257,15 @@ class SymbolicExpression(ABC):
         self, *types: Type[SymbolicExpression]
     ) -> Optional[SymbolicExpression]:
         """
-        :return: The most recently attached parent that is an instance of any of *types*, or ``None``.
+        :return: The most recently attached direct parent that is an instance of any of *types*,
+            or ``None``.
 
-        A node reused across the DAG has several parents at once, so there is no single "current"
-        parent. ``_parent_`` holds only the last parent set, and building an unrelated expression
-        over the node (for example ``node == False``) overwrites it with that operand parent,
-        hiding the structural rule-tree parent. This scans the full ``_parents_`` history and
-        returns the most recent parent restricted to the wanted structural *types* (``Filter`` /
-        ``ConclusionSelector``), skipping such incidental operand parents. The type filter is what
-        excludes the clobbering parent; "most recent" only breaks ties between several structural
-        parents, mirroring ``_parent_``'s own last-wins rule.
+        A node reused in more than one query/subquery keeps a direct parent per position, but only
+        one of them is ``_parent_`` (the first one attached — see the ``_parent_`` setter). Walking
+        the ``_parent_`` chain from such a node therefore reaches whichever context it was first
+        embedded in, not necessarily the one currently asking. This checks *this node's own*
+        `_parents_` directly (no multi-hop walk) for one matching *types*, so callers that need "the
+        Filter/ConclusionSelector directly owning me" find it regardless of which parent is primary.
         """
         return next(
             (parent for parent in reversed(self._parents_) if isinstance(parent, types)),
@@ -353,6 +352,7 @@ class SymbolicExpression(ABC):
 
             evaluation_context = create_default_evaluation_context()
             context_token = set_evaluation_context(evaluation_context)
+            evaluation_context.active_conditions_root.claim(self._conditions_root_)
         try:
             evaluation_context.on_evaluate_enter(expression=self, sources=sources)
             # Normalize sources: always work with an OperationResult
@@ -386,16 +386,29 @@ class SymbolicExpression(ABC):
 
         :param current_result: The current result of this expression.
         """
-        # Only evaluate the conclusions at the root condition expression (i.e. after all conditions have been evaluated)
-        # and when the result truth value is True.
-        if not (self._conditions_root_ is self) or current_result.is_condition_false:
+        # Only evaluate the conclusions at the active conditions root of the current evaluation
+        # pass (i.e. after all conditions have been evaluated) and when the result truth value is
+        # True. "Active" is an evaluation-scoped fact, not a structural one: a node reused as the
+        # condition of more than one Filter has no single correct root, so this is resolved by
+        # which evaluation is currently running (see ActiveConditionsRoot), not by the node's
+        # construction history. When no evaluation context is active (this method is only ever
+        # reached from inside _evaluate_'s own thread, but a caller may drive evaluation from a
+        # thread that never had one set up — contextvars.ContextVar values do not propagate into a
+        # plain threading.Thread), fall back to the structural check: it is the only signal left.
+        evaluation_context = get_evaluation_context()
+        if evaluation_context is not None:
+            is_active_root = evaluation_context.active_conditions_root.is_active_root(
+                self
+            )
+        else:
+            is_active_root = self._conditions_root_ is self
+        if not is_active_root or current_result.is_false:
             return current_result
         for conclusion in self._conclusions_:
             current_result.bindings = next(
                 conclusion._evaluate_(current_result)
             ).bindings
 
-        evaluation_context = get_evaluation_context()
         if evaluation_context is not None:
             evaluation_context.on_conclusions_processed(
                 expression=self,
@@ -469,9 +482,12 @@ class SymbolicExpression(ABC):
         """
         :return: The root of the symbolic expression graph that contains conditions, or None if no conditions found.
 
-        ..note:: When a node is reused both as a ``Filter`` condition and inside a sibling condition
-            its ``_parent_`` is clobbered, hiding the ``Filter`` from the graph walk; the owning
-            ``Filter`` is then recovered from the authoritative ``_parents_`` history.
+        ..note:: A node reused across separate queries or subqueries (for example a shared
+            sub-expression wrapped in a second ``Filter`` by a derived/introspection query) has a
+            direct ``Filter`` parent that may not be reachable by walking up from ``self._root_``,
+            since that walk follows only the primary ``_parent_`` — whichever context first attached
+            it. :meth:`_last_parent_of_type_` recovers the owning ``Filter`` directly from this
+            node's own parents when the graph walk misses it.
         """
         root_via_graph = next(
             (
