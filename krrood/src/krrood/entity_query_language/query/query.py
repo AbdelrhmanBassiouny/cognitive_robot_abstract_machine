@@ -69,7 +69,7 @@ from krrood.entity_query_language.core.variable import (
     InstantiatedVariable,
     ExternallySetVariable,
 )
-from krrood.entity_query_language.enums import DomainSource, EvaluationContextKey
+from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import (
     UnsupportedNegation,
     NonPositiveLimitValue,
@@ -502,15 +502,10 @@ class Query(
             yield from self._produce_results_(sources)
             return
 
-        cache = evaluation_context.data.setdefault(
-            EvaluationContextKey.SUBQUERY_RESULT_CACHE_KEY, {}
+        cached_stream = evaluation_context.subquery_result_cache.get_or_create(
+            self._id_,
+            lambda: CachedResultStream(self._produce_results_(OperationResult({}))),
         )
-        cached_stream = cache.get(self._id_)
-        if cached_stream is None:
-            cached_stream = CachedResultStream(
-                self._produce_results_(OperationResult({}))
-            )
-            cache[self._id_] = cached_stream
         yield from cached_stream
 
     def _is_nested_subquery_(self, evaluation_context) -> bool:
@@ -520,10 +515,7 @@ class Query(
             outermost query of the current evaluation. The first compiled query to evaluate claims the
             outermost role; any other is nested.
         """
-        outermost_query_id = evaluation_context.data.setdefault(
-            EvaluationContextKey.OUTERMOST_QUERY_ID_KEY, self._id_
-        )
-        return outermost_query_id != self._id_
+        return evaluation_context.outermost_query_claim.is_nested(self._id_)
 
     def _produce_results_(self, sources: OperationResult) -> Iterator[OperationResult]:
         """
@@ -762,6 +754,24 @@ class Query(
         return self._expression_
 
     @property
+    def _root_(self) -> SymbolicExpression:
+        """
+        Resolve the root through the compiled product.
+
+        ``SatisfiedConditionTracker`` treats ``expression._conditions_root_ is expression._root_``
+        as "this query has no where/having condition" (both fall back to the same node when no
+        ``Filter`` exists). Since :attr:`_conditions_root_` already resolves within the compiled
+        product, :attr:`_root_` must too, or that comparison always sees two different objects (the
+        spec and its product) even when the product itself has no condition.
+
+        :return: The root of the compiled product's tree.
+        """
+        self.build()
+        if not self._is_compiled_product_:
+            return self._expression_._root_
+        return SymbolicExpression._root_.fget(self)
+
+    @property
     def _conditions_root_(self) -> Optional[SymbolicExpression]:
         """
         Resolve the conditions root within the compiled product, so rule definition (:meth:`__enter__`)
@@ -788,6 +798,23 @@ class Query(
         if not self._is_compiled_product_:
             return self._expression_._all_expressions_
         return SymbolicExpression._all_expressions_.fget(self)
+
+    @property
+    def _descendants_(self) -> Iterator[SymbolicExpression]:
+        """
+        Traverse descendants through the compiled product.
+
+        A selected variable's own ``_all_expressions_``/``_conditions_root_`` reach this query
+        only indirectly, via ``self._root_._descendants_`` on the base class. Without this override
+        that walk sees only the spec's structural children (its selected variables), never the
+        ``where`` / ``having`` conditions, which live in the compiled product — so callers reaching
+        this query as a root through a plain child, rather than through the query object itself,
+        must get the same delegation as :attr:`_all_expressions_` and :attr:`_conditions_root_`.
+        """
+        self.build()
+        if not self._is_compiled_product_:
+            return self._expression_._descendants_
+        return SymbolicExpression._descendants_.fget(self)
 
     @UnaryExpression._parent_.setter
     def _parent_(self, parent: SymbolicExpression):
