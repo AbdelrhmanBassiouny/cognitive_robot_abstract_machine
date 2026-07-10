@@ -21,7 +21,7 @@ from krrood.entity_query_language.predicate import (
     length,
 )
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-    value_function_phrase,
+    function_value_phrase,
 )
 from krrood.utils import recursive_subclasses
 from krrood.inheritance_path_length import inheritance_path_length
@@ -200,7 +200,7 @@ class ClassNameLowercased(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+        return function_value_phrase(cls.__name__, *fields.values())
 
 
 class_name_lowercased = functional_form(ClassNameLowercased)
@@ -243,7 +243,7 @@ class AnnotationVolume(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+        return function_value_phrase(cls.__name__, *fields.values())
 
 
 annotation_volume = functional_form(AnnotationVolume)
