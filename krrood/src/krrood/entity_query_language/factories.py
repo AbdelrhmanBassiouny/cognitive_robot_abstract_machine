@@ -53,7 +53,6 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 from krrood.entity_query_language.operators.logical_quantifiers import ForAll, Exists
 from krrood.entity_query_language.predicate import *  # type: ignore
 from krrood.entity_query_language.predicate import (
-    NameVerbalized,
     Predicate,
     RenderedFields,
     SymbolicFunction,
@@ -747,7 +746,7 @@ def evaluate_condition(condition: ConditionType) -> bool:
 
 
 @dataclass(eq=False)
-class NodeId(NameVerbalized, SymbolicFunction):
+class NodeId(SymbolicFunction):
     """The stable identity of an EQL node, as a value operation."""
 
     node: SymbolicExpression
@@ -756,12 +755,20 @@ class NodeId(NameVerbalized, SymbolicFunction):
     def __call__(self) -> UUID:
         return self.node._id_
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 node_id = functional_form(NodeId)
 
 
 @dataclass(eq=False)
-class NodeDescendants(NameVerbalized, SymbolicFunction):
+class NodeDescendants(SymbolicFunction):
     """The descendants of an EQL node, as a value operation."""
 
     node: SymbolicExpression
@@ -770,12 +777,20 @@ class NodeDescendants(NameVerbalized, SymbolicFunction):
     def __call__(self) -> Iterable[SymbolicExpression]:
         return self.node._descendants_
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 node_descendants = functional_form(NodeDescendants)
 
 
 @dataclass(eq=False)
-class NodeType(NameVerbalized, SymbolicFunction):
+class NodeType(SymbolicFunction):
     """The selectable type of an EQL node, as a value operation."""
 
     node: Selectable
@@ -784,12 +799,20 @@ class NodeType(NameVerbalized, SymbolicFunction):
     def __call__(self) -> Optional[Type]:
         return getattr(self.node, "_type_", None)
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 node_type = functional_form(NodeType)
 
 
 @dataclass(eq=False)
-class NodeChildren(NameVerbalized, SymbolicFunction):
+class NodeChildren(SymbolicFunction):
     """The children of an EQL node, as a value operation."""
 
     node: CanBehaveLikeAVariable
@@ -798,12 +821,20 @@ class NodeChildren(NameVerbalized, SymbolicFunction):
     def __call__(self) -> Iterable[SymbolicExpression]:
         return self.node._children_
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 node_children = functional_form(NodeChildren)
 
 
 @dataclass(eq=False)
-class AttributeOwnerClass(NameVerbalized, SymbolicFunction):
+class AttributeOwnerClass(SymbolicFunction):
     """The class that owns an attribute, as a value operation."""
 
     node: Attribute
@@ -812,12 +843,20 @@ class AttributeOwnerClass(NameVerbalized, SymbolicFunction):
     def __call__(self) -> Type:
         return self.node._owner_class_
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 attribute_owner_class = functional_form(AttributeOwnerClass)
 
 
 @dataclass(eq=False)
-class NodeParents(NameVerbalized, SymbolicFunction):
+class NodeParents(SymbolicFunction):
     """The parents of an EQL node, as a value operation."""
 
     node: SymbolicExpression
@@ -825,6 +864,14 @@ class NodeParents(NameVerbalized, SymbolicFunction):
 
     def __call__(self) -> Iterable[SymbolicExpression]:
         return self.node._parents_
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 node_parents = functional_form(NodeParents)
@@ -898,7 +945,7 @@ is_class = functional_form(IsClass)
 
 
 @dataclass(eq=False)
-class RuntimeType(NameVerbalized, SymbolicFunction):
+class RuntimeType(SymbolicFunction):
     """The runtime class of an object, as a value operation."""
 
     obj: Any
@@ -906,6 +953,14 @@ class RuntimeType(NameVerbalized, SymbolicFunction):
 
     def __call__(self) -> Type:
         return self.obj.__class__
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 type_ = functional_form(RuntimeType)
