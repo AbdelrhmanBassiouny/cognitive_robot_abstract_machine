@@ -43,7 +43,6 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.predicate import (
     HasType,
     HasTypes,
-    NameVerbalized,
     Predicate,
     Triple,
 )
@@ -1512,8 +1511,8 @@ def test_verbalize_custom_predicate_employee_domain():
 
 
 def test_verbalize_predicate_without_fragment_raises():
-    """A predicate that neither implements a fragment nor opts into ``NameVerbalized`` is an
-    undecided surface — verbalizing it fails loudly instead of guessing a sentence."""
+    """A predicate that does not implement a fragment is an undecided surface — verbalizing it fails
+    loudly instead of guessing a sentence."""
 
     @dataclass(eq=False)
     class EarnsMoreThan(Predicate):
@@ -1528,17 +1527,26 @@ def test_verbalize_predicate_without_fragment_raises():
         verbalize_expression(EarnsMoreThan(employee, 50000.0))
 
 
-def test_name_verbalized_predicate_reads_its_name_as_the_clause():
-    """Opting into ``NameVerbalized`` says the class name as the clause — verb-first for a plain
-    verb name (``EarnsMoreThan`` → *"… earns more than …"*)."""
+def test_name_based_clause_reads_a_verb_name_verb_first():
+    """A fragment built from ``predicate_clause(cls.__name__, …)`` says the class name as the clause
+    — verb-first for a plain verb name (``EarnsMoreThan`` → *"… earns more than …"*)."""
 
     @dataclass(eq=False)
-    class EarnsMoreThan(NameVerbalized, Predicate):
+    class EarnsMoreThan(Predicate):
         employee: Any
         threshold: float
 
         def __call__(self) -> bool:
             return self.employee.salary > self.threshold
+
+        @classmethod
+        def _verbalization_fragment_(cls, fields):
+            from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+                predicate_clause,
+            )
+
+            subject, *objects = fields.values()
+            return predicate_clause(cls.__name__, subject, *objects)
 
     employee = variable(Employee, [])
     assert (
@@ -1547,16 +1555,24 @@ def test_name_verbalized_predicate_reads_its_name_as_the_clause():
     )
 
 
-def test_name_verbalized_copular_predicate_reads_as_subject_is_complement():
-    """A copular ``Is…`` name with the ``NameVerbalized`` mixin reads as *"<subject> is
-    <complement>"*."""
+def test_name_based_clause_reads_a_copular_name_as_subject_is_complement():
+    """A ``predicate_clause`` over a copular ``Is…`` name reads as *"<subject> is <complement>"*."""
 
     @dataclass(eq=False)
-    class IsActive(NameVerbalized, Predicate):
+    class IsActive(Predicate):
         entity: Any
 
         def __call__(self) -> bool:
             return True
+
+        @classmethod
+        def _verbalization_fragment_(cls, fields):
+            from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+                predicate_clause,
+            )
+
+            subject, *objects = fields.values()
+            return predicate_clause(cls.__name__, subject, *objects)
 
     employee = variable(Employee, [])
     assert verbalize_expression(IsActive(employee)) == "an Employee is active"
@@ -1868,8 +1884,8 @@ def test_verbalize_triple():
 
 
 def test_verbalize_1arg_predicate_without_fragment_raises():
-    """A 1-arg predicate without a fragment and without the ``NameVerbalized`` opt-in raises — the
-    surface must always be an explicit decision, never a silent guess."""
+    """A 1-arg predicate without a fragment raises — the surface must always be an explicit
+    decision, never a silent guess."""
 
     @dataclass(eq=False)
     class IsActive(Predicate):

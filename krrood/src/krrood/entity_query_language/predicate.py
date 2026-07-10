@@ -274,8 +274,8 @@ class SymbolicFunction(SymbolicCallable, ABC):
     Like :class:`Predicate` it is a self-verbalizing symbolic callable, but its :meth:`__call__`
     returns a value (not a truth value), so its :meth:`Verbalizable._verbalization_fragment_` names
     that value as a NOUN PHRASE rather than a clause. When the class name itself reads as the value
-    (``Length`` → *"the length of a list"*), mix in :class:`NameVerbalized` instead of writing the
-    fragment by hand.
+    (``Length`` → *"the length of a list"*), the fragment is a one-liner over
+    :func:`~…vocabulary.parts_of_speech.value_function_phrase` read off ``cls.__name__``.
     """
 
     @classmethod
@@ -290,48 +290,6 @@ class SymbolicFunction(SymbolicCallable, ABC):
         """
         Compute the value for the supplied arguments.
         """
-
-
-@dataclass(eq=False)
-class NameVerbalized(Verbalizable):
-    """Opt-in mixin declaring that the class NAME is its verbalization surface.
-
-    Mixing this in (``class Length(NameVerbalized, SymbolicFunction)``) is an explicit, greppable
-    choice that the CamelCase / snake_case class name reads as the operation's surface, so no
-    hand-written fragment is needed: a :class:`SymbolicFunction` reads as the value noun phrase
-    *"the <name> of <arguments>"* (``Length`` → *"the length of a list"*) and a :class:`Predicate`
-    as the name-based clause — copular for an ``Is…`` name (``IsReachable`` → *"<subject> is
-    reachable"*), verb-first otherwise (``ConnectsTo`` → *"<subject> connects to <object>"*).
-
-    Keeping :meth:`Verbalizable._verbalization_fragment_` abstract and making the name-based reading
-    an explicit mixin (rather than a silently inherited default) means an author must always *decide*
-    how a new operation is said — a class that decides nothing fails loudly instead of producing an
-    unreviewed sentence.
-
-    ..warning:: Mix it in only after checking the produced sentence — the surface snapshot test
-        (``test_verbalization_surfaces.py``) prints it for every symbolic callable, so it shows up
-        in the PR diff. When the name does not read as the surface, implement
-        :meth:`Verbalizable._verbalization_fragment_` with a
-        :func:`~krrood.entity_query_language.verbalization.vocabulary.parts_of_speech.clause`
-        instead.
-    """
-
-    @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
-        """:return: the name-based surface — the value noun phrase for a :class:`SymbolicFunction`,
-        the name-based clause (first operand as subject, the rest trailing objects) for a
-        :class:`Predicate`.
-        """
-        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
-        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-            predicate_clause,
-            value_function_phrase,
-        )
-
-        if issubclass(cls, SymbolicFunction):
-            return value_function_phrase(cls.__name__, *fields.values())
-        subject, *objects = fields.values()
-        return predicate_clause(cls.__name__, subject, *objects)
 
 
 @dataclass(eq=False)
@@ -502,10 +460,10 @@ class HasTypes(HasType):
 
 
 @dataclass(eq=False)
-class Length(NameVerbalized, SymbolicFunction):
+class Length(SymbolicFunction):
     """The number of items in an iterable, as a value operation.
 
-    Reads through the explicit :class:`NameVerbalized` surface (*"the length of <iterable>"*).
+    Reads as the name-based value phrase *"the length of <iterable>"*.
     """
 
     iterable: Sized
@@ -513,6 +471,15 @@ class Length(NameVerbalized, SymbolicFunction):
 
     def __call__(self) -> int:
         return len(self.iterable)
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 length = functional_form(Length)

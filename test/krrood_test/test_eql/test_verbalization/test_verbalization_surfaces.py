@@ -4,13 +4,13 @@ Golden-surface snapshot over every symbolic callable's verbalization.
 Every concrete :class:`~krrood.entity_query_language.predicate.Predicate` /
 :class:`~krrood.entity_query_language.predicate.SymbolicFunction` defined in krrood's source is
 rendered with placeholder operands and compared against the committed snapshot
-(``verbalization_surfaces.yaml``, one ``qualified class name: sentence`` entry per class). A class without a fragment (and without the ``NameVerbalized``
-opt-in) is recorded as fragment-less rather than rendered.
+(``verbalization_surfaces.yaml``, one ``qualified class name: sentence`` entry per class). A class
+that does not implement a fragment is recorded as fragment-less rather than rendered.
 
-The point is review visibility: adding or renaming a symbolic callable, opting into
-``NameVerbalized``, or changing the shared surface builders makes the affected sentences appear as
-diff lines in the snapshot file, so the author and every reviewer see — and can object to — the
-exact wording a class produces, without anyone writing a per-class test.
+The point is review visibility: adding or renaming a symbolic callable, or changing the shared
+surface builders, makes the affected sentences appear as diff lines in the snapshot file, so the
+author and every reviewer see — and can object to — the exact wording a class produces, without
+anyone writing a per-class test.
 
 To update the snapshot after an intentional change, run::
 
@@ -99,8 +99,8 @@ def _qualified_name(cls: Type) -> str:
 
 
 def _has_fragment(cls: Type[SymbolicCallable]) -> bool:
-    """:return: whether *cls* decided its surface (own fragment or the ``NameVerbalized`` opt-in),
-    mirroring the check the grammar call-site uses."""
+    """:return: whether *cls* decided its surface by implementing its own fragment, mirroring the
+    check the grammar call-site uses."""
     return (
         cls._verbalization_fragment_.__func__
         is not Verbalizable._verbalization_fragment_.__func__

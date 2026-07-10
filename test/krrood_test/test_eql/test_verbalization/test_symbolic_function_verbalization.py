@@ -89,8 +89,7 @@ def test_symbolic_function_binds_its_computed_value_in_a_query():
 
 def test_migrated_length_reads_as_a_noun_phrase_and_keeps_its_value():
     """``length`` is now ``class Length(SymbolicFunction)`` behind a ``functional_form`` wrapper: it
-    reads through the explicit ``NameVerbalized`` surface (*"the length of ..."*) and still computes
-    the length."""
+    reads as the name-based value phrase (*"the length of ..."*) and still computes the length."""
     assert issubclass(Length, SymbolicFunction)
     assert length([1, 2, 3]) == 3
     assert (
