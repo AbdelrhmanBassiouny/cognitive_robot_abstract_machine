@@ -1,0 +1,128 @@
+digraph tree {
+    "conditions_166
+ -> conclusion_166 " [style=filled, fillcolor=white];
+    "conditions_256
+ -> conclusion_256 " [style=filled, fillcolor=white];
+    "conditions_288
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_908
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_311
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_184
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_295
+ -> conclusion_295 " [style=filled, fillcolor=white];
+    "conditions_184
+ -> conclusion_184 " [style=filled, fillcolor=white];
+    "conditions_163
+ -> conclusion_163 " [style=filled, fillcolor=white];
+    "conditions_113
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_303
+ -> conclusion_303 " [style=filled, fillcolor=white];
+    "conditions_276
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_277
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_213
+ -> conclusion_213 " [style=filled, fillcolor=white];
+    "conditions_269
+ -> def _get_value(case):
+    return Stop.stop " [style=filled, fillcolor=white];
+    "conditions_277
+ -> def _get_value(case):
+    return Stop.stop _1" [style=filled, fillcolor=white];
+    "conditions_337
+ -> conclusion_337 " [style=filled, fillcolor=white];
+    "conditions_134
+ -> conclusion_134 " [style=filled, fillcolor=white];
+    "conditions_166
+ -> conclusion_166 " -> "conditions_256
+ -> conclusion_256 " [style="bold", label=" RDREdge.Next"];
+    "conditions_256
+ -> conclusion_256 " -> "conditions_288
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_256
+ -> conclusion_256 " -> "conditions_295
+ -> conclusion_295 " [style="bold", label=" RDREdge.Next"];
+    "conditions_288
+ -> def _get_value(case):
+    return Stop.stop " -> "conditions_908
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_908
+ -> def _get_value(case):
+    return Stop.stop " -> "conditions_311
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_311
+ -> def _get_value(case):
+    return Stop.stop " -> "conditions_184
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_295
+ -> conclusion_295 " -> "conditions_184
+ -> conclusion_184 " [style="bold", label=" RDREdge.Next"];
+    "conditions_184
+ -> conclusion_184 " -> "conditions_163
+ -> conclusion_163 " [style="bold", label=" RDREdge.Next"];
+    "conditions_163
+ -> conclusion_163 " -> "conditions_113
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_163
+ -> conclusion_163 " -> "conditions_303
+ -> conclusion_303 " [style="bold", label=" RDREdge.Next"];
+    "conditions_303
+ -> conclusion_303 " -> "conditions_276
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_303
+ -> conclusion_303 " -> "conditions_213
+ -> conclusion_213 " [style="bold", label=" RDREdge.Next"];
+    "conditions_276
+ -> def _get_value(case):
+    return Stop.stop " -> "conditions_277
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_213
+ -> conclusion_213 " -> "conditions_269
+ -> def _get_value(case):
+    return Stop.stop " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_213
+ -> conclusion_213 " -> "conditions_337
+ -> conclusion_337 " [style="bold", label=" RDREdge.Next"];
+    "conditions_269
+ -> def _get_value(case):
+    return Stop.stop " -> "conditions_277
+ -> def _get_value(case):
+    return Stop.stop _1" [style="bold", label=" RDREdge.Alternative"];
+    "conditions_337
+ -> conclusion_337 " -> "conditions_134
+ -> conclusion_134 " [style="bold", label=" RDREdge.Next"];
+
+// Color legend as a subgraph
+subgraph cluster_legend {
+label = "Legend";
+style = dashed;
+color = gray;
+
+legend_green [label="Fired->Query Related Value", shape=box, style=filled, fillcolor=green, fontcolor=black, size=0.5];
+legend_yellow [label="Fired->Some Value", shape=box, style=filled, fillcolor=yellow, fontcolor=black, size=0.5];
+legend_orange [label="Fired->Empty Value", shape=box, style=filled, fillcolor=orange, fontcolor=black, size=0.5];
+legend_red [label="Evaluated->Not Fired", shape=box, style=filled, fillcolor=red, fontcolor=black, size=0.5];
+legend_white [label="Not Evaluated",  shape=box, style=filled, fillcolor=white, fontcolor=black, size=0.5];
+
+// Invisible edges to arrange legend vertically
+legend_white -> legend_red -> legend_orange -> legend_yellow -> legend_green [style=invis];
+}
+}

@@ -1,0 +1,75 @@
+digraph tree {
+    "conditions_664
+ -> conclusion_664 " [style=filled, fillcolor=white];
+    "conditions_284
+ -> conclusion_284 " [style=filled, fillcolor=white];
+    "conditions_225
+ -> conclusion_225 " [style=filled, fillcolor=white];
+    "conditions_205
+ -> conclusion_205 " [style=filled, fillcolor=white];
+    "conditions_133
+ -> conclusion_133 " [style=filled, fillcolor=white];
+    "conditions_174
+ -> conclusion_174 " [style=filled, fillcolor=white];
+    "conditions_809
+ -> conclusion_809 " [style=filled, fillcolor=white];
+    "conditions_585
+ -> conclusion_585 " [style=filled, fillcolor=white];
+    "conditions_611
+ -> conclusion_611 " [style=filled, fillcolor=white];
+    "conditions_438
+ -> conclusion_438 " [style=filled, fillcolor=white];
+    "conditions_284
+ -> conclusion_284 _1" [style=filled, fillcolor=white];
+    "conditions_250
+ -> conclusion_250 " [style=filled, fillcolor=white];
+    "conditions_664
+ -> conclusion_664 " -> "conditions_284
+ -> conclusion_284 " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_284
+ -> conclusion_284 " -> "conditions_225
+ -> conclusion_225 " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_284
+ -> conclusion_284 " -> "conditions_809
+ -> conclusion_809 " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_225
+ -> conclusion_225 " -> "conditions_205
+ -> conclusion_205 " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_205
+ -> conclusion_205 " -> "conditions_133
+ -> conclusion_133 " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_133
+ -> conclusion_133 " -> "conditions_174
+ -> conclusion_174 " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_809
+ -> conclusion_809 " -> "conditions_585
+ -> conclusion_585 " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_585
+ -> conclusion_585 " -> "conditions_611
+ -> conclusion_611 " [style="bold", label=" RDREdge.Alternative"];
+    "conditions_611
+ -> conclusion_611 " -> "conditions_438
+ -> conclusion_438 " [style="bold", label=" RDREdge.Refinement"];
+    "conditions_611
+ -> conclusion_611 " -> "conditions_284
+ -> conclusion_284 _1" [style="bold", label=" RDREdge.Alternative"];
+    "conditions_284
+ -> conclusion_284 _1" -> "conditions_250
+ -> conclusion_250 " [style="bold", label=" RDREdge.Alternative"];
+
+// Color legend as a subgraph
+subgraph cluster_legend {
+label = "Legend";
+style = dashed;
+color = gray;
+
+legend_green [label="Fired->Query Related Value", shape=box, style=filled, fillcolor=green, fontcolor=black, size=0.5];
+legend_yellow [label="Fired->Some Value", shape=box, style=filled, fillcolor=yellow, fontcolor=black, size=0.5];
+legend_orange [label="Fired->Empty Value", shape=box, style=filled, fillcolor=orange, fontcolor=black, size=0.5];
+legend_red [label="Evaluated->Not Fired", shape=box, style=filled, fillcolor=red, fontcolor=black, size=0.5];
+legend_white [label="Not Evaluated",  shape=box, style=filled, fillcolor=white, fontcolor=black, size=0.5];
+
+// Invisible edges to arrange legend vertically
+legend_white -> legend_red -> legend_orange -> legend_yellow -> legend_green [style=invis];
+}
+}

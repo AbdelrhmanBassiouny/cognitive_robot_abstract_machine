@@ -11,6 +11,7 @@ from __future__ import annotations
 from abc import ABC
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from uuid import UUID
 
 from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING
 
@@ -83,6 +84,19 @@ class EvaluationContext:
     Observers should use well-known keys defined in :class:`~krrood.entity_query_language.enums.EvaluationContextKey`
     to avoid collisions.
     """
+
+    def is_nested_query(self, query_id: UUID) -> bool:
+        """
+        Claim the outermost-query role for *query_id* if no query has claimed it yet in this
+        evaluation.
+
+        :param query_id: The identifier of the compiled query being evaluated.
+        :return: Whether the query is nested — a different query already claimed the outermost role.
+        """
+        outermost_query_id = self.data.setdefault(
+            EvaluationContextKey.OUTERMOST_QUERY_ID_KEY, query_id
+        )
+        return outermost_query_id != query_id
 
     def on_evaluate_enter(
         self,
