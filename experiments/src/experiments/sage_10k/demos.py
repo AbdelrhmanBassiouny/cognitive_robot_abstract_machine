@@ -41,11 +41,11 @@ from semantic_digital_twin.spatial_types import Point3, Pose, Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from typing import Any
-from krrood.entity_query_language.predicate import SymbolicFunction, functional_form
+from krrood.entity_query_language.predicate import NameVerbalized, SymbolicFunction, functional_form
 
 
 @dataclass(eq=False)
-class PlanarDistance(SymbolicFunction):
+class PlanarDistance(NameVerbalized, SymbolicFunction):
     """The Euclidean distance between two points, as a value operation."""
 
     point1: Point3
@@ -62,7 +62,7 @@ planar_distance = functional_form(PlanarDistance)
 
 
 @dataclass(eq=False)
-class ClosesToBorder(SymbolicFunction):
+class ClosesToBorder(NameVerbalized, SymbolicFunction):
     """The position of a target along the coffee table's border axis, as a value operation.
 
     Used as a sort key, so a target nearer the table border sorts first.
