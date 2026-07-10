@@ -52,10 +52,10 @@ class InheritancePathLength(SymbolicFunction):
             Prepositions,
         )
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-            value_phrase,
+            function_relation_phrase,
         )
 
-        return value_phrase(
+        return function_relation_phrase(
             "inheritance path length", Prepositions.BETWEEN, *fields.values()
         )
 
