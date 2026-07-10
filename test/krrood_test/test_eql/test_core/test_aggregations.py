@@ -31,7 +31,7 @@ from krrood.entity_query_language.predicate import (
 )
 from krrood.entity_query_language.query.operations import GroupedBy
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-    value_function_phrase,
+    function_value_phrase,
 )
 from ...dataset.department_and_employee import Department, Employee
 from ...dataset.example_classes import NamedNumbers
@@ -731,7 +731,7 @@ def test_nearest_object_type():
 
         @classmethod
         def _verbalization_fragment_(cls, operands):
-            return value_function_phrase(cls.__name__, *operands)
+            return function_value_phrase(cls.__name__, *operands)
 
     symbolic_distance = functional_form(SymbolicDistance)
 
@@ -744,7 +744,7 @@ def test_nearest_object_type():
 
         @classmethod
         def _verbalization_fragment_(cls, operands):
-            return value_function_phrase(cls.__name__, *operands)
+            return function_value_phrase(cls.__name__, *operands)
 
     eql_mro = functional_form(EqlMro)
 
