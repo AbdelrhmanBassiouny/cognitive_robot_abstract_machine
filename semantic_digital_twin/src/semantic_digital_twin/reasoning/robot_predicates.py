@@ -13,6 +13,7 @@ from krrood.entity_query_language.factories import (
     the,
 )
 from krrood.entity_query_language.predicate import (
+    NameVerbalized,
     Predicate,
     SymbolicFunction,
     functional_form,
@@ -48,7 +49,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass(eq=False)
-class RobotCollisions(SymbolicFunction):
+class RobotCollisions(NameVerbalized, SymbolicFunction):
     """The collision contacts between a robot and the world at the robot's current pose."""
 
     robot: AbstractRobot
@@ -128,7 +129,7 @@ robot_holds_body = functional_form(RobotHoldsBody)
 
 
 @dataclass(eq=False)
-class BlockingBodies(SymbolicFunction):
+class BlockingBodies(NameVerbalized, SymbolicFunction):
     """The bodies blocking a robot from reaching a pose.
 
     These are the bodies the robot is in collision with when its kinematic chain is moved to reach
@@ -165,7 +166,7 @@ blocking = functional_form(BlockingBodies)
 
 
 @dataclass(eq=False)
-class BodiesInGripper(SymbolicFunction):
+class BodiesInGripper(NameVerbalized, SymbolicFunction):
     """The bodies between the two fingers of a gripper, found by ray casting between the fingers."""
 
     gripper: HasTwoFingers
@@ -202,7 +203,7 @@ bodies_in_gripper = functional_form(BodiesInGripper)
 
 
 @dataclass(eq=False)
-class BodyInGripperFraction(SymbolicFunction):
+class BodyInGripperFraction(NameVerbalized, SymbolicFunction):
     """The fraction of sampled rays between a gripper's fingers that hit a given body.
 
     Random rays are sampled between the finger and thumb; the returned value is the marginal
