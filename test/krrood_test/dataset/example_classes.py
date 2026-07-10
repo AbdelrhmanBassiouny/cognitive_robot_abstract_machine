@@ -202,6 +202,7 @@ class KRROODTorso(KRROODKinematicChain):
     A collection of kinematic chains that are connected to the torso.
     """
 
+
 @dataclass
 class Parent(Symbol):
     name: str
