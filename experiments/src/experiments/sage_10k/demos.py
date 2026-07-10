@@ -41,11 +41,11 @@ from semantic_digital_twin.spatial_types import Point3, Pose, Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from typing import Any
-from krrood.entity_query_language.predicate import NameVerbalized, SymbolicFunction, functional_form
+from krrood.entity_query_language.predicate import SymbolicFunction, functional_form
 
 
 @dataclass(eq=False)
-class PlanarDistance(NameVerbalized, SymbolicFunction):
+class PlanarDistance(SymbolicFunction):
     """The Euclidean distance between two points, as a value operation."""
 
     point1: Point3
@@ -57,12 +57,20 @@ class PlanarDistance(NameVerbalized, SymbolicFunction):
     def __call__(self):
         return self.point1.euclidean_distance(self.point2)
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 planar_distance = functional_form(PlanarDistance)
 
 
 @dataclass(eq=False)
-class ClosesToBorder(NameVerbalized, SymbolicFunction):
+class ClosesToBorder(SymbolicFunction):
     """The position of a target along the coffee table's border axis, as a value operation.
 
     Used as a sort key, so a target nearer the table border sorts first.
@@ -81,6 +89,14 @@ class ClosesToBorder(NameVerbalized, SymbolicFunction):
         return self.world.transform(
             self.target.global_pose, self.couch_table.root
         ).y
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 closes_to_border = functional_form(ClosesToBorder)

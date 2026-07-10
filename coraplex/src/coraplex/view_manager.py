@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing_extensions import Optional, Tuple
 
 from krrood.entity_query_language.predicate import (
-    NameVerbalized,
     SymbolicFunction,
     functional_form,
 )
@@ -17,7 +16,7 @@ from semantic_digital_twin.robots.robot_parts import (
 
 
 @dataclass(eq=False)
-class EndEffectorView(NameVerbalized, SymbolicFunction):
+class EndEffectorView(SymbolicFunction):
     """The end effector of a robot's arm view, as a value operation."""
 
     arm: Arms
@@ -29,6 +28,14 @@ class EndEffectorView(NameVerbalized, SymbolicFunction):
     def __call__(self) -> Optional[EndEffector]:
         arm_view = ViewManager.get_arm_view(self.arm, self.robot_view)
         return arm_view.end_effector
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_function_phrase,
+        )
+
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 @dataclass
