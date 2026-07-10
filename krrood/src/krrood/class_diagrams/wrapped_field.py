@@ -218,7 +218,11 @@ class WrappedField:
 
     @cached_property
     def is_type_type(self) -> bool:
-        return get_origin(self.resolved_type) is type
+        """
+        ``True`` for both the parametrized form (``Type[X]``, whose origin is ``type``) and the bare
+        ``type`` / ``typing.Type`` annotation, which has no origin at all.
+        """
+        return self.resolved_type in (type, Type) or get_origin(self.resolved_type) is type
 
     @cached_property
     def is_enum(self) -> bool:

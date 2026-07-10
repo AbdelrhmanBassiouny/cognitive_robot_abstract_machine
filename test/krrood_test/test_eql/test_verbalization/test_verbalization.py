@@ -40,7 +40,13 @@ from krrood.entity_query_language.factories import (
     and_,
     or_,
 )
-from krrood.entity_query_language.predicate import HasType, HasTypes, Predicate, Triple
+from krrood.entity_query_language.predicate import (
+    HasType,
+    HasTypes,
+    NameVerbalized,
+    Predicate,
+    Triple,
+)
 from krrood.entity_query_language.verbalization.exceptions import (
     PredicateFragmentRequiredError,
 )
@@ -223,12 +229,12 @@ def test_verbalize_literal_tuple_of_types_is_a_value_not_membership():
 
 
 def test_verbalize_has_types_is_membership():
-    """The type-membership predicate reads as the bounded *"one of A, B, or C"* set — the same
-    surface a domain-constrained variable uses — over its admissible types."""
+    """The type-membership predicate reads through the same *"is of type A or B"* surface as
+    ``HasType``, its admissible types listed disjunctively."""
     subject = variable(Body, [])
     assert (
         verbalize_expression(HasTypes(subject, (Apple, Cabinet)))
-        == "a Body is one of Apple or Cabinet"
+        == "a Body is of type Apple or Cabinet"
     )
 
 
@@ -246,7 +252,7 @@ def test_verbalize_has_types_too_many_is_not_spelled():
     )
     text = verbalize_expression(HasTypes(subject, many))
     assert "Apple" not in text
-    assert text == "a Body is one of seven types"
+    assert text == "a Body is of seven possible types"
 
 
 # ── Unit tests: MappedVariable chain ──────────────────────────────────────────
@@ -1438,6 +1444,17 @@ def test_verbalize_has_type_tuple_of_types():
     assert "Body" in text
 
 
+def test_has_type_lists_a_tuple_of_types_disjunctively():
+    """``isinstance`` over a tuple holds when the value is ANY of the types, so the listing joins
+    with *"or"* — *"is of type Apple or Body"*, never the conjunctive *"and"* (a value cannot be of
+    both types at once)."""
+    fruit = variable(Body, [])
+    assert (
+        verbalize_expression(HasType(fruit, (Apple, Body)))
+        == "a Body is of type Apple or Body"
+    )
+
+
 def test_verbalize_contains_type():
     fruit_box = variable(FruitBox, [])
     predicate = ContainsType(fruit_box.fruits, Apple)
@@ -1494,13 +1511,29 @@ def test_verbalize_custom_predicate_employee_domain():
     assert "Department" in text
 
 
-def test_verbalize_predicate_without_fragment_uses_name_based_default():
-    """A predicate that supplies no verbalization fragment reads through the inherited name-based
-    default clause (``HasHighSalary`` → *"… has high salary …"*), so a sensible surface needs no
-    per-predicate fragment."""
+def test_verbalize_predicate_without_fragment_raises():
+    """A predicate that neither implements a fragment nor opts into ``NameVerbalized`` is an
+    undecided surface — verbalizing it fails loudly instead of guessing a sentence."""
 
     @dataclass(eq=False)
-    class HasHighSalary(Predicate):
+    class EarnsMoreThan(Predicate):
+        employee: Any
+        threshold: float
+
+        def __call__(self) -> bool:
+            return self.employee.salary > self.threshold
+
+    employee = variable(Employee, [])
+    with pytest.raises(PredicateFragmentRequiredError):
+        verbalize_expression(EarnsMoreThan(employee, 50000.0))
+
+
+def test_name_verbalized_predicate_reads_its_name_as_the_clause():
+    """Opting into ``NameVerbalized`` says the class name as the clause — verb-first for a plain
+    verb name (``EarnsMoreThan`` → *"… earns more than …"*)."""
+
+    @dataclass(eq=False)
+    class EarnsMoreThan(NameVerbalized, Predicate):
         employee: Any
         threshold: float
 
@@ -1509,16 +1542,17 @@ def test_verbalize_predicate_without_fragment_uses_name_based_default():
 
     employee = variable(Employee, [])
     assert (
-        verbalize_expression(HasHighSalary(employee, 50000.0))
-        == "an Employee has high salary 50000.0"
+        verbalize_expression(EarnsMoreThan(employee, 50000.0))
+        == "an Employee earns more than 50000.0"
     )
 
 
-def test_verbalize_copular_predicate_without_fragment_uses_name_based_default():
-    """A copular ``Is…`` predicate with no fragment reads as *"<subject> is <complement>"*."""
+def test_name_verbalized_copular_predicate_reads_as_subject_is_complement():
+    """A copular ``Is…`` name with the ``NameVerbalized`` mixin reads as *"<subject> is
+    <complement>"*."""
 
     @dataclass(eq=False)
-    class IsActive(Predicate):
+    class IsActive(NameVerbalized, Predicate):
         entity: Any
 
         def __call__(self) -> bool:
@@ -1833,9 +1867,9 @@ def test_verbalize_triple():
     assert text.index("Body") < text.index("Handle")
 
 
-def test_verbalize_1arg_predicate_without_fragment_uses_name_based_default():
-    """A 1-arg predicate without a verbalization fragment reads through the inherited name-based
-    default clause rather than raising — fragments are optional, overriding only a wrong reading."""
+def test_verbalize_1arg_predicate_without_fragment_raises():
+    """A 1-arg predicate without a fragment and without the ``NameVerbalized`` opt-in raises — the
+    surface must always be an explicit decision, never a silent guess."""
 
     @dataclass(eq=False)
     class IsActive(Predicate):
@@ -1845,7 +1879,8 @@ def test_verbalize_1arg_predicate_without_fragment_uses_name_based_default():
             return True
 
     employee = variable(Employee, [])
-    assert verbalize_expression(IsActive(employee)) == "an Employee is active"
+    with pytest.raises(PredicateFragmentRequiredError):
+        verbalize_expression(IsActive(employee))
 
 
 # ── Same-type variable disambiguation ─────────────────────────────────────────

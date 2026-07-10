@@ -285,6 +285,46 @@ def value_function_phrase(
     return possessive_path([PathStep(noun)], owner)
 
 
+def value_phrase(
+    noun: str, relation: ClauseConstituent, *operands: ClauseConstituent
+) -> VerbalizationFragment:
+    """Build *"the <noun> <relation> <operands...>"* — the general value noun phrase for a value
+    whose relation to its operands is not the possessive *"of"* that
+    :func:`value_function_phrase` hardcodes (e.g. a length BETWEEN two things).
+
+    The operands are joined with *"and"*; the relation is any constituent, typically a
+    :class:`~krrood.entity_query_language.verbalization.vocabulary.english.Prepositions` member.
+    This lives here so a predicate's fragment depends only on the part-of-speech vocabulary, never
+    on the lower-level fragment builders.
+
+    :param noun: The value's noun (the definite article is realised by the determiner pass).
+    :param relation: The word relating the value to its operands.
+    :param operands: The already-rendered operands.
+    :return: The value noun phrase.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text,
+    ... )
+    >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+    ...     realize_tree,
+    ... )
+    >>> flatten_fragment_to_plain_text(realize_tree(value_phrase(
+    ...     "inheritance path length", Prepositions.BETWEEN, Noun.the("begin"), Noun.the("end")
+    ... )))
+    'the inheritance path length between the begin and the end'
+    """
+    return PhraseFragment(
+        parts=[
+            Noun.the(noun).as_fragment(),
+            relation.as_fragment(),
+            oxford_comma(
+                [operand.as_fragment() for operand in operands],
+                Conjunctions.AND.as_fragment(),
+            ),
+        ]
+    )
+
+
 _COPULA_LEMMA = "be"
 """The lemma a copular predicate name's leading word reduces to (``is`` / ``are`` -> ``be``)."""
 
@@ -307,38 +347,47 @@ def predicate_clause(
     A copular complement attaches trailing operands only through a final preposition
     (``is_supported_by`` → *"… is supported by <object>"*). With none, an adjective/noun complement
     cannot take them as objects and naming any single operand the subject would be a false claim, so
-    the condition is stated to *hold for* all operands: *"one month holds for the begin and the end"*.
+    the condition is stated to *hold given* all operands: *"one month holds given the begin and the end"*.
 
     :param name: The predicate's identifier — a class or function name.
     :param subject: The first operand, rendered as the clause's subject.
     :param objects: Any further operands, rendered as trailing objects.
     :return: The predicate clause.
 
+    A bare literal :class:`Noun` (e.g. ``Noun("Robot")``) still needs the lowering passes
+    (:func:`~…rendering.realization.realize_tree`) to choose its article before it can be flattened
+    to text — the examples below realize the clause first, the same as a full query render does.
+
     >>> from krrood.entity_query_language.verbalization.fragments.base import (
-    ...     flatten_fragment_to_plain_text, WordFragment,
+    ...     flatten_fragment_to_plain_text,
     ... )
-    >>> flatten_fragment_to_plain_text(
-    ...     predicate_clause("IsReachable", Noun(WordFragment(text="a Robot")))
+    >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+    ...     realize_tree,
     ... )
+    >>> def render(fragment):
+    ...     return flatten_fragment_to_plain_text(realize_tree(fragment))
+    >>> render(predicate_clause("IsReachable", Noun("Robot")))
     'a Robot is reachable'
-    >>> flatten_fragment_to_plain_text(
-    ...     predicate_clause("ConnectsTo", Noun(WordFragment(text="a body")),
-    ...                      Noun(WordFragment(text="another body")))
-    ... )
-    'a body connect to another body'
+    >>> render(predicate_clause("ConnectsTo", Noun("body"), Noun("gripper")))
+    'a body connects to a gripper'
+    >>> render(predicate_clause("IsOneMonth", Noun.the("begin"), Noun.the("end")))
+    'one month holds given the begin and the end'
     """
     head, *rest = camel_case_to_words(name).split()
     complement = [WordFragment(text=word) for word in rest]
     is_copular = morphology.verb_lemma(head) == _COPULA_LEMMA
     if is_copular and objects and (not rest or rest[-1] not in _PREPOSITION_WORDS):
         operands = oxford_comma(
-            [Noun(subject).as_fragment(), *(Noun(obj).as_fragment() for obj in objects)],
+            [
+                Noun(subject).as_fragment(),
+                *(Noun(obj).as_fragment() for obj in objects),
+            ],
             Conjunctions.AND.as_fragment(),
         )
         return clause(
             Noun(PhraseFragment(parts=complement)),
             Verb("hold"),
-            WordFragment(text="for"),
+            WordFragment(text="given"),
             operands,
         )
     predicate = (

@@ -53,6 +53,11 @@ class KRROODPositionTypeWrapper(Symbol):
     position_type: Type[KRROODPosition]
 
 
+@dataclass
+class KRROODBarePositionTypeWrapper(Symbol):
+    position_type: type
+
+
 # check that flat classes work
 @dataclass(unsafe_hash=True)
 class KRROODPosition(Symbol):

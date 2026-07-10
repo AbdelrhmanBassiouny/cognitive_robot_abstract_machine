@@ -53,7 +53,9 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 from krrood.entity_query_language.operators.logical_quantifiers import ForAll, Exists
 from krrood.entity_query_language.predicate import *  # type: ignore
 from krrood.entity_query_language.predicate import (
+    NameVerbalized,
     Predicate,
+    RenderedFields,
     SymbolicFunction,
     functional_form,
     symbolic_function,
@@ -745,7 +747,7 @@ def evaluate_condition(condition: ConditionType) -> bool:
 
 
 @dataclass(eq=False)
-class NodeId(SymbolicFunction):
+class NodeId(NameVerbalized, SymbolicFunction):
     """The stable identity of an EQL node, as a value operation."""
 
     node: SymbolicExpression
@@ -759,7 +761,7 @@ node_id = functional_form(NodeId)
 
 
 @dataclass(eq=False)
-class NodeDescendants(SymbolicFunction):
+class NodeDescendants(NameVerbalized, SymbolicFunction):
     """The descendants of an EQL node, as a value operation."""
 
     node: SymbolicExpression
@@ -773,7 +775,7 @@ node_descendants = functional_form(NodeDescendants)
 
 
 @dataclass(eq=False)
-class NodeType(SymbolicFunction):
+class NodeType(NameVerbalized, SymbolicFunction):
     """The selectable type of an EQL node, as a value operation."""
 
     node: Selectable
@@ -787,7 +789,7 @@ node_type = functional_form(NodeType)
 
 
 @dataclass(eq=False)
-class NodeChildren(SymbolicFunction):
+class NodeChildren(NameVerbalized, SymbolicFunction):
     """The children of an EQL node, as a value operation."""
 
     node: CanBehaveLikeAVariable
@@ -801,7 +803,7 @@ node_children = functional_form(NodeChildren)
 
 
 @dataclass(eq=False)
-class AttributeOwnerClass(SymbolicFunction):
+class AttributeOwnerClass(NameVerbalized, SymbolicFunction):
     """The class that owns an attribute, as a value operation."""
 
     node: Attribute
@@ -815,7 +817,7 @@ attribute_owner_class = functional_form(AttributeOwnerClass)
 
 
 @dataclass(eq=False)
-class NodeParents(SymbolicFunction):
+class NodeParents(NameVerbalized, SymbolicFunction):
     """The parents of an EQL node, as a value operation."""
 
     node: SymbolicExpression
@@ -841,6 +843,29 @@ class IsSubclass(Predicate):
     def __call__(self) -> bool:
         return issubclass(self.subclass, self.parent_or_parents)
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """:return: the clause *"<subclass> is a subclass of <parent>"* — a custom fragment because
+        the name-based reading lacks the article and preposition (*"subclass holds for …"*).
+        """
+        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            clause,
+            Copula,
+            Noun,
+        )
+        from krrood.entity_query_language.verbalization.vocabulary.english import (
+            Prepositions,
+        )
+
+        return clause(
+            Noun(fields["subclass"]),
+            Copula(),
+            Noun("subclass"),
+            Prepositions.OF,
+            Noun(fields["parent_or_parents"]),
+        )
+
 
 issubclass_ = functional_form(IsSubclass)
 
@@ -855,12 +880,25 @@ class IsClass(Predicate):
     def __call__(self) -> bool:
         return isclass(self.obj)
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """:return: the clause *"<obj> is a class"* — a custom fragment because the name-based
+        reading drops the complement's article (*"… is class"*)."""
+        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            clause,
+            Copula,
+            Noun,
+        )
+
+        return clause(Noun(fields["obj"]), Copula(), Noun("class"))
+
 
 is_class = functional_form(IsClass)
 
 
 @dataclass(eq=False)
-class RuntimeType(SymbolicFunction):
+class RuntimeType(NameVerbalized, SymbolicFunction):
     """The runtime class of an object, as a value operation."""
 
     obj: Any

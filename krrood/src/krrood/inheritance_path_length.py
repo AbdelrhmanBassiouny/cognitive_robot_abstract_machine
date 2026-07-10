@@ -3,9 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 from inspect import isclass
-from typing import Type, Optional
+from typing import Type, Optional, TYPE_CHECKING
 
-from krrood.entity_query_language.predicate import SymbolicFunction, functional_form
+from krrood.entity_query_language.predicate import (
+    RenderedFields,
+    SymbolicFunction,
+    functional_form,
+)
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.verbalization.fragments.base import (
+        VerbalizationFragment,
+    )
 
 
 @dataclass(eq=False)
@@ -32,6 +41,23 @@ class InheritancePathLength(SymbolicFunction):
             return None
 
         return _inheritance_path_length(self.child_class, self.parent_class, 0)
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """:return: the noun phrase *"the inheritance path length between <child> and <parent>"* — a
+        custom fragment because the length is BETWEEN its two operands, a relation the name-based
+        *"of X and Y"* genitive cannot express."""
+        # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
+        from krrood.entity_query_language.verbalization.vocabulary.english import (
+            Prepositions,
+        )
+        from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+            value_phrase,
+        )
+
+        return value_phrase(
+            "inheritance path length", Prepositions.BETWEEN, *fields.values()
+        )
 
 
 inheritance_path_length = lru_cache(functional_form(InheritancePathLength))
