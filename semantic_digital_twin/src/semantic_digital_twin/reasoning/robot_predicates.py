@@ -13,7 +13,6 @@ from krrood.entity_query_language.factories import (
     the,
 )
 from krrood.entity_query_language.predicate import (
-    NameVerbalized,
     Predicate,
     SymbolicFunction,
     functional_form,
@@ -26,6 +25,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Copula,
     Noun,
     Verb,
+    value_function_phrase,
 )
 from semantic_digital_twin.collision_checking.collision_detector import (
     ClosestPoints,
@@ -49,7 +49,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 
 @dataclass(eq=False)
-class RobotCollisions(NameVerbalized, SymbolicFunction):
+class RobotCollisions(SymbolicFunction):
     """The collision contacts between a robot and the world at the robot's current pose."""
 
     robot: AbstractRobot
@@ -88,6 +88,10 @@ class RobotCollisions(NameVerbalized, SymbolicFunction):
         collisions = world.collision_manager.compute_collisions()
 
         return collisions.contacts
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 robot_in_collision = functional_form(RobotCollisions)
@@ -129,7 +133,7 @@ robot_holds_body = functional_form(RobotHoldsBody)
 
 
 @dataclass(eq=False)
-class BlockingBodies(NameVerbalized, SymbolicFunction):
+class BlockingBodies(SymbolicFunction):
     """The bodies blocking a robot from reaching a pose.
 
     These are the bodies the robot is in collision with when its kinematic chain is moved to reach
@@ -161,12 +165,16 @@ class BlockingBodies(NameVerbalized, SymbolicFunction):
         )
         return robot_in_collision(robot.first(), [])
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 blocking = functional_form(BlockingBodies)
 
 
 @dataclass(eq=False)
-class BodiesInGripper(NameVerbalized, SymbolicFunction):
+class BodiesInGripper(SymbolicFunction):
     """The bodies between the two fingers of a gripper, found by ray casting between the fingers."""
 
     gripper: HasTwoFingers
@@ -198,12 +206,16 @@ class BodiesInGripper(NameVerbalized, SymbolicFunction):
             set(bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies)
         )
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 bodies_in_gripper = functional_form(BodiesInGripper)
 
 
 @dataclass(eq=False)
-class BodyInGripperFraction(NameVerbalized, SymbolicFunction):
+class BodyInGripperFraction(SymbolicFunction):
     """The fraction of sampled rays between a gripper's fingers that hit a given body.
 
     Random rays are sampled between the finger and thumb; the returned value is the marginal
@@ -222,6 +234,10 @@ class BodyInGripperFraction(NameVerbalized, SymbolicFunction):
     def __call__(self) -> float:
         bodies = bodies_in_gripper(self.gripper, self.sample_size)
         return len([b for b in bodies if b == self.body]) / self.sample_size
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 is_body_in_gripper = functional_form(BodyInGripperFraction)

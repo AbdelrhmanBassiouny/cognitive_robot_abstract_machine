@@ -10,7 +10,6 @@ from trimesh.collision import CollisionManager
 from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
 from krrood.entity_query_language.predicate import (
-    NameVerbalized,
     Predicate,
     SymbolicFunction,
     functional_form,
@@ -24,6 +23,8 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Copula,
     Noun,
     Verb,
+    value_function_phrase,
+    predicate_clause,
 )
 from random_events.interval import Interval
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
@@ -114,7 +115,7 @@ contact = functional_form(Contact)
 
 
 @dataclass(eq=False)
-class GetVisibleBodies(NameVerbalized, SymbolicFunction):
+class GetVisibleBodies(SymbolicFunction):
     """The bodies and regions visible from a camera, computed from a segmentation mask."""
 
     camera: Camera
@@ -141,6 +142,10 @@ class GetVisibleBodies(NameVerbalized, SymbolicFunction):
         bodies = [camera._world.kinematic_structure[i] for i in indices]
 
         return bodies
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 get_visible_bodies = functional_form(GetVisibleBodies)
@@ -175,7 +180,7 @@ visible = functional_form(Visible)
 
 
 @dataclass(eq=False)
-class OccludingBodies(NameVerbalized, SymbolicFunction):
+class OccludingBodies(SymbolicFunction):
     """The bodies that occlude a given body in the scene as seen from a camera.
 
     Determined by ray tracing: every body that hides anything from the target body is occluding it.
@@ -242,6 +247,10 @@ class OccludingBodies(NameVerbalized, SymbolicFunction):
         bodies = [camera._world.kinematic_structure[i] for i in indices]
         return bodies
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 occluding_bodies = functional_form(OccludingBodies)
 
@@ -287,7 +296,7 @@ reachable = functional_form(Reachable)
 
 
 @dataclass(eq=False)
-class EuclideanPlanarDistance(NameVerbalized, SymbolicFunction):
+class EuclideanPlanarDistance(SymbolicFunction):
     """The Euclidean distance between two bodies in a plane, ignoring one dimension.
 
     The ignored dimension is set to zero on both positions before the distance is computed, so the
@@ -319,12 +328,16 @@ class EuclideanPlanarDistance(NameVerbalized, SymbolicFunction):
 
         return body1_position.euclidean_distance(body2_position)
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
+
 
 compute_euclidean_planar_distance = functional_form(EuclideanPlanarDistance)
 
 
 @dataclass(eq=False)
-class IsSupportedBy(NameVerbalized, Predicate):
+class IsSupportedBy(Predicate):
     """Whether one object is supported by another object."""
 
     supported_body: Body
@@ -366,12 +379,17 @@ class IsSupportedBy(NameVerbalized, Predicate):
         size = sum([si.upper - si.lower for si in z_intersection.simple_sets])
         return size < self.max_intersection_height
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        subject, *objects = fields.values()
+        return predicate_clause(cls.__name__, subject, *objects)
+
 
 is_supported_by = functional_form(IsSupportedBy)
 
 
 @dataclass(eq=False)
-class IsSupporting(NameVerbalized, Predicate):
+class IsSupporting(Predicate):
     """Whether any body in the world is supported by a given supporting body.
 
     Iterates over the bodies in the world and checks each with :class:`IsSupportedBy`; bodies for
@@ -395,12 +413,17 @@ class IsSupporting(NameVerbalized, Predicate):
 
         return False
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        subject, *objects = fields.values()
+        return predicate_clause(cls.__name__, subject, *objects)
+
 
 is_supporting = functional_form(IsSupporting)
 
 
 @dataclass(eq=False)
-class BodyInRegionFraction(NameVerbalized, SymbolicFunction):
+class BodyInRegionFraction(SymbolicFunction):
     """The fraction (0.0..1.0) of a body's collision volume that lies inside a region's volume.
 
     Both meshes are defined in their local frames and are transformed into a common world frame using
@@ -433,6 +456,10 @@ class BodyInRegionFraction(NameVerbalized, SymbolicFunction):
             return 0.0
 
         return intersection.volume / body_volume
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 is_body_in_region = functional_form(BodyInRegionFraction)
@@ -687,7 +714,7 @@ class ContainsType(Predicate):
 
 
 @dataclass(eq=False)
-class IsPlaceOccupied(NameVerbalized, Predicate):
+class IsPlaceOccupied(Predicate):
     """Whether a place (a box at a pose) intersects any collidable body in the world.
 
     The box is converted to a mesh at its pose and tested against each body's world-aligned collision
@@ -738,6 +765,11 @@ class IsPlaceOccupied(NameVerbalized, Predicate):
                 return True
 
         return False
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        subject, *objects = fields.values()
+        return predicate_clause(cls.__name__, subject, *objects)
 
 
 is_place_occupied = functional_form(IsPlaceOccupied)

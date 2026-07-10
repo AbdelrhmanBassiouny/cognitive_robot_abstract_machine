@@ -16,10 +16,12 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.predicate import (
-    NameVerbalized,
     SymbolicFunction,
     functional_form,
     length,
+)
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    value_function_phrase,
 )
 from krrood.utils import recursive_subclasses
 from krrood.inheritance_path_length import inheritance_path_length
@@ -187,7 +189,7 @@ def filter_annotations_by_color(
 
 
 @dataclass(eq=False)
-class ClassNameLowercased(NameVerbalized, SymbolicFunction):
+class ClassNameLowercased(SymbolicFunction):
     """A class's own name, lowercased, for case-insensitive label matching."""
 
     semantic_class: type
@@ -195,6 +197,10 @@ class ClassNameLowercased(NameVerbalized, SymbolicFunction):
 
     def __call__(self) -> str:
         return self.semantic_class.__name__.lower()
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 class_name_lowercased = functional_form(ClassNameLowercased)
@@ -219,7 +225,7 @@ def annotation_class_by_label(label: str) -> Optional[type]:
 
 
 @dataclass(eq=False)
-class AnnotationVolume(NameVerbalized, SymbolicFunction):
+class AnnotationVolume(SymbolicFunction):
     """The volume of a semantic annotation, from its body's collision scale (x * y * z)."""
 
     annotation: SemanticAnnotation
@@ -234,6 +240,10 @@ class AnnotationVolume(NameVerbalized, SymbolicFunction):
                 body.collision.scale.x * body.collision.scale.y * body.collision.scale.z
             )
         return 0.0
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        return value_function_phrase(cls.__name__, *fields.values())
 
 
 annotation_volume = functional_form(AnnotationVolume)
