@@ -80,7 +80,7 @@ class Doubled(SymbolicFunction):
 
 def test_symbolic_function_binds_its_computed_value_in_a_query():
     """In a query a value ``SymbolicFunction`` binds what it COMPUTES (constructed AND called),
-    exactly like a ``@symbolic_function`` — not the constructed instance."""
+    not the constructed instance."""
     numbers = variable(int, domain=[1, 2, 3])
     values = sorted(
         next(iter(row.values())) for row in a(set_of(Doubled(numbers))).tolist()

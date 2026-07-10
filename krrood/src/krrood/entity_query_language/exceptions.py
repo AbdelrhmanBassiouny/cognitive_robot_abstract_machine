@@ -197,8 +197,8 @@ class SymbolicDunderAccessError(AttributeError, UsageError):
 
     def suggest_correction(self) -> str:
         return (
-            f"Perform the access inside a @symbolic_function that receives the concrete object, e.g. "
-            f"`@symbolic_function` def get_value(obj): return obj.{self.attribute_name}, then call "
+            f"Perform the access inside a SymbolicFunction subclass that receives the concrete object, e.g. "
+            f"a GetValue(SymbolicFunction) whose __call__ returns obj.{self.attribute_name}, then call "
             f"get_value(variable) inside the query."
         )
 
@@ -418,7 +418,7 @@ class LiteralConditionError(UsageError):
         >>> a = True
         >>> body = let(Body, None)
         >>> query = an(entity(body, a))
-    This could also happen when you are using a predicate or a symbolic_function and all the given arguments are literals.
+    This could also happen when you are using a predicate or a SymbolicFunction and all the given arguments are literals.
     Example:
         >>> predicate = HasType(Body("Body1"), Body)
         >>> query = an(entity(let(Body, None), predicate))

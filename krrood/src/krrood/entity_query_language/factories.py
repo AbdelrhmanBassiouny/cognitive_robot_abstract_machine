@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from inspect import isclass
 from uuid import UUID
 
-from typing_extensions import Self, Any, Iterable, List, Optional, Tuple, Type
+from typing_extensions import Self, Any, Iterable, List, Optional, Tuple, Type, Union
 
 from krrood.entity_query_language.core.base_expressions import (
     Selectable,
@@ -57,7 +57,6 @@ from krrood.entity_query_language.predicate import (
     RenderedFields,
     SymbolicFunction,
     functional_form,
-    symbolic_function,
 )
 from krrood.entity_query_language.query.match import (
     Match,

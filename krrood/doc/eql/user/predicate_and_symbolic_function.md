@@ -39,15 +39,24 @@ you need to check the type of a {py:class}`~krrood.entity_query_language.core.ma
 
 ## Symbolic Functions
 
-A **Symbolic Function** is a regular Python function decorated with `@symbolic_function`. When called with symbolic 
-arguments, it defers execution until the query is evaluated.
+A **Symbolic Function** is a {py:class}`~krrood.entity_query_language.predicate.SymbolicFunction` subclass whose
+`__call__` computes a value. When constructed with symbolic arguments it defers execution until the query is
+evaluated. Bind {py:func}`~krrood.entity_query_language.predicate.functional_form` to a plain name so the function
+reads naturally at the call site: it constructs the symbolic expression when any argument is a variable, and returns
+the directly computed value otherwise.
 
 ```python
-from krrood.entity_query_language.predicate import symbolic_function
+from dataclasses import dataclass
+from krrood.entity_query_language.predicate import SymbolicFunction, functional_form
 
-@symbolic_function
-def is_even(n: int) -> bool:
-    return n % 2 == 0
+@dataclass(eq=False)
+class IsEven(SymbolicFunction):
+    number: int
+
+    def __call__(self) -> bool:
+        return self.number % 2 == 0
+
+is_even = functional_form(IsEven)
 
 # Use it in a query
 query = entity(r).where(is_even(r.battery))
@@ -62,12 +71,17 @@ checking the size of collections.
 Symbolic attribute access covers **regular** attributes only. Dunder names (e.g. `variable.__name__`)
 are *not* resolved symbolically — they are reserved for Python's own protocols, so intercepting them
 would break `copy`, pickling, and debugging. To read a dunder-named member of a matched object inside
-a query, wrap the access in a `@symbolic_function`:
+a query, wrap the access in a `SymbolicFunction`:
 
 ```python
-@symbolic_function
-def class_name(cls: type) -> str:
-    return cls.__name__
+@dataclass(eq=False)
+class ClassName(SymbolicFunction):
+    owner: type
+
+    def __call__(self) -> str:
+        return self.owner.__name__
+
+class_name = functional_form(ClassName)
 
 query = entity(v).where(class_name(v).startswith("C"))
 ```
@@ -80,16 +94,21 @@ Let's define a custom predicate and a symbolic function to find robots with spec
 ```{code-cell} ipython3
 from dataclasses import dataclass
 from krrood.entity_query_language.factories import variable, entity, an, Symbol
-from krrood.entity_query_language.predicate import symbolic_function, Predicate
+from krrood.entity_query_language.predicate import SymbolicFunction, functional_form, Predicate
 
 @dataclass
 class ExampleRobot(Symbol):
     name: str
     load: float
 
-@symbolic_function
-def calculate_stress(load: float) -> float:
-    return load * 1.5
+@dataclass(eq=False)
+class CalculateStress(SymbolicFunction):
+    load: float
+
+    def __call__(self) -> float:
+        return self.load * 1.5
+
+calculate_stress = functional_form(CalculateStress)
 
 @dataclass(eq=False)
 class ExampleIsOverloaded(Predicate):
@@ -112,7 +131,8 @@ for robot in query.evaluate():
 ```
 
 ## API Reference
-- {py:func}`~krrood.entity_query_language.predicate.symbolic_function`
+- {py:class}`~krrood.entity_query_language.predicate.SymbolicFunction`
+- {py:func}`~krrood.entity_query_language.predicate.functional_form`
 - {py:class}`~krrood.entity_query_language.predicate.Predicate`
 - {py:class}`~krrood.entity_query_language.predicate.HasType`
 - {py:func}`~krrood.entity_query_language.predicate.length`

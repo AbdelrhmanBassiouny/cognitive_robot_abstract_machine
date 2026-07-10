@@ -96,7 +96,7 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         # Dunder names are never symbolic attribute access. Mapping them would (a) let copy/pickle
         # and other machinery that probes optional dunder hooks recurse into endless variable
         # creation, and (b) blur language semantics. Access a dunder-named member symbolically via a
-        # :func:`symbolic_function` instead. SymbolicDunderAccessError is an AttributeError so that
+        # :class:`SymbolicFunction` instead. SymbolicDunderAccessError is an AttributeError so that
         # optional-hook probing still treats it as a missing attribute.
         if name.startswith("__") and name.endswith("__"):
             raise SymbolicDunderAccessError(name)
