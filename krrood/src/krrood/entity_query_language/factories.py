@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from inspect import isclass
 from uuid import UUID
 
-from typing_extensions import Any, Iterable, List, Optional, Tuple, Type
+from typing_extensions import Self, Any, Iterable, List, Optional, Tuple, Type
 
 from krrood.entity_query_language.core.base_expressions import (
     Selectable,
@@ -756,12 +756,12 @@ class NodeId(SymbolicFunction):
         return self.node._id_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 node_id = functional_form(NodeId)
@@ -778,12 +778,12 @@ class NodeDescendants(SymbolicFunction):
         return self.node._descendants_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 node_descendants = functional_form(NodeDescendants)
@@ -800,12 +800,12 @@ class NodeType(SymbolicFunction):
         return getattr(self.node, "_type_", None)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 node_type = functional_form(NodeType)
@@ -822,12 +822,12 @@ class NodeChildren(SymbolicFunction):
         return self.node._children_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 node_children = functional_form(NodeChildren)
@@ -844,12 +844,12 @@ class AttributeOwnerClass(SymbolicFunction):
         return self.node._owner_class_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 attribute_owner_class = functional_form(AttributeOwnerClass)
@@ -866,12 +866,12 @@ class NodeParents(SymbolicFunction):
         return self.node._parents_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 node_parents = functional_form(NodeParents)
@@ -891,7 +891,7 @@ class IsSubclass(Predicate):
         return issubclass(self.subclass, self.parent_or_parents)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """:return: the clause *"<subclass> is a subclass of <parent>"* — a custom fragment because
         the name-based reading lacks the article and preposition (*"subclass holds for …"*).
         """
@@ -906,11 +906,11 @@ class IsSubclass(Predicate):
         )
 
         return clause(
-            Noun(fields["subclass"]),
+            Noun(operands.subclass),
             Copula(),
             Noun("subclass"),
             Prepositions.OF,
-            Noun(fields["parent_or_parents"]),
+            Noun(operands.parent_or_parents),
         )
 
 
@@ -928,7 +928,7 @@ class IsClass(Predicate):
         return isclass(self.obj)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """:return: the clause *"<obj> is a class"* — a custom fragment because the name-based
         reading drops the complement's article (*"… is class"*)."""
         # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
@@ -938,7 +938,7 @@ class IsClass(Predicate):
             Noun,
         )
 
-        return clause(Noun(fields["obj"]), Copula(), Noun("class"))
+        return clause(Noun(operands.obj), Copula(), Noun("class"))
 
 
 is_class = functional_form(IsClass)
@@ -955,12 +955,12 @@ class RuntimeType(SymbolicFunction):
         return self.obj.__class__
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 type_ = functional_form(RuntimeType)

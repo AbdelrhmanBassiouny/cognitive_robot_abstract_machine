@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing_extensions import Self
+
 from dataclasses import dataclass
 from functools import lru_cache
 from inspect import isclass
@@ -43,7 +45,7 @@ class InheritancePathLength(SymbolicFunction):
         return _inheritance_path_length(self.child_class, self.parent_class, 0)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """:return: the noun phrase *"the inheritance path length between <child> and <parent>"* — a
         custom fragment because the length is BETWEEN its two operands, a relation the name-based
         *"of X and Y"* genitive cannot express."""
@@ -56,7 +58,7 @@ class InheritancePathLength(SymbolicFunction):
         )
 
         return value_phrase(
-            "inheritance path length", Prepositions.BETWEEN, *fields.values()
+            "inheritance path length", Prepositions.BETWEEN, *operands
         )
 
 

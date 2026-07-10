@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing_extensions import Self
+
 from dataclasses import dataclass
 from typing import Optional, List
 
@@ -90,8 +92,8 @@ class RobotCollisions(SymbolicFunction):
         return collisions.contacts
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 robot_in_collision = functional_form(RobotCollisions)
@@ -123,10 +125,10 @@ class RobotHoldsBody(Predicate):
         )
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<robot> holds <body>" -- the name starts with the subject noun, so the name-based default
         # would read it as a verb ("a robot robots holds body").
-        return clause(Noun(fields["robot"]), Verb("hold"), Noun(fields["body"]))
+        return clause(Noun(operands.robot), Verb("hold"), Noun(operands.body))
 
 
 robot_holds_body = functional_form(RobotHoldsBody)
@@ -166,8 +168,8 @@ class BlockingBodies(SymbolicFunction):
         return robot_in_collision(robot.first(), [])
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 blocking = functional_form(BlockingBodies)
@@ -207,8 +209,8 @@ class BodiesInGripper(SymbolicFunction):
         )
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 bodies_in_gripper = functional_form(BodiesInGripper)
@@ -236,8 +238,8 @@ class BodyInGripperFraction(SymbolicFunction):
         return len([b for b in bodies if b == self.body]) / self.sample_size
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 is_body_in_gripper = functional_form(BodyInGripperFraction)
@@ -259,11 +261,11 @@ class IsGripperHoldingSomething(Predicate):
         return len(bodies_under_tcp) > 1
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<gripper> holds something" -- the name does not read as a clause on its own. "something"
         # is a bare word (no article).
         return clause(
-            Noun(fields["gripper"]), Verb("hold"), WordFragment(text="something")
+            Noun(operands.gripper), Verb("hold"), WordFragment(text="something")
         )
 
 
@@ -297,14 +299,14 @@ class IsPoseFreeForRobot(Predicate):
         )
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "the <pose> is free for <robot>" -- an adjective relation with a preposition.
         return clause(
-            Noun(fields["pose"]),
+            Noun(operands.pose),
             Copula(),
             Adjective("free"),
             Prepositions.FOR,
-            Noun(fields["robot"]),
+            Noun(operands.robot),
         )
 
 

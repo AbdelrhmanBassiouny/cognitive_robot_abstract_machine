@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 import trimesh.boolean
 from trimesh.collision import CollisionManager
-from typing_extensions import List, TYPE_CHECKING, Iterable, Type
+from typing_extensions import Self, List, TYPE_CHECKING, Iterable, Type
 
 from krrood.entity_query_language.predicate import (
     Predicate,
@@ -69,9 +69,9 @@ class Stable(Predicate):
         raise NotImplementedError("Needs multiverse")
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<body> is stable" -- an adjective, so the name-based verb-first default would read wrong.
-        return clause(Noun(fields["body"]), Copula(), Adjective("stable"))
+        return clause(Noun(operands.body), Copula(), Adjective("stable"))
 
 
 stable = functional_form(Stable)
@@ -99,15 +99,15 @@ class Contact(Predicate):
         return result.distance < self.threshold
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<body1> is in contact with <body2>" -- a copular relation read with prepositions.
         return clause(
-            Noun(fields["body1"]),
+            Noun(operands.body1),
             Copula(),
             Prepositions.IN,
             WordFragment(text="contact"),  # bare noun -- "in contact", not "in a contact"
             Prepositions.WITH,
-            Noun(fields["body2"]),
+            Noun(operands.body2),
         )
 
 
@@ -144,8 +144,8 @@ class GetVisibleBodies(SymbolicFunction):
         return bodies
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 get_visible_bodies = functional_form(GetVisibleBodies)
@@ -165,14 +165,14 @@ class Visible(Predicate):
         return self.object in get_visible_bodies(self.camera)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<object> is visible from <camera>" -- an adjective relation with a preposition.
         return clause(
-            Noun(fields["object"]),
+            Noun(operands.object),
             Copula(),
             Adjective("visible"),
             Prepositions.FROM,
-            Noun(fields["camera"]),
+            Noun(operands.camera),
         )
 
 
@@ -248,8 +248,8 @@ class OccludingBodies(SymbolicFunction):
         return bodies
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 occluding_bodies = functional_form(OccludingBodies)
@@ -280,15 +280,15 @@ class Reachable(Predicate):
         return True
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<pose> is reachable by <tip's name>" -- an adjective relation; the reacher is read as the
         # tip's name, a derived attribute on the EXISTING tip variable (so coreference holds).
         return clause(
-            Noun(fields["pose"]),
+            Noun(operands.pose),
             Copula(),
             Adjective("reachable"),
             Prepositions.BY,
-            Noun(fields["tip"].name),
+            Noun(operands.tip.name),
         )
 
 
@@ -329,8 +329,8 @@ class EuclideanPlanarDistance(SymbolicFunction):
         return body1_position.euclidean_distance(body2_position)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 compute_euclidean_planar_distance = functional_form(EuclideanPlanarDistance)
@@ -380,8 +380,8 @@ class IsSupportedBy(Predicate):
         return size < self.max_intersection_height
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        subject, *objects = fields.values()
+    def _verbalization_fragment_(cls, operands: Self):
+        subject, *objects = operands
         return predicate_clause(cls.__name__, subject, *objects)
 
 
@@ -414,8 +414,8 @@ class IsSupporting(Predicate):
         return False
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        subject, *objects = fields.values()
+    def _verbalization_fragment_(cls, operands: Self):
+        subject, *objects = operands
         return predicate_clause(cls.__name__, subject, *objects)
 
 
@@ -458,8 +458,8 @@ class BodyInRegionFraction(SymbolicFunction):
         return intersection.volume / body_volume
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return value_function_phrase(cls.__name__, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return value_function_phrase(cls.__name__, *operands)
 
 
 is_body_in_region = functional_form(BodyInRegionFraction)
@@ -483,14 +483,14 @@ class KinematicStructureEntitySpatialRelation(Predicate, ABC):
     """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<body> is <relation> <other>" -- the relation is read off the class name
         # ("InsideOf" -> "inside of"), so each concrete relation needs no per-class fragment.
         return clause(
-            Noun(fields["body"]),
+            Noun(operands.body),
             Copula(),
             Adjective(camel_case_to_words(cls.__name__)),
-            Noun(fields["other"]),
+            Noun(operands.other),
         )
 
 
@@ -511,14 +511,14 @@ class PointSpatialRelation(Predicate, ABC):
     """
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "<point> is <relation> <other>" -- the relation is read off the class name
         # ("LeftOf" -> "left of", "InFrontOf" -> "in front of").
         return clause(
-            Noun(fields["point"]),
+            Noun(operands.point),
             Copula(),
             Adjective(camel_case_to_words(cls.__name__)),
-            Noun(fields["other"]),
+            Noun(operands.other),
         )
 
 
@@ -703,13 +703,13 @@ class ContainsType(Predicate):
         return any(isinstance(obj, self.obj_type) for obj in self.iterable)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         return clause(
-            Noun(fields["iterable"]),
+            Noun(operands.iterable),
             Verb("contain"),
             Noun("instance"),
             Prepositions.OF,
-            Noun(fields["obj_type"]),
+            Noun(operands.obj_type),
         )
 
 
@@ -767,8 +767,8 @@ class IsPlaceOccupied(Predicate):
         return False
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        subject, *objects = fields.values()
+    def _verbalization_fragment_(cls, operands: Self):
+        subject, *objects = operands
         return predicate_clause(cls.__name__, subject, *objects)
 
 
@@ -792,7 +792,7 @@ class AllClose(Predicate):
         return np.allclose(self.array1, self.array2, atol=self.atol)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         # "each element of <array1> is close to the matching element of <array2>" -- the query operands
         # render naturally (coreference/disambiguation name the arrays). A singular "each element ... is"
         # is used rather than "all elements ... are" because the realizer does not agree the copula with
@@ -801,7 +801,7 @@ class AllClose(Predicate):
             WordFragment(text="each"),
             WordFragment(text="element"),
             Prepositions.OF,
-            Noun(fields["array1"]),
+            Noun(operands.array1),
             Copula(),
             Adjective("close"),
             Prepositions.TO,
@@ -809,7 +809,7 @@ class AllClose(Predicate):
             WordFragment(text="matching"),
             WordFragment(text="element"),
             Prepositions.OF,
-            Noun(fields["array2"]),
+            Noun(operands.array2),
         )
 
 

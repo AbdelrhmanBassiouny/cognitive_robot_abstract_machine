@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing_extensions import Self
+
 from dataclasses import field
 from functools import cached_property
 
@@ -58,12 +60,12 @@ class PlanarDistance(SymbolicFunction):
         return self.point1.euclidean_distance(self.point2)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 planar_distance = functional_form(PlanarDistance)
@@ -91,12 +93,12 @@ class ClosesToBorder(SymbolicFunction):
         ).y
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 closes_to_border = functional_form(ClosesToBorder)

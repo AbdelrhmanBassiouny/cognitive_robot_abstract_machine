@@ -46,8 +46,8 @@ class PredicateFragmentRequiredError(DataclassException):
 
     def suggest_correction(self) -> str:
         return (
-            "Implement `_verbalization_fragment_(cls, fields)` returning a clause built with "
-            "`vocabulary.parts_of_speech.clause(Noun(...), Verb(...), …)`."
+            "Implement `_verbalization_fragment_(cls, operands)` returning a clause built with "
+            "`vocabulary.parts_of_speech.clause(Noun(operands.x), Verb(...), …)`."
         )
 
 

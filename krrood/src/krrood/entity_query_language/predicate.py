@@ -14,6 +14,7 @@ from functools import wraps
 from typing_extensions import (
     Callable,
     Iterator,
+    Self,
     Optional,
     Any,
     Type,
@@ -100,7 +101,7 @@ class VerbalizationField:
     It carries both the field's already-rendered (and source-linked) :attr:`fragment` and the raw
     :attr:`value` bound to it (a :class:`Literal`'s value unwrapped). A part-of-speech element takes
     whichever it needs — :class:`Noun` uses the fragment, :class:`OneOf` uses the value — so the
-    author just passes ``fields[name]`` and the right thing happens, never an explicit accessor.
+    author just passes ``operands[name]`` and the right thing happens, never an explicit accessor.
     """
 
     fragment: VerbalizationFragment
@@ -120,7 +121,7 @@ class VerbalizationField:
 class RenderedFields(Mapping):
     """The arguments passed to :meth:`Verbalizable._verbalization_fragment_`.
 
-    A mapping of *field name → :class:`VerbalizationField`*. Each ``fields["x"]`` carries both the rendered
+    A mapping of *field name → :class:`VerbalizationField`*. Each ``operands.x`` carries both the rendered
     fragment and the raw value, so it can be passed straight to a part-of-speech element — ``Noun``
     takes the fragment, ``OneOf`` takes the value — without the author choosing between them.
     """
@@ -143,6 +144,109 @@ class RenderedFields(Mapping):
         return len(self.fragments)
 
 
+@dataclass(frozen=True)
+class Operand:
+    """One operand of a symbolic callable, as its :meth:`Verbalizable._verbalization_fragment_` sees it.
+
+    It wraps the operand's EXISTING child expression — never a freshly constructed variable, so
+    coreference is preserved — together with the renderer that turns an expression into a fragment in
+    the current context. Used directly it renders the operand (``Noun(operands.body)``); navigated it
+    renders a DERIVED expression on the SAME variable (``operands.tip.name`` → *"the name of …"*),
+    reusing EQL's attribute navigation.
+
+    An author never constructs one: it is handed to the fragment as an attribute of the typed
+    :class:`OperandView` (``operands.tip``), so the IDE resolves ``tip`` to the field and ``name`` to
+    the field type's attribute (autocompletion, go-to-definition).
+    """
+
+    _expression_: Any
+    """The EXISTING child expression this operand wraps (or a derived expression after navigation)."""
+
+    _render_: "Callable[[Any], VerbalizationFragment]"
+    """Renders an expression to a fragment in the current context (coreference, determiners)."""
+
+    def as_fragment(self) -> "VerbalizationFragment":
+        """:return: the operand's rendered fragment, so an :class:`Operand` is a clause constituent
+        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work."""
+        return self._render_(self._expression_)
+
+    @property
+    def _value_of_operand_(self) -> Any:
+        """:return: the raw Python value bound to the operand (a literal's value unwrapped) — what
+        :class:`~…parts_of_speech.OneOf` enumerates. Named with surrounding underscores so it is not
+        mistaken for a navigated attribute (``operands.x.value`` navigates to ``x.value``)."""
+        return (
+            self._expression_._value_
+            if isinstance(self._expression_, Literal)
+            else self._expression_
+        )
+
+    def __getattr__(self, attribute_name: str) -> "Operand":
+        """:return: the operand for a navigated attribute, built on the SAME underlying expression so
+        coreference holds — ``operands.tip.name`` is the name of the existing tip, not a new variable.
+
+        Only public names navigate; a dunder/private name raises :class:`AttributeError` so copying,
+        pickling and the real fields are unaffected.
+        """
+        if attribute_name.startswith("_"):
+            raise AttributeError(attribute_name)
+        return Operand(getattr(self._expression_, attribute_name), self._render_)
+
+
+@dataclass(frozen=True)
+class OperandView:
+    """The typed view of a symbolic callable's operands handed to ``_verbalization_fragment_``.
+
+    Each attribute is the :class:`Operand` for that field — ``operands.body`` — navigable to derived
+    expressions (``operands.tip.name``) and usable directly as a clause constituent. The author types
+    the parameter as the callable instance (``operands: Self``), so the IDE autocompletes the operand
+    fields and their attributes and go-to-definition works; at runtime each resolves to the EXISTING
+    child expression. Iterating yields the operands in field order (used by the default surfaces).
+    """
+
+    _child_expressions_: "Mapping[str, Any]"
+    """The EXISTING child expression for each operand field, keyed by field name."""
+
+    _render_: "Callable[[Any], VerbalizationFragment]"
+    """Renders an expression to a fragment in the current context."""
+
+    def _operand_for_(self, field_name: str) -> Operand:
+        return Operand(self._child_expressions_[field_name], self._render_)
+
+    def __getattr__(self, field_name: str) -> Operand:
+        if field_name.startswith("_"):
+            raise AttributeError(field_name)
+        return self._operand_for_(field_name)
+
+    def __getitem__(self, field_name: str) -> Operand:
+        return self._operand_for_(field_name)
+
+    def __iter__(self) -> Iterator[Operand]:
+        return (self._operand_for_(name) for name in self._child_expressions_)
+
+
+@dataclass(frozen=True)
+class _PreviewExpression:
+    """A stand-in operand expression for :meth:`SymbolicCallable.preview_verbalization`.
+
+    It has no query behind it, so navigation just records a dotted path (``tip`` → ``tip.name``) that
+    the preview renders verbatim — letting a developer see which derived attribute a fragment reads
+    without building a query.
+    """
+
+    _path_: str
+    """The dotted access path so far (the field name, then each navigated attribute)."""
+
+    def __getattr__(self, attribute_name: str) -> "_PreviewExpression":
+        if attribute_name.startswith("_"):
+            raise AttributeError(attribute_name)
+        return _PreviewExpression(f"{self._path_}.{attribute_name}")
+
+    def __iter__(self) -> Iterator[Any]:
+        # So a fragment using OneOf over an operand previews without a real collection behind it.
+        return iter(())
+
+
 @dataclass(eq=False)
 class Verbalizable(ABC):
     """
@@ -152,7 +256,7 @@ class Verbalizable(ABC):
 
     @classmethod
     @abstractmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """
         Structured verbalization for this predicate — a required clause (no string fallback).
 
@@ -176,8 +280,8 @@ class Verbalizable(ABC):
                 person_2: Person
 
                 @classmethod
-                def _verbalization_fragment_(cls, fields):
-                    return clause(Noun(fields["person_1"]), Verb("love"), Noun(fields["person_2"]))
+                def _verbalization_fragment_(cls, operands: Self):
+                    return clause(Noun(operands.person_1), Verb("love"), Noun(operands.person_2))
 
         :param fields: The rendered fragment for each predicate field, keyed by field name.
         :return: The predicate's verbalization fragment.
@@ -315,9 +419,7 @@ class Triple(Predicate):
         """
 
     @classmethod
-    def _verbalization_fragment_(
-        cls, fields: Mapping[str, VerbalizationFragment]
-    ) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """
         Verbalization of a Triple is a subject - verb-phrase - object, where the verb phrase is read
         off the class name (``ConnectsTo`` → *"connects to"*). The leading word is a :class:`Verb`
@@ -344,10 +446,10 @@ class Triple(Predicate):
         )
         particles = [WordFragment(text=word) for word in words[1:]]
         return clause(
-            Noun(fields[subject_name]),
+            Noun(operands[subject_name]),
             Verb(morphology.verb_lemma(words[0])),
             *particles,
-            Noun(fields[object_name]),
+            Noun(operands[object_name]),
         )
 
 
@@ -382,9 +484,7 @@ class HasType(Triple):
         return self.types_
 
     @classmethod
-    def _verbalization_fragment_(
-        cls, fields: Mapping[str, VerbalizationFragment]
-    ) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         # Imported locally to avoid the core → verbalization import cycle (see :class:`Triple`).
         from krrood.entity_query_language.verbalization.vocabulary.english import (
             Prepositions,
@@ -401,11 +501,11 @@ class HasType(Triple):
         # conjunction). The listing is the vocabulary's :class:`Or` element, not a bespoke tail;
         # "type" is a bare noun ("of type", not "of a type").
         return clause(
-            Noun(fields["variable"]),
+            Noun(operands.variable),
             Copula(),
             Prepositions.OF,
             Noun.bare("type"),
-            Or(fields["types_"]),
+            Or(operands.types_),
         )
 
 
@@ -441,13 +541,13 @@ class Length(SymbolicFunction):
         return len(self.iterable)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             value_function_phrase,
         )
 
-        return value_function_phrase(cls.__name__, *fields.values())
+        return value_function_phrase(cls.__name__, *operands)
 
 
 length = functional_form(Length)

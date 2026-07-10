@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pytest
 
+from krrood.entity_query_language.predicate import OperandView
 from krrood.entity_query_language.verbalization import example_domain
 from krrood.entity_query_language.verbalization.fragments.base import (
     VerbalizationFragment,
@@ -130,7 +131,10 @@ def test_predicates_build_a_verbalization_fragment(cls_name):
     """The custom-predicate examples build their verbalization as a :class:`VerbalizationFragment` from the shared
     vocabulary, given the rendered fragment for each field."""
     cls = getattr(example_domain, cls_name)
-    fields = {
-        field.name: WordFragment(text=field.name) for field in dataclasses.fields(cls)
-    }
-    assert isinstance(cls._verbalization_fragment_(fields), VerbalizationFragment)
+    operands = OperandView(
+        _child_expressions_={
+            field.name: field.name for field in dataclasses.fields(cls)
+        },
+        _render_=lambda expression: WordFragment(text=expression),
+    )
+    assert isinstance(cls._verbalization_fragment_(operands), VerbalizationFragment)

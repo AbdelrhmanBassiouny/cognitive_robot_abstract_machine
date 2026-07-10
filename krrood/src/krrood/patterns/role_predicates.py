@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any
+from typing_extensions import Self, Any
 
 from krrood.entity_query_language.predicate import Predicate, RenderedFields
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -50,12 +50,12 @@ class IsSameSemanticEntity(Predicate):
         return value.root_persistent_entity if isinstance(value, Role) else value
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """:return: the clause *"<entity_1> is the same entity as <entity_2>"*."""
         return clause(
-            Noun(fields["entity_1"]),
+            Noun(operands.entity_1),
             Copula(),
             Noun.the("same entity"),
             Prepositions.AS,
-            Noun(fields["entity_2"]),
+            Noun(operands.entity_2),
         )
