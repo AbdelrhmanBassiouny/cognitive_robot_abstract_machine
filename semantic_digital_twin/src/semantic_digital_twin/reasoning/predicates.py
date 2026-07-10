@@ -13,9 +13,9 @@ from krrood.entity_query_language.predicate import (
     NameVerbalized,
     Predicate,
     SymbolicFunction,
-    Symbol,
     functional_form,
 )
+from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
 from krrood.entity_query_language.verbalization.fragments.base import WordFragment
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
@@ -439,7 +439,7 @@ is_body_in_region = functional_form(BodyInRegionFraction)
 
 
 @dataclass
-class KinematicStructureEntitySpatialRelation(Symbol, ABC):
+class KinematicStructureEntitySpatialRelation(Predicate, ABC):
     """
     Base class for spatial relations between two KinematicStructureEntity instances.
     Implementations typically compare the centers of mass computed from the KSE's collision geometry.
@@ -455,9 +455,20 @@ class KinematicStructureEntitySpatialRelation(Symbol, ABC):
     The other KSE.
     """
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "<body> is <relation> <other>" -- the relation is read off the class name
+        # ("InsideOf" -> "inside of"), so each concrete relation needs no per-class fragment.
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Adjective(camel_case_to_words(cls.__name__)),
+            Noun(fields["other"]),
+        )
+
 
 @dataclass
-class PointSpatialRelation(Symbol, ABC):
+class PointSpatialRelation(Predicate, ABC):
     """
     Check if the point is spatially related to the other point.
     """
@@ -471,6 +482,17 @@ class PointSpatialRelation(Symbol, ABC):
     """
     The other point.
     """
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "<point> is <relation> <other>" -- the relation is read off the class name
+        # ("LeftOf" -> "left of", "InFrontOf" -> "in front of").
+        return clause(
+            Noun(fields["point"]),
+            Copula(),
+            Adjective(camel_case_to_words(cls.__name__)),
+            Noun(fields["other"]),
+        )
 
 
 @dataclass
