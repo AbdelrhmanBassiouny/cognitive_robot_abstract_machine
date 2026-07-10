@@ -589,6 +589,15 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
         def __call__(self):
             return self.body_.name.startswith("Handle")
 
+        @classmethod
+        def _verbalization_fragment_(cls, operands):
+            from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+                predicate_clause,
+            )
+
+            subject, *objects = operands
+            return predicate_clause(cls.__name__, subject, *objects)
+
     is_handle = functional_form(IsHandle)
 
     body = variable(Body, domain=world.bodies)

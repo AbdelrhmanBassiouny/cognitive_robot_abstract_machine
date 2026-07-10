@@ -726,6 +726,14 @@ def test_nearest_object_type():
         def __call__(self) -> int | None:
             return inheritance_path_length(self.type1, self.type2)
 
+        @classmethod
+        def _verbalization_fragment_(cls, operands):
+            from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+                value_function_phrase,
+            )
+
+            return value_function_phrase(cls.__name__, *operands)
+
     symbolic_distance = functional_form(SymbolicDistance)
 
     @dataclass(eq=False)
@@ -734,6 +742,14 @@ def test_nearest_object_type():
 
         def __call__(self) -> tuple[Type]:
             return self.object_.__class__.__mro__
+
+        @classmethod
+        def _verbalization_fragment_(cls, operands):
+            from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+                value_function_phrase,
+            )
+
+            return value_function_phrase(cls.__name__, *operands)
 
     eql_mro = functional_form(EqlMro)
 
