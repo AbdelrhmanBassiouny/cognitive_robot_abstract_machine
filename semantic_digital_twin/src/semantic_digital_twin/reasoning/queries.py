@@ -16,6 +16,7 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.predicate import (
+    NameVerbalized,
     SymbolicFunction,
     functional_form,
     length,
@@ -186,7 +187,7 @@ def filter_annotations_by_color(
 
 
 @dataclass(eq=False)
-class ClassNameLowercased(SymbolicFunction):
+class ClassNameLowercased(NameVerbalized, SymbolicFunction):
     """A class's own name, lowercased, for case-insensitive label matching."""
 
     semantic_class: type
@@ -218,7 +219,7 @@ def annotation_class_by_label(label: str) -> Optional[type]:
 
 
 @dataclass(eq=False)
-class AnnotationVolume(SymbolicFunction):
+class AnnotationVolume(NameVerbalized, SymbolicFunction):
     """The volume of a semantic annotation, from its body's collision scale (x * y * z)."""
 
     annotation: SemanticAnnotation

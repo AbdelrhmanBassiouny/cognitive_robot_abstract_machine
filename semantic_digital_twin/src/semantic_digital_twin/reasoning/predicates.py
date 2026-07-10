@@ -10,6 +10,7 @@ from trimesh.collision import CollisionManager
 from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
 from krrood.entity_query_language.predicate import (
+    NameVerbalized,
     Predicate,
     SymbolicFunction,
     Symbol,
@@ -113,7 +114,7 @@ contact = functional_form(Contact)
 
 
 @dataclass(eq=False)
-class GetVisibleBodies(SymbolicFunction):
+class GetVisibleBodies(NameVerbalized, SymbolicFunction):
     """The bodies and regions visible from a camera, computed from a segmentation mask."""
 
     camera: Camera
@@ -174,7 +175,7 @@ visible = functional_form(Visible)
 
 
 @dataclass(eq=False)
-class OccludingBodies(SymbolicFunction):
+class OccludingBodies(NameVerbalized, SymbolicFunction):
     """The bodies that occlude a given body in the scene as seen from a camera.
 
     Determined by ray tracing: every body that hides anything from the target body is occluding it.
@@ -286,7 +287,7 @@ reachable = functional_form(Reachable)
 
 
 @dataclass(eq=False)
-class EuclideanPlanarDistance(SymbolicFunction):
+class EuclideanPlanarDistance(NameVerbalized, SymbolicFunction):
     """The Euclidean distance between two bodies in a plane, ignoring one dimension.
 
     The ignored dimension is set to zero on both positions before the distance is computed, so the
@@ -323,7 +324,7 @@ compute_euclidean_planar_distance = functional_form(EuclideanPlanarDistance)
 
 
 @dataclass(eq=False)
-class IsSupportedBy(Predicate):
+class IsSupportedBy(NameVerbalized, Predicate):
     """Whether one object is supported by another object."""
 
     supported_body: Body
@@ -370,7 +371,7 @@ is_supported_by = functional_form(IsSupportedBy)
 
 
 @dataclass(eq=False)
-class IsSupporting(Predicate):
+class IsSupporting(NameVerbalized, Predicate):
     """Whether any body in the world is supported by a given supporting body.
 
     Iterates over the bodies in the world and checks each with :class:`IsSupportedBy`; bodies for
@@ -399,7 +400,7 @@ is_supporting = functional_form(IsSupporting)
 
 
 @dataclass(eq=False)
-class BodyInRegionFraction(SymbolicFunction):
+class BodyInRegionFraction(NameVerbalized, SymbolicFunction):
     """The fraction (0.0..1.0) of a body's collision volume that lies inside a region's volume.
 
     Both meshes are defined in their local frames and are transformed into a common world frame using
@@ -664,7 +665,7 @@ class ContainsType(Predicate):
 
 
 @dataclass(eq=False)
-class IsPlaceOccupied(Predicate):
+class IsPlaceOccupied(NameVerbalized, Predicate):
     """Whether a place (a box at a pose) intersects any collidable body in the world.
 
     The box is converted to a mesh at its pose and tested against each body's world-aligned collision
