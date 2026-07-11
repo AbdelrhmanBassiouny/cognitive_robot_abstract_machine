@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from krrood.entity_query_language.factories import not_, variable
+from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.rdr.backward_inference import (
     ConclusionKnowledge,
     GuardCondition,
@@ -53,8 +54,8 @@ def _empty_knowledge(value):
 # ---------------------------------------------------------------------------
 
 
-def test_resolution_mode_has_silent_and_hint_members():
-    assert ResolutionMode.SILENT.value == "silent"
+def test_resolution_mode_has_automatic_and_hint_members():
+    assert ResolutionMode.AUTOMATIC.value == "automatic"
     assert ResolutionMode.HINT.value == "hint"
 
 
@@ -84,14 +85,16 @@ def test_materialize_wraps_a_negated_guard_in_not():
 
     materialized = _materialize(guard)
 
-    assert materialized is not animal.has_fur
-    # not_(has_fur) must hold exactly when has_fur does not -- the inverse of the
-    # unnegated guard, confirming the negation was actually applied.
-    unnegated_guard = GuardCondition(materialized._child_, negated=False)
+    assert isinstance(materialized, Not)
+    assert materialized._child_ is animal.has_fur
+
+    # materialized itself (not_(has_fur)) must be True exactly when has_fur is
+    # False, and False when has_fur is True -- the inverse of the bare condition.
+    materialized_guard = GuardCondition(materialized, negated=False)
     cat = Animal("cat", has_fur=True)
     snake = Animal("snake", has_fur=False)
-    assert unnegated_guard.holds_for(animal, cat) is True
-    assert unnegated_guard.holds_for(animal, snake) is False
+    assert materialized_guard.holds_for(animal, cat) is False
+    assert materialized_guard.holds_for(animal, snake) is True
 
 
 # ---------------------------------------------------------------------------

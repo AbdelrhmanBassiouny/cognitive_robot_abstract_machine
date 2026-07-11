@@ -40,11 +40,11 @@ class ResolutionMode(Enum):
     """Controls how an auto-resolved condition is applied when fitting a case.
 
     See :meth:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR.fit_case`.
-    :attr:`SILENT` preserves the original behaviour (no expert prompt); :attr:`HINT`
+    :attr:`AUTOMATIC` preserves the original behaviour (no expert prompt); :attr:`HINT`
     shows the suggestion to the expert who may accept or overwrite it.
     """
 
-    SILENT = "silent"
+    AUTOMATIC = "automatic"
     """Auto-resolved condition is inserted directly without consulting the expert."""
     HINT = "hint"
     """Auto-resolved condition is shown to the expert as a pre-seeded suggestion."""

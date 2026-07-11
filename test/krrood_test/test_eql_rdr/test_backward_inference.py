@@ -79,6 +79,32 @@ def test_sufficient_condition_set_requires_every_guard_to_hold():
     assert scs.evaluate_against(animal, Animal("eagle", has_fur=False, can_fly=True)) is False
 
 
+def test_what_do_we_know_about_resolves_conditions_root_from_any_tree_node():
+    """what_do_we_know_about() resolves the conditions root internally.
+
+    Guarantee: passing any live node from the rule tree -- not only the
+    already-resolved root -- yields the same knowledge, so callers never need
+    to call ._conditions_root_ themselves.
+    """
+    animal = variable(Animal, domain=[])
+    base_condition = animal.has_fur
+    with base_condition:
+        add(animal.species, Species.MAMMAL)
+        with refinement(animal.can_fly):
+            add(animal.species, Species.BIRD)
+
+    # The refinement replaced base_condition as the tree's actual root.
+    assert base_condition._conditions_root_ is not base_condition
+
+    via_node = what_do_we_know_about(base_condition, Species.BIRD)
+    via_resolved_root = what_do_we_know_about(
+        base_condition._conditions_root_, Species.BIRD
+    )
+
+    assert via_node == via_resolved_root
+    assert via_node.is_satisfiable() is True
+
+
 def test_conclusion_knowledge_is_satisfiable_only_with_at_least_one_path():
     animal = variable(Animal, domain=[])
     unsatisfiable = what_do_we_know_about(None, Species.MAMMAL)
@@ -88,7 +114,7 @@ def test_conclusion_knowledge_is_satisfiable_only_with_at_least_one_path():
     condition = animal.has_fur
     with condition:
         add(animal.species, Species.MAMMAL)
-    satisfiable = what_do_we_know_about(condition._conditions_root_, Species.MAMMAL)
+    satisfiable = what_do_we_know_about(condition, Species.MAMMAL)
     assert satisfiable.is_satisfiable() is True
 
 
@@ -103,7 +129,7 @@ def test_bare_condition_rule_is_its_own_sufficient_guard():
     with condition:
         add(animal.species, Species.MAMMAL)
 
-    knowledge = what_do_we_know_about(condition._conditions_root_, Species.MAMMAL)
+    knowledge = what_do_we_know_about(condition, Species.MAMMAL)
 
     assert len(knowledge.sufficient_condition_sets) == 1
     scs = knowledge.sufficient_condition_sets[0]
@@ -117,7 +143,7 @@ def test_conclusion_value_with_no_rule_path_is_unsatisfiable():
     with condition:
         add(animal.species, Species.MAMMAL)
 
-    knowledge = what_do_we_know_about(condition._conditions_root_, Species.REPTILE)
+    knowledge = what_do_we_know_about(condition, Species.REPTILE)
 
     assert knowledge.is_satisfiable() is False
 
@@ -130,8 +156,7 @@ def test_refinement_child_guard_requires_both_parent_and_refinement_conditions()
         with refinement(animal.can_fly):
             add(animal.species, Species.BIRD)
 
-    root = base_condition._conditions_root_
-    knowledge = what_do_we_know_about(root, Species.BIRD)
+    knowledge = what_do_we_know_about(base_condition, Species.BIRD)
 
     assert len(knowledge.sufficient_condition_sets) == 1
     scs = knowledge.sufficient_condition_sets[0]
@@ -148,8 +173,7 @@ def test_refinement_parent_guard_excludes_the_refined_case():
         with refinement(animal.can_fly):
             add(animal.species, Species.BIRD)
 
-    root = base_condition._conditions_root_
-    knowledge = what_do_we_know_about(root, Species.MAMMAL)
+    knowledge = what_do_we_know_about(base_condition, Species.MAMMAL)
 
     assert len(knowledge.sufficient_condition_sets) == 1
     scs = knowledge.sufficient_condition_sets[0]
@@ -167,8 +191,7 @@ def test_alternative_first_branch_guard_is_unconditional_on_the_second():
         with alternative(animal.lays_eggs):
             add(animal.species, Species.REPTILE)
 
-    root = base_condition._conditions_root_
-    knowledge = what_do_we_know_about(root, Species.MAMMAL)
+    knowledge = what_do_we_know_about(base_condition, Species.MAMMAL)
 
     assert len(knowledge.sufficient_condition_sets) == 1
     scs = knowledge.sufficient_condition_sets[0]
@@ -185,8 +208,7 @@ def test_alternative_second_branch_guard_requires_the_first_to_be_false():
         with alternative(animal.lays_eggs):
             add(animal.species, Species.REPTILE)
 
-    root = base_condition._conditions_root_
-    knowledge = what_do_we_know_about(root, Species.REPTILE)
+    knowledge = what_do_we_know_about(base_condition, Species.REPTILE)
 
     assert len(knowledge.sufficient_condition_sets) == 1
     scs = knowledge.sufficient_condition_sets[0]
@@ -204,9 +226,8 @@ def test_next_branches_are_independent_disjuncts_with_no_cross_guards():
         with next_rule(animal.lays_eggs):
             add(animal.species, Species.REPTILE)
 
-    root = base_condition._conditions_root_
-    mammal_knowledge = what_do_we_know_about(root, Species.MAMMAL)
-    reptile_knowledge = what_do_we_know_about(root, Species.REPTILE)
+    mammal_knowledge = what_do_we_know_about(base_condition, Species.MAMMAL)
+    reptile_knowledge = what_do_we_know_about(base_condition, Species.REPTILE)
 
     assert len(mammal_knowledge.sufficient_condition_sets) == 1
     assert len(reptile_knowledge.sufficient_condition_sets) == 1
@@ -232,7 +253,7 @@ def test_ambiguous_value_produces_one_sufficient_condition_set_per_path():
         with next_rule(animal.lays_eggs):
             add(animal.species, Species.MAMMAL)
 
-    knowledge = what_do_we_know_about(base_condition._conditions_root_, Species.MAMMAL)
+    knowledge = what_do_we_know_about(base_condition, Species.MAMMAL)
 
     assert len(knowledge.sufficient_condition_sets) == 2
 
@@ -269,11 +290,11 @@ def test_index_builds_once_and_serves_every_conclusion_value_from_cache():
     index = BackwardInferenceIndex()
     assert index._cache is None
 
-    mammal_knowledge = index.query(base_condition._conditions_root_, Species.MAMMAL)
+    mammal_knowledge = index.query(base_condition, Species.MAMMAL)
     assert index._cache is not None
     cache_after_first_query = index._cache
 
-    reptile_knowledge = index.query(base_condition._conditions_root_, Species.REPTILE)
+    reptile_knowledge = index.query(base_condition, Species.REPTILE)
     assert index._cache is cache_after_first_query, "Second query must reuse the cached index"
 
     assert mammal_knowledge.is_satisfiable() is True
@@ -287,7 +308,7 @@ def test_invalidate_forces_the_next_query_to_rebuild():
         add(animal.species, Species.MAMMAL)
 
     index = BackwardInferenceIndex()
-    index.query(base_condition._conditions_root_, Species.MAMMAL)
+    index.query(base_condition, Species.MAMMAL)
     assert index._cache is not None
 
     index.invalidate()

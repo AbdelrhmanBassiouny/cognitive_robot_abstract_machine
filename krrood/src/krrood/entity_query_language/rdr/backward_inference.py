@@ -288,18 +288,19 @@ class BackwardInferenceIndex:
 
     def query(
         self,
-        conditions_root: Optional[SymbolicExpression],
+        expression: Optional[SymbolicExpression],
         conclusion_value: Any,
     ) -> ConclusionKnowledge:
         """
-        :param conditions_root: The root of the rule tree's condition DAG, or ``None`` for an empty tree.
+        :param expression: Any node belonging to the rule tree, or ``None`` for an empty
+            tree. The condition DAG's root is resolved from it via ``_conditions_root_``.
         :param conclusion_value: The target value to search for.
         :return: The backward-inference knowledge for *conclusion_value*.
         """
-        if conditions_root is None:
+        if expression is None:
             return ConclusionKnowledge(conclusion_value, ())
         if self._cache is None:
-            self._cache = _index_conclusions_by_value(conditions_root)
+            self._cache = _index_conclusions_by_value(expression._conditions_root_)
         return self._cache.get(
             conclusion_value,
             ConclusionKnowledge(conclusion_value, ()),
@@ -311,7 +312,7 @@ class BackwardInferenceIndex:
 
 
 def what_do_we_know_about(
-    conditions_root: Optional[SymbolicExpression],
+    expression: Optional[SymbolicExpression],
     conclusion_value: Any,
 ) -> ConclusionKnowledge:
     """Inspect the rule tree for every rule path that produces *conclusion_value*.
@@ -323,9 +324,9 @@ def what_do_we_know_about(
     When no path exists, returns a :class:`ConclusionKnowledge` with
     ``is_satisfiable() == False``.
 
-    :param conditions_root: The root of the rule tree's condition DAG,
-        or ``None`` for an empty tree.
+    :param expression: Any node belonging to the rule tree, or ``None`` for an empty
+        tree. The condition DAG's root is resolved from it via ``_conditions_root_``.
     :param conclusion_value: The target value to search for.
     :return: The backward-inference knowledge.
     """
-    return BackwardInferenceIndex().query(conditions_root, conclusion_value)
+    return BackwardInferenceIndex().query(expression, conclusion_value)
