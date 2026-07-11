@@ -63,7 +63,7 @@ class PlanarDistance(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates(fields.values()).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
 
 
 planar_distance = functional_form(PlanarDistance)
@@ -96,7 +96,7 @@ class ClosesToBorder(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates(fields.values()).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
 
 
 closes_to_border = functional_form(ClosesToBorder)
