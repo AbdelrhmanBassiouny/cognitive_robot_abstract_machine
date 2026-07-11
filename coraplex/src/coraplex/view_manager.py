@@ -35,7 +35,7 @@ class EndEffectorView(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 @dataclass

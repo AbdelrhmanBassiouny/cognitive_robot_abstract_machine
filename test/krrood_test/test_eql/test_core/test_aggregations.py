@@ -731,7 +731,7 @@ def test_nearest_object_type():
 
         @classmethod
         def _verbalization_fragment_(cls, operands):
-            return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
+            return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
     symbolic_distance = functional_form(SymbolicDistance)
 
@@ -744,7 +744,7 @@ def test_nearest_object_type():
 
         @classmethod
         def _verbalization_fragment_(cls, operands):
-            return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
+            return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
     eql_mro = functional_form(EqlMro)
 
