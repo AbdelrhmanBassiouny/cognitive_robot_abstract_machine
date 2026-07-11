@@ -447,7 +447,7 @@ class Length(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 length = functional_form(Length)

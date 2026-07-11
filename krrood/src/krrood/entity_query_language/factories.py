@@ -761,7 +761,7 @@ class NodeId(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 node_id = functional_form(NodeId)
@@ -783,7 +783,7 @@ class NodeDescendants(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 node_descendants = functional_form(NodeDescendants)
@@ -805,7 +805,7 @@ class NodeType(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 node_type = functional_form(NodeType)
@@ -827,7 +827,7 @@ class NodeChildren(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 node_children = functional_form(NodeChildren)
@@ -849,7 +849,7 @@ class AttributeOwnerClass(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 attribute_owner_class = functional_form(AttributeOwnerClass)
@@ -871,7 +871,7 @@ class NodeParents(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 node_parents = functional_form(NodeParents)
@@ -960,7 +960,7 @@ class RuntimeType(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
 type_ = functional_form(RuntimeType)
