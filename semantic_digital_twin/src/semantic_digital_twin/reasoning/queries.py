@@ -202,7 +202,7 @@ class ClassNameLowercased(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
 
 
 class_name_lowercased = functional_form(ClassNameLowercased)
@@ -245,7 +245,7 @@ class AnnotationVolume(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
 
 
 annotation_volume = functional_form(AnnotationVolume)
