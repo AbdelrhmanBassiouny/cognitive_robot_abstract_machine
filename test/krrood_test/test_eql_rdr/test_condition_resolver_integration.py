@@ -87,31 +87,13 @@ _DUMMY_ARGS = (None, None, None, None, None, None, None)
 
 
 class TestResolvedCondition:
-    """ResolvedCondition is a frozen dataclass with expression and resolver_type fields."""
+    """ResolvedCondition is a frozen dataclass with expression and resolver_type fields.
 
-    def test_construction_stores_expression(self):
-        """The expression passed at construction is retrievable unchanged.
-
-        Guarantee: no copy or transformation is applied to the expression.
-        """
-        rc = ResolvedCondition(_SENTINEL_EXPR, TargetKnowledgeResolver)
-        assert rc.expression is _SENTINEL_EXPR
-
-    def test_construction_stores_resolver_type(self):
-        """The resolver_type passed at construction is retrievable unchanged.
-
-        Guarantee: the provenance class is not coerced or transformed.
-        """
-        rc = ResolvedCondition(_SENTINEL_EXPR, CornerCaseKnowledgeResolver)
-        assert rc.resolver_type is CornerCaseKnowledgeResolver
-
-    def test_resolved_condition_resolver_type_field_target(self):
-        """resolver_type is TargetKnowledgeResolver when constructed with that class.
-
-        Guarantee: the field stores the exact class object, not a string or enum value.
-        """
-        rc = ResolvedCondition(_SENTINEL_EXPR, TargetKnowledgeResolver)
-        assert rc.resolver_type is TargetKnowledgeResolver
+    Basic field-storage coverage lives in test_condition_resolver.py's
+    self-contained test_resolved_condition_carries_expression_and_resolver_type;
+    this class covers the frozen/equality dataclass mechanics that mocked test
+    does not.
+    """
 
     def test_is_frozen_expression_field(self):
         """Mutating the expression field of a ResolvedCondition raises an error.
@@ -158,23 +140,13 @@ class TestResolvedCondition:
 
 
 class TestChainConditionResolver:
-    """ChainConditionResolver implements chain-of-responsibility correctly."""
+    """ChainConditionResolver implements chain-of-responsibility correctly.
 
-    def test_returns_second_resolver_result_when_first_returns_none(self):
-        """When the first resolver returns None, the chain falls through to the second.
-
-        Guarantee: a None result from one resolver does not swallow a valid result
-        that a later resolver can provide.
-        """
-        first = _AlwaysNoneResolver()
-        second = _AlwaysTargetResolver()
-        chain = ChainConditionResolver([first, second])
-
-        result = chain.resolve(*_DUMMY_ARGS)
-
-        assert result is not None
-        assert isinstance(result, ResolvedCondition)
-        assert result.resolver_type is _AlwaysTargetResolver
+    Basic fall-through/short-circuit/default-ordering coverage lives in
+    test_condition_resolver.py's self-contained ChainConditionResolver tests;
+    this class keeps only the call-count and structural-edge-case guarantees
+    those do not exercise.
+    """
 
     def test_short_circuits_when_first_resolver_returns_non_none(self):
         """When the first resolver returns a result, the second is never called.
@@ -191,19 +163,6 @@ class TestChainConditionResolver:
         assert result is not None
         assert result.resolver_type is _AlwaysTargetResolver
         assert second.call_count == 0
-
-    def test_returns_none_when_all_resolvers_return_none(self):
-        """When every resolver in the chain returns None, the chain itself returns None.
-
-        Guarantee: the caller receives None and can fall back to the expert prompt.
-        """
-        chain = ChainConditionResolver(
-            [_AlwaysNoneResolver(), _AlwaysNoneResolver(), _AlwaysNoneResolver()]
-        )
-
-        result = chain.resolve(*_DUMMY_ARGS)
-
-        assert result is None
 
     def test_empty_chain_returns_none(self):
         """A chain with no resolvers returns None without error.
@@ -225,65 +184,6 @@ class TestChainConditionResolver:
         result = ChainConditionResolver.backward_inference_default()
 
         assert isinstance(result, ChainConditionResolver)
-
-    def test_backward_inference_default_has_two_resolvers(self):
-        """backward_inference_default() installs exactly two resolvers.
-
-        Guarantee: the default chain contains TargetKnowledgeResolver followed by
-        CornerCaseKnowledgeResolver — the ordering is part of the public contract and
-        the count pins the surface so any future addition requires an explicit test update.
-        """
-        chain = ChainConditionResolver.backward_inference_default()
-
-        assert len(chain.resolvers) == 2
-
-    def test_backward_inference_default_first_resolver_is_target_knowledge(self):
-        """backward_inference_default() places TargetKnowledgeResolver first.
-
-        Guarantee: the target-knowledge resolver is always tried before the
-        corner-case-knowledge resolver — the ordering is part of the public contract.
-        """
-        chain = ChainConditionResolver.backward_inference_default()
-
-        assert isinstance(chain.resolvers[0], TargetKnowledgeResolver)
-
-    def test_backward_inference_default_resolvers_are_target_then_corner_case(self):
-        """backward_inference_default() contains TargetKnowledgeResolver then CornerCaseKnowledgeResolver.
-
-        Guarantee: index 0 is TargetKnowledgeResolver, index 1 is CornerCaseKnowledgeResolver —
-        both types and their order are pinned so downstream callers that depend on strategy
-        sequencing cannot be silently broken by reordering.
-        """
-        chain = ChainConditionResolver.backward_inference_default()
-
-        assert isinstance(chain.resolvers[0], TargetKnowledgeResolver)
-        assert isinstance(chain.resolvers[1], CornerCaseKnowledgeResolver)
-
-    def test_backward_inference_default_second_resolver_is_corner_case_knowledge(self):
-        """backward_inference_default() places CornerCaseKnowledgeResolver at index 1.
-
-        Guarantee: the second strategy in the default chain is exactly
-        CornerCaseKnowledgeResolver — not a generic fallback resolver.
-        """
-        chain = ChainConditionResolver.backward_inference_default()
-
-        assert isinstance(chain.resolvers[1], CornerCaseKnowledgeResolver)
-
-    def test_chain_returns_first_resolver_result_not_second(self):
-        """The result value comes from the first non-None resolver, not a later one.
-
-        Guarantee: result identity is preserved end-to-end through the chain loop —
-        no extra wrapping or replacement occurs.
-        """
-        first = _AlwaysTargetResolver()
-        second = _AlwaysCornerResolver()
-        chain = ChainConditionResolver([first, second])
-
-        result = chain.resolve(*_DUMMY_ARGS)
-
-        # The first resolver returned its own type; that must be what we get back.
-        assert result is not None
-        assert result.resolver_type is _AlwaysTargetResolver
 
     def test_all_resolvers_are_tried_when_none_succeed(self):
         """Every resolver is invoked when none of them return a result.
@@ -452,40 +352,12 @@ class TestTargetKnowledgeResolver:
       - Rule 2: feathers == True → bird   (alternative)
 
     Each test exercises one logical path through TargetKnowledgeResolver.resolve().
+
+    Basic discrimination and no-known-paths coverage lives in
+    test_condition_resolver.py's self-contained TargetKnowledgeResolver tests;
+    this class keeps only the live-evaluation and negated-guard guarantees
+    those do not exercise.
     """
-
-    def test_resolves_when_guard_true_for_new_case_false_for_corner_case(self):
-        """Resolver returns non-None when a target-knowledge guard discriminates.
-
-        Guarantee: when a guard G in target_knowledge is True for ``case`` AND
-        False for ``corner_case``, TargetKnowledgeResolver returns a
-        ResolvedCondition whose resolver_type is TargetKnowledgeResolver.
-
-        Scenario: new case is a second bird (feathers=True, milk=False).
-        Corner case is the mammal (milk=True, feathers=False).
-        The bird-knowledge guard ``feathers == True`` is True for bird2, False
-        for the mammal — so it discriminates correctly.
-        """
-        rdr, mammal, _bird = _two_rule_rdr()
-        bird2 = _make_bird(name="bird2")
-
-        bird_knowledge = rdr.what_do_we_know_about(Species.bird)
-        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
-
-        resolver = TargetKnowledgeResolver()
-        result = resolver.resolve(
-            bird2,
-            rdr.case_variable,
-            Species.bird,
-            Species.mammal,
-            mammal,
-            bird_knowledge,
-            mammal_knowledge,
-        )
-
-        assert result is not None
-        assert isinstance(result, ResolvedCondition)
-        assert result.resolver_type is TargetKnowledgeResolver
 
     def test_resolved_expression_evaluates_true_for_new_case(self):
         """The resolved expression is True when evaluated against the new case.
@@ -540,63 +412,6 @@ class TestTargetKnowledgeResolver:
         assert result is not None
         # Evaluate the resolved expression against the corner case (mammal).
         assert _eval_expr(result.expression, rdr.case_variable, mammal) is False
-
-    def test_returns_none_when_no_discriminating_guard_exists(self):
-        """Resolver returns None when every target-knowledge guard also holds for the corner case.
-
-        Guarantee: if the new case and corner case both satisfy every guard in
-        target_knowledge, no guard discriminates and the result is None — the
-        caller must fall back to the next resolver or the expert.
-
-        Scenario: corner case is a second bird identical to the new case
-        (feathers=True, milk=False) — the ``feathers == True`` guard holds for
-        both, so no discrimination is possible.
-        """
-        rdr, mammal, _bird = _two_rule_rdr()
-        bird_new = _make_bird(name="bird_new")
-        bird_corner = _make_bird(name="bird_corner")  # same trait signature
-
-        bird_knowledge = rdr.what_do_we_know_about(Species.bird)
-        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
-
-        resolver = TargetKnowledgeResolver()
-        result = resolver.resolve(
-            bird_new,
-            rdr.case_variable,
-            Species.bird,
-            Species.mammal,
-            bird_corner,  # corner case also satisfies feathers==True → no discrimination
-            bird_knowledge,
-            mammal_knowledge,
-        )
-
-        assert result is None
-
-    def test_returns_none_when_target_knowledge_has_no_sufficient_condition_sets(self):
-        """Resolver returns None when target_knowledge contains no sufficient condition sets.
-
-        Guarantee: an empty ConclusionKnowledge (no rules for the target) causes
-        the resolver to return None immediately — no AttributeError, no crash.
-        """
-        rdr, mammal, bird = _two_rule_rdr()
-        bird2 = _make_bird(name="bird2")
-
-        # Manually construct empty knowledge (as if the target has no rules yet).
-        empty_knowledge = ConclusionKnowledge(Species.reptile, ())
-        mammal_knowledge = rdr.what_do_we_know_about(Species.mammal)
-
-        resolver = TargetKnowledgeResolver()
-        result = resolver.resolve(
-            bird2,
-            rdr.case_variable,
-            Species.reptile,
-            Species.mammal,
-            mammal,
-            empty_knowledge,
-            mammal_knowledge,
-        )
-
-        assert result is None
 
     def test_handles_negated_guard_materialize_wraps_with_not(self):
         """_materialize produces not_(expr) for a negated guard, yielding a correct expression.
@@ -726,87 +541,13 @@ def _eval_expr(expr, case_variable, case):
 
 class TestCornerCaseKnowledgeResolver:
     """CornerCaseKnowledgeResolver finds a positive discriminating condition from
-    a non-active path to the wrong conclusion, without applying negation."""
+    a non-active path to the wrong conclusion, without applying negation.
 
-    def test_non_active_path_guard_returned_when_it_discriminates(self):
-        """Non-active-path guard is returned when it holds for case but not corner_case.
-
-        Guarantee: given two SCSs for the wrong conclusion, where the active path's
-        guard expression equals firing_anchor, the resolver finds a guard in the
-        non-active path that is True for the new case and False for the corner case
-        and returns a ResolvedCondition whose resolver_type is CornerCaseKnowledgeResolver.
-
-        Scenario:
-          Active path:     fins == True   (firing_anchor)
-          Non-active path: aquatic == True
-          case:        aquatic=True, fins=False  → non-active guard holds
-          corner_case: aquatic=False, fins=True  → non-active guard does not hold
-        """
-        case_variable, fins_expr, _aquatic_expr, current_knowledge = (
-            _two_path_wrong_knowledge()
-        )
-
-        # new case: aquatic=True → non-active guard holds; fins=False → not active path
-        case = _make_mammal(name="aquatic_case", fins=False, aquatic=True)
-        # corner case: aquatic=False → non-active guard fails; fins=True → active path
-        corner_case = _make_mammal(name="fins_corner", fins=True, aquatic=False)
-
-        empty_target = ConclusionKnowledge(Species.bird, ())
-        resolver = CornerCaseKnowledgeResolver()
-
-        result = resolver.resolve(
-            case=case,
-            case_variable=case_variable,
-            target_conclusion=Species.bird,
-            current_conclusion=Species.fish,
-            corner_case=corner_case,
-            target_knowledge=empty_target,
-            current_knowledge=current_knowledge,
-            firing_anchor=fins_expr,
-        )
-
-        assert result is not None
-        assert isinstance(result, ResolvedCondition)
-        assert result.resolver_type is CornerCaseKnowledgeResolver
-
-    def test_active_path_guard_never_returned(self):
-        """A guard that exists only in the active path is never returned.
-
-        Guarantee: even when the active-path guard (fins == True) would discriminate
-        case from corner_case, it is excluded because it belongs to the active SCS.
-        The resolver returns None when no non-active guard can discriminate.
-
-        Scenario:
-          Active path:     fins == True   (firing_anchor)
-          Non-active path: aquatic == True
-          case:        fins=True, aquatic=False → active guard holds, non-active does not
-          corner_case: fins=False, aquatic=False → neither holds for corner_case
-          Expected: None (non-active guard fails for case; active guard excluded)
-        """
-        case_variable, fins_expr, _aquatic_expr, current_knowledge = (
-            _two_path_wrong_knowledge()
-        )
-
-        # case: fins=True → active guard holds; aquatic=False → non-active guard fails
-        case = _make_mammal(name="fins_case", fins=True, aquatic=False)
-        # corner_case: fins=False → active guard fails; aquatic=False → non-active fails
-        corner_case = _make_mammal(name="no_aquatic_corner", fins=False, aquatic=False)
-
-        empty_target = ConclusionKnowledge(Species.bird, ())
-        resolver = CornerCaseKnowledgeResolver()
-
-        result = resolver.resolve(
-            case=case,
-            case_variable=case_variable,
-            target_conclusion=Species.bird,
-            current_conclusion=Species.fish,
-            corner_case=corner_case,
-            target_knowledge=empty_target,
-            current_knowledge=current_knowledge,
-            firing_anchor=fins_expr,
-        )
-
-        assert result is None
+    Basic discrimination and active-path-exclusion coverage lives in
+    test_condition_resolver.py's self-contained CornerCaseKnowledgeResolver tests;
+    this class keeps only the white-box (_active_path) and structural-edge-case
+    guarantees those do not exercise.
+    """
 
     def test_active_path_identified_by_firing_anchor(self):
         """_active_path() returns the sufficient condition set whose guard expression is firing_anchor.
@@ -829,42 +570,6 @@ class TestCornerCaseKnowledgeResolver:
 
         assert active is scs_fins
         assert active is not scs_aquatic
-
-    def test_returns_none_when_all_non_active_guards_fail(self):
-        """Resolver returns None when every non-active-path guard fails to discriminate.
-
-        Guarantee: if the non-active guard holds for both case and corner_case, it
-        does not discriminate and the resolver correctly yields None.
-
-        Scenario:
-          Active path:     fins == True   (firing_anchor)
-          Non-active path: aquatic == True
-          case:        aquatic=True, fins=False → non-active guard holds
-          corner_case: aquatic=True, fins=True  → non-active guard ALSO holds
-          → guard is True for both; no discrimination possible → None
-        """
-        case_variable, fins_expr, _aquatic_expr, current_knowledge = (
-            _two_path_wrong_knowledge()
-        )
-
-        case = _make_mammal(name="aquatic_case", fins=False, aquatic=True)
-        corner_case = _make_mammal(name="aquatic_corner", fins=True, aquatic=True)
-
-        empty_target = ConclusionKnowledge(Species.bird, ())
-        resolver = CornerCaseKnowledgeResolver()
-
-        result = resolver.resolve(
-            case=case,
-            case_variable=case_variable,
-            target_conclusion=Species.bird,
-            current_conclusion=Species.fish,
-            corner_case=corner_case,
-            target_knowledge=empty_target,
-            current_knowledge=current_knowledge,
-            firing_anchor=fins_expr,
-        )
-
-        assert result is None
 
     def test_returns_none_when_no_sufficient_condition_sets(self):
         """Resolver returns None immediately when current_knowledge has no condition sets.
@@ -929,42 +634,6 @@ class TestCornerCaseKnowledgeResolver:
         )
 
         assert result is None
-
-    def test_returns_result_when_firing_anchor_none(self):
-        """When firing_anchor is None, all paths are searched (no active-path exclusion).
-
-        Guarantee: firing_anchor=None degrades gracefully — _active_path() returns None,
-        so no SCS is excluded and any discriminating guard in any path can be returned.
-
-        Scenario: with two SCSs (fins, aquatic) and firing_anchor=None, the fins guard
-        can discriminate case from corner_case and is returned even though it would have
-        been excluded as the active path if firing_anchor had been supplied.
-        """
-        case_variable, _fins_expr, _aquatic_expr, current_knowledge = (
-            _two_path_wrong_knowledge()
-        )
-
-        # case: fins=True → fins guard holds
-        # corner_case: fins=False → fins guard fails → discriminates
-        case = _make_mammal(name="fins_case", fins=True, aquatic=False)
-        corner_case = _make_mammal(name="no_fins_corner", fins=False, aquatic=False)
-
-        empty_target = ConclusionKnowledge(Species.bird, ())
-        resolver = CornerCaseKnowledgeResolver()
-
-        result = resolver.resolve(
-            case=case,
-            case_variable=case_variable,
-            target_conclusion=Species.bird,
-            current_conclusion=Species.fish,
-            corner_case=corner_case,
-            target_knowledge=empty_target,
-            current_knowledge=current_knowledge,
-            firing_anchor=None,  # no active path excluded
-        )
-
-        assert result is not None
-        assert result.resolver_type is CornerCaseKnowledgeResolver
 
     def test_no_negation_applied_to_returned_expression(self):
         """The returned expression is the raw guard expression — not wrapped in not_().
