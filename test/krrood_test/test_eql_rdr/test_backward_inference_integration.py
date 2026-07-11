@@ -1,9 +1,13 @@
 """
-Tests for backward inference on the EQL-RDR rule tree.
+Integration tests for backward inference on the EQL-RDR rule tree.
 
 :func:`what_do_we_know_about` inspects the rule tree (a live EQL expression DAG) and
 returns the sets of conditions that would cause a given conclusion value to fire, as
 :class:`SufficientConditionSet` objects inside a :class:`ConclusionKnowledge`.
+
+Exercises this through the full engine (:class:`EQLSingleClassRDR`, the zoo fixture
+dataset); see ``test_backward_inference.py`` for the self-contained unit tests that
+build rule trees directly from core EQL primitives.
 """
 
 from __future__ import annotations

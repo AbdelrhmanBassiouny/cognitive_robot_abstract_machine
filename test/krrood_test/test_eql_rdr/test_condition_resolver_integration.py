@@ -1,10 +1,12 @@
 """
-Tests for the auto-condition resolution system (``condition_resolver.py``):
+Integration tests for the auto-condition resolution system (``condition_resolver.py``):
 ``ResolvedCondition``, ``ConditionResolver`` ABC, ``ChainConditionResolver``,
 and the two concrete strategy resolvers.
 
 Each test class pins exactly one contract; each test method verifies one
-observable guarantee.
+observable guarantee. Exercises this through the full engine (:class:`EQLSingleClassRDR`,
+:class:`Expert`, the zoo fixture dataset); see ``test_condition_resolver.py`` for the
+self-contained unit tests built against hand-constructed knowledge fixtures.
 """
 
 from __future__ import annotations
