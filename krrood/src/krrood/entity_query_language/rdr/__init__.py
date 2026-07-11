@@ -1,5 +1,18 @@
-"""Ripple-Down-Rules engine for the Entity Query Language."""
+"""
+EQL-native Ripple Down Rules.
 
+The rule tree is a live EQL expression DAG (``Refinement`` / ``Alternative`` / ``Add``)
+and classification is plain EQL evaluation. The RDR attaches to evaluation through the
+aspect-oriented :class:`~krrood.entity_query_language.evaluation.EvaluationObserver`
+hooks rather than driving a bespoke traversal.
+"""
+
+from krrood.entity_query_language.rdr.backend import (
+    GroundTruth,
+    ModelKey,
+    RDRBackend,
+    key_from_attribute,
+)
 from krrood.entity_query_language.rdr.backward_inference import (
     BackwardInferenceIndex,
     ConclusionKnowledge,
@@ -14,6 +27,11 @@ from krrood.entity_query_language.rdr.condition_resolver import (
     ResolvedCondition,
     ResolutionMode,
     TargetKnowledgeResolver,
+)
+from krrood.entity_query_language.rdr.expert import (
+    Expert,
+    NoConclusionProvided,
+    NoConditionsProvided,
 )
 from krrood.entity_query_language.rdr.function_case import FunctionCase
 from krrood.entity_query_language.rdr.interface import (
@@ -49,6 +67,10 @@ from krrood.entity_query_language.rdr.serialization import (
     rdr_to_python,
     save_rdr,
     save_rdr_with_case,
+)
+from krrood.entity_query_language.rdr.single_class import (
+    EQLSingleClassRDR,
+    RDRConvergenceWarning,
 )
 from krrood.entity_query_language.rdr.underspecified import (
     MultipleInferenceTargets,
