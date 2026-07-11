@@ -111,10 +111,10 @@ class EQLSingleClassRDR:
     Use :class:`~krrood.entity_query_language.rdr.condition_resolver.ChainConditionResolver`
     ``.backward_inference_default()`` for the standard target-knowledge resolution strategy.
     """
-    resolution_mode: ResolutionMode = field(default=ResolutionMode.SILENT)
+    resolution_mode: ResolutionMode = field(default=ResolutionMode.AUTOMATIC)
     """Controls whether an auto-resolved condition is silently inserted or shown as a hint.
 
-    :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.SILENT`
+    :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.AUTOMATIC`
     (default) inserts the condition directly without asking the expert.
     :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.HINT`
     passes the resolved condition to the expert as a pre-seeded suggestion; the expert
@@ -266,7 +266,7 @@ class EQLSingleClassRDR:
                 self._insert_rule(trace, current, condition, target, case)
                 break
             except SelfReferentialInsertionError as e:
-                if self.resolution_mode is ResolutionMode.SILENT:
+                if self.resolution_mode is ResolutionMode.AUTOMATIC:
                     raise
                 condition = expert.ask_for_conditions(
                     case,
@@ -332,7 +332,7 @@ class EQLSingleClassRDR:
     ) -> SymbolicExpression:
         """Apply the auto-resolver outcome according to :attr:`resolution_mode`.
 
-        In :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.SILENT`
+        In :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.AUTOMATIC`
         mode (default), a resolved condition is inserted directly without prompting.  In
         :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.HINT`
         mode, the full :class:`~krrood.entity_query_language.rdr.condition_resolver.ResolvedCondition`
@@ -349,7 +349,7 @@ class EQLSingleClassRDR:
         :param expert: The expert that supplies conditions.
         :return: The EQL condition expression to insert.
         """
-        if resolved is not None and self.resolution_mode is ResolutionMode.SILENT:
+        if resolved is not None and self.resolution_mode is ResolutionMode.AUTOMATIC:
             return resolved.expression
         suggestion = resolved if self.resolution_mode is ResolutionMode.HINT else None
         return expert.ask_for_conditions(

@@ -810,7 +810,7 @@ class TestSharedAnchorDoesNotCorruptSiblingCondition:
             Animal,
             "species",
             condition_resolver=resolver,
-            resolution_mode=ResolutionMode.SILENT,
+            resolution_mode=ResolutionMode.AUTOMATIC,
         )
         expert = Expert(interface=FunctionInterface(answer_fn=answer))
 

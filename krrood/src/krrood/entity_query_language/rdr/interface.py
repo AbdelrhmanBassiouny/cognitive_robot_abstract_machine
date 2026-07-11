@@ -90,7 +90,7 @@ class CaseContext:
     ``None`` when no rule fired (first rule or alternative path)."""
     suggested_condition: Optional[ResolvedCondition] = None
     """The full auto-resolved condition (expression + resolver provenance) suggested to the
-    expert in HINT mode; ``None`` when no hint is available (SILENT mode or resolver found
+    expert in HINT mode; ``None`` when no hint is available (AUTOMATIC mode or resolver found
     nothing)."""
 
     @property
