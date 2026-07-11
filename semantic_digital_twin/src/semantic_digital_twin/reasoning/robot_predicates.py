@@ -27,7 +27,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Copula,
     Noun,
     Verb,
-    function_possessive_phrase,
+    FunctionVerbalizationTemplates,
 )
 from semantic_digital_twin.collision_checking.collision_detector import (
     ClosestPoints,
@@ -93,7 +93,7 @@ class RobotCollisions(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return function_possessive_phrase(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
 
 
 robot_in_collision = functional_form(RobotCollisions)
@@ -169,7 +169,7 @@ class BlockingBodies(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return function_possessive_phrase(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
 
 
 blocking = functional_form(BlockingBodies)
@@ -210,7 +210,7 @@ class BodiesInGripper(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return function_possessive_phrase(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
 
 
 bodies_in_gripper = functional_form(BodiesInGripper)
@@ -239,7 +239,7 @@ class BodyInGripperFraction(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return function_possessive_phrase(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
 
 
 is_body_in_gripper = functional_form(BodyInGripperFraction)

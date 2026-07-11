@@ -62,10 +62,10 @@ class PlanarDistance(SymbolicFunction):
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-            function_possessive_phrase,
+            FunctionVerbalizationTemplates,
         )
 
-        return function_possessive_phrase(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
 
 
 planar_distance = functional_form(PlanarDistance)
@@ -95,10 +95,10 @@ class ClosesToBorder(SymbolicFunction):
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-            function_possessive_phrase,
+            FunctionVerbalizationTemplates,
         )
 
-        return function_possessive_phrase(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
 
 
 closes_to_border = functional_form(ClosesToBorder)
