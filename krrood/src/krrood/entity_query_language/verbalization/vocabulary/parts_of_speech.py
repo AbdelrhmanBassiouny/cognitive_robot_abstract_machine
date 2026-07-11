@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Iterable, Protocol, Sequence, Union, runtime_checkable
+from typing_extensions import Iterable, Protocol, Union, runtime_checkable
 
 from krrood.entity_query_language.predicate import VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
@@ -332,64 +332,32 @@ def value_function_noun(name: str) -> str:
     return " ".join(words)
 
 
-@dataclass
 class FunctionVerbalizationTemplates:
     """The name-based surface templates a value
-    :class:`~krrood.entity_query_language.predicate.SymbolicFunction` reuses to verbalize itself:
-    construct it with the function's already-rendered operands, then call the template that matches how
-    the value relates to them. Grouping them here means each reading lives in one place rather than being
-    duplicated per class, so a value function only has to pick a template.
+    :class:`~krrood.entity_query_language.predicate.SymbolicFunction` reuses to verbalize itself: call
+    the template that matches how the value relates to its operands. Each reading lives here in one place
+    rather than being duplicated per class, so a value function only has to pick a template.
+
+    The templates are stateless static methods; each takes the function's *name* (read as the
+    value's noun, a leading ``get`` dropped) followed by its already-rendered operands, in the order they
+    are spoken.
 
     ..note:: These build *noun phrases* — a value is a referring expression. The boolean counterpart for
         a predicate is :func:`predicate_clause`, which builds a subject-led :class:`Clause`.
     """
 
-    operands: Sequence[ClauseConstituent]
-    """The function's already-rendered arguments, shared by every template."""
-
-    def __post_init__(self) -> None:
-        self.operands = tuple(self.operands)
-
-    def possessive(self, name: str) -> VerbalizationFragment:
+    @staticmethod
+    def possessive(
+        name: str, *operands: ClauseConstituent
+    ) -> VerbalizationFragment:
         """Build *"the <noun> of <operands>"* — the operands read as a possessive genitive over the
-        value's noun. The *name* is read as that noun (a leading ``get`` dropped); a nullary function is
-        just the noun.
+        value's noun. A nullary function is just the noun.
 
         Reach for this when the value relates to its operands by the possessive *"of"* (``Length`` →
         *"the length **of** …"*); use :meth:`custom_relation` for any other relating word.
 
-        :param name: The function's identifier (or class name).
-        :return: The value noun phrase.
-
-        >>> from krrood.entity_query_language.verbalization.fragments.base import (
-        ...     flatten_fragment_to_plain_text, WordFragment,
-        ... )
-        >>> flatten_fragment_to_plain_text(FunctionVerbalizationTemplates(()).possessive("GetQuarter"))
-        'quarter'
-        >>> flatten_fragment_to_plain_text(
-        ...     FunctionVerbalizationTemplates(
-        ...         (Noun(WordFragment(text="the capacity")),)
-        ...     ).possessive("RemainingLoad")
-        ... )
-        'the remaining load of the capacity'
-        """
-        noun = value_function_noun(name)
-        if not self.operands:
-            return Noun(WordFragment(text=noun)).as_fragment()
-        return possessive_path([PathStep(noun)], And(self.operands).as_fragment())
-
-    def custom_relation(
-        self, noun: str, relation: ClauseConstituent
-    ) -> VerbalizationFragment:
-        """Build *"the <noun> <relation> <operands...>"* — the general value noun phrase for a value
-        whose relation to its operands is not the possessive *"of"* that :meth:`possessive` hardcodes
-        (e.g. a length BETWEEN two things).
-
-        The operands are joined with *"and"*; the relation is any constituent, typically a
-        :class:`~krrood.entity_query_language.verbalization.vocabulary.english.Prepositions` member.
-
-        :param noun: The value's noun (the definite article is realised by the determiner pass).
-        :param relation: The word relating the value to its operands.
+        :param name: The function's identifier (or class name), read as the value's noun.
+        :param operands: The function's already-rendered arguments, in spoken order.
         :return: The value noun phrase.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import (
@@ -399,17 +367,53 @@ class FunctionVerbalizationTemplates:
         ...     realize_tree,
         ... )
         >>> flatten_fragment_to_plain_text(realize_tree(
-        ...     FunctionVerbalizationTemplates((Noun.the("begin"), Noun.the("end"))).custom_relation(
-        ...         "inheritance path length", Prepositions.BETWEEN
+        ...     FunctionVerbalizationTemplates.possessive("GetQuarter")
+        ... ))
+        'quarter'
+        >>> flatten_fragment_to_plain_text(realize_tree(
+        ...     FunctionVerbalizationTemplates.possessive("RemainingLoad", Noun.the("capacity"))
+        ... ))
+        'the remaining load of the capacity'
+        """
+        noun = value_function_noun(name)
+        if not operands:
+            return Noun.bare(noun).as_fragment()
+        return possessive_path([PathStep(noun)], And(operands).as_fragment())
+
+    @staticmethod
+    def custom_relation(
+        name: str, relation: ClauseConstituent, *operands: ClauseConstituent
+    ) -> VerbalizationFragment:
+        """Build *"the <noun> <relation> <operands...>"* — the general value noun phrase for a value
+        whose relation to its operands is not the possessive *"of"* that :meth:`possessive` hardcodes
+        (e.g. a length BETWEEN two things).
+
+        The operands are joined with *"and"*; the relation is any constituent, typically a
+        :class:`~krrood.entity_query_language.verbalization.vocabulary.english.Prepositions` member.
+
+        :param name: The function's identifier (or class name), read as the value's noun.
+        :param relation: The word relating the value to its operands.
+        :param operands: The function's already-rendered arguments, in spoken order.
+        :return: The value noun phrase.
+
+        >>> from krrood.entity_query_language.verbalization.fragments.base import (
+        ...     flatten_fragment_to_plain_text,
+        ... )
+        >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+        ...     realize_tree,
+        ... )
+        >>> flatten_fragment_to_plain_text(realize_tree(
+        ...     FunctionVerbalizationTemplates.custom_relation(
+        ...         "InheritancePathLength", Prepositions.BETWEEN, Noun.the("begin"), Noun.the("end")
         ...     )
         ... ))
         'the inheritance path length between the begin and the end'
         """
         return PhraseFragment(
             parts=[
-                Noun.the(noun).as_fragment(),
+                Noun.the(value_function_noun(name)).as_fragment(),
                 relation.as_fragment(),
-                And(self.operands).as_fragment(),
+                And(operands).as_fragment(),
             ]
         )
 
