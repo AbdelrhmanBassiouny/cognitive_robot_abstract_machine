@@ -155,6 +155,7 @@
     border: 1px dashed var(--line-strong); background: var(--panel-2); align-self: flex-start;
   }
   .root-label .glyph { color: var(--accent); font-weight: 700; }
+  .root-label.hidden { display: none; }
   .root-label .detached { color: var(--muted); opacity: 0.75; font-style: italic; }
   /* a stack deeper than MAX_DEPTH spills into a continuation root, linked back to its parent node */
   .root-label.continuation { border-style: solid; border-color: var(--accent-soft); color: var(--accent); }
@@ -505,6 +506,7 @@ const orphanRoots = BOARD.branches.filter(b => b.parent !== "cram2/main" && !byN
 const MAX_DEPTH = 5;          // deepest nesting before a stack spills into a new rooted block
 const continuations = [];     // {branch, parentName} queued while rendering the current block
 const links = [];             // {parentName, childName} — one arrow per continuation root
+const rootBlocks = [];        // {label, ul} — every root/continuation block, for the empty-label sweep
 
 function nodeEl(b, depth) {
   const st = STATUS[b.status];
@@ -571,6 +573,7 @@ function appendRootBlock(branch, labelHtml, parentName) {
   ul.appendChild(nodeEl(branch, 1));
   canvas.appendChild(label);
   canvas.appendChild(ul);
+  rootBlocks.push({ label, ul });
   if (parentName) links.push({ parentName, childName: branch.name });
   // Render the blocks this one spilled directly under it, in order (each may spill again).
   continuations.splice(start).forEach(c => appendRootBlock(
@@ -655,6 +658,12 @@ const showMerged = document.getElementById("show-merged");
 function applyMerged() {
   document.querySelectorAll('li[data-merged="1"]').forEach(li => {
     li.classList.toggle("hidden", !showMerged.checked);
+  });
+  // A root/continuation block whose every branch just went hidden (e.g. a merged root with no
+  // active descendants) would otherwise leave its "cram2/main" (or "continues ...") label floating
+  // with nothing under it -- hide the label along with the now-empty block.
+  rootBlocks.forEach(({ label, ul }) => {
+    label.classList.toggle("hidden", !ul.querySelector("li:not(.hidden)"));
   });
   drawConnectors();
 }
