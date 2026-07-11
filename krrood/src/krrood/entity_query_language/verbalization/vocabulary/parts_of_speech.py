@@ -338,9 +338,9 @@ class FunctionVerbalizationTemplates:
     the template that matches how the value relates to its operands. Each reading lives here in one place
     rather than being duplicated per class, so a value function only has to pick a template.
 
-    The templates are stateless static methods; each takes the function's *name* (read as the
-    value's noun, a leading ``get`` dropped) followed by its already-rendered operands, in the order they
-    are spoken.
+    The templates are stateless static methods; each takes the value function's *class* (its name read
+    as the value's noun, a leading ``get`` dropped) followed by its already-rendered operands, in the
+    order they are spoken.
 
     ..note:: These build *noun phrases* — a value is a referring expression. The boolean counterpart for
         a predicate is :func:`predicate_clause`, which builds a subject-led :class:`Clause`.
@@ -348,7 +348,7 @@ class FunctionVerbalizationTemplates:
 
     @staticmethod
     def possessive(
-        name: str, *operands: ClauseConstituent
+        function_class: type, *operands: ClauseConstituent
     ) -> VerbalizationFragment:
         """Build *"the <noun> of <operands>"* — the operands read as a possessive genitive over the
         value's noun. A nullary function is just the noun.
@@ -356,7 +356,7 @@ class FunctionVerbalizationTemplates:
         Reach for this when the value relates to its operands by the possessive *"of"* (``Length`` →
         *"the length **of** …"*); use :meth:`custom_relation` for any other relating word.
 
-        :param name: The function's identifier (or class name), read as the value's noun.
+        :param function_class: The value function's class; its name is read as the value's noun.
         :param operands: The function's already-rendered arguments, in spoken order.
         :return: The value noun phrase.
 
@@ -367,22 +367,24 @@ class FunctionVerbalizationTemplates:
         ...     realize_tree,
         ... )
         >>> flatten_fragment_to_plain_text(realize_tree(
-        ...     FunctionVerbalizationTemplates.possessive("GetQuarter")
+        ...     FunctionVerbalizationTemplates.possessive(type("GetQuarter", (), {}))
         ... ))
         'quarter'
         >>> flatten_fragment_to_plain_text(realize_tree(
-        ...     FunctionVerbalizationTemplates.possessive("RemainingLoad", Noun.the("capacity"))
+        ...     FunctionVerbalizationTemplates.possessive(
+        ...         type("RemainingLoad", (), {}), Noun.the("capacity")
+        ...     )
         ... ))
         'the remaining load of the capacity'
         """
-        noun = value_function_noun(name)
+        noun = value_function_noun(function_class.__name__)
         if not operands:
             return Noun.bare(noun).as_fragment()
         return possessive_path([PathStep(noun)], And(operands).as_fragment())
 
     @staticmethod
     def custom_relation(
-        name: str, relation: ClauseConstituent, *operands: ClauseConstituent
+        function_class: type, relation: ClauseConstituent, *operands: ClauseConstituent
     ) -> VerbalizationFragment:
         """Build *"the <noun> <relation> <operands...>"* — the general value noun phrase for a value
         whose relation to its operands is not the possessive *"of"* that :meth:`possessive` hardcodes
@@ -391,7 +393,7 @@ class FunctionVerbalizationTemplates:
         The operands are joined with *"and"*; the relation is any constituent, typically a
         :class:`~krrood.entity_query_language.verbalization.vocabulary.english.Prepositions` member.
 
-        :param name: The function's identifier (or class name), read as the value's noun.
+        :param function_class: The value function's class; its name is read as the value's noun.
         :param relation: The word relating the value to its operands.
         :param operands: The function's already-rendered arguments, in spoken order.
         :return: The value noun phrase.
@@ -404,14 +406,17 @@ class FunctionVerbalizationTemplates:
         ... )
         >>> flatten_fragment_to_plain_text(realize_tree(
         ...     FunctionVerbalizationTemplates.custom_relation(
-        ...         "InheritancePathLength", Prepositions.BETWEEN, Noun.the("begin"), Noun.the("end")
+        ...         type("InheritancePathLength", (), {}),
+        ...         Prepositions.BETWEEN,
+        ...         Noun.the("begin"),
+        ...         Noun.the("end"),
         ...     )
         ... ))
         'the inheritance path length between the begin and the end'
         """
         return PhraseFragment(
             parts=[
-                Noun.the(value_function_noun(name)).as_fragment(),
+                Noun.the(value_function_noun(function_class.__name__)).as_fragment(),
                 relation.as_fragment(),
                 And(operands).as_fragment(),
             ]
