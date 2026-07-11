@@ -6,7 +6,14 @@ import pytest
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
-from krrood.entity_query_language.evaluation import is_condition_participant
+from krrood.entity_query_language.evaluation import (
+    EvaluationTracker,
+    is_condition_participant,
+)
+from krrood.entity_query_language.evaluation_context import (
+    EvaluationContext,
+    set_evaluation_context,
+)
 from krrood.entity_query_language._stack import CallStack
 from krrood.entity_query_language._monitoring import monitored
 from krrood.entity_query_language.explanation.explanation import (
@@ -278,6 +285,29 @@ def test_satisfied_conditions_simple():
 
     assert result.satisfied_condition_ids is not None
     assert len(result.satisfied_condition_ids) > 0
+
+
+def test_cumulative_evaluated_ids_are_complete_from_on_evaluate_enter_alone():
+    """The context's cumulative evaluated-id set records every evaluated condition node.
+
+    Each expression adds its own id when entered, so the cumulative set (the one
+    :func:`~krrood.entity_query_language.rdr.observer.trace_case` reads) is complete without any
+    per-step source-set propagation or per-result snapshotting.
+    """
+    val = variable_from([6])
+    query = entity(val).where(and_(val > 5, val < 10))
+    query.build()
+
+    context = EvaluationContext(observers=[EvaluationTracker()])
+    set_evaluation_context(context)
+    try:
+        list(query._evaluate_())
+    finally:
+        set_evaluation_context(None)
+
+    evaluated = context.evaluated_expression_ids.snapshot()
+    condition_names = _get_satisfied_names(evaluated, val._conditions_root_)
+    assert {"AND", ">", "<"} <= condition_names
 
 
 def test_satisfied_conditions_and_both_true():

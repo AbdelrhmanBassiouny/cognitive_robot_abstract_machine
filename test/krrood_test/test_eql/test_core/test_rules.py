@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import pytest
 
 from krrood.entity_query_language.factories import (
@@ -14,6 +16,10 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.core.base_expressions import OperationResult
+from krrood.entity_query_language.evaluation_context import (
+    EvaluationContext,
+    set_evaluation_context,
+)
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.rules.conclusion import Add
 from ...dataset.eql_rule_tree_doc_example import (
@@ -648,3 +654,76 @@ def test_conclusions_fire_without_an_active_evaluation_context(
 
     assert drawers._id_ in processed_result.bindings
     assert isinstance(processed_result.bindings[drawers._id_], Drawer)
+
+
+def test_conclusions_fire_with_a_pre_installed_evaluation_context(
+    handles_and_containers_world,
+):
+    """A conclusion must still fire when the caller installs an ``EvaluationContext`` itself.
+
+    ``_evaluate_``'s active-conditions-root claim only ran when it created its own context
+    (``owns_an_evaluation_context``). A caller that pre-installs a context to attach its own
+    observers (e.g. so it can watch which conclusions fire) never went through that branch, so
+    ``active_conditions_root`` stayed unclaimed for the whole pass and every conclusion was
+    silently skipped -- not because it was structurally wrong, but because nothing had claimed
+    the pass's active root. The claim must happen for the first node to evaluate in a pass
+    regardless of who created the context.
+    """
+    world = handles_and_containers_world
+    container = variable(Container, domain=world.bodies)
+    handle = variable(Handle, domain=world.bodies)
+    fixed_connection = variable(FixedConnection, domain=world.connections)
+    drawers = variable(Drawer, domain=[])
+    condition = and_(
+        container == fixed_connection.parent,
+        handle == fixed_connection.child,
+    )
+
+    with condition:
+        Add(drawers, inference(Drawer)(handle=handle, container=container))
+
+    context = EvaluationContext()
+    set_evaluation_context(context)
+    try:
+        results = list(condition._evaluate_())
+    finally:
+        set_evaluation_context(None)
+
+    fired = next(result for result in results if not result.is_false)
+    assert drawers._id_ in fired.bindings
+    assert isinstance(fired.bindings[drawers._id_], Drawer)
+
+
+def test_conclusions_respect_a_bare_attribute_conditions_root_truthiness():
+    """A bare (non-comparator) attribute used directly as a Filter's condition must gate
+    conclusions by its actual value, not by ``OperationResult.is_false``.
+
+    A bare ``Attribute``/``Variable`` never sets ``is_false`` itself (only ``Comparator``s and
+    ``LogicalOperator``s do), so when it *is* the conditions root directly (e.g.
+    ``entity(x).where(x.flag)``, no wrapping comparator), checking ``current_result.is_false``
+    always reads ``False`` regardless of the attribute's real value.
+    ``OperationResult.is_condition_false`` exists precisely to derive truth from the value
+    instead, and must be what gates conclusion firing here.
+    """
+
+    @dataclass(unsafe_hash=True)
+    class Robot:
+        name: str
+        charged: bool
+
+    @dataclass(unsafe_hash=True)
+    class Status:
+        label: str
+
+    uncharged = Robot("R2D2", charged=False)
+    robot = variable(Robot, domain=[uncharged])
+    statuses = variable(Status, domain=[])
+    condition = robot.charged
+
+    with condition:
+        Add(statuses, Status("ready"))
+
+    results = list(condition._evaluate_())
+
+    fired = [result for result in results if not result.is_false]
+    assert all(statuses._id_ not in result.bindings for result in fired)
