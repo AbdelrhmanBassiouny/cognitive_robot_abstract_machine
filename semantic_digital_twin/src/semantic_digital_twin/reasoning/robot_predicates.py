@@ -93,7 +93,7 @@ class RobotCollisions(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 robot_in_collision = functional_form(RobotCollisions)
@@ -169,7 +169,7 @@ class BlockingBodies(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 blocking = functional_form(BlockingBodies)
@@ -210,7 +210,7 @@ class BodiesInGripper(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 bodies_in_gripper = functional_form(BodiesInGripper)
@@ -239,7 +239,7 @@ class BodyInGripperFraction(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 is_body_in_gripper = functional_form(BodyInGripperFraction)
