@@ -16,7 +16,12 @@
 # `stack.py` reads a `board.json` export of the fork PRs (refreshed by the routine via the GitHub
 # MCP, or by `stack.py export` where `gh` is available) plus git — so you never hand-edit a ledger.
 
-wip_cap = 3                    # max INDEPENDENT stacks simultaneously in review on cram2 (bugs exempt)
+wip_cap = 1000000              # max INDEPENDENT stacks simultaneously in review on cram2 (bugs exempt)
+                                # effectively unlimited: size/scrutiny-needed predicts review duration far
+                                # better than admission-gate count does, and gating hides the backlog from
+                                # the reviewer's own triage. Left as a large int rather than 0/None so
+                                # promotion_order's `wip_cap - len(reviewed_roots)` arithmetic and the
+                                # board's free-slot chips need no special-casing.
 wip_exempt_labels = ["bug"]    # PRs with any of these labels do NOT count against wip_cap
 in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
