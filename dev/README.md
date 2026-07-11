@@ -29,6 +29,16 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 ## Files
 
+**These tooling files live only on `claude/stack-workflow-tooling`, deliberately never merged into
+fork `main`.** They're dev-only workflow scaffolding, not repo runtime code — merging them would
+pollute every stack branch (which bases on `main`) with tooling that has nothing to do with the
+actual codebase. PR #25, which introduced them, is intentionally **closed, not merged**; the branch
+itself is the durable home, and stays open indefinitely. Anything that needs `dev/stack.py` or
+`dev/board.json`'s schema pulls it FROM that branch, never from `main`: the board Action checks the
+whole branch out (see below), and the cloud Routine's SETUP step 0 pulls just the `dev/` folder onto
+its `main` checkout. This is expected, steady-state structure — not a gap to work around or a signal
+that #25 needs merging.
+
 - **`stack.toml`** — **config only**: `wip_cap`, `wip_exempt_labels`, the label names, and the
   remotes. No branches, no per-PR state. You rarely touch it.
 - **`board.json`** — the fork-PR export (`number`, `head`, `base`, `draft`, `labels`, `ci`, `session`)
@@ -188,6 +198,13 @@ SETUP
    (AbdelrhmanBassiouny/cognitive_robot_abstract_machine) and `cram2` the upstream. A fresh cloud
    clone may have them named differently — check `git remote -v` and rename/add so `origin`=fork,
    `cram2`=upstream before continuing.
+0b. PULL THE TOOLING. `dev/stack.py`, `dev/stack.toml`, and this README live ONLY on
+   `claude/stack-workflow-tooling` — that branch is deliberately never merged into `main` (PR #25 is
+   closed, not merged, on purpose). This is expected, steady-state structure, not a gap: every run,
+   pull just the `dev/` folder from it onto your `main` checkout —
+   `git fetch origin claude/stack-workflow-tooling && git checkout origin/claude/stack-workflow-tooling -- dev/`
+   — rather than treating the absence of `dev/stack.py` on `main` as something to work around or
+   report.
 1. UPDATE FORK MAIN FIRST — before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
    inflates every root branch's diff. Fork main is a pristine mirror of the upstream trunk — keep it
