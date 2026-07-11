@@ -145,7 +145,7 @@ class GetVisibleBodies(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
 
 
 get_visible_bodies = functional_form(GetVisibleBodies)
@@ -249,7 +249,7 @@ class OccludingBodies(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
 
 
 occluding_bodies = functional_form(OccludingBodies)
@@ -330,7 +330,7 @@ class EuclideanPlanarDistance(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
 
 
 compute_euclidean_planar_distance = functional_form(EuclideanPlanarDistance)
@@ -459,7 +459,7 @@ class BodyInRegionFraction(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
-        return FunctionVerbalizationTemplates(operands).possessive(cls.__name__)
+        return FunctionVerbalizationTemplates.possessive(cls.__name__, *operands)
 
 
 is_body_in_region = functional_form(BodyInRegionFraction)

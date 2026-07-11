@@ -57,8 +57,8 @@ class InheritancePathLength(SymbolicFunction):
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates(operands).custom_relation(
-            "inheritance path length", Prepositions.BETWEEN
+        return FunctionVerbalizationTemplates.custom_relation(
+            cls.__name__, Prepositions.BETWEEN, *operands
         )
 
 
