@@ -16,11 +16,13 @@ import pytest
 from typing_extensions import List, Optional
 
 from krrood.entity_query_language.factories import an
-from krrood.entity_query_language.rdr.underspecified import (
+from krrood.entity_query_language.rdr.exceptions import (
     MultipleInferenceTargets,
     NoInferenceTarget,
-    UnderspecifiedMatch,
     UnsupportedInferenceTarget,
+)
+from krrood.entity_query_language.rdr.underspecified import (
+    UnderspecifiedMatch,
     is_ellipsis_target,
 )
 
