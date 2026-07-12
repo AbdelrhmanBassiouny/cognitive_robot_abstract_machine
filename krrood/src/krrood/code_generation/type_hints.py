@@ -9,6 +9,7 @@ from typing import (
     Callable,
     Dict,
     ForwardRef,
+    Iterable,
     List,
     Optional,
     Set,
@@ -113,6 +114,17 @@ def value_to_source(value: object) -> str:
     if isinstance(value, type) or is_typing_type(value):
         return stringify_type_hint(value)
     return repr(value)
+
+
+def render_dict_literal(items: Iterable[Tuple[str, str]]) -> str:
+    """Render a dict-display literal ``{key: value, ...}`` from source fragments.
+
+    :param items: The ``(key_source, value_source)`` pairs, already rendered to source and
+        in the order they should appear.
+    :return: The dict literal source (``"{}"`` when there are no items).
+    """
+    body = ", ".join(f"{key_source}: {value_source}" for key_source, value_source in items)
+    return "{" + body + "}"
 
 
 def get_types_to_import_from_type_hints(hints: List[Type]) -> Set[Type]:
