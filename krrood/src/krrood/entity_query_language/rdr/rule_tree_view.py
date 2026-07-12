@@ -198,9 +198,7 @@ def enforce_parent_consistency(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Compact symbolic formatting of conditions and conclusions.
-# ---------------------------------------------------------------------------
+# %% Compact symbolic formatting of conditions and conclusions
 
 
 def _format_value(value: Any) -> str:
@@ -293,9 +291,7 @@ def _format_conclusions(rule: RuleView) -> str:
     return ", ".join(format_conclusion(add) for add in rule.conclusions)
 
 
-# ---------------------------------------------------------------------------
-# Tree connectors, elision, and the renderer.
-# ---------------------------------------------------------------------------
+# %% Tree connectors, elision, and the renderer
 
 
 def _continues_at(depths: List[int], index: int, level: int) -> bool:
