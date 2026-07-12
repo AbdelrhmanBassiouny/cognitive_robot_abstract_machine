@@ -290,14 +290,12 @@ def rdr_to_python(rdr, case_type_is_local: bool = False) -> str:
     # Build the corner-cases block: {positional_index: constructor_source, ...}.
     ordered_nodes = walk_rules_in_emission_order(rdr.query._conditions_root_)
     corner_case_sources = rdr.corner_cases.to_ordered_sources(ordered_nodes)
-    for _, referenced_types_for_case in corner_case_sources.values():
-        referenced_types.update(referenced_types_for_case)
+    for case_source in corner_case_sources.values():
+        referenced_types.update(case_source.referenced_types)
     if corner_case_sources:
         entries = ", ".join(
-            f"{positional_index}: {constructor_source}"
-            for positional_index, (constructor_source, _) in sorted(
-                corner_case_sources.items()
-            )
+            f"{positional_index}: {case_source.source}"
+            for positional_index, case_source in sorted(corner_case_sources.items())
         )
         corner_cases_dict_src = "{" + entries + "}"
     else:
