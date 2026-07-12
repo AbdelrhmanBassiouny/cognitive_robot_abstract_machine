@@ -69,9 +69,7 @@ def _exec_generated_module(source: str) -> dict:
     return namespace
 
 
-# ---------------------------------------------------------------------------
-# rdr_to_python: structure of the generated source
-# ---------------------------------------------------------------------------
+# %% rdr_to_python: structure of the generated source
 
 
 def test_generated_source_rebuilds_an_equivalent_rule_tree():
@@ -121,9 +119,7 @@ def test_raises_when_the_rdr_has_no_rules():
         rdr_to_python(empty_rdr)
 
 
-# ---------------------------------------------------------------------------
-# rdr_to_python: corner cases are embedded in the generated source
-# ---------------------------------------------------------------------------
+# %% rdr_to_python: corner cases are embedded in the generated source
 
 
 def test_recorded_corner_case_is_embedded_in_the_generated_source():
