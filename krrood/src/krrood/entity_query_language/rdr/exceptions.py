@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any
+from typing_extensions import Any, Tuple, Type
 
 from krrood.exceptions import DataclassException
 
@@ -74,11 +74,16 @@ class CaseNotSerializableError(DataclassException):
     value: Any
     """The field value that could not be serialized."""
 
+    supported_types: Tuple[Type, ...]
+    """The scalar types the serializer does support (``None`` and nested dataclasses are
+    always supported in addition to these, so are not part of this list)."""
+
     def error_message(self) -> str:
+        type_names = ", ".join(t.__name__ for t in self.supported_types)
         return (
             f"Cannot serialize value of type {type(self.value).__name__!r} to Python "
-            "constructor source. Only None, bool, int, float, str, enum.Enum members, "
-            "and nested dataclasses are supported."
+            f"constructor source. Only None, {type_names} members, and nested "
+            "dataclasses are supported."
         )
 
     def suggest_correction(self) -> str:
