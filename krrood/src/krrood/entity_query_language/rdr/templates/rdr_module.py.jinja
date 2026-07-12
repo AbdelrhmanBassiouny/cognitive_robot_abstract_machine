@@ -9,8 +9,8 @@ with query:
 query.build()
 
 # Stable handles for loading.
-RDR_CASE_TYPE = {{ case_type_name }}
-RDR_CONCLUSION_ATTRIBUTE = {{ conclusion_attribute_name|tojson }}
-RDR_CASE_VARIABLE = {{ var_name }}
-RDR_QUERY = query
-RDR_CORNER_CASES = {{ corner_cases_dict_src }}
+{{ rdr_case_type_name }} = {{ case_type_name }}
+{{ rdr_conclusion_attribute_name }} = {{ conclusion_attribute_name|tojson }}
+{{ rdr_case_variable_name }} = {{ var_name }}
+{{ rdr_query_name }} = query
+{{ rdr_corner_cases_name }} = {{ corner_cases_dict_src }}
