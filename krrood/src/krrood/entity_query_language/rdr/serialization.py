@@ -18,8 +18,9 @@ from textwrap import indent as _indent
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from typing_extensions import Any, Callable, Dict, List, Optional
+from typing_extensions import Any, Callable, Dict, List, Optional, Set, Type, Union
 
+from krrood.code_generation import ast_helpers
 from krrood.code_generation.function_case import FunctionCaseGenerator
 from krrood.code_generation.generator import CodeGenerator
 from krrood.code_generation.imports import get_imports_from_types
@@ -56,15 +57,20 @@ from krrood.entity_query_language.rules.conclusion_selector import (
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
-_SELECTORS = (Refinement, Alternative, Next)
+SerializableValue = Union[enum.Enum, bool, int, float, str, None]
+"""The literal value types a rule conclusion may hold and that :func:`_emit_value` can emit."""
 
-_SELECTOR_FACTORY: Dict[type, Callable[..., Any]] = {
+_CONCLUSION_SELECTORS = (Refinement, Alternative, Next)
+"""The conclusion-selector classes whose left-nested chains a rule tree is built from."""
+
+_CONCLUSION_SELECTOR_FACTORY: Dict[type, Callable[..., SymbolicExpression]] = {
     Refinement: refinement,
     Alternative: alternative,
     Next: next_rule,
 }
+"""Maps each conclusion-selector class to the factory that reconstructs it in generated source."""
 
-_COMPARATOR_AST_OP: Dict[Any, type] = {
+_COMPARATOR_AST_OP: Dict[Callable[..., Any], Type[ast.cmpop]] = {
     operator.eq: ast.Eq,
     operator.ne: ast.NotEq,
     operator.lt: ast.Lt,
@@ -72,18 +78,26 @@ _COMPARATOR_AST_OP: Dict[Any, type] = {
     operator.gt: ast.Gt,
     operator.ge: ast.GtE,
 }
+"""Maps each comparator operation to the AST comparison-operator class that renders it."""
 
 _FACTORY_IMPORT = "\n".join(
     get_imports_from_types(
         [variable, entity, add, refinement, alternative, next_rule, and_, or_, not_]
     )
 )
+"""The import statement that makes every rule-authoring factory available in generated source."""
 
 _CLASS_AND_RULES_SEPARATOR = "\n\n\n"
 """Blank-line separator placed between the generated case class and the rule-tree source."""
 
+_TEMPLATES_DIRECTORY = os.path.join(os.path.dirname(__file__), "templates")
+"""Absolute path to the directory holding this package's code-generation templates."""
+
 _RDR_MODULE_TEMPLATE_NAME = "rdr_module.py.jinja"
 """Filename of the Jinja2 template used to render a saved RDR module."""
+
+_LOADED_MODULE_NAME_PREFIX = "_eql_rdr_loaded_"
+"""Prefix for the uuid-suffixed module name a saved RDR file is imported under."""
 
 RDR_CASE_TYPE_NAME = "RDR_CASE_TYPE"
 """Name of the generated module attribute holding the RDR's case type."""
@@ -100,17 +114,18 @@ RDR_QUERY_NAME = "RDR_QUERY"
 RDR_CORNER_CASES_NAME = "RDR_CORNER_CASES"
 """Name of the generated module attribute holding the RDR's corner-case source dict."""
 
-_class_name_to_var_name = camel_case_to_lower_camel_case
+_class_name_to_variable_name = camel_case_to_lower_camel_case
+"""Derives the rule-tree variable name from the case-type class name."""
 
 
 # %% DAG decomposition
 
 
 @dataclass
-class SelectorBranch:
-    """One reinsertion step: a selector type paired with the branch condition it wraps."""
+class ConclusionSelectorBranch:
+    """One reinsertion step: a conclusion-selector type paired with the branch condition it wraps."""
 
-    selector_type: type
+    conclusion_selector_type: type
     """The selector class (``Refinement``, ``Alternative``, or ``Next``) this branch belongs to."""
 
     condition: SymbolicExpression
@@ -121,16 +136,16 @@ class SelectorBranch:
 class DecomposedRuleTree:
     """The result of flattening a left-nested chain of conclusion selectors."""
 
-    main: SymbolicExpression
-    """The base condition node with no selector wrapping."""
+    base_condition: SymbolicExpression
+    """The anchor condition node with no selector wrapping."""
 
-    branches: List[SelectorBranch]
+    branches: List[ConclusionSelectorBranch]
     """The selector branches, ordered as the loader must re-insert them."""
 
 
 def _reorder_branches_for_reinsertion(
-    selector_run: List[SelectorBranch],
-) -> List[SelectorBranch]:
+    selector_run: List[ConclusionSelectorBranch],
+) -> List[ConclusionSelectorBranch]:
     """
     Put one same-orientation run of branches into the order the loader must re-insert them.
 
@@ -138,12 +153,15 @@ def _reorder_branches_for_reinsertion(
     base node), so walking ``.left`` already yields insertion order. ``Alternative`` /
     ``Next`` chains grow *outward* (each re-anchors at the moving conditions root), so
     walking ``.left`` yields *reverse* insertion order and must be flipped.
+
+    :param selector_run: A contiguous run of branches that share an orientation.
+    :return: The run ordered as the loader re-inserts it.
     """
     if not selector_run:
         return []
     return (
         list(selector_run)
-        if selector_run[0].selector_type is Refinement
+        if selector_run[0].conclusion_selector_type is Refinement
         else list(reversed(selector_run))
     )
 
@@ -158,21 +176,25 @@ def _flatten_selector_chain(node: SymbolicExpression) -> DecomposedRuleTree:
     :func:`_reorder_branches_for_reinsertion`), each contiguous same-orientation run is
     oriented independently; a blanket reverse would silently swap sibling refinements on
     every round-trip.
+
+    :param node: The (possibly selector-wrapped) condition node to flatten.
+    :return: The decomposed rule tree (base condition plus ordered branches).
     """
-    walk: List[SelectorBranch] = []
-    while isinstance(node, _SELECTORS):
-        walk.append(SelectorBranch(type(node), node.right))
+    walk: List[ConclusionSelectorBranch] = []
+    while isinstance(node, _CONCLUSION_SELECTORS):
+        walk.append(ConclusionSelectorBranch(type(node), node.right))
         node = node.left
 
-    branches: List[SelectorBranch] = []
-    run: List[SelectorBranch] = []
-    for entry in walk:
-        if run and (entry.selector_type is Refinement) != (
-            run[0].selector_type is Refinement
-        ):
+    branches: List[ConclusionSelectorBranch] = []
+    run: List[ConclusionSelectorBranch] = []
+    for branch in walk:
+        branch_is_refinement = branch.conclusion_selector_type is Refinement
+        run_is_refinement = bool(run) and run[0].conclusion_selector_type is Refinement
+        orientation_changed = bool(run) and branch_is_refinement != run_is_refinement
+        if orientation_changed:
             branches.extend(_reorder_branches_for_reinsertion(run))
             run = []
-        run.append(entry)
+        run.append(branch)
     branches.extend(_reorder_branches_for_reinsertion(run))
     return DecomposedRuleTree(node, branches)
 
@@ -196,7 +218,7 @@ def walk_rules_in_emission_order(
 
     def _visit(node: SymbolicExpression) -> None:
         decomposed = _flatten_selector_chain(node)
-        result.append(decomposed.main)
+        result.append(decomposed.base_condition)
         for branch in decomposed.branches:
             _visit(branch.condition)
 
@@ -205,8 +227,14 @@ def walk_rules_in_emission_order(
     return result
 
 
-def _conclusion_value(condition_node: SymbolicExpression) -> Any:
-    """:return: The single value concluded at ``condition_node`` (its ``Add``)."""
+def _conclusion_value(
+    condition_node: SymbolicExpression,
+) -> Union[SerializableValue, SymbolicExpression]:
+    """Return the single value concluded at a condition node.
+
+    :param condition_node: The rule condition whose ``Add`` conclusion is read.
+    :return: The concluded literal value, or the target node when it is not a literal.
+    """
     for conclusion in condition_node._conclusions_:
         if isinstance(conclusion, Add):
             target = conclusion.right
@@ -217,61 +245,73 @@ def _conclusion_value(condition_node: SymbolicExpression) -> Any:
 # %% Expression -> AST
 
 
-def _emit_value(value: Any) -> ast.expr:
-    """Build the AST expression that reconstructs the literal *value*."""
+def _emit_value(value: SerializableValue) -> ast.expr:
+    """Build the AST expression that reconstructs a literal value.
+
+    :param value: The literal (or enum member) to emit.
+    :return: The AST expression that evaluates back to *value*.
+    """
     if isinstance(value, enum.Enum):
-        return ast.Attribute(
-            value=ast.Name(id=type(value).__name__, ctx=ast.Load()),
-            attr=value.name,
-            ctx=ast.Load(),
+        return ast_helpers.attribute_access(
+            ast_helpers.load_name(type(value).__name__), value.name
         )
     if isinstance(value, (bool, int, float, str)) or value is None:
-        return ast.Constant(value=value)
+        return ast_helpers.constant(value)
     raise UnsupportedNodeForSerialization(value)
 
 
 def _emit_factory_call(
-    factory: Callable[..., Any],
+    factory: Callable[..., SymbolicExpression],
     operands: List[SymbolicExpression],
-    var_names: Dict[UUID, str],
+    variable_names_by_id: Dict[UUID, str],
 ) -> ast.Call:
-    """Build the AST call that invokes *factory* on the emitted *operands*."""
-    return ast.Call(
-        func=ast.Name(id=factory.__name__, ctx=ast.Load()),
-        args=[_emit_expr(operand, var_names) for operand in operands],
-        keywords=[],
+    """Build the AST call that invokes a factory on the emitted operands.
+
+    :param factory: The rule-authoring factory function to call by name.
+    :param operands: The condition sub-trees to pass as positional arguments.
+    :param variable_names_by_id: Maps each bound variable's id to its source name.
+    :return: The AST call node.
+    """
+    return ast_helpers.call(
+        factory.__name__,
+        [_emit_expr(operand, variable_names_by_id) for operand in operands],
     )
 
 
-def _emit_expr(node: SymbolicExpression, var_names: Dict[UUID, str]) -> ast.expr:
-    """Build the AST expression that reconstructs the condition sub-tree at *node*."""
+def _emit_expr(
+    node: SymbolicExpression, variable_names_by_id: Dict[UUID, str]
+) -> ast.expr:
+    """Build the AST expression that reconstructs a condition sub-tree.
+
+    :param node: The condition sub-tree to emit.
+    :param variable_names_by_id: Maps each bound variable's id to its source name.
+    :return: The AST expression that rebuilds *node*.
+    """
     if isinstance(node, Literal):
         return _emit_value(node._value_)
     if isinstance(node, Attribute):
-        return ast.Attribute(
-            value=_emit_expr(node._child_, var_names),
-            attr=node._attribute_name_,
-            ctx=ast.Load(),
+        return ast_helpers.attribute_access(
+            _emit_expr(node._child_, variable_names_by_id), node._attribute_name_
         )
     if isinstance(node, Variable):
-        if node._id_ not in var_names:
+        if node._id_ not in variable_names_by_id:
             raise UnsupportedNodeForSerialization(node)
-        return ast.Name(id=var_names[node._id_], ctx=ast.Load())
+        return ast_helpers.load_name(variable_names_by_id[node._id_])
     if isinstance(node, Comparator):
-        comparison_op = _COMPARATOR_AST_OP.get(node.operation)
-        if comparison_op is None:
+        comparison_operator = _COMPARATOR_AST_OP.get(node.operation)
+        if comparison_operator is None:
             raise UnsupportedNodeForSerialization(node)
-        return ast.Compare(
-            left=_emit_expr(node.left, var_names),
-            ops=[comparison_op()],
-            comparators=[_emit_expr(node.right, var_names)],
+        return ast_helpers.compare(
+            _emit_expr(node.left, variable_names_by_id),
+            comparison_operator,
+            _emit_expr(node.right, variable_names_by_id),
         )
     if isinstance(node, AND):
-        return _emit_factory_call(and_, _condition_operands(node), var_names)
+        return _emit_factory_call(and_, _condition_operands(node), variable_names_by_id)
     if isinstance(node, OR):
-        return _emit_factory_call(or_, _condition_operands(node), var_names)
+        return _emit_factory_call(or_, _condition_operands(node), variable_names_by_id)
     if isinstance(node, Not):
-        return _emit_factory_call(not_, [node._children_[0]], var_names)
+        return _emit_factory_call(not_, [node._children_[0]], variable_names_by_id)
     raise UnsupportedNodeForSerialization(node)
 
 
@@ -280,6 +320,9 @@ def _condition_operands(node: SymbolicExpression) -> List[SymbolicExpression]:
     The logical operands of a connective, excluding any conclusions. When a rule's
     condition is the connective itself (e.g. an ``and_`` root), its ``Add`` conclusions are
     attached as children too; those are not part of the boolean expression.
+
+    :param node: The connective node to read operands from.
+    :return: The operand children that form the boolean expression.
     """
     conclusion_ids = {conclusion._id_ for conclusion in node._conclusions_}
     return [child for child in node._children_ if child._id_ not in conclusion_ids]
@@ -290,38 +333,36 @@ def _condition_operands(node: SymbolicExpression) -> List[SymbolicExpression]:
 
 def _emit_rule_body(
     condition_node: SymbolicExpression,
-    var_names: Dict[UUID, str],
+    variable_names_by_id: Dict[UUID, str],
     conclusion_target: ast.expr,
-    referenced_types: set,
+    referenced_types: Set[type],
 ) -> List[ast.stmt]:
-    """Emit the ``add(...)`` statement plus any nested refinement/alternative blocks for a rule."""
+    """Emit the ``add(...)`` statement plus any nested refinement/alternative blocks for a rule.
+
+    :param condition_node: The rule condition to emit statements for.
+    :param variable_names_by_id: Maps each bound variable's id to its source name.
+    :param conclusion_target: The AST expression the conclusion value is assigned to.
+    :param referenced_types: Accumulates enum types that need importing; mutated in place.
+    :return: The AST statements forming this rule's body.
+    """
     decomposed = _flatten_selector_chain(condition_node)
-    value = _conclusion_value(decomposed.main)
+    value = _conclusion_value(decomposed.base_condition)
     if isinstance(value, enum.Enum):
         referenced_types.add(type(value))
 
     statements: List[ast.stmt] = [
-        ast.Expr(
-            value=ast.Call(
-                func=ast.Name(id=add.__name__, ctx=ast.Load()),
-                args=[conclusion_target, _emit_value(value)],
-                keywords=[],
-            )
-        )
+        ast.Expr(value=ast_helpers.call(add.__name__, [conclusion_target, _emit_value(value)]))
     ]
     for branch in decomposed.branches:
-        factory = _SELECTOR_FACTORY[branch.selector_type]
-        branch_main = _flatten_selector_chain(branch.condition).main
-        with_call = _emit_factory_call(factory, [branch_main], var_names)
+        factory = _CONCLUSION_SELECTOR_FACTORY[branch.conclusion_selector_type]
+        branch_base_condition = _flatten_selector_chain(branch.condition).base_condition
+        selector_call = _emit_factory_call(
+            factory, [branch_base_condition], variable_names_by_id
+        )
         nested_body = _emit_rule_body(
-            branch.condition, var_names, conclusion_target, referenced_types
+            branch.condition, variable_names_by_id, conclusion_target, referenced_types
         )
-        statements.append(
-            ast.With(
-                items=[ast.withitem(context_expr=with_call, optional_vars=None)],
-                body=nested_body,
-            )
-        )
+        statements.append(ast_helpers.with_block(selector_call, nested_body))
     return statements
 
 
@@ -339,25 +380,21 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
         raise EmptyRuleTreeError()
 
     case_type = rdr.case_type
-    variable_name = _class_name_to_var_name(case_type.__name__)
-    var_names = {rdr.case_variable._id_: variable_name}
-    conclusion_target = ast.Attribute(
-        value=ast.Name(id=variable_name, ctx=ast.Load()),
-        attr=rdr.conclusion_attribute_name,
-        ctx=ast.Load(),
+    variable_name = _class_name_to_variable_name(case_type.__name__)
+    variable_names_by_id = {rdr.case_variable._id_: variable_name}
+    conclusion_target = ast_helpers.attribute_access(
+        ast_helpers.load_name(variable_name), rdr.conclusion_attribute_name
     )
-    referenced_types = {case_type}
+    referenced_types: Set[type] = {case_type}
 
     decomposed = _flatten_selector_chain(rdr.query._conditions_root_)
-    base_condition_expr = ast.fix_missing_locations(_emit_expr(decomposed.main, var_names))
-    base_condition = ast.unparse(base_condition_expr)
+    base_condition = ast_helpers.unparse_expression(
+        _emit_expr(decomposed.base_condition, variable_names_by_id)
+    )
     body_statements = _emit_rule_body(
-        rdr.query._conditions_root_, var_names, conclusion_target, referenced_types
+        rdr.query._conditions_root_, variable_names_by_id, conclusion_target, referenced_types
     )
-    body_module = ast.fix_missing_locations(
-        ast.Module(body=body_statements, type_ignores=[])
-    )
-    body = _indent(ast.unparse(body_module), "    ")
+    body = _indent(ast_helpers.unparse_statements(body_statements), "    ")
 
     ordered_nodes = walk_rules_in_emission_order(rdr.query._conditions_root_)
     corner_case_sources = rdr.corner_cases.to_ordered_sources(ordered_nodes)
@@ -382,13 +419,12 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
         types_to_import = list(referenced_types)
     type_imports = "\n".join(get_imports_from_types(types_to_import))
 
-    template_directory = os.path.join(os.path.dirname(__file__), "templates")
-    generator = CodeGenerator(template_directory=template_directory)
+    generator = CodeGenerator(template_directory=_TEMPLATES_DIRECTORY)
     return generator.render(
         _RDR_MODULE_TEMPLATE_NAME,
         factory_import=_FACTORY_IMPORT,
         type_imports=type_imports,
-        var_name=variable_name,
+        variable_name=variable_name,
         case_type_name=case_type.__name__,
         base_condition=base_condition,
         body=body,
@@ -403,7 +439,12 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
 
 
 def save_rdr(rdr: EQLSingleClassRDR, path: str) -> str:
-    """Write the RDR's Python source to ``path`` and return that source."""
+    """Write the RDR's Python source to a file and return that source.
+
+    :param rdr: The fitted RDR to serialize.
+    :param path: Destination ``.py`` file path.
+    :return: The source written to disk.
+    """
     source = rdr_to_python(rdr)
     with open(path, "w") as file:
         file.write(source)
@@ -422,7 +463,7 @@ def save_rdr_with_case(rdr: EQLSingleClassRDR, path: str) -> str:
 
     :param rdr: A fitted :class:`EQLSingleClassRDR`.
     :param path: Destination ``.py`` file path.
-    :returns: The source written to disk.
+    :return: The source written to disk.
     """
     from krrood.entity_query_language.rdr.function_case import FunctionCase
 
@@ -442,10 +483,14 @@ def save_rdr_with_case(rdr: EQLSingleClassRDR, path: str) -> str:
 
 
 def load_rdr(path: str) -> EQLSingleClassRDR:
-    """Load an :class:`EQLSingleClassRDR` from a module previously written by :func:`save_rdr`."""
+    """Load an :class:`EQLSingleClassRDR` from a module previously written by :func:`save_rdr`.
+
+    :param path: Path to a ``.py`` file produced by the save path.
+    :return: The rebuilt RDR.
+    """
     from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
-    module = load_module_from_path(path, "_eql_rdr_loaded_")
+    module = load_module_from_path(path, _LOADED_MODULE_NAME_PREFIX)
 
     case_type = getattr(module, RDR_CASE_TYPE_NAME)
     conclusion_attribute_name = getattr(module, RDR_CONCLUSION_ATTRIBUTE_NAME)

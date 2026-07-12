@@ -2,8 +2,8 @@
 {{ factory_import }}
 {{ type_imports }}
 
-{{ var_name }} = variable({{ case_type_name }}, domain=[])
-query = entity({{ var_name }}).where({{ base_condition }})
+{{ variable_name }} = variable({{ case_type_name }}, domain=[])
+query = entity({{ variable_name }}).where({{ base_condition }})
 with query:
 {{ body }}
 query.build()
@@ -11,6 +11,6 @@ query.build()
 # Stable handles for loading.
 {{ rdr_case_type_name }} = {{ case_type_name }}
 {{ rdr_conclusion_attribute_name }} = {{ conclusion_attribute_name|tojson }}
-{{ rdr_case_variable_name }} = {{ var_name }}
+{{ rdr_case_variable_name }} = {{ variable_name }}
 {{ rdr_query_name }} = query
 {{ rdr_corner_cases_name }} = {{ corner_cases_dict_src }}
