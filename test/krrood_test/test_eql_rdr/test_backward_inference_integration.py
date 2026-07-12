@@ -37,9 +37,7 @@ from krrood.entity_query_language.rules.conclusion_selector import ConclusionSel
 
 from .animal import Animal, Species
 
-# ---------------------------------------------------------------------------
-# Fixture helpers
-# ---------------------------------------------------------------------------
+# %% Fixture helpers
 
 
 def _flat_tree() -> Tuple[Any, Any, Any]:
@@ -164,9 +162,7 @@ _FROG = Animal(
 )
 
 
-# ---------------------------------------------------------------------------
-# ConclusionKnowledge structure
-# ---------------------------------------------------------------------------
+# %% ConclusionKnowledge structure
 
 
 class TestConclusionKnowledge:
@@ -212,9 +208,7 @@ class TestConclusionKnowledge:
         assert conds[1].negated is True
 
 
-# ---------------------------------------------------------------------------
-# evaluate_against correctness
-# ---------------------------------------------------------------------------
+# %% evaluate_against correctness
 
 
 class TestEvaluateAgainst:
@@ -273,9 +267,7 @@ class TestEvaluateAgainst:
         )
 
 
-# ---------------------------------------------------------------------------
-# EQLSingleClassRDR integration
-# ---------------------------------------------------------------------------
+# %% EQLSingleClassRDR integration
 
 
 class TestRDRIntegration:
@@ -289,9 +281,7 @@ class TestRDRIntegration:
         assert not knowledge.is_satisfiable()
 
 
-# ---------------------------------------------------------------------------
-# Cache invalidation
-# ---------------------------------------------------------------------------
+# %% Cache invalidation
 
 
 class TestCacheInvalidation:
@@ -374,9 +364,7 @@ class TestCacheInvalidation:
         assert rdr.what_do_we_know_about(Species.mammal).is_satisfiable()
 
 
-# ---------------------------------------------------------------------------
-# format_condition handles ConclusionSelector guards
-# ---------------------------------------------------------------------------
+# %% format_condition handles ConclusionSelector guards
 
 
 class TestGuardFlattening:
@@ -438,9 +426,7 @@ def _tree_name(root):
     return getattr(root, "_name_", str(type(root).__name__))
 
 
-# ---------------------------------------------------------------------------
-# is_satisfiable edge cases
-# ---------------------------------------------------------------------------
+# %% is_satisfiable edge cases
 
 
 class TestIsSatisfiable:

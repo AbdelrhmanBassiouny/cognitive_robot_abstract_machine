@@ -41,9 +41,7 @@ from krrood.entity_query_language.rdr.rule_tree import (
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rules.conclusion_selector import ConclusionSelector
 
-# ---------------------------------------------------------------------------
-# Minimal stub helpers — named after the pattern they exercise, not "Mock"
-# ---------------------------------------------------------------------------
+# %% Minimal stub helpers — named after the pattern they exercise, not "Mock"
 
 # A sentinel SymbolicExpression stand-in.  The resolver tests do not execute
 # EQL expressions; they only inspect the *returned object*.  Using a plain
@@ -81,9 +79,7 @@ class _AlwaysCornerResolver(_AlwaysSucceedingResolver):
 _DUMMY_ARGS = (None, None, None, None, None, None, None)
 
 
-# ---------------------------------------------------------------------------
-# ResolvedCondition dataclass
-# ---------------------------------------------------------------------------
+# %% ResolvedCondition dataclass
 
 
 class TestResolvedCondition:
@@ -134,9 +130,7 @@ class TestResolvedCondition:
         assert rc1 != rc2
 
 
-# ---------------------------------------------------------------------------
-# ChainConditionResolver structural tests
-# ---------------------------------------------------------------------------
+# %% ChainConditionResolver structural tests
 
 
 class TestChainConditionResolver:
@@ -216,9 +210,7 @@ class TestChainConditionResolver:
         assert counting_resolver_3.call_count == 1
 
 
-# ---------------------------------------------------------------------------
-# ConditionResolver ABC contract
-# ---------------------------------------------------------------------------
+# %% ConditionResolver ABC contract
 
 
 class TestConditionResolverABC:
@@ -257,9 +249,7 @@ class TestConditionResolverABC:
         assert isinstance(resolver, ConditionResolver)
 
 
-# ---------------------------------------------------------------------------
-# Animal helpers shared by TestTargetKnowledgeResolver
-# ---------------------------------------------------------------------------
+# %% Animal helpers shared by TestTargetKnowledgeResolver
 
 
 def _make_mammal(**overrides) -> Animal:
@@ -339,9 +329,7 @@ def _two_rule_rdr():
     return rdr, mammal, bird
 
 
-# ---------------------------------------------------------------------------
-# TestTargetKnowledgeResolver — live animal-fixture discrimination tests
-# ---------------------------------------------------------------------------
+# %% TestTargetKnowledgeResolver — live animal-fixture discrimination tests
 
 
 class TestTargetKnowledgeResolver:
@@ -479,8 +467,7 @@ class TestTargetKnowledgeResolver:
         assert _eval_expr(result.expression, animal_var, mammal_corner) is False
 
 
-# ---------------------------------------------------------------------------
-# TestCornerCaseKnowledgeResolver — positive-condition, non-active-path semantics tests
+# %% TestCornerCaseKnowledgeResolver — positive-condition, non-active-path semantics tests
 #
 # The algorithm searches non-active paths to the wrong conclusion for a
 # POSITIVE guard (no negation) that holds for the new case and does not hold
@@ -492,7 +479,6 @@ class TestTargetKnowledgeResolver:
 # correctly.
 #   Active path:     fins == True   (guard expression serves as firing_anchor)
 #   Non-active path: aquatic == True (the search target)
-# ---------------------------------------------------------------------------
 
 
 def _two_path_wrong_knowledge():
@@ -672,10 +658,7 @@ class TestCornerCaseKnowledgeResolver:
         assert truth_for_case is True
 
 
-# ---------------------------------------------------------------------------
-# TestResolverWithAlternativeGuard
-# (Test 5: resolver must never return a ConclusionSelector expression)
-# ---------------------------------------------------------------------------
+# %% TestResolverWithAlternativeGuard (Test 5: resolver must never return a ConclusionSelector expression)
 
 
 def _alt_refinement_tree_for_resolver():

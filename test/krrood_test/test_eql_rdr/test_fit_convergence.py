@@ -27,9 +27,7 @@ from krrood.entity_query_language.rdr.single_class import (
     RDRConvergenceWarning,
 )
 
-# ---------------------------------------------------------------------------
-# Minimal case domain: two boolean attributes, two labels
-# ---------------------------------------------------------------------------
+# %% Minimal case domain: two boolean attributes, two labels
 
 
 @dataclasses.dataclass
@@ -55,9 +53,7 @@ _RED_TARGET = TwoLabel.red
 _BLUE_TARGET = TwoLabel.blue
 
 
-# ---------------------------------------------------------------------------
-# Helper: SpyFunctionInterface (mirrors the pattern from test_single_class_rdr.py)
-# ---------------------------------------------------------------------------
+# %% Helper: SpyFunctionInterface (mirrors the pattern from test_single_class_rdr.py)
 
 
 class SpyFunctionInterface(FunctionInterface):
@@ -75,9 +71,7 @@ class SpyFunctionInterface(FunctionInterface):
         return self.spy
 
 
-# ---------------------------------------------------------------------------
-# Answer functions
-# ---------------------------------------------------------------------------
+# %% Answer functions
 
 
 def _non_discriminating_answer(context: CaseContext, requests):
@@ -123,9 +117,7 @@ def _labelling_answer(context: CaseContext, requests):
     return result
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+# %% Fixtures
 
 
 @pytest.fixture()
@@ -146,9 +138,7 @@ def discriminating_expert() -> Expert:
     return Expert(interface=FunctionInterface(answer_fn=_discriminating_answer))
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — Oscillation terminates with RDRConvergenceWarning
-# ---------------------------------------------------------------------------
+# %% Test 1 — Oscillation terminates with RDRConvergenceWarning
 
 
 def test_oscillating_fit_terminates_before_max_passes(
@@ -198,9 +188,7 @@ def test_oscillating_fit_emits_exactly_one_convergence_warning(
     ), f"Expected exactly 1 RDRConvergenceWarning, got {len(record)}."
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — Happy-path: convergent dataset completes without warning
-# ---------------------------------------------------------------------------
+# %% Test 2 — Happy-path: convergent dataset completes without warning
 
 
 def test_convergent_fit_emits_no_convergence_warning(
@@ -270,9 +258,7 @@ def test_convergent_fit_calls_finish_exactly_once(
     )
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — reset() called with actual pending count per re-pass
-# ---------------------------------------------------------------------------
+# %% Test 3 — reset() called with actual pending count per re-pass
 
 
 def test_reset_called_with_pending_count_not_total(
@@ -323,9 +309,7 @@ def test_reset_called_with_pending_count_not_total(
         )
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — No-target path: finishes without oscillation check or warning
-# ---------------------------------------------------------------------------
+# %% Test 4 — No-target path: finishes without oscillation check or warning
 
 
 def test_no_target_fit_emits_no_convergence_warning(
@@ -389,9 +373,7 @@ def test_no_target_fit_never_calls_reset(
     ), f"reset() must not be called on the no-target path, got: {reset_events}"
 
 
-# ---------------------------------------------------------------------------
-# Test 5 — Warning message names clashing case reprs
-# ---------------------------------------------------------------------------
+# %% Test 5 — Warning message names clashing case reprs
 
 
 def test_convergence_warning_message_contains_clashing_case_repr(

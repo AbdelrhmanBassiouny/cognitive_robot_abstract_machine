@@ -21,9 +21,7 @@ FEATURE_FIELDS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# %% Helpers
 
 
 def _make_animal(
@@ -76,9 +74,7 @@ def _first_recorded_node_id(rdr: EQLSingleClassRDR):
     return nodes[0]._id_
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — first rule inserts one corner case entry
-# ---------------------------------------------------------------------------
+# %% Test 1 — first rule inserts one corner case entry
 
 
 def test_first_rule_corner_case_is_recorded():
@@ -94,9 +90,7 @@ def test_first_rule_corner_case_is_recorded():
     assert rdr.corner_cases.get(root_node_id) is mammal
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — alternative rule adds a second corner case entry
-# ---------------------------------------------------------------------------
+# %% Test 2 — alternative rule adds a second corner case entry
 
 
 def test_alternative_rule_corner_case_is_recorded():
@@ -122,9 +116,7 @@ def test_alternative_rule_corner_case_is_recorded():
     assert rdr.corner_cases.get(alternative_node_id) is bird
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — refinement rule adds a third corner case entry for the trigger case
-# ---------------------------------------------------------------------------
+# %% Test 3 — refinement rule adds a third corner case entry for the trigger case
 
 
 def test_refinement_rule_corner_case_is_recorded():
@@ -156,9 +148,7 @@ def test_refinement_rule_corner_case_is_recorded():
     assert rdr.corner_cases.get(refinement_node_id) is mammal
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — fitting an already-correct case does not add a new corner case
-# ---------------------------------------------------------------------------
+# %% Test 4 — fitting an already-correct case does not add a new corner case
 
 
 def test_no_new_rule_means_no_new_corner_case():
@@ -175,9 +165,7 @@ def test_no_new_rule_means_no_new_corner_case():
     assert len(rdr.corner_cases.cases) == count_before
 
 
-# ---------------------------------------------------------------------------
-# Test 5 — corner cases do not affect classification results
-# ---------------------------------------------------------------------------
+# %% Test 5 — corner cases do not affect classification results
 
 
 def test_corner_cases_do_not_affect_classification():
@@ -204,9 +192,7 @@ def test_corner_cases_do_not_affect_classification():
     assert result_before == result_after == Species.mammal
 
 
-# ---------------------------------------------------------------------------
-# Test 6 — fit() for 3 independent cases populates all 3 corner cases
-# ---------------------------------------------------------------------------
+# %% Test 6 — fit() for 3 independent cases populates all 3 corner cases
 
 
 def test_fit_bulk_populates_all_corner_cases():

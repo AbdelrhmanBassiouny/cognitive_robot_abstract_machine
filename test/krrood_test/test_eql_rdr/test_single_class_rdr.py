@@ -686,9 +686,7 @@ class TestProgressBarIntegration(unittest.TestCase):
         self.assertGreater(len(spy.events), 0)
 
 
-# ---------------------------------------------------------------------------
-# Helpers for TestAutoConditionResolution
-# ---------------------------------------------------------------------------
+# %% Helpers for TestAutoConditionResolution
 
 
 def _make_auto_resolution_animal(name: str, **kwargs) -> "Animal":
