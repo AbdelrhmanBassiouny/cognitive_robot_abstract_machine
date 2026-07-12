@@ -49,9 +49,7 @@ def _empty_knowledge(value):
     return ConclusionKnowledge(conclusion_value=value, sufficient_condition_sets=())
 
 
-# ---------------------------------------------------------------------------
-# ResolutionMode / ResolvedCondition
-# ---------------------------------------------------------------------------
+# %% ResolutionMode / ResolvedCondition
 
 
 def test_resolution_mode_has_automatic_and_hint_members():
@@ -67,9 +65,7 @@ def test_resolved_condition_carries_expression_and_resolver_type():
     assert resolved.resolver_type is TargetKnowledgeResolver
 
 
-# ---------------------------------------------------------------------------
-# _materialize
-# ---------------------------------------------------------------------------
+# %% _materialize
 
 
 def test_materialize_returns_the_bare_expression_when_not_negated():
@@ -97,9 +93,7 @@ def test_materialize_wraps_a_negated_guard_in_not():
     assert materialized_guard.holds_for(animal, snake) is True
 
 
-# ---------------------------------------------------------------------------
-# TargetKnowledgeResolver
-# ---------------------------------------------------------------------------
+# %% TargetKnowledgeResolver
 
 
 def test_target_knowledge_resolver_finds_a_discriminating_guard():
@@ -175,9 +169,7 @@ def test_target_knowledge_resolver_returns_none_with_no_known_paths():
     assert resolved is None
 
 
-# ---------------------------------------------------------------------------
-# CornerCaseKnowledgeResolver
-# ---------------------------------------------------------------------------
+# %% CornerCaseKnowledgeResolver
 
 
 def _two_path_current_knowledge(animal):
@@ -293,9 +285,7 @@ def test_corner_case_resolver_returns_none_when_no_path_discriminates():
     assert resolved is None
 
 
-# ---------------------------------------------------------------------------
-# ChainConditionResolver
-# ---------------------------------------------------------------------------
+# %% ChainConditionResolver
 
 
 class _AlwaysFailsResolver(ConditionResolver):
