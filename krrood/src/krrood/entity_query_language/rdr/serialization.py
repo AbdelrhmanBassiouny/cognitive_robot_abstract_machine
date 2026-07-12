@@ -26,6 +26,7 @@ from krrood.code_generation.generator import CodeGenerator
 from krrood.code_generation.imports import get_imports_from_types
 from krrood.code_generation.module_loading import load_module_from_path
 from krrood.code_generation.naming import camel_case_to_lower_camel_case
+from krrood.code_generation.type_hints import render_dict_literal
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Literal, Variable
@@ -416,14 +417,10 @@ def _render_corner_cases_source(
     """
     for case_source in corner_case_sources.values():
         referenced_types.update(case_source.referenced_types)
-    items = [
-        (
-            ast_helpers.constant(positional_index),
-            ast_helpers.parse_expression(case_source.source),
-        )
+    return render_dict_literal(
+        (repr(positional_index), case_source.source)
         for positional_index, case_source in sorted(corner_case_sources.items())
-    ]
-    return ast_helpers.unparse_expression(ast_helpers.dict_literal(items))
+    )
 
 
 def _render_type_imports(
