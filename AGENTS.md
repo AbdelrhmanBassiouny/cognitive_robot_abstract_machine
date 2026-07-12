@@ -25,6 +25,7 @@
 - Use existing packages whenever possible
 - Always use dataclasses
 - Use short but descriptive names
+- Mark section dividers with a single `# %% Section Name` comment line, not multi-line ASCII-box/dashed banners
 
 ## Imports
 - Imports should always be absolute

@@ -84,9 +84,7 @@ class UnsupportedNodeForSerialization(Exception):
         self.node = node
 
 
-# --------------------------------------------------------------------------- #
-# DAG decomposition
-# --------------------------------------------------------------------------- #
+# %% DAG decomposition
 
 
 def _orient_run(
@@ -172,9 +170,7 @@ def _conclusion_value(condition_node) -> Any:
     raise UnsupportedNodeForSerialization(condition_node)
 
 
-# --------------------------------------------------------------------------- #
-# Expression -> source
-# --------------------------------------------------------------------------- #
+# %% Expression -> source
 
 
 def _emit_value(value: Any) -> str:
@@ -227,9 +223,7 @@ def _condition_operands(node) -> List[Any]:
     return [child for child in node._children_ if child._id_ not in conclusion_ids]
 
 
-# --------------------------------------------------------------------------- #
-# Rule tree -> source
-# --------------------------------------------------------------------------- #
+# %% Rule tree -> source
 
 
 def _emit_rule_body(

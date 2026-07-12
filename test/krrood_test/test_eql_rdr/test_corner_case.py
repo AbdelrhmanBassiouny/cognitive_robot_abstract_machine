@@ -57,9 +57,7 @@ def _rex() -> Animal:
     return Animal("Rex", Species.DOG, 3, Owner("Alice"))
 
 
-# ---------------------------------------------------------------------------
-# AsdictCaseSerializer.to_source
-# ---------------------------------------------------------------------------
+# %% AsdictCaseSerializer.to_source
 
 
 def test_to_source_emits_eval_able_constructor_source_for_a_nested_dataclass():
@@ -68,7 +66,8 @@ def test_to_source_emits_eval_able_constructor_source_for_a_nested_dataclass():
     case_source = serializer.to_source(_rex())
 
     rebuilt = eval(
-        case_source.source, {"Animal": Animal, "Species": Species, "Owner": Owner}
+        case_source.source,
+        {t.__name__: t for t in (Animal, Species, Owner)},
     )
     assert rebuilt == _rex()
     assert case_source.referenced_types == {Animal, Species, Owner}
@@ -89,9 +88,7 @@ def test_to_source_raises_for_an_unsupported_field_type():
         serializer.to_source(Unserializable(tags=["a", "b"]))
 
 
-# ---------------------------------------------------------------------------
-# AsdictCaseSerializer.from_data
-# ---------------------------------------------------------------------------
+# %% AsdictCaseSerializer.from_data
 
 
 def test_from_data_reconstructs_a_nested_dataclass_from_an_asdict_style_mapping():
@@ -103,9 +100,7 @@ def test_from_data_reconstructs_a_nested_dataclass_from_an_asdict_style_mapping(
     assert rebuilt == _rex()
 
 
-# ---------------------------------------------------------------------------
-# CornerCaseStore.record / get
-# ---------------------------------------------------------------------------
+# %% CornerCaseStore.record / get
 
 
 def test_get_returns_the_case_recorded_for_a_node():
@@ -131,9 +126,7 @@ def test_get_returns_none_for_a_none_node_id():
     assert store.get(None) is None
 
 
-# ---------------------------------------------------------------------------
-# CornerCaseStore.to_ordered_sources / from_ordered_cases
-# ---------------------------------------------------------------------------
+# %% CornerCaseStore.to_ordered_sources / from_ordered_cases
 
 
 def test_to_ordered_sources_only_includes_nodes_with_a_recorded_case():

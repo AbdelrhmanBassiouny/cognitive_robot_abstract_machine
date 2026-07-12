@@ -17,7 +17,7 @@ import dataclasses
 import enum
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import Any, Dict, List, Optional, Set, Type
+from typing_extensions import Any, Dict, List, Optional, Set, Tuple, Type
 from uuid import UUID
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
@@ -25,9 +25,12 @@ from krrood.code_generation.type_hints import value_to_source
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.exceptions import CaseNotSerializableError
 
-# ---------------------------------------------------------------------------
-# CaseSource
-# ---------------------------------------------------------------------------
+#: The scalar types :class:`AsdictCaseSerializer` emits directly. The single source of
+#: truth for both the ``isinstance`` check in :meth:`AsdictCaseSerializer._emit_value`
+#: and the types listed in :class:`~krrood.entity_query_language.rdr.exceptions.CaseNotSerializableError`.
+SUPPORTED_SCALAR_TYPES: Tuple[Type, ...] = (bool, int, float, str, enum.Enum)
+
+# %% CaseSource
 
 
 @dataclass
@@ -41,9 +44,7 @@ class CaseSource:
     """Every type referenced in :attr:`source` that must be imported for it to evaluate."""
 
 
-# ---------------------------------------------------------------------------
-# CaseSerializer ABC
-# ---------------------------------------------------------------------------
+# %% CaseSerializer ABC
 
 
 @dataclass
@@ -80,9 +81,7 @@ class CaseSerializer(ABC):
         """
 
 
-# ---------------------------------------------------------------------------
-# AsdictCaseSerializer — default implementation
-# ---------------------------------------------------------------------------
+# %% AsdictCaseSerializer — default implementation
 
 
 @dataclass
@@ -113,7 +112,7 @@ class AsdictCaseSerializer(CaseSerializer):
         :raises CaseNotSerializableError: When a field value cannot be emitted.
         """
         if not dataclasses.is_dataclass(case) or isinstance(case, type):
-            raise CaseNotSerializableError(case)
+            raise CaseNotSerializableError(case, SUPPORTED_SCALAR_TYPES)
         referenced: Set[Type] = {type(case)}
         field_parts = []
         for f in dataclasses.fields(case):
@@ -128,12 +127,12 @@ class AsdictCaseSerializer(CaseSerializer):
         """Emit a single field value as source, recursing into nested dataclasses."""
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return self.to_source(value)
-        if value is None or isinstance(value, (bool, int, float, str, enum.Enum)):
+        if value is None or isinstance(value, SUPPORTED_SCALAR_TYPES):
             ref_types: Set[Type] = set()
             if isinstance(value, enum.Enum):
                 ref_types.add(type(value))
             return CaseSource(value_to_source(value), ref_types)
-        raise CaseNotSerializableError(value)
+        raise CaseNotSerializableError(value, SUPPORTED_SCALAR_TYPES)
 
     def from_data(self, data: Any, case_type: Type) -> Any:
         """Reconstruct a case instance from a ``dataclasses.asdict``-style dict.
@@ -156,9 +155,7 @@ class AsdictCaseSerializer(CaseSerializer):
         return case_type(**kwargs)
 
 
-# ---------------------------------------------------------------------------
-# CornerCaseStore
-# ---------------------------------------------------------------------------
+# %% CornerCaseStore
 
 
 @dataclass
