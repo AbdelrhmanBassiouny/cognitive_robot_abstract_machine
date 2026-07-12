@@ -41,6 +41,16 @@ def constant(value: Any) -> ast.Constant:
     return ast.Constant(value=value)
 
 
+def enum_member(enum_type_name: str, member_name: str) -> ast.Attribute:
+    """Build an enum-member access ``EnumType.MEMBER``.
+
+    :param enum_type_name: The enum class name.
+    :param member_name: The member (attribute) name on that enum.
+    :return: An :class:`ast.Attribute` accessing the member in load context.
+    """
+    return attribute_access(load_name(enum_type_name), member_name)
+
+
 def call(function_name: str, arguments: List[ast.expr]) -> ast.Call:
     """Build a positional-only call of a named function.
 
