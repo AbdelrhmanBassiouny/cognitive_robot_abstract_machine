@@ -52,9 +52,7 @@ def _animals():
     ]
 
 
-# ---------------------------------------------------------------------------
-# is_ellipsis_target
-# ---------------------------------------------------------------------------
+# %% is_ellipsis_target
 
 
 def test_is_ellipsis_target_true_for_an_ellipsis_assignment():
@@ -71,9 +69,7 @@ def test_is_ellipsis_target_false_for_a_concrete_assignment():
     assert is_ellipsis_target(attribute_match) is False
 
 
-# ---------------------------------------------------------------------------
-# case_type / variable
-# ---------------------------------------------------------------------------
+# %% case_type / variable
 
 
 def test_case_type_and_variable_reflect_the_underlying_match():
@@ -84,9 +80,7 @@ def test_case_type_and_variable_reflect_the_underlying_match():
     assert underspecified.variable is match.variable
 
 
-# ---------------------------------------------------------------------------
-# inference_targets / single_target / target_attribute_name
-# ---------------------------------------------------------------------------
+# %% inference_targets / single_target / target_attribute_name
 
 
 def test_single_ellipsis_attribute_is_the_sole_inference_target():
@@ -125,9 +119,7 @@ def test_unbounded_iterable_ellipsis_attribute_raises_unsupported_inference_targ
     assert error.value.attribute_name == "tags"
 
 
-# ---------------------------------------------------------------------------
-# filtered_cases
-# ---------------------------------------------------------------------------
+# %% filtered_cases
 
 
 def test_filtered_cases_keeps_only_instances_matching_the_concrete_constraints():
