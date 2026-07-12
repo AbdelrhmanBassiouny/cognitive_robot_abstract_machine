@@ -32,6 +32,20 @@ into every session by the `.claude/hooks/session-start.sh` hook (see the
   investigating problems, reacting to events, or implementing features, so
   you are always working from its latest state.
 
+## PR plan and progress tracking
+
+- For every PR you create, maintain a plan/progress/next-steps note in
+  CLAUDE.local.md's PR-progress section (the block between the
+  BEGIN-PR-PROGRESS/END-PR-PROGRESS markers, written automatically by
+  session-start.sh). Initialize it with a short plan as soon as you start
+  real work on the PR.
+- Keep it current: update it whenever the plan changes, whenever you update
+  your task list, and before ending any turn that changed either. Run
+  `save-pr-progress.sh` whenever you update it.
+- Never write this plan into any file tracked on the PR branch itself. It
+  must live only in the PR-progress section, which is stored on the
+  `claude/personal-notes` branch and is never merged.
+
 <!--
 Add new personal-only rules below this line. Keep each rule short and
 imperative, same style as above.
