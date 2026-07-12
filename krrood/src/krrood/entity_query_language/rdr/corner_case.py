@@ -17,30 +17,28 @@ import dataclasses
 import enum
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing_extensions import Any, Dict, List, Optional, Set, Tuple, Type
+from typing_extensions import Any, Dict, List, Optional, Set, Type
 from uuid import UUID
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
 from krrood.code_generation.type_hints import value_to_source
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.rdr.exceptions import CaseNotSerializableError
 
 # ---------------------------------------------------------------------------
-# Exception
+# CaseSource
 # ---------------------------------------------------------------------------
 
 
-class CaseNotSerializableError(Exception):
-    """Raised when :class:`AsdictCaseSerializer` cannot emit constructor source for a value."""
+@dataclass
+class CaseSource:
+    """The eval-able Python constructor source for a case, plus its type dependencies."""
 
-    def __init__(self, value: Any) -> None:
-        super().__init__(
-            f"Cannot serialize value of type {type(value).__name__!r} to Python "
-            "constructor source. Only None, bool, int, float, str, enum.Enum members, "
-            "and nested dataclasses are supported. For other types, implement a custom "
-            "CaseSerializer."
-        )
-        self.value = value
-        """The field value that could not be serialized."""
+    source: str
+    """Eval-able Python constructor expression, e.g. ``Animal(name='Rex')``."""
+
+    referenced_types: Set[Type]
+    """Every type referenced in :attr:`source` that must be imported for it to evaluate."""
 
 
 # ---------------------------------------------------------------------------
@@ -58,12 +56,12 @@ class CaseSerializer(ABC):
     """
 
     @abstractmethod
-    def to_source(self, case: Any) -> Tuple[str, Set[Type]]:
-        """Return ``(constructor_source, referenced_types)`` for ``case``.
+    def to_source(self, case: Any) -> CaseSource:
+        """Return the constructor source and referenced types for ``case``.
 
         :param case: A dataclass instance to serialize.
-        :return: A tuple of the Python constructor expression (eval-able) and the
-            set of types that must be imported for the expression to evaluate.
+        :return: The Python constructor expression (eval-able) and the set of types
+            that must be imported for the expression to evaluate.
         """
 
     @abstractmethod
@@ -108,12 +106,10 @@ class AsdictCaseSerializer(CaseSerializer):
     :class:`CaseSerializer`.
     """
 
-    def to_source(self, case: Any) -> Tuple[str, Set[Type]]:
+    def to_source(self, case: Any) -> CaseSource:
         """Emit ``CaseType(field=value, ...)`` constructor source for ``case``.
 
         :param case: A dataclass instance to serialize.
-        :return: ``(source, referenced_types)`` where ``source`` is eval-able Python
-            and ``referenced_types`` contains all types that must be imported.
         :raises CaseNotSerializableError: When a field value cannot be emitted.
         """
         if not dataclasses.is_dataclass(case) or isinstance(case, type):
@@ -122,13 +118,13 @@ class AsdictCaseSerializer(CaseSerializer):
         field_parts = []
         for f in dataclasses.fields(case):
             value = getattr(case, f.name)
-            value_src, value_refs = self._emit_value(value)
-            referenced.update(value_refs)
-            field_parts.append(f"{f.name}={value_src}")
+            value_source = self._emit_value(value)
+            referenced.update(value_source.referenced_types)
+            field_parts.append(f"{f.name}={value_source.source}")
         source = f"{type(case).__name__}({', '.join(field_parts)})"
-        return source, referenced
+        return CaseSource(source, referenced)
 
-    def _emit_value(self, value: Any) -> Tuple[str, Set[Type]]:
+    def _emit_value(self, value: Any) -> CaseSource:
         """Emit a single field value as source, recursing into nested dataclasses."""
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return self.to_source(value)
@@ -136,7 +132,7 @@ class AsdictCaseSerializer(CaseSerializer):
             ref_types: Set[Type] = set()
             if isinstance(value, enum.Enum):
                 ref_types.add(type(value))
-            return value_to_source(value), ref_types
+            return CaseSource(value_to_source(value), ref_types)
         raise CaseNotSerializableError(value)
 
     def from_data(self, data: Any, case_type: Type) -> Any:
@@ -195,17 +191,17 @@ class CornerCaseStore:
     def to_ordered_sources(
         self,
         ordered_nodes: List[SymbolicExpression],
-    ) -> Dict[int, Tuple[str, Set[Type]]]:
+    ) -> Dict[int, CaseSource]:
         """Emit constructor source for every node that has a recorded corner case.
 
         Delegates to ``self.serializer.to_source`` for each recorded case.
 
         :param ordered_nodes: Rule condition nodes in the order returned by
             :func:`~krrood.entity_query_language.rdr.serialization.walk_rules_in_emission_order`.
-        :return: Mapping ``{index: (source, referenced_types)}`` for nodes that have a
+        :return: Mapping from index to :class:`CaseSource` for nodes that have a
             recorded corner case; nodes without one are absent.
         """
-        result: Dict[int, Tuple[str, Set[Type]]] = {}
+        result: Dict[int, CaseSource] = {}
         for i, node in enumerate(ordered_nodes):
             case = self.cases.get(node._id_)
             if case is not None:
