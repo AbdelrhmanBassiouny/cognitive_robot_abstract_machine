@@ -16,14 +16,16 @@ import os
 from dataclasses import dataclass
 from textwrap import indent as _indent
 from typing import TYPE_CHECKING
+from uuid import UUID
 
-from typing_extensions import Any, Callable, Dict, List
+from typing_extensions import Any, Callable, Dict, List, Optional
 
 from krrood.code_generation.function_case import FunctionCaseGenerator
 from krrood.code_generation.generator import CodeGenerator
 from krrood.code_generation.imports import get_imports_from_types
 from krrood.code_generation.module_loading import load_module_from_path
 from krrood.code_generation.naming import camel_case_to_lower_camel_case
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.factories import (
@@ -111,7 +113,7 @@ class SelectorBranch:
     selector_type: type
     """The selector class (``Refinement``, ``Alternative``, or ``Next``) this branch belongs to."""
 
-    condition: Any
+    condition: SymbolicExpression
     """The branch's condition sub-tree (an EQL expression DAG node)."""
 
 
@@ -119,7 +121,7 @@ class SelectorBranch:
 class DecomposedRuleTree:
     """The result of flattening a left-nested chain of conclusion selectors."""
 
-    main: Any
+    main: SymbolicExpression
     """The base condition node with no selector wrapping."""
 
     branches: List[SelectorBranch]
@@ -146,7 +148,7 @@ def _reorder_branches_for_reinsertion(
     )
 
 
-def _flatten_selector_chain(node: Any) -> DecomposedRuleTree:
+def _flatten_selector_chain(node: SymbolicExpression) -> DecomposedRuleTree:
     """
     Flatten a left-nested chain of conclusion selectors into a base condition plus an
     ordered list of branches in the order the loader must re-insert them to rebuild the
@@ -175,7 +177,9 @@ def _flatten_selector_chain(node: Any) -> DecomposedRuleTree:
     return DecomposedRuleTree(node, branches)
 
 
-def walk_rules_in_emission_order(conditions_root: Any) -> List[Any]:
+def walk_rules_in_emission_order(
+    conditions_root: Optional[SymbolicExpression],
+) -> List[SymbolicExpression]:
     """
     Return condition (leaf) nodes in the same pre-order that ``_emit_rule_body`` visits.
 
@@ -188,9 +192,9 @@ def walk_rules_in_emission_order(conditions_root: Any) -> List[Any]:
         calls (i.e. the *i*-th element here corresponds to the *i*-th ``add(`` line in
         the file written by :func:`rdr_to_python`).
     """
-    result: List = []
+    result: List[SymbolicExpression] = []
 
-    def _visit(node: Any) -> None:
+    def _visit(node: SymbolicExpression) -> None:
         decomposed = _flatten_selector_chain(node)
         result.append(decomposed.main)
         for branch in decomposed.branches:
@@ -201,7 +205,7 @@ def walk_rules_in_emission_order(conditions_root: Any) -> List[Any]:
     return result
 
 
-def _conclusion_value(condition_node: Any) -> Any:
+def _conclusion_value(condition_node: SymbolicExpression) -> Any:
     """:return: The single value concluded at ``condition_node`` (its ``Add``)."""
     for conclusion in condition_node._conclusions_:
         if isinstance(conclusion, Add):
@@ -227,7 +231,9 @@ def _emit_value(value: Any) -> ast.expr:
 
 
 def _emit_factory_call(
-    factory: Callable[..., Any], operands: List[Any], var_names: Dict[Any, str]
+    factory: Callable[..., Any],
+    operands: List[SymbolicExpression],
+    var_names: Dict[UUID, str],
 ) -> ast.Call:
     """Build the AST call that invokes *factory* on the emitted *operands*."""
     return ast.Call(
@@ -237,7 +243,7 @@ def _emit_factory_call(
     )
 
 
-def _emit_expr(node: Any, var_names: Dict[Any, str]) -> ast.expr:
+def _emit_expr(node: SymbolicExpression, var_names: Dict[UUID, str]) -> ast.expr:
     """Build the AST expression that reconstructs the condition sub-tree at *node*."""
     if isinstance(node, Literal):
         return _emit_value(node._value_)
@@ -269,7 +275,7 @@ def _emit_expr(node: Any, var_names: Dict[Any, str]) -> ast.expr:
     raise UnsupportedNodeForSerialization(node)
 
 
-def _condition_operands(node: Any) -> List[Any]:
+def _condition_operands(node: SymbolicExpression) -> List[SymbolicExpression]:
     """
     The logical operands of a connective, excluding any conclusions. When a rule's
     condition is the connective itself (e.g. an ``and_`` root), its ``Add`` conclusions are
@@ -283,8 +289,8 @@ def _condition_operands(node: Any) -> List[Any]:
 
 
 def _emit_rule_body(
-    condition_node: Any,
-    var_names: Dict[Any, str],
+    condition_node: SymbolicExpression,
+    var_names: Dict[UUID, str],
     conclusion_target: ast.expr,
     referenced_types: set,
 ) -> List[ast.stmt]:
