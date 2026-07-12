@@ -271,7 +271,7 @@ def _emit_value(value: SerializableValue) -> ast.expr:
     """
     match value:
         case enum.Enum():
-            return ast_helpers.enum_member(type(value).__name__, value.name)
+            return ast_helpers.enum_member(value)
         case bool() | int() | float() | str() | None:
             return ast_helpers.constant(value)
         case _:
@@ -416,13 +416,14 @@ def _render_corner_cases_source(
     """
     for case_source in corner_case_sources.values():
         referenced_types.update(case_source.referenced_types)
-    if not corner_case_sources:
-        return "{}"
-    entries = ", ".join(
-        f"{positional_index}: {case_source.source}"
+    items = [
+        (
+            ast_helpers.constant(positional_index),
+            ast_helpers.parse_expression(case_source.source),
+        )
         for positional_index, case_source in sorted(corner_case_sources.items())
-    )
-    return "{" + entries + "}"
+    ]
+    return ast_helpers.unparse_expression(ast_helpers.dict_literal(items))
 
 
 def _render_type_imports(
