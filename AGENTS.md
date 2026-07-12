@@ -26,6 +26,7 @@
 - Always use dataclasses
 - Use short but descriptive names
 - Mark section dividers with a single `# %% Section Name` comment line, not multi-line ASCII-box/dashed banners
+- Do not hardcode a string literal that duplicates a value with its own source of truth elsewhere (an importable symbol's name, a generated file's attribute name, etc.); reference the real object (e.g. `obj.__name__`) or a shared named constant instead
 
 ## Imports
 - Imports should always be absolute
