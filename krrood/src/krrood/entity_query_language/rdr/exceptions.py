@@ -1,8 +1,10 @@
-"""Exceptions raised while adapting an underspecified EQL ``Match`` for RDR inference."""
+"""Exceptions raised by the EQL-native RDR engine."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from typing_extensions import Any
 
 from krrood.exceptions import DataclassException
 
@@ -62,3 +64,22 @@ class UnsupportedInferenceTarget(DataclassException):
 
     def suggest_correction(self) -> str:
         return "This will be supported by a future MultiClassRDR."
+
+
+@dataclass
+class CaseNotSerializableError(DataclassException):
+    """Raised when a :class:`~krrood.entity_query_language.rdr.corner_case.CaseSerializer`
+    cannot emit constructor source for a value."""
+
+    value: Any
+    """The field value that could not be serialized."""
+
+    def error_message(self) -> str:
+        return (
+            f"Cannot serialize value of type {type(self.value).__name__!r} to Python "
+            "constructor source. Only None, bool, int, float, str, enum.Enum members, "
+            "and nested dataclasses are supported."
+        )
+
+    def suggest_correction(self) -> str:
+        return "For other types, implement a custom CaseSerializer."
