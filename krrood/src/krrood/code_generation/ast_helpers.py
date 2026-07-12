@@ -11,7 +11,7 @@ from __future__ import annotations
 import ast
 import enum
 
-from typing_extensions import Any, Iterable, List, Tuple, Type
+from typing_extensions import Any, List, Type
 
 
 def load_name(identifier: str) -> ast.Name:
@@ -49,32 +49,6 @@ def enum_member(member: enum.Enum) -> ast.Attribute:
     :return: An :class:`ast.Attribute` accessing the member on its enum class.
     """
     return attribute_access(load_name(type(member).__name__), member.name)
-
-
-def parse_expression(source: str) -> ast.expr:
-    """Parse a source fragment into a single expression node.
-
-    Use this to lift already-rendered source (produced by another generator) into an AST
-    being assembled, so it can be spliced into a larger node and unparsed uniformly.
-
-    :param source: A Python expression in source form.
-    :return: The parsed expression node.
-    """
-    return ast.parse(source, mode="eval").body
-
-
-def dict_literal(items: Iterable[Tuple[ast.expr, ast.expr]]) -> ast.Dict:
-    """Build a dict-display node from ordered key/value expression pairs.
-
-    :param items: The ``(key, value)`` expression pairs, in the order they should appear.
-    :return: An :class:`ast.Dict` node.
-    """
-    keys: List[ast.expr] = []
-    values: List[ast.expr] = []
-    for key, value in items:
-        keys.append(key)
-        values.append(value)
-    return ast.Dict(keys=keys, values=values)
 
 
 def call(function_name: str, arguments: List[ast.expr]) -> ast.Call:
