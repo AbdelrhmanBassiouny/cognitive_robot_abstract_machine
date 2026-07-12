@@ -42,7 +42,7 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import AND, OR, Not
-from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
+from krrood.entity_query_language.rdr.corner_case import CaseSource, CornerCaseStore
 from krrood.entity_query_language.rdr.exceptions import (
     EmptyRuleTreeError,
     UnsupportedNodeForSerialization,
@@ -70,7 +70,7 @@ _CONCLUSION_SELECTOR_FACTORY: Dict[type, Callable[..., SymbolicExpression]] = {
 }
 """Maps each conclusion-selector class to the factory that reconstructs it in generated source."""
 
-_COMPARATOR_AST_OP: Dict[Callable[..., Any], Type[ast.cmpop]] = {
+_COMPARATOR_AST_OPERATOR: Dict[Callable[..., Any], Type[ast.cmpop]] = {
     operator.eq: ast.Eq,
     operator.ne: ast.NotEq,
     operator.lt: ast.Lt,
@@ -143,27 +143,41 @@ class DecomposedRuleTree:
     """The selector branches, ordered as the loader must re-insert them."""
 
 
+def _branch_grew_the_tree_inward(branch: ConclusionSelectorBranch) -> bool:
+    """
+    Report whether a branch's selector grew the rule tree inward rather than outward.
+
+    A ``Refinement`` re-anchors at the same fixed base node, so successive refinements
+    grow *inward* and the left-to-right walk visits them in the order they were added.
+    An ``Alternative`` / ``Next`` re-anchors at the moving conditions root, so those grow
+    *outward* and the walk visits them in the reverse of the order they were added.
+
+    :param branch: The branch to classify.
+    :return: ``True`` when the branch was added by an inward-growing refinement,
+        ``False`` for outward-growing alternative/next branches.
+    """
+    return branch.conclusion_selector_type is Refinement
+
+
 def _reorder_branches_for_reinsertion(
-    selector_run: List[ConclusionSelectorBranch],
+    branches_added_the_same_direction: List[ConclusionSelectorBranch],
 ) -> List[ConclusionSelectorBranch]:
     """
-    Put one same-orientation run of branches into the order the loader must re-insert them.
+    Order one group of same-direction branches the way the loader must re-insert them.
 
-    ``Refinement`` chains grow *inward* (each new refinement re-anchors at the same fixed
-    base node), so walking ``.left`` already yields insertion order. ``Alternative`` /
-    ``Next`` chains grow *outward* (each re-anchors at the moving conditions root), so
-    walking ``.left`` yields *reverse* insertion order and must be flipped.
+    Inward-growing (refinement) branches are already in the order they were added, so the
+    group is kept as-is. Outward-growing (alternative/next) branches were walked in reverse
+    of the order they were added, so the group is flipped back.
 
-    :param selector_run: A contiguous run of branches that share an orientation.
-    :return: The run ordered as the loader re-inserts it.
+    :param branches_added_the_same_direction: Consecutive branches that were all added by
+        the same kind of selector (all refinements, or all alternatives/nexts).
+    :return: The group in the order the loader re-inserts it.
     """
-    if not selector_run:
+    if not branches_added_the_same_direction:
         return []
-    return (
-        list(selector_run)
-        if selector_run[0].conclusion_selector_type is Refinement
-        else list(reversed(selector_run))
-    )
+    if _branch_grew_the_tree_inward(branches_added_the_same_direction[0]):
+        return list(branches_added_the_same_direction)
+    return list(reversed(branches_added_the_same_direction))
 
 
 def _flatten_selector_chain(node: SymbolicExpression) -> DecomposedRuleTree:
@@ -172,30 +186,34 @@ def _flatten_selector_chain(node: SymbolicExpression) -> DecomposedRuleTree:
     ordered list of branches in the order the loader must re-insert them to rebuild the
     identical DAG.
 
-    Because refinement and alternative chains grow in opposite directions (see
-    :func:`_reorder_branches_for_reinsertion`), each contiguous same-orientation run is
-    oriented independently; a blanket reverse would silently swap sibling refinements on
-    every round-trip.
+    Because refinement and alternative branches were added growing in opposite directions
+    (see :func:`_branch_grew_the_tree_inward`), the walked branches are split into maximal
+    groups that were all added the same direction, and each group is ordered independently;
+    a blanket reverse would silently swap sibling refinements on every round-trip.
 
     :param node: The (possibly selector-wrapped) condition node to flatten.
     :return: The decomposed rule tree (base condition plus ordered branches).
     """
-    walk: List[ConclusionSelectorBranch] = []
+    walked_branches: List[ConclusionSelectorBranch] = []
     while isinstance(node, _CONCLUSION_SELECTORS):
-        walk.append(ConclusionSelectorBranch(type(node), node.right))
+        walked_branches.append(ConclusionSelectorBranch(type(node), node.right))
         node = node.left
 
     branches: List[ConclusionSelectorBranch] = []
-    run: List[ConclusionSelectorBranch] = []
-    for branch in walk:
-        branch_is_refinement = branch.conclusion_selector_type is Refinement
-        run_is_refinement = bool(run) and run[0].conclusion_selector_type is Refinement
-        orientation_changed = bool(run) and branch_is_refinement != run_is_refinement
-        if orientation_changed:
-            branches.extend(_reorder_branches_for_reinsertion(run))
-            run = []
-        run.append(branch)
-    branches.extend(_reorder_branches_for_reinsertion(run))
+    current_group: List[ConclusionSelectorBranch] = []
+    for branch in walked_branches:
+        # Close the current group whenever this branch was added growing the opposite
+        # direction from the branches already in it, so each same-direction group can be
+        # ordered on its own.
+        breaks_the_current_group = bool(current_group) and (
+            _branch_grew_the_tree_inward(branch)
+            != _branch_grew_the_tree_inward(current_group[0])
+        )
+        if breaks_the_current_group:
+            branches.extend(_reorder_branches_for_reinsertion(current_group))
+            current_group = []
+        current_group.append(branch)
+    branches.extend(_reorder_branches_for_reinsertion(current_group))
     return DecomposedRuleTree(node, branches)
 
 
@@ -251,13 +269,13 @@ def _emit_value(value: SerializableValue) -> ast.expr:
     :param value: The literal (or enum member) to emit.
     :return: The AST expression that evaluates back to *value*.
     """
-    if isinstance(value, enum.Enum):
-        return ast_helpers.attribute_access(
-            ast_helpers.load_name(type(value).__name__), value.name
-        )
-    if isinstance(value, (bool, int, float, str)) or value is None:
-        return ast_helpers.constant(value)
-    raise UnsupportedNodeForSerialization(value)
+    match value:
+        case enum.Enum():
+            return ast_helpers.enum_member(type(value).__name__, value.name)
+        case bool() | int() | float() | str() | None:
+            return ast_helpers.constant(value)
+        case _:
+            raise UnsupportedNodeForSerialization(value)
 
 
 def _emit_factory_call(
@@ -274,11 +292,30 @@ def _emit_factory_call(
     """
     return ast_helpers.call(
         factory.__name__,
-        [_emit_expr(operand, variable_names_by_id) for operand in operands],
+        [_emit_expression(operand, variable_names_by_id) for operand in operands],
     )
 
 
-def _emit_expr(
+def _emit_comparison(
+    node: Comparator, variable_names_by_id: Dict[UUID, str]
+) -> ast.Compare:
+    """Build the AST comparison that reconstructs a comparator node.
+
+    :param node: The comparator sub-tree to emit.
+    :param variable_names_by_id: Maps each bound variable's id to its source name.
+    :return: The AST comparison node.
+    """
+    comparison_operator = _COMPARATOR_AST_OPERATOR.get(node.operation)
+    if comparison_operator is None:
+        raise UnsupportedNodeForSerialization(node)
+    return ast_helpers.compare(
+        _emit_expression(node.left, variable_names_by_id),
+        comparison_operator,
+        _emit_expression(node.right, variable_names_by_id),
+    )
+
+
+def _emit_expression(
     node: SymbolicExpression, variable_names_by_id: Dict[UUID, str]
 ) -> ast.expr:
     """Build the AST expression that reconstructs a condition sub-tree.
@@ -287,32 +324,32 @@ def _emit_expr(
     :param variable_names_by_id: Maps each bound variable's id to its source name.
     :return: The AST expression that rebuilds *node*.
     """
-    if isinstance(node, Literal):
-        return _emit_value(node._value_)
-    if isinstance(node, Attribute):
-        return ast_helpers.attribute_access(
-            _emit_expr(node._child_, variable_names_by_id), node._attribute_name_
-        )
-    if isinstance(node, Variable):
-        if node._id_ not in variable_names_by_id:
+    match node:
+        case Literal():
+            return _emit_value(node._value_)
+        case Attribute():
+            return ast_helpers.attribute_access(
+                _emit_expression(node._child_, variable_names_by_id),
+                node._attribute_name_,
+            )
+        case Variable() if node._id_ in variable_names_by_id:
+            return ast_helpers.load_name(variable_names_by_id[node._id_])
+        case Comparator():
+            return _emit_comparison(node, variable_names_by_id)
+        case AND():
+            return _emit_factory_call(
+                and_, _condition_operands(node), variable_names_by_id
+            )
+        case OR():
+            return _emit_factory_call(
+                or_, _condition_operands(node), variable_names_by_id
+            )
+        case Not():
+            return _emit_factory_call(
+                not_, [node._children_[0]], variable_names_by_id
+            )
+        case _:
             raise UnsupportedNodeForSerialization(node)
-        return ast_helpers.load_name(variable_names_by_id[node._id_])
-    if isinstance(node, Comparator):
-        comparison_operator = _COMPARATOR_AST_OP.get(node.operation)
-        if comparison_operator is None:
-            raise UnsupportedNodeForSerialization(node)
-        return ast_helpers.compare(
-            _emit_expr(node.left, variable_names_by_id),
-            comparison_operator,
-            _emit_expr(node.right, variable_names_by_id),
-        )
-    if isinstance(node, AND):
-        return _emit_factory_call(and_, _condition_operands(node), variable_names_by_id)
-    if isinstance(node, OR):
-        return _emit_factory_call(or_, _condition_operands(node), variable_names_by_id)
-    if isinstance(node, Not):
-        return _emit_factory_call(not_, [node._children_[0]], variable_names_by_id)
-    raise UnsupportedNodeForSerialization(node)
 
 
 def _condition_operands(node: SymbolicExpression) -> List[SymbolicExpression]:
@@ -366,6 +403,50 @@ def _emit_rule_body(
     return statements
 
 
+def _render_corner_cases_source(
+    corner_case_sources: Dict[int, CaseSource], referenced_types: Set[type]
+) -> str:
+    """Render the ``{index: constructor, ...}`` corner-case dict literal.
+
+    :param corner_case_sources: The per-rule corner-case constructor sources, keyed by
+        emission index.
+    :param referenced_types: Accumulates the types each corner case needs imported;
+        mutated in place.
+    :return: The corner-case dict source (``"{}"`` when there are none).
+    """
+    for case_source in corner_case_sources.values():
+        referenced_types.update(case_source.referenced_types)
+    if not corner_case_sources:
+        return "{}"
+    entries = ", ".join(
+        f"{positional_index}: {case_source.source}"
+        for positional_index, case_source in sorted(corner_case_sources.items())
+    )
+    return "{" + entries + "}"
+
+
+def _render_type_imports(
+    referenced_types: Set[type], case_type: type, case_type_is_local: bool
+) -> str:
+    """Render the import block for every type the generated module references.
+
+    :param referenced_types: The types referenced by the rule tree and corner cases.
+    :param case_type: The RDR's case type.
+    :param case_type_is_local: When ``True``, omit the case type's own import (its class
+        is already defined in the same file).
+    :return: The newline-joined import statements.
+    """
+    if case_type_is_local:
+        types_to_import = [
+            referenced_type
+            for referenced_type in referenced_types
+            if referenced_type is not case_type
+        ]
+    else:
+        types_to_import = list(referenced_types)
+    return "\n".join(get_imports_from_types(types_to_import))
+
+
 def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> str:
     """
     Serialize an :class:`EQLSingleClassRDR` to importable Python source.
@@ -389,7 +470,7 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
 
     decomposed = _flatten_selector_chain(rdr.query._conditions_root_)
     base_condition = ast_helpers.unparse_expression(
-        _emit_expr(decomposed.base_condition, variable_names_by_id)
+        _emit_expression(decomposed.base_condition, variable_names_by_id)
     )
     body_statements = _emit_rule_body(
         rdr.query._conditions_root_, variable_names_by_id, conclusion_target, referenced_types
@@ -397,27 +478,10 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
     body = _indent(ast_helpers.unparse_statements(body_statements), "    ")
 
     ordered_nodes = walk_rules_in_emission_order(rdr.query._conditions_root_)
-    corner_case_sources = rdr.corner_cases.to_ordered_sources(ordered_nodes)
-    for case_source in corner_case_sources.values():
-        referenced_types.update(case_source.referenced_types)
-    if corner_case_sources:
-        entries = ", ".join(
-            f"{positional_index}: {case_source.source}"
-            for positional_index, case_source in sorted(corner_case_sources.items())
-        )
-        corner_cases_dict_src = "{" + entries + "}"
-    else:
-        corner_cases_dict_src = "{}"
-
-    if case_type_is_local:
-        types_to_import = [
-            referenced_type
-            for referenced_type in referenced_types
-            if referenced_type is not case_type
-        ]
-    else:
-        types_to_import = list(referenced_types)
-    type_imports = "\n".join(get_imports_from_types(types_to_import))
+    corner_cases_dict_src = _render_corner_cases_source(
+        rdr.corner_cases.to_ordered_sources(ordered_nodes), referenced_types
+    )
+    type_imports = _render_type_imports(referenced_types, case_type, case_type_is_local)
 
     generator = CodeGenerator(template_directory=_TEMPLATES_DIRECTORY)
     return generator.render(
