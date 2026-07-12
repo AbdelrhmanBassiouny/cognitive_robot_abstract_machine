@@ -19,9 +19,9 @@ import pytest
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.rdr.corner_case import (
     AsdictCaseSerializer,
-    CaseNotSerializableError,
     CornerCaseStore,
 )
+from krrood.entity_query_language.rdr.exceptions import CaseNotSerializableError
 
 
 class Species(Enum):
@@ -31,7 +31,7 @@ class Species(Enum):
 
 @dataclass(unsafe_hash=True)
 class Owner:
-    """Nested dataclass used to exercise recursive (de)serialization."""
+    """Inner dataclass of a nested dataclass, used to exercise recursive (de)serialization."""
 
     name: str
 
@@ -65,11 +65,13 @@ def _rex() -> Animal:
 def test_to_source_emits_eval_able_constructor_source_for_a_nested_dataclass():
     serializer = AsdictCaseSerializer()
 
-    source, referenced_types = serializer.to_source(_rex())
+    case_source = serializer.to_source(_rex())
 
-    rebuilt = eval(source, {"Animal": Animal, "Species": Species, "Owner": Owner})
+    rebuilt = eval(
+        case_source.source, {"Animal": Animal, "Species": Species, "Owner": Owner}
+    )
     assert rebuilt == _rex()
-    assert referenced_types == {Animal, Species, Owner}
+    assert case_source.referenced_types == {Animal, Species, Owner}
 
 
 def test_to_source_raises_for_a_non_dataclass_value():
@@ -143,8 +145,7 @@ def test_to_ordered_sources_only_includes_nodes_with_a_recorded_case():
     sources = store.to_ordered_sources([with_case, without_case])
 
     assert set(sources) == {0}
-    source, referenced_types = sources[0]
-    assert Animal in referenced_types
+    assert Animal in sources[0].referenced_types
 
 
 def test_from_ordered_cases_rebuilds_a_store_keyed_by_node_id():
@@ -152,9 +153,7 @@ def test_from_ordered_cases_rebuilds_a_store_keyed_by_node_id():
     without_case = variable(Animal, domain=[])
     case = _rex()
 
-    rebuilt = CornerCaseStore.from_ordered_cases(
-        [with_case, without_case], {0: case}
-    )
+    rebuilt = CornerCaseStore.from_ordered_cases([with_case, without_case], {0: case})
 
     assert rebuilt.get(with_case._id_) == case
     assert rebuilt.get(without_case._id_) is None
