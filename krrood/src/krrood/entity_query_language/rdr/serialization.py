@@ -26,7 +26,7 @@ from krrood.code_generation.generator import CodeGenerator
 from krrood.code_generation.imports import get_imports_from_types
 from krrood.code_generation.module_loading import load_module_from_path
 from krrood.code_generation.naming import camel_case_to_lower_camel_case
-from krrood.code_generation.type_hints import render_dict_literal
+from krrood.code_generation.object_to_source import render_dict_literal
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Literal, Variable

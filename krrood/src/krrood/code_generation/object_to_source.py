@@ -1,4 +1,4 @@
-"""Serialisation of type hints and values to Python source-code strings."""
+"""Create Python source-code strings from live objects (type hints, values, dict literals)."""
 
 from __future__ import annotations
 

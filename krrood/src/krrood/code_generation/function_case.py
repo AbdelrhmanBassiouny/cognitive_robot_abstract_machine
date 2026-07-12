@@ -15,7 +15,7 @@ from krrood.code_generation.imports import (
     validate_annotations,
 )
 from krrood.code_generation.naming import to_camel_case
-from krrood.code_generation.type_hints import stringify_type_hint
+from krrood.code_generation.object_to_source import stringify_type_hint
 
 # %%
 # FunctionCase dataclass generation
