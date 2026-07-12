@@ -33,41 +33,14 @@ from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annot
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import entity
 from krrood.entity_query_language.query.match import AttributeMatch, Match
+from krrood.entity_query_language.rdr.exceptions import (
+    MultipleInferenceTargets,
+    NoInferenceTarget,
+    UnsupportedInferenceTarget,
+)
 
 #: Generic origins whose instances are unbounded iterables we cannot conclude as one value.
 _UNBOUNDED_ITERABLE_ORIGINS = (list, set, frozenset, tuple, dict)
-
-
-class NoInferenceTarget(Exception):
-    """Raised when an underspecified ``Match`` has no ``...`` attribute to infer."""
-
-    def __init__(self, case_type: Type) -> None:
-        super().__init__(
-            f"{case_type.__name__} has no underspecified (`...`) attribute to infer."
-        )
-
-
-class MultipleInferenceTargets(Exception):
-    """Raised when a single-class RDR is handed more than one ``...`` attribute."""
-
-    def __init__(self, attribute_names: List[str]) -> None:
-        super().__init__(
-            "Single-class RDR infers one attribute, but several were underspecified: "
-            f"{attribute_names}. Use a separate RDR per attribute (or a future MultiClassRDR)."
-        )
-        self.attribute_names = attribute_names
-
-
-class UnsupportedInferenceTarget(Exception):
-    """Raised when an ``...`` attribute is an unbounded iterable (needs MultiClassRDR)."""
-
-    def __init__(self, case_type: Type, attribute_name: str) -> None:
-        super().__init__(
-            f"{case_type.__name__}.{attribute_name} is an unbounded iterable; single-class "
-            "RDR only infers single-valued attributes. This will be supported by MultiClassRDR."
-        )
-        self.case_type = case_type
-        self.attribute_name = attribute_name
 
 
 def is_ellipsis_target(attribute_match: AttributeMatch) -> bool:
@@ -93,6 +66,9 @@ class UnderspecifiedMatch:
     match: Match
 
     def __post_init__(self) -> None:
+        # Callers hand in a freshly built, unresolved template (e.g. an(Animal)(species=...));
+        # every property below reads match.type/.variable/.matches_with_variables, which only
+        # exist once resolved. Match.resolve() is idempotent, so this is safe if already resolved.
         self.match.resolve()
 
     @property
