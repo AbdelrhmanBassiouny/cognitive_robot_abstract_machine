@@ -22,16 +22,16 @@ from typing_extensions import List, Optional
 from krrood.entity_query_language.factories import an, and_
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.rdr.backend import RDRBackend
+from krrood.entity_query_language.rdr.exceptions import (
+    MultipleInferenceTargets,
+    NoInferenceTarget,
+    UnsupportedInferenceTarget,
+)
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.serialization import load_rdr, save_rdr
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from krrood.entity_query_language.rdr.underspecified import (
-    MultipleInferenceTargets,
-    NoInferenceTarget,
-    UnderspecifiedMatch,
-    UnsupportedInferenceTarget,
-)
+from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
 
 from .animal import Animal, Species
 from .zoo_loader import load_zoo_animals
