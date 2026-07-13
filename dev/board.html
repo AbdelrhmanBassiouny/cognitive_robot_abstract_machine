@@ -213,6 +213,11 @@
 
   .node.merged { opacity: 0.7; }
   .node.merged .name { text-decoration: line-through; text-decoration-color: var(--faint); }
+  /* Hides only the merged branch's own card + connector tick, not its <li> -- any non-merged
+     descendants nested inside (see nodeEl) keep rendering. li.hidden (below) additionally collapses
+     the <li> itself, but only once applyMerged() has confirmed nothing visible remains inside it. */
+  li.mergedHidden > .node { display: none; }
+  li.mergedHidden::before { display: none; }
   li.hidden { display: none; }
 
   /* ── readiness chips ── */
@@ -659,8 +664,16 @@ canvas.addEventListener("click", e => {
 // show/hide merged
 const showMerged = document.getElementById("show-merged");
 function applyMerged() {
+  // A merged branch's own card hides via .mergedHidden. Its children live in a nested <ul> inside
+  // the SAME <li> (see nodeEl), so hiding the whole <li> with display:none would take any non-merged
+  // descendants down with it. Only collapse the <li> itself (.hidden) once none of its descendants
+  // are left visible -- a merged leaf then fully disappears, but a merged branch with active
+  // descendants keeps them showing, just without its own now-redundant card.
   document.querySelectorAll('li[data-merged="1"]').forEach(li => {
-    li.classList.toggle("hidden", !showMerged.checked);
+    li.classList.toggle("mergedHidden", !showMerged.checked);
+  });
+  document.querySelectorAll("li.mergedHidden").forEach(li => {
+    li.classList.toggle("hidden", !li.querySelector("li:not(.mergedHidden)"));
   });
   // A root/continuation block whose every branch just went hidden (e.g. a merged root with no
   // active descendants) would otherwise leave its "cram2/main" (or "continues ...") label floating
