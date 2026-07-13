@@ -603,7 +603,10 @@ function drawConnectors() {
   links.forEach(({ parentName, childName }) => {
     const pn = document.querySelector(`li[data-name="${CSS.escape(parentName)}"] > .node`);
     const cn = document.querySelector(`li[data-name="${CSS.escape(childName)}"] > .node`);
-    if (!pn || !cn) return;
+    // offsetParent is null for a node inside a display:none li (hidden by the "show merged" toggle) --
+    // its getBoundingClientRect() would otherwise return all zeros, drawing a stray arrow off to the
+    // canvas's top-left corner instead of skipping the link.
+    if (!pn || !cn || pn.offsetParent === null || cn.offsetParent === null) return;
     const p = pn.getBoundingClientRect(), c = cn.getBoundingClientRect();
     const px = p.left - cr.left, py = p.top - cr.top + p.height / 2;
     const cx = c.left - cr.left, cy = c.top - cr.top + c.height / 2;
