@@ -180,7 +180,10 @@ class OneOf(ClauseElement):
             else self.members
         )
         listed = one_of(
-            [RoleFragment.for_value(member) for member in members[: MAX_SET_MEMBERS + 1]]
+            [
+                RoleFragment.for_value(member)
+                for member in members[: MAX_SET_MEMBERS + 1]
+            ]
         )
         if listed is not None:
             return listed
@@ -313,21 +316,21 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     return Clause(parts=[constituent.as_fragment() for constituent in constituents])
 
 
-_VALUE_GETTER_PREFIX = "get"
-"""Leading imperative dropped when reading a getter's name as a noun (``get_quarter`` -> *"quarter"*)."""
-
-
-def value_function_noun(name: str) -> str:
+def function_as_noun(name: str, getter_prefix: str = "get") -> str:
     """:return: a value (non-boolean) symbolic function class's name as noun words, dropping a leading
-    imperative ``get`` so ``GetQuarter`` reads as *"quarter"*; a plain-noun name is unchanged.
+    imperative *getter_prefix* so ``GetQuarter`` reads as *"quarter"*; a plain-noun name is unchanged.
 
-    >>> value_function_noun("GetQuarter")
+    :param name: The function's identifier (or class name).
+    :param getter_prefix: A leading imperative word (default ``"get"``) dropped when reading a getter's
+        name as a noun (``get_quarter`` -> *"quarter"*).
+
+    >>> function_as_noun("GetQuarter")
     'quarter'
-    >>> value_function_noun("RemainingLoad")
+    >>> function_as_noun("RemainingLoad")
     'remaining load'
     """
     words = camel_case_to_words(name).split()
-    if len(words) > 1 and words[0].lower() == _VALUE_GETTER_PREFIX:
+    if len(words) > 1 and words[0].lower() == getter_prefix:
         words = words[1:]
     return " ".join(words)
 
@@ -377,7 +380,7 @@ class FunctionVerbalizationTemplates:
         ... ))
         'the remaining load of the capacity'
         """
-        noun = value_function_noun(function_class.__name__)
+        noun = function_as_noun(function_class.__name__)
         if not operands:
             return Noun.bare(noun).as_fragment()
         return possessive_path([PathStep(noun)], And(operands).as_fragment())
@@ -416,7 +419,7 @@ class FunctionVerbalizationTemplates:
         """
         return PhraseFragment(
             parts=[
-                Noun.the(value_function_noun(function_class.__name__)).as_fragment(),
+                Noun.the(function_as_noun(function_class.__name__)).as_fragment(),
                 relation.as_fragment(),
                 And(operands).as_fragment(),
             ]
@@ -475,9 +478,7 @@ def predicate_clause(
     complement = [WordFragment(text=word) for word in rest]
     is_copular = morphology.verb_lemma(head) == _COPULA_LEMMA
     if is_copular and objects and (not rest or rest[-1] not in _PREPOSITION_WORDS):
-        operands = And(
-            [Noun(subject), *(Noun(obj) for obj in objects)]
-        ).as_fragment()
+        operands = And([Noun(subject), *(Noun(obj) for obj in objects)]).as_fragment()
         return clause(
             Noun(PhraseFragment(parts=complement)),
             Verb("hold"),

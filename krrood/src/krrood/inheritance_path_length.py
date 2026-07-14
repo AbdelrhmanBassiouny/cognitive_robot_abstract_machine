@@ -8,7 +8,7 @@ from typing import Type, Optional, TYPE_CHECKING
 from krrood.entity_query_language.predicate import (
     RenderedFields,
     SymbolicFunction,
-    functional_form,
+    symbolic_callable_to_function,
 )
 
 if TYPE_CHECKING:
@@ -60,7 +60,9 @@ class InheritancePathLength(SymbolicFunction):
         )
 
 
-inheritance_path_length = lru_cache(functional_form(InheritancePathLength))
+inheritance_path_length = lru_cache(
+    symbolic_callable_to_function(InheritancePathLength)
+)
 
 
 def _inheritance_path_length(
