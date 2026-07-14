@@ -17,7 +17,7 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.predicate import (
     Predicate,
     SymbolicFunction,
-    functional_form,
+    symbolic_callable_to_function,
 )
 from krrood.entity_query_language.verbalization.fragments.base import WordFragment
 from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
@@ -96,7 +96,7 @@ class RobotCollisions(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-robot_in_collision = functional_form(RobotCollisions)
+robot_in_collision = symbolic_callable_to_function(RobotCollisions)
 
 
 @dataclass(eq=False)
@@ -131,7 +131,7 @@ class RobotHoldsBody(Predicate):
         return clause(Noun(operands.robot), Verb("hold"), Noun(operands.body))
 
 
-robot_holds_body = functional_form(RobotHoldsBody)
+robot_holds_body = symbolic_callable_to_function(RobotHoldsBody)
 
 
 @dataclass(eq=False)
@@ -172,7 +172,7 @@ class BlockingBodies(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-blocking = functional_form(BlockingBodies)
+blocking = symbolic_callable_to_function(BlockingBodies)
 
 
 @dataclass(eq=False)
@@ -213,7 +213,7 @@ class BodiesInGripper(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-bodies_in_gripper = functional_form(BodiesInGripper)
+bodies_in_gripper = symbolic_callable_to_function(BodiesInGripper)
 
 
 @dataclass(eq=False)
@@ -242,7 +242,7 @@ class BodyInGripperFraction(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-is_body_in_gripper = functional_form(BodyInGripperFraction)
+is_body_in_gripper = symbolic_callable_to_function(BodyInGripperFraction)
 
 
 @dataclass(eq=False)
@@ -253,8 +253,10 @@ class IsGripperHoldingSomething(Predicate):
     """The gripper to check."""
 
     def __call__(self) -> bool:
-        bodies_under_tcp = self.gripper._world.get_kinematic_structure_entities_of_branch(
-            self.gripper.tool_frame
+        bodies_under_tcp = (
+            self.gripper._world.get_kinematic_structure_entities_of_branch(
+                self.gripper.tool_frame
+            )
         )
         # the branch always contains the tool frame itself, so only additional
         # entities below it count as something being held
@@ -269,7 +271,7 @@ class IsGripperHoldingSomething(Predicate):
         )
 
 
-is_gripper_holding_something = functional_form(IsGripperHoldingSomething)
+is_gripper_holding_something = symbolic_callable_to_function(IsGripperHoldingSomething)
 
 
 @dataclass(eq=False)
@@ -310,4 +312,4 @@ class IsPoseFreeForRobot(Predicate):
         )
 
 
-is_pose_free_for_robot = functional_form(IsPoseFreeForRobot)
+is_pose_free_for_robot = symbolic_callable_to_function(IsPoseFreeForRobot)

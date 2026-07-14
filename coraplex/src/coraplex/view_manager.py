@@ -4,7 +4,7 @@ from typing_extensions import Self, Optional, Tuple
 
 from krrood.entity_query_language.predicate import (
     SymbolicFunction,
-    functional_form,
+    symbolic_callable_to_function,
 )
 from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.robots.robot_parts import (
@@ -41,9 +41,9 @@ class EndEffectorView(SymbolicFunction):
 @dataclass
 class ViewManager:
 
-    get_end_effector_view = staticmethod(functional_form(EndEffectorView))
+    get_end_effector_view = staticmethod(symbolic_callable_to_function(EndEffectorView))
     """Returns the end effector of an arm view -- the class-form :class:`EndEffectorView` behind a
-    :func:`functional_form` wrapper, so a call returns the end effector for concrete arguments and a
+    :func:`symbolic_callable_to_function` wrapper, so a call returns the end effector for concrete arguments and a
     symbolic expression when any argument is symbolic."""
 
     @staticmethod

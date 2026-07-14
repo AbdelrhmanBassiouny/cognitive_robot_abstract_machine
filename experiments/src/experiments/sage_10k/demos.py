@@ -43,7 +43,10 @@ from semantic_digital_twin.spatial_types import Point3, Pose, Vector3
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from typing import Any
-from krrood.entity_query_language.predicate import SymbolicFunction, functional_form
+from krrood.entity_query_language.predicate import (
+    SymbolicFunction,
+    symbolic_callable_to_function,
+)
 
 
 @dataclass(eq=False)
@@ -68,7 +71,7 @@ class PlanarDistance(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-planar_distance = functional_form(PlanarDistance)
+planar_distance = symbolic_callable_to_function(PlanarDistance)
 
 
 @dataclass(eq=False)
@@ -88,9 +91,7 @@ class ClosesToBorder(SymbolicFunction):
     """The coffee table whose frame the position is measured in."""
 
     def __call__(self) -> float:
-        return self.world.transform(
-            self.target.global_pose, self.couch_table.root
-        ).y
+        return self.world.transform(self.target.global_pose, self.couch_table.root).y
 
     @classmethod
     def _verbalization_fragment_(cls, operands: Self):
@@ -101,7 +102,7 @@ class ClosesToBorder(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-closes_to_border = functional_form(ClosesToBorder)
+closes_to_border = symbolic_callable_to_function(ClosesToBorder)
 
 
 @dataclass
@@ -312,9 +313,7 @@ class Sage10kTVStudioDemo(Sage10kAbstractDemoHSRB):
             )
             .ordered_by(
                 v,
-                key=lambda x: closes_to_border(
-                    x.root, self.world, couch_table
-                ),
+                key=lambda x: closes_to_border(x.root, self.world, couch_table),
                 descending=False,
             )
         )
@@ -392,9 +391,7 @@ class Sage10kCraftsmanLobbyDemo(Sage10kAbstractDemoHSRB):
             )
             .ordered_by(
                 v,
-                key=lambda x: closes_to_border(
-                    x.root, self.world, couch_table
-                ),
+                key=lambda x: closes_to_border(x.root, self.world, couch_table),
                 descending=False,
             )
         )

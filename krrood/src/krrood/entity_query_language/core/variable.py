@@ -255,7 +255,7 @@ class InstantiatedVariable(
             # not, so it binds the direct call result.
             bind = (
                 self._type_._bound_value_
-                if isinstance(self._type_, type)
+                if inspect.isclass(self._type_)
                 and issubclass(self._type_, HasBoundValue)
                 else self._type_
             )
