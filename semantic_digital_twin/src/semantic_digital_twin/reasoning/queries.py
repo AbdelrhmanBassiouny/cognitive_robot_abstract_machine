@@ -17,7 +17,7 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.query.query import Entity
 from krrood.entity_query_language.predicate import (
     SymbolicFunction,
-    functional_form,
+    symbolic_callable_to_function,
     length,
 )
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
@@ -203,7 +203,7 @@ class ClassNameLowercased(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
-class_name_lowercased = functional_form(ClassNameLowercased)
+class_name_lowercased = symbolic_callable_to_function(ClassNameLowercased)
 """Functional form of :class:`ClassNameLowercased`."""
 
 
@@ -246,7 +246,7 @@ class AnnotationVolume(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
 
 
-annotation_volume = functional_form(AnnotationVolume)
+annotation_volume = symbolic_callable_to_function(AnnotationVolume)
 
 
 def sort_annotations_by_volume(
