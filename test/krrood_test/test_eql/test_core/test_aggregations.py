@@ -26,7 +26,7 @@ from random_events.interval import SimpleInterval, Bound
 from ...dataset.example_classes import KRROODVectorsWithProperty
 from krrood.entity_query_language.predicate import (
     SymbolicFunction,
-    functional_form,
+    symbolic_callable_to_function,
     length,
 )
 from krrood.entity_query_language.query.operations import GroupedBy
@@ -733,7 +733,7 @@ def test_nearest_object_type():
         def _verbalization_fragment_(cls, operands):
             return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
-    symbolic_distance = functional_form(SymbolicDistance)
+    symbolic_distance = symbolic_callable_to_function(SymbolicDistance)
 
     @dataclass(eq=False)
     class EqlMro(SymbolicFunction):
@@ -746,7 +746,7 @@ def test_nearest_object_type():
         def _verbalization_fragment_(cls, operands):
             return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
-    eql_mro = functional_form(EqlMro)
+    eql_mro = symbolic_callable_to_function(EqlMro)
 
     objects = [BaseObject(), Object1(), Object2()]
     object_of_interest = Level2Object()

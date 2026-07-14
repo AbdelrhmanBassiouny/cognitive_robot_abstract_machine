@@ -56,7 +56,7 @@ from krrood.entity_query_language.predicate import (
     Predicate,
     RenderedFields,
     SymbolicFunction,
-    functional_form,
+    symbolic_callable_to_function,
 )
 from krrood.entity_query_language.query.match import (
     Match,
@@ -763,7 +763,7 @@ class NodeId(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-node_id = functional_form(NodeId)
+node_id = symbolic_callable_to_function(NodeId)
 
 
 @dataclass(eq=False)
@@ -785,7 +785,7 @@ class NodeDescendants(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-node_descendants = functional_form(NodeDescendants)
+node_descendants = symbolic_callable_to_function(NodeDescendants)
 
 
 @dataclass(eq=False)
@@ -807,7 +807,7 @@ class NodeType(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-node_type = functional_form(NodeType)
+node_type = symbolic_callable_to_function(NodeType)
 
 
 @dataclass(eq=False)
@@ -829,7 +829,7 @@ class NodeChildren(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-node_children = functional_form(NodeChildren)
+node_children = symbolic_callable_to_function(NodeChildren)
 
 
 @dataclass(eq=False)
@@ -851,7 +851,7 @@ class AttributeOwnerClass(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-attribute_owner_class = functional_form(AttributeOwnerClass)
+attribute_owner_class = symbolic_callable_to_function(AttributeOwnerClass)
 
 
 @dataclass(eq=False)
@@ -873,7 +873,7 @@ class NodeParents(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-node_parents = functional_form(NodeParents)
+node_parents = symbolic_callable_to_function(NodeParents)
 
 
 @dataclass(eq=False)
@@ -913,7 +913,7 @@ class IsSubclass(Predicate):
         )
 
 
-issubclass_ = functional_form(IsSubclass)
+issubclass_ = symbolic_callable_to_function(IsSubclass)
 
 
 @dataclass(eq=False)
@@ -940,7 +940,7 @@ class IsClass(Predicate):
         return clause(Noun(operands.obj), Copula(), Noun("class"))
 
 
-is_class = functional_form(IsClass)
+is_class = symbolic_callable_to_function(IsClass)
 
 
 @dataclass(eq=False)
@@ -962,4 +962,4 @@ class RuntimeType(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-type_ = functional_form(RuntimeType)
+type_ = symbolic_callable_to_function(RuntimeType)

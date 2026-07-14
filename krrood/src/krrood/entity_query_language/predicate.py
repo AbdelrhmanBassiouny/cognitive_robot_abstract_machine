@@ -48,13 +48,15 @@ from krrood.patterns.code_parsing_utils import (
 from krrood.symbol_graph.symbol_graph import Symbol
 
 
-def functional_form(symbolic_callable: Type[T]) -> Callable[..., Any]:
+def symbolic_callable_to_function(
+    symbolic_callable: Type[SymbolicCallable],
+) -> Callable[..., Any]:
     """:return: a function that calls *symbolic_callable* -- the value-returning counterpart of
     :class:`SymbolicFunction`.
 
     It returns a symbolic expression when any argument is a variable (so it composes in a query) and
     the directly computed value otherwise. Binding an existing function name to
-    ``functional_form(TheClass)`` lets a migration to the class form keep that name's call behaviour
+    ``symbolic_callable_to_function(TheClass)`` lets a migration to the class form keep that name's call behaviour
     unchanged -- the logic moves into the class's :meth:`__call__` and the name just constructs it.
     """
 
@@ -138,14 +140,16 @@ class Operand:
 
     def as_fragment(self) -> "VerbalizationFragment":
         """:return: the operand's rendered fragment, so an :class:`Operand` is a clause constituent
-        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work."""
+        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work.
+        """
         return self._render_(self._expression_)
 
     @property
     def _value_of_operand_(self) -> Any:
         """:return: the raw Python value bound to the operand (a literal's value unwrapped) — what
         :class:`~…parts_of_speech.OneOf` enumerates. Named with surrounding underscores so it is not
-        mistaken for a navigated attribute (``operands.x.value`` navigates to ``x.value``)."""
+        mistaken for a navigated attribute (``operands.x.value`` navigates to ``x.value``).
+        """
         return (
             self._expression_._value_
             if isinstance(self._expression_, Literal)
@@ -518,7 +522,7 @@ class Length(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-length = functional_form(Length)
+length = symbolic_callable_to_function(Length)
 """Backward-compatible functional form of :class:`Length` (keeps the ``length(iterable)`` call)."""
 
 

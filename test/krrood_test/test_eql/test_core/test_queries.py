@@ -39,7 +39,7 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.predicate import (
     HasType,
     Predicate,
-    functional_form,
+    symbolic_callable_to_function,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
@@ -595,7 +595,7 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
             subject, *objects = operands
             return predicate_clause(cls.__name__, subject, *objects)
 
-    is_handle = functional_form(IsHandle)
+    is_handle = symbolic_callable_to_function(IsHandle)
 
     body = variable(Body, domain=world.bodies)
     query_kwargs = an(entity(body).where(is_handle(body_=body)))

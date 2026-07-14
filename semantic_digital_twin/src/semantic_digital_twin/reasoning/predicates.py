@@ -12,7 +12,7 @@ from typing_extensions import Self, List, TYPE_CHECKING, Iterable, Type
 from krrood.entity_query_language.predicate import (
     Predicate,
     SymbolicFunction,
-    functional_form,
+    symbolic_callable_to_function,
 )
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
@@ -74,7 +74,7 @@ class Stable(Predicate):
         return clause(Noun(operands.body), Copula(), Adjective("stable"))
 
 
-stable = functional_form(Stable)
+stable = symbolic_callable_to_function(Stable)
 
 
 @dataclass(eq=False)
@@ -105,13 +105,15 @@ class Contact(Predicate):
             Noun(operands.body1),
             Copula(),
             Prepositions.IN,
-            WordFragment(text="contact"),  # bare noun -- "in contact", not "in a contact"
+            WordFragment(
+                text="contact"
+            ),  # bare noun -- "in contact", not "in a contact"
             Prepositions.WITH,
             Noun(operands.body2),
         )
 
 
-contact = functional_form(Contact)
+contact = symbolic_callable_to_function(Contact)
 
 
 @dataclass(eq=False)
@@ -148,7 +150,7 @@ class GetVisibleBodies(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-get_visible_bodies = functional_form(GetVisibleBodies)
+get_visible_bodies = symbolic_callable_to_function(GetVisibleBodies)
 
 
 @dataclass(eq=False)
@@ -176,7 +178,7 @@ class Visible(Predicate):
         )
 
 
-visible = functional_form(Visible)
+visible = symbolic_callable_to_function(Visible)
 
 
 @dataclass(eq=False)
@@ -252,7 +254,7 @@ class OccludingBodies(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-occluding_bodies = functional_form(OccludingBodies)
+occluding_bodies = symbolic_callable_to_function(OccludingBodies)
 
 
 @dataclass(eq=False)
@@ -292,7 +294,7 @@ class Reachable(Predicate):
         )
 
 
-reachable = functional_form(Reachable)
+reachable = symbolic_callable_to_function(Reachable)
 
 
 @dataclass(eq=False)
@@ -333,7 +335,9 @@ class EuclideanPlanarDistance(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-compute_euclidean_planar_distance = functional_form(EuclideanPlanarDistance)
+compute_euclidean_planar_distance = symbolic_callable_to_function(
+    EuclideanPlanarDistance
+)
 
 
 @dataclass(eq=False)
@@ -385,7 +389,7 @@ class IsSupportedBy(Predicate):
         return predicate_clause(cls.__name__, subject, *objects)
 
 
-is_supported_by = functional_form(IsSupportedBy)
+is_supported_by = symbolic_callable_to_function(IsSupportedBy)
 
 
 @dataclass(eq=False)
@@ -419,7 +423,7 @@ class IsSupporting(Predicate):
         return predicate_clause(cls.__name__, subject, *objects)
 
 
-is_supporting = functional_form(IsSupporting)
+is_supporting = symbolic_callable_to_function(IsSupporting)
 
 
 @dataclass(eq=False)
@@ -462,7 +466,7 @@ class BodyInRegionFraction(SymbolicFunction):
         return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
-is_body_in_region = functional_form(BodyInRegionFraction)
+is_body_in_region = symbolic_callable_to_function(BodyInRegionFraction)
 
 
 @dataclass
@@ -772,7 +776,7 @@ class IsPlaceOccupied(Predicate):
         return predicate_clause(cls.__name__, subject, *objects)
 
 
-is_place_occupied = functional_form(IsPlaceOccupied)
+is_place_occupied = symbolic_callable_to_function(IsPlaceOccupied)
 
 
 @dataclass(eq=False)
@@ -813,4 +817,4 @@ class AllClose(Predicate):
         )
 
 
-allclose = functional_form(AllClose)
+allclose = symbolic_callable_to_function(AllClose)
