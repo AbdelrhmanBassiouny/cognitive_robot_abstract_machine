@@ -84,8 +84,9 @@ class TrainingEnvironment(ABC):
     @abstractmethod
     def setup_plan(self, limit: int = 10, **kwargs) -> Plan:
         """
-        Create a plan with an underspecified node as a root. This plan is used
-        to generate variants of the actions.
+        Create a plan with an underspecified node as a root.
+
+        This plan is used to generate variants of the actions.
 
         :param limit: The maximum number of actions that should be
             executed.
@@ -254,8 +255,10 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment):
 
     def setup_backend_from_path(self, underspecified_action: Match):
         """
-        Setup a backend from a model file. Adds the variables of the action to
-        the loaded model if they don't exist.
+        Setup a backend from a model file.
+
+        Adds the variables of the action to the loaded model if they
+        don't exist.
 
         :param underspecified_action: The action to load the model for.
         :return: The probabilistic backend.

@@ -185,6 +185,7 @@ class PickAndPlaceAction(ActionDescription):
     """
     Arm that should be used.
     """
+
     grasp_description: GraspDescription
     """
     Description of the grasp to pick up the target.
@@ -218,6 +219,7 @@ class MoveAndPlaceAction(ActionDescription):
     """
     The pose to stand before trying to pick up the object.
     """
+
     object_designator: Body
     """
     The object to pick up.
@@ -258,19 +260,21 @@ class MoveAndPickUpAction(ActionDescription):
     """
     The pose to stand before trying to pick up the object.
     """
+
     object_designator: Body
     """
     The object to pick up.
     """
+
     arm: Arms
     """
     The arm to use.
     """
+
     grasp_description: GraspDescription
     """
     The grasp to use.
     """
-
     keep_joint_states: bool = ActionConfig.navigate_keep_joint_states
     """
     Keep the joint states of the robot the same during the navigation.

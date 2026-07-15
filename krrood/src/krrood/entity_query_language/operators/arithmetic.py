@@ -41,11 +41,19 @@ class ArithmeticOperation(
     """
 
     left: Selectable
-    """The left operand."""
+    """
+    The left operand.
+    """
+
     right: Selectable
-    """The right operand."""
+    """
+    The right operand.
+    """
+
     math_operator: MathOperator
-    """The operator applied to the operands."""
+    """
+    The operator applied to the operands.
+    """
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -72,8 +80,10 @@ class ArithmeticOperation(
         """
         Compute the operation for one product result and bind its value.
 
-        :param child_result: The result carrying the values of both operands.
-        :return: The result with this operation's value bound under its own id.
+        :param child_result: The result carrying the values of both
+            operands.
+        :return: The result with this operation's value bound under its
+            own id.
         """
         operands = (
             self.left._process_result_(child_result),
@@ -92,9 +102,13 @@ class UnaryArithmeticOperation(UnaryExpression, CanBehaveLikeAVariable[T]):
     """
 
     _child_: CanBehaveLikeAVariable[T]
-    """The operand the operator is applied to."""
+    """
+    The operand the operator is applied to.
+    """
     math_operator: MathOperator
-    """The operator applied to the operand."""
+    """
+    The operator applied to the operand.
+    """
 
     def __post_init__(self) -> None:
         self._var_ = self
@@ -110,7 +124,8 @@ class UnaryArithmeticOperation(UnaryExpression, CanBehaveLikeAVariable[T]):
         """
         yield from (
             self._build_operation_result_and_update_truth_value_(
-                child_result.bindings | {self._id_: self._operation_value_(child_result)},
+                child_result.bindings
+                | {self._id_: self._operation_value_(child_result)},
                 child_result,
             )
             for child_result in self._child_._evaluate_(sources)

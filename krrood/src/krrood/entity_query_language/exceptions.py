@@ -519,6 +519,7 @@ class UnSupportedOperand(UnsupportedOperation):
     """
     The operation used.
     """
+
     unsupported_operand: Any
     """
     The operand that is not supported by the operation.
@@ -590,6 +591,7 @@ class InvalidQuantificationRangeError(QuantificationConsistencyError):
     """
     The lower bound of the quantification range.
     """
+
     at_most: Any
     """
     The upper bound of the quantification range.
@@ -654,6 +656,7 @@ class NoExpressionFoundForGivenID(DataclassException):
     """
     The current symbolic expression being evaluated.
     """
+
     expression_id: uuid.UUID
     """
     The ID of the expression that was not found.
@@ -852,6 +855,7 @@ class WrongPropertyReturnStatementImplementation(ModelingError):
     """
     The reason for the wrong property.
     """
+
     clazz: Optional[Type] = None
     """
     The class that has the property.

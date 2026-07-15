@@ -1,7 +1,9 @@
 """
-This module provides mechanisms for mapping symbolic expressions to object domains.
+This module provides mechanisms for mapping symbolic expressions to object
+domains.
 
-It contains classes for attribute access, indexing, and function calls on symbolic expressions.
+It contains classes for attribute access, indexing, and function calls
+on symbolic expressions.
 """
 
 from __future__ import annotations
@@ -45,15 +47,16 @@ from krrood.symbol_graph.helpers import get_field_type_endpoint
 @dataclass(eq=False, repr=False)
 class CanBehaveLikeAVariable(Selectable[T], ABC):
     """
-    This class adds the monitoring/tracking behavior on variables that tracks attribute access, calling,
-    and comparison operations.
+    This class adds the monitoring/tracking behavior on variables that tracks
+    attribute access, calling, and comparison operations.
     """
 
     _known_mapped_variables_: Dict[MappedVariableCacheItem, MappedVariable] = field(
         init=False, default_factory=dict
     )
     """
-    A storage of created MappedVariable instances to prevent recreating same mapping multiple times.
+    A storage of created MappedVariable instances to prevent recreating same
+    mapping multiple times.
     """
 
     __iter__ = None
@@ -65,11 +68,15 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         self, type_: Type[MappedVariable], *args, **kwargs
     ) -> MappedVariable:
         """
-        Retrieves or creates a MappedVariable instance based on the provided arguments.
+        Retrieves or creates a MappedVariable instance based on the provided
+        arguments.
 
-        :param type_: The type of the MappedVariable to retrieve or create.
-        :param args: Positional arguments to pass to the MappedVariable constructor.
-        :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
+        :param type_: The type of the MappedVariable to retrieve or
+            create.
+        :param args: Positional arguments to pass to the MappedVariable
+            constructor.
+        :param kwargs: Keyword arguments to pass to the MappedVariable
+            constructor.
         :return: The retrieved or created MappedVariable instance.
         """
         cache_item = MappedVariableCacheItem(type_, self, args, kwargs)
@@ -84,9 +91,12 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         """
         Generates a hashable key for the given type and arguments.
 
-        :param type_: The type of the mapped variable to generate a key for, e.g., Attribute, Index, etc.
-        :param args: Positional arguments to pass to the MappedVariable constructor.
-        :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
+        :param type_: The type of the mapped variable to generate a key
+            for, e.g., Attribute, Index, etc.
+        :param args: Positional arguments to pass to the MappedVariable
+            constructor.
+        :param kwargs: Keyword arguments to pass to the MappedVariable
+            constructor.
         :return: The generated hashable key.
         """
         args = (self,) + args
@@ -131,7 +141,8 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         self, other: Any, math_operator: MathOperator
     ) -> CanBehaveLikeAVariable[T]:
         """
-        Build a binary arithmetic operation with this variable as the left operand.
+        Build a binary arithmetic operation with this variable as the left
+        operand.
 
         :param other: The right operand.
         :param math_operator: The operator to apply.
@@ -147,10 +158,12 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         self, other: Any, math_operator: MathOperator
     ) -> CanBehaveLikeAVariable[T]:
         """
-        Build a binary arithmetic operation with this variable as the right operand.
+        Build a binary arithmetic operation with this variable as the right
+        operand.
 
-        This is used for the reflected dunders (``other <op> self``) so that the operand order is
-        preserved for non-commutative operators such as subtraction and division.
+        This is used for the reflected dunders (``other <op> self``) so
+        that the operand order is preserved for non-commutative
+        operators such as subtraction and division.
 
         :param other: The left operand.
         :param math_operator: The operator to apply.
@@ -245,7 +258,6 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
         """
         Apply the mapping to the child's values.
         """
-
         yield from (
             self._build_operation_result_and_update_truth_value_(
                 child_result.bindings | {self._id_: mapped_value}, child_result
@@ -321,7 +333,8 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
 
     def apply_mapping_on_external_root(self, instance: Any) -> Any:
         """
-        Apply the mapping on the given instance by following the access path and applying the mapping at each step.
+        Apply the mapping on the given instance by following the access path
+        and applying the mapping at each step.
 
         :param instance: The instance to apply the mapping on.
         :return: An iterable of the mapped values.
@@ -347,9 +360,11 @@ class MappedVariable(UnaryExpression, CanBehaveLikeAVariable[T], ABC):
 @dataclass(eq=False, repr=False)
 class Attribute(MappedVariable[T]):
     """
-    A symbolic attribute that can be used to access attributes of symbolic variables.
+    A symbolic attribute that can be used to access attributes of symbolic
+    variables.
 
-    For instance, if Body.name is called, then the attribute name is "name" and `_owner_class_` is `Body`
+    For instance, if Body.name is called, then the attribute name is
+    "name" and `_owner_class_` is `Body`
     """
 
     _attribute_name_: str
@@ -366,7 +381,8 @@ class Attribute(MappedVariable[T]):
 
     def _update_type_(self) -> None:
         """
-        Update the `_type_` attribute with the type of the values of this attribute.
+        Update the `_type_` attribute with the type of the values of this
+        attribute.
         """
         self._type_ = get_field_type_endpoint(self._owner_class_, self._attribute_name_)
 
@@ -387,7 +403,8 @@ class Attribute(MappedVariable[T]):
 @dataclass(eq=False, repr=False)
 class Index(MappedVariable):
     """
-    A variable that was created through collection indexing by a certain key on its child variable.
+    A variable that was created through collection indexing by a certain key on
+    its child variable.
     """
 
     _key_: Any
@@ -428,6 +445,7 @@ class Call(MappedVariable):
     """
     The arguments to call the method with.
     """
+
     _kwargs_: Dict[str, Any] = field(default_factory=dict)
     """
     The keyword arguments to call the method with.
@@ -476,23 +494,30 @@ class FlatVariable(MappedVariable[T]):
 @dataclass
 class MappedVariableCacheItem:
     """
-    A cache item for mapped variable creation. To prevent recreating same mapped variable multiple times, mapping
-     instances are stored in a dictionary with a hashable key. This class is used to generate the key for the dictionary
-      that stores the mapped variable instances.
+    A cache item for mapped variable creation.
+
+    To prevent recreating same mapped variable multiple times, mapping
+    instances are stored in a dictionary with a hashable key. This class
+    is used to generate the key for the dictionary  that stores the
+    mapped variable instances.
     """
 
     type: Type[MappedVariable]
     """
     The mapping type to create, e.g., Attribute, Index, etc.
     """
+
     child: CanBehaveLikeAVariable
     """
-    The child of the mapping (i.e. the original variable on which the mapping is applied).
+    The child of the mapping (i.e. the original variable on which the mapping
+    is applied).
     """
+
     args: Tuple[Any, ...] = field(default_factory=tuple)
     """
     Positional arguments to pass to the mapping constructor.
     """
+
     kwargs: Dict[str, Any] = field(default_factory=dict)
     """
     Keyword arguments to pass to the mapping constructor.
