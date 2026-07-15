@@ -63,3 +63,19 @@ blocked while draft -- mark ready only when told to.
   `git ls-files`), so no lockfile commit needed -- verified locally with
   `uv lock` that it resolves cleanly. Pushed as eb5341a.
 - Waiting on this CI run to go green.
+
+### Review round 1 (addressed)
+
+- 5 inline review comments from the PR owner, all in factories.py /
+  quantifier_overloads_fixture.py:
+  - Renamed `SymbolicExpressionT` -> `TSymbolicExpression` (codebase
+    convention is T-prefixed, matching the existing `TSymbolicExpression` in
+    verbalization/grammar/framework/planner.py).
+  - Corrected the new overload's docstring note: not every
+    `SymbolicExpression` is callable, only the ones that inherit `__call__`
+    from `CanBehaveLikeAVariable` (Entity, Query, Match, Attribute, ...).
+  - Replaced the fixture's dash-style section comments with this codebase's
+    `# %%` cell-divider convention (4 occurrences).
+- Verified mypy still passes on the fixture, full krrood suite still green
+  (1695 passed, 9 skipped). Pushed as 5b48b85e6.
+- Replied to and resolved all 5 threads.
