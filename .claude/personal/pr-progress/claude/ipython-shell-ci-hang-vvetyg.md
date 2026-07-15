@@ -39,11 +39,27 @@ back to `UserPrompt`/`IPythonShell`).
   clear exception on non-interactive stdin.
 - Removed now-unused `logging` import from `ipython_custom_shell.py`.
 
+## Done (continued)
+
+- Full `test/krrood_test/test_ripple_down_rules` suite ran green: 71 passed,
+  6 skipped (Python 3.12 venv, had to reconstruct requirements +
+  random-events/casadi/scipy/objgraph/pytest-xdist + system `graphviz`
+  package from scratch since none of it is preinstalled).
+- Discarded unrelated auto-regenerated files that running the suite
+  touches as a side effect (`test/krrood_test/dataset/ormatic_interface.py`
+  and the `test_expert_answers/*.py` fixtures) so the commit stays focused
+  on the actual fix.
+- Ran `docformatter` on the two modified source files per AGENTS.md.
+- Committed as `Abdelrhman Bassiouny <bido.bassuny@gmail.com>` (matched
+  against existing commit authors in the repo, since local git config was
+  set to the `Claude`/`noreply@anthropic.com` assistant identity) and
+  pushed to `claude/ipython-shell-ci-hang-vvetyg`.
+- Opened draft PR #71 against `main`, labeled `bug`, body includes a link
+  to this session, subscribed to PR activity.
+
 ## Next
 
-- Run the full `test/krrood_test/test_ripple_down_rules` suite to confirm no
-  regressions (in progress).
-- Commit (as the human user's git identity, not an assistant identity) and
-  push to `claude/ipython-shell-ci-hang-vvetyg`.
-- Open the draft PR against `main`, add `bug` label, include session link,
-  subscribe to PR activity.
+- Watching PR #71 for CI completion and review comments via the
+  subscription; no unresolved review comments as of the last check, krrood
+  CI leg passed, several other matrix legs still in progress.
+- Re-check in ~1 hour if no webhook events arrive in the meantime.
