@@ -60,6 +60,11 @@ back to `UserPrompt`/`IPythonShell`).
 ## Next
 
 - Watching PR #71 for CI completion and review comments via the
-  subscription; no unresolved review comments as of the last check, krrood
-  CI leg passed, several other matrix legs still in progress.
-- Re-check in ~1 hour if no webhook events arrive in the meantime.
+  subscription. krrood CI leg passed; `giskardpy` leg failed on an
+  unrelated pre-existing flaky physics test
+  (`test_ros2_stuff/test_integration_pr2.py::TestSelfCollisionAvoidance::test_attached_self_collision_avoid_stick`,
+  `assert len(collisions.contacts) > 0`) that has nothing to do with the
+  krrood-only diff in this PR - skipped, no action taken, explained in
+  session chat. All other matrix legs green except `coraplex` still
+  in progress as of the last check.
+- Re-check in ~1 hour (scheduled) if no further webhook events arrive.
