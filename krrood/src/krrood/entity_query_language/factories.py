@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from inspect import isclass
 from uuid import UUID
 
-from typing_extensions import Any, Iterable, List, Optional, Tuple, Type
+from typing_extensions import Any, Iterable, List, Optional, Tuple, Type, overload
 
 from krrood.entity_query_language.core.base_expressions import (
     Selectable,
@@ -61,7 +61,6 @@ from krrood.entity_query_language.predicate import (
 )
 from krrood.entity_query_language.query.match import (
     Match,
-    MatchVariable,
 )
 from krrood.entity_query_language.query.quantifiers import (
     ResultQuantificationConstraint,
@@ -106,56 +105,6 @@ def set_of(*selected_variables: Union[Selectable[T], Any]) -> SetOf:
     :return: Set descriptor.
     """
     return SetOf(_selected_variables_=selected_variables)
-
-
-# %% Match
-
-
-def match(
-    type_: Optional[Union[Type[T], Selectable[T]]] = None,
-) -> Union[Type[T], CanBehaveLikeAVariable[T], Match[T]]:
-    """
-    Create a symbolic variable matching the type and the provided keyword
-    arguments.
-
-    This is used for easy variable definitions when there are structural
-    constraints.
-
-    :param type_: The type of the variable (i.e., The class you want to
-        instantiate).
-    :return: The Match instance.
-    """
-    return Match(factory=type_)
-
-
-def match_variable(
-    type_: Union[Type[T], Selectable[T]], domain: DomainType
-) -> Union[T, Entity[T], MatchVariable[T]]:
-    """
-    Same as :py:func:`krrood.entity_query_language.match.match` but with a
-    domain to use for the variable created by the match.
-
-    :param type_: The type of the variable (i.e., The class you want to
-        instantiate).
-    :param domain: The domain used for the variable created by the
-        match.
-    :return: The Match instance.
-    """
-    return MatchVariable(factory=type_, domain=domain)
-
-
-def underspecified(
-    expression: Union[Type[T], Callable[..., T]], target_type: Type[T] | None = None
-) -> Union[Type[T], Match[T]]:
-    """
-    Same as :py:func:`krrood.entity_query_language.factories.match` but instead
-    of searching for solutions in the domain objects, it is used as a query for
-    generative processes to infer solutions that satisfy the constraints in the
-    query.
-    """
-    if target_type is not None:
-        return Match(factory=expression, type_=target_type)
-    return Match(factory=expression)
 
 
 # %% Variable Declaration
@@ -350,48 +299,186 @@ def exists(
 # %% Result Quantifiers
 
 
-def an(
-    entity_: Union[T, Query],
+def _quantify_or_build_match(
+    arg: Union[T, Query, Type[T], Callable[..., T]],
+    quantifier_type: Type[ResultQuantifier],
     quantification: Optional[ResultQuantificationConstraint] = None,
-) -> Union[T, Query]:
+    *,
+    target_type: Optional[Type[T]] = None,
+) -> Union[T, Query, Match[T]]:
     """
-    Select all values satisfying the given entity description.
+    Shared implementation for :py:func:`an` and :py:func:`the`.
 
-    :param entity_: An entity or a set expression to quantify over.
-    :param quantification: Optional quantification constraint.
-    :return: The entity with the applied quantifier.
+    The behaviour is selected by the runtime type of ``arg``:
+
+    * If ``arg`` is a :class:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`
+      (an entity, a set expression, a variable or an attribute), it is quantified with
+      ``quantifier_type``. Raw selectables that are not already a
+      :class:`~krrood.entity_query_language.query.query.Query` are first wrapped with
+      :py:func:`entity`.
+    * Otherwise ``arg`` is treated as a type (or a callable factory) and a structural
+      :class:`~krrood.entity_query_language.query.match.Match` is built — selectable by default
+      and generative-ready through a
+      :class:`~krrood.entity_query_language.backends.GenerativeBackend`. Restrict the search to
+      specific instances with :meth:`~krrood.entity_query_language.query.match.Match.from_`.
+
+    :param arg: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param quantifier_type: The result quantifier to apply (``An`` or ``The``).
+    :param quantification: Optional quantification constraint (quantify path only).
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: A quantified query, or a ``Match`` builder.
     """
-    return entity_._quantify_(An, quantification_constraint=quantification)
+    if isinstance(arg, SymbolicExpression):
+        if not isinstance(arg, Query):
+            arg = entity(arg)
+        return arg._quantify_(quantifier_type, quantification_constraint=quantification)
+
+    match_ = Match(factory=arg, type_=target_type)
+    match_._quantifier_type_ = quantifier_type
+    return match_
+
+
+@overload
+def an(
+    entity_: Type[T],
+    quantification: None = ...,
+    *,
+    target_type: None = ...,
+) -> Match[T]: ...
+
+
+@overload
+def an(
+    entity_: Callable[..., T],
+    quantification: None = ...,
+    *,
+    target_type: Type[T] = ...,
+) -> Match[T]: ...
+
+
+@overload
+def an(
+    entity_: T,
+    quantification: Optional[ResultQuantificationConstraint] = ...,
+    *,
+    target_type: None = ...,
+) -> T: ...
+
+
+def an(
+    entity_,
+    quantification=None,
+    *,
+    target_type=None,
+):
+    """
+    Select all values satisfying the given description.
+
+    Depending on ``entity_`` this either quantifies an existing symbolic expression with the
+    ``An`` quantifier (zero or more results), or builds a structural ``Match`` when ``entity_``
+    is a type or a callable factory. See :py:func:`_quantify_or_build_match` for details;
+    restrict a match to specific instances with
+    :meth:`~krrood.entity_query_language.query.match.Match.from_`.
+
+    :param entity_: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param quantification: Optional quantification constraint (quantify path only).
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: The applied quantifier or the constructed match.
+    """
+    return _quantify_or_build_match(
+        entity_, An, quantification, target_type=target_type
+    )
+
+
+@overload
+def a(
+    entity_: Type[T],
+    quantification: None = ...,
+    *,
+    target_type: None = ...,
+) -> Match[T]: ...
+
+
+@overload
+def a(
+    entity_: Callable[..., T],
+    quantification: None = ...,
+    *,
+    target_type: Type[T] = ...,
+) -> Match[T]: ...
+
+
+@overload
+def a(
+    entity_: T,
+    quantification: Optional[ResultQuantificationConstraint] = ...,
+    *,
+    target_type: None = ...,
+) -> T: ...
 
 
 def a(
-    entity_: Union[T, Query],
-    quantification: Optional[ResultQuantificationConstraint] = None,
-) -> Union[T, Query]:
+    entity_,
+    quantification=None,
+    *,
+    target_type=None,
+):
     """
-    Select all values satisfying the given entity description.
+    Select all values satisfying the given description.
 
     This accommodates words not starting with a vowel; it delegates to :func:`an`. It is a real
     function (not an ``a = an`` alias) so its ``__name__`` is ``"a"``, which lets tools that key a
     namespace by ``__name__`` (e.g. the doctest harness) expose it under the name ``a``.
 
-    :param entity_: An entity or a set expression to quantify over.
-    :param quantification: Optional quantification constraint.
-    :return: The entity with the applied quantifier.
+    :param entity_: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param quantification: Optional quantification constraint (quantify path only).
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: The applied quantifier or the constructed match.
     """
-    return an(entity_, quantification=quantification)
+    return an(entity_, quantification, target_type=target_type)
+
+
+@overload
+def the(
+    entity_: Type[T],
+    *,
+    target_type: None = ...,
+) -> Match[T]: ...
+
+
+@overload
+def the(
+    entity_: Callable[..., T],
+    *,
+    target_type: Type[T] = ...,
+) -> Match[T]: ...
+
+
+@overload
+def the(
+    entity_: T,
+    *,
+    target_type: None = ...,
+) -> T: ...
 
 
 def the(
-    entity_: Union[T, Query],
-) -> Union[T, Query]:
+    entity_,
+    *,
+    target_type=None,
+):
     """
-    Select the unique value satisfying the given entity description.
+    Select the unique value satisfying the given description.
 
-    :param entity_: An entity or a set expression to quantify over.
-    :return: The entity with the applied quantifier.
+    Behaves like :py:func:`an` but applies the ``The`` quantifier, which expects exactly one
+    result when the expression is materialized (raising otherwise). Restrict a match to
+    specific instances with :meth:`~krrood.entity_query_language.query.match.Match.from_`.
+
+    :param entity_: An entity/set/variable/attribute to quantify, or a type/callable to match.
+    :param target_type: Optional explicit type for callable factories (match path only).
+    :return: The applied quantifier or the constructed match.
     """
-    return entity_._quantify_(The)
+    return _quantify_or_build_match(entity_, The, None, target_type=target_type)
 
 
 # %% Rules
@@ -747,10 +834,14 @@ def evaluate_condition(condition: ConditionType) -> bool:
 
 @dataclass(eq=False)
 class NodeId(SymbolicFunction):
-    """The stable identity of an EQL node, as a value operation."""
+    """
+    The stable identity of an EQL node, as a value operation.
+    """
 
     node: SymbolicExpression
-    """The node whose identity is read."""
+    """
+    The node whose identity is read.
+    """
 
     def __call__(self) -> UUID:
         return self.node._id_
@@ -769,10 +860,14 @@ node_id = symbolic_callable_to_function(NodeId)
 
 @dataclass(eq=False)
 class NodeDescendants(SymbolicFunction):
-    """The descendants of an EQL node, as a value operation."""
+    """
+    The descendants of an EQL node, as a value operation.
+    """
 
     node: SymbolicExpression
-    """The node whose descendants are read."""
+    """
+    The node whose descendants are read.
+    """
 
     def __call__(self) -> Iterable[SymbolicExpression]:
         return self.node._descendants_
@@ -791,10 +886,14 @@ node_descendants = symbolic_callable_to_function(NodeDescendants)
 
 @dataclass(eq=False)
 class NodeType(SymbolicFunction):
-    """The selectable type of an EQL node, as a value operation."""
+    """
+    The selectable type of an EQL node, as a value operation.
+    """
 
     node: Selectable
-    """The node whose type is read."""
+    """
+    The node whose type is read.
+    """
 
     def __call__(self) -> Optional[Type]:
         return getattr(self.node, "_type_", None)
@@ -813,10 +912,14 @@ node_type = symbolic_callable_to_function(NodeType)
 
 @dataclass(eq=False)
 class NodeChildren(SymbolicFunction):
-    """The children of an EQL node, as a value operation."""
+    """
+    The children of an EQL node, as a value operation.
+    """
 
     node: CanBehaveLikeAVariable
-    """The node whose children are read."""
+    """
+    The node whose children are read.
+    """
 
     def __call__(self) -> Iterable[SymbolicExpression]:
         return self.node._children_
@@ -835,10 +938,14 @@ node_children = symbolic_callable_to_function(NodeChildren)
 
 @dataclass(eq=False)
 class AttributeOwnerClass(SymbolicFunction):
-    """The class that owns an attribute, as a value operation."""
+    """
+    The class that owns an attribute, as a value operation.
+    """
 
     node: Attribute
-    """The attribute whose owner class is read."""
+    """
+    The attribute whose owner class is read.
+    """
 
     def __call__(self) -> Type:
         return self.node._owner_class_
@@ -857,10 +964,14 @@ attribute_owner_class = symbolic_callable_to_function(AttributeOwnerClass)
 
 @dataclass(eq=False)
 class NodeParents(SymbolicFunction):
-    """The parents of an EQL node, as a value operation."""
+    """
+    The parents of an EQL node, as a value operation.
+    """
 
     node: SymbolicExpression
-    """The node whose parents are read."""
+    """
+    The node whose parents are read.
+    """
 
     def __call__(self) -> Iterable[SymbolicExpression]:
         return self.node._parents_
@@ -879,13 +990,19 @@ node_parents = symbolic_callable_to_function(NodeParents)
 
 @dataclass(eq=False)
 class IsSubclass(Predicate):
-    """Whether one class is a subclass of another class (or tuple of classes)."""
+    """
+    Whether one class is a subclass of another class (or tuple of classes).
+    """
 
     subclass: Type
-    """The candidate subclass."""
+    """
+    The candidate subclass.
+    """
 
     parent_or_parents: Type | Tuple[Type, ...]
-    """The class or tuple of classes checked against."""
+    """
+    The class or tuple of classes checked against.
+    """
 
     def __call__(self) -> bool:
         return issubclass(self.subclass, self.parent_or_parents)
@@ -919,10 +1036,14 @@ issubclass_ = symbolic_callable_to_function(IsSubclass)
 
 @dataclass(eq=False)
 class IsClass(Predicate):
-    """Whether an object is a class."""
+    """
+    Whether an object is a class.
+    """
 
     obj: Any
-    """The object checked."""
+    """
+    The object checked.
+    """
 
     def __call__(self) -> bool:
         return isclass(self.obj)
@@ -946,10 +1067,14 @@ is_class = symbolic_callable_to_function(IsClass)
 
 @dataclass(eq=False)
 class RuntimeType(SymbolicFunction):
-    """The runtime class of an object, as a value operation."""
+    """
+    The runtime class of an object, as a value operation.
+    """
 
     obj: Any
-    """The object whose runtime class is read."""
+    """
+    The object whose runtime class is read.
+    """
 
     def __call__(self) -> Type:
         return self.obj.__class__

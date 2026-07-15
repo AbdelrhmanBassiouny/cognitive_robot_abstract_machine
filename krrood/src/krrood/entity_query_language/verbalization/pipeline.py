@@ -33,10 +33,32 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.rendering.source_link_resolver import (
         SourceLinkResolver,
     )
+    from krrood.entity_query_language.backends import QueryBackend
+    from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
-_log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
-_HTML_PAGE_TEMPLATE = Template("""\
+
+def directive_for_backend(backend: Optional[QueryBackend]) -> Optional[Directive]:
+    """
+    Resolve the opening directive implied by an evaluating backend.
+
+    Each backend declares its own
+    :attr:`~…backends.QueryBackend.opening_directive`, so this stays
+    decoupled from the concrete backend types (no import of the backends
+    module, no ``isinstance``).
+
+    :param backend: The backend the expression would be evaluated with,
+        or ``None``.
+    :return:``GENERATE`` for a generative backend, ``FIND`` for a
+        selective one, or ``None`` when no backend is given (keep the
+        query-type default).
+    """
+    return backend.opening_directive if backend is not None else None
+
+
+_HTML_PAGE_TEMPLATE = Template(
+    """\
 <!DOCTYPE html>
 <html>
 <head>
@@ -55,8 +77,11 @@ _HTML_PAGE_TEMPLATE = Template("""\
 </head>
 <body>{{ body }}</body>
 </html>
-""")
-"""Standalone dark page for browser display; the rendered markup fills ``body``."""
+"""
+)
+"""
+Standalone dark page for browser display; the rendered markup fills ``body``.
+"""
 
 _HTML_CELL_WRAPPER = Template(
     '<div style="background:#1e1e1e;color:#d4d4d4;font-family:monospace;'
@@ -64,12 +89,16 @@ _HTML_CELL_WRAPPER = Template(
     "{{ body }}"
     "</div>"
 )
-"""Inline dark wrapper for HTML cell output (Jupyter / built docs); mirrors the page colours so
-the markup reads correctly in both environments."""
+"""
+Inline dark wrapper for HTML cell output (Jupyter / built docs); mirrors the
+page colours so the markup reads correctly in both environments.
+"""
 
 
 def _is_ipython() -> bool:
-    """Return ``True`` when running inside an IPython / Jupyter session."""
+    """
+    Return ``True`` when running inside an IPython / Jupyter session.
+    """
     try:
         from IPython import get_ipython
 
@@ -92,15 +121,20 @@ class VerbalizationPipeline:
     """
 
     renderer: FragmentRenderer = field(default_factory=ParagraphRenderer)
-    """Renderer that converts the fragment tree to a string."""
+    """
+    Renderer that converts the fragment tree to a string.
+    """
 
     _verbalizer: EQLVerbalizer = field(default_factory=EQLVerbalizer, init=False)
-    """The verbalizer that builds fragment trees from EQL expressions."""
+    """
+    The verbalizer that builds fragment trees from EQL expressions.
+    """
 
     def verbalize(
         self,
         expression: SymbolicExpression,
         services: Optional[MicroplanningServices] = None,
+        backend: Optional[QueryBackend] = None,
     ) -> str:
         """
         Verbalize *expression* to a string using this pipeline's renderer.
@@ -108,6 +142,9 @@ class VerbalizationPipeline:
         :param expression: Any EQL expression or query.
         :param services: Shared verbalization state; created automatically when omitted.  Pass the
             same services across calls so repeated mentions corefer (a Robot … the Robot).
+        :param backend: The backend the expression would be evaluated with. When given it decides
+            the opening verb (generative → *"Generate"*, selective → *"Find"*); when omitted the
+            verb is derived from the query type as before.
         :return: Formatted natural-language string (plain, ANSI, or HTML, per the renderer).
 
         It runs the full path — build the fragment tree, then render it — whereas
@@ -120,7 +157,9 @@ class VerbalizationPipeline:
             expression.expression.build()
         elif isinstance(expression, Query):
             expression.build()
-        fragment = self._verbalizer.build(expression, services)
+        fragment = self._verbalizer.build(
+            expression, services, performative=directive_for_backend(backend)
+        )
         return self.verbalize_fragment(fragment)
 
     def _is_html_renderer(self) -> bool:
@@ -151,8 +190,8 @@ class VerbalizationPipeline:
 
     def display(self, expression: SymbolicExpression) -> None:
         """
-        Render *expression* and display it in the current environment — inline in
-        Jupyter / IPython, or in the default browser elsewhere.
+        Render *expression* and display it in the current environment — inline
+        in Jupyter / IPython, or in the default browser elsewhere.
 
         :param expression: Any EQL expression or query.
         """
@@ -160,7 +199,8 @@ class VerbalizationPipeline:
 
     def display_fragment(self, fragment: VerbalizationFragment) -> None:
         """
-        Display a pre-built fragment, with the same environment routing as ``display``.
+        Display a pre-built fragment, with the same environment routing as
+        ``display``.
 
         :param fragment: Root of the fragment tree to display.
         """
@@ -206,17 +246,19 @@ class VerbalizationPipeline:
         """
         Create an ANSI true-colour (24-bit) pipeline for terminal display.
 
-        When *link_resolver* is given and the terminal supports OSC 8 hyperlinks, class and
-        attribute names become clickable; on unsupported terminals the resolver is disabled
-        with a warning.
+        When *link_resolver* is given and the terminal supports OSC 8
+        hyperlinks, class and attribute names become clickable; on
+        unsupported terminals the resolver is disabled with a warning.
 
-        :param hierarchical: When ``True``, render indented bullets instead of paragraph prose.
-        :param link_resolver: Optional resolver mapping source references to URLs.
+        :param hierarchical: When ``True``, render indented bullets
+            instead of paragraph prose.
+        :param link_resolver: Optional resolver mapping source
+            references to URLs.
         :return: An ANSI-coloured pipeline.
         """
         formatter = ANSIFormatter()
         if link_resolver is not None and not detect_osc8_support():
-            _log.warning(
+            logger.warning(
                 "The current terminal does not appear to support OSC 8 hyperlinks "
                 "(VTE_VERSION / TERM_PROGRAM / TERM not recognised). "
                 "link_resolver will be ignored for ANSI output."
@@ -236,13 +278,16 @@ class VerbalizationPipeline:
         link_resolver: Optional[SourceLinkResolver] = None,
     ) -> VerbalizationPipeline:
         """
-        Create an HTML ``<span>`` colour pipeline for Jupyter / inline-HTML rendering.
+        Create an HTML ``<span>`` colour pipeline for Jupyter / inline-HTML
+        rendering.
 
-        When *link_resolver* is given, class and attribute names are wrapped in anchors
-        pointing to documentation pages.
+        When *link_resolver* is given, class and attribute names are
+        wrapped in anchors pointing to documentation pages.
 
-        :param hierarchical: When ``True``, render indented bullets instead of paragraph prose.
-        :param link_resolver: Optional resolver mapping source references to URLs.
+        :param hierarchical: When ``True``, render indented bullets
+            instead of paragraph prose.
+        :param link_resolver: Optional resolver mapping source
+            references to URLs.
         :return: An HTML-coloured pipeline.
         """
         formatter = HTMLFormatter()
@@ -254,15 +299,16 @@ class VerbalizationPipeline:
         return cls(renderer)
 
 
-#: Shared, stateless plain-text pipeline.
-_PLAIN_PIPELINE = VerbalizationPipeline.plain()
-
-
-def verbalize_expression(expression: SymbolicExpression) -> str:
+def verbalize_expression(
+    expression: SymbolicExpression, backend: Optional[QueryBackend] = None
+) -> str:
     """
     Verbalize any EQL expression into a plain-text English phrase.
 
     :param expression: Any EQL expression or query.
+    :param backend: The backend the expression would be evaluated with. When given it decides the
+        opening verb (generative → *"Generate"*, selective → *"Find"*); when omitted the verb is
+        derived from the query type as before.
     :return: Plain-text natural-language string.
 
     >>> verbalize_expression(a(entity(variable(Robot, []))))
@@ -271,4 +317,4 @@ def verbalize_expression(expression: SymbolicExpression) -> str:
     >>> verbalize_expression(a(entity(robot).where(robot.battery > 50)))
     'Find a Robot whose battery is greater than 50'
     """
-    return _PLAIN_PIPELINE.verbalize(expression)
+    return VerbalizationPipeline.plain().verbalize(expression, backend=backend)

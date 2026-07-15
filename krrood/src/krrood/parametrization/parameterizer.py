@@ -12,7 +12,7 @@ import random_events.variable
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.variable import Literal, Variable
 from krrood.entity_query_language.factories import and_
-from krrood.entity_query_language.query.match import MatchVariable, AttributeMatch
+from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.ormatic.data_access_objects.to_dao import ToDataAccessObjectState
 from krrood.parametrization.random_events_translator import (
@@ -32,14 +32,18 @@ from random_events.variable import (
 @dataclass
 class UnderspecifiedParameters:
     """
-    A class that extracts all necessary information from a {py:class}`~krrood.entity_query_language.query.match.Match`
-    and binds it together. Instances of this can be used to parameterize objects with underspecified variables using
-    generative models. This generally serves as glue between `ProbabilisticModel` and `Match`.
+    A class that extracts all necessary information from a
+    {py:class}`~krrood.entity_query_language.query.match.Match` and binds it
+    together.
+
+    Instances of this can be used to parameterize objects with
+    underspecified variables using generative models. This generally
+    serves as glue between `ProbabilisticModel` and `Match`.
     """
 
-    statement: MatchVariable
+    statement: Match
     """
-    The UnderspecifiedVariable to extract information from.
+    The match to extract information from.
     """
 
     _random_event_compiler: Optional[WhereExpressionToRandomEventTranslator] = field(
@@ -47,6 +51,7 @@ class UnderspecifiedParameters:
     )
     """
     The translator that extracts a random event from the where conditions.
+
     Only exists if the statement has a where condition.
     """
 
@@ -55,6 +60,7 @@ class UnderspecifiedParameters:
     )
     """
     The where condition as random event.
+
     Only exists if the statement has a where condition.
     """
 
@@ -62,14 +68,26 @@ class UnderspecifiedParameters:
         random_events.variable.Variable, Any
     ] = field(init=False, default_factory=dict)
     """
-    Dictionary of events that are created from literal values, e.g. actual values. These are the assignments, that the probabilistic model is *conditioned* on.
+    Dictionary of events that are created from literal values, e.g. actual
+    values.
+
+    These are the assignments, that the probabilistic model is
+    *conditioned* on.
     """
 
     truncation_assignments_from_krrood_variables: list[Event] = field(
         init=False, default_factory=list
     )
     """
-    List of events that are created from symbolic expressions, e.g. variable assignments. These are the assignments, that the probabilistic model is *truncated* on. They may contain literals in their domains, however, the difference to `_events_from_literal_values` is, that these events are not directly used for conditioning, but rather for truncation. This means, that the events of this list do not change the weights of sum nodes in probabilistic circuits.
+    List of events that are created from symbolic expressions, e.g. variable
+    assignments.
+
+    These are the assignments, that the probabilistic model is
+    *truncated* on. They may contain literals in their domains, however,
+    the difference to `_events_from_literal_values` is, that these
+    events are not directly used for conditioning, but rather for
+    truncation. This means, that the events of this list do not change
+    the weights of sum nodes in probabilistic circuits.
     """
 
     _symbolic_expression_event_cache: dict[
@@ -110,9 +128,11 @@ class UnderspecifiedParameters:
         self, attribute_match: AttributeMatch
     ) -> dict[str, random_events.variable.Variable]:
         """
-        Extract variables from an attribute match by dispatching to specific handlers.
+        Extract variables from an attribute match by dispatching to specific
+        handlers.
 
-        :param attribute_match: The attribute match to extract variables from.
+        :param attribute_match: The attribute match to extract variables
+            from.
         :return: A dictionary of extracted variables.
         """
         krrood_variable = attribute_match.assigned_variable
@@ -131,7 +151,8 @@ class UnderspecifiedParameters:
         """
         Handle attribute matches where the assigned value is a literal.
 
-        :param attribute_match: The attribute match with a literal assigned value.
+        :param attribute_match: The attribute match with a literal
+            assigned value.
         :return: A dictionary of extracted variables.
         """
         name = attribute_match.name_from_variable_access_path
@@ -176,12 +197,14 @@ class UnderspecifiedParameters:
         type_: type,
     ) -> dict[str, random_events.variable.Variable]:
         """
-        Handle a literal whose value or declared type is a primitive compatible type.
+        Handle a literal whose value or declared type is a primitive compatible
+        type.
 
-        Picks ``type_`` when it is a concrete compatible type; falls back to
-        ``type(value)`` otherwise.
+        Picks ``type_`` when it is a concrete compatible type; falls
+        back to ``type(value)`` otherwise.
 
-        :param name: The variable name derived from the attribute access path.
+        :param name: The variable name derived from the attribute access
+            path.
         :param value: The literal value being matched.
         :param type_: The processed declared type of the attribute.
         :return: A dictionary containing the extracted variable.
@@ -203,8 +226,9 @@ class UnderspecifiedParameters:
         self, name: str, value: Union[list, tuple]
     ) -> dict[str, random_events.variable.Variable]:
         """
-        Extract variables from an iterable literal by processing each element with an
-        indexed name prefix (e.g. ``walls[0].height``, ``walls[1].start_point.x``).
+        Extract variables from an iterable literal by processing each element
+        with an indexed name prefix (e.g. ``walls[0].height``,
+        ``walls[1].start_point.x``).
 
         Primitive elements become a single conditioning variable; non-primitive elements
         are decomposed via
@@ -227,10 +251,14 @@ class UnderspecifiedParameters:
 
             indexed_name = f"{name}[{index}]"
             if isinstance(element, compatible_types):
-                result.update(self._handle_compatible_type_literal(indexed_name, element, type_))
+                result.update(
+                    self._handle_compatible_type_literal(indexed_name, element, type_)
+                )
             else:
                 result.update(
-                    self._extract_variables_from_non_primitive_literal(element, indexed_name)
+                    self._extract_variables_from_non_primitive_literal(
+                        element, indexed_name
+                    )
                 )
         return result
 
@@ -240,19 +268,23 @@ class UnderspecifiedParameters:
         """
         Extract variables from a single non-primitive literal value.
 
-        Converts ``value`` to a DAO, runs feature extraction, and registers a
-        conditioning assignment for every discovered feature.
+        Converts ``value`` to a DAO, runs feature extraction, and
+        registers a conditioning assignment for every discovered
+        feature.
 
         :param value: The non-primitive literal to decompose.
-        :param name_prefix: Attribute access path used to namespace the feature names
-            (e.g. ``"obj"`` yields ``"obj.position.x"``).
-        :return: A dictionary mapping prefixed feature names to their variables.
+        :param name_prefix: Attribute access path used to namespace the
+            feature names (e.g. ``"obj"`` yields ``"obj.position.x"``).
+        :return: A dictionary mapping prefixed feature names to their
+            variables.
         """
         result = {}
         dao_state = ToDataAccessObjectState()
         extractor = FeatureExtractor.from_instances([to_dao(value, dao_state)])
         for feature in extractor.features:
-            feature_name = f"{name_prefix}.{feature.get_clean_name_from_mapped_variable()}"
+            feature_name = (
+                f"{name_prefix}.{feature.get_clean_name_from_mapped_variable()}"
+            )
             random_events_variable = variable_from_name_and_type(
                 name=feature_name, type_=feature._type_
             )
@@ -260,7 +292,9 @@ class UnderspecifiedParameters:
             mapping = feature.apply_mapping_on_external_root(value)
             if not isinstance(mapping, feature._type_):
                 mapping = feature._type_(mapping)
-            self.conditioning_assignments_from_literal_values[random_events_variable] = mapping
+            self.conditioning_assignments_from_literal_values[
+                random_events_variable
+            ] = mapping
         return result
 
     def _handle_variable_attribute_match(
@@ -269,7 +303,8 @@ class UnderspecifiedParameters:
         """
         Handle attribute matches where the assigned value is a KRROOD variable.
 
-        :param attribute_match: The attribute match with a KRROOD variable assigned value.
+        :param attribute_match: The attribute match with a KRROOD
+            variable assigned value.
         :return: A dictionary of extracted variables.
         """
         type_ = self._process_attribute_match_type(
@@ -438,7 +473,9 @@ class UnderspecifiedParameters:
     @staticmethod
     def _process_attribute_match_type(type_):
         """
-        Process the type of an attribute matches assigned variable such that there are no unions.
+        Process the type of an attribute matches assigned variable such that
+        there are no unions.
+
         :param type_: The type to process
         :return: The processed type.
         """
