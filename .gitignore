@@ -156,3 +156,6 @@ class_diagram.pdf
 *_evaluated_tree.svg
 *_rdr.dot
 *_rdr.svg
+
+# Local Claude Code memory (personal, not shared)
+CLAUDE.local.md
