@@ -125,3 +125,37 @@ blocked while draft -- mark ready only when told to.
   on checks/reviews now). Not otherwise tracking this PR's progress here
   since it's not the PR this session's dedicated file is for -- flagging it
   existed and is now unstuck.
+
+### Review round 3 (addressed)
+
+- 1 more inline comment on `test_quantifier_overload_types.py`: "can't we
+  import this python file and get the path from the module object? what is
+  a better way that doesn't involve the string name and is reliable?" --
+  the old `_FIXTURE_PATH = Path(__file__).parent / "quantifier_overloads_fixture.py"`
+  hardcoded the filename as a string, so a rename would silently point at a
+  nonexistent path instead of failing loudly. Fixed by properly importing
+  the fixture module (`from . import quantifier_overloads_fixture`, a
+  relative import -- allowed by AGENTS.md's explicit exception for
+  test-fixture imports) and reading `Path(quantifier_overloads_fixture.__file__)`
+  inside `_run_mypy_on_fixture`. Pushed as e74ff383f.
+- Self-caught (not a review comment): docformatter's re-wrap of that
+  function's docstring split "first-party" across the line boundary as
+  "first-\n    party", which paragraph-reflow renders as "first- party"
+  (stray space) -- same class of docformatter artifact hit earlier this
+  session on a `:meth:` role target. Reworded both affected sentences so
+  the compound word never lands at docformatter's chosen wrap point;
+  verified `docformatter` now exits 0 with no further changes. Pushed as
+  3d11c0829.
+- Verified mypy passes on the fixture, full krrood suite still green (1695
+  passed, 9 skipped). Replied to and resolved the thread
+  (PRRT_kwDOQhJw3c6RHZX7).
+- All 7 review threads on PR #70 are now resolved. Branch pushed through
+  3d11c0829, working tree clean.
+
+### Next
+
+- Re-check CI/mergeability on 3d11c0829 (last checked well before this
+  push, at 5b48b85e6 -- 16/17 green, coraplex still running).
+- Continue watching for further review comments or CI results via the
+  active subscription; merge is gated by required checks/reviews, no
+  action needed from me unless something fails or a new comment arrives.
