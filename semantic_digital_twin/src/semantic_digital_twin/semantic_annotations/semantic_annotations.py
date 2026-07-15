@@ -1194,10 +1194,12 @@ class RoomWithWallsAndDoors(Room):
     """
     Description of the type of the room in natural language.
     """
+
     walls: List[Wall] = field(kw_only=True, default_factory=list)
     """
     The walls enclosing this room.
     """
+
     doors: List[Door] = field(kw_only=True, default_factory=list)
     """
     The doors of the room.

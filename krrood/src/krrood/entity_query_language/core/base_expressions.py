@@ -777,10 +777,12 @@ class OperationResult:
     Whether the operation resulted in a false value (i.e., The operation
     condition was not satisfied)
     """
+
     operand: Optional[SymbolicExpression] = None
     """
     The operand that produced the result.
     """
+
     previous_operation_result: Optional[OperationResult] = None
     """
     The result of the operation that was evaluated before this one.
