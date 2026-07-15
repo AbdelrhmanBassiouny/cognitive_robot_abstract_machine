@@ -1,6 +1,9 @@
 ## PR #70: Add mypy assert_type tests for an()/a()/the() overloads
 
-Status: draft PR open against `main`, CI running (just triggered), no review
+Status: marked ready for review by the PR owner (no longer draft). CI nearly
+all green on 5b48b85e6 (16/17 checks passed, 1 still running). No
+unresolved review comments. Merge is now gated by required checks/reviews
+as normal.
 comments yet, subscribed to activity. 1h check-in cron scheduled. Merge is
 blocked while draft -- mark ready only when told to.
 
@@ -79,3 +82,12 @@ blocked while draft -- mark ready only when told to.
 - Verified mypy still passes on the fixture, full krrood suite still green
   (1695 passed, 9 skipped). Pushed as 5b48b85e6.
 - Replied to and resolved all 5 threads.
+
+### Update: marked ready for review
+
+- Owner marked the PR ready for review directly (not asked of me). Verified
+  via a fresh fetch: draft=false, not merged, mergeable_state=unstable
+  (checks still settling).
+- Checked CI on 5b48b85e6: 16/17 checks green, only
+  `test_each_lib (coraplex)` still in progress. No unresolved review
+  comments remain.
