@@ -18,7 +18,15 @@ lifecycle, subquery result caching, and a composable result-transformer pipeline
   comment, distinct-decorator); left open the _root_query_ design Q&A and the _var_-as-Role
   follow-up thread.
 
+- PR #4's latest comment (rename create_variable -> create_or_update_variable) was already handled
+  by the owner directly (commit eac372c09) on match-where-without-resolve; nothing to do there.
+  Propagated the same rename into PR #5 (query-class-refactor) as a pure rename (body was already
+  byte-identical to the base's create_or_update_variable via the a8bfb09ce merge); match+queries
+  tests green (104 passed). Pushed 96e82d448.
+
 ## Next
-- Watch PR #5 CI on the new merge commit (17 checks running); address any krrood failure.
+- Watch PR #5 CI on the new commits; address any krrood failure.
+- Base (match-where-without-resolve) advanced to f55221a12 (rename + self-merge) - PR #5 carries its
+  own equivalent rename so it should stay mergeable; re-merge base only if GitHub flags it.
 - Merge once approved.
 - Follow-up (separate PR, prompt already given): model Selectable._var_ as an explicit Role/delegate.
