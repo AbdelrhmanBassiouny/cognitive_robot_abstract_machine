@@ -1,11 +1,8 @@
 ## PR #70: Add mypy assert_type tests for an()/a()/the() overloads
 
-Status: marked ready for review by the PR owner (no longer draft). CI nearly
-all green on 5b48b85e6 (16/17 checks passed, 1 still running). No
-unresolved review comments. Merge is now gated by required checks/reviews
-as normal.
-comments yet, subscribed to activity. 1h check-in cron scheduled. Merge is
-blocked while draft -- mark ready only when told to.
+Status: MERGED. Webhook confirmed the merge and auto-unsubscribed this
+session from the PR's activity. Nothing further to track here -- do not
+reopen or create a follow-up PR for this change unless explicitly asked.
 
 ### Done
 
