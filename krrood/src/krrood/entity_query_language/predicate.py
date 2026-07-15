@@ -470,7 +470,7 @@ class Length(SymbolicFunction):
     """
     The number of items in an iterable, as a value operation.
 
-    Reads as the name-based value phrase *"the length of <iterable>"*.
+    Reads as the name-based noun phrase *"the length of <iterable>"*.
     """
 
     iterable: Sized
