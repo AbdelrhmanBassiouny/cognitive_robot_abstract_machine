@@ -1313,7 +1313,8 @@ def test_containment_only_annotation_has_no_add():
 
 def test_mechanical_joint_mount_splices_under_whole_parent():
     """
-    When the whole already sits under a non-root parent, mounting a mechanical
+    When the whole already sits under a non-root parent, mounting a mechanical.
+
     joint splices the joint between the whole and that parent (parent -> joint
     -> whole): the whole's ancestry is preserved and the joint keeps its active
     (revolute) connection, now anchored at the whole's parent.

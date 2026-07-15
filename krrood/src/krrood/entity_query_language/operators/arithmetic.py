@@ -105,6 +105,7 @@ class UnaryArithmeticOperation(UnaryExpression, CanBehaveLikeAVariable[T]):
     """
     The operand the operator is applied to.
     """
+
     math_operator: MathOperator
     """
     The operator applied to the operand.
