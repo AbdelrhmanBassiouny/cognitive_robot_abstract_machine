@@ -54,6 +54,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     clause,
     Copula,
     Noun,
+    predicate_clause,
     Verb,
 )
 from krrood.entity_query_language.verbalization.pipeline import (
@@ -114,9 +115,7 @@ class BankTransaction:
     booking_date: datetime.datetime
 
 
-# ── Sanity / regression tests ──────────────────────────────────────────────────
-
-
+# %% Sanity / regression tests
 def test_all_rules_registry_is_populated():
     """
     RULES must be non-empty after import — otherwise every expression falls
@@ -171,9 +170,7 @@ def test_verbalization_produces_natural_language_not_repr():
     assert "10" in result
 
 
-# ── Unit tests: leaves ─────────────────────────────────────────────────────────
-
-
+# %% Unit tests: leaves
 def test_verbalize_variable_first_mention():
     x = variable(int, [1, 2])
     assert verbalize_expression(x) == "an Integer"
@@ -269,9 +266,7 @@ def test_verbalize_has_types_lists_all_admissible_types():
     )
 
 
-# ── Unit tests: MappedVariable chain ──────────────────────────────────────────
-
-
+# %% Unit tests: MappedVariable chain
 def test_verbalize_attribute_uses_of_form():
     employee = variable(Employee, [])
     text = verbalize_expression(employee.salary)
@@ -389,9 +384,7 @@ def test_verbalize_second_index_ordinal():
     assert "completed" in text
 
 
-# ── Relational navigation: a verb-named hop reads as a relative clause ────────────
-
-
+# %% Relational navigation: a verb-named hop reads as a relative clause
 @dataclass
 class _NavRobot:
     operational: bool
@@ -587,9 +580,7 @@ def test_genitive_omits_article_before_an_uncountable_noun():
     )
 
 
-# ── Relational navigation: pronominalisation of the relative-clause owner ─────────
-
-
+# %% Relational navigation: pronominalisation of the relative-clause owner
 def test_relational_navigation_pronominalises_the_subject():
     """
     When the chain root is the query subject, a deferred relational chain
@@ -820,9 +811,7 @@ def test_verbalize_flat_variable_delegates_to_child():
     assert "drawers" in text
 
 
-# ── Unit tests: comparators ────────────────────────────────────────────────────
-
-
+# %% Unit tests: comparators
 @pytest.mark.parametrize(
     "op,word",
     [
@@ -854,9 +843,7 @@ def test_verbalize_comparator_at_least():
     assert "at least" in text
 
 
-# ── Unit tests: logical operators ─────────────────────────────────────────────
-
-
+# %% Unit tests: logical operators
 def test_verbalize_and_chain_flattening():
     x = variable(int, [])
     cond = and_(x > 1, x < 10, x != 5)
@@ -912,9 +899,7 @@ def test_verbalize_not_complex_fallback():
     assert " or " in text
 
 
-# ── Unit tests: aggregators ────────────────────────────────────────────────────
-
-
+# %% Unit tests: aggregators
 def test_verbalize_count():
     x = variable(int, [1, 2])
     text = verbalize_expression(eql.count(x))
@@ -1050,9 +1035,7 @@ def test_grouped_having_on_max_fronts_onto_group_key():
     assert "is greater than 100, report the maximum of" in text
 
 
-# ── Nested sub-queries as values (the imperative "Find" is reserved for the top level) ──
-
-
+# %% Nested sub-queries as values (the imperative "Find" is reserved for the top level)
 def test_nested_unconstrained_aggregation_no_second_find():
     """
     An aggregation sub-query used as a comparison value must not emit a second
@@ -1322,9 +1305,7 @@ def test_nested_non_aggregation_entity_keeps_numbering():
     assert "BankTransaction 1" in text and "BankTransaction 2" in text, f"Got: {text!r}"
 
 
-# ── Integration: target test cases ────────────────────────────────────────────
-
-
+# %% Integration: target test cases
 def test_verbalize_presentation_example():
     robots = [
         _Robot("Robot1", 100, [_Task("Task1", True)]),
@@ -1570,9 +1551,7 @@ def test_verbalize_has_type_with_exists():
     assert "is of type" in text
 
 
-# ── Predicate fragment tests ────────────────────────────────────────────────────
-
-
+# %% Predicate fragment tests
 def test_verbalize_has_type():
     fruit = variable(Body, [])
     predicate = HasType(fruit, Apple)
@@ -1696,10 +1675,6 @@ def test_name_based_clause_reads_a_verb_name_verb_first():
 
         @classmethod
         def _verbalization_fragment_(cls, fields):
-            from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-                predicate_clause,
-            )
-
             subject, *objects = fields.values()
             return predicate_clause(cls.__name__, subject, *objects)
 
@@ -1725,10 +1700,6 @@ def test_name_based_clause_reads_a_copular_name_as_subject_is_complement():
 
         @classmethod
         def _verbalization_fragment_(cls, fields):
-            from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
-                predicate_clause,
-            )
-
             subject, *objects = fields.values()
             return predicate_clause(cls.__name__, subject, *objects)
 
@@ -1736,9 +1707,7 @@ def test_name_based_clause_reads_a_copular_name_as_subject_is_complement():
     assert verbalize_expression(IsActive(employee)) == "an Employee is active"
 
 
-# ── Aggregator coreference & HAVING compact form ──────────────────────────────
-
-
+# %% Aggregator coreference & HAVING compact form
 def test_aggregator_coreference_second_mention_is_the(
     departments_and_employees_fixture,
 ):
@@ -1864,9 +1833,7 @@ def test_set_of_grouped_by_reports_without_restating_the_key(
     assert "whose" in text and "30000" in text
 
 
-# ── Comparator "is" form ──────────────────────────────────────────────────────
-
-
+# %% Comparator "is" form
 def test_verbalize_comparator_eq_uses_is():
     x = variable(int, [])
     text = verbalize_expression(x == 5)
@@ -1904,9 +1871,7 @@ def test_verbalize_having_eq_uses_is_copula():
     assert "is equal to 2" in whose_part
 
 
-# ── Non-predicate InstantiatedVariable natural-English form ───────────────────
-
-
+# %% Non-predicate InstantiatedVariable natural-English form
 def test_verbalize_inference_no_sub_query(doors_and_drawers_world):
     """
     inference(...) with plain variable bindings: 'where' clause, no 'such
@@ -2041,9 +2006,7 @@ def test_verbalize_double_nested_with_outer_entity(doors_and_drawers_world):
     assert text.count("such that") == 2
 
 
-# ── 2-argument Predicate triple form ─────────────────────────────────────────
-
-
+# %% 2-argument Predicate triple form
 def test_verbalize_triple():
     @dataclass(eq=False)
     class ConnectsTo(Triple):
@@ -2091,9 +2054,7 @@ def test_verbalize_1arg_predicate_without_fragment_raises():
         verbalize_expression(IsActive(employee))
 
 
-# ── Same-type variable disambiguation ─────────────────────────────────────────
-
-
+# %% Same-type variable disambiguation
 def test_two_same_type_variables_are_disambiguated():
     """
     Two distinct variables of the same type must get numbered labels to tell
@@ -2395,9 +2356,7 @@ def test_grouped_by_without_instantiated_variable(handles_and_containers_world):
     )
 
 
-# ── Fixture ────────────────────────────────────────────────────────────────────
-
-
+# %% Fixture
 @pytest.fixture
 def departments_and_employees_fixture():
     d1 = Department("HR")
@@ -2407,9 +2366,7 @@ def departments_and_employees_fixture():
     return [d1, d2], [e1, e2]
 
 
-# ── Reference pronouns, condition grouping, range folding, calc-equality ────────
-
-
+# %% Reference pronouns, condition grouping, range folding, calc-equality
 def test_example_sum_between_full_sentence():
     """
     Motivating example 1: pronoun + calc-equality + 'whose … between' in the
@@ -2710,9 +2667,7 @@ def test_range_fold_without_subject_has_no_whose():
     assert "booking_date of" in text, f"Expected full chain in: {text!r}"
 
 
-# ── Generality: a second domain (Employee) ──────────────────────────────────────
-
-
+# %% Generality: a second domain (Employee)
 def test_second_domain_whose_single_predicate():
     employee = variable(Employee, domain=None)
     query = an(entity(employee).where(employee.salary > 50000))
@@ -2745,9 +2700,7 @@ def test_second_domain_calc_equality_in_whose():
     assert "average of salaries" in text, f"Got: {text!r}"
 
 
-# ── Declarative-rule unit tests ─────────────────────────────────────────────────
-
-
+# %% Declarative-rule unit tests
 def test_is_calculation_value_predicate():
     from krrood.entity_query_language.query.aggregation_structure import (
         is_calculation_value,
@@ -2829,9 +2782,7 @@ def test_pr_example():
     )
 
 
-# ── verbalize_expression renderer argument tests ──────────────────────────────
-
-
+# %% verbalize_expression renderer argument tests
 def test_verbalize_expression_no_renderer_backward_compatible():
     """
     Calling verbalize_expression matches pipeline plain output.
