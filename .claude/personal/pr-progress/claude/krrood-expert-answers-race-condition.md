@@ -57,17 +57,33 @@ both in this PR, as separated commits."
    signal instead of burning 40+ min per run.
 9. Commented on PR #73 explaining the cancellation + merge.
 
+## Done (continued 2)
+
+10. New CI run (post #71-merge) completed in 2:32 (not 40+ min) - confirms the
+    fail-fast-instead-of-hang fix works. Result: 1697 passed, 9 skipped, 4 failed -
+    all 4 failures are `NonInteractiveTerminalError` (not `FileNotFoundError`, not a
+    hang): `test_rdr.py::TestRDR::test_fit_mcrdr_stop_only`,
+    `test_rdr_alchemy.py::TestAlchemyRDR::test_fit_grdr`/`test_fit_mcrdr_stop_only`/
+    `test_fit_scrdr`. My own regression tests (isolation mechanism unit tests +
+    `test_get_fit_scrdr_does_not_mutate_committed_expert_answers_fixture`) are NOT
+    among the failures - they pass in real CI too.
+11. This confirms, with real CI evidence (not just local sandbox behavior): the
+    delimiter fix and the race/isolation fix both genuinely work - no more
+    FileNotFoundError, no more hangs. But the "answers insufficient" issue (recorded
+    expert-answer fixtures don't have enough refinements for the current dataset
+    content) is REAL in production CI too, not a local-only gap as I'd hoped/assumed
+    in the PR caveat. This is a third, separate, now-confirmed-live issue.
+12. This needs the user's domain judgment (correct RDR refinement conditions for
+    zoo animal classification) - I should not guess/invent expert answers myself.
+    Posting a clear summary to the PR and asking the user how to proceed (regenerate
+    fixtures interactively themselves, investigate dataset content drift, accept as
+    known follow-up, etc.) rather than attempting a fix.
+
 ## Next
 
-- Watching the NEW CI run on PR #73 (post-#71-merge) - this is the real test of
-  whether `test_fit_scrdr`/`test_fit_mcrdr_stop_only`/`test_fit_grdr` actually pass,
-  or whether they now fail fast with `NonInteractiveTerminalError` (meaning the
-  "answers insufficient" issue is real in CI too and needs further investigation
-  beyond the two fixes already in this PR).
-- If it fails fast with NonInteractiveTerminalError: this would mean the delimiter +
-  isolation fixes are necessary but not sufficient - the recorded expert answers
-  fixtures may need actual regeneration against current dataset content, which
-  needs the user's input (domain-specific, can't safely guess correct RDR
-  refinement conditions for zoo animal classification).
+- Awaiting user direction on the "answers insufficient" issue (see #12 above) -
+  this PR's two original fixes (delimiter + race) are confirmed working via real CI
+  evidence; whether to also try to address the third issue in this PR or split it
+  off depends on what the user wants.
 - Also still watching PR #72 (giskardpy race fix) - separate branch-keyed progress
   file, not duplicated here.
