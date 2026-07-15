@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from typing_extensions import Optional, Tuple
+from typing_extensions import Self, Optional, Tuple
 
 from krrood.entity_query_language.predicate import (
     SymbolicFunction,
@@ -30,12 +30,12 @@ class EndEffectorView(SymbolicFunction):
         return arm_view.end_effector
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 @dataclass

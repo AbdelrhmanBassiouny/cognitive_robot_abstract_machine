@@ -12,6 +12,7 @@ through :meth:`__call__`.
 """
 
 from __future__ import annotations
+from typing_extensions import Self
 
 from dataclasses import dataclass
 
@@ -50,7 +51,7 @@ class RemainingLoad(SymbolicFunction):
         return self.capacity - self.load
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         return Noun(WordFragment(text="the remaining load")).as_fragment()
 
 
@@ -98,7 +99,7 @@ class Doubled(SymbolicFunction):
         return self.number * 2
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         return Noun(WordFragment(text="the doubled number")).as_fragment()
 
 

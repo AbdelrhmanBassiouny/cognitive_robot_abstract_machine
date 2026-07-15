@@ -18,7 +18,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from typing import Any
-from typing_extensions import List
+from typing_extensions import Self, List
 
 import pytest
 
@@ -1622,8 +1622,8 @@ def test_verbalize_custom_predicate_robotics_domain(handles_and_containers_world
             return True
 
         @classmethod
-        def _verbalization_fragment_(cls, fields):
-            return clause(Noun(fields["body"]), Copula(), Adjective("reachable"))
+        def _verbalization_fragment_(cls, operands: Self):
+            return clause(Noun(operands.body), Copula(), Adjective("reachable"))
 
     world = handles_and_containers_world
     handle = variable(Handle, world.bodies)
@@ -1643,12 +1643,12 @@ def test_verbalize_custom_predicate_employee_domain():
             return self.employee.department == self.department
 
         @classmethod
-        def _verbalization_fragment_(cls, fields):
+        def _verbalization_fragment_(cls, operands: Self):
             return clause(
-                Noun(fields["employee"]),
+                Noun(operands.employee),
                 Verb("work"),
                 Prepositions.IN,
-                Noun(fields["department"]),
+                Noun(operands.department),
             )
 
     employee = variable(Employee, [])
@@ -1695,12 +1695,12 @@ def test_name_based_clause_reads_a_verb_name_verb_first():
             return self.employee.salary > self.threshold
 
         @classmethod
-        def _verbalization_fragment_(cls, fields):
+        def _verbalization_fragment_(cls, operands: Self):
             from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
                 predicate_clause,
             )
 
-            subject, *objects = fields.values()
+            subject, *objects = operands
             return predicate_clause(cls.__name__, subject, *objects)
 
     employee = variable(Employee, [])
@@ -1724,12 +1724,12 @@ def test_name_based_clause_reads_a_copular_name_as_subject_is_complement():
             return True
 
         @classmethod
-        def _verbalization_fragment_(cls, fields):
+        def _verbalization_fragment_(cls, operands: Self):
             from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
                 predicate_clause,
             )
 
-            subject, *objects = fields.values()
+            subject, *objects = operands
             return predicate_clause(cls.__name__, subject, *objects)
 
     employee = variable(Employee, [])

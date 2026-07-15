@@ -1,3 +1,5 @@
+
+from typing_extensions import Self
 import math
 from dataclasses import dataclass
 from typing import List, Union, Optional
@@ -199,8 +201,8 @@ class ClassNameLowercased(SymbolicFunction):
         return self.semantic_class.__name__.lower()
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 class_name_lowercased = symbolic_callable_to_function(ClassNameLowercased)
@@ -242,8 +244,8 @@ class AnnotationVolume(SymbolicFunction):
         return 0.0
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+    def _verbalization_fragment_(cls, operands: Self):
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 annotation_volume = symbolic_callable_to_function(AnnotationVolume)

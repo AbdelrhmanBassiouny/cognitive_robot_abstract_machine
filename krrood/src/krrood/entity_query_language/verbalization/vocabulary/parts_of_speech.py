@@ -3,9 +3,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from typing_extensions import Iterable, Protocol, Union, runtime_checkable
+from typing_extensions import Any, Iterable, Protocol, Union, runtime_checkable
 
-from krrood.entity_query_language.predicate import VerbalizationField
+from krrood.entity_query_language.predicate import Operand, VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -63,12 +63,9 @@ class Noun(ClauseElement):
     already-rendered fragment, or a literal noun given by its *head word only*.
     """
 
-    content: Union[str, "ClauseConstituent"]
-    """
-    A literal noun *head* (the article is a feature, not part of the text —
-    write ``"instance"``, not ``"an instance"``), or any constituent (a field,
-    a rendered fragment) rendered as-is.
-    """
+    content: Any
+    """A literal noun *head* (the article is a feature, not part of the text — write ``"instance"``,
+    not ``"an instance"``), or any constituent (a field, a rendered fragment) rendered as-is."""
 
     definiteness: Definiteness = Definiteness.INDEFINITE
     """
@@ -191,14 +188,10 @@ class OneOf(ClauseElement):
     domain-constrained variable uses.
     """
 
-    members: Union[Iterable, VerbalizationField]
-    """
-    The admissible values — a predicate
-    :class:`~krrood.entity_query_language.predicate.VerbalizationField` bound
-    to a collection, or a collection directly.
-
-    Classes render as linked type references, other values as literals.
-    """
+    members: Union[Iterable, VerbalizationField, Operand, Any]
+    """The admissible values — a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`
+    bound to a collection, or a collection directly. Classes render as linked type references, other
+    values as literals."""
 
     def as_fragment(self) -> VerbalizationFragment:
         """:return: the membership phrase, or a count summary past the cap.
@@ -210,7 +203,9 @@ class OneOf(ClauseElement):
         'one of Integer or Text'
         """
         members = list(
-            self.members.value
+            self.members._value_of_operand_
+            if isinstance(self.members, Operand)
+            else self.members.value
             if isinstance(self.members, VerbalizationField)
             else self.members
         )
@@ -252,12 +247,9 @@ class Or(ClauseElement):
     iterable) value keeps that value's own rendered fragment.
     """
 
-    members: Union[Iterable, VerbalizationField]
-    """
-    The admissible values — a predicate
-    :class:`~krrood.entity_query_language.predicate.VerbalizationField` bound
-    to an iterable (or a single value), or an iterable directly.
-    """
+    members: Union[Iterable, VerbalizationField, Operand, Any]
+    """The admissible values — a predicate :class:`~krrood.entity_query_language.predicate.VerbalizationField`
+    bound to an iterable (or a single value), or an iterable directly."""
 
     def as_fragment(self) -> VerbalizationFragment:
         """:return: the disjunction phrase *"A, B, or C"*, or a single member's own fragment.
@@ -269,7 +261,9 @@ class Or(ClauseElement):
         'Integer or Text'
         """
         value = (
-            self.members.value
+            self.members._value_of_operand_
+            if isinstance(self.members, Operand)
+            else self.members.value
             if isinstance(self.members, VerbalizationField)
             else self.members
         )

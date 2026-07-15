@@ -5,7 +5,7 @@ from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
 
-from typing_extensions import Callable, List, Iterator, Optional, Iterable, Type, TYPE_CHECKING
+from typing_extensions import Self, Callable, List, Iterator, Optional, Iterable, Type, TYPE_CHECKING
 
 from krrood.entity_query_language.predicate import Predicate
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
@@ -196,7 +196,7 @@ class PoseValidator(Predicate):
         pass
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         """Default clause for a pose validator — *"a pose candidate is valid"*.
 
         A validator is a validity *check*, agnostic of who performs it, so it says the candidate is

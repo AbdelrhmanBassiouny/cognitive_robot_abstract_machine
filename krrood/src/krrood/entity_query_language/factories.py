@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from inspect import isclass
 from uuid import UUID
 
-from typing_extensions import Any, Iterable, List, Optional, Tuple, Type, overload
+from typing_extensions import Self, Any, Iterable, List, Optional, Tuple, Type, overload
 
 from krrood.entity_query_language.core.base_expressions import (
     Selectable,
@@ -847,12 +847,12 @@ class NodeId(SymbolicFunction):
         return self.node._id_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 node_id = symbolic_callable_to_function(NodeId)
@@ -873,12 +873,12 @@ class NodeDescendants(SymbolicFunction):
         return self.node._descendants_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 node_descendants = symbolic_callable_to_function(NodeDescendants)
@@ -899,12 +899,12 @@ class NodeType(SymbolicFunction):
         return getattr(self.node, "_type_", None)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 node_type = symbolic_callable_to_function(NodeType)
@@ -925,12 +925,12 @@ class NodeChildren(SymbolicFunction):
         return self.node._children_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 node_children = symbolic_callable_to_function(NodeChildren)
@@ -951,12 +951,12 @@ class AttributeOwnerClass(SymbolicFunction):
         return self.node._owner_class_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 attribute_owner_class = symbolic_callable_to_function(AttributeOwnerClass)
@@ -977,12 +977,12 @@ class NodeParents(SymbolicFunction):
         return self.node._parents_
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 node_parents = symbolic_callable_to_function(NodeParents)
@@ -1008,7 +1008,7 @@ class IsSubclass(Predicate):
         return issubclass(self.subclass, self.parent_or_parents)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """:return: the clause *"<subclass> is a subclass of <parent>"* — a custom fragment because
         the name-based reading lacks the article and preposition (*"subclass holds for …"*).
         """
@@ -1023,11 +1023,11 @@ class IsSubclass(Predicate):
         )
 
         return clause(
-            Noun(fields["subclass"]),
+            Noun(operands.subclass),
             Copula(),
             Noun("subclass"),
             Prepositions.OF,
-            Noun(fields["parent_or_parents"]),
+            Noun(operands.parent_or_parents),
         )
 
 
@@ -1049,7 +1049,7 @@ class IsClass(Predicate):
         return isclass(self.obj)
 
     @classmethod
-    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+    def _verbalization_fragment_(cls, operands: Self) -> VerbalizationFragment:
         """:return: the clause *"<obj> is a class"* — a custom fragment because the name-based
         reading drops the complement's article (*"… is class"*)."""
         # Imported locally to avoid the core -> verbalization import cycle (as Triple does).
@@ -1059,7 +1059,7 @@ class IsClass(Predicate):
             Noun,
         )
 
-        return clause(Noun(fields["obj"]), Copula(), Noun("class"))
+        return clause(Noun(operands.obj), Copula(), Noun("class"))
 
 
 is_class = symbolic_callable_to_function(IsClass)
@@ -1080,12 +1080,12 @@ class RuntimeType(SymbolicFunction):
         return self.obj.__class__
 
     @classmethod
-    def _verbalization_fragment_(cls, fields):
+    def _verbalization_fragment_(cls, operands: Self):
         from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
             FunctionVerbalizationTemplates,
         )
 
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        return FunctionVerbalizationTemplates.possessive(cls, *operands)
 
 
 type_ = symbolic_callable_to_function(RuntimeType)

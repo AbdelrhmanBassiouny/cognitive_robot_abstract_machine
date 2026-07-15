@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pytest
-from typing_extensions import Any
+from typing_extensions import Self, Any
 
 from krrood.entity_query_language.factories import an, entity, for_all, variable
 from krrood.entity_query_language.operators.core_logical_operators import Not
@@ -212,7 +212,7 @@ def test_predicate_returning_a_string_template_is_rejected():
             return True
 
         @classmethod
-        def _verbalization_fragment_(cls, fields):
+        def _verbalization_fragment_(cls, operands: Self):
             return "{who} says hello"  # a string template — no longer supported
 
     with pytest.raises(NonFragmentPredicateError):
