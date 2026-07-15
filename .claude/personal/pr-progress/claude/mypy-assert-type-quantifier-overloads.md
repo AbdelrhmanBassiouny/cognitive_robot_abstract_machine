@@ -49,3 +49,17 @@ blocked while draft -- mark ready only when told to.
 - Mark ready for review only when explicitly asked to.
 - On the 1h check-in: re-check CI/mergeability/comments; re-arm silently if
   nothing changed.
+
+### Update
+
+- CI failed: `test_each_lib (krrood) / test` -- `ModuleNotFoundError: No module
+  named 'mypy'`. Root cause: this is a uv workspace; CI runs `uv sync --extra
+  dev` from the repo ROOT, which has its own independent `dev` extra separate
+  from `krrood/pyproject.toml`'s. Adding `mypy` only to krrood's own extra
+  (previous commit) never reached CI's environment.
+- Fixed by also adding `mypy>=1.8` to the root `pyproject.toml`'s `dev`
+  extra (kept krrood's own addition too, for anyone installing `krrood[dev]`
+  standalone from PyPI). `uv.lock` is gitignored (confirmed via
+  `git ls-files`), so no lockfile commit needed -- verified locally with
+  `uv lock` that it resolves cleanly. Pushed as eb5341a.
+- Waiting on this CI run to go green.
