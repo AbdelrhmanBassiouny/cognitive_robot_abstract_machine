@@ -70,4 +70,8 @@ all addressed and resolved in commit 49191e5:
 - Watching PR #72 for further CI completion and review comments via the
   subscription.
 - (PR #71 on `claude/ipython-shell-ci-hang-vvetyg` is tracked separately
-  under its own branch-keyed progress file, not duplicated here.)
+  under its own branch-keyed progress file, not duplicated here. Update as
+  of this check: owner marked it ready for review, and its `giskardpy` leg
+  was re-run and passed - all 17 checks green, mergeable_state clean.
+  Confirms the original giskardpy failure is intermittent. No action taken
+  by me, just observed via webhook.)
