@@ -91,3 +91,37 @@ blocked while draft -- mark ready only when told to.
 - Checked CI on 5b48b85e6: 16/17 checks green, only
   `test_each_lib (coraplex)` still in progress. No unresolved review
   comments remain.
+
+### Review round 2 (addressed)
+
+- 1 more inline comment: `_FIXTURE_PATH`/`_KRROOD_SRC` module-level constants
+  violate "avoid global variables" -- moved both into local variables
+  computed inside `_run_mypy_on_fixture` from `__file__` and the
+  already-imported `krrood` module.
+- Verified full krrood suite still green (1695 passed, 9 skipped).
+- Remote had independently merged origin/main into this branch in the
+  meantime (another routine/session) -- merged that into my local branch
+  before pushing (no conflicts). Pushed as eb5492b25, then merge commit
+  70d4c5a16.
+- Replied to and resolved the thread.
+
+### Also this session: unblocked PR #4 (match-where-without-resolve)
+
+- User pointed out PR #4 had a stuck "needs-resolution" comment from an
+  automated restacking routine: merging origin/query-interface-refactor
+  (now long since merged into main) into match-where-without-resolve hit
+  real conflicts in 2 test files, judgment-call conflicts outside the
+  routine's scope, so it aborted and asked for help.
+- Checked out match-where-without-resolve fresh, merged origin/main
+  (774 files diff, branch was very stale). Both conflicts were the exact
+  same shape: PR #4's own feature (match.where() with no .resolve()
+  needed) colliding with the an()->a() grammar fix that had since landed
+  on main (KRROODPosition/Vector3/HomogeneousTransformationMatrix are all
+  consonant-starting). Resolved by keeping both: a() naming, no .resolve()
+  call. Files: test_underspecified_parameters.py, test_spatial_types.py.
+- Full krrood suite: 1695 passed, 9 skipped. Pushed as ce79c6e08. Replied
+  on the PR explaining the resolution, removed the needs-resolution label.
+  mergeable_state went from dirty to unstable (conflict-free, just waiting
+  on checks/reviews now). Not otherwise tracking this PR's progress here
+  since it's not the PR this session's dedicated file is for -- flagging it
+  existed and is now unstuck.
