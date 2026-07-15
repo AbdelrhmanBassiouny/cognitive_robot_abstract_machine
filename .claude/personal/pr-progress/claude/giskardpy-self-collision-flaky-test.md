@@ -43,9 +43,31 @@ Requested follow-up from PR #71: try to fix the flaky `giskardpy` CI failure
 - So this fix is unverified locally and explicitly flagged in the PR body as
   a best-effort attempt depending on CI to validate.
 
+## Done (review round 1)
+
+Owner (AbdelrhmanBassiouny) left 6 review comments shortly after opening,
+all addressed and resolved in commit 49191e5:
+- 2x "use timedelta instead of float" on the grace-period/poll-interval
+  fields - converted both to `datetime.timedelta`.
+- 3x "dataclass?" on the test's fake Synchronizer/node mimic classes -
+  converted all three to `@dataclass` per AGENTS.md.
+- 1x substantive question: "could falling back to the last observed count
+  cause wrong behaviour, and is that better than the original design?" -
+  genuinely reconsidered this: yes, last-sample fallback could still
+  undercount if a low reading landed right as the grace period elapsed
+  even after a higher count was already seen. Fixed to fall back to the
+  *highest* observed count instead (undercount silently breaks the sync
+  contract = the bug being fixed; overcount just costs the existing,
+  already-logged timeout - not symmetric, so biasing toward "never
+  undercount" is strictly safer than both the last-sample fallback and
+  the original no-wait design). Added a third test
+  (`test_snapshot_subscribers_falls_back_to_highest_sample_not_last_sample`)
+  covering this specifically. Replied to each thread explaining the fix,
+  then resolved all 6.
+
 ## Next
 
-- Watching PR #72 for CI completion and review comments via the
-  subscription. Just opened, no check yet.
+- Watching PR #72 for further CI completion and review comments via the
+  subscription.
 - (PR #71 on `claude/ipython-shell-ci-hang-vvetyg` is tracked separately
   under its own branch-keyed progress file, not duplicated here.)
