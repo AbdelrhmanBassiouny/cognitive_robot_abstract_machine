@@ -24,8 +24,15 @@ from krrood.entity_query_language.factories import (
 from krrood.inheritance_path_length import inheritance_path_length
 from random_events.interval import SimpleInterval, Bound
 from ...dataset.example_classes import KRROODVectorsWithProperty
-from krrood.entity_query_language.predicate import length, symbolic_function
+from krrood.entity_query_language.predicate import (
+    SymbolicFunction,
+    symbolic_callable_to_function,
+    length,
+)
 from krrood.entity_query_language.query.operations import GroupedBy
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    FunctionVerbalizationTemplates,
+)
 from ...dataset.department_and_employee import Department, Employee
 from ...dataset.example_classes import NamedNumbers
 from ...dataset.semantic_world_like_classes import Cabinet, Body, Container, Drawer
@@ -714,13 +721,32 @@ def test_nearest_object_type():
     @dataclass
     class Level2Object(Object1): ...
 
-    @symbolic_function
-    def symbolic_distance(type1: Type, type2: Type) -> int | None:
-        return inheritance_path_length(type1, type2)
+    @dataclass(eq=False)
+    class SymbolicDistance(SymbolicFunction):
+        type1: Type
+        type2: Type
 
-    @symbolic_function
-    def eql_mro(object_: Any) -> tuple[Type]:
-        return object_.__class__.__mro__
+        def __call__(self) -> int | None:
+            return inheritance_path_length(self.type1, self.type2)
+
+        @classmethod
+        def _verbalization_fragment_(cls, operands):
+            return FunctionVerbalizationTemplates.possessive(cls, *operands)
+
+    symbolic_distance = symbolic_callable_to_function(SymbolicDistance)
+
+    @dataclass(eq=False)
+    class EqlMro(SymbolicFunction):
+        object_: Any
+
+        def __call__(self) -> tuple[Type]:
+            return self.object_.__class__.__mro__
+
+        @classmethod
+        def _verbalization_fragment_(cls, operands):
+            return FunctionVerbalizationTemplates.possessive(cls, *operands)
+
+    eql_mro = symbolic_callable_to_function(EqlMro)
 
     objects = [BaseObject(), Object1(), Object2()]
     object_of_interest = Level2Object()

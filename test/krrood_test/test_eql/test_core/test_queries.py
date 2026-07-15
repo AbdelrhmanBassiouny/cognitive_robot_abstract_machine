@@ -38,8 +38,8 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.predicate import (
     HasType,
-    symbolic_function,
     Predicate,
+    symbolic_callable_to_function,
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
@@ -48,6 +48,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import Prepos
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     clause,
     Noun,
+    predicate_clause,
     Verb,
 )
 from krrood.patterns.role_predicates import IsSameSemanticEntity
@@ -582,9 +583,19 @@ def test_generate_with_using_decorated_predicate(handles_and_containers_world):
     """
     world = handles_and_containers_world
 
-    @symbolic_function
-    def is_handle(body_: Body):
-        return body_.name.startswith("Handle")
+    @dataclass(eq=False)
+    class IsHandle(Predicate):
+        body_: Body
+
+        def __call__(self):
+            return self.body_.name.startswith("Handle")
+
+        @classmethod
+        def _verbalization_fragment_(cls, operands):
+            subject, *objects = operands
+            return predicate_clause(cls.__name__, subject, *objects)
+
+    is_handle = symbolic_callable_to_function(IsHandle)
 
     body = variable(Body, domain=world.bodies)
     query_kwargs = an(entity(body).where(is_handle(body_=body)))
@@ -1270,7 +1281,7 @@ def test_accessing_a_dunder_attribute_symbolically_raises_a_helpful_error():
 
     It must remain an :class:`AttributeError` so that ``copy``/``pickle`` machinery probing optional
     dunder hooks still treats it as a missing attribute, while its message points at
-    ``@symbolic_function`` as the correct way to reach a dunder-named member.
+    ``SymbolicFunction`` as the correct way to reach a dunder-named member.
     """
     var = variable(int, [1, 2, 3])
 
@@ -1281,7 +1292,7 @@ def test_accessing_a_dunder_attribute_symbolically_raises_a_helpful_error():
     assert exception_info.value.attribute_name == "__name__"
     message = str(exception_info.value)
     assert "__name__" in message
-    assert "symbolic_function" in message
+    assert "SymbolicFunction" in message
 
     # The AttributeError contract keeps optional-hook probing working.
     assert getattr(var, "__name__", "fallback") == "fallback"

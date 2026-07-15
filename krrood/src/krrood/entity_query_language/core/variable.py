@@ -277,9 +277,8 @@ class InstantiatedVariable(
                 if id_ in self._child_var_id_name_map_
             }
             # A callable class (Predicate / SymbolicFunction) implements HasBoundValue -- it binds the
-            # constructed instance, or, for a value operation, its constructed-and-called value -- the
-            # class-form counterpart of a @symbolic_function being called. A plain function/type does
-            # not, so it binds the direct call result.
+            # constructed instance, or, for a value operation, its constructed-and-called value. A
+            # plain function/type does not, so it binds the direct call result.
             bind = (
                 self._type_._bound_value_
                 if inspect.isclass(self._type_)

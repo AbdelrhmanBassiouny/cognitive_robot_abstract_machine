@@ -1,22 +1,19 @@
 """
 Predicates and symbolic function utilities for the Entity Query Language.
 
-This module defines predicate classes for boolean checks and a decorator
-to build symbolic expressions from regular Python functions when
-variables are present.
+This module defines predicate classes for boolean checks and symbolic-function classes that build
+symbolic expressions when variables are present.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import wraps
 
 from typing_extensions import (
     Callable,
     Iterator,
     Self,
-    Optional,
     Any,
     Type,
     Tuple,
@@ -25,7 +22,6 @@ from typing_extensions import (
     Sized,
     TYPE_CHECKING,
     Dict,
-    Union,
 )
 
 if TYPE_CHECKING:
@@ -52,40 +48,11 @@ from krrood.patterns.code_parsing_utils import (
 from krrood.symbol_graph.symbol_graph import Symbol
 
 
-def symbolic_function(
-    function: Callable[..., T],
-) -> Union[Callable[..., Variable[T]], T]:
-    """
-    Function decorator that constructs a symbolic expression representing the
-    function call when inside a symbolic_rule context.
-
-    When symbolic mode is active, calling the method returns a Call
-    instance which is a SymbolicExpression bound to representing the
-    method call that is not evaluated until the evaluate() method is
-    called on the query/rule.
-
-    :param function: The function to decorate.
-    :return: The decorated function.
-    """
-
-    @wraps(function)
-    def wrapper(*args, **kwargs) -> Optional[Any]:
-        all_kwargs = merge_args_and_kwargs(function, args, kwargs)
-        if _any_of_the_kwargs_is_a_variable(all_kwargs):
-            return InstantiatedVariable(
-                _type_=function,
-                _kwargs_=all_kwargs,
-            )
-        return function(*args, **kwargs)
-
-    return wrapper
-
-
 def symbolic_callable_to_function(
     symbolic_callable: Type[SymbolicCallable],
 ) -> Callable[..., Any]:
-    """:return: a function that calls *symbolic_callable* -- the class-form counterpart of the
-    :func:`symbolic_function` decorator.
+    """:return: a function that calls *symbolic_callable* -- the value-returning counterpart of
+    :class:`SymbolicFunction`.
 
     It returns a symbolic expression when any argument is a variable (so it composes in a query) and
     the directly computed value otherwise. Binding an existing function name to
@@ -184,14 +151,16 @@ class Operand:
 
     def as_fragment(self) -> "VerbalizationFragment":
         """:return: the operand's rendered fragment, so an :class:`Operand` is a clause constituent
-        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work."""
+        like the part-of-speech elements — ``Noun(operands.body)`` and ``clause(operands.body)`` work.
+        """
         return self._render_(self._expression_)
 
     @property
     def _value_of_operand_(self) -> Any:
         """:return: the raw Python value bound to the operand (a literal's value unwrapped) — what
         :class:`~…parts_of_speech.OneOf` enumerates. Named with surrounding underscores so it is not
-        mistaken for a navigated attribute (``operands.x.value`` navigates to ``x.value``)."""
+        mistaken for a navigated attribute (``operands.x.value`` navigates to ``x.value``).
+        """
         return (
             self._expression_._value_
             if isinstance(self._expression_, Literal)
@@ -364,9 +333,6 @@ class SymbolicCallable(Symbol, Verbalizable, HasBoundValue, ABC):
         """:return: the value this operation contributes to a query result when its arguments have
         concrete values -- the constructed instance itself by default (a :class:`Predicate`'s truth is
         then read from that instance). A value operation overrides this to its COMPUTED value.
-
-        ..note:: This is the class-form counterpart of calling a ``@symbolic_function``: for a function
-            the query binds ``function(**values)``; for a callable class it binds this.
         """
         return cls._construct_normally_(**kwargs)
 
@@ -412,7 +378,7 @@ class SymbolicFunction(SymbolicCallable, ABC):
     @classmethod
     def _bound_value_(cls, **kwargs) -> Any:
         """:return: the COMPUTED value -- a value operation is constructed AND called, so a query binds
-        what it computes (exactly as a ``@symbolic_function`` is called), not the instance.
+        what it computes, not the instance.
         """
         return cls._construct_normally_(**kwargs)()
 

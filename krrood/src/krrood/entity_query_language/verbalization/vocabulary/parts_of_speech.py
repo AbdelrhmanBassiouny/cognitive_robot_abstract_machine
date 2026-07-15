@@ -205,9 +205,11 @@ class OneOf(ClauseElement):
         members = list(
             self.members._value_of_operand_
             if isinstance(self.members, Operand)
-            else self.members.value
-            if isinstance(self.members, VerbalizationField)
-            else self.members
+            else (
+                self.members.value
+                if isinstance(self.members, VerbalizationField)
+                else self.members
+            )
         )
         listed = one_of(
             [
@@ -263,9 +265,11 @@ class Or(ClauseElement):
         value = (
             self.members._value_of_operand_
             if isinstance(self.members, Operand)
-            else self.members.value
-            if isinstance(self.members, VerbalizationField)
-            else self.members
+            else (
+                self.members.value
+                if isinstance(self.members, VerbalizationField)
+                else self.members
+            )
         )
         if not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
             return Noun(self.members).as_fragment()

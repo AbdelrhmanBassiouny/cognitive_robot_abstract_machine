@@ -1,4 +1,3 @@
-
 from typing_extensions import Self
 import math
 from dataclasses import dataclass
