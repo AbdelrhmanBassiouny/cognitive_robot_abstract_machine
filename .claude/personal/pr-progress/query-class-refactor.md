@@ -24,9 +24,13 @@ lifecycle, subquery result caching, and a composable result-transformer pipeline
   byte-identical to the base's create_or_update_variable via the a8bfb09ce merge); match+queries
   tests green (104 passed). Pushed 96e82d448.
 
+- Base advanced to f55221a12 (its rename eac372c09 + a merge), which re-conflicted PR #5 (dirty).
+  Re-merged origin/match-where-without-resolve into query-class-refactor; only factories.py
+  conflicted (docstring line-wrap, both referencing create_or_update_variable) - took base wrap.
+  match tests green (23 passed). Pushed 695b0278b; PR #5 mergeable again (unstable = CI running),
+  base now f55221a12.
+
 ## Next
-- Watch PR #5 CI on the new commits; address any krrood failure.
-- Base (match-where-without-resolve) advanced to f55221a12 (rename + self-merge) - PR #5 carries its
-  own equivalent rename so it should stay mergeable; re-merge base only if GitHub flags it.
+- Watch PR #5 CI on the new commits (695b0278b); address any krrood failure.
 - Merge once approved.
 - Follow-up (separate PR, prompt already given): model Selectable._var_ as an explicit Role/delegate.
