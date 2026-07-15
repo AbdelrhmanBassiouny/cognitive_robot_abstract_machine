@@ -14,8 +14,12 @@ into every session by the `.claude/hooks/session-start.sh` hook (see the
   unrelated cleanup bundled in.
 - Always include a link to the session that created the PR in the PR
   description.
-- Always subscribe to all events on every PR you open, and handle each event
-  with an explanation summary in the session chat.
+- Keep the PR description up to date: after pushing any change that alters
+  what the PR does, update the description to match. Never leave it
+  describing an earlier state of the PR.
+- Always subscribe to all events on every PR you open - including plain
+  conversation comments, not just inline review comments - and handle each
+  event with an explanation summary in the session chat.
 
 ## Review comments
 
