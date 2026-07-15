@@ -43,11 +43,31 @@ both in this PR, as separated commits."
 6. Opened draft PR #73 against `main`, labeled `bug`, session link included,
    subscribed to PR activity.
 
+## Done (continued)
+
+7. First CI run confirmed my local finding was real, not a sandbox artifact: the
+   `krrood` leg genuinely hung on the live job (`IPythonShell.run()`'s old infinite
+   retry loop, same as before #71's fix) - user caught it ("that is too long...
+   there's a loop hanging"). Cancelled the wasted run
+   (`actions_run_trigger cancel_workflow_run`, run 29433858569).
+8. PR #71 merged into `main` while I was investigating. Merged updated `main`
+   (with #71's fix) into this branch - clean merge, no conflicts, commit `2e6dfad`.
+   Pushed; new CI run in progress. This won't fix the "answers insufficient" issue
+   itself but means CI will fail fast instead of hanging if it recurs, giving a real
+   signal instead of burning 40+ min per run.
+9. Commented on PR #73 explaining the cancellation + merge.
+
 ## Next
 
-- Watching PR #73 for CI results - this is the real test of whether the delimiter +
-  isolation fixes get `test_fit_scrdr`/`test_fit_mcrdr_stop_only`/`test_fit_grdr`
-  fully green in the actual CI environment (which apparently has different dataset
-  behavior than my sandbox).
-- Also still watching PR #71 (krrood ipython fix, ready for review, green) and PR #72
-  (giskardpy race fix) - separate branch-keyed progress files, not duplicated here.
+- Watching the NEW CI run on PR #73 (post-#71-merge) - this is the real test of
+  whether `test_fit_scrdr`/`test_fit_mcrdr_stop_only`/`test_fit_grdr` actually pass,
+  or whether they now fail fast with `NonInteractiveTerminalError` (meaning the
+  "answers insufficient" issue is real in CI too and needs further investigation
+  beyond the two fixes already in this PR).
+- If it fails fast with NonInteractiveTerminalError: this would mean the delimiter +
+  isolation fixes are necessary but not sufficient - the recorded expert answers
+  fixtures may need actual regeneration against current dataset content, which
+  needs the user's input (domain-specific, can't safely guess correct RDR
+  refinement conditions for zoo animal classification).
+- Also still watching PR #72 (giskardpy race fix) - separate branch-keyed progress
+  file, not duplicated here.
