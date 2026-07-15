@@ -21,9 +21,9 @@ class MathOperatorSpecification:
     """
     The symbol and callable that make up one :class:`MathOperator`.
 
-    Mixed into ``MathOperator`` itself (an Enum mix-in type), so each
-    member's ``symbol``/``function`` are its own attributes directly,
-    with no separate value object to forward through.
+    Mixed into ``MathOperator`` itself (an Enum mix-in type), so each member's
+    ``symbol``/``function`` are its own attributes directly, with no separate value
+    object to forward through.
     """
 
     symbol: str
@@ -33,8 +33,7 @@ class MathOperatorSpecification:
 
     function: Callable[..., numbers.Number]
     """
-    The callable that performs the operation over already-resolved operand
-    values.
+    The callable that performs the operation over already-resolved operand values.
     """
 
 
@@ -42,8 +41,8 @@ class MathOperator(MathOperatorSpecification, Enum):
     """
     An arithmetic operator usable inside a query.
 
-    Each member carries the symbol it renders as and the callable that
-    computes it over already-resolved operand values.
+    Each member carries the symbol it renders as and the callable that computes it over
+    already-resolved operand values.
     """
 
     ADD = ("+", operator.add)

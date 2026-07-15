@@ -69,20 +69,19 @@ class Context(PlanEntity):
     """
     The backend used to answer queries about underspecified statements.
 
-    Defaults to the deterministic generative backend, since
-    underspecified actions are constructed (generated).
+    Defaults to the deterministic generative backend, since underspecified actions are
+    constructed (generated).
     """
 
     alternative_motion_mappings: List[Type[AlternativeMotion]] = field(
         default_factory=list
     )
     """
-    The alternative motion mappings that are used to resolve motions in this
-    plan.
+    The alternative motion mappings that are used to resolve motions in this plan.
 
-    A motion is replaced by an alternative motion from this list if the
-    alternative matches the motion type, the robot and the current
-    execution type. If empty, motions use their default motion chart.
+    A motion is replaced by an alternative motion from this list if the alternative
+    matches the motion type, the robot and the current execution type. If empty, motions
+    use their default motion chart.
     """
 
     _debug: bool = field(default=False)
@@ -117,12 +116,10 @@ class Context(PlanEntity):
         There is no super plan in this case.
         :param world: The world for which to create the context
         :param plan: The plan that manages this context
-        :param query_backend: The query backend to use for answering
-            queries
-        :param alternative_motion_mappings: The alternative motion
-            mappings used to resolve motions
-        :return: A context with the first robot in the world and no
-            super plan
+        :param query_backend: The query backend to use for answering queries
+        :param alternative_motion_mappings: The alternative motion mappings used to
+            resolve motions
+        :return: A context with the first robot in the world and no super plan
         """
         if query_backend is None:
             query_backend = EntityQueryLanguageGenerativeBackend()

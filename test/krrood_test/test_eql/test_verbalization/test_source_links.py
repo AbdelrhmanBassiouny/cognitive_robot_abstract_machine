@@ -218,14 +218,13 @@ def test_autoapi_resolver_no_warning_when_page_exists(tmp_path):
 @pytest.fixture(scope="session")
 def built_example_domain_autoapi(tmp_path_factory) -> Path:
     """
-    Build the Sphinx AutoAPI HTML for ``example_domain`` into a tmp dir and
-    return the HTML root.
+    Build the Sphinx AutoAPI HTML for ``example_domain`` into a tmp dir and return the
+    HTML root.
 
     Only ``example_domain`` is mirrored (into its real
-    ``krrood/entity_query_language/verbalization`` package path) so the
-    build is fast yet faithful: the generated page path and anchor ids
-    are exactly those of a full docs build, which is what the resolver's
-    URLs must point at.
+    ``krrood/entity_query_language/verbalization`` package path) so the build is fast
+    yet faithful: the generated page path and anchor ids are exactly those of a full
+    docs build, which is what the resolver's URLs must point at.
     """
     pytest.importorskip("sphinx.application")
     pytest.importorskip("autoapi")
@@ -282,8 +281,8 @@ def test_resolver_url_points_to_existing_page_and_anchor(
     built_example_domain_autoapi, reference
 ):
     """
-    The page and ``#anchor`` the resolver builds must exist in the real AutoAPI
-    output \u2014 the regression guard for the resolver's path/anchor scheme.
+    The page and ``#anchor`` the resolver builds must exist in the real AutoAPI output
+    \u2014 the regression guard for the resolver's path/anchor scheme.
     """
     html_root = built_example_domain_autoapi
     resolver = AutoAPIResolver(base_url=str(html_root), html_root=html_root)
@@ -299,9 +298,9 @@ def test_resolver_url_points_to_existing_page_and_anchor(
 
 def test_in_site_docs_links_resolve_within_built_site(built_example_domain_autoapi):
     """
-    End-to-end regression for the 404: a verbalization rendered with the in-
-    site resolver (as the docs use it) produces relative links whose targets
-    exist relative to the page's location.
+    End-to-end regression for the 404: a verbalization rendered with the in-site
+    resolver (as the docs use it) produces relative links whose targets exist relative
+    to the page's location.
     """
     html_root = built_example_domain_autoapi
     resolver = AutoAPIResolver.for_in_site_docs()  # base_url="../.."
@@ -550,9 +549,8 @@ def test_pipeline_html_without_resolver_no_anchor_tags():
 
 def test_type_valued_literal_is_hyperlinked():
     """
-    A bare class used as a value (e.g. the type argument of a predicate) links
-    to its source like a type reference, rather than rendering as an un-
-    linkable literal.
+    A bare class used as a value (e.g. the type argument of a predicate) links to its
+    source like a type reference, rather than rendering as an un-linkable literal.
     """
     from krrood.entity_query_language.core.variable import Literal
 
@@ -615,8 +613,7 @@ def test_pipeline_ansi_with_resolver_no_osc8_logs_warning_and_no_osc8():
 
 def _collect_source_refs(fragment: VerbalizationFragment) -> list[SourceReference]:
     """
-    Recursively collect all non-None SourceReference values from a fragment
-    tree.
+    Recursively collect all non-None SourceReference values from a fragment tree.
     """
     match fragment:
         case RoleFragment(source_reference=ref) if ref is not None:
@@ -666,8 +663,7 @@ def test_comparator_fragment_has_both_class_and_attr_refs():
 
 def test_display_opens_browser_outside_jupyter():
     """
-    Outside Jupyter, display() writes a temp HTML file and calls
-    webbrowser.open.
+    Outside Jupyter, display() writes a temp HTML file and calls webbrowser.open.
     """
     from unittest.mock import patch as _patch
     import krrood.entity_query_language.verbalization.pipeline as pipeline_mod

@@ -1,10 +1,9 @@
 """
 Shared evaluation interface for the Entity Query Language.
 
-Both queries (which select existing data) and structural matches (which
-can generate new instances) are evaluable. Defining a single interface
-lets backends treat them uniformly and gives them a consistent
-``evaluate``/``tolist``/``first`` surface.
+Both queries (which select existing data) and structural matches (which can generate new
+instances) are evaluable. Defining a single interface lets backends treat them uniformly
+and gives them a consistent ``evaluate``/``tolist``/``first`` surface.
 """
 
 from __future__ import annotations
@@ -23,17 +22,15 @@ class Evaluable(ABC):
     """
     Interface for objects that can be evaluated to produce results.
 
-    Implementations provide :meth:`_evaluate_natively_`, the in-process
-    (backend-free) evaluation strategy. The public :meth:`evaluate`
-    dispatches to a chosen backend, which by default is the native
-    ``EntityQueryLanguageBackend``.
+    Implementations provide :meth:`_evaluate_natively_`, the in-process (backend-free)
+    evaluation strategy. The public :meth:`evaluate` dispatches to a chosen backend,
+    which by default is the native ``EntityQueryLanguageBackend``.
     """
 
     @abstractmethod
     def _evaluate_natively_(self) -> Iterator:
         """
-        Produce results by evaluating this object in the current python
-        process.
+        Produce results by evaluating this object in the current python process.
 
         :return: An iterator over the results.
         """
@@ -41,12 +38,10 @@ class Evaluable(ABC):
 
     def evaluate(self, backend: Optional[QueryBackend] = None) -> Iterator:
         """
-        Evaluate using the given backend, returning an iterator over the
-        results.
+        Evaluate using the given backend, returning an iterator over the results.
 
-        :param backend: The query backend to evaluate with. Defaults to
-            the ``EntityQueryLanguageBackend`` (native in-process
-            evaluation / generation).
+        :param backend: The query backend to evaluate with. Defaults to the
+            ``EntityQueryLanguageBackend`` (native in-process evaluation / generation).
         :return: An iterator over the results.
         """
         if backend is None:

@@ -1,10 +1,9 @@
 """
 Tests for arithmetic operations in the Entity Query Language.
 
-Arithmetic is written with the normal Python operators on EQL variables
-(``a + b``, ``-x`` …) and is computed with Python's numeric operators;
-the operation nodes compose with comparison, filtering, and aggregation
-like any other value.
+Arithmetic is written with the normal Python operators on EQL variables (``a + b``,
+``-x`` …) and is computed with Python's numeric operators; the operation nodes compose
+with comparison, filtering, and aggregation like any other value.
 """
 
 import operator
@@ -72,8 +71,8 @@ def test_reflected_non_commutative_operators():
 
 def test_literal_operand_in_either_position():
     """
-    ``+`` and ``*`` are commutative, so a literal operand must produce the same
-    result whether it is.
+    ``+`` and ``*`` are commutative, so a literal operand must produce the same result
+    whether it is.
 
     on the variable's right (the normal dunder, e.g. ``__add__``) or left (the reflected dunder, e.g.
     ``__radd__``) - both call paths must be exercised, not just one.

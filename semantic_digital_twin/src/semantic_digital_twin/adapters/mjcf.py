@@ -167,8 +167,7 @@ class MJCFParser:
         Parse the inertial properties of a Mujoco body.
 
         :param mujoco_body: The Mujoco body to parse.
-        :return: The Inertial properties of the body, or None if not
-            applicable.
+        :return: The Inertial properties of the body, or None if not applicable.
         """
         if numpy.isclose(mujoco_body.mass, 0.0) or numpy.isnan(mujoco_body.ipos).any():
             return None
@@ -359,8 +358,8 @@ class MJCFParser:
 
         :param parent_name: The name of the parent body.
         :param child_name: The name of the child body.
-        :param mujoco_joint: The Mujoco joint to parse. If None, a fixed
-            connection is created.
+        :param mujoco_joint: The Mujoco joint to parse. If None, a fixed connection is
+            created.
         """
         parent_body = self.world.get_kinematic_structure_entity_by_name(parent_name)
         child_body = self.world.get_kinematic_structure_entity_by_name(child_name)

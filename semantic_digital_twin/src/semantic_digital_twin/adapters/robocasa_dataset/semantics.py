@@ -85,10 +85,10 @@ class RoboCasaObjectCategory(StrEnum):
 
 def _tokenize_category(category: str) -> set[str]:
     """
-    Split a RoboCasa category into lower-case word tokens, handling snake_case
-    object categories (for example ``"coffee_machine"``), upper camel case
-    fixture class names (for example ``"HingeCabinet"``), and plain single-case
-    words (for example ``"MICROWAVE"`` or ``"sink"``).
+    Split a RoboCasa category into lower-case word tokens, handling snake_case object
+    categories (for example ``"coffee_machine"``), upper camel case fixture class names
+    (for example ``"HingeCabinet"``), and plain single-case words (for example
+    ``"MICROWAVE"`` or ``"sink"``).
 
     :param category: The category string or class name to tokenize.
     :return: The set of lower-case word tokens.
@@ -123,19 +123,18 @@ class RoboCasaCategoryResolver:
 
     category_to_annotation_class: ClassVar[Dict[str, Type[HasRootBody]]]
     """
-    Lookup table from registered RoboCasa category to the matching
-    SemanticAnnotation subclass.
+    Lookup table from registered RoboCasa category to the matching SemanticAnnotation
+    subclass.
     """
 
     def resolve(self, category: str) -> Optional[Type[HasRootBody]]:
         """
-        Resolve a RoboCasa category to the matching SemanticAnnotation
-        subclass.
+        Resolve a RoboCasa category to the matching SemanticAnnotation subclass.
 
-        :param category: The RoboCasa category, for example
-            ``"cabinet"``, ``"HingeCabinet"``, or ``"coffee_machine"``.
-        :return: The most specific matching SemanticAnnotation subclass,
-            or None if no registered category matches.
+        :param category: The RoboCasa category, for example ``"cabinet"``,
+            ``"HingeCabinet"``, or ``"coffee_machine"``.
+        :return: The most specific matching SemanticAnnotation subclass, or None if no
+            registered category matches.
         """
         category_tokens = _tokenize_category(category)
 
@@ -158,8 +157,8 @@ class RoboCasaCategoryResolver:
 class RoboCasaKitchenApplianceResolver(RoboCasaCategoryResolver):
     """
     Resolves RoboCasa fixture categories (the module names under
-    ``robocasa.models.fixtures``, or the fixture's Python class name) to the
-    matching SemanticAnnotation subclass.
+    ``robocasa.models.fixtures``, or the fixture's Python class name) to the matching
+    SemanticAnnotation subclass.
     """
 
     category_to_annotation_class: ClassVar[

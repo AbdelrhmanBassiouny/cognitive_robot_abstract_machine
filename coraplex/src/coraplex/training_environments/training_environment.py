@@ -56,8 +56,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 @dataclass
 class TrainingEnvironment(ABC):
     """
-    A training environment for generating data for the parameterization of
-    actions.
+    A training environment for generating data for the parameterization of actions.
     """
 
     action_type: ClassVar[type[ActionDescription]]
@@ -88,8 +87,7 @@ class TrainingEnvironment(ABC):
 
         This plan is used to generate variants of the actions.
 
-        :param limit: The maximum number of actions that should be
-            executed.
+        :param limit: The maximum number of actions that should be executed.
         :return: The plan
         """
 
@@ -97,8 +95,8 @@ class TrainingEnvironment(ABC):
         """
         Generate episodes until `number_of_actions` have been executed.
 
-        :param number_of_actions: The number of action executions that
-            should be generated.
+        :param number_of_actions: The number of action executions that should be
+            generated.
         """
         remaining_actions = number_of_actions
 
@@ -110,8 +108,7 @@ class TrainingEnvironment(ABC):
         """
         Generate a single episode.
 
-        :param limit: The maximum number of actions that should be
-            executed.
+        :param limit: The maximum number of actions that should be executed.
         :return: The number of actions executed in the episode.
         """
         plan = self.setup_plan(limit)
@@ -145,8 +142,7 @@ class TrainingEnvironment(ABC):
 @dataclass
 class MoveToReachTrainingEnvironment(TrainingEnvironment):
     """
-    Training environment for MoveToReach actions in an empty world using the
-    PR2.
+    Training environment for MoveToReach actions in an empty world using the PR2.
     """
 
     action_type = MoveToReach
@@ -224,11 +220,10 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment):
 
     def setup_backend(self, underspecified_action: Match) -> ProbabilisticBackend:
         """
-        Create a backend containing the best guesses as distribution for this
-        action in this environment.
+        Create a backend containing the best guesses as distribution for this action in
+        this environment.
 
-        :param underspecified_action: The underspecified action to
-            create a backend for.
+        :param underspecified_action: The underspecified action to create a backend for.
         :return: The probabilistic backend
         """
         parameters = UnderspecifiedParameters(underspecified_action)
@@ -257,8 +252,7 @@ class MoveToReachTrainingEnvironment(TrainingEnvironment):
         """
         Setup a backend from a model file.
 
-        Adds the variables of the action to the loaded model if they
-        don't exist.
+        Adds the variables of the action to the loaded model if they don't exist.
 
         :param underspecified_action: The action to load the model for.
         :return: The probabilistic backend.

@@ -80,10 +80,8 @@ class ArithmeticOperation(
         """
         Compute the operation for one product result and bind its value.
 
-        :param child_result: The result carrying the values of both
-            operands.
-        :return: The result with this operation's value bound under its
-            own id.
+        :param child_result: The result carrying the values of both operands.
+        :return: The result with this operation's value bound under its own id.
         """
         operands = (
             self.left._process_result_(child_result),
@@ -105,6 +103,7 @@ class UnaryArithmeticOperation(UnaryExpression, CanBehaveLikeAVariable[T]):
     """
     The operand the operator is applied to.
     """
+
     math_operator: MathOperator
     """
     The operator applied to the operand.

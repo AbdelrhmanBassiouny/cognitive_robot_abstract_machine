@@ -56,14 +56,17 @@ if TYPE_CHECKING:
 
 @dataclass(eq=False)
 class Stable(Predicate):
-    """Whether an object is stable in the world.
+    """
+    Whether an object is stable in the world.
 
-    Stable means its position will not change after simulating physics in the world (simulating for
-    10 seconds and comparing the coordinates before and after).
+    Stable means its position will not change after simulating physics in the world
+    (simulating for 10 seconds and comparing the coordinates before and after).
     """
 
     body: Body
-    """The body whose stability is checked."""
+    """
+    The body whose stability is checked.
+    """
 
     def __call__(self) -> bool:
         raise NotImplementedError("Needs multiverse")
@@ -79,16 +82,24 @@ stable = symbolic_callable_to_function(Stable)
 
 @dataclass(eq=False)
 class Contact(Predicate):
-    """Whether two bodies are in contact."""
+    """
+    Whether two bodies are in contact.
+    """
 
     body1: Body
-    """The first body."""
+    """
+    The first body.
+    """
 
     body2: Body
-    """The second body."""
+    """
+    The second body.
+    """
 
     threshold: float = 0.001
-    """The maximum distance at which the two bodies count as in contact."""
+    """
+    The maximum distance at which the two bodies count as in contact.
+    """
 
     def __call__(self) -> bool:
         tcd = self.body1._world.collision_manager.collision_detector
@@ -118,10 +129,14 @@ contact = symbolic_callable_to_function(Contact)
 
 @dataclass(eq=False)
 class GetVisibleBodies(SymbolicFunction):
-    """The bodies and regions visible from a camera, computed from a segmentation mask."""
+    """
+    The bodies and regions visible from a camera, computed from a segmentation mask.
+    """
 
     camera: Camera
-    """The camera the visible bodies are seen from."""
+    """
+    The camera the visible bodies are seen from.
+    """
 
     def __call__(self) -> List[KinematicStructureEntity]:
         camera = self.camera
@@ -155,13 +170,19 @@ get_visible_bodies = symbolic_callable_to_function(GetVisibleBodies)
 
 @dataclass(eq=False)
 class Visible(Predicate):
-    """Whether a body or region is visible from a camera."""
+    """
+    Whether a body or region is visible from a camera.
+    """
 
     camera: Camera
-    """The camera the visibility is checked from."""
+    """
+    The camera the visibility is checked from.
+    """
 
     object: KinematicStructureEntity
-    """The body or region whose visibility is checked."""
+    """
+    The body or region whose visibility is checked.
+    """
 
     def __call__(self) -> bool:
         return self.object in get_visible_bodies(self.camera)
@@ -183,16 +204,21 @@ visible = symbolic_callable_to_function(Visible)
 
 @dataclass(eq=False)
 class OccludingBodies(SymbolicFunction):
-    """The bodies that occlude a given body in the scene as seen from a camera.
+    """
+    The bodies that occlude a given body in the scene as seen from a camera.
 
     Determined by ray tracing: every body that hides anything from the target body is occluding it.
     """
 
     camera: Camera
-    """The camera the occlusion is seen from."""
+    """
+    The camera the occlusion is seen from.
+    """
 
     body: Body
-    """The body whose occluders are computed."""
+    """
+    The body whose occluders are computed.
+    """
 
     def __call__(self) -> List[Body]:
         camera = self.camera
@@ -259,16 +285,24 @@ occluding_bodies = symbolic_callable_to_function(OccludingBodies)
 
 @dataclass(eq=False)
 class Reachable(Predicate):
-    """Whether a kinematic chain can reach a given pose, determined by inverse kinematics."""
+    """
+    Whether a kinematic chain can reach a given pose, determined by inverse kinematics.
+    """
 
     pose: HomogeneousTransformationMatrix
-    """The pose to reach."""
+    """
+    The pose to reach.
+    """
 
     root: Body
-    """The root of the kinematic chain."""
+    """
+    The root of the kinematic chain.
+    """
 
     tip: Body
-    """The tip (end effector) of the kinematic chain."""
+    """
+    The tip (end effector) of the kinematic chain.
+    """
 
     def __call__(self) -> bool:
         try:
@@ -299,20 +333,27 @@ reachable = symbolic_callable_to_function(Reachable)
 
 @dataclass(eq=False)
 class EuclideanPlanarDistance(SymbolicFunction):
-    """The Euclidean distance between two bodies in a plane, ignoring one dimension.
+    """
+    The Euclidean distance between two bodies in a plane, ignoring one dimension.
 
-    The ignored dimension is set to zero on both positions before the distance is computed, so the
-    calculation is restricted to the chosen spatial plane.
+    The ignored dimension is set to zero on both positions before the distance is
+    computed, so the calculation is restricted to the chosen spatial plane.
     """
 
     body1: Body
-    """The first body, whose global pose gives its position."""
+    """
+    The first body, whose global pose gives its position.
+    """
 
     body2: Body
-    """The second body, whose global pose gives its position."""
+    """
+    The second body, whose global pose gives its position.
+    """
 
     ignore_dimension: Vector3
-    """The dimension (x, y or z) set to zero before the distance is computed."""
+    """
+    The dimension (x, y or z) set to zero before the distance is computed.
+    """
 
     def __call__(self):
         body1_position = self.body1.global_pose.to_position()
@@ -342,17 +383,25 @@ compute_euclidean_planar_distance = symbolic_callable_to_function(
 
 @dataclass(eq=False)
 class IsSupportedBy(Predicate):
-    """Whether one object is supported by another object."""
+    """
+    Whether one object is supported by another object.
+    """
 
     supported_body: Body
-    """The object that is supported."""
+    """
+    The object that is supported.
+    """
 
     supporting_body: Body
-    """The object that potentially supports the first object."""
+    """
+    The object that potentially supports the first object.
+    """
 
     max_intersection_height: float = 0.1
-    """Maximum height of the intersection between the two objects; above it the check returns False
-    due to unhandled clipping."""
+    """
+    Maximum height of the intersection between the two objects; above it the check
+    returns False due to unhandled clipping.
+    """
 
     def __call__(self) -> bool:
         if Below(
@@ -386,7 +435,7 @@ class IsSupportedBy(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields):
         subject, *objects = fields.values()
-        return predicate_clause(cls.__name__, subject, *objects)
+        return predicate_clause(cls, subject, *objects)
 
 
 is_supported_by = symbolic_callable_to_function(IsSupportedBy)
@@ -394,17 +443,22 @@ is_supported_by = symbolic_callable_to_function(IsSupportedBy)
 
 @dataclass(eq=False)
 class IsSupporting(Predicate):
-    """Whether any body in the world is supported by a given supporting body.
+    """
+    Whether any body in the world is supported by a given supporting body.
 
-    Iterates over the bodies in the world and checks each with :class:`IsSupportedBy`; bodies for
-    which the computation fails are skipped.
+    Iterates over the bodies in the world and checks each with :class:`IsSupportedBy`;
+    bodies for which the computation fails are skipped.
     """
 
     supporting_body: Body
-    """The body checked for supporting any other body in the world."""
+    """
+    The body checked for supporting any other body in the world.
+    """
 
     max_intersection_height: float = 0.1
-    """The maximum allowable intersection height for a body to count as supported."""
+    """
+    The maximum allowable intersection height for a body to count as supported.
+    """
 
     def __call__(self) -> bool:
         for candidate in self.supporting_body._world.bodies_with_collision:
@@ -420,7 +474,7 @@ class IsSupporting(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields):
         subject, *objects = fields.values()
-        return predicate_clause(cls.__name__, subject, *objects)
+        return predicate_clause(cls, subject, *objects)
 
 
 is_supporting = symbolic_callable_to_function(IsSupporting)
@@ -428,17 +482,23 @@ is_supporting = symbolic_callable_to_function(IsSupporting)
 
 @dataclass(eq=False)
 class BodyInRegionFraction(SymbolicFunction):
-    """The fraction (0.0..1.0) of a body's collision volume that lies inside a region's volume.
+    """
+    The fraction (0.0..1.0) of a body's collision volume that lies inside a region's
+    volume.
 
-    Both meshes are defined in their local frames and are transformed into a common world frame using
-    their global poses before the boolean intersection is computed.
+    Both meshes are defined in their local frames and are transformed into a common
+    world frame using their global poses before the boolean intersection is computed.
     """
 
     body: Body
-    """The body whose contained volume fraction is computed."""
+    """
+    The body whose contained volume fraction is computed.
+    """
 
     region: Region
-    """The region the body is tested against."""
+    """
+    The region the body is tested against.
+    """
 
     def __call__(self) -> float:
         # Retrieve meshes in local frames
@@ -473,7 +533,9 @@ is_body_in_region = symbolic_callable_to_function(BodyInRegionFraction)
 class KinematicStructureEntitySpatialRelation(Predicate, ABC):
     """
     Base class for spatial relations between two KinematicStructureEntity instances.
-    Implementations typically compare the centers of mass computed from the KSE's collision geometry.
+
+    Implementations typically compare the centers of mass computed from the KSE's
+    collision geometry.
     """
 
     body: KinematicStructureEntity
@@ -543,14 +605,15 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
 
     def _signed_distance_along_direction(self, index: int) -> float:
         """
-        Calculate the spatial relation between self.point and self.other with respect to a given
-        reference point (self.point_of_semantic_annotation) and a specified axis index. This function computes the
-        signed distance along a specified direction derived from the reference point
-        to compare the positions.
+        Calculate the spatial relation between self.point and self.other with respect to
+        a given reference point (self.point_of_semantic_annotation) and a specified axis
+        index. This function computes the signed distance along a specified direction
+        derived from the reference point to compare the positions.
 
-        :param index: The index of the axis in the transformation matrix along which
-            the spatial relation is computed.
-        :return: The signed distance between the first and the second points along the given direction.
+        :param index: The index of the axis in the transformation matrix along which the
+            spatial relation is computed.
+        :return: The signed distance between the first and the second points along the
+            given direction.
         """
         ref_np = self.point_of_view.to_np()
         front_world = ref_np[:3, index]
@@ -570,7 +633,8 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
 @dataclass
 class LeftOf(ViewDependentSpatialRelation):
     """
-    The "left" direction is taken as the -Y axis of the given point of semantic_annotation.
+    The "left" direction is taken as the -Y axis of the given point of
+    semantic_annotation.
     """
 
     def __call__(self) -> bool:
@@ -581,7 +645,8 @@ class LeftOf(ViewDependentSpatialRelation):
 @dataclass
 class RightOf(ViewDependentSpatialRelation):
     """
-    The "right" direction is taken as the +Y axis of the given point of semantic_annotation.
+    The "right" direction is taken as the +Y axis of the given point of
+    semantic_annotation.
     """
 
     def __call__(self) -> bool:
@@ -592,7 +657,8 @@ class RightOf(ViewDependentSpatialRelation):
 @dataclass
 class Above(ViewDependentSpatialRelation):
     """
-    The "above" direction is taken as the +Z axis of the given point of semantic_annotation.
+    The "above" direction is taken as the +Z axis of the given point of
+    semantic_annotation.
     """
 
     def __call__(self) -> bool:
@@ -603,7 +669,8 @@ class Above(ViewDependentSpatialRelation):
 @dataclass
 class Below(ViewDependentSpatialRelation):
     """
-    The "below" direction is taken as the -Z axis of the given point of semantic_annotation.
+    The "below" direction is taken as the -Z axis of the given point of
+    semantic_annotation.
     """
 
     def __call__(self) -> bool:
@@ -614,7 +681,8 @@ class Below(ViewDependentSpatialRelation):
 @dataclass
 class Behind(ViewDependentSpatialRelation):
     """
-    The "behind" direction is defined as the -X axis of the given point of semantic annotation.
+    The "behind" direction is defined as the -X axis of the given point of semantic
+    annotation.
     """
 
     def __call__(self) -> bool:
@@ -625,7 +693,8 @@ class Behind(ViewDependentSpatialRelation):
 @dataclass
 class InFrontOf(ViewDependentSpatialRelation):
     """
-    The "in front of" direction is defined as the +X axis of the given point of semantic annotation.
+    The "in front of" direction is defined as the +X axis of the given point of semantic
+    annotation.
     """
 
     def __call__(self) -> bool:
@@ -719,23 +788,33 @@ class ContainsType(Predicate):
 
 @dataclass(eq=False)
 class IsPlaceOccupied(Predicate):
-    """Whether a place (a box at a pose) intersects any collidable body in the world.
+    """
+    Whether a place (a box at a pose) intersects any collidable body in the world.
 
-    The box is converted to a mesh at its pose and tested against each body's world-aligned collision
-    mesh with trimesh's collision manager, excluding the allowed bodies.
+    The box is converted to a mesh at its pose and tested against each body's world-
+    aligned collision mesh with trimesh's collision manager, excluding the allowed
+    bodies.
     """
 
     box: BoundingBox
-    """The place as an axis-aligned box in its own local frame."""
+    """
+    The place as an axis-aligned box in its own local frame.
+    """
 
     pose: Pose
-    """The pose the box is placed at."""
+    """
+    The pose the box is placed at.
+    """
 
     world: World
-    """The world providing the bodies with enabled collisions."""
+    """
+    The world providing the bodies with enabled collisions.
+    """
 
     allowed_bodies: List[Body] = None
-    """Bodies to ignore during the check."""
+    """
+    Bodies to ignore during the check.
+    """
 
     def __call__(self) -> bool:
         allowed_bodies = set(self.allowed_bodies or [])
@@ -773,7 +852,7 @@ class IsPlaceOccupied(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields):
         subject, *objects = fields.values()
-        return predicate_clause(cls.__name__, subject, *objects)
+        return predicate_clause(cls, subject, *objects)
 
 
 is_place_occupied = symbolic_callable_to_function(IsPlaceOccupied)
@@ -781,16 +860,25 @@ is_place_occupied = symbolic_callable_to_function(IsPlaceOccupied)
 
 @dataclass(eq=False)
 class AllClose(Predicate):
-    """Whether two arrays are element-wise equal within a tolerance (wraps :func:`numpy.allclose`)."""
+    """
+    Whether two arrays are element-wise equal within a tolerance (wraps
+    :func:`numpy.allclose`).
+    """
 
     array1: np.ndarray
-    """The first array."""
+    """
+    The first array.
+    """
 
     array2: np.ndarray
-    """The second array."""
+    """
+    The second array.
+    """
 
     atol: float = 1e-3
-    """The absolute tolerance."""
+    """
+    The absolute tolerance.
+    """
 
     def __call__(self) -> bool:
         return np.allclose(self.array1, self.array2, atol=self.atol)

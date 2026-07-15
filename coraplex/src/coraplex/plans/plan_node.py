@@ -79,9 +79,8 @@ class PlanNode(PlanEntity):
     """
     The position of this node in its children.
 
-    The children of a node are interpreted as a list of nodes that have
-    order. rustworkx doesn't have order in the children, hence this
-    attribute makes it possible.
+    The children of a node are interpreted as a list of nodes that have order. rustworkx
+    doesn't have order in the children, hence this attribute makes it possible.
     """
 
     @property
@@ -202,8 +201,8 @@ class PlanNode(PlanEntity):
         """
         Gets the previous nodes to the given node.
 
-        Previous meaning the nodes that are before the given one in
-        depth first order of nodes.
+        Previous meaning the nodes that are before the given one in depth first order of
+        nodes.
 
         :return: The previous nodes as a list of nodes
         """
@@ -301,15 +300,15 @@ class PlanNode(PlanEntity):
         """
         Simplifies the plan by merging nodes that are semantically equivalent.
 
-        This modifies the plan in-place. Only implement this if it makes
-        sense for your class to have this ability.
+        This modifies the plan in-place. Only implement this if it makes sense for your
+        class to have this ability.
         """
         pass
 
     def merge(self, other: PlanNode):
         """
-        Merges this node with another, this will mount the children of the
-        other node under this one and remove the other node from the plan.
+        Merges this node with another, this will mount the children of the other node
+        under this one and remove the other node from the plan.
 
         :param other: The other node to merge
         """
@@ -328,10 +327,9 @@ class PlanNode(PlanEntity):
         Update references this node holds to ``replaced_node`` so they point to
         ``replacement_node`` instead.
 
-        Called when ``replaced_node`` is merged into
-        ``replacement_node`` and removed from the plan. Subclasses that
-        reference other plan nodes override this to avoid dangling
-        references to the removed node.
+        Called when ``replaced_node`` is merged into ``replacement_node`` and removed
+        from the plan. Subclasses that reference other plan nodes override this to avoid
+        dangling references to the removed node.
 
         :param replaced_node: The node being removed from the plan.
         :param replacement_node: The node that takes its place.
@@ -349,8 +347,8 @@ class PlanNode(PlanEntity):
         self, executables: List[Executable]
     ) -> List[Executable]:
         """
-        Merge consecutive giskard executables into a single one while leaving
-        the other executables untouched and in their original order.
+        Merge consecutive giskard executables into a single one while leaving the other
+        executables untouched and in their original order.
         """
         result = []
         for group in split_list_by_type(executables, GiskardExecutable):
@@ -369,8 +367,7 @@ class PlanNode(PlanEntity):
         self, motions: List[GiskardExecutable]
     ) -> Dict[MotionNode, Task]:
         """
-        Combine the motion mappings of several giskard executables into one
-        mapping.
+        Combine the motion mappings of several giskard executables into one mapping.
         """
         new_mappings = {}
         for motion in motions:
@@ -381,8 +378,8 @@ class PlanNode(PlanEntity):
 @dataclass(eq=False, repr=False)
 class UnderspecifiedNode(PlanNode):
     """
-    An action or language expression that is described by an underspecified
-    `an(...)` match statement.
+    An action or language expression that is described by an underspecified `an(...)`
+    match statement.
 
     This node is used to generate fully specified actions  or language expressions.
     The semantics are: try until it succeeds or fails if the underspecified action is exhausted.
@@ -407,8 +404,8 @@ class UnderspecifiedNode(PlanNode):
         default=None, init=False, repr=False
     )
     """
-    The action candidate this node currently resolves to, set by `advance` at
-    execution time.
+    The action candidate this node currently resolves to, set by `advance` at execution
+    time.
 
     On failure, `advance` replaces it with the next candidate.
     """
@@ -422,8 +419,7 @@ class UnderspecifiedNode(PlanNode):
         Pull the next grounded action from the iterator and make it the current
         candidate.
 
-        :return: The new candidate node, or None if the iterator is
-            exhausted.
+        :return: The new candidate node, or None if the iterator is exhausted.
         """
         if self._action_iterator is None:
             self._action_iterator = self.plan.context.query_backend.evaluate(
@@ -442,18 +438,15 @@ class UnderspecifiedNode(PlanNode):
 
     def stop_grounding(self) -> None:
         """
-        Release the action iterator once no further candidate will be requested
-        from it.
+        Release the action iterator once no further candidate will be requested from it.
 
-        Between candidates the iterator is left suspended (rather than
-        exhausted) so a later retry can resume the search instead of
-        restarting it; a suspended generator keeps every value its frame
-        holds alive, including resources a candidate generator only
-        builds to validate against (for example a location's deep-copied
-        test world). Once a candidate is accepted and no retry will
-        happen, closing the iterator here releases those resources
-        immediately instead of retaining them for this node's whole
-        lifetime.
+        Between candidates the iterator is left suspended (rather than exhausted) so a
+        later retry can resume the search instead of restarting it; a suspended
+        generator keeps every value its frame holds alive, including resources a
+        candidate generator only builds to validate against (for example a location's
+        deep-copied test world). Once a candidate is accepted and no retry will happen,
+        closing the iterator here releases those resources immediately instead of
+        retaining them for this node's whole lifetime.
         """
         if self._action_iterator is not None:
             self._action_iterator.close()
@@ -468,14 +461,14 @@ class UnderspecifiedNode(PlanNode):
 
     def advance(self) -> bool:
         """
-        Resolve the next candidate and expand it against the current world
-        state. Driven by
-        :class:`~pycram.plans.executables.UnderspecifiedExecutable` to ground
-        the action at execution time, and reused by failure handling to retry
-        with a freshly generated action.
+        Resolve the next candidate and expand it against the current world state.
 
-        :return: True if a new candidate was generated, False if the
-            iterator is exhausted.
+        Driven by :class:`~pycram.plans.executables.UnderspecifiedExecutable` to ground the
+        action at execution time, and reused by failure handling to retry with a freshly
+        generated action.
+
+        :return: True if a new candidate was generated, False if the iterator is
+            exhausted.
         """
         if self._next_candidate() is None:
             return False
@@ -510,8 +503,8 @@ class DesignatorNode(PlanNode, ABC):
 
     def simplify(self):
         """
-        Merges this designator node with a child if they are of the same type
-        and carry the same parameters.
+        Merges this designator node with a child if they are of the same type and carry
+        the same parameters.
         """
         for child in list(self.children):
             if not isinstance(child, DesignatorNode):
@@ -537,14 +530,12 @@ class ActionNode(DesignatorNode):
 
     execution_data: Optional[ExecutionData] = None
     """
-    Additional data that is collected before and after the execution of the
-    action.
+    Additional data that is collected before and after the execution of the action.
     """
 
     _last_world_modification_block_pre_perform_index: Optional[int] = None
     """
-    Index of the last model modification block before the execution of this
-    node.
+    Index of the last model modification block before the execution of this node.
 
     Used to check if the model has changed during execution.
     """
@@ -555,8 +546,8 @@ class ActionNode(DesignatorNode):
 
     def create_execution_data_pre_perform(self):
         """
-        Create the ExecutionData and logs additional information about the
-        execution of this node.
+        Create the ExecutionData and logs additional information about the execution of
+        this node.
         """
         robot_pose = self.plan.robot.root.global_pose
         exec_data = ExecutionData(robot_pose, self.plan.world.state._data)
@@ -567,8 +558,8 @@ class ActionNode(DesignatorNode):
 
     def update_execution_data_post_perform(self):
         """
-        Update the ExecutionData with additional information to the
-        ExecutionData object after performing this node.
+        Update the ExecutionData with additional information to the ExecutionData object
+        after performing this node.
         """
         self.execution_data.execution_end_pose = self.plan.robot.root.global_pose
 
@@ -582,8 +573,8 @@ class ActionNode(DesignatorNode):
     @property
     def parent_action_node(self) -> Optional[ActionNode]:
         """
-        Returns the next action node in the plan above this node, None if this
-        is the outermost action.
+        Returns the next action node in the plan above this node, None if this is the
+        outermost action.
         """
         for node in self.path:
             if isinstance(node, ActionNode):
@@ -643,8 +634,8 @@ class MotionNode(DesignatorNode):
     """
     A node in the plan representing a fully specified motion.
 
-    Motions are not directly performed. Motions get merged with their
-    siblings into one motion state chart which then is executed.
+    Motions are not directly performed. Motions get merged with their siblings into one
+    motion state chart which then is executed.
     """
 
     designator: BaseMotion = field(kw_only=True)
@@ -660,8 +651,8 @@ class MotionNode(DesignatorNode):
         """
         Performs this node by performing the respective MotionDesignator.
 
-        Additionally, checks if one of the parents has the status
-        INTERRUPTED and aborts the perform if that is the case.
+        Additionally, checks if one of the parents has the status INTERRUPTED and aborts
+        the perform if that is the case.
 
         :return: The return value of the Motion Designator
         """
@@ -671,8 +662,7 @@ class MotionNode(DesignatorNode):
     @property
     def parent_action_node(self) -> Optional[ActionNode]:
         """
-        Returns the next resolved action node in the plan above this motion
-        node.
+        Returns the next resolved action node in the plan above this motion node.
         """
         for node in self.path:
             if isinstance(node, ActionNode):

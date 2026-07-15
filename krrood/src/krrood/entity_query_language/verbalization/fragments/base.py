@@ -249,7 +249,7 @@ class RoleFragment(HasText, HasNumber, HasPolarity, VerbalizationFragment):
 
         Use this — rather than choosing :meth:`for_type` or :meth:`for_literal` yourself — when the
         value's kind is not known statically, i.e. when rendering the elements of a listing that may
-        hold either types or literals (:class:`~…vocabulary.parts_of_speech.Or` /
+        hold either types or literals (:class:`~…vocabulary.parts_of_speech.DisjunctivePhrase` /
         :class:`~…vocabulary.parts_of_speech.OneOf`). Prefer :meth:`for_literal` directly when the
         value is always a literal.
 
@@ -258,7 +258,9 @@ class RoleFragment(HasText, HasNumber, HasPolarity, VerbalizationFragment):
         >>> RoleFragment.for_value(42).text
         '42'
         """
-        return cls.for_type(value) if isinstance(value, type) else cls.for_literal(value)
+        return (
+            cls.for_type(value) if isinstance(value, type) else cls.for_literal(value)
+        )
 
     @classmethod
     def for_operator(cls, label: str) -> RoleFragment:

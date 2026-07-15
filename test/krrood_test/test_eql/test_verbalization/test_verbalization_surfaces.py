@@ -2,99 +2,74 @@
 Golden-surface snapshot over every symbolic callable's verbalization.
 
 Every concrete :class:`~krrood.entity_query_language.predicate.Predicate` /
-:class:`~krrood.entity_query_language.predicate.SymbolicFunction` defined in krrood's source is
-rendered with placeholder operands and compared against the committed snapshot
-(``verbalization_surfaces.yaml``, one ``qualified class name: sentence`` entry per class). A class
-that does not implement a fragment is recorded as fragment-less rather than rendered.
+:class:`~krrood.entity_query_language.predicate.SymbolicFunction` that krrood's source package
+defines is discovered automatically — by walking the package, not from a hardcoded module list — and
+its rendered surface is checked against the committed snapshot in :mod:`verbalization_surfaces`, one
+:class:`~verbalization_surfaces.VerbalizationSurface` per class. Every covered class must implement a
+fragment; a fragment-less class fails.
 
 The point is review visibility: adding or renaming a symbolic callable, or changing the shared
-surface builders, makes the affected sentences appear as diff lines in the snapshot file, so the
-author and every reviewer see — and can object to — the exact wording a class produces, without
-anyone writing a per-class test.
+surface builders, shows up as a diff in ``verbalization_surfaces.py`` (a new entry, a broken import,
+or a changed sentence), so the author and every reviewer see — and can object to — the exact wording
+a class produces, without anyone writing a per-class test.
 
-To update the snapshot after an intentional change, set ``UPDATE_SNAPSHOT = True`` (below) and run::
-
-    pytest test/krrood_test/test_eql/test_verbalization/test_verbalization_surfaces.py
-
-then restore ``UPDATE_SNAPSHOT = False`` and commit the regenerated YAML with the change that caused it.
+When an intentional change alters a surface, the match test prints each class and its new sentence;
+update that class's :class:`~verbalization_surfaces.VerbalizationSurface` in
+``verbalization_surfaces.py`` and commit it (the diff is the review record). A newly added symbolic
+callable fails the coverage test until it gets an entry.
 """
 
 from __future__ import annotations
 
-import inspect
 from dataclasses import fields
-from pathlib import Path
+from functools import lru_cache
 
-import yaml
-from typing_extensions import Any, Dict, List, Type
+import krrood
+from typing_extensions import Any, Dict, Tuple, Type
 
-import krrood.entity_query_language.factories
-import krrood.entity_query_language.verbalization.example_domain
-import krrood.inheritance_path_length
-import krrood.patterns.role_predicates
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.factories import variable
-from krrood.entity_query_language.predicate import (
-    SymbolicCallable,
-    Verbalizable,
-)
+from krrood.entity_query_language.predicate import SymbolicCallable, Verbalizable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
-from krrood.utils import recursive_subclasses
+from krrood.ormatic.utils import classes_of_package
 
-SNAPSHOT_PATH = Path(__file__).parent / "verbalization_surfaces.yaml"
-"""The committed snapshot mapping each symbolic callable to its rendered surface."""
-
-COVERED_MODULES = frozenset(
-    {
-        "krrood.entity_query_language.predicate",
-        "krrood.entity_query_language.factories",
-        "krrood.entity_query_language.verbalization.example_domain",
-        "krrood.inheritance_path_length",
-        "krrood.patterns.role_predicates",
-    }
-)
-"""The source modules the snapshot covers — an explicit list (matching the imports above) so the
-population is deterministic regardless of what other tests import. A new module that defines
-symbolic callables is added here (and imported above) to join the snapshot."""
-
-UPDATE_SNAPSHOT = False
-"""Flip to ``True`` in this file to regenerate the snapshot instead of asserting against it."""
-
-FRAGMENT_LESS_MARKER = (
-    "(no fragment -- verbalizing raises PredicateFragmentRequiredError)"
-)
-"""Snapshot entry for a class that made no surface decision yet."""
+from .verbalization_surfaces import SURFACES
 
 OPERAND_OVERRIDES: Dict[str, Dict[str, Any]] = {
     "HasType": {"types_": int},
     "HasTypes": {"types_": (int, str)},
 }
-"""Concrete operands for classes whose fragments read a field's raw VALUE, keyed by class name;
-every other field defaults to a fresh placeholder variable of its annotated type. ``HasType`` gets
-the SINGLE type its contract declares (``types_: Type``) — the tuple form belongs to ``HasTypes``."""
+"""
+Concrete operands for classes whose fragments read a field's raw VALUE, keyed by class
+name; every other field defaults to a fresh placeholder variable of its annotated type.
 
-
-def _source_symbolic_callables() -> List[Type[SymbolicCallable]]:
-    """:return: the symbolic callables defined in the covered source modules, sorted by qualified
-    name — the deterministic population the snapshot covers. A class whose only missing piece is
-    the verbalization fragment is included (recorded as fragment-less): it is still symbolically
-    constructible, so its undecided surface is exactly what the snapshot should make visible.
-    """
-    return sorted(
-        (
-            cls
-            for cls in recursive_subclasses(SymbolicCallable)
-            if cls.__module__ in COVERED_MODULES
-            and set(getattr(cls, "__abstractmethods__", ()))
-            <= {"_verbalization_fragment_"}
-        ),
-        key=_qualified_name,
-    )
+``HasType`` gets the SINGLE type its contract declares (``types_: Type``) — the tuple
+form belongs to ``HasTypes``. The annotation alone cannot drive this: a ``Type`` field
+is a value here but a symbolic operand in ``InheritancePathLength``, so the choice is
+made per class.
+"""
 
 
 def _qualified_name(cls: Type) -> str:
     return f"{cls.__module__}.{cls.__qualname__}"
+
+
+@lru_cache(maxsize=None)
+def _source_symbolic_callables() -> Tuple[Type[SymbolicCallable], ...]:
+    """:return: every concrete-enough symbolic callable defined anywhere in krrood's source package,
+    discovered by walking the package so no module list is hardcoded, sorted by qualified name. A
+    class whose only missing piece is the verbalization fragment is still included, so the fragment
+    guard can flag it instead of it silently escaping coverage.
+    """
+    discovered = {
+        cls
+        for cls in classes_of_package(krrood, recursive=True)
+        if isinstance(cls, type)
+        and issubclass(cls, SymbolicCallable)
+        and set(cls.__abstractmethods__) <= {"_verbalization_fragment_"}
+    }
+    return tuple(sorted(discovered, key=_qualified_name))
 
 
 def _has_fragment(cls: Type[SymbolicCallable]) -> bool:
@@ -107,10 +82,10 @@ def _has_fragment(cls: Type[SymbolicCallable]) -> bool:
 
 
 def _placeholder_operands(cls: Type[SymbolicCallable]) -> Dict[str, Any]:
-    """:return: one placeholder operand per init dataclass field — an override where registered,
-    else a fresh variable of the field's type endpoint as the class diagram resolves it (``object``
-    when the endpoint is not a plain class — ``Any``, a union, a parametrized generic), so the
-    surface reads the operand as *"a <TypeName>"*."""
+    """:return: one placeholder operand per init dataclass field — an override where registered, else
+    a fresh variable of the field's type endpoint as the class diagram resolves it (``object`` when
+    the endpoint is not a plain class — ``Any``, a union, a parametrized generic), so the surface
+    reads the operand as *"a <TypeName>"*."""
     overrides = OPERAND_OVERRIDES.get(cls.__name__, {})
     wrapped_class = WrappedClass(clazz=cls)
     operands: Dict[str, Any] = {}
@@ -129,30 +104,63 @@ def _placeholder_operands(cls: Type[SymbolicCallable]) -> Dict[str, Any]:
 
 
 def _surface_of(cls: Type[SymbolicCallable]) -> str:
-    """:return: the sentence *cls* renders with placeholder operands, or the fragment-less marker."""
-    if not _has_fragment(cls):
-        return FRAGMENT_LESS_MARKER
+    """:return: the sentence *cls* renders with placeholder operands."""
     return verbalize_expression(cls(**_placeholder_operands(cls)))
 
 
-def _render_surfaces() -> Dict[str, str]:
-    """:return: the snapshot mapping — ``qualified class name -> rendered surface``."""
-    return {
-        _qualified_name(cls): _surface_of(cls) for cls in _source_symbolic_callables()
+def test_every_covered_symbolic_callable_has_a_verbalization_fragment():
+    """
+    Every discovered symbolic callable must implement its own verbalization fragment —
+    there is no undecided surface.
+
+    A new predicate or function that ships without a fragment is a red test until it
+    gets one.
+    """
+    fragment_less = sorted(
+        _qualified_name(cls)
+        for cls in _source_symbolic_callables()
+        if not _has_fragment(cls)
+    )
+    assert not fragment_less, (
+        "These symbolic callables have no verbalization fragment and must implement "
+        f"_verbalization_fragment_: {fragment_less}."
+    )
+
+
+def test_covered_symbolic_callables_match_the_declared_surfaces():
+    """
+    The discovered symbolic callables are exactly the classes declared in
+    :data:`verbalization_surfaces.SURFACES`.
+
+    A newly added class with no entry, or an entry for a class that no longer exists, is a
+    red test — so the snapshot cannot silently drift out of coverage.
+    """
+    discovered = {
+        _qualified_name(cls)
+        for cls in _source_symbolic_callables()
+        if _has_fragment(cls)
     }
+    declared = {_qualified_name(surface.callable_class) for surface in SURFACES}
+    missing = sorted(discovered - declared)
+    stale = sorted(declared - discovered)
+    assert discovered == declared, (
+        f"verbalization_surfaces.SURFACES is out of sync. Discovered classes with no entry "
+        f"(add one): {missing}. Entries whose class is no longer discovered (remove them): {stale}."
+    )
 
 
-def test_every_symbolic_callable_surface_matches_the_snapshot():
-    """The rendered surface of every source symbolic callable matches the committed snapshot, so
-    any new class or changed wording must be re-approved by regenerating the file (see module
-    docstring) and reviewing its diff."""
-    actual = _render_surfaces()
-    if UPDATE_SNAPSHOT:
-        SNAPSHOT_PATH.write_text(
-            yaml.safe_dump(actual, sort_keys=True, width=1000, allow_unicode=True)
-        )
-    expected = yaml.safe_load(SNAPSHOT_PATH.read_text())
-    assert actual == expected, (
-        "Verbalization surfaces changed. Review the differences, and if the new wording is "
-        "intended, regenerate the snapshot by setting UPDATE_SNAPSHOT = True in this file and commit it."
+def test_every_declared_surface_matches_what_its_class_renders():
+    """
+    Each declared sentence matches what its class renders with placeholder operands, so
+    any wording change is re-approved by updating the entry and reviewing the diff.
+    """
+    mismatches = {
+        _qualified_name(surface.callable_class): _surface_of(surface.callable_class)
+        for surface in SURFACES
+        if _has_fragment(surface.callable_class)
+        and _surface_of(surface.callable_class) != surface.sentence
+    }
+    assert not mismatches, (
+        "Verbalization surfaces changed. Update the sentence for each of these in "
+        f"verbalization_surfaces.py: {mismatches}."
     )

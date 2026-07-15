@@ -50,16 +50,24 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 @dataclass(eq=False)
 class RobotCollisions(SymbolicFunction):
-    """The collision contacts between a robot and the world at the robot's current pose."""
+    """
+    The collision contacts between a robot and the world at the robot's current pose.
+    """
 
     robot: AbstractRobot
-    """The robot checked for collisions."""
+    """
+    The robot checked for collisions.
+    """
 
     ignore_collision_with: Optional[List[Body]] = None
-    """Bodies to ignore collisions with."""
+    """
+    Bodies to ignore collisions with.
+    """
 
     threshold: float = 0.001
-    """The buffer-zone distance for contact detection."""
+    """
+    The buffer-zone distance for contact detection.
+    """
 
     def __call__(self) -> List[ClosestPoints]:
         ignore_collision_with = self.ignore_collision_with or []
@@ -99,13 +107,19 @@ robot_in_collision = symbolic_callable_to_function(RobotCollisions)
 
 @dataclass(eq=False)
 class RobotHoldsBody(Predicate):
-    """Whether a robot is holding a body in one of its grippers."""
+    """
+    Whether a robot is holding a body in one of its grippers.
+    """
 
     robot: AbstractRobot
-    """The robot."""
+    """
+    The robot.
+    """
 
     body: Body
-    """The body checked for being held."""
+    """
+    The body checked for being held.
+    """
 
     def __call__(self) -> bool:
         g = variable(EndEffector, self.robot._world.semantic_annotations)
@@ -134,20 +148,27 @@ robot_holds_body = symbolic_callable_to_function(RobotHoldsBody)
 
 @dataclass(eq=False)
 class BlockingBodies(SymbolicFunction):
-    """The bodies blocking a robot from reaching a pose.
+    """
+    The bodies blocking a robot from reaching a pose.
 
-    These are the bodies the robot is in collision with when its kinematic chain is moved to reach
-    the pose by inverse kinematics.
+    These are the bodies the robot is in collision with when its kinematic chain is
+    moved to reach the pose by inverse kinematics.
     """
 
     pose: HomogeneousTransformationMatrix
-    """The pose to reach."""
+    """
+    The pose to reach.
+    """
 
     root: Body
-    """The root of the kinematic chain."""
+    """
+    The root of the kinematic chain.
+    """
 
     tip: Body
-    """The tip (end effector) of the kinematic chain."""
+    """
+    The tip (end effector) of the kinematic chain.
+    """
 
     def __call__(self) -> List[ClosestPoints]:
         result = self.root._world.compute_inverse_kinematics(
@@ -175,13 +196,20 @@ blocking = symbolic_callable_to_function(BlockingBodies)
 
 @dataclass(eq=False)
 class BodiesInGripper(SymbolicFunction):
-    """The bodies between the two fingers of a gripper, found by ray casting between the fingers."""
+    """
+    The bodies between the two fingers of a gripper, found by ray casting between the
+    fingers.
+    """
 
     gripper: HasTwoFingers
-    """The gripper to check between."""
+    """
+    The gripper to check between.
+    """
 
     sample_size: int = 100
-    """The number of rays to sample."""
+    """
+    The number of rays to sample.
+    """
 
     def __call__(self) -> List[Body]:
         gripper = self.gripper
@@ -216,20 +244,27 @@ bodies_in_gripper = symbolic_callable_to_function(BodiesInGripper)
 
 @dataclass(eq=False)
 class BodyInGripperFraction(SymbolicFunction):
-    """The fraction of sampled rays between a gripper's fingers that hit a given body.
+    """
+    The fraction of sampled rays between a gripper's fingers that hit a given body.
 
-    Random rays are sampled between the finger and thumb; the returned value is the marginal
-    probability that a ray hits the body.
+    Random rays are sampled between the finger and thumb; the returned value is the
+    marginal probability that a ray hits the body.
     """
 
     body: Body
-    """The body checked for being in the gripper."""
+    """
+    The body checked for being in the gripper.
+    """
 
     gripper: EndEffector
-    """The gripper to check."""
+    """
+    The gripper to check.
+    """
 
     sample_size: int = 100
-    """The number of rays to sample."""
+    """
+    The number of rays to sample.
+    """
 
     def __call__(self) -> float:
         bodies = bodies_in_gripper(self.gripper, self.sample_size)
@@ -245,10 +280,15 @@ is_body_in_gripper = symbolic_callable_to_function(BodyInGripperFraction)
 
 @dataclass(eq=False)
 class IsGripperHoldingSomething(Predicate):
-    """Whether a gripper is holding something -- a body mounted beneath it in the kinematic chain."""
+    """
+    Whether a gripper is holding something -- a body mounted beneath it in the kinematic
+    chain.
+    """
 
     gripper: EndEffector
-    """The gripper to check."""
+    """
+    The gripper to check.
+    """
 
     def __call__(self) -> bool:
         bodies_under_tcp = (
@@ -274,14 +314,20 @@ is_gripper_holding_something = symbolic_callable_to_function(IsGripperHoldingSom
 
 @dataclass(eq=False)
 class IsPoseFreeForRobot(Predicate):
-    """Whether a pose is free for a robot -- its mobile base would not collide there (ignoring the
-    robot's own bodies and the floor)."""
+    """
+    Whether a pose is free for a robot -- its mobile base would not collide there
+    (ignoring the robot's own bodies and the floor).
+    """
 
     robot: AbstractRobot
-    """The robot whose mobile base is checked."""
+    """
+    The robot whose mobile base is checked.
+    """
 
     pose: Pose
-    """The pose checked for being free."""
+    """
+    The pose checked for being free.
+    """
 
     def __call__(self) -> bool:
         return not is_place_occupied(

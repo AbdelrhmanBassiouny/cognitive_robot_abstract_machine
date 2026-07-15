@@ -35,8 +35,8 @@ def conditions_90574698325129464513441443063592862114(case) -> bool:
 def conclusion_90574698325129464513441443063592862114(case) -> List[Handle]:
     def get_handles(case: World) -> List[Handle]:
         """
-        Get possible value(s) for World.semantic_annotations of types list/set
-        of Handle.
+        Get possible value(s) for World.semantic_annotations of types list/set of
+        Handle.
         """
         kse = variable(Body, case.kinematic_structure_entities)
         return (
@@ -62,8 +62,8 @@ def conditions_331345798360792447350644865254855982739(case) -> bool:
 def conclusion_331345798360792447350644865254855982739(case) -> List[Drawer]:
     def get_drawers(case: World) -> List[Drawer]:
         """
-        Get possible value(s) for World.semantic_annotations of types list/set
-        of Drawer.
+        Get possible value(s) for World.semantic_annotations of types list/set of
+        Drawer.
         """
         handle = variable(Handle, case.semantic_annotations)
         prismatic_connection = variable(PrismaticConnection, case.connections)
@@ -94,8 +94,8 @@ def conditions_35528769484583703815352905256802298589(case) -> bool:
 def conclusion_35528769484583703815352905256802298589(case) -> List[Wardrobe]:
     def get_wardrobes(case: World) -> List[Wardrobe]:
         """
-        Get possible value(s) for World.semantic_annotations of types list/set
-        of Wardrobe.
+        Get possible value(s) for World.semantic_annotations of types list/set of
+        Wardrobe.
         """
         drawer = variable(Drawer, case.semantic_annotations)
         prismatic_connection = variable(PrismaticConnection, case.connections)
