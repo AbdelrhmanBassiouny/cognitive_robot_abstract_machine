@@ -1,3 +1,9 @@
+## Status: MERGED (2026-07-16)
+
+PR #72 merged into main; webhook confirmed the merge and auto-unsubscribed
+the steward session. Final outcome - do not reopen or re-create unless
+explicitly asked. Historical plan/progress kept below for reference.
+
 ## Plan (PR #72, branch claude/giskardpy-self-collision-flaky-test)
 
 Requested follow-up from PR #71: try to fix the flaky `giskardpy` CI failure
