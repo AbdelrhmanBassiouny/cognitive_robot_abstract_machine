@@ -32,12 +32,18 @@ cut from origin/D-core-engine; rebase onto origin/D-ui before opening the PR).
 ## Next
 
 - Babysit draft PR #77 (subscribed to activity; self check-ins armed)
-  until merged or closed. Known inherited CI failure documented in the
-  PR description: semantic_digital_twin job fails because the current
-  stack tip's reasoner.py passes case_factory=/scenario= to the
-  refactored CaseQuery which no longer accepts them — base-stack bug
-  (reproduces without any D-deco commit), owned by the
-  ripple-down-rules-refactor slice / steward, not D-deco.
+  until merged or closed. At the next check-in: confirm the
+  semantic_digital_twin job is green on fc9874f5 (the steward's restack
+  removed the case_factory= call from reasoner.py, fixing the
+  previously-documented base-stack failure — trim that section from the
+  PR description once confirmed green) and watch whether the coraplex
+  test_merge_motions MotionDidNotFinish failure (seen once, on stale
+  head 8d05977a; timing-sensitive threading test, disjoint from this
+  slice) recurs — if it does, report it as a base/flaky issue.
+- Steward restacked the whole chain and pushed fc9874f5 to D-deco
+  (merge of restacked D-ui into my 559daaa1 — my head is an ancestor,
+  nothing lost). Local branch synced to it; test_eql_rdr on that tip:
+  538 passed, 2 skipped.
 
 ## Status
 
