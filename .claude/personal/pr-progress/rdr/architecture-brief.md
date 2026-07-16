@@ -20,8 +20,13 @@ Re-lands closed PR #20's content as a small docs-only PR off `main`.
 - Doc + 7 bib entries cherry-picked from `rdr/oo-plan`.
 - Stale references refreshed (scope line, §2.1, §3 table, §4/§5/§7).
 - Page wired into developer index and `_toc.yml`.
+- Full jupyter-book build passed; new page warning-clean (all 280
+  warnings pre-existing autoapi/notebook ones, none on touched files).
+- docformatter: nothing to do (no Python files touched).
+- Committed (ee4c9d57, authored as the user), pushed, draft PR #75
+  opened with session link; subscribed to PR activity.
 
 ## Next
 
-- Await jupyter-book build result; confirm no warnings for the new page.
-- Commit, push, open draft PR, subscribe to its activity.
+- Babysit PR #75: react to CI results and review comments; hourly
+  send_later check-ins until merged/closed.
