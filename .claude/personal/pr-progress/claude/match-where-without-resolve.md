@@ -1,12 +1,14 @@
 ## PR #4: Generative match .where() without an explicit resolve()
 
-Status: open, based off `main`. Session link and subscription added this
-session (the PR predates this session's PR-progress convention -- it had
-already been unblocked from a stuck merge-conflict earlier this session,
-see the old note in mypy-assert-type-quantifier-overloads.md's "Also this
-session" section for that part). Latest push a8bfb09ce, CI just
-(re)triggered, not yet observed green. 1 review thread still open
-(PRRT_kwDOQhJw3c6RIfVG) -- deliberately left unresolved, see below.
+Status: MERGED. Webhook confirmed the merge and auto-unsubscribed this
+session from the PR's activity. Nothing further to track here -- do not
+reopen or create a follow-up PR for this change unless explicitly asked.
+Final pushed state: eac372c09 -> merged into f55221a12 with an origin/main
+sync (rename `create_variable` -> `create_or_update_variable`, last review
+round). Thread PRRT_kwDOQhJw3c6RIfVG was left unresolved at merge time
+(the PR owner never explicitly weighed in on the in-place-mutation vs.
+decorator approach before merging) -- if it comes up again, the reasoning
+is preserved in the thread's replies on GitHub.
 
 ### Done
 
