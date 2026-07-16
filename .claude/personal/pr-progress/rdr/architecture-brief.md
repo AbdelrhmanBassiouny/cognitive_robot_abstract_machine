@@ -1,21 +1,27 @@
 # PR plan: rdr/architecture-brief — re-land the design brief (Wave 0, S3)
 
-Not started. Recovers closed PR #20's content as a small docs-only PR off
-`main`. Independent of everything; do first.
+Re-lands closed PR #20's content as a small docs-only PR off `main`.
 
-## Scope
+## Plan
 
-- `git checkout abdel/rdr/oo-plan -- krrood/doc/eql/developer/rdr_architecture_plan.md`
-  plus the 7 BibTeX entries it cites (PR #20 added them to
-  `krrood/doc/references.bib` — cherry-pick from `abdel/rdr/oo-plan`).
-- Update the doc's stale bits before landing: §3 repo mapping now points at
-  the real `entity_query_language/rdr` package (post split), and §2.1's
-  "same auto-serialization pipeline" claim should reference
-  `rdr/serialization.py`.
-- Wire into the developer doc index if `doc/eql/developer/index.md` lists
-  pages explicitly.
+1. Cherry-pick `krrood/doc/eql/developer/rdr_architecture_plan.md` and the
+   7 BibTeX entries from `rdr/oo-plan`.
+2. Refresh stale parts: scope + §3 repo mapping point at the real post-split
+   `krrood/src/krrood/entity_query_language/rdr/` package; §2.1 references
+   `rdr/serialization.py`; remaining `eql_rdr` mentions renamed.
+3. Wire the page into `doc/eql/developer/index.md` and `doc/_toc.yml`.
+4. Verify: jupyter-book build warning-clean for the new page; docformatter
+   (no Python files touched, so nothing to format).
+5. Draft PR `rdr/architecture-brief` -> `main`, session link, subscribe.
 
-## Procedure
+## Done
 
-Branch off `main`, docs build check (sphinx warnings clean for the new
-page), draft PR to `main`.
+- Branch `rdr/architecture-brief` cut from `origin/main`.
+- Doc + 7 bib entries cherry-picked from `rdr/oo-plan`.
+- Stale references refreshed (scope line, §2.1, §3 table, §4/§5/§7).
+- Page wired into developer index and `_toc.yml`.
+
+## Next
+
+- Await jupyter-book build result; confirm no warnings for the new page.
+- Commit, push, open draft PR, subscribe to its activity.
