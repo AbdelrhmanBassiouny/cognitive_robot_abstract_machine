@@ -31,23 +31,36 @@ cut from origin/D-core-engine; rebase onto origin/D-ui before opening the PR).
 
 ## Next
 
-- Verify `git diff origin/rdr-engine D-deco` remainder is only the
-  intentionally-dropped legacy files (Qt GUI, tracked_object, predicates,
-  types, JSON serialization tests — removed by #53) plus
-  refactor-superseded filenames, and close umbrella #38 with a comment
-  pointing at the split chain.
-- Babysit draft PR #77 (subscribed to activity; hourly self check-ins
-  armed) until merged or closed.
+- Babysit draft PR #77 (subscribed to activity; self check-ins armed)
+  until merged or closed. Known inherited CI failure documented in the
+  PR description: semantic_digital_twin job fails because the current
+  stack tip's reasoner.py passes case_factory=/scenario= to the
+  refactored CaseQuery which no longer accepts them — base-stack bug
+  (reproduces without any D-deco commit), owned by the
+  ripple-down-rules-refactor slice / steward, not D-deco.
 
 ## Status
 
-- D-ui appeared; rebased D-deco onto origin/D-ui (96e236e8) and
-  force-pushed-with-lease. test_eql_rdr on the rebase: 518 passed,
-  2 skipped. Draft PR #77 "D-deco -> D-ui" opened with session link;
-  subscribed to its activity.
-- Earlier: test_eql 1017 passed, 3 skipped. ORM artifacts reverted.
-  docformatter run on the two new source modules; the two test files
-  intentionally keep the rdr-engine formatting because docformatter's
-  multi-line-summary rewrite changes a fixture docstring that
-  test_wrapper_dunder_doc_matches_original asserts on verbatim (sibling
-  test files in the suite are not docformatter-clean either).
+- DONE: PR #77 (D-deco -> D-ui, draft) open with session link and
+  subscribed; umbrella #38 closed with the split-chain comment.
+- Head 559daaa1 = two commits: the decorator slice (93d2fd05) + the
+  final-slice sweep (eql_rdr_refactor_plan.md, rdr_conclusion_domain.py,
+  backward-inference docs, test_rule_tree_view.py) so the umbrella diff
+  closes. In test_rule_tree_view.py the copy.copy cloning test was
+  rewired to _node_for_new_position_ (copy.copy never produced a fresh
+  id on rdr-engine either — verified empirically against that branch;
+  it only stayed green there behind the zoo-dataset skip guard).
+- Rebased twice onto moving bases (D-ui 6b12c1c7, then ccbbe603 after
+  the steward restack). On the final base: test_eql_rdr 538 passed,
+  2 skipped; test_eql 1058 passed, 3 skipped. ORM artifacts reverted.
+- Final umbrella verification: files present only on rdr-engine are
+  exactly the #53 legacy drops (gui.py, tracked_object.py,
+  predicates.py, types.py, test_json_serialization.py,
+  test_predicates.py, test_tracked_object.py, test_qt_gui_inline.py,
+  PyQt5-dependent test_ripple_down_rules/test_eql_rdr.py) plus two
+  refactor-superseded filenames (code_generation/utils.py,
+  test_code_generation_utilities.py) whose content landed via #58/#39.
+- docformatter caveat (still true): the two decorator test files keep
+  rdr-engine formatting because the multi-line-summary rewrite breaks
+  test_wrapper_dunder_doc_matches_original's verbatim docstring
+  assertion.
