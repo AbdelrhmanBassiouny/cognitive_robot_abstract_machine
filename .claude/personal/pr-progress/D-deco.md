@@ -31,23 +31,23 @@ cut from origin/D-core-engine; rebase onto origin/D-ui before opening the PR).
 
 ## Next
 
-- origin/D-ui does not exist yet (parallel session S1 still working).
-  Waiting on it; checking periodically. Once it appears: rebase D-deco onto
-  origin/D-ui, rerun test_eql_rdr, force-push-with-lease, open draft PR
-  "D-deco -> D-ui" with session link, subscribe to activity.
-- Then verify `git diff origin/rdr-engine D-deco` remainder is only the
+- Verify `git diff origin/rdr-engine D-deco` remainder is only the
   intentionally-dropped legacy files (Qt GUI, tracked_object, predicates,
   types, JSON serialization tests — removed by #53) plus
   refactor-superseded filenames, and close umbrella #38 with a comment
   pointing at the split chain.
+- Babysit draft PR #77 (subscribed to activity; hourly self check-ins
+  armed) until merged or closed.
 
 ## Status
 
-- Committed d36f3f16 on D-deco (based on origin/D-core-engine) and pushed.
-- test_eql_rdr: 269 passed (includes 41 new decorator/file-store tests);
-  test_eql: 1017 passed, 3 skipped. ORM artifacts reverted. docformatter run
-  on the two new source modules; the two test files intentionally keep the
-  rdr-engine formatting because docformatter's multi-line-summary rewrite
-  changes a fixture docstring that test_wrapper_dunder_doc_matches_original
-  asserts on verbatim (sibling test files in the suite are not
-  docformatter-clean either).
+- D-ui appeared; rebased D-deco onto origin/D-ui (96e236e8) and
+  force-pushed-with-lease. test_eql_rdr on the rebase: 518 passed,
+  2 skipped. Draft PR #77 "D-deco -> D-ui" opened with session link;
+  subscribed to its activity.
+- Earlier: test_eql 1017 passed, 3 skipped. ORM artifacts reverted.
+  docformatter run on the two new source modules; the two test files
+  intentionally keep the rdr-engine formatting because docformatter's
+  multi-line-summary rewrite changes a fixture docstring that
+  test_wrapper_dunder_doc_matches_original asserts on verbatim (sibling
+  test files in the suite are not docformatter-clean either).
