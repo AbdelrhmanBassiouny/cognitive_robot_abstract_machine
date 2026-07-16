@@ -11,7 +11,6 @@ from typing_extensions import (
     Any,
     TYPE_CHECKING,
     Optional,
-    Callable,
     Type,
 )
 
@@ -94,8 +93,6 @@ class CaseReasoner:
         attribute_types: List[Type[Any]],
         mutually_exclusive: bool,
         update_existing_rules: bool = False,
-        case_factory: Optional[Callable] = None,
-        scenario: Optional[Callable] = None,
     ) -> None:
         """
         Fit the semantic annotation RDR to the required attribute types.
@@ -107,17 +104,11 @@ class CaseReasoner:
             or not.
         :param update_existing_rules: If True, existing rules of the given types will be
             updated with new rules, else they will be skipped.
-        :param case_factory: Optional callable that can be used to recreate the case
-            object.
-        :param scenario: Optional callable that represents the test method or scenario
-            that is being executed.
         """
         case_query = CaseQuery(
             self.case,
             attribute_name,
             tuple(attribute_types),
             mutually_exclusive,
-            case_factory=case_factory,
-            scenario=scenario,
         )
         self.rdr.fit_case(case_query, update_existing_rules=update_existing_rules)
