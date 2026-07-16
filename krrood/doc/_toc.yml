@@ -32,6 +32,7 @@ parts:
         - file: eql/developer/graph_and_visualization
         - file: eql/developer/inference_explanation
         - file: eql/developer/verbalization
+        - file: eql/developer/rdr_architecture_plan
 - caption: ORMatic
   chapters:
     - file: ormatic/intro

@@ -20,3 +20,4 @@ If you are interested in the internals of EQL or wish to extend it:
 5.  **[Graph and Visualization](graph_and_visualization.md)**: Tools and techniques for debugging and visualizing query plans and execution graphs.
 6.  **[Inference Explanation Internals](inference_explanation.md)**: How the `InferenceExplanation` system is implemented, including the observer pipeline, Symbol inheritance design, weakref lifecycle management, and the `lru_cache` memory-leak fix.
 7.  **[Verbalization Internals](verbalization.md)**: How the EQL verbalization pipeline works, including the fragment type hierarchy, rule dispatch via MRO-depth sorting, `VerbalizationContext` state management, source reference linking, and how to extend the system with new rules or output formats.
+8.  **[RDR Architecture Plan](rdr_architecture_plan.md)**: The forward-looking design brief for the EQL-based RDR package: feature sharing, concept trees, and OO integration.
