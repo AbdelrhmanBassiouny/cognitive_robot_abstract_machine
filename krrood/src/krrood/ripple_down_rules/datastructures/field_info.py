@@ -18,7 +18,8 @@ from krrood.ripple_down_rules.utils import make_tuple
 
 class ParseError(TypeError):
     """
-    Error that will be raised when the parser encounters something that can/should not be parsed.
+    Error that will be raised when the parser encounters something that can/should not
+    be parsed.
 
     For instance, Union types
     """
@@ -54,7 +55,9 @@ class FieldInfo:
 
     container: Optional[Type]
     """
-    The type of the container if it is one (list, set, tuple, etc.). If there is no container this is None
+    The type of the container if it is one (list, set, tuple, etc.).
+
+    If there is no container this is None
     """
 
     is_type_field: bool = False
@@ -132,15 +135,14 @@ def is_container(clazz: Type) -> bool:
 
 def manually_search_for_class_name(target_class_name: str) -> Type:
     """
-    Searches for a class with the specified name in the current module's `globals()` dictionary
-    and all loaded modules present in `sys.modules`. This function attempts to find and resolve
-    the first class that matches the given name. If multiple classes are found with the same
-    name, a warning is logged, and the first one is returned. If no matching class is found,
-    an exception is raised.
+    Searches for a class with the specified name in the current module's `globals()`
+    dictionary and all loaded modules present in `sys.modules`. This function attempts
+    to find and resolve the first class that matches the given name. If multiple classes
+    are found with the same name, a warning is logged, and the first one is returned. If
+    no matching class is found, an exception is raised.
 
     :param target_class_name: Name of the class to search for.
     :return: The resolved class with the matching name.
-
     :raises ValueError: Raised when no class with the specified name can be found.
     """
     found_classes = []

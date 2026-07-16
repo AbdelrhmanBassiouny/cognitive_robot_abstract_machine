@@ -1,4 +1,5 @@
 import os
+import sys
 from typing_extensions import Optional, List
 
 from IPython.core.magic import magics_class, Magics, line_magic
@@ -11,6 +12,7 @@ from krrood.ripple_down_rules.user_interface.template_file_creator import (
 )
 from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
 from krrood.ripple_down_rules.datastructures.enums import PromptFor
+from krrood.ripple_down_rules.exceptions import NonInteractiveTerminalError
 from krrood.ripple_down_rules.utils import (
     contains_return_statement,
     extract_dependencies,
@@ -158,8 +160,10 @@ class IPythonShell:
 
         :param header: The header to display when the shell is started.
         :param prompt_for: The type of information to ask the user about.
-        :param case_query: The case query which contains the case and the attribute to ask about.
-        :param code_to_modify: The code to modify. If given, will be used as a start for user to modify.
+        :param case_query: The case query which contains the case and the attribute to
+            ask about.
+        :param code_to_modify: The code to modify. If given, will be used as a start for
+            user to modify.
         """
         self.header: str = header or ">>> Embedded Ipython Shell"
         self.case_query: Optional[CaseQuery] = case_query
@@ -185,8 +189,14 @@ class IPythonShell:
 
     def run(self):
         """
-        Run the embedded shell.
+        Run the embedded shell once and capture the resulting user input.
+
+        :raises NonInteractiveTerminalError: if stdin is not attached to an interactive
+            terminal, since the embedded shell would then have no way to prompt for
+            input.
         """
+        if not sys.stdin.isatty():
+            raise NonInteractiveTerminalError()
         self.shell()
         self.update_user_input_from_code_lines()
 
