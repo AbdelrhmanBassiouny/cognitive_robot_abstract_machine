@@ -21,13 +21,15 @@ from pandas.core.frame import DataFrame
 
 
 def animal_habitats_of_type_habitat(case: DataFrame) -> List[Habitat]:
-    """Get possible value(s) for Animal.habitats  of type Habitat."""
+    """
+    Get possible value(s) for Animal.habitats  of type Habitat.
+    """
     # Write your code here
     habitats = Habitat.land
     return habitats
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -53,13 +55,16 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_habitats_of_type_habitat(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.habitats  of type Habitat."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.habitats  of
+    type Habitat.
+    """
     # Write your code here
     is_a_mammal = case.species == Species.mammal
     return is_a_mammal
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -85,13 +90,15 @@ from pandas.core.frame import DataFrame
 
 
 def animal_habitats_of_type_habitat(case: DataFrame) -> List[Habitat]:
-    """Get possible value(s) for Animal.habitats  of type Habitat."""
+    """
+    Get possible value(s) for Animal.habitats  of type Habitat.
+    """
     # Write your code here
     habitats = Habitat.water
     return habitats
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -117,13 +124,16 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_habitats_of_type_habitat(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.habitats  of type Habitat."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.habitats  of
+    type Habitat.
+    """
     # Write your code here
     is_aquatic = case.aquatic == 1
     return is_aquatic
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -149,13 +159,15 @@ from pandas.core.frame import DataFrame
 
 
 def animal_habitats_of_type_habitat(case: DataFrame) -> List[Habitat]:
-    """Get possible value(s) for Animal.habitats  of type Habitat."""
+    """
+    Get possible value(s) for Animal.habitats  of type Habitat.
+    """
     # Write your code here
     habitats = {Habitat.land, Habitat.air}
     return habitats
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -181,14 +193,17 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_habitats_of_type_habitat(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.habitats  of type Habitat."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.habitats  of
+    type Habitat.
+    """
     # Write your code here
     is_a_bird = case.species == Species.bird
     has_legs = case.legs > 0
     return is_a_bird and has_legs
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -214,13 +229,15 @@ from pandas.core.frame import DataFrame
 
 
 def animal_habitats_of_type_habitat(case: DataFrame) -> List[Habitat]:
-    """Get possible value(s) for Animal.habitats  of type Habitat."""
+    """
+    Get possible value(s) for Animal.habitats  of type Habitat.
+    """
     # Write your code here
     habitats = Habitat.land
     return habitats
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -246,14 +263,17 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_habitats_of_type_habitat(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.habitats  of type Habitat."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.habitats  of
+    type Habitat.
+    """
     # Write your code here
     is_a_molusc = case.species == Species.molusc
     is_not_aquatic = case.aquatic == 0
     return is_a_molusc and is_not_aquatic
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -279,13 +299,15 @@ from pandas.core.frame import DataFrame
 
 
 def animal_habitats_of_type_habitat(case: DataFrame) -> List[Habitat]:
-    """Get possible value(s) for Animal.habitats  of type Habitat."""
+    """
+    Get possible value(s) for Animal.habitats  of type Habitat.
+    """
     # Write your code here
     habitats = {Habitat.land, Habitat.water}
     return habitats
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -311,7 +333,10 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_habitats_of_type_habitat(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.habitats  of type Habitat."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.habitats  of
+    type Habitat.
+    """
     # Write your code here
     is_a_molusc = case.species == Species.molusc
     is_aquatic = case.aquatic == 1
@@ -319,4 +344,4 @@ def conditions_for_animal_habitats_of_type_habitat(case: DataFrame) -> bool:
     return is_a_molusc and is_aquatic and has_legs
 
 
-"===New Answer==="
+'===New Answer==='
