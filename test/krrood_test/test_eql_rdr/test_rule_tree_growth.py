@@ -473,5 +473,65 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
         )
 
 
+class TestAttributeReusedInEarlierSiblingBranch(unittest.TestCase):
+    """
+    Regression: refining on an attribute first embedded in an earlier sibling branch.
+
+    ``animal.eggs`` is a shared-identity singleton. When it is first used inside
+    ``Comparator(eggs, False)`` in the alternative branch, that Comparator becomes its
+    primary ``_parent_`` (first attached wins). A later ``with refinement(animal.eggs)``
+    under the root, followed by a nested refinement anchored on ``eggs``, used to splice
+    via ``anchor._parent_`` — the unrelated Comparator — dragging the whole refinement
+    chain into the Comparator's operand and detaching it from the rule tree.
+
+    This is the DSL shape emitted by the serializer for any saved model that both tests
+    an attribute bare (``refinement(eggs)``) and compares it elsewhere
+    (``refinement(eggs == False)``), so loading such a model silently dropped rules.
+    """
+
+    def test_nested_refinement_on_reused_attribute_stays_in_rule_tree(self):
+        """
+        The nested refinement must classify, not vanish into the sibling's Comparator.
+        """
+        from krrood.entity_query_language.factories import refinement
+        from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
+
+        animal_var = variable(Animal, domain=[])
+        query = entity(animal_var).where(animal_var.backbone)
+        with query:
+            add(animal_var.species, Species.mammal)
+            with alternative(animal_var.backbone == False):
+                add(animal_var.species, Species.molusc)
+                with refinement(animal_var.eggs == False):
+                    add(animal_var.species, Species.molusc)
+            with refinement(animal_var.eggs):
+                add(animal_var.species, Species.fish)
+                with refinement(animal_var.legs > 0):
+                    add(animal_var.species, Species.bird)
+        query.build()
+
+        self.assertEqual(
+            len(walk_rules(query._conditions_root_)),
+            5,
+            "Every authored rule must survive tree construction",
+        )
+
+        bird = make_animal("chicken", backbone=True, eggs=True, legs=2, feathers=True)
+        fish = make_animal("herring", backbone=True, eggs=True, fins=True)
+        mammal = make_animal("bear", backbone=True, milk=True, legs=4)
+        self.assertEqual(
+            classify_case(query, animal_var, animal_var.species, bird).conclusion,
+            Species.bird,
+        )
+        self.assertEqual(
+            classify_case(query, animal_var, animal_var.species, fish).conclusion,
+            Species.fish,
+        )
+        self.assertEqual(
+            classify_case(query, animal_var, animal_var.species, mammal).conclusion,
+            Species.mammal,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

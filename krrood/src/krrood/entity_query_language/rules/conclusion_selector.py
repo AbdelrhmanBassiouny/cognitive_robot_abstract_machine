@@ -23,6 +23,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
+    Filter,
     OperationResult,
     SymbolicExpression,
     TruthValueOperator,
@@ -95,8 +96,14 @@ class ConclusionSelector(TruthValueOperator, ABC):
             new_condition = new_condition._node_for_new_position_()
 
         # Splice above the anchor's structural parent — a ConclusionSelector for a node already
-        # in a rule tree, or a Filter for a direct WHERE condition.
-        previous_parent = anchor._parent_
+        # in a rule tree, or a Filter for a direct WHERE condition. A shared-identity anchor
+        # (MappedVariable) may have been embedded in an unrelated expression first (for example
+        # ``Comparator(eggs, False)`` in a sibling branch), making that its primary ``_parent_`` —
+        # splicing there would drag the new branch out of the rule tree, so the structural parent
+        # is recovered from the anchor's own parents instead.
+        previous_parent = anchor._last_parent_of_type_(ConclusionSelector, Filter)
+        if previous_parent is None:
+            previous_parent = anchor._parent_
 
         # Only raise when the anchor is already established in a rule tree (has parents).
         # A freshly-created anchor with no parents indicates _conditions_root_ returned a node

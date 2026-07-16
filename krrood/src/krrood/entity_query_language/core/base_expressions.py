@@ -136,6 +136,26 @@ class SymbolicExpression(ABC):
         clone._conclusions_ = set()
         return clone
 
+    def _last_parent_of_type_(
+        self, *types: Type[SymbolicExpression]
+    ) -> Optional[SymbolicExpression]:
+        """
+        :return: The most recently attached direct parent that is an instance of any of *types*,
+            or ``None``.
+
+        A shared-identity node (see
+        :meth:`~krrood.entity_query_language.core.mapped_variable.MappedVariable._node_for_new_position_`)
+        keeps a direct parent per DAG position, but only the first one attached is its primary
+        ``_parent_``. Callers that need "the structural parent currently owning me" (for example a
+        ``Filter`` or ``ConclusionSelector``, skipping incidental operand parents such as a
+        ``Comparator`` built over the same node) recover it from this node's own ``_parents_``
+        regardless of which parent is primary.
+        """
+        return next(
+            (parent for parent in reversed(self._parents_) if isinstance(parent, types)),
+            None,
+        )
+
     def _get_expression_by_id_(self, id_: uuid.UUID) -> SymbolicExpression:
         """
         Retrieve the expression with the given ID from the collection of all expressions.
