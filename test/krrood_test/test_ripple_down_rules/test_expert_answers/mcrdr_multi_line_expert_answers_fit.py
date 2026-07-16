@@ -21,13 +21,16 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.species  of type Species."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.species  of
+    type Species.
+    """
     # Write your code here
     has_milk_glands = case.milk == 1
     return has_milk_glands
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -53,13 +56,16 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.species  of type Species."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.species  of
+    type Species.
+    """
     # Write your code here
     is_aquatic = case.aquatic == 1
     return is_aquatic
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -85,13 +91,16 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.species  of type Species."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.species  of
+    type Species.
+    """
     # Write your code here
     has_feathers = case.feathers == 1
     return has_feathers
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -117,14 +126,17 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.species  of type Species."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.species  of
+    type Species.
+    """
     # Write your code here
     cannot_breath = case.breathes == 0
     no_backbone = case.backbone == 0
     return no_backbone and cannot_breath
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -150,13 +162,16 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.species  of type Species."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.species  of
+    type Species.
+    """
     # Write your code here
     has_no_fins = case.fins == 0
     return has_no_fins
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -182,10 +197,13 @@ from pandas.core.frame import DataFrame
 
 
 def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
-    """Get conditions on whether it's possible to conclude a value for Animal.species  of type Species."""
+    """
+    Get conditions on whether it's possible to conclude a value for Animal.species  of
+    type Species.
+    """
     # Write your code here
     has_milk_glands = case.milk == 1
     return has_milk_glands
 
 
-"===New Answer==="
+'===New Answer==='
