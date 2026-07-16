@@ -32,30 +32,23 @@ cut from origin/D-core-engine; rebase onto origin/D-ui before opening the PR).
 ## Next
 
 - Babysit draft PR #77 (subscribed to activity; self check-ins armed)
-  until merged or closed. At the next check-in: confirm the
-  semantic_digital_twin job is green on fc9874f5 (the steward's restack
-  removed the case_factory= call from reasoner.py, fixing the
-  previously-documented base-stack failure — trim that section from the
-  PR description once confirmed green) and finalize the coraplex
-  test_merge_motions diagnosis: THREE identical MotionDidNotFinish
-  failures on #77 runs (heads 8d05977a, 559daaa1, and post-restack
-  merge-sha 2b27bf67) while main's CI is consistently green (latest
-  20:02Z run passed). The stack does NOT touch coraplex source or
-  tests (git diff main..D-deco -- coraplex/ and test/coraplex_test/
-  both empty), so the regression window is the stack's krrood/EQL-core
-  changes that coraplex consumes at runtime (plan machinery imports
-  krrood.entity_query_language.query.match.Match) — or a
-  runner-timing sensitivity those changes exposed. D-deco itself only
-  adds new unimported modules, so ownership is the lower stack /
-  steward. Confirmation pending: #76's coraplex run (zero D-deco
-  commits) on af1c4cf1 was still queued at last check — read its
-  result at the check-in, then update #77's "Known inherited CI
-  failure" section in one edit (drop resolved sdt entry, add coraplex
-  entry if confirmed) and report to the user.
-- Steward restacked the whole chain and pushed fc9874f5 to D-deco
-  (merge of restacked D-ui into my 559daaa1 — my head is an ancestor,
-  nothing lost). Local branch synced to it; test_eql_rdr on that tip:
-  538 passed, 2 skipped.
+  until merged or closed. At the next check-in: verify CI on the new
+  head e53fb418 — expect semantic_digital_twin green (restack removed
+  the case_factory= call); watch the coraplex test_merge_motions
+  MotionDidNotFinish failure (3/3 on earlier #77 runs, main green,
+  stack doesn't touch coraplex — diagnosis posted on #76 and recorded
+  in #77's known-failures section). Also re-check whether D-ui moved
+  again.
+
+## Restacks so far
+
+- D-ui was force-rewritten to linear history (a7eb3703: splice fix
+  cfe32ad0 + case-table 2e8c8496 + interactive a7eb3703). Restacked by
+  cherry-picking my two commits onto it → head e53fb418 (slice
+  9f1823c1 + sweep e53fb418), force-pushed-with-lease. test_eql_rdr on
+  that tip: 538 passed, 2 skipped. #77 description updated (restack
+  note + known-failures section: sdt resolved-pending-green, coraplex
+  open/owned by lower stack).
 
 ## Status
 
