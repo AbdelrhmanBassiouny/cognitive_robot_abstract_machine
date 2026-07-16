@@ -116,17 +116,52 @@ sequential.
 - **S0 (steward):** babysit the open stack bottom-up; merge #5 → #28 → …;
   propagate restacks forward after each merge (this is the standing
   session's job today).
-- **S1 (D-ui):** cut `D-ui` on top of `D-core-engine`, per
-  `pr-progress/D-ui.md`. Disjoint from S2's files.
-- **S2 (D-deco):** cut `D-deco` on top of `D-ui` (keeps the umbrella chain
-  linear; decorator tests import nothing from interactive, but base on
-  D-ui anyway so the final diff of #38 vs the split tip reaches zero and
-  #38 can close).
+- **S1 (D-ui) — SPLIT INTO 3 STACKED PRs** (see `pr-progress/D-ui.md`, owned
+  by the D-ui session): #78 `D-ui-splice-fix` (insert_at splice engine fix,
+  may fold into #68 — steward decision pending), #79 `D-ui-rendering`
+  (case_table + shell-free tests), #76 `D-ui` (interactive layer + conftest
+  fixture + docs). Merge order #78 → #79 → #76.
+  **Steward: the propagation chain is now D-core-engine → D-ui-splice-fix →
+  D-ui-rendering → D-ui → D-deco — register the two intermediate branches in
+  any restack loop.**
+- **S2 (D-deco):** based on the new `D-ui` tip (the 3-PR stack's top), so the
+  final diff of the closed umbrella #38 vs the split tip reaches zero.
 - **S3 (docs, off main):** `rdr/architecture-brief` — re-land the closed
   #20 content (`rdr_architecture_plan.md` + bibliography). Trivial,
   independent, unblocks every Wave-1+ session's shared context.
 
-### Wave 1 — independent foundations (after the stack lands on main; 3 parallel tracks)
+### Why & Montessori track — PRIORITY after Wave 0 (decided 2026-07-16)
+
+Why-questions on RDR conclusions + the Montessori shape-sorting demo take
+priority over Tracks F/G/T below (those start only when sessions are free).
+Full design: plan session 2026-07-16; per-PR notes exist for every branch.
+
+- **W1 `rdr/why-answer`** (base: D-core-engine): WhyQuestion/WhyAnswer value
+  objects built from ClassificationTrace/FiredConclusion,
+  `EQLSingleClassRDR.why(case)`, backend explain-path, Explanation
+  unification with `explain_inference`. Plain why in v1; contrast field
+  reserved (contrastive = follow-up via SufficientConditionSet).
+- **W2 `eql/causal-verbalization`** (base: W1): "because" vocabulary +
+  `grammar/causal/` assembler (InferenceAssembler pattern), routing beside
+  the Match special case, binding-threading; `WhyAnswer.verbalize()`.
+- **W3 `rdr/why-query-surface`** (base: W2): `why(...)` EQL factory + docs +
+  bibliography (provenance witnesses, JTMS, RDR traces, Miller contrastive).
+  `%why` magic deferred until D-ui #76 lands.
+- **M1 `montessori/choice-policies`** (base: `tomsch420/montessori_ijcai`
+  tip b4b45382d + W1; SHARED with Tom Schierenbeck — coordinate):
+  `ExplainableChoice` protocol over RDRBackend/underspecified (generic,
+  krrood), pick_policy + hole_policy RDRs replacing the procedural
+  `hole_for` loop and fixed insertion order, policy seam on
+  `InsertMontessoriShapeAction`.
+- **M2 `montessori/why-demo`** (base: M1 + W2): narrated demo loop, headless
+  CI mode emitting the why-transcript, README.
+- Ordering: W1 → W2 → W3 sequential (one session track); M1 starts once W1's
+  API shape is pushed; M2 after W2 + M1.
+- Conflict watch: Tom's branch modifies krrood verbalization files W2 also
+  touches (`vocabulary/english.py`, `fragments/base.py`,
+  `parts_of_speech.py`) plus `factories.py`/`predicate.py`.
+
+### Wave 1 — independent foundations (after the stack lands on main; 3 parallel tracks; AFTER the Why & Montessori track per priority decision)
 
 - **Track F — feature layer ("poor man's Rete"):**
   `rdr/feature-registry` (registry + CaseView memoization + EQL name
