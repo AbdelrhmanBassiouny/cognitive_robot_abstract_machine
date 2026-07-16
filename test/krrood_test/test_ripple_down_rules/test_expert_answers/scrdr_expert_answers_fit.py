@@ -26,7 +26,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.milk == 1
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -57,7 +57,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.aquatic == 1
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -88,7 +88,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.feathers == 1
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -119,7 +119,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.backbone == 0 and case.breathes == 0
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -150,7 +150,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.fins == 0
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -181,7 +181,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.feathers == 1
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -212,7 +212,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.eggs == 1 and case.backbone == 0
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -243,7 +243,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.backbone == 1
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -274,7 +274,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.backbone == 1 and case.tail == 1
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -305,7 +305,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.backbone == 0 and case.eggs == 0
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -336,7 +336,7 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.breathes == 0
 
 
-"===New Answer==="
+'===New Answer==='
 
 
 from types import NoneType
@@ -367,4 +367,4 @@ def conditions_for_animal_species_of_type_species(case: DataFrame) -> bool:
     return case.legs == 0
 
 
-"===New Answer==="
+'===New Answer==='
