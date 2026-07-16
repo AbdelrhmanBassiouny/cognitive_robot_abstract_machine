@@ -36,10 +36,15 @@ cut from origin/D-core-engine; rebase onto origin/D-ui before opening the PR).
   semantic_digital_twin job is green on fc9874f5 (the steward's restack
   removed the case_factory= call from reasoner.py, fixing the
   previously-documented base-stack failure — trim that section from the
-  PR description once confirmed green) and watch whether the coraplex
-  test_merge_motions MotionDidNotFinish failure (seen once, on stale
-  head 8d05977a; timing-sensitive threading test, disjoint from this
-  slice) recurs — if it does, report it as a base/flaky issue.
+  PR description once confirmed green) and check the coraplex
+  test_merge_motions MotionDidNotFinish failure: now seen TWICE (heads
+  8d05977a and 559daaa1, both pre-restack; second run hit the 30:00
+  timeout boundary). Timing/threading plan-execution test, provably
+  disjoint from this slice (D-deco only adds new krrood rdr modules —
+  nothing imports them from coraplex). Decisive data point pending:
+  #76's fresh coraplex run (zero D-deco commits) queued on the
+  restacked head — if it fails there too, it's base/stack-wide and
+  belongs to the steward; report it to the user either way.
 - Steward restacked the whole chain and pushed fc9874f5 to D-deco
   (merge of restacked D-ui into my 559daaa1 — my head is an ancestor,
   nothing lost). Local branch synced to it; test_eql_rdr on that tip:
