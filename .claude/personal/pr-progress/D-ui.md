@@ -29,9 +29,25 @@ Session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
 - Verified: full test_eql_rdr + test_eql = 1494 passed, 5 skipped; fitted
   zoo model reproduces 101/101; ORM artifacts reverted; docformatter run.
 
+## CI status (head ccbbe603, 2026-07-16)
+
+- Merged the restacked D-core-engine (fa1e46c0) into D-ui; resolved the
+  conclusion_selector.py formatting conflict (base commit fab3aeae enforces
+  black+docformatter repo-wide); ran scripts/format_docstrings.py over all
+  PR-touched files; re-verified 1535 passed, 5 skipped.
+- Only failing check: test_each_lib (semantic_digital_twin) —
+  CaseQuery.__init__() got an unexpected keyword argument 'case_factory' in
+  semantic_digital_twin/reasoning/reasoner.py (legacy ripple_down_rules API
+  drift). PRE-EXISTING: the identical job fails on the base D-core-engine
+  run at fa1e46c0 (run 29518169104). Not caused by D-ui; belongs to the
+  steward's stack (likely #53's legacy-RDR refactor). test_each_lib (krrood)
+  is green on the PR head.
+
 ## Next
 
-- Handle PR #76 review comments / CI events as they arrive.
-- Flag to the steward (S0): the engine fix commit may belong in #68.
+- Handle PR #76 review comments / CI events as they arrive; re-check via
+  hourly send_later self check-in until merged/closed.
+- Flag to the steward (S0): the engine fix commit 7cd1f993 may belong in
+  #68, and the semantic_digital_twin CaseQuery failure is theirs.
 - D-deco (S2) bases on D-ui per the roadmap; it can start now that D-ui
   is pushed.
