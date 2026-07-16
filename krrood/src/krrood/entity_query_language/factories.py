@@ -27,6 +27,7 @@ from krrood.entity_query_language.core.base_expressions import (
     TruthValueOperator,
     OperationResult,
 )
+from krrood.entity_query_language.core.helpers import _resolve_domain
 from krrood.entity_query_language.core.mapped_variable import (
     FlatVariable,
     CanBehaveLikeAVariable,
@@ -34,10 +35,8 @@ from krrood.entity_query_language.core.mapped_variable import (
 )
 from krrood.entity_query_language.core.variable import (
     DomainType,
-    Literal,
     ExternallySetVariable,
 )
-from krrood.entity_query_language.cache_data import InstanceFilteredDomain
 from krrood.entity_query_language.enums import DomainSource
 from krrood.entity_query_language.exceptions import UnsupportedExpressionTypeForDistinct
 from krrood.entity_query_language.operators.aggregators import (
@@ -84,8 +83,6 @@ from krrood.entity_query_language.rules.conclusion_selector import (
     Alternative,
     Next,
 )
-from krrood.entity_query_language.utils import is_iterable
-from krrood.symbol_graph.symbol_graph import Symbol, SymbolGraph
 
 ConditionType = Union[SymbolicExpression, bool, Predicate, TruthValueOperator]
 """
@@ -138,20 +135,10 @@ def variable(
       but by another evaluator (e.g., EQL To SQL converter in Ormatic).
     :return: A Variable that can be queried for.
     """
-    # Determine the domain source
-    if is_iterable(domain):
-        domain = InstanceFilteredDomain(type_, domain)
-    elif domain is None and issubclass(type_, Symbol):
-        domain = SymbolGraph().get_instances_of_type(type_)
-    else:
-        domain = domain
-
-    result = Variable(
+    return Variable(
         _type_=type_,
-        _domain_=domain,
+        _domain_=_resolve_domain(type_, domain),
     )
-
-    return result
 
 
 def deduced_variable(
