@@ -65,10 +65,64 @@ all addressed and resolved in commit 49191e5:
   covering this specifically. Replied to each thread explaining the fix,
   then resolved all 6.
 
+## Round 2 (this session) - reviewer's deadlock concern
+
+Reviewer comment on the PR (referenced by the user as
+https://github.com/cram2/cognitive_robot_abstract_machine/pull/448): could
+falling back to the *highest* observed subscriber count cause a deadlock
+later on, if that count is higher than the truth?
+
+Unlike Round 1, this session's sandbox has real ROS 2 Jazzy available
+(`source /opt/ros/jazzy/setup.bash`, `.venv` has `rclpy`), so used it to add
+real-ROS integration tests (not just the existing fake-node unit tests) to
+`test/semantic_digital_twin_test/test_ros/test_world_synchronizer.py`:
+
+- `test_synchronous_publish_settles_promptly_with_multiple_real_subscribers` -
+  control case: 3 real subscribers, no churn, no timeout paid.
+- `test_overcounted_expected_acknowledgments_times_out_but_recovers_on_next_publish` -
+  deterministically injects a +1 over-count; proves publish still returns
+  (bounded by `wait_for_synchronization_timeout`, not an infinite hang), the
+  message is still delivered, and the very next publish recomputes the count
+  fresh and returns promptly - self-heals because
+  `_expected_acknowledgment_count` is recomputed on every `publish()` call,
+  never cached across calls.
+- `test_subscriber_disconnecting_during_discovery_grace_period_does_not_hang_forever` -
+  genuine (unmocked) subscriber flap during the discovery grace period; only
+  asserts the bounded/recovers invariant since whether the real race actually
+  triggers an over-count is timing-dependent. It did trigger the timeout
+  warning path at least once across repeated runs, confirming the scenario is
+  real and not just theoretical.
+
+Ran all 3 five times standalone (no flakiness), then the full
+`test_world_synchronizer.py` file: 97 passed, 1 pre-existing skip, 1
+pre-existing xfail (the unrelated same-node-name undercounting bug), 158s,
+no regressions.
+
+Answer to the reviewer: an over-count is not a deadlock - it's a one-time
+bounded wait (the existing, already-logged
+`wait_for_synchronization_timeout`) on the single affected publish, because
+the expected acknowledgment count is never cached across publishes.
+
+Also reverted an unrelated `ormatic_interface.py` diff that appeared as a
+side effect of running the test suite (unrelated Rerun-adapter DAO classes
+from someone else's in-progress work) - did not commit it, per AGENTS.md's
+guidance to avoid touching `ormatic_interface.py`.
+
+Committed (`242913798`) as the human user's git identity and pushed to
+`claude/giskardpy-self-collision-flaky-test`.
+
+Could not update the PR description/labels via the GitHub API this session:
+no `gh` CLI and no token/credential available in this sandbox (unlike
+whatever session merged PRs #451/#449 earlier in the git log). Drafted the
+description addition in the session chat for the user to paste in manually.
+
 ## Next
 
-- Watching PR #72 for further CI completion and review comments via the
-  subscription.
+- User needs to paste the drafted PR-description addition (given in the
+  session chat) onto the PR, since this session can't reach the GitHub API.
+- Watch for the reviewer's response to the new tests once posted.
+- Watching for further CI completion and review comments via the
+  subscription (once reachable again).
 - (PR #71 on `claude/ipython-shell-ci-hang-vvetyg` is tracked separately
   under its own branch-keyed progress file, not duplicated here. Update as
   of this check: owner marked it ready for review, and its `giskardpy` leg
