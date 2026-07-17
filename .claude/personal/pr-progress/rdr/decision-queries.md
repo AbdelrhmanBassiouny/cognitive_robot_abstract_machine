@@ -1,9 +1,64 @@
 # PR plan: rdr/decision-queries — backend explanation semantics + the decision-query pattern (Why track, C1 — REFRAMED 2026-07-17)
 
-Not started. Base: `eql/causal-verbalization` (W2, PR #82) so verbalized
-explanations are available; coordinate with the W3 session
-(`rdr/why-query-surface`, just cut) — why(...) composes over exactly what this
-PR produces.
+Base: `eql/causal-verbalization` (W2, PR #82). **Draft PR #85 open**
+(`rdr/decision-queries -> eql/causal-verbalization`).
+Session: https://claude.ai/code/session_013NepUGgubeWHnLT5TUPLdu
+
+## STATUS — implemented, pushed, CI watch (2026-07-17)
+
+All five scope items + six TDD anchors done. Full `test_eql_rdr` = 291 passed
+(273 baseline + 18 new). docformatter via `scripts/format_docstrings.py`; stray
+downloads reverted, zoo pickles are gitignored.
+
+Delivered:
+- `rdr/explanation_store.py` `CaseExplanationStore`: model-side, weak *and*
+  identity-keyed. Holds BOTH case and explanation weakly (the explanation's
+  bindings reference the case, so a strong value would pin the case and defeat
+  the weak key) — it is a cache; `answer_why` reads it then falls back to
+  re-tracing. `record`/`get`/`require`/`__contains__`; `NoRecordedExplanation`.
+- `rdr/decision.py`: `ExplainedUnificationDict(UnificationDict)` exposing
+  `conclusion_explanation`; `explain(result)` routes RDR handles and
+  `inference()` instances through one surface; `UnexplainedResult` on an
+  unexplained handle (typed first-access failure).
+- `single_class.py`: `explanation_store` field (repr/compare=False, ignored by
+  serialization); `classify_and_explain` + shared `explanation_from_trace`
+  helper; `answer_why` reads the store before re-tracing.
+- `backend.py`: strategies return `ConcludedCase(value, explanation)`;
+  `ExplainingInference` UPGRADED (not duplicated) to record into the store;
+  `infer` attaches the explanation to the yielded handle (fresh per yield);
+  new `RDRBackend.evaluate()` = decision-query entry, explains by default.
+- Docs: decision-query pattern + canonical three-liner in
+  `doc/eql/user/underspecified.md`.
+
+## DEFAULT-ON decision — MEASURED (zoo, this env)
+
+- small policy tree (7 cases): explain overhead ~13.5% (+1.7 ms/case).
+- full zoo (101 cases, deep tree): explain -> RecursionError at default limit
+  1000 (deep `OperationResult.all_bindings` chain); with limit 100k, +78.7%.
+=> `infer()` KEEPS `FastInference` default (bulk, zoo-safe — changing it would
+   also break the existing zoo integration tests with the RecursionError).
+   `evaluate()` (the decision surface) defaults to `ExplainingInference` (small
+   trees ~13%, and it is what the `explain(result)` three-liner needs).
+   Follow-up worth flagging: the deep-chain RecursionError in `all_bindings` is
+   latent for explanation over large trees (Track T / iterative-bindings fix).
+
+## Coordination with W3 (#84) — CONFIRMED
+
+W3 reshaped to `why(source)` composing over an `ExplanationCarrier` protocol
+(a handle exposing `conclusion_explanation`). My `ExplainedUnificationDict`
+exposes exactly that attribute (locked by
+`test_handle_exposes_conclusion_explanation_attribute`) and satisfies a
+`runtime_checkable` carrier — real handles drop into W3 unchanged, no public
+signature change. `rdr.why(case)` stays the case-directed Python API.
+
+## NEXT
+
+- Watch CI on #85; keep draft; keep description current.
+- If a reviewer wants the `all_bindings` recursion fixed here rather than in
+  Track T, that is a scoped follow-up — flag, don't bundle.
+
+---
+(historical design rationale below)
 
 ## Why the reframe (design discussion with the owner, 2026-07-17)
 
