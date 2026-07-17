@@ -44,6 +44,7 @@ from krrood.entity_query_language.factories import (
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.operators.core_logical_operators import AND, OR, Not
 from krrood.entity_query_language.rdr.corner_case import CaseSource, CornerCaseStore
+from krrood.entity_query_language.rdr.rule_tree_view import RuleCode, rule_kinds
 from krrood.entity_query_language.rdr.exceptions import (
     EmptyRuleTreeError,
     UnsupportedNodeForSerialization,
@@ -246,6 +247,26 @@ def walk_rules_in_emission_order(
     return result
 
 
+def rule_code_map(
+    conditions_root: Optional[SymbolicExpression],
+) -> Dict[UUID, RuleCode]:
+    """:return: A ``condition._id_`` → :class:`RuleCode` map, the canonical rule numbering.
+
+    The id is the rule's index in :func:`walk_rules_in_emission_order` (base = ``0``, so the codes
+    run in the same order as the serialized ``add(`` lines); the kind letter comes from
+    :func:`~krrood.entity_query_language.rdr.rule_tree_view.rule_kinds`. Keyed by ``condition._id_``
+    so the verbalizer and the serializer name each rule identically, by identity rather than by their
+    own traversal position.
+    """
+    if conditions_root is None:
+        return {}
+    kinds = rule_kinds(conditions_root)
+    return {
+        node._id_: RuleCode(index, kinds[node._id_])
+        for index, node in enumerate(walk_rules_in_emission_order(conditions_root))
+    }
+
+
 def _conclusion_value(
     condition_node: SymbolicExpression,
 ) -> Union[SerializableValue, SymbolicExpression]:
@@ -346,9 +367,7 @@ def _emit_expression(
                 or_, _condition_operands(node), variable_names_by_id
             )
         case Not():
-            return _emit_factory_call(
-                not_, [node._children_[0]], variable_names_by_id
-            )
+            return _emit_factory_call(not_, [node._children_[0]], variable_names_by_id)
         case _:
             raise UnsupportedNodeForSerialization(node)
 
@@ -389,7 +408,11 @@ def _emit_rule_body(
         referenced_types.add(type(value))
 
     statements: List[ast.stmt] = [
-        ast.Expr(value=ast_helpers.call(add.__name__, [conclusion_target, _emit_value(value)]))
+        ast.Expr(
+            value=ast_helpers.call(
+                add.__name__, [conclusion_target, _emit_value(value)]
+            )
+        )
     ]
     for branch in decomposed.branches:
         factory = _CONCLUSION_SELECTOR_FACTORY[branch.conclusion_selector_type]
@@ -402,6 +425,36 @@ def _emit_rule_body(
         )
         statements.append(ast_helpers.with_block(selector_call, nested_body))
     return statements
+
+
+def _annotate_rule_comments(
+    body: str,
+    ordered_nodes: List[SymbolicExpression],
+    codes_by_id: Dict[UUID, RuleCode],
+) -> str:
+    """Insert a ``# <kind> rule <code>`` comment above each rule's ``add(...)`` line.
+
+    The unparser cannot carry comments, so the codes are woven into the rendered text. The i-th
+    ``add(`` line is the i-th rule in emission order (:func:`walk_rules_in_emission_order`), so the
+    two lists line up; each comment keeps its ``add(`` line's indentation.
+
+    :param body: The unparsed, indented rule-tree body.
+    :param ordered_nodes: The rule condition nodes in emission order.
+    :param codes_by_id: The ``condition._id_`` → :class:`RuleCode` map.
+    :return: The body with a code comment above every rule.
+    """
+    codes = iter(codes_by_id.get(node._id_) for node in ordered_nodes)
+    annotated: List[str] = []
+    for line in body.splitlines():
+        if line.lstrip().startswith("add("):
+            code = next(codes, None)
+            if code is not None:
+                indentation = line[: len(line) - len(line.lstrip())]
+                annotated.append(
+                    f"{indentation}# {code.kind.value} rule {code.as_string}"
+                )
+        annotated.append(line)
+    return "\n".join(annotated)
 
 
 def _render_corner_cases_source(
@@ -471,11 +524,17 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
         _emit_expression(decomposed.base_condition, variable_names_by_id)
     )
     body_statements = _emit_rule_body(
-        rdr.query._conditions_root_, variable_names_by_id, conclusion_target, referenced_types
+        rdr.query._conditions_root_,
+        variable_names_by_id,
+        conclusion_target,
+        referenced_types,
     )
     body = _indent(ast_helpers.unparse_statements(body_statements), "    ")
 
     ordered_nodes = walk_rules_in_emission_order(rdr.query._conditions_root_)
+    body = _annotate_rule_comments(
+        body, ordered_nodes, rule_code_map(rdr.query._conditions_root_)
+    )
     corner_cases_dict_src = _render_corner_cases_source(
         rdr.corner_cases.to_ordered_sources(ordered_nodes), referenced_types
     )

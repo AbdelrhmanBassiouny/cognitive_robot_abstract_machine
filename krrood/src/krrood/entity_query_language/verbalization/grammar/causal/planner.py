@@ -14,6 +14,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.planner import
 from krrood.entity_query_language.verbalization.vocabulary.english import FallbackNouns
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.rdr.rule_tree_view import RuleCode
     from krrood.entity_query_language.rdr.why import WhyAnswer
 
 
@@ -35,12 +36,10 @@ class CausalStructure:
     reasons: List[SymbolicExpression]
     """The satisfied leaf conditions that justify the conclusion — the *"because"* coordinands."""
 
-    rule_kind: str
-    """How the fired rule relates to its predecessor (``"if"`` / ``"else if"`` / ``"except if"``);
-    the rule-identity clause reads it."""
-
-    rule_depth: int
-    """The fired rule's refinement-nesting depth (``0`` = a top-level rule)."""
+    rule_code: RuleCode
+    """The fired rule's code — its kind word (``refinement`` / ``alternative`` / ``base``) names the
+    rule and its :attr:`~…RuleCode.as_string` (``R1`` / ``A2`` / ``R0``) identifies it; the
+    rule-identity clause reads both."""
 
     case_variable_id: Optional[uuid.UUID] = None
     """The ``_id_`` of the classified case's variable, so the assembler can substitute the concrete
@@ -73,8 +72,7 @@ class CausalPlanner(Planner["WhyAnswer", CausalStructure]):
             conclusion_subject=subject,
             conclusion_value=answer.conclusion,
             reasons=[condition.condition for condition in answer.satisfied_conditions],
-            rule_kind=answer.rule_kind,
-            rule_depth=answer.rule_depth,
+            rule_code=answer.rule_code,
             case_variable_id=case_variable._id_ if case_variable is not None else None,
             case_type_name=FallbackNouns.ENTITY.name_of(case_variable),
         )

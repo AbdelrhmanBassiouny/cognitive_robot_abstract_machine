@@ -110,12 +110,17 @@ class CausalAssembler(Assembler["WhyAnswer", CausalStructure]):
         )
 
     def _rule_identity_clause(self, plan: CausalStructure) -> VerbalizationFragment:
-        """:return: *"by the <kind> rule"* — the identity of the rule that fired."""
+        """:return: *"by the <kind> rule <code>"* — the identity of the rule that fired (*"by the
+        refinement rule R1"*). The code is a role-tagged token, the seam a source-link resolver turns
+        into a link to the rule's definition."""
         return PhraseFragment(
             parts=[
                 Prepositions.BY.as_fragment(),
                 Articles.THE.as_fragment(),
-                WordFragment(text=plan.rule_kind),
+                WordFragment(text=plan.rule_code.kind.value),
                 WordFragment(text="rule"),
+                RoleFragment(
+                    text=plan.rule_code.as_string, role=SemanticRole.RULE_REFERENCE
+                ),
             ]
         )

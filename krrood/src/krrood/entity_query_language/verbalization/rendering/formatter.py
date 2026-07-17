@@ -26,6 +26,7 @@ ROLE_COLORS: dict[SemanticRole, Optional[str]] = {
     SemanticRole.LOGICAL: "#2ca02c",  # LogicalOperator green
     SemanticRole.LITERAL: "#949292",  # Literal gray
     SemanticRole.ATTRIBUTE: "#8FC7B8",  # MappedVariable teal
+    SemanticRole.RULE_REFERENCE: "#4ea1ff",  # rule-code link blue
     SemanticRole.PLAIN: None,
 }
 

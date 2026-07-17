@@ -33,7 +33,12 @@ from krrood.entity_query_language.operators.core_logical_operators import (
     LogicalOperator,
 )
 from krrood.entity_query_language.rdr.observer import ClassificationTrace
-from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
+from krrood.entity_query_language.rdr.rule_tree_view import (
+    RuleCode,
+    RuleKindWord,
+    walk_rules,
+)
+from krrood.entity_query_language.rdr.serialization import rule_code_map
 from krrood.entity_query_language.rules.conclusion import Add
 
 CONTRAST_NOT_IMPLEMENTED = (
@@ -74,6 +79,8 @@ class WhyAnswer:
     """How the fired rule relates to its predecessor: ``"if"`` / ``"else if"`` / ``"except if"``."""
     rule_depth: int
     """The fired rule's refinement-nesting depth (``0`` = a top-level rule)."""
+    rule_code: RuleCode
+    """The fired rule's code — its kind letter and tree index (``R0`` / ``R1`` / ``A2``)."""
     satisfied_conditions: Tuple[ConditionAndBindings, ...]
     """The non-logical conditions satisfied during classification, each with its bindings."""
     corner_case: Optional[Any]
@@ -93,12 +100,16 @@ class WhyAnswer:
         rule_kind, rule_depth = _placement_of(
             trace.rule_tree_root, trace.firing_anchor_id
         )
+        rule_code = rule_code_map(trace.rule_tree_root).get(
+            trace.firing_anchor_id, RuleCode(0, RuleKindWord.BASE)
+        )
         return cls(
             conclusion=trace.conclusion,
             condition=trace.firing_anchor,
             add_node=fired.add_node,
             rule_kind=rule_kind,
             rule_depth=rule_depth,
+            rule_code=rule_code,
             satisfied_conditions=_satisfied_conditions_of(trace),
             corner_case=corner_case,
         )

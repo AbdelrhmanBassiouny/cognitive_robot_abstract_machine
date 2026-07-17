@@ -76,7 +76,7 @@ class TestCausalTopLevelRule(unittest.TestCase):
         self.assertEqual(
             self.answer.verbalize(),
             "the species of the Animal is mammal, "
-            "because the Animal is milk, by the if rule",
+            "because the Animal is milk, by the base rule R0",
         )
 
     def test_because_fronts_the_condition(self):
@@ -158,11 +158,36 @@ class TestCausalRefinementRule(unittest.TestCase):
         self.rdr.fit_case(self.mammal, Species.mammal, expert)
         self.surface = self.rdr.why(self.mammal).verbalize()
 
-    def test_rule_identity_names_the_except_if_kind(self):
-        self.assertIn("by the except if rule", self.surface)
+    def test_rule_identity_names_the_refinement_with_its_code(self):
+        self.assertIn("by the refinement rule R1", self.surface)
 
     def test_conclusion_is_the_refined_value(self):
         self.assertIn("the species of the Animal is mammal", self.surface)
+
+
+@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+class TestCausalAlternativeRule(unittest.TestCase):
+    """
+    An alternative (else-if) rule names its kind and code in the rule-identity clause.
+    """
+
+    def setUp(self):
+        self.rdr = EQLSingleClassRDR(Animal, "species")
+        expert = scripted_expert(
+            {
+                Species.mammal: lambda v: v.milk == True,
+                Species.bird: lambda v: v.feathers == True,
+            }
+        )
+        self.mammal = first(Species.mammal)
+        self.bird = first(Species.bird)
+        # The bird fires no existing rule, so its rule is added as an else-if alternative.
+        self.rdr.fit_case(self.mammal, Species.mammal, expert)
+        self.rdr.fit_case(self.bird, Species.bird, expert)
+        self.surface = self.rdr.why(self.bird).verbalize()
+
+    def test_rule_identity_names_the_alternative_with_its_code(self):
+        self.assertIn("by the alternative rule A1", self.surface)
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")

@@ -28,7 +28,7 @@ import enum
 
 from dataclasses import dataclass, field
 
-from typing_extensions import TYPE_CHECKING, Any, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, Dict, List, Optional
 from uuid import UUID
 
 from colorama import Fore, Style
@@ -146,6 +146,76 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
     return rules
 
 
+class RuleKindWord(enum.StrEnum):
+    """The word naming a rule's relationship to its predecessor, and the letter of its code."""
+
+    BASE = "base"
+    """The seed / top-level rule (kind ``"if"``); coded ``R0``."""
+    REFINEMENT = "refinement"
+    """An except-if rule refining a more general one (kind ``"except if"``); coded ``R<n>``."""
+    ALTERNATIVE = "alternative"
+    """An else-if sibling rule (kind ``"else if"``); coded ``A<n>``."""
+
+    @property
+    def letter(self) -> str:
+        """:return: The code letter — ``"A"`` for an alternative, else ``"R"`` (base and refinement
+        share the ``R`` namespace, the base being ``R0``).
+
+        >>> RuleKindWord.REFINEMENT.letter
+        'R'
+        >>> RuleKindWord.ALTERNATIVE.letter
+        'A'
+        """
+        return "A" if self is RuleKindWord.ALTERNATIVE else "R"
+
+    @classmethod
+    def from_kind(cls, kind: str) -> RuleKindWord:
+        """:return: The rule-kind word for a :func:`walk_rules` kind string (``"if"`` → base,
+        ``"except if"`` → refinement, ``"else if"`` → alternative)."""
+        return _KIND_STRING_TO_WORD[kind]
+
+
+_KIND_STRING_TO_WORD: Dict[str, RuleKindWord] = {
+    "if": RuleKindWord.BASE,
+    "except if": RuleKindWord.REFINEMENT,
+    "else if": RuleKindWord.ALTERNATIVE,
+}
+
+
+@dataclass(frozen=True)
+class RuleCode:
+    """A stable, human-readable code for a rule — its kind letter followed by its tree index.
+
+    Identity is the :attr:`id` alone (the index is unique within a tree), so two codes are equal iff
+    their ids match; :attr:`kind` only chooses the display letter.
+    """
+
+    id: int
+    """The rule's 0-based index in the tree's pre-order walk (the base rule is ``0``)."""
+    kind: RuleKindWord = field(compare=False)
+    """The rule's relationship to its predecessor; sets the code letter, not the code's identity."""
+
+    @property
+    def as_string(self) -> str:
+        """:return: The code — the kind letter then the id (``"R0"`` / ``"R1"`` / ``"A2"``).
+
+        >>> RuleCode(1, RuleKindWord.REFINEMENT).as_string
+        'R1'
+        """
+        return f"{self.kind.letter}{self.id}"
+
+
+def rule_kinds(conditions_root: SymbolicExpression) -> Dict[UUID, RuleKindWord]:
+    """:return: A ``condition._id_`` → :class:`RuleKindWord` map — each rule's relationship to its
+    predecessor (base / refinement / alternative), read from the display walk. The rule *index* is
+    assigned separately (in emission order), so the shared code map keys the two together by id.
+    """
+    return {
+        rule.condition._id_: RuleKindWord.from_kind(rule.kind)
+        for rule in walk_rules(conditions_root)
+    }
+
+
 def resolve_status(
     rule: RuleView,
     satisfied_ids: Optional[OrderedSet[UUID]],
@@ -229,7 +299,9 @@ def _format_conclusion_selector(expr: ConclusionSelector) -> str:
     """
     match expr:
         case Alternative():
-            return f"({format_condition(expr.left)} else {format_condition(expr.right)})"
+            return (
+                f"({format_condition(expr.left)} else {format_condition(expr.right)})"
+            )
         case Refinement():
             return f"({format_condition(expr.left)} except if {format_condition(expr.right)})"
         case Next():
@@ -355,9 +427,7 @@ class RuleTreeRenderer:
         if not rules:
             return ""
         depths = [r.depth for r in rules]
-        statuses = [
-            resolve_status(r, satisfied_ids, evaluated_ids) for r in rules
-        ]
+        statuses = [resolve_status(r, satisfied_ids, evaluated_ids) for r in rules]
         statuses = enforce_parent_consistency(statuses, rules)
         lines = [
             self._render_row(rule, _connector(depths, i), statuses[i])
