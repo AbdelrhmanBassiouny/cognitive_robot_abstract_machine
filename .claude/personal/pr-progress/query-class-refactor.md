@@ -42,10 +42,14 @@ lifecycle, subquery result caching, and a composable result-transformer pipeline
   Kept Ordering/Quantification names (pipeline stages, not old OrderBy node). Verified fixed-point
   of format_docstrings.py so pre-commit won't re-modify. Targeted tests 136 passed. Pushed.
 
+- Owner follow-up on query.py:111 ("why not define the sentinel inside __iter__?"): moved
+  _STREAM_EXHAUSTED from ClassVar to a local `stream_exhausted = object()` in __iter__, removed the
+  ClassVar import. Subquery-caching tests 6 passed. Pushed cecdc5493; replied + resolved the thread.
+
 ## Next
-- GitHub API is lagging (returns only threads up to 07-11) - reply/resolve the tomsch420 +
-  davidprueser threads once it surfaces them. Reasoning to post: Ordering rename = pipeline stage
-  vs removed tree node; while-True needed so exhausted stream still replays buffer.
-- Watch PR #5 CI on 9b6119efe; address any failure.
+- GitHub API still not surfacing the tomsch420 + davidprueser threads (AbdelrhmanBassiouny-authored
+  ones do appear) - reply/resolve those once available. Reasoning to post: Ordering rename = pipeline
+  stage vs removed tree node; while-True needed so exhausted stream still replays buffer.
+- Watch PR #5 CI on cecdc5493; address any failure.
 - Merge once approved.
 - Follow-up (separate PR, prompt already given): model Selectable._var_ as an explicit Role/delegate.
