@@ -162,15 +162,21 @@ Full design: plan session 2026-07-16; per-PR notes exist for every branch.
 - **W3 `rdr/why-query-surface`** (base: W2): `why(...)` EQL factory + docs +
   bibliography (provenance witnesses, JTMS, RDR traces, Miller contrastive).
   `%why` magic deferred until D-ui #76 lands.
-- **C1 `rdr/explainable-choice`** (base: W1; REFACTORED out of old M1,
-  2026-07-17 — the choice machinery is general): `ExplainableChoice`
-  protocol + `RDRChoice` over the backend's InferenceStrategy seam, krrood
-  only, tested against pattern-named mimics in the krrood test datasets
-  (`CategorizedItem`/`CategorizedSlot`). See
-  `pr-progress/rdr/explainable-choice.md`.
+- **C1 `rdr/decision-queries`** (base: W2; REFRAMED 2026-07-17 after design
+  discussion — the ExplainableChoice protocol was dropped as YAGNI): a
+  choice IS an underspecified query over a partially-specified decision
+  object (`an(InsertionAction)(slot=...).evaluate(backend=rdr)`); C1
+  delivers the missing explanation semantics instead: model-side weak-keyed
+  explanation store (never attach to shared concluded values — enum
+  aliasing), explanation-bearing yielded results so `explain(result)`
+  routes RDR conclusions, default-on explaining strategy (measure first),
+  typed first-access failure, and the documented decision-query pattern.
+  See `pr-progress/rdr/decision-queries.md` for the full rationale.
 - **M1 `montessori/choice-policies` — DEFERRED** until Tom's
-  `montessori_ijcai` branch is ready: only the demo-specific remainder
-  (pick/hole policy RDRs on top of C1, `InsertMontessoriShapeAction` seam).
+  `montessori_ijcai` branch is ready: only the demo-specific remainder —
+  pick/hole policy RDRs as decision queries per the C1 pattern (the
+  action's slot/next-shape become underspecified attributes resolved by
+  query + RDR backend; no policy-injection seam needed anymore).
 - **M2 `montessori/why-demo` — DEFERRED** (base: M1 + W2): narrated demo
   loop, headless CI mode emitting the why-transcript, README.
 - Ordering: W1 → W2 → W3 sequential; C1 parallel to W3 (both need only W1);
