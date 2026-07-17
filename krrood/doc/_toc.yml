@@ -23,6 +23,7 @@ parts:
         - file: eql/user/writing_rule_trees
         - file: eql/user/inference_explanation
         - file: eql/user/verbalization
+        - file: eql/user/why_questions
     - file: eql/developer/index
       sections:
         - file: eql/developer/architecture_overview
@@ -32,6 +33,7 @@ parts:
         - file: eql/developer/graph_and_visualization
         - file: eql/developer/inference_explanation
         - file: eql/developer/verbalization
+        - file: eql/developer/why_questions
 - caption: ORMatic
   chapters:
     - file: ormatic/intro
