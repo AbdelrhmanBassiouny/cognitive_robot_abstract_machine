@@ -40,3 +40,12 @@ RESULT HANDLE. So this PR stays decoupled and drops onto their handles unchanged
 - Follow-ups: contrastive answering (SufficientConditionSet); %why once D-ui #76 lands.
 - Coordinate: confirm decision-queries handles satisfy ExplanationCarrier (or adapt
   resolve_why_answer) — internal, no public signature change.
+
+## CI fix (base advanced)
+- CI red on first push: base `eql/causal-verbalization` advanced with 2849bcff
+  "[RDR] Name the fired rule with a code" — rule-identity now renders "by the base rule R0"
+  / "refinement rule R1" / "alternative rule A1" (WhyAnswer.rule_code). My golden text was
+  stale ("by the if/except if rule").
+- Fixed: rebased onto the new base (clean auto-merge of WhyQuery/ExplanationCarrier with
+  rule_code), updated test golden strings + user-doc prose to the code vocabulary. Full
+  test_eql_rdr = 294 passed; docs rebuild clean. Amended + force-with-lease pushed.
