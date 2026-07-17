@@ -40,6 +40,28 @@ cut from origin/D-core-engine; rebase onto origin/D-ui before opening the PR).
   in #77's known-failures section). Also re-check whether D-ui moved
   again.
 
+## CI status
+
+- Head e53fb418: FULL CI GREEN (all 18 matrix jobs). Both prior failures
+  resolved — semantic_digital_twin (case_factory fixed by restack) and
+  coraplex test_merge_motions (stack/timing, never this slice). #77
+  description updated to reflect green + a restructure-pending note.
+
+## Split plan (in progress with user)
+
+- User wants #77 split into smaller single-concern PRs. Root cause of
+  size: two unrelated commits bundled — 9f1823c1 (real @rdr feature,
+  1993 lines/7 files) + e53fb418 (umbrella-closure "sweep", 1031
+  lines/5 orphan files that belong to lower slices; #38 already closed
+  so the sweep's zero-diff justification is discharged). Dependency
+  dirs confirmed: decorator->file_store one-way; file_store test has no
+  decorator dep; rule_tree_view test independent of the whole slice.
+  Orphan homes: test_rule_tree_view + refactor_plan + backward-inf docs
+  -> #68; rdr_conclusion_domain.py -> #76 (D-ui guide imports it,
+  required). Awaiting user's answers on (a) feature split granularity,
+  (b) orphan disposition; then update roadmap/pr-progress + notify
+  steward.
+
 ## Restacks so far
 
 - D-ui was force-rewritten to linear history (a7eb3703: splice fix
