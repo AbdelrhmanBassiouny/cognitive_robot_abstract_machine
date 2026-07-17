@@ -1,6 +1,8 @@
 ## Plan
-Land the EQL query-class refactor as PR #5 (base: match-where-without-resolve): spec/product
-lifecycle, subquery result caching, and a composable result-transformer pipeline.
+MERGED. PR #5 (EQL query-class refactor: spec/product lifecycle, subquery result caching,
+composable result-transformer pipeline) landed. Session auto-unsubscribed; hourly cron cleared.
+Follow-up still open: model Selectable._var_ as an explicit Role/delegate (separate PR, prompt
+already given).
 
 ## Done
 - Refactor complete; merged query-interface-refactor, role-pure-composition, match-where, main.
