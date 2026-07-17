@@ -300,11 +300,85 @@ query itself.
 
 ---
 
+## Decision Queries: Filling `...` with an RDR Backend (and Asking Why)
+
+A **decision** is nothing more than an underspecified query over a partially-specified
+object: the decision object is the case, and its `...` attribute is the choice to make.
+Choosing is filling that `...` by evaluating with an
+{py:class}`~krrood.entity_query_language.rdr.backend.RDRBackend` — the same `backend=` seam
+you used for the probabilistic backend above, so no new machinery is needed. Because a
+decision's whole point is to be justified, evaluating with the RDR backend also *explains*
+each choice: every yielded result carries the rule-firing explanation behind its value.
+
+Model the decision as an ordinary dataclass and mark the attribute to decide with `...`:
+
+```python
+from dataclasses import dataclass
+from enum import Enum
+from typing import Optional
+
+class Slot(Enum):
+    left = 1
+    right = 2
+    center = 3
+
+@dataclass
+class SlotAssignment:
+    shape: str
+    chosen: Optional[Slot] = None   # the attribute a decision query fills
+```
+
+Given an `RDRBackend` fitted to decide `chosen` (see the RDR guide for fitting), the whole
+pattern — choose, then ask why — is the canonical three-liner:
+
+```python
+from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.rdr.decision import explain
+
+result = next(an(SlotAssignment)(chosen=...).from_([assignment]).evaluate(backend=rdr_backend))
+explanation = explain(result)
+print(explanation.why_answer.verbalize())
+# "the chosen of the SlotAssignment is left, because the shape of the SlotAssignment is 'circle', by the base rule R0"
+```
+
+- `an(SlotAssignment)(chosen=...)` is the partially-specified decision; `.from_([assignment])`
+  supplies the object(s) to decide.
+- `.evaluate(backend=rdr_backend)` fills `chosen` and yields one **explanation-bearing**
+  result handle per object.
+- {py:func}`~krrood.entity_query_language.rdr.decision.explain` returns the
+  {py:class}`~krrood.entity_query_language.rdr.why.RDRConclusionExplanation` for that
+  choice, routed through the *same* surface that explains
+  {py:func}`~krrood.entity_query_language.factories.inference`-created instances.
+
+```{note}
+`explain(result)` on a handle for which **no rule fired** raises
+{py:class}`~krrood.entity_query_language.rdr.exceptions.UnexplainedResult` rather than
+returning `None` — an unexplained decision is an error to surface, not a null to thread
+through your code.
+```
+
+The explanation is stored **on the model**, never on the concluded value: a single `Slot`
+member is decided for many assignments, so attaching provenance to it would overwrite one
+global slot. The RDR keeps a weak, identity-keyed store of each case's latest explanation,
+readable directly with `rdr.why(assignment)`.
+
+```{note}
+Bulk inference (`backend.infer(query)`) stays on the fast path and does **not** explain by
+default; opt in with `backend.infer(query, strategy=ExplainingInference())`. It is the
+decision-query surface (`evaluate(backend=...)`) that explains by default, because explaining
+a choice is the reason to ask for it. Explanation retention re-evaluates each case to build
+its trace, so it is measurably heavier than plain classification on large rule trees.
+```
+
+---
+
 ## API Reference
 
 - {py:func}`~krrood.entity_query_language.factories.an`
 - {py:func}`~krrood.entity_query_language.factories.the`
 - {py:class}`~krrood.entity_query_language.query.match.Match`
+- {py:class}`~krrood.entity_query_language.rdr.backend.RDRBackend`
+- {py:func}`~krrood.entity_query_language.rdr.decision.explain`
 - {py:class}`~krrood.entity_query_language.backends.ProbabilisticBackend`
 - {py:class}`~krrood.parametrization.parameterizer.UnderspecifiedParameters`
 - {py:class}`~krrood.parametrization.model_registries.ModelRegistry`

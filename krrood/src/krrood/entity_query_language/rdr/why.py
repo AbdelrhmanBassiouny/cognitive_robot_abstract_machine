@@ -129,6 +129,21 @@ class WhyAnswer:
 
 
 @dataclass(frozen=True)
+class ConcludedCase:
+    """A case's inferred value paired with the explanation of how it was reached.
+
+    Returned by the explaining classification path so a caller receives both the conclusion
+    and its justification from a single evaluation. :attr:`explanation` is ``None`` when no
+    rule fired (nothing was concluded, so there is nothing to explain).
+    """
+
+    value: Any
+    """The inferred conclusion value (``UNSET`` when no rule fired)."""
+    explanation: Optional[RDRConclusionExplanation] = None
+    """The explanation of the conclusion, or ``None`` when no rule fired."""
+
+
+@dataclass(frozen=True)
 class RDRConclusionExplanation(Explanation):
     """An :class:`Explanation` of an RDR attribute conclusion, backed by a :class:`WhyAnswer`.
 

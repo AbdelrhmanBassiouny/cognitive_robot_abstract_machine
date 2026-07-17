@@ -1,14 +1,15 @@
 """
 RDR backend for underspecified EQL queries.
 
-Given an underspecified ``Match`` — ``...`` marks the attribute to infer, concrete kwargs
-filter, an optional domain supplies the instances — this backend infers the ``...``
-attribute on each matching instance using a single-class RDR, **lazily, one case at a
-time**, mirroring ordinary EQL evaluation.
+Given an underspecified ``Match`` — ``...`` marks the attribute to infer, concrete
+kwargs filter, an optional domain supplies the instances — this backend infers the
+``...`` attribute on each matching instance using a single-class RDR, **lazily, one case
+at a time**, mirroring ordinary EQL evaluation.
 
-It keeps one :class:`EQLSingleClassRDR` per ``(case type, attribute)``. Asked to infer an
-attribute it has no model for, it first falls into *fit mode* (using ground-truth targets
-when given, otherwise asking the expert for both the conclusion and its conditions).
+It keeps one :class:`EQLSingleClassRDR` per ``(case type, attribute)``. Asked to infer
+an attribute it has no model for, it first falls into *fit mode* (using ground-truth
+targets when given, otherwise asking the expert for both the conclusion and its
+conditions).
 """
 
 from __future__ import annotations
@@ -25,19 +26,21 @@ from typing_extensions import (
     Optional,
     Tuple,
     Type,
-    Union, Self,
+    Union,
+    Self,
 )
 
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.rdr.decision import ExplainedUnificationDict
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.observer import ClassificationTrace
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
 from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.rdr.why import (
+    ConcludedCase,
     RDRConclusionExplanation,
-    WhyAnswer,
 )
 
 #: Ground truth: either a single conclusion shared by every case, or a per-case callable.
@@ -53,47 +56,61 @@ def key_from_attribute(attribute: Attribute) -> ModelKey:
 
 
 class InferenceStrategy(ABC):
-    """How :meth:`RDRBackend.infer` turns a case into a conclusion.
+    """
+    How :meth:`RDRBackend.infer` turns a case into a conclusion.
 
-    The default :class:`FastInference` just classifies. :class:`ExplainingInference` wraps
-    that fast path to also retain the per-result
-    :class:`~krrood.entity_query_language.rdr.observer.ClassificationTrace`, so inference
-    and explanation share one evaluation without the fast path paying for it.
+    :class:`FastInference` just classifies. :class:`ExplainingInference` retains the
+    per-result explanation and records it in the model store, so inference and explanation
+    share one evaluation without the fast path paying for it. A strategy returns a
+    :class:`~krrood.entity_query_language.rdr.why.ConcludedCase` so :meth:`RDRBackend.infer`
+    stays agnostic to whether an explanation was produced.
     """
 
     @abstractmethod
-    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> Any:
-        """:return: The conclusion inferred for ``case`` by ``rdr``."""
+    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> ConcludedCase:
+        """:return: The conclusion inferred for ``case`` by ``rdr``, with any explanation."""
 
 
 @dataclass
 class FastInference(InferenceStrategy):
-    """Classify with no explanatory retention — the default, unchanged fast path."""
+    """
+    Classify with no explanatory retention — the unchanged fast path.
+    """
 
-    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> Any:
-        return rdr.classify(case)
+    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> ConcludedCase:
+        return ConcludedCase(value=rdr.classify(case))
 
 
 @dataclass
 class ExplainingInference(InferenceStrategy):
-    """Classify while retaining a trace (and conclusion explanation) per inferred result."""
+    """
+    Classify while retaining a trace and conclusion explanation per inferred result.
+
+    The explanation is also recorded in the RDR's model-side
+    :attr:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR.explanation_store`,
+    so ``rdr.why(case)`` answers from it and the yielded result handle can reference it.
+    """
 
     traces: List[ClassificationTrace] = field(default_factory=list)
-    """One classification trace per concluded case, in inference order."""
+    """
+    One classification trace per concluded case, in inference order.
+    """
+
     _explanations: List[RDRConclusionExplanation] = field(
         default_factory=list, repr=False
     )
-    """Conclusion explanations for the traces whose rule fired, built as each case concludes."""
+    """
+    Conclusion explanations for the traces whose rule fired, built as each case
+    concludes.
+    """
 
-    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> Any:
+    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> ConcludedCase:
         trace = rdr._trace(case)
         self.traces.append(trace)
-        if trace.fired_conclusion is not None:
-            corner_case = rdr.corner_cases.get(trace.firing_anchor_id)
-            self._explanations.append(
-                RDRConclusionExplanation(WhyAnswer.from_trace(trace, corner_case))
-            )
-        return trace.conclusion
+        concluded = rdr.explanation_from_trace(case, trace)
+        if concluded.explanation is not None:
+            self._explanations.append(concluded.explanation)
+        return concluded
 
     def explanations(self) -> List[RDRConclusionExplanation]:
         """:return: A conclusion explanation for each concluded case whose rule fired."""
@@ -102,28 +119,37 @@ class ExplainingInference(InferenceStrategy):
 
 @dataclass
 class RDRBackend:
-    """Infers underspecified (``...``) attributes on existing instances via RDR models."""
+    """
+    Infers underspecified (``...``) attributes on existing instances via RDR models.
+    """
 
     expert: Optional[Expert] = None
-    """Authors rule conditions (and, in fit mode without ground truth, conclusions too)."""
-    models: Dict[ModelKey, EQLSingleClassRDR] = field(default_factory=dict)
-    """One single-class RDR per ``(case type, attribute)`` the backend has learned."""
+    """
+    Authors rule conditions (and, in fit mode without ground truth, conclusions too).
+    """
 
-    def fit(
-        self, query: Any, ground_truth: Optional[GroundTruth] = None
-    ) -> Self:
+    models: Dict[ModelKey, EQLSingleClassRDR] = field(default_factory=dict)
+    """
+    One single-class RDR per ``(case type, attribute)`` the backend has learned.
+    """
+
+    def fit(self, query: Any, ground_truth: Optional[GroundTruth] = None) -> Self:
         """
         Train the model for ``query``'s ``...`` attribute over the filtered domain.
 
-        :param query: An underspecified ``Match`` (with a domain) whose ``...`` slot to train.
-        :param ground_truth: A single conclusion for every case, or a ``case -> conclusion``
-            callable. When ``None`` the expert labels each case (via ``ask_for_rule``).
+        :param query: An underspecified ``Match`` (with a domain) whose ``...`` slot to
+            train.
+        :param ground_truth: A single conclusion for every case, or a ``case ->
+            conclusion`` callable. When ``None`` the expert labels each case (via
+            ``ask_for_rule``).
         :return: self.
         """
         statement = UnderspecifiedMatch(query)
         rdr = self._get_or_create(statement)
         for case in statement.filtered_cases():
-            rdr.fit_case(case, target=self._target_for(case, ground_truth), expert=self.expert)
+            rdr.fit_case(
+                case, target=self._target_for(case, ground_truth), expert=self.expert
+            )
         return self
 
     def infer(
@@ -139,14 +165,20 @@ class RDRBackend:
         If no model exists for the attribute yet, fit mode runs first (using
         ``ground_truth`` when given, otherwise the expert).
 
+        When the strategy produces an explanation for a case, the default (non-fill) yield
+        is an :class:`~krrood.entity_query_language.rdr.decision.ExplainedUnificationDict`
+        carrying that explanation — fresh per yield, so no two handles alias one
+        explanation — so ``explain(result)`` can route it. Filled instances are never
+        given an explanation attribute (the case is not mutated beyond its inferred slot);
+        their explanation is read from the model store via ``rdr.why(case)``.
+
         :param query: An underspecified ``Match`` (with a domain).
         :param ground_truth: Used only if fit mode is triggered (see :meth:`fit`).
         :param fill_in_place: When ``True``, set the attribute on each instance and yield the
             instance. Otherwise (default) yield a :class:`UnificationDict` mapping the case
             variable to the instance and the target attribute to the inferred value.
         :param strategy: How each case is concluded. Defaults to :class:`FastInference`; pass
-            an :class:`ExplainingInference` to retain a trace and conclusion explanation per
-            result without altering the yielded values.
+            an :class:`ExplainingInference` to retain a conclusion explanation per result.
         :return: A lazy iterator of :class:`UnificationDict` (default) or filled instances.
         """
         strategy = strategy if strategy is not None else FastInference()
@@ -157,14 +189,45 @@ class RDRBackend:
         rdr = self.models[key]
         target = statement.single_target()
         for case in statement.filtered_cases():
-            value = strategy.conclude(rdr, case)
+            concluded = strategy.conclude(rdr, case)
             if fill_in_place:
-                setattr(case, target.attribute_name, value)
+                setattr(case, target.attribute_name, concluded.value)
                 yield case
             else:
-                yield UnificationDict(
-                    {statement.variable: case, target.attribute: value}
-                )
+                yield self._unification_dict(statement, target, case, concluded)
+
+    def evaluate(self, expression: Any) -> Iterator[Any]:
+        """
+        Evaluate an underspecified decision query, explaining each choice by default.
+
+        This is the backend entry point behind ``decision.evaluate(backend=rdr_backend)``: a
+        decision is an underspecified query over a partially-specified object, and its whole
+        point is to be asked *why*. So, unlike bulk :meth:`infer` (which stays on the fast
+        path), evaluation defaults to :class:`ExplainingInference`, making each yielded
+        handle carry its explanation for :func:`~krrood.entity_query_language.rdr.decision.explain`.
+
+        :param expression: An underspecified ``Match`` (with a domain).
+        :return: A lazy iterator of explanation-bearing result handles.
+        """
+        return self.infer(expression, strategy=ExplainingInference())
+
+    @staticmethod
+    def _unification_dict(
+        statement: UnderspecifiedMatch,
+        target: Any,
+        case: Any,
+        concluded: ConcludedCase,
+    ) -> UnificationDict:
+        """
+        Build the yielded handle, carrying the explanation when the strategy produced
+        one.
+        """
+        bindings = {statement.variable: case, target.attribute: concluded.value}
+        if concluded.explanation is None:
+            return UnificationDict(bindings)
+        handle = ExplainedUnificationDict(bindings)
+        handle.conclusion_explanation = concluded.explanation
+        return handle
 
     def _get_or_create(self, statement: UnderspecifiedMatch) -> EQLSingleClassRDR:
         key = self._key(statement)
