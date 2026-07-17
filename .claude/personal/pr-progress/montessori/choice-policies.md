@@ -1,43 +1,33 @@
-# PR plan: montessori/choice-policies — explainable choices (Montessori track, M1)
+# PR plan: montessori/choice-policies — demo policy wiring (Montessori track, M1 — DEFERRED)
 
-Not started. Base: `tomsch420/cognitive_robot_abstract_machine` branch
-`montessori_ijcai` (tip `b4b45382d`, the REAL demo: `hole_geometry.py` mesh-based
-hole detection, `insert_shape_action.py`, Multiverse iCub scene under
-`segmind/resources/multiverse_episodes/icub_montessori_no_hands/`, HSRB demo
-main) with `rdr/why-answer` (W1) merged in. SHARED BRANCH LINEAGE with Tom
-Schierenbeck — coordinate before any force-push; agree the PR target with him.
+**DEFERRED (2026-07-17): blocked on Tom's `montessori_ijcai` branch being ready.**
+The generic half was extracted to `rdr/explainable-choice.md` (C1) and proceeds
+now in krrood. This note keeps only the demo-specific remainder.
 
-## Goal
+## Remaining scope (when Tom's branch is ready)
 
-Replace both procedural choice points with EQL/RDR-backed, why-explainable
-policies. Nothing montessori-specific below the experiments layer.
+Base: `tomsch420/montessori_ijcai` (fetch read-only via the git proxy;
+re-check the tip — Tom pushes actively) + the landed C1/W1/W2 work. Push only
+to the AbdelrhmanBassiouny fork; coordinate the PR target with Tom.
 
-## Design
-
-- Generic layer (`krrood/.../rdr/choice.py`): `ExplainableChoice` protocol —
-  candidates as an EQL variable + an RDR-backed policy →
-  `choose() -> (choice, WhyAnswer)`. Implement once over
-  `RDRBackend`/underspecified: the choice IS an underspecified query, so every
-  such choice is why-explainable for free (DIP).
-- Demo layer (`experiments/montessori/`):
-  - `pick_policy` RDR: which loose shape next (case = shapes on table + board
-    state).
-  - `hole_policy` RDR: which hole for a shape; base rule = `hole.shape_category
-    == shape.shape_category` (what `ShapeSortingBoard.hole_for`'s loop hard-codes
-    today), refinable by exception (occluded, unreachable, drawer open).
-  - `InsertMontessoriShapeAction`: injected policy seam; default preserves
-    current `hole_for` behaviour (OCP, backward compatible).
-  - Shape categories: existing `hole_geometry.py` detection (inferred) or the
-    `shape_category` annotations (given).
+1. `pick_policy` RDR (which loose shape next; case = shapes on table + board
+   state) built ON the generic `ExplainableChoice`/`RDRChoice` from C1.
+2. `hole_policy` RDR (which hole for a shape; base rule = shape_category
+   equality — what `ShapeSortingBoard.hole_for` hard-codes — refinable by
+   exception: occluded, unreachable, drawer open).
+3. Policy-injection seam on `InsertMontessoriShapeAction` (default preserves
+   current `hole_for` behaviour); demo loop asks `pick_policy` instead of
+   fixed iteration.
+4. Shape categories from `hole_geometry.py` detection (inferred) or the
+   `shape_category` annotations (given).
 
 ## Conflict watch
 
-Tom's branch changes krrood verbalization files that W2 also touches
-(`vocabulary/english.py`, `fragments/base.py`, `parts_of_speech.py`) and
-`factories.py`/`predicate.py` — reconcile with the split stack + W1/W2 early.
+Tom's branch edits krrood verbalization/factories files (english.py,
+fragments/base.py, parts_of_speech.py, factories.py, predicate.py) —
+reconcile against the split stack + W2 (#82) + #83 at pickup time.
 
 ## TDD anchors
 
-Hole-policy refinement-by-exception scenario; pick-order test; both branches'
-existing montessori tests stay green (`test_montessori_semantics`,
-`test_montessori_world`).
+Hole-policy refinement-by-exception; pick-order test; both branches' existing
+montessori tests stay green. M2 (`montessori/why-demo.md`) stacks after this.
