@@ -87,3 +87,20 @@ result unless data shows otherwise).
    `explain(next(an(SlotAssignment)(chosen=...).from_([assignment]).evaluate(backend=...)))`
    works end-to-end and verbalizes via W2.
 6. First-access failure raises the typed exception.
+
+## Coordination contract with W3 (decided 2026-07-17, second round)
+
+The W3 session (`rdr/why-query-surface`) proceeds UNBLOCKED via a decoupled
+seam: it defines a small explanation-source abstraction (an
+`explain(result)`-style accessor + case store-read) and tests against a mimic
+implementation. Decisions:
+
+- `why(...)`'s primary input is the YIELDED RESULT HANDLE. The case-directed
+  ask stays exclusively on W1's Python API (`rdr.why(case)`) — do not add a
+  `(rdr, case)` form to the factory (one way of doing things).
+- **C1 implements W3's abstraction** — the model-side store +
+  explanation-bearing handles from this PR become its concrete
+  implementation. Read W3's seam definition (their branch/note) BEFORE
+  designing the store's public accessor, and match it exactly; do not invent
+  a second lookup path. If the seam needs adjusting, negotiate via the notes,
+  not by diverging.
