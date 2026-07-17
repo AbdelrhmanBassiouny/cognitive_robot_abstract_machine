@@ -33,6 +33,9 @@ Re-lands closed PR #20's content as a small docs-only PR off `main`.
 - 2026-07-17 ~12:40 check-in: second steward restack (7d1cf8f5,
   "upstream advanced to cram2 #452"); CI 17/18 green, coraplex job
   still running. No comments. Still draft, awaiting review.
+- 2026-07-17 ~13:40 check-in: coraplex job finished; CI fully green
+  (18/18) on 7d1cf8f5, mergeable state clean. No comments. Still
+  draft, awaiting review.
 
 ## Next
 
