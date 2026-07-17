@@ -82,17 +82,29 @@ its tests.
   `rdr/prompt_examples.py`, `rdr/prompt_sections.py` + the interactive/
   rendering/magic tests and `fitted_models/`. Plan:
   `pr-progress/D-ui.md`.
-- **D-deco** — `rdr/decorator.py`, `rdr/file_store.py`,
-  `rdr/templates/rdr_empty.py.jinja` + `test_rdr_decorator.py`,
-  `test_rdr_file_store.py`. Plan: `pr-progress/D-deco.md`.
+- **D-deco — SPLIT INTO 2 STACKED PRs** (2026-07-16, review-size): #80
+  `D-store` (`rdr/file_store.py` + `test_rdr_file_store.py`; RDRFileStore
+  lifecycle, self-tested with no decorator dep) then #77 `D-deco`
+  (`rdr/decorator.py`, `rdr/templates/rdr_empty.py.jinja`,
+  `test_rdr_decorator.py`, `rdr_decorator.md` dev+user). Merge order
+  #80 → #77. Plans: `pr-progress/D-store.md`, `pr-progress/D-deco.md`.
+  **Steward: propagation chain now …→ D-ui → D-store → D-deco — register
+  D-store in the restack loop.**
 - Old task "D-ser" is subsumed: `serialization.py` landed as #66; the
   serializer-adjacent tests ride D-ui (they exercise interactive save).
 - Legacy `ripple_down_rules` leftovers on the umbrella (gui.py,
   tracked_object.py, predicates.py, types.py, JSON tests) are
   **deliberately dropped** (removed by #53) — do not port them.
-- RDR docs (`eql_rdr_refactor_plan.md`, `rdr_decorator.md`,
-  `eql_rdr_conclusion_asking.md`, backward-inference docs) ride with their
-  matching split PR (decorator docs with D-deco, etc.).
+- RDR docs (`rdr_decorator.md` ride with D-deco #77). The umbrella-closure
+  "sweep" that briefly rode D-deco is dissolved (2026-07-16): #38 was
+  already closed, so its zero-diff justification was spent. Only genuinely
+  additive, non-duplicate files are rehomed — `rdr_conclusion_domain.py`
+  (D-ui's `eql_rdr_conclusion_asking.md` imports it) and
+  `test_rule_tree_view.py` (only real coverage of the rule-tree renderer)
+  → **rehome to #76 (D-ui), handed to the steward**. `eql_rdr_refactor_plan.md`
+  is a dangling (un-indexed) design doc → offered to steward for #68 or drop.
+  `backward_inference_{design,user_guide}.md` sit in a stray `krrood/docs/`
+  path (not the built `krrood/doc/` tree, referenced by nothing) → **dropped**.
 
 ### OO-track prototypes (stale bases — do not merge as-is)
 
@@ -124,8 +136,11 @@ sequential.
   **Steward: the propagation chain is now D-core-engine → D-ui-splice-fix →
   D-ui-rendering → D-ui → D-deco — register the two intermediate branches in
   any restack loop.**
-- **S2 (D-deco):** based on the new `D-ui` tip (the 3-PR stack's top), so the
-  final diff of the closed umbrella #38 vs the split tip reaches zero.
+- **S2 (D-deco) — SPLIT INTO 2 STACKED PRs** (see `pr-progress/D-store.md`
+  + `pr-progress/D-deco.md`): #80 `D-store` (RDRFileStore) then #77 `D-deco`
+  (decorator + docs), on the new `D-ui` tip. The sweep that made #38's diff
+  reach zero is dissolved now that #38 is closed; its two keeper files are
+  rehomed to #76 (steward hand-off).
 - **S3 (docs, off main):** `rdr/architecture-brief` — re-land the closed
   #20 content (`rdr_architecture_plan.md` + bibliography). Trivial,
   independent, unblocks every Wave-1+ session's shared context.
@@ -198,7 +213,7 @@ Full design: plan session 2026-07-16; per-PR notes exist for every branch.
 ### Dependency graph
 
 ```
-main ── stack #5…#68 ── D-ui ── D-deco          (Wave 0, sequential chain)
+main ── stack #5…#68 ── D-ui ── D-store ── D-deco   (Wave 0, sequential chain)
 main ── rdr/architecture-brief                   (Wave 0, parallel)
 land ─┬─ rdr/feature-registry ── rdr/feature-capture   (Track F)
       ├─ rdr/multi-class ── rdr/general-fixpoint       (Track G)

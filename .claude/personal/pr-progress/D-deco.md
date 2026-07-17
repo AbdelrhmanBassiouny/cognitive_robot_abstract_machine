@@ -1,99 +1,56 @@
-# PR plan: D-deco — @rdr decorator + file store (Wave 0, S2)
+# PR plan: D-deco — @rdr decorator (Wave 0, S2b)
 
-Final slice of the rdr-engine split. Base: D-ui (not pushed yet — currently
-cut from origin/D-core-engine; rebase onto origin/D-ui before opening the PR).
+Decorator half of the @rdr path, stacked on D-store (#80). Base: `D-store`.
+PR: #77 (draft, retargeted from D-ui -> D-store).
 
-## Plan
+## Scope
 
-1. Copy from origin/rdr-engine, adapted to the refactored code_generation
-   package: rdr/decorator.py, rdr/file_store.py, templates/rdr_empty.py.jinja,
-   test_rdr_decorator.py, test_rdr_file_store.py, developer + user
-   rdr_decorator.md docs.
-2. Full test_eql_rdr + test_eql suites, docformatter, revert ORM artifacts.
-3. Rebase onto origin/D-ui once it exists, push, draft PR "D-deco -> D-ui",
-   subscribe to PR activity.
-4. Verify diff origin/rdr-engine vs D-deco leaves only dropped legacy files;
-   close umbrella #38 with pointer to the split chain.
+- `rdr/decorator.py` — rdr() factory + RDRWrapper.
+- `rdr/templates/rdr_empty.py.jinja` — empty rule-tree section.
+- `test_rdr_decorator.py`, `rdr_decorator.md` (dev + user).
 
-## Done
+SOLID split preserved; both load invariants hold (case_type.function
+rewired; rdr.save_path always set). Adaptations vs rdr-engine:
+FunctionCaseGenerator().generate, camel_case_to_lower_camel_case,
+load_module_from_path; imports global.
 
-- Sources adapted and smoke-tested end-to-end (decorate → fit → classify
-  override → auto-save → reload; enum return types round-trip too).
-  Adaptations vs rdr-engine: function_to_dataclass_source →
-  FunctionCaseGenerator().generate; to_variable_name →
-  camel_case_to_lower_camel_case; _load_module_from_path →
-  load_module_from_path(path, prefix); imports made global; template variable
-  var_name → variable_name. Both load invariants preserved
-  (case_type.function rewired; rdr.save_path always set).
-- Tests copied with import adaptations only; docs copied with
-  FunctionCaseGenerator references and the now-fixed non-builtin-annotation
-  limitation bullet rewritten (verified empirically).
+## Split history (2026-07-16)
 
-## Next
+The original single D-deco PR was too big for review. Root cause: it
+bundled two unrelated commits — the real @rdr feature (1993 lines) + an
+"umbrella-closure sweep" (1031 lines of orphan files bundled only to make
+`git diff rdr-engine <tip>` reach zero for #38).
 
-- Babysit draft PR #77 (subscribed to activity; self check-ins armed)
-  until merged or closed. At the next check-in: verify CI on the new
-  head e53fb418 — expect semantic_digital_twin green (restack removed
-  the case_factory= call); watch the coraplex test_merge_motions
-  MotionDidNotFinish failure (3/3 on earlier #77 runs, main green,
-  stack doesn't touch coraplex — diagnosis posted on #76 and recorded
-  in #77's known-failures section). Also re-check whether D-ui moved
-  again.
+Resolution:
+1. Feature split into #80 D-store (file store) + #77 D-deco (decorator).
+2. Sweep dissolved (#38 already closed). Per-file disposition:
+   - rdr_conclusion_domain.py -> REHOME #76 (D-ui guide imports it; required).
+   - test_rule_tree_view.py -> REHOME #76 (only real renderer coverage; the
+     copy.copy assertion was rewired to _node_for_new_position_).
+   - eql_rdr_refactor_plan.md -> dangling (un-indexed) design doc; offered
+     to steward for #68 or drop.
+   - backward_inference_{design,user_guide}.md -> DROPPED (stray krrood/docs/
+     path, not in the built doc tree, referenced by nothing).
+   Both keepers verified green on D-ui (test_rule_tree_view 20 passed);
+   staged for the steward to land (I don't push their branch).
 
-## CI status
+## Stack
 
-- Head e53fb418: FULL CI GREEN (all 18 matrix jobs). Both prior failures
-  resolved — semantic_digital_twin (case_factory fixed by restack) and
-  coraplex test_merge_motions (stack/timing, never this slice). #77
-  description updated to reflect green + a restructure-pending note.
-
-## Split plan (in progress with user)
-
-- User wants #77 split into smaller single-concern PRs. Root cause of
-  size: two unrelated commits bundled — 9f1823c1 (real @rdr feature,
-  1993 lines/7 files) + e53fb418 (umbrella-closure "sweep", 1031
-  lines/5 orphan files that belong to lower slices; #38 already closed
-  so the sweep's zero-diff justification is discharged). Dependency
-  dirs confirmed: decorator->file_store one-way; file_store test has no
-  decorator dep; rule_tree_view test independent of the whole slice.
-  Orphan homes: test_rule_tree_view + refactor_plan + backward-inf docs
-  -> #68; rdr_conclusion_domain.py -> #76 (D-ui guide imports it,
-  required). Awaiting user's answers on (a) feature split granularity,
-  (b) orphan disposition; then update roadmap/pr-progress + notify
-  steward.
-
-## Restacks so far
-
-- D-ui was force-rewritten to linear history (a7eb3703: splice fix
-  cfe32ad0 + case-table 2e8c8496 + interactive a7eb3703). Restacked by
-  cherry-picking my two commits onto it → head e53fb418 (slice
-  9f1823c1 + sweep e53fb418), force-pushed-with-lease. test_eql_rdr on
-  that tip: 538 passed, 2 skipped. #77 description updated (restack
-  note + known-failures section: sdt resolved-pending-green, coraplex
-  open/owned by lower stack).
+main … D-core-engine (#68) -> D-ui (#76) -> D-store (#80) -> D-deco (#77)
 
 ## Status
 
-- DONE: PR #77 (D-deco -> D-ui, draft) open with session link and
-  subscribed; umbrella #38 closed with the split-chain comment.
-- Head 559daaa1 = two commits: the decorator slice (93d2fd05) + the
-  final-slice sweep (eql_rdr_refactor_plan.md, rdr_conclusion_domain.py,
-  backward-inference docs, test_rule_tree_view.py) so the umbrella diff
-  closes. In test_rule_tree_view.py the copy.copy cloning test was
-  rewired to _node_for_new_position_ (copy.copy never produced a fresh
-  id on rdr-engine either — verified empirically against that branch;
-  it only stayed green there behind the zoo-dataset skip guard).
-- Rebased twice onto moving bases (D-ui 6b12c1c7, then ccbbe603 after
-  the steward restack). On the final base: test_eql_rdr 538 passed,
-  2 skipped; test_eql 1058 passed, 3 skipped. ORM artifacts reverted.
-- Final umbrella verification: files present only on rdr-engine are
-  exactly the #53 legacy drops (gui.py, tracked_object.py,
-  predicates.py, types.py, test_json_serialization.py,
-  test_predicates.py, test_tracked_object.py, test_qt_gui_inline.py,
-  PyQt5-dependent test_ripple_down_rules/test_eql_rdr.py) plus two
-  refactor-superseded filenames (code_generation/utils.py,
-  test_code_generation_utilities.py) whose content landed via #58/#39.
-- docformatter caveat (still true): the two decorator test files keep
-  rdr-engine formatting because the multi-line-summary rewrite breaks
-  test_wrapper_dunder_doc_matches_original's verbatim docstring
-  assertion.
+- DONE: D-deco rebuilt on D-store, head 7e89ec60 (single decorator commit),
+  force-pushed. #77 retargeted base D-ui -> D-store, description rewritten,
+  subscribed. #80 opened + subscribed.
+- test_rdr_decorator.py: 20 passed. Full test_eql_rdr on D-deco tip: 518
+  passed, 2 skipped (-20 vs before = test_rule_tree_view moved to #76).
+- Earlier: on the pre-split tip, full CI was green (all 18 matrix jobs;
+  semantic_digital_twin case_factory fixed by restack, coraplex
+  test_merge_motions green).
+
+## Next
+
+- Notify steward: register D-store in the restack chain; hand off the 2
+  rehome files for #76; offer/drop eql_rdr_refactor_plan.md.
+- Babysit #80 and #77 until merged/closed (#80 merges first).
