@@ -57,12 +57,10 @@ class EQLVerbalizer:
         >>> flatten_fragment_to_plain_text(EQLVerbalizer().build(a(entity(variable(Robot, [])))))
         'Find a Robot'
         """
-        # A match is not a foldable EQL node but a builder; it routes to its own assembler and
-        # everything inside it (selection, values, conditions) is scanned/folded through its
-        # resolved query expression.
-        scan_target = (
-            expression.expression if isinstance(expression, Match) else expression
-        )
+        # A match and a why-answer are not foldable EQL nodes but non-foldable roots; each is
+        # scanned through the EQL expression that stands in for it (the match's resolved query, the
+        # why-answer's firing condition) so disambiguation and discourse focus see the case variable.
+        scan_target = self._scan_target(expression)
         if services is None:
             services = MicroplanningServices.from_expression(scan_target)
         if performative is not None:
@@ -76,6 +74,8 @@ class EQLVerbalizer:
                 expression
             )
         else:
+            # A why-answer dispatches through the fold like any node: ``select`` routes it to the
+            # auto-registered ``CausalExplanationRule`` (its construct is ``WhyAnswer``).
             fragment = fold(expression, services, RULES)
         # The discourse focus per query scope, projected once from the shared plan read model; the
         # coreference pass consults it instead of rule-emitted subject markers.
@@ -86,6 +86,22 @@ class EQLVerbalizer:
             discourse=discourse,
             numbered_labels=services.referring.numbered_labels,
         )
+
+    @staticmethod
+    def _scan_target(expression: SymbolicExpression) -> SymbolicExpression:
+        """
+        :param expression: The value being verbalized.
+        :return: The EQL expression to scan for disambiguation and discourse focus — the resolved
+            query for a ``Match``, the firing condition for a ``WhyAnswer`` (both non-foldable
+            roots), or *expression* itself for an ordinary node.
+        """
+        from krrood.entity_query_language.rdr.why import WhyAnswer
+
+        if isinstance(expression, Match):
+            return expression.expression
+        if isinstance(expression, WhyAnswer):
+            return expression.condition
+        return expression
 
     @staticmethod
     def _match_context(services: MicroplanningServices) -> RuleContext:

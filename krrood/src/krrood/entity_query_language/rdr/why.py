@@ -103,6 +103,19 @@ class WhyAnswer:
             corner_case=corner_case,
         )
 
+    def verbalize(self) -> str:
+        """Render this answer as a plain-text causal explanation.
+
+        :return: *"<conclusion> because <conditions>, by the <kind> rule"* — the conclusion the
+            rule reached, the satisfied conditions that justify it (read with the concrete case,
+            *"the Animal"*), and the identity of the rule that fired.
+        """
+        from krrood.entity_query_language.verbalization.pipeline import (
+            verbalize_expression,
+        )
+
+        return verbalize_expression(self)
+
 
 @dataclass(frozen=True)
 class RDRConclusionExplanation(Explanation):

@@ -475,6 +475,18 @@ class Conjunctions(VocabEnum):
     OR = PlainWord("or")
 
 
+class CausalConnectives(VocabEnum):
+    """
+    Subordinating connectives that link a conclusion to its justification.
+
+    Currently the *"because"* that fronts the conditions justifying a conclusion. Tagged with the
+    keyword role so it colours like the other structural connectives (:class:`Keywords`).
+    """
+
+    BECAUSE = KeyWord("because")
+    """Fronts the satisfied conditions that justify the conclusion."""
+
+
 class Absence(VocabEnum):
     """
     Absence-of-attribute verb — the *"has no"* / *"have no"* of *"the Pose has
