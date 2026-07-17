@@ -30,7 +30,22 @@ lifecycle, subquery result caching, and a composable result-transformer pipeline
   match tests green (23 passed). Pushed 695b0278b; PR #5 mergeable again (unstable = CI running),
   base now f55221a12.
 
+- Owner restacked query-class-refactor onto main (375abd03c) and advanced match-where to 1a140d8c5
+  (moved _resolve_domain into core/helpers.py). Fast-forwarded both local branches to origin.
+
+- New review round from tomsch420 + davidprueser (both requested changes, ~12 comments, mostly
+  docstring-formatting nits). Fixed on 9b6119efe: reformatted docstrings to the multi-line
+  convention (evaluation_context OutermostQueryClaim/SubqueryResultCache + fields, eql_interface
+  quantifier_type field+property with :return:); dropped redundant ellipsis in ResultTransformer;
+  made Quantification.owner default consistent (bare = None) + removed unused field import; moved
+  _STREAM_EXHAUSTED module global into CachedResultStream as a ClassVar; added while-True comment.
+  Kept Ordering/Quantification names (pipeline stages, not old OrderBy node). Verified fixed-point
+  of format_docstrings.py so pre-commit won't re-modify. Targeted tests 136 passed. Pushed.
+
 ## Next
-- Watch PR #5 CI on the new commits (695b0278b); address any krrood failure.
+- GitHub API is lagging (returns only threads up to 07-11) - reply/resolve the tomsch420 +
+  davidprueser threads once it surfaces them. Reasoning to post: Ordering rename = pipeline stage
+  vs removed tree node; while-True needed so exhausted stream still replays buffer.
+- Watch PR #5 CI on 9b6119efe; address any failure.
 - Merge once approved.
 - Follow-up (separate PR, prompt already given): model Selectable._var_ as an explicit Role/delegate.
