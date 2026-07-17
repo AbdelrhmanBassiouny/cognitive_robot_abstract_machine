@@ -26,6 +26,11 @@ Re-lands closed PR #20's content as a small docs-only PR off `main`.
 - Committed (ee4c9d57, authored as the user), pushed, draft PR #75
   opened with session link; subscribed to PR activity.
 
+- 2026-07-16 ~20:45 check-in: steward session merged main into the
+  branch (c4831fbb, "restack: upstream advanced"); CI fully green on
+  the restacked head (18/18 checks), mergeable state clean, no review
+  or conversation comments. Still draft, awaiting review.
+
 ## Next
 
 - Babysit PR #75: react to CI results and review comments; hourly
