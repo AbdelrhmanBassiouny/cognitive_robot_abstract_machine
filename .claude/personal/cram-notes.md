@@ -102,21 +102,14 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   no env hacks.
 
 ### The four PRs  ( [ ] todo / [~] in progress / [x] done )
-- P1 [x] done — branch `claude/eql-verbalization-p1-surface-verification-eqltzc`, off `main`.
-  Extracted `surface_verification.py` (`VerbalizationSurface` + `SymbolicSurfaceSnapshot`) and
-  rewired krrood's surface test/snapshot onto it. Polish applied: `SymbolicCallableOverride`
-  dataclass (field `operands`) → `Dict[Type[SymbolicCallable], SymbolicCallableOverride]`;
-  `module_and_class_name` replaces the local `qualified_name`; general
-  `class_implements_own_method(cls, base, method_name)` added to `class_diagrams/utils.py`
-  (handles classmethods/staticmethods via `getattr_static`, unit-tested) and used in
-  `has_fragment`; param docs added. DIVERGENCE (DRY): also reused the new util in
-  `phrase_rule._is_guarded`, which duplicated the exact override-check pattern — same subsystem,
-  covered by its doctest; makes the util demonstrably general (two non-test call sites). Also
-  added a docstring to `module_and_class_name`. Committed as the human identity
-  (AbdelrhmanBassiouny <bido.bassuny@gmail.com>), "Made with the help of Claude." note, no
-  assistant trailer. Verified locally on py3.12: krrood surface test (3) + new util test (7)
-  green; full `test_verbalization/` green except two pre-existing `jpt`-import env failures.
-  Must merge before #33 rebases. No deps.
+- P1 [ ] general, off `main` — surface-verification API polish. Introduce
+  `SymbolicCallableOverride` dataclass →
+  `Dict[Type[SymbolicCallable], SymbolicCallableOverride]`; use
+  `krrood.utils.module_and_class_name` for the unique name; extract a general
+  `class_implements_own_method` util (krrood utils / class-diagram utils) and use it in
+  `has_fragment`; add missing param docs. This EXTRACTS `surface_verification.py` +
+  krrood's surface test/snapshot from the #33 branch onto `main`. Must merge before #33
+  rebases. No deps.
 - P2 [ ] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
   gates #33 and P3. No deps.
 - P3 [ ] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). Dep: P2.
