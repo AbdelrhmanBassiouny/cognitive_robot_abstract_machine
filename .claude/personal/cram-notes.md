@@ -57,3 +57,79 @@ into every session by the `.claude/hooks/session-start.sh` hook (see the
 Add new personal-only rules below this line. Keep each rule short and
 imperative, same style as above.
 -->
+
+## EQL verbalization follow-up plan (PR #33 review) — living roadmap
+
+Cross-PR roadmap for the semantic_digital_twin verbalization review on PR #33. Every
+session working P1–P4 below: READ this section first, keep its status current (check off
+items, record decisions and any agreed divergence), and run `save-personal-notes.sh` when
+it changes. #32 (SymbolicFunction migration) is merged to `main`.
+
+### Finalized design decisions
+1. Operand naming: grammatical metadata on the field → field/attribute name → type name
+   (last resort). Provide the metadata mechanism with good defaults (low modelling
+   burden); build on the existing `_attribute_name_` / possessive / referring
+   microplanning. (Replaces "always the type name", which read awkwardly, e.g. "Point3".)
+2. Same-type operands: determiners ("a point … the other point"), not numbering ("Point3 1/2").
+3. Value-agnostic (first-order) + value-using forms, and abstract→concrete-subclass
+   expansion ("a Body or a Region"): their own phase (P3), on `concrete_subclasses` +
+   `RoleFragment.for_type` / `for_literal`.
+4. Fragments must use `Noun` / `Noun.bare` / `Noun.the`, never a raw `WordFragment`.
+5. `EuclideanPlanarDistance`: `custom_relation` with `Prepositions.BETWEEN`, not `of`.
+6. `Pose` type hints (predicates.py:292, robot_predicates.py:158 are
+   HomogeneousTransformationMatrix): investigate and switch to `Pose` if correct/clearer.
+7. No abbreviations (`cm`→`collision_manager`); sweep all touched code.
+8. Keep the functional wrapper name `get_volume` (the class stays `AnnotationVolume`).
+9. ormatic `type`-mappability PR: DROPPED (maintainer). `OPERAND_OVERRIDES` stays; its
+   only cleanup is the `SymbolicCallableOverride` dataclass in P1.
+10. Keep surfaces concise (omit root/tip from `BlockingBodies`); details are query-able.
+
+### Every P1–P4 session must
+- Critically evaluate first: don't blindly implement; assess vs this codebase's
+  verbalization/EQL architecture, the literature (NLG surface realization, grammar
+  frameworks, snapshot testing), and reliability/scalability/maintainability + SOLID.
+  Surface a better approach or a flaw and discuss before implementing.
+- Follow AGENTS.md incl. Version Control (commit as the human identity, no assistant
+  trailers, "Made with the help of Claude." note allowed), no abbreviations, dataclasses,
+  absolute/top-level imports, RST field docstrings, no `getattr`, guard clauses, SOLID,
+  TDD, black+docformatter (`scripts/format_docstrings.py`).
+- The exhaustive `SymbolicSurfaceSnapshot` test is the coverage mechanism; keep it green.
+- To render sdt/coraplex surfaces locally: build random_events (`pip install ./random_events`
+  → gives native `random_events_lib.reals`), `pip install trimesh mujoco daqp plyfile lxml`,
+  PYTHONPATH = krrood/src + <pkg>/src + giskardpy/src + probabilistic_model/src +
+  coraplex/src + repo root, and stub `giskardpy_bullet_bindings` (MagicMock in sys.modules)
+  before importing — rendering needs type names, not physics. CI has the real stack; commit
+  no env hacks.
+
+### The four PRs  ( [ ] todo / [~] in progress / [x] done )
+- P1 [ ] general, off `main` — surface-verification API polish. Introduce
+  `SymbolicCallableOverride` dataclass →
+  `Dict[Type[SymbolicCallable], SymbolicCallableOverride]`; use
+  `krrood.utils.module_and_class_name` for the unique name; extract a general
+  `class_implements_own_method` util (krrood utils / class-diagram utils) and use it in
+  `has_fragment`; add missing param docs. This EXTRACTS `surface_verification.py` +
+  krrood's surface test/snapshot from the #33 branch onto `main`. Must merge before #33
+  rebases. No deps.
+- P2 [ ] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
+  gates #33 and P3. No deps.
+- P3 [ ] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). Dep: P2.
+- P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
+  all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
+
+### P4 sdt checklist (reasoning/predicates.py, queries.py, robot_predicates.py; test snapshot)
+- Reachable: remove `fields["tip"].name`; reword ("a Pose is reachable …"); Pose hint (dec 6).
+- No abbreviations sweep (dec 7); `Noun`/`Noun.bare`/`Noun.the` not raw `WordFragment` (dec 4).
+- get_volume wrapper name kept (dec 8).
+- Wordings: GetVisibleBodies "the bodies visible to/through a camera"; EuclideanPlanarDistance
+  `between` (dec 5); IsSupportedBy "a body is supported by another body" (drop threshold);
+  IsPlaceOccupied custom "a place represented by a bounding box at a given pose is occupied by
+  other bodies in the world"; InFrontOf/Above/Below/LeftOf/RightOf/Behind "a point is in front
+  of the other point"; OccludingBodies "the bodies that occlude another body from the view of a
+  camera"; Visible value-agnostic + concrete subclasses; BlockingBodies "the bodies blocking the
+  path to reach a pose" (concise); IsGripperHoldingSomething "a gripper is holding something";
+  BodyInGripperFraction "the part of the body between the fingers of the gripper"; BodiesInGripper
+  "the bodies between the fingers of a gripper"; RobotCollisions "the collision points between a
+  robot and the bodies of the world"; ClassNameLowercased "the lower case form of a class name";
+  AnnotationVolume "the volume of a <concrete annotation type>".
+- Regenerate the sdt snapshot; reply-and-resolve each review thread.
+
