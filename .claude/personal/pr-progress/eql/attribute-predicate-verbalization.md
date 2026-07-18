@@ -6,32 +6,31 @@ Sibling: causal PR #82 (its note lives under eql/causal-verbalization.md).
 
 ## Plan
 Fix boolean-attribute condition verbalization ("an Animal is milk" was wrong).
-Per-field BooleanPredicateSpec (patterns) + verbalization interpreter +
-name-shape heuristic default; negation derived via morphology (do-support /
-copula suppletion), number via Clause. Decisions: heuristic default,
-FieldMetadata-only, separate PR first (this one).
+Per-field BooleanPredicate + verbalization realization + name-shape heuristic
+default; negation derived via morphology (do-support / copula suppletion),
+number via Clause. Review response (commit d657d928) restructured per user's 3
+approved forks + negation-scope "either".
 
-## Done
-- patterns/boolean_predicate.py: BooleanPredicateSpec family (Adjectival /
-  Possessive / Verbal) + Article enum; data-only (no verbalization import, so
-  GrammarMetadata in patterns can reference it). GrammarMetadata.boolean_predicate.
-- verbalization/attribute_predicates.py: realizer registry (concrete_subclasses),
-  resolve_boolean_predicate + default heuristic (is_past_participle +
-  is_likely_adjective suffixes -> "is X"; else "has X"; verbs need explicit spec),
-  boolean_predicate_clause / boolean_alternative_clause. No grammar import (no cycle).
-- morphology.is_likely_adjective (suffix fallback). exceptions.UnknownBooleanPredicateError.
-- ChainAssembler.boolean_predicative/boolean_alternative -> Clause via interpreter;
-  negation via negated flag; subject now pronominalizes ("... it is operational").
-- Updated goldens: characterization_coverage (pronominalization x2); annotated
-  mimics decaf + _NavPanel.lit (AdjectivalPredicate) since heuristic can't classify.
-- test_boolean_predicates.py (22 tests) green; full fixture-independent
-  verbalization suite 678 passed; docformatter applied. Committed as human author.
-- Draft PR #83 opened off main. Subscribe pending (tool needed approval - retry).
+## Done (original)
+- Predicate family + heuristic + ChainAssembler rewire + tests + draft PR #83 off main.
+
+## Done (review response, commit d657d928, rebased onto adcfed2e)
+- A: moved GrammarMetadata -> verbalization/grammar_metadata.py; predicate types
+  -> verbalization/boolean_predicate.py; patterns/field_metadata.py keeps only
+  FieldMetadata; deleted layering-guard test.
+- B: collapsed spec+realizer into one polymorphic BooleanPredicate (each builds
+  own head/predicate_object); removed registry + UnknownBooleanPredicateError;
+  builders take the terminal Attribute node (no loose owner+name).
+- C: dropped Article -> Definiteness; complement -> predicate_object; spec ->
+  predicate; morphology AdjectivalSuffix(StrEnum); heuristic honesty docs;
+  unquoted type hints; param/field docs.
+- D: "either" placement by negation scope (OPERATOR/copula -> after head;
+  VERB/do-support -> fronts head). Goldens: "either has milk or not",
+  intransitive "either breathes or not", kept "is either operational or not".
+- Tests green (86 touched-file tests); black + docformatter; committed as human.
+- PR #83 description updated; all 29 review threads replied + resolved; kept draft.
 
 ## Deferred / next
-- Cross-lib CI: booleans render differently everywhere; other libs' goldens may
-  shift (coraplex/sdt). Confirmed only krrood test_verbalization locally; watch CI.
-- Fixture-gated verbalization tests + ORM gen need py3.12 (run --confcutdir to skip
-  the parent conftest locally); full suite confirmed on CI.
+- Cross-lib CI watch (coraplex/sdt goldens may shift); fixture-gated tests need py3.12.
 - Follow-up on causal PR #82: annotate zoo Animal fields + update causal goldens
   ("because the Animal has milk") once this lands.
