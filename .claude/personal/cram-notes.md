@@ -112,8 +112,8 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   rebases. No deps.
 - P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
   gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`
-  (commit "Name predicate operands by their field, not always by their type"). No PR opened yet
-  (open on request). New `microplanning/operand_naming.py`; `ReferringExpressions` gains a
+  (commit "Name predicate operands by their field, not always by their type"). PR #87 (draft, base
+  main, subscribed to all activity). New `microplanning/operand_naming.py`; `ReferringExpressions` gains a
   per-node occurrence count; wired at `InstantiatedVerbalizableRule.build`. Divergence recorded:
   added a small generic-slot-name fallback (`node`/`obj`/`object`/`entity`/`thing`/… → type name)
   so existing meta-predicate surfaces stay unchanged and only domain predicates improve — this is
