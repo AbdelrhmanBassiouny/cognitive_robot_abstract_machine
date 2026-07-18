@@ -111,13 +111,17 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   krrood's surface test/snapshot from the #33 branch onto `main`. Must merge before #33
   rebases. No deps.
 - P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
-  gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`
-  (commit "Name predicate operands by their field, not always by their type"). PR #87 (draft, base
-  main, subscribed to all activity). New `microplanning/operand_naming.py`; `ReferringExpressions` gains a
-  per-node occurrence count; wired at `InstantiatedVerbalizableRule.build`. Divergence recorded:
-  added a small generic-slot-name fallback (`node`/`obj`/`object`/`entity`/`thing`/… → type name)
-  so existing meta-predicate surfaces stay unchanged and only domain predicates improve — this is
-  the "automate it to lower the modelling burden" the reviewer asked about; flag for confirmation.
+  gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`.
+  PR #87 (draft, base main, subscribed to all activity, all 12 review threads resolved).
+  Redesigned after developer review (see PR-progress section above for the full account):
+  operand naming and disambiguation now live entirely in `ReferringExpressions`/
+  `DistinguisherIndex` (coreference-driven, identity-keyed) instead of a parallel predicate-side
+  module — `operand_naming.py` and its heuristics (generic-name list, ordinal stripping,
+  occurrence-count anonymity) are deleted. Final precedence (supersedes decision 1's original
+  ordering): operand's own type wins when informative → field metadata → field name → "object".
+  Same-noun pairs read "a X … another X" (indefinite alternative, not "the other X" on first
+  mention); larger groups use ordinals, not numbers. Full suite verified against baseline
+  (zero regressions).
 - P3 [ ] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). Dep: P2.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
