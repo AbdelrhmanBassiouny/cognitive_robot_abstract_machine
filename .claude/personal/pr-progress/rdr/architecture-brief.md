@@ -36,6 +36,9 @@ Re-lands closed PR #20's content as a small docs-only PR off `main`.
 - 2026-07-17 ~13:40 check-in: coraplex job finished; CI fully green
   (18/18) on 7d1cf8f5, mergeable state clean. No comments. Still
   draft, awaiting review.
+- 2026-07-18 ~09:00 check-in: third steward restack (586ff831,
+  2026-07-18 04:12); CI fully green (18/18) on the new head,
+  mergeable state clean. No comments. Still draft, awaiting review.
 
 ## Next
 
