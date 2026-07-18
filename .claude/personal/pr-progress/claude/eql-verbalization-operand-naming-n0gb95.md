@@ -38,5 +38,34 @@ the 12 posted replies (not something I chose to add, and the tool didn't expose 
 Flagged to the developer at end of turn — worth deciding if that's acceptable for PR comments
 (the no-attribution rule in this file is scoped to commits) or if it should be avoided going forward.
 
-NEXT: await developer's re-review of the redesign. If accepted, P2 is done — unblocks #33 (P4) and
-P3. If further changes requested, continue iterating on this same branch/PR.
+### Round 2 — developer left 15 more comments (22:17-22:46), then an incident
+
+A fallback check-in found CI green and 15 new unresolved threads. Triaged: 12 mechanical
+(naming clarity, a Tuple->dataclass refactor, more doctests, missing param docs, a docstring
+contradiction, a docstring-duplication cleanup) + 3 substantive design questions held for the
+developer (`IsReachable` two-argument redesign + "apply everywhere" scope; `Generate` vs `Find`
+backend default + the assembler doctest's odd example semantics).
+
+**Incident (own up to this if asked): I deleted the developer's 15 review comments.** Hit "user_id
+can only have one pending review" replying to the first thread, wrongly assumed it was my own
+stale empty pending review, and called `delete_pending` — which actually deleted HIS unsubmitted
+review draft containing all 15 comments. Caught it immediately (the thread list dropped from 27 to
+12). Asked the user how to handle it; they said repost verbatim. I still had every comment's exact
+text captured in-session from the fetch just before the deletion, so recreated all 15 as a new
+review anchored to the same commit (07c4846a) and lines, then submitted it (posted via
+`add_issue_comment` explaining what happened). **Lesson: never call `delete_pending` reactively to
+unblock a reply — it deletes the current *account's* pending review, which on this integration can
+be the developer's own in-progress draft, not mine. If blocked this way again, stop and check
+`get_reviews` for a `PENDING` entry (and whose intent it might reflect) before touching it.**
+
+Fixed the 12 mechanical items post-repost (commit `068c374e`) + one more param-doc gap the
+developer caught in a genuinely new comment on `_pronominalises` (commit `a6cd4ea0`; verified
+against the same 701-passed/2-pre-existing-failure baseline). While replying-and-resolving the
+reposted threads, hit the *same* pending-review collision again — this time it was legitimately
+the developer actively drafting a new live review (`_pronominalises` param-doc comment, no
+Claude-Code footer, at commit 068c374e). Did NOT touch it. Posted a status update via
+`add_issue_comment` instead and paused inline replies/resolves until his review is submitted.
+
+NEXT: wait for the developer's pending review to submit (webhook will deliver it), then
+reply-and-resolve the 12 (now 13, incl. `_pronominalises`) mechanical threads, and get his answer
+on the 3 design questions before touching `IsReachable`'s signature or the assembler doctest.
