@@ -110,8 +110,14 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   `has_fragment`; add missing param docs. This EXTRACTS `surface_verification.py` +
   krrood's surface test/snapshot from the #33 branch onto `main`. Must merge before #33
   rebases. No deps.
-- P2 [ ] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
-  gates #33 and P3. No deps.
+- P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
+  gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`
+  (commit "Name predicate operands by their field, not always by their type"). No PR opened yet
+  (open on request). New `microplanning/operand_naming.py`; `ReferringExpressions` gains a
+  per-node occurrence count; wired at `InstantiatedVerbalizableRule.build`. Divergence recorded:
+  added a small generic-slot-name fallback (`node`/`obj`/`object`/`entity`/`thing`/… → type name)
+  so existing meta-predicate surfaces stay unchanged and only domain predicates improve — this is
+  the "automate it to lower the modelling burden" the reviewer asked about; flag for confirmation.
 - P3 [ ] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). Dep: P2.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
