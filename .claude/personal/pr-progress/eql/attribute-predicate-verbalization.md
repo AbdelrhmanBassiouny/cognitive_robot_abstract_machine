@@ -30,7 +30,18 @@ approved forks + negation-scope "either".
 - Tests green (86 touched-file tests); black + docformatter; committed as human.
 - PR #83 description updated; all 29 review threads replied + resolved; kept draft.
 
+## Review round 2 (commit 1ef0b157)
+- Added real per-field docstrings to test mimics (my first "done" was false).
+- Removed the LLM aside from default_boolean_predicate docstring.
+- 3 threads resolved. 2 left OPEN awaiting user decision:
+  1. either-placement: reviewer wants it out of boolean_alternative_clause into a
+     realization/polarity pass (Polarity.OPEN on head + clause-level RealizationPass
+     placing "either" by copula-vs-do-support). Proposed; asked this-PR vs follow-up.
+  2. adjective library: list not exhaustive; offered WordNet membership check (adds
+     nltk dep, over-classifies homographs) vs keep suffix heuristic. Asked preference.
+
 ## Deferred / next
+- Awaiting user decision on the 2 open threads above.
 - Cross-lib CI watch (coraplex/sdt goldens may shift); fixture-gated tests need py3.12.
 - Follow-up on causal PR #82: annotate zoo Animal fields + update causal goldens
   ("because the Animal has milk") once this lands.
