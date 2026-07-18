@@ -16,5 +16,8 @@ Done:
 Verified: surface test 3/3, util test 7/7, `test_verbalization/` green bar 2 pre-existing
 `jpt`-import env failures (unrelated).
 
-Next: open the draft PR off `main` (per personal-notes workflow: draft, session link,
-subscribe to all events). Then P2 (operand-naming architecture) is the keystone that gates #33.
+Draft PR: #86 (off `main`, subscribed to all events). Watching CI; re-arm hourly check-in
+until merged/closed.
+
+Next: get PR #86 CI green and reviewed → merge before #33 rebases. Then P2 (operand-naming
+architecture) is the keystone that gates #33.
