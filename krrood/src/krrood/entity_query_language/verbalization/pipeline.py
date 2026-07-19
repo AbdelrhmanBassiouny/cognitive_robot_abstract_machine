@@ -139,10 +139,11 @@ class VerbalizationPipeline:
         >>> VerbalizationPipeline.plain().verbalize(a(entity(variable(Robot, []))))
         'Find a Robot'
         """
-        if isinstance(expression, Match):
-            expression.expression.build()
-        elif isinstance(expression, Query):
-            expression.build()
+        match expression:
+            case Match():
+                expression.expression.build()
+            case Query():
+                expression.build()
         fragment = self._verbalizer.build(
             expression, services, performative=directive_for_backend(backend)
         )

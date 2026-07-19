@@ -466,13 +466,55 @@ class Prepositions(VocabEnum):
         return frozenset(preposition.text for preposition in cls)
 
 
-class Conjunctions(VocabEnum):
+class CoordinatingConjunctions(VocabEnum):
     """
-    Coordinating conjunctions (AND, OR).
+    Coordinating conjunctions — the FANBOYS — joining same-level constituents (a coordinated
+    list): *"a and b"*, *"a, b, or c"*.
+
+    .. note::
+        *Conjunction* here is the grammatical part-of-speech sense (a word class), not the
+        propositional-logic sense (where *conjunction* means AND and *disjunction* means OR).
+        ``AND`` and ``OR`` are both coordinating conjunctions grammatically;
+        :class:`SubordinatingConjunctions` is the sibling class for the other kind (*because*,
+        *although*, …).
     """
 
+    FOR = PlainWord("for")
     AND = PlainWord("and")
+    NOR = PlainWord("nor")
+    BUT = PlainWord("but")
     OR = PlainWord("or")
+    YET = PlainWord("yet")
+    SO = PlainWord("so")
+
+
+class SubordinatingConjunctions(VocabEnum):
+    """
+    Subordinating conjunctions — introducing a dependent clause on a main clause, unlike
+    :class:`CoordinatingConjunctions`'s same-level joins.
+
+    ``BECAUSE`` fronts the conditions justifying a conclusion; the others complete the closed,
+    commonly-cited set for causal/RDR verbalization's future clause kinds (e.g. a deferred
+    concessive *"although"* clause). Tagged with the keyword role so each colours like the other
+    structural connectives (:class:`Keywords`).
+    """
+
+    BECAUSE = KeyWord("because")
+    """Fronts the satisfied conditions that justify a conclusion."""
+    ALTHOUGH = KeyWord("although")
+    """Fronts a concessive clause (a condition that held despite not being decisive)."""
+    THOUGH = KeyWord("though")
+    """Informal variant of ``ALTHOUGH``."""
+    UNLESS = KeyWord("unless")
+    """Fronts a negative-conditional clause."""
+    WHEREAS = KeyWord("whereas")
+    """Fronts a contrastive clause."""
+    ONCE = KeyWord("once")
+    """Fronts a clause establishing a precondition has been met."""
+    LEST = KeyWord("lest")
+    """Fronts a clause naming what an action guards against."""
+    WHILE = KeyWord("while")
+    """Fronts a concurrent or contrastive clause."""
 
 
 class Absence(VocabEnum):

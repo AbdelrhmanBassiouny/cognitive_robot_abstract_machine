@@ -23,7 +23,7 @@ from krrood.entity_query_language.verbalization.vocabulary.countability import (
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
-    Conjunctions,
+    CoordinatingConjunctions,
     Copulas,
     Keywords,
     Prepositions,
@@ -230,7 +230,9 @@ def coordinated_genitive(
     return PhraseFragment(
         parts=[
             Articles.THE.as_fragment(),
-            oxford_comma(attribute_fragments, Conjunctions.AND.as_fragment()),
+            oxford_comma(
+                attribute_fragments, CoordinatingConjunctions.AND.as_fragment()
+            ),
             Prepositions.OF.as_fragment(),
             owner_fragment,
         ]

@@ -50,6 +50,12 @@ class SemanticRole(StrEnum):
     Attribute and field names — *battery*, *tasks*, *name*.
     """
 
+    RULE_REFERENCE = "rule_reference"
+    """
+    A rule's code in an explanation — *R0*, *R1*, *A2* — the token a source-link
+    resolver turns into a link to the rule's definition.
+    """
+
     PLAIN = "plain"
     """
     Neutral connecting text with no special colour.
