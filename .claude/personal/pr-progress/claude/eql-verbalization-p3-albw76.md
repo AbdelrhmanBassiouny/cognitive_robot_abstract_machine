@@ -1,9 +1,10 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status: pushed (3 commits), draft PR #88 open, base `claude/eql-verbalization-operand-naming-n0gb95`
+Status: pushed (4 commits), draft PR #88 open, base `claude/eql-verbalization-operand-naming-n0gb95`
 (P2), merges in P1 (#86) too. Subscribed to activity. Review round 1 (3 comments) fully handled;
-review round 2 (1 comment, design question) fixed and resolved too. Developer's answer on the
-base/stacking question (round 1's general comment) is still pending. Hourly check-in loop active.
+review round 2 (1 comment, design question) fixed and resolved too; review round 3 (1 comment, test
+quality) fixed and resolved too. Developer's answer on the base/stacking question (round 1's
+general comment) is still pending. Hourly check-in loop active.
 
 ## What's done
 - Merged P1 into the P3 branch (one conflict, in `verbalization_surfaces.py`'s import block —
@@ -43,6 +44,15 @@ base/stacking question (round 1's general comment) is still pending. Hourly chec
   registered overrides on top itself, keeping that concern local to the snapshot. Retargeted the
   two override tests at `SymbolicSurfaceSnapshot` directly instead of the free functions. Replied
   and resolved.
+- **Review round 3** (1 item, pushed 68cea9fd): "I don't get it why 'ash' doesn't appear? didn't we
+  override 'catalyst' to be 'ash'?" — a real test-quality gap, not a misunderstanding on the
+  developer's part: `Kindled`'s fragment only ever read `fuel`, so the override test asserted the
+  overridden and un-overridden renderings were *equal*, proving nothing. Gave `Kindled`'s fragment
+  a second clause reading `catalyst` too ("an Igniter is lit with ..."), so the default now reads
+  "a catalyst" (field-name fallback) and the override genuinely reads "with 'ash'" — visible in the
+  string itself. Updated the affected assertions (and the value-using-form comparison test, which
+  had bound `catalyst` to a raw `object()` whose repr would otherwise now leak into the sentence —
+  swapped for an equivalent placeholder variable). Replied and resolved.
 
 ## Next
 - Wait for the developer's answer on the base/stacking question (comment above) — be ready to
