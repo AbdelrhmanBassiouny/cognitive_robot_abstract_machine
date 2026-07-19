@@ -334,10 +334,11 @@ pattern — choose, then ask why — is the canonical three-liner:
 ```python
 from krrood.entity_query_language.factories import an
 from krrood.entity_query_language.rdr.decision import explain
+from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 
 result = next(an(SlotAssignment)(chosen=...).from_([assignment]).evaluate(backend=rdr_backend))
 explanation = explain(result)
-print(explanation.why_answer.verbalize())
+print(verbalize_expression(explanation.why_answer))
 # "the chosen of the SlotAssignment is left, because the shape of the SlotAssignment is 'circle', by the base rule R0"
 ```
 

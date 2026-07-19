@@ -32,6 +32,7 @@ from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import FunctionInterface
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.why import RDRConclusionExplanation
+from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.symbol_graph.symbol_graph import Symbol
 
 from ..dataset.decision_object import Slot, SlotAssignment
@@ -106,7 +107,7 @@ class TestDecisionQueryThreeLiner(unittest.TestCase):
     def test_three_liner_verbalizes(self):
         explanation = explain(next(self._query().evaluate(backend=self.backend)))
         self.assertEqual(
-            explanation.why_answer.verbalize(),
+            verbalize_expression(explanation.why_answer),
             "the chosen of the SlotAssignment is left, "
             "because the shape of the SlotAssignment is 'circle', by the base rule R0",
         )
