@@ -78,17 +78,29 @@ main … D-core-engine (#68) -> D-ui (#76) -> D-store (#80) -> D-deco (#77)
   test_rule_tree_view.py now included via the landed D-ui rehome).
   ORM artifacts reverted. Force-pushed both branches.
 - Attempted to delete the now-landed D-deco-rehome-handoff staging
-  branch; the delete push failed with HTTP 403 (proxy/auth scope
-  issue specific to branch deletion, pushes/fetches otherwise fine).
-  Left it in place — harmless now that its content has landed;
-  revisit deletion later if the permission allows.
+  branch; the delete push failed with HTTP 403. CONFIRMED SYSTEMIC:
+  the D-ui/steward session hit the identical rejection independently
+  ("the remote end hung up") trying to delete the same branch — this
+  is a session-wide git-proxy limitation on ref deletion, not specific
+  to my permissions. Stopping retries; branch is harmless (content
+  fully landed), theirs to remove when their side allows it.
 - #77 description updated (verification numbers, known-failures
   list including both confirmed-unrelated flakes, restack history).
+- 2026-07-19 (later still): full CI green on #77's current head
+  (c675dd49) — all 18 matrix jobs pass, INCLUDING both previously-
+  flaky jobs (coraplex, semantic_digital_twin) — confirms they are
+  genuinely intermittent, not real failures. Both #80 and #77 show
+  mergeable_state "clean". D-ui/steward session independently
+  confirmed the rehome landing and flake diagnoses in their own #76
+  comments; eql_rdr_refactor_plan.md punted to the actual steward
+  (S0), still unanswered.
 
 ## Next
 
-- Babysit #80 and #77 until merged/closed (#80 merges first).
-- Still waiting: steward's call on eql_rdr_refactor_plan.md (land on
-  #68 with an index entry, or drop) — posted, no reply yet.
-- Retry deleting D-deco-rehome-handoff (origin) when a working delete
-  path is available — currently 403s.
+- Babysit #80 and #77 until merged/closed (#80 merges first). Both
+  green and clean as of this check-in — likely just waiting on
+  steward review/merge now, not further action from this session.
+- Still waiting: steward's (S0) call on eql_rdr_refactor_plan.md (land
+  on #68 with an index entry, or drop) — posted, no reply yet.
+- D-deco-rehome-handoff: leave as-is, systemic delete limitation
+  confirmed by two independent sessions — not worth further retries.
