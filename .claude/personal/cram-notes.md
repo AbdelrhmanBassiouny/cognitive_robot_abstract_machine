@@ -117,19 +117,24 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   `assert_every_callable_has_a_fragment` isn't redundant with Python's own abstractmethod
   enforcement — `assert_surfaces_cover_every_callable` explicitly filters fragment-less classes
   out via `if self.has_fragment(cls)`, so only this assertion catches a fragment-less predicate,
-  and it does so immediately rather than lazily at some future instantiation site. TWO THREADS
-  LEFT OPEN (developer pushback pending, not yet resolved — replied with reasoning + a question,
-  no code change made): (d) whether `SymbolicCallableOverride.operands: Dict[str, Any]` should
-  narrow to a `(name: str, types: Tuple[Type, ...])`-shaped dataclass list — argued against
-  narrowing (docstring already generalizes past Type fields; no sdt/coraplex precedent yet;
-  `Dict[str, Any]` fits the `.get(field_.name)` lookup `placeholder_operands` needs) but asked
-  the developer to confirm; (e) whether the three separate `assert_*`-per-test functions should
-  collapse into one `SNAPSHOT.test()` — argued for keeping them separate (per-property pass/fail
-  granularity in CI output) but offered an additive `SNAPSHOT.test()` convenience method as a
-  middle ground, asked the developer which they want. Verified locally on py3.12: krrood surface
-  test 3/3, util test 7/7 (updated for new signature), `test_verbalization/` green bar 2
-  pre-existing `jpt`-import env failures (unrelated, present on `main` too). Must merge before
-  #33 rebases. No deps.
+  and it does so immediately rather than lazily at some future instantiation site.
+  Review round 2, developer answered both open threads, pushed (26984976): (d)
+  `SymbolicCallableOverride` (a class wrapping `Dict[str, Any]`) replaced with
+  `OverriddenOperand(name: str, value: Any)` — one dataclass per overridden field, so
+  `operand_overrides` is now `Dict[Type[SymbolicCallable], Sequence[OverriddenOperand]]`
+  (developer's answer kept `Any`, just wanted the per-field-entry shape, not the type-narrowed
+  one I'd pushed back on); (e) `class_implements_own_method`'s params retyped `Callable` instead
+  of `Any` per a follow-up comment (mind the gap: I initially mis-replied to the wrong/old
+  resolved thread before catching it and reposting on the right one — check thread targets
+  carefully when several land in one batch); (f) added the "why not redundant with
+  abstractmethod" reasoning into `assert_every_callable_has_a_fragment`'s docstring per request.
+  ONE THREAD STILL OPEN, awaiting developer answer (not yet resolved): whether the three
+  separate `assert_*`-per-test functions should collapse into `SNAPSHOT.test()` — argued for
+  keeping them separate (per-property pass/fail granularity in CI output), offered an additive
+  `SNAPSHOT.test()` convenience method as a middle ground. Verified locally on py3.12 after each
+  round: krrood surface test 3/3, util test 7/7, `test_verbalization/` green bar 2 pre-existing
+  `jpt`-import env failures (unrelated, present on `main` too). Must merge before #33 rebases.
+  No deps.
 - P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
   gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`.
   PR #87 (draft, base main, subscribed to all activity, all 12 review threads resolved).
