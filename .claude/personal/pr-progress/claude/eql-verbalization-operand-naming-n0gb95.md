@@ -179,8 +179,39 @@ The developer responded to round 4's held items:
 - PR stayed draft throughout (already was); description left as-is (no substantive behavior
   change this round).
 
-NEXT: wait for the developer's answers on the two still-open design questions (Literal/LSP —
-prompt delivered, work deferred to its own PR; example-domain file-vs-class prefixing — my
-opinion posted, awaiting their choice) and the doctest-placement-rules discussion (prompt
-delivered, work deferred to its own PR). Otherwise watch for further re-review / approval / ready
-instruction. PR description kept current.
+### Round 5 — developer picked the file-prefix option and fixed a doctest example
+
+Two quick review comments landed together:
+- Confirmed the file-prefix choice ("ok do prefix the module with '_' then"): renamed
+  `example_domain.py` → `_example_domain.py` (commit `452374a1`), updated every import site
+  (all affected test files, `verbalization.md`, `test_rule_doctests.py`'s auto-discovery).
+  Where the module itself (not just specific classes) was imported, kept the local alias name
+  `example_domain` via `from ... import _example_domain as example_domain` so usage sites stay
+  untouched — only the import line and module path carry the prefix. Took the module's own
+  docstring claim seriously (AutoAPI hyperlinking is the entire reason it lives under `src`) —
+  `test_source_links.py`'s ground-truth test builds a *real* Sphinx AutoAPI tree and checks the
+  rendered hyperlink resolves; that test was silently skipped in this session's fresh sandbox
+  (no `sphinx`/`autoapi` installed), so before trusting the rename I installed both and confirmed
+  it actually passes rather than assuming skip meant safe. Full suite: 713 passed, 0 skipped (up
+  from 710/3-skipped now that sphinx is present).
+- Fixed the `_subject_clause` `for_all` doctest per exact instruction — swapped the
+  same-type-Robot-as-location example for a domain-typed `Location`/`Robot` pair (commit
+  `da1e4be5`): `for_all(location, IsReachable(location, robot))` → *"for all Locations, they are
+  reachable for a Robot"*, verified against the live venv before committing.
+- Both threads replied-and-resolved. PR description updated: rewrote the "items left open" note
+  (only Literal/LSP remains, doctest-rules is a delivered-prompt future PR not a pending decision
+  on *this* PR), added the rename bullet, added the new `for_all` surface-table row, refreshed the
+  testing section's pass/skip counts. Stayed draft throughout (was already).
+- Environment note for future rounds: this session's container has no persistent venv — `uv run
+  pytest ...` bootstraps a full project `.venv` on first use (pulls ~268 packages incl. building
+  `dnutils`/`polytope`/`antlr4-python3-runtime`/`urdf-parser-py`/`arff` from source), and
+  `--confcutdir=test/krrood_test` is still needed to dodge the root conftest's sdt/coraplex-only
+  imports (`xacro`, etc.) for krrood-only runs. `uv pip install <pkg>` adds one-off packages
+  (`sphinx`, `sphinx-autoapi`, `docformatter`, `black`) into that venv without disturbing the
+  lockfile-resolved set. A bare system `pip install` in this container fails outright (broken
+  `distutils`/`install_layout` in the system Python) — always route through `uv`.
+
+NEXT: wait for the developer's answer on the one remaining open design question (Literal/LSP —
+prompt delivered, work deferred to its own PR) and on the doctest-placement-rules discussion
+(prompt delivered, work deferred to its own PR — not blocking this PR). Otherwise watch for
+further re-review / approval / ready instruction. PR description kept current.
