@@ -15,11 +15,15 @@ from typing_extensions import (
     Iterable,
     List,
     Optional,
+    TYPE_CHECKING,
     Tuple,
     Type,
     TypeVar,
     overload,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.rdr.why import WhyAnswerSource, WhyQuery
 
 from krrood.entity_query_language.core.base_expressions import (
     Selectable,
@@ -532,6 +536,39 @@ def add(variable: Any, value: Any) -> None:
     Add(variable, value)
 
 
+def why(
+    source: WhyAnswerSource,
+    *,
+    contrast: Optional[Any] = None,
+) -> WhyQuery:
+    """
+    Ask why an RDR reached the conclusion carried by ``source``.
+
+    Returns a :class:`~krrood.entity_query_language.rdr.why.WhyQuery`: the formal ask surface that
+    composes over the explanation a result already carries, rather than re-classifying. Pass a
+    yielded RDR result handle (its conclusion's explanation rides on the handle, model-side, never
+    on the shared concluded value), an
+    :class:`~krrood.entity_query_language.rdr.why.RDRConclusionExplanation` (the case store-read,
+    e.g. ``rdr.explain(case)``), or a bare
+    :class:`~krrood.entity_query_language.rdr.why.WhyAnswer`. Reading it is deferred until the answer
+    is used (``.answer`` / ``.verbalize()``). The query composes into the EQL verbalization algebra,
+    so ``why(result).verbalize()`` reads *"<conclusion> because <conditions>, by the <kind> rule"*.
+
+    :param source: The explanation source to question — a yielded result handle
+        (:class:`~krrood.entity_query_language.rdr.why.ExplanationCarrier`), an
+        ``RDRConclusionExplanation``, or a ``WhyAnswer``.
+    :param contrast: Reserved for contrastive questions (*why this rather than that*). Supplying it
+        is accepted but answering is not implemented yet; resolving such a query raises
+        ``NotImplementedError`` (see
+        :data:`~krrood.entity_query_language.rdr.why.CONTRAST_NOT_IMPLEMENTED`).
+    :return: The why-query to resolve or verbalize.
+    """
+    # Imported here (not at module top) because rdr.why -> explanation -> factories would cycle.
+    from krrood.entity_query_language.rdr.why import WhyQuery
+
+    return WhyQuery(source=source, contrast=contrast)
+
+
 def inference(
     type_: Type[T],
 ) -> Union[Callable[[], Union[T, InstantiatedVariable[T]]]]:
@@ -948,10 +985,6 @@ class NodeChildren(SymbolicFunction):
 node_children = symbolic_callable_to_function(NodeChildren)
 
 
-
-
-
-
 @dataclass(eq=False)
 class AttributeOwnerClass(SymbolicFunction):
     """
@@ -1105,6 +1138,8 @@ class RuntimeType(SymbolicFunction):
 
 
 type_ = symbolic_callable_to_function(RuntimeType)
+
+
 @symbolic_function
 def type_(obj: Any):
     """

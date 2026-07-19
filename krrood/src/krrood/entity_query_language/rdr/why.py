@@ -20,9 +20,17 @@ alike.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from typing_extensions import Any, List, Optional, Tuple
+from typing_extensions import (
+    Any,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Union,
+    runtime_checkable,
+)
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.explanation.explanation import (
@@ -32,6 +40,7 @@ from krrood.entity_query_language.explanation.explanation import (
 from krrood.entity_query_language.operators.core_logical_operators import (
     LogicalOperator,
 )
+from krrood.entity_query_language.rdr.exceptions import NoConclusionToExplainError
 from krrood.entity_query_language.rdr.observer import ClassificationTrace
 from krrood.entity_query_language.rdr.rule_tree_view import (
     RuleCode,
@@ -126,6 +135,121 @@ class RDRConclusionExplanation(Explanation):
     def get_satisfied_conditions_and_their_bindings(self) -> List[ConditionAndBindings]:
         """:return: The satisfied conditions justifying the conclusion, with their bindings."""
         return list(self.why_answer.satisfied_conditions)
+
+
+@runtime_checkable
+class ExplanationCarrier(Protocol):
+    """A yielded result handle that carries the explanation of how its RDR conclusion was reached.
+
+    The decoupled seam the *why* ask surface composes over: the RDR backend attaches each
+    conclusion's explanation to the fresh handle it yields — never to the concluded value, which an
+    RDR shares across cases — so a result explains itself. Any object exposing
+    :attr:`conclusion_explanation` satisfies it structurally.
+
+    .. note::
+        Yielded RDR results become carriers once the model-side explanation store and its
+        handle attachment land (the ``rdr/decision-queries`` work); this protocol is the seam
+        ``why(...)`` reads them through.
+    """
+
+    conclusion_explanation: Optional[RDRConclusionExplanation]
+    """The explanation of this result's RDR conclusion, or ``None`` when it carries none."""
+
+
+WhyAnswerSource = Union[ExplanationCarrier, RDRConclusionExplanation, WhyAnswer]
+"""What the *why* ask surface composes over: a yielded result handle carrying its conclusion
+explanation, an :class:`RDRConclusionExplanation` (the case store-read, e.g. ``rdr.explain(case)``),
+or a bare :class:`WhyAnswer`."""
+
+
+def resolve_why_answer(source: WhyAnswerSource) -> WhyAnswer:
+    """Read the :class:`WhyAnswer` from an explanation *source*.
+
+    The single place the ask surface maps a subject to its answer, so admitting a new kind of
+    source is one branch here rather than a new query type.
+
+    :param source: A yielded result handle (:class:`ExplanationCarrier`), an
+        :class:`RDRConclusionExplanation`, or a bare :class:`WhyAnswer`.
+    :return: The why-answer the source explains.
+    :raises NoConclusionToExplainError: When the source carries no explanation.
+    """
+    if isinstance(source, WhyAnswer):
+        return source
+    if isinstance(source, RDRConclusionExplanation):
+        return source.why_answer
+    if isinstance(source, ExplanationCarrier):
+        explanation = source.conclusion_explanation
+        if explanation is not None:
+            return explanation.why_answer
+    raise NoConclusionToExplainError(source)
+
+
+@dataclass
+class WhyQuery:
+    """The formal *why* ask surface: a query over the explanation a result (or case) carries.
+
+    Built by :func:`~krrood.entity_query_language.factories.why`, it wraps an explanation *source* —
+    a yielded RDR result handle carrying its conclusion's explanation, the
+    :class:`RDRConclusionExplanation` a case resolves to (``rdr.explain(case)``), or a bare
+    :class:`WhyAnswer` — and reads the answer from it lazily and once. Nothing is re-classified: the
+    query composes over the explanation the reasoner already produced (model-side, riding on the
+    yielded handle), never over the concluded value.
+
+    It composes into the EQL verbalization algebra like any other construct: a top-level
+    :class:`WhyQuery` dispatches through the rule registry to the causal grammar (its own
+    :class:`~…grammar.causal.rules.WhyQueryRule`, beside the :class:`WhyAnswer` one), so
+    :meth:`verbalize` reads *"<conclusion> because <conditions>, by the <kind> rule <code>"*.
+
+    .. note::
+        ``contrast`` is reserved: reading :meth:`answer` on a contrastive query raises (see
+        :data:`CONTRAST_NOT_IMPLEMENTED`) until contrastive why-questions land.
+    """
+
+    source: WhyAnswerSource
+    """The explanation source whose why-answer this query reads."""
+    contrast: Optional[Any] = None
+    """The conclusion to contrast against (*why this rather than that*). Reserved: answering a
+    contrastive query is not implemented in this version."""
+    _answer: Optional[WhyAnswer] = field(init=False, default=None, repr=False)
+    """Memoized answer, read once on first access."""
+
+    @property
+    def is_contrastive(self) -> bool:
+        """:return: Whether a contrast conclusion was supplied."""
+        return self.contrast is not None
+
+    @property
+    def answer(self) -> WhyAnswer:
+        """The why-answer this query reads from its source, resolved once on first access.
+
+        :return: The :class:`WhyAnswer` naming the fired rule and its justification.
+        :raises NotImplementedError: When the query is contrastive (reserved).
+        :raises NoConclusionToExplainError: When the source carries no explanation.
+        """
+        if self.is_contrastive:
+            raise NotImplementedError(CONTRAST_NOT_IMPLEMENTED)
+        if self._answer is None:
+            self._answer = resolve_why_answer(self.source)
+        return self._answer
+
+    @property
+    def condition(self) -> SymbolicExpression:
+        """:return: The firing-anchor condition of the resolved answer — the EQL expression the
+        verbalizer scans for discourse focus, mirroring :attr:`WhyAnswer.condition`."""
+        return self.answer.condition
+
+    def verbalize(self) -> str:
+        """Render this query's answer as a plain-text causal explanation.
+
+        :return: *"<conclusion> because <conditions>, by the <kind> rule <code>"* — the same
+            reading ``verbalize_expression`` produces for the underlying answer, obtained by
+            routing this query through the causal grammar.
+        """
+        from krrood.entity_query_language.verbalization.pipeline import (
+            verbalize_expression,
+        )
+
+        return verbalize_expression(self)
 
 
 def _depth_of(
