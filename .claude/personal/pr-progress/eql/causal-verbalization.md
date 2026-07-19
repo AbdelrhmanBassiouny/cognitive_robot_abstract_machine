@@ -27,6 +27,22 @@ documented elsewhere in these notes, not something my fix caused — confirmed
 by every test in the class failing identically at setUp(), not just the two
 I touched). Real verification is CI, which has the full env.
 
+CI on 2bb7503e (full run, workflow 29698823747): 17/18 green, including
+krrood (confirms the rule_kind fix) — and coraplex, which now PASSES for the
+first time this session (was the developer's flagged stale-base failure at
+session start; the mid-session restack must have fixed it — worth noting,
+not something I did). The one failure: giskardpy, on
+test_ros2_tools/test_collision_matrix_tool.py::test_script_launch_and_kill —
+a subprocess.TimeoutExpired launching a ROS2 script, stderr showing a
+circular-import race ("partially initialized module 'semantic_digital_twin.
+world'"). Zero file overlap with this PR's diff (krrood only) — has the
+signature of flakiness (timing-sensitive import race vs. a fixed 15s
+subprocess timeout). Asked the user via AskUserQuestion before acting (CI
+reruns are a visible, resource-consuming action); they said re-run. First
+rerun_failed_jobs attempt got 403 "workflow already running" (coraplex was
+still in progress); retried once the full run completed (coraplex finished
+success at 19:00:09) — queued successfully. Watching for the retry result.
+
 CI: re-check pending on 2bb7503e. Still expect only test_each_lib (coraplex)
 to fail per the developer's stale-base note — not touching it, no
 rebase/merge attempted beyond fast-forwarding through the restack's own merge
