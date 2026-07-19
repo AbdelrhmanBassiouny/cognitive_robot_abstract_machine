@@ -82,7 +82,7 @@ class TestWhyTopLevelRule(unittest.TestCase):
         self.assertEqual(self.answer.add_node.unwrapped_value, Species.mammal)
 
     def test_rule_kind_and_depth_for_top_level_rule(self):
-        self.assertEqual(self.answer.rule_kind, "if")
+        self.assertEqual(self.answer.rule_code.kind.tree_connector_word, "if")
         self.assertEqual(self.answer.rule_depth, 0)
 
     def test_satisfied_conditions_carry_bindings(self):
@@ -125,7 +125,7 @@ class TestWhyRefinementRule(unittest.TestCase):
         self.assertEqual(self.answer.conclusion, Species.mammal)
 
     def test_rule_kind_and_depth_for_refinement(self):
-        self.assertEqual(self.answer.rule_kind, "except if")
+        self.assertEqual(self.answer.rule_code.kind.tree_connector_word, "except if")
         self.assertEqual(self.answer.rule_depth, 1)
 
     def test_corner_case_is_the_refinement_case(self):
