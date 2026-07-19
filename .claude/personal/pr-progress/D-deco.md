@@ -48,9 +48,33 @@ main … D-core-engine (#68) -> D-ui (#76) -> D-store (#80) -> D-deco (#77)
 - Earlier: on the pre-split tip, full CI was green (all 18 matrix jobs;
   semantic_digital_twin case_factory fixed by restack, coraplex
   test_merge_motions green).
+- Steward notified via #76 comment (2026-07-17): register D-store in the
+  restack chain, hand off the 2 rehome files (staged on branch
+  D-deco-rehome-handoff, cut from D-ui), eql_rdr_refactor_plan.md question.
+- 2026-07-19: steward acted. D-ui split further into 3 stacked branches
+  (D-ui-splice-fix -> D-ui-rendering -> D-ui) and D-store was registered
+  in the restack chain — D-ui/D-store/D-deco all auto-restacked
+  (D-ui a7eb3703->9c7f8e6b, D-store 0c4938d3->b7655f11, D-deco
+  7e89ec60->86717780). Both my commits preserved verbatim (diffed
+  identical old vs new). Re-verified on the new tip: test_rdr_file_store
+  21 passed, test_rdr_decorator 20 passed, full test_eql_rdr 518 passed/
+  2 skipped.
+- Rehome files NOT yet landed on D-ui (still needed) — the old
+  D-deco-rehome-handoff branch had gone stale (base drifted through the
+  new restack), so I recreated it fresh off the current D-ui tip with the
+  same two files, re-verified green (test_rule_tree_view 20 passed), and
+  force-pushed. Still just a staging branch, not a PR.
+- New CI flake found on #77's current head: semantic_digital_twin ->
+  test_multi_sim.py::test_world_sim_state_sync (physics-settling
+  assertion). Confirmed unrelated: same job passes on #80, whose only
+  diff from #77 is the decorator commit, which never touches
+  semantic_digital_twin/physics_simulators. Documented in #77's
+  description and flagged on #76; no fix needed here.
+- #77 description updated with the restack note + the new flake's
+  known-failures entry. Posted update comment on #76.
 
 ## Next
 
-- Notify steward: register D-store in the restack chain; hand off the 2
-  rehome files for #76; offer/drop eql_rdr_refactor_plan.md.
-- Babysit #80 and #77 until merged/closed (#80 merges first).
+- Babysit #80 and #77 until merged/closed (#80 merges first). Watch for
+  the steward landing the rehome files onto D-ui (then delete
+  D-deco-rehome-handoff) and their eql_rdr_refactor_plan.md decision.
