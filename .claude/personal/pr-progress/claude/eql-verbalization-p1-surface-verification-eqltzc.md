@@ -52,8 +52,19 @@ Review round 2, developer answered, addressed and pushed in 26984976:
   several comments land in one batch, check each `commentId`/thread against
   `get_review_comments` rather than assuming continuity.
 
-Still open: whether to collapse the three `assert_*` tests into `SNAPSHOT.test()` — awaiting
-developer's call.
+Last thread (whether to collapse the three `assert_*` tests into `SNAPSHOT.test()`) resolved by
+the developer directly on GitHub with no further comment — implicit acceptance of keeping the
+three separate. All 6 review threads now resolved.
 
-Next: watching CI on 26984976 (self check-in loop). Once the last open thread gets a decision,
-apply/skip accordingly, then merge before #33 rebases. P2 is already done (PR #87) in parallel.
+PR marked ready for review by the developer (left as-is per personal-notes rule — that rule
+governs converting back to draft after MY commits, not undoing an explicit developer action).
+Updated the PR description afterward since it still described the pre-review-round state
+(`SymbolicCallableOverride`, old 3-arg `class_implements_own_method` signature) — now matches
+`OverriddenOperand` / `Callable`-typed signature.
+
+CI: all 18 checks green on 26984976. `mergeable_state: clean`. No formal GitHub "Approve" review
+yet (all reviews are COMMENTED, from the inline threads), so unclear if merge is otherwise gated
+on that — not something to act on unprompted; watching for further movement.
+
+Next: watching for merge/close (self check-in loop). P2 (PR #87) is already done in parallel;
+P1 merging is the last thing standing between here and #33's rebase.
