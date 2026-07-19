@@ -10,9 +10,18 @@ https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
 | #79 | `D-ui-rendering` | `D-ui-splice-fix` | `case_table.py` + 7 shell-free rendering/serialization tests |
 | #76 | `D-ui` | `D-ui-rendering` | interactive.py, magics.py, prompt_sections/examples, conftest, fitted_models, docs, 9 shell tests |
 
-Stack tips (2026-07-16, rebased onto restacked `D-core-engine` 5ccec861):
-#78 cfe32ad0, #79 2e8c8496, #76 a7eb3703. Full assembled stack =
-1535 passed, 5 skipped; fitted zoo model reloads 101/101.
+Stack tips: steward's automation restacked the WHOLE stack a SECOND time
+(D-core-engine 5ccec861 -> bd6e42f4). Current heads: #78 2c2e81b5,
+#79 22476489, #76 9c7f8e6b. Verified the automation preserved my commits
+byte-for-byte: #78 delta over new base = exactly my 89-line splice fix;
+#79 = case_table + 7 tests; #76 = interactive layer. No action needed — the
+automation now clearly tracks the two intermediate branches, so the earlier
+coordination concern is resolved. Locally synced (reset --hard) to the
+restacked remotes. Assembled stack last verified 1535 passed, 5 skipped;
+fitted zoo model reloads 101/101.
+
+`test_each_lib (krrood)` is GREEN on all three current live heads — that's
+the only job that exercises my code.
 
 ## Split rationale + dependency facts
 
@@ -90,11 +99,18 @@ Stack tips (2026-07-16, rebased onto restacked `D-core-engine` 5ccec861):
 
 - Watch #78, #79, #76 CI/review events until merged/closed; re-check via
   hourly send_later self check-in. Merge order is bottom-up: #78 -> #79 -> #76.
-- Known non-actionable CI: `test_each_lib (coraplex)` failed on the steward's
-  replaced head 90810979 (test_merge_motions / MotionDidNotFinish) — a
-  coraplex motion-planning test from the main cascade, not krrood, likely
-  flaky. Re-runs on the new heads; not ours.
-- Flag to steward (S0): #78 (splice fix) may fold into #68; the two new
-  intermediate branches (D-ui-splice-fix, D-ui-rendering) must be registered
-  with the restack automation.
-- D-deco (S2) now bases on the new D-ui tip (a7eb3703), not the old one.
+- Known non-actionable CI (all EXTERNAL packages, not krrood; systematic
+  across the steward's whole cascade, unrelated to my 3 PRs):
+  - `test_each_lib (robokudo)`: downloads test data from
+    gitlab.informatik.uni-bremen.de -> `[Errno 101] Network is unreachable`.
+    CI runner has no egress to that host; each fresh merge-commit misses the
+    per-commit test-data cache. Infra fix (network access or seeded cache),
+    not code.
+  - `test_each_lib (coraplex)`: test_merge_motions / MotionDidNotFinish —
+    motion-planning flake from the main cascade.
+  - giskardpy / semantic_digital_twin failures seen only on STALE heads;
+    green on the current live heads.
+- Flag to steward (S0): #78 (splice fix) may still fold into #68. (The
+  intermediate-branch coordination concern is RESOLVED — the automation's
+  2nd restack correctly re-parented D-ui-splice-fix and D-ui-rendering.)
+- D-deco (S2) now bases on the current D-ui tip (9c7f8e6b).
