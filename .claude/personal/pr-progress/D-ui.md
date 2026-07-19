@@ -29,8 +29,13 @@ D-deco-session handoff landed on #76 (commit bf5b63c3, on top of restacked
 `test_rule_tree_view.py` (renderer coverage; imports IPythonInterface so it
 must live in #76, not the shell-free #79). Verified: test_rule_tree_view 20
 passed, doc import satisfied. Replied on #76 + posted correction that I could
-NOT delete `D-deco-rehome-handoff` (git proxy blocks ref deletion) — the
-sibling session should delete that staging branch; its content is landed.
+NOT delete `D-deco-rehome-handoff` (git proxy blocks ref deletion). D-deco
+session confirmed (2026-07-19) the files landed byte-identical and rebuilt
+#80/#77 on the new tip (full test_eql_rdr 538 passed/2 skipped). Loose end:
+NEITHER automated session can delete `D-deco-rehome-handoff` (my git proxy
+hangs on ref-delete; theirs gets HTTP 403) — harmless staging branch, human
+can delete via the GitHub UI. The dangling `eql_rdr_refactor_plan.md` doc is
+#68/steward territory, not this stack (already deflected in-thread).
 
 ## Split rationale + dependency facts
 
