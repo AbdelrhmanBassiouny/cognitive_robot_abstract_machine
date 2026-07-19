@@ -38,6 +38,22 @@ this file got clobbered by a later save from that session (which only had P2's e
 mine). Re-applied here; P2's own entry above was left untouched. Watch for this if working
 notes concurrently with another session.
 
-Next: watching CI on 92d4a9b3 (self check-in loop). Once the two open threads get a decision
-from the developer, apply/skip accordingly, then merge before #33 rebases. P2 is already done
-(PR #87) in parallel.
+Review round 2, developer answered, addressed and pushed in 26984976:
+- `SymbolicCallableOverride` → `OverriddenOperand(name: str, value: Any)`, one per overridden
+  field; `operand_overrides` is now `Dict[Type[SymbolicCallable], Sequence[OverriddenOperand]]`.
+  Developer kept `Any` (didn't want the type-narrowed version I'd pushed back on), just wanted
+  the per-field-entry shape.
+- `class_implements_own_method`'s params retyped `Callable` instead of `Any`.
+- Doc note added to `assert_every_callable_has_a_fragment` explaining the abstractmethod
+  non-redundancy reasoning (was previously only in a PR reply).
+- Gotcha: the `Callable` question landed as a NEW review thread, not a reply on the
+  already-resolved "why name not method object" thread — I initially posted my answer to the
+  wrong (old, resolved) thread by mistake, caught it, and reposted on the correct one. When
+  several comments land in one batch, check each `commentId`/thread against
+  `get_review_comments` rather than assuming continuity.
+
+Still open: whether to collapse the three `assert_*` tests into `SNAPSHOT.test()` — awaiting
+developer's call.
+
+Next: watching CI on 26984976 (self check-in loop). Once the last open thread gets a decision,
+apply/skip accordingly, then merge before #33 rebases. P2 is already done (PR #87) in parallel.
