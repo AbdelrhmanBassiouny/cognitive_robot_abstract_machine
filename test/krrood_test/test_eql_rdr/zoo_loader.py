@@ -1,8 +1,8 @@
 """
 Load the UCI zoo dataset as plain :class:`Animal` instances.
 
-Returns animals with ``species=None`` (underspecified) plus the parallel list of
-ground-truth :class:`Species` targets, so the RDR can be fit and scored.
+Returns animals with ``species=None`` (underspecified) plus the parallel list of ground-
+truth :class:`Species` targets, so the RDR can be fit and scored.
 """
 
 from __future__ import annotations
@@ -12,25 +12,14 @@ import pickle
 
 from typing_extensions import List, Optional, Tuple
 
+from krrood.class_diagrams.utils import get_type_hints_of_object
+
 from .animal import Animal, Species
 
-#: 16 trait columns of the zoo dataset; all but ``legs`` are 0/1 booleans.
-_BOOL_FIELDS = (
-    "hair",
-    "feathers",
-    "eggs",
-    "milk",
-    "airborne",
-    "aquatic",
-    "predator",
-    "toothed",
-    "backbone",
-    "breathes",
-    "venomous",
-    "fins",
-    "tail",
-    "domestic",
-    "catsize",
+#: The 0/1-boolean trait columns of the zoo dataset (every ``Animal`` field typed
+#: ``bool``; ``legs`` is numeric and ``name``/``species`` are handled separately).
+_BOOL_FIELDS = tuple(
+    name for name, hint in get_type_hints_of_object(Animal).items() if hint is bool
 )
 
 #: Default cache location — reuses the pickles already committed for the legacy RDR tests.
@@ -43,7 +32,9 @@ DEFAULT_CACHE_FILE = os.path.join(
 
 
 def _load_cached(cache_file: str) -> Optional[dict]:
-    """Load the {features, targets, ids} parts from the per-key pickle files, or None."""
+    """
+    Load the {features, targets, ids} parts from the per-key pickle files, or None.
+    """
     if not cache_file.endswith(".pkl"):
         cache_file += ".pkl"
     parts = {}
@@ -70,7 +61,9 @@ def _save_cache(dataset, cache_file: str) -> None:
 
 
 def _fetch_zoo(cache_file: Optional[str]) -> Optional[dict]:
-    """Return {features, targets, ids} dataframes from cache or the UCI repo."""
+    """
+    Return {features, targets, ids} dataframes from cache or the UCI repo.
+    """
     if cache_file is not None:
         cached = _load_cached(cache_file)
         if cached is not None:
@@ -111,14 +104,14 @@ def load_zoo_animals(
 
     animals: List[Animal] = []
     targets: List[Species] = []
-    for i, (_, row) in enumerate(features.iterrows()):
+    for index, (_, row) in enumerate(features.iterrows()):
         animals.append(
             Animal(
-                name=str(names[i]),
+                name=str(names[index]),
                 legs=int(row["legs"]),
                 species=None,
                 **{field: bool(row[field]) for field in _BOOL_FIELDS},
             )
         )
-        targets.append(Species(int(target_ids[i])))
+        targets.append(Species(int(target_ids[index])))
     return animals, targets

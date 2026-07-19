@@ -1,5 +1,5 @@
 """
-Phase 1 tests: Animal dataclass + zoo loader.
+Tests for the Animal dataclass and the zoo dataset loader.
 """
 
 import unittest
@@ -20,14 +20,14 @@ class TestZooLoader(unittest.TestCase):
 
     def test_species_is_underspecified_on_cases(self):
         # Cases carry no species; the target list holds ground truth separately.
-        self.assertTrue(all(a.species is None for a in animals))
+        self.assertTrue(all(animal.species is None for animal in animals))
 
     def test_field_types(self):
-        a = animals[0]
-        self.assertIsInstance(a.hair, bool)
-        self.assertIsInstance(a.legs, int)
+        first_animal = animals[0]
+        self.assertIsInstance(first_animal.hair, bool)
+        self.assertIsInstance(first_animal.legs, int)
         # legs is a count, not a boolean.
-        self.assertTrue(any(x.legs > 1 for x in animals))
+        self.assertTrue(any(animal.legs > 1 for animal in animals))
 
     def test_first_case_is_aardvark_mammal(self):
         aardvark = animals[0]
@@ -46,13 +46,13 @@ class TestZooLoader(unittest.TestCase):
         # The plain dataclass needs no special treatment to be queried by EQL.
         animal = variable(Animal, domain=animals)
         hairy = list(entity(animal).where(animal.hair == True).evaluate())
-        expected = sum(1 for a in animals if a.hair)
+        expected = sum(1 for zoo_animal in animals if zoo_animal.hair)
         self.assertEqual(len(hairy), expected)
-        self.assertTrue(all(a.hair for a in hairy))
+        self.assertTrue(all(zoo_animal.hair for zoo_animal in hairy))
 
     def test_animal_is_plain_dataclass(self):
         # No EQL/ORM base classes — just a dataclass.
-        a = Animal(
+        animal = Animal(
             name="x",
             hair=True,
             feathers=False,
@@ -71,10 +71,6 @@ class TestZooLoader(unittest.TestCase):
             domestic=False,
             catsize=True,
         )
-        self.assertIsNone(a.species)
-        a.species = Species.mammal
-        self.assertEqual(a.species, Species.mammal)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        self.assertIsNone(animal.species)
+        animal.species = Species.mammal
+        self.assertEqual(animal.species, Species.mammal)

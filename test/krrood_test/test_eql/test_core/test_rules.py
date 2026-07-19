@@ -13,7 +13,13 @@ from krrood.entity_query_language.factories import (
     add,
 )
 from krrood.entity_query_language.core.variable import Literal
-from krrood.entity_query_language.core.base_expressions import OperationResult
+from krrood.entity_query_language.core.base_expressions import (
+    OperationResult,
+    _evaluation_context_var,
+    get_evaluation_context,
+    set_evaluation_context,
+)
+from krrood.entity_query_language.evaluation import create_default_evaluation_context
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.rules.conclusion import Add
 from ...dataset.eql_rule_tree_doc_example import (
@@ -515,7 +521,9 @@ def test_doc_example(rule_tree_doc_example_connections, alternative_code, result
 
 
 def test_conclusions_of_type_returns_matching_conclusions(handles_and_containers_world):
-    """``conclusions_of_type`` returns the attached conclusions of the requested subtype."""
+    """
+    ``conclusions_of_type`` returns the attached conclusions of the requested subtype.
+    """
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
     handle = variable(Handle, domain=world.bodies)
@@ -537,7 +545,10 @@ def test_conclusions_of_type_returns_matching_conclusions(handles_and_containers
 def test_conclusions_of_type_is_empty_without_matching_conclusions(
     handles_and_containers_world,
 ):
-    """``conclusions_of_type`` returns an empty list on an expression with no such conclusions."""
+    """
+    ``conclusions_of_type`` returns an empty list on an expression with no such
+    conclusions.
+    """
     world = handles_and_containers_world
     fixed_connection = variable(FixedConnection, domain=world.connections)
 
@@ -545,7 +556,9 @@ def test_conclusions_of_type_is_empty_without_matching_conclusions(
 
 
 def test_unwrapped_value_strips_literal_wrapper(handles_and_containers_world):
-    """``unwrapped_value`` returns the raw value behind a :class:`Literal` right-hand side."""
+    """
+    ``unwrapped_value`` returns the raw value behind a :class:`Literal` right-hand side.
+    """
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
     drawers = variable(Drawer, domain=[])
@@ -561,7 +574,10 @@ def test_unwrapped_value_strips_literal_wrapper(handles_and_containers_world):
 def test_unwrapped_value_returns_non_literal_right_unchanged(
     handles_and_containers_world,
 ):
-    """``unwrapped_value`` returns the right-hand expression unchanged when it is not a literal."""
+    """
+    ``unwrapped_value`` returns the right-hand expression unchanged when it is not a
+    literal.
+    """
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
     handle = variable(Handle, domain=world.bodies)
@@ -658,23 +674,16 @@ def test_conclusions_fire_without_an_active_evaluation_context(
 def test_conclusions_fire_with_a_pre_installed_evaluation_context(
     handles_and_containers_world,
 ):
-    """A conclusion must still fire when an ``EvaluationContext`` is already active.
+    """
+    A conclusion must still fire when an ``EvaluationContext`` is already active.
 
     Callers like RDR's ``classify_case``/``trace_case`` install an ``EvaluationContext``
-    before calling ``.evaluate()``, so ``_evaluate_``'s ``owns_an_evaluation_context`` is
-    ``False`` for every node in that pass. ``active_conditions_root.claim()`` must still
-    run in that case -- previously it was skipped entirely (nested inside the
+    before calling ``.evaluate()``, so ``_evaluate_``'s ``owns_an_evaluation_context``
+    is ``False`` for every node in that pass. ``active_conditions_root.claim()`` must
+    still run in that case -- previously it was skipped entirely (nested inside the
     ``owns_an_evaluation_context`` branch), so the conditions root was never claimed and
     conclusions never fired under RDR classification.
     """
-    from krrood.entity_query_language.core.base_expressions import (
-        get_evaluation_context,
-        set_evaluation_context,
-    )
-    from krrood.entity_query_language.evaluation import (
-        create_default_evaluation_context,
-    )
-
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
     handle = variable(Handle, domain=world.bodies)
@@ -694,26 +703,25 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
         assert get_evaluation_context() is pre_installed_context
         results = list(condition._evaluate_(OperationResult({})))
     finally:
-        from krrood.entity_query_language.core.base_expressions import (
-            _evaluation_context_var,
-        )
-
         _evaluation_context_var.reset(token)
 
-    fired = [r for r in results if drawers._id_ in r.bindings]
+    fired = [result for result in results if drawers._id_ in result.bindings]
     assert len(fired) >= 1
-    assert all(isinstance(r.bindings[drawers._id_], Drawer) for r in fired)
+    assert all(isinstance(result.bindings[drawers._id_], Drawer) for result in fired)
 
 
 def test_conclusions_respect_a_bare_attribute_conditions_root_truthiness():
-    """A conclusion gated on a bare-attribute conditions root must use ``is_condition_false``.
+    """
+    A conclusion gated on a bare-attribute conditions root must use
+    ``is_condition_false``.
 
     When the conditions root is itself a bare attribute Comparator acting as a Filter
-    condition (rather than a logical combinator like ``AND``/``OR``/``NOT``), the gate in
-    ``_evaluate_conclusions_and_update_bindings_`` previously checked ``current_result.is_false``,
-    which does not reflect the comparator's own truth value for a bare-attribute root and
-    stayed ``False`` regardless of the attribute's actual value -- ``is_condition_false`` is
-    the property documented as the canonical check for this.
+    condition (rather than a logical combinator like ``AND``/``OR``/``NOT``), the gate
+    in ``_evaluate_conclusions_and_update_bindings_`` previously checked
+    ``current_result.is_false``, which does not reflect the comparator's own truth value
+    for a bare-attribute root and stayed ``False`` regardless of the attribute's actual
+    value -- ``is_condition_false`` is the property documented as the canonical check
+    for this.
     """
     milk_true = Body(name="milk_true")
     milk_false = Body(name="milk_false")
@@ -726,6 +734,6 @@ def test_conclusions_respect_a_bare_attribute_conditions_root_truthiness():
 
     results = list(condition._evaluate_(OperationResult({})))
 
-    fired = [r for r in results if conclusion._id_ in r.bindings]
+    fired = [result for result in results if conclusion._id_ in result.bindings]
     assert len(fired) == 1
     assert fired[0].bindings[conclusion._id_] == Body(name="conclusion_fired")
