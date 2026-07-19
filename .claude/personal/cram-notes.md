@@ -102,14 +102,34 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   no env hacks.
 
 ### The four PRs  ( [ ] todo / [~] in progress / [x] done )
-- P1 [ ] general, off `main` — surface-verification API polish. Introduce
-  `SymbolicCallableOverride` dataclass →
-  `Dict[Type[SymbolicCallable], SymbolicCallableOverride]`; use
-  `krrood.utils.module_and_class_name` for the unique name; extract a general
-  `class_implements_own_method` util (krrood utils / class-diagram utils) and use it in
-  `has_fragment`; add missing param docs. This EXTRACTS `surface_verification.py` +
-  krrood's surface test/snapshot from the #33 branch onto `main`. Must merge before #33
-  rebases. No deps.
+- P1 [x] done — branch `claude/eql-verbalization-p1-surface-verification-eqltzc`, off `main`,
+  PR #86 (draft, subscribed to all activity). Extracted `surface_verification.py`
+  (`VerbalizationSurface`, `SymbolicCallableOverride`, `SymbolicSurfaceSnapshot`) and rewired
+  krrood's surface test/snapshot onto it; general `class_implements_own_method` added to
+  `class_diagrams/utils.py`, unit-tested. Review round (5 comments) addressed and pushed
+  (92d4a9b3): (a) `class_implements_own_method` redesigned per developer feedback to take two
+  already-resolved methods (`Subclass.method_name`, `BaseClass.method_name`) instead of
+  `(cls, base_class, method_name)` — caller does ordinary attribute access, no more
+  `inspect.getattr_static`, no string-typed lookup; (b) `phrase_rule._is_guarded` reverted to
+  the plain `type(rule).when is not PhraseRule.when` comparison — `when` is a plain instance
+  method, never classmethod/staticmethod, so the direct comparison was already correct and the
+  util added needless indirection there; (c) explained (no code change, thread resolved) why
+  `assert_every_callable_has_a_fragment` isn't redundant with Python's own abstractmethod
+  enforcement — `assert_surfaces_cover_every_callable` explicitly filters fragment-less classes
+  out via `if self.has_fragment(cls)`, so only this assertion catches a fragment-less predicate,
+  and it does so immediately rather than lazily at some future instantiation site. TWO THREADS
+  LEFT OPEN (developer pushback pending, not yet resolved — replied with reasoning + a question,
+  no code change made): (d) whether `SymbolicCallableOverride.operands: Dict[str, Any]` should
+  narrow to a `(name: str, types: Tuple[Type, ...])`-shaped dataclass list — argued against
+  narrowing (docstring already generalizes past Type fields; no sdt/coraplex precedent yet;
+  `Dict[str, Any]` fits the `.get(field_.name)` lookup `placeholder_operands` needs) but asked
+  the developer to confirm; (e) whether the three separate `assert_*`-per-test functions should
+  collapse into one `SNAPSHOT.test()` — argued for keeping them separate (per-property pass/fail
+  granularity in CI output) but offered an additive `SNAPSHOT.test()` convenience method as a
+  middle ground, asked the developer which they want. Verified locally on py3.12: krrood surface
+  test 3/3, util test 7/7 (updated for new signature), `test_verbalization/` green bar 2
+  pre-existing `jpt`-import env failures (unrelated, present on `main` too). Must merge before
+  #33 rebases. No deps.
 - P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
   gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`.
   PR #87 (draft, base main, subscribed to all activity, all 12 review threads resolved).
