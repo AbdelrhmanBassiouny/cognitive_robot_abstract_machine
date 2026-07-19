@@ -94,12 +94,30 @@ main … D-core-engine (#68) -> D-ui (#76) -> D-store (#80) -> D-deco (#77)
   confirmed the rehome landing and flake diagnoses in their own #76
   comments; eql_rdr_refactor_plan.md punted to the actual steward
   (S0), still unanswered.
+- 2026-07-19 (restack #3, automated): D-core-engine, D-ui, D-store,
+  and D-deco all advanced again (D-core-engine bd6e42f4->d98d9566,
+  D-ui bf5b63c3->c50d2109, D-store f1de44d9->07cb6831, D-deco
+  c675dd49->c46c0c5b). This time the restack automation itself
+  pushed merge commits ("Merge origin/X into Y (restack onto updated
+  parent)", authored by the automation identity) directly onto
+  D-store and D-deco — no action needed from this session, just
+  verification. Diffed old tip vs new tip for every file this slice
+  owns (file_store.py + its test on D-store; decorator.py, the
+  jinja template, test_rdr_decorator.py, both rdr_decorator.md docs
+  on D-deco): all empty, confirming zero content drift through the
+  automated merge. Re-ran full test_eql_rdr on the new D-deco tip:
+  538 passed / 2 skipped. mergeable_state was "unstable" right after
+  the restack (CI queued/in-progress on the new tip, not a real
+  conflict) — expected transient state, not investigated further.
+  Reverted the regenerated ormatic_interface.py diff as usual. No
+  new comments on #76/#77/#80; steward's eql_rdr_refactor_plan.md
+  call still outstanding.
 
 ## Next
 
 - Babysit #80 and #77 until merged/closed (#80 merges first). Both
-  green and clean as of this check-in — likely just waiting on
-  steward review/merge now, not further action from this session.
+  green/clean pre-restack; post-restack content verified identical,
+  CI re-running on the new tip — check back for it to go green.
 - Still waiting: steward's (S0) call on eql_rdr_refactor_plan.md (land
   on #68 with an index entry, or drop) — posted, no reply yet.
 - D-deco-rehome-handoff: leave as-is, systemic delete limitation
