@@ -86,6 +86,74 @@ replied-and-resolved (17 of 18; the Generate-vs-Find default question left open)
 updated to match (surface table, design bullets). Full suite re-verified: 701 passed, same 2
 pre-existing failures.
 
-NEXT: wait for the developer's answer on the Generate-vs-Find backend default (only remaining open
-thread), then reply-and-resolve it. Otherwise watch for further re-review / approval / ready
-instruction.
+### Round 4 — several quiet fallback check-ins, then 13 more comments, then a real infra discovery
+
+After the round-3 push, ~5 consecutive fallback check-ins (spaced 60/90/120/180/180 min, widening
+each time) found zero developer activity — confirmed via byte-identical `updated_at` on the PR
+between checks, not just "no new threads". One check-in did find the PR body had picked up a stray
+`stack-turn: 3` trailing line with a bumped `updated_at` I hadn't caused; not a real instruction, so
+I didn't act on it as one — just restored the description and flagged it in the check-in reply.
+Hasn't recurred since.
+
+Developer then left 13 more review comments in one batch. Triaged and fixed the mechanical ones
+(commit `e7db996c`):
+- `IsReachable.location` was still typed `Robot` in two flagged doctests (and, for consistency, a
+  third unflagged one in the same test file) — switched to `Location` (no `Pose` class exists in
+  the example domain), keeping `body` as `Robot`. Reads *"a Location is reachable for a Robot"*.
+- `_sole_predicate_field` now returns `Optional[ParentEdge]` (the edge itself) instead of unpacking
+  into `(type, str)`; `operand_head_noun` reads `sole_field.parent._type_` /
+  `sole_field.field_name` directly. Also caught and fixed a second leftover `Tuple` type hint on
+  `_resolve_head_noun` I'd missed in the earlier `ParentEdge` conversion, and dropped the now-unused
+  `Tuple` import.
+- `operand_head_noun`'s docstring now opens by defining "operand" and "head noun" before using them
+  (kept the name — "operand" is the module's established term).
+- Simplified two docstring sentences (`distinguisher_for`'s convoluted "its first mention was
+  assigned" → "keeps the distinguisher that was assigned to its first mention"; added a missing
+  "that" in `_HeadNounGrouping`'s docstring).
+- The developer asked to confirm `verbalize_expression(..., backend=someSelectiveBackend())` renders
+  "Find" — confirmed by reading `directive_for_backend`/`SelectiveBackend.opening_directive` in
+  `backends.py`, then updated the `match/assembler.py` doctest to demonstrate it explicitly with
+  `EntityQueryLanguageBackend()`, finally resolving the long-open Generate-vs-Find thread from round
+  3 without touching the Selective backend's actual default.
+- `head_noun_of`'s "variable outside the pre-scanned expression" fallback was genuinely unclear —
+  traced it to a real, reachable case (an aggregation-source population variable: scanned but
+  deliberately excluded from `head_nouns`, then still rendered via `AggregationValueAssembler` →
+  `VariableRule` → `head_noun_of`). Verified against the live venv and added doctests for both the
+  normal case and the aggregation-source fallback.
+- Removed a doctest on `CoreferenceProcessor._noun_phrase` that was a byte-for-byte duplicate of
+  `_distinguished`'s own example (developer's own diagnosis); left `_noun_phrase`'s prose as the
+  sole documentation of the cases it handles, since forcing one example to cover all of them would
+  have been worse than dropping it. The developer's broader ask — where should doctest-placement
+  *rules* live, since they're not verbalization-specific — is a live discussion, not something I
+  decided unilaterally; proposed AGENTS.md (general rules) + the developer verbalization doc
+  (domain-specific addendum) and asked whether to draft it or let him shape the rules first.
+- The `%%`-divider AGENTS.md rule was scoped to "test file", but source files (referring.py,
+  example_domain.py, fragments/base.py, and others) already use it too — broadened the rule to "a
+  file" and moved it from Testing to Code Style (the developer's "why only test files?" was a
+  legitimate catch, not a rhetorical question).
+
+**Left open, not acted on:**
+- `Literal` inheriting from `Variable` reads like an LSP violation (every "real variable" check has
+  to explicitly exclude `Literal`) — agreed it's a real tension, explicitly out of scope per the
+  developer's own note ("that would be its own PR"), so just acknowledged and left unresolved.
+- The example-domain class-prefix request (`_` or `Example`, to avoid collisions with other cram
+  packages) has a large blast radius (every class, every doctest/test/doc referencing them) and two
+  open sub-questions (which prefix; whether the *rendered* noun should also change, or stay
+  "Robot"/"Location"/etc. as a pure Python-identifier fix) — held for the developer's answer rather
+  than guessing.
+
+**Infra discovery, worth remembering:** doctests in this package are NOT illustrative-only — the
+whole tree is auto-discovered and actually executed by `test/krrood_test/test_eql/test_verbalization/
+test_rule_doctests.py` (`pkgutil.walk_packages` + `doctest.DocTestFinder`), and `test_backend_performative.py`
+plus the two "test_grammar_is_queryable_with_eql_by_construct" /
+"test_symbolic_function_binds_its_computed_value_in_a_query" failures I'd been treating since round 1
+as an unfixable pre-existing sandbox gap were ALL just missing the `pyjpt` pip package — `pip install
+pyjpt` in the venv312 sandbox made the *entire* suite pass cleanly (710 passed, 0 failed, 3 unrelated
+skips), no exclusions needed any more. Re-verify new doctests against this harness going forward
+instead of assuming they're inert; and remember `pyjpt` is installable in this sandbox if the jpt gap
+resurfaces.
+
+NEXT: wait for the developer's answers on the two held design questions (Literal/LSP, example-domain
+prefixing) and the doctest-placement-rules discussion. Otherwise watch for further re-review /
+approval / ready instruction. PR description kept current (surface table now includes the Find/Generate
+backend-param example; design bullets mention the later rounds).
