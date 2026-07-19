@@ -128,11 +128,13 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   resolved thread before catching it and reposting on the right one — check thread targets
   carefully when several land in one batch); (f) added the "why not redundant with
   abstractmethod" reasoning into `assert_every_callable_has_a_fragment`'s docstring per request.
-  ONE THREAD STILL OPEN, awaiting developer answer (not yet resolved): whether the three
-  separate `assert_*`-per-test functions should collapse into `SNAPSHOT.test()` — argued for
-  keeping them separate (per-property pass/fail granularity in CI output), offered an additive
-  `SNAPSHOT.test()` convenience method as a middle ground. Verified locally on py3.12 after each
-  round: krrood surface test 3/3, util test 7/7, `test_verbalization/` green bar 2 pre-existing
+  Last thread (whether the three separate `assert_*`-per-test functions should collapse into
+  `SNAPSHOT.test()`) resolved by the developer directly with no further comment — implicit
+  acceptance of keeping them separate as argued (per-property pass/fail granularity). All 6
+  review threads resolved; PR marked ready for review by the developer; description updated to
+  match the final diff; CI green (18/18) on 26984976, `mergeable_state: clean`. No formal GitHub
+  "Approve" review yet, not acted on unprompted. Verified locally on py3.12 after each round:
+  krrood surface test 3/3, util test 7/7, `test_verbalization/` green bar 2 pre-existing
   `jpt`-import env failures (unrelated, present on `main` too). Must merge before #33 rebases.
   No deps.
 - P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
