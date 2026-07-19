@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing_extensions import TYPE_CHECKING, List
+from typing_extensions import List
 
+from krrood.entity_query_language.rdr.why import WhyAnswer
 from krrood.entity_query_language.verbalization.fragments.base import (
     BlockFragment,
     Clause,
@@ -22,20 +23,17 @@ from krrood.entity_query_language.verbalization.grammar.framework.assembler impo
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
-    CausalConnectives,
-    Conjunctions,
+    CoordinatingConjunctions,
     Copulas,
     Prepositions,
+    SubordinatingConjunctions,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import (
     GrammaticalNumber,
 )
 
-if TYPE_CHECKING:
-    from krrood.entity_query_language.rdr.why import WhyAnswer
 
-
-class CausalAssembler(Assembler["WhyAnswer", CausalStructure]):
+class CausalAssembler(Assembler[WhyAnswer, CausalStructure]):
     """
     Realise a why-answer as *"<conclusion> because <conditions>, by the <kind> rule"*.
 
@@ -104,9 +102,9 @@ class CausalAssembler(Assembler["WhyAnswer", CausalStructure]):
             self.context.child(reason) for reason in plan.reasons
         ]
         return BlockFragment(
-            header=CausalConnectives.BECAUSE.as_fragment(),
+            header=SubordinatingConjunctions.BECAUSE.as_fragment(),
             items=reasons,
-            conjunction=Conjunctions.AND.as_fragment(),
+            conjunction=CoordinatingConjunctions.AND.as_fragment(),
         )
 
     def _rule_identity_clause(self, plan: CausalStructure) -> VerbalizationFragment:

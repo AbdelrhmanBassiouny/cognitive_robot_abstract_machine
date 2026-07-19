@@ -250,13 +250,16 @@ def walk_rules_in_emission_order(
 def rule_code_map(
     conditions_root: Optional[SymbolicExpression],
 ) -> Dict[UUID, RuleCode]:
-    """:return: A ``condition._id_`` → :class:`RuleCode` map, the canonical rule numbering.
-
+    """
     The id is the rule's index in :func:`walk_rules_in_emission_order` (base = ``0``, so the codes
     run in the same order as the serialized ``add(`` lines); the kind letter comes from
     :func:`~krrood.entity_query_language.rdr.rule_tree_view.rule_kinds`. Keyed by ``condition._id_``
     so the verbalizer and the serializer name each rule identically, by identity rather than by their
     own traversal position.
+
+    :param conditions_root: The root of the rule tree's condition DAG, or ``None`` for an
+        empty tree.
+    :return: A ``condition._id_`` → :class:`RuleCode` map, the canonical rule numbering.
     """
     if conditions_root is None:
         return {}
@@ -388,11 +391,38 @@ def _condition_operands(node: SymbolicExpression) -> List[SymbolicExpression]:
 # %% Rule tree -> AST
 
 
+_RULE_COMMENT_MARKER_PREFIX = "__EQL_RULE_COMMENT__:"
+"""Sentinel prefix for a rule-comment marker statement. ``ast.unparse`` cannot render a real ``#``
+comment (the AST has no comment node), so :func:`_emit_rule_body` emits this uniquely-prefixed
+string-literal statement at the exact position of each rule instead; :func:`_convert_rule_comment_markers`
+then swaps it for a comment by exact match on this prefix — a marker this module itself produced,
+never a guess based on an unrelated statement's rendered text."""
+
+#: The quote styles ``ast.unparse`` may wrap a marker statement in: triple-quoted when the marker
+#: is the first statement of the module (docstring position), single-quoted otherwise.
+_MARKER_QUOTE_STYLES = ('"""', "'")
+
+
+def _rule_comment_marker_statement(code: RuleCode) -> ast.stmt:
+    """Build the sentinel statement :func:`_convert_rule_comment_markers` turns into this rule's
+    ``# <kind> rule <code>`` comment.
+
+    :param code: The rule's code.
+    :return: An ``ast.Expr`` string-literal statement carrying the marker text.
+    """
+    return ast.Expr(
+        value=ast_helpers.constant(
+            f"{_RULE_COMMENT_MARKER_PREFIX}{code.kind.value} rule {code.as_string}"
+        )
+    )
+
+
 def _emit_rule_body(
     condition_node: SymbolicExpression,
     variable_names_by_id: Dict[UUID, str],
     conclusion_target: ast.expr,
     referenced_types: Set[type],
+    codes_by_id: Dict[UUID, RuleCode],
 ) -> List[ast.stmt]:
     """Emit the ``add(...)`` statement plus any nested refinement/alternative blocks for a rule.
 
@@ -400,6 +430,8 @@ def _emit_rule_body(
     :param variable_names_by_id: Maps each bound variable's id to its source name.
     :param conclusion_target: The AST expression the conclusion value is assigned to.
     :param referenced_types: Accumulates enum types that need importing; mutated in place.
+    :param codes_by_id: The ``condition._id_`` → :class:`RuleCode` map; a rule with no entry
+        emits no comment marker.
     :return: The AST statements forming this rule's body.
     """
     decomposed = _flatten_selector_chain(condition_node)
@@ -407,13 +439,17 @@ def _emit_rule_body(
     if isinstance(value, enum.Enum):
         referenced_types.add(type(value))
 
-    statements: List[ast.stmt] = [
+    statements: List[ast.stmt] = []
+    code = codes_by_id.get(decomposed.base_condition._id_)
+    if code is not None:
+        statements.append(_rule_comment_marker_statement(code))
+    statements.append(
         ast.Expr(
             value=ast_helpers.call(
                 add.__name__, [conclusion_target, _emit_value(value)]
             )
         )
-    ]
+    )
     for branch in decomposed.branches:
         factory = _CONCLUSION_SELECTOR_FACTORY[branch.conclusion_selector_type]
         branch_base_condition = _flatten_selector_chain(branch.condition).base_condition
@@ -421,40 +457,36 @@ def _emit_rule_body(
             factory, [branch_base_condition], variable_names_by_id
         )
         nested_body = _emit_rule_body(
-            branch.condition, variable_names_by_id, conclusion_target, referenced_types
+            branch.condition,
+            variable_names_by_id,
+            conclusion_target,
+            referenced_types,
+            codes_by_id,
         )
         statements.append(ast_helpers.with_block(selector_call, nested_body))
     return statements
 
 
-def _annotate_rule_comments(
-    body: str,
-    ordered_nodes: List[SymbolicExpression],
-    codes_by_id: Dict[UUID, RuleCode],
-) -> str:
-    """Insert a ``# <kind> rule <code>`` comment above each rule's ``add(...)`` line.
-
-    The unparser cannot carry comments, so the codes are woven into the rendered text. The i-th
-    ``add(`` line is the i-th rule in emission order (:func:`walk_rules_in_emission_order`), so the
-    two lists line up; each comment keeps its ``add(`` line's indentation.
+def _convert_rule_comment_markers(body: str) -> str:
+    """Swap every rule-comment marker statement for its real ``# <kind> rule <code>`` comment.
 
     :param body: The unparsed, indented rule-tree body.
-    :param ordered_nodes: The rule condition nodes in emission order.
-    :param codes_by_id: The ``condition._id_`` → :class:`RuleCode` map.
-    :return: The body with a code comment above every rule.
+    :return: The body with every marker line turned into a comment.
     """
-    codes = iter(codes_by_id.get(node._id_) for node in ordered_nodes)
-    annotated: List[str] = []
-    for line in body.splitlines():
-        if line.lstrip().startswith("add("):
-            code = next(codes, None)
-            if code is not None:
-                indentation = line[: len(line) - len(line.lstrip())]
-                annotated.append(
-                    f"{indentation}# {code.kind.value} rule {code.as_string}"
-                )
-        annotated.append(line)
-    return "\n".join(annotated)
+    return "\n".join(_convert_marker_line(line) for line in body.splitlines())
+
+
+def _convert_marker_line(line: str) -> str:
+    """:return: *line* with its rule-comment marker swapped for a ``#`` comment, or *line*
+    unchanged when it carries no marker."""
+    indentation = line[: len(line) - len(line.lstrip())]
+    stripped = line.strip()
+    for quote in _MARKER_QUOTE_STYLES:
+        prefix = f"{quote}{_RULE_COMMENT_MARKER_PREFIX}"
+        if stripped.startswith(prefix) and stripped.endswith(quote):
+            comment = stripped[len(prefix) : -len(quote)]
+            return f"{indentation}# {comment}"
+    return line
 
 
 def _render_corner_cases_source(
@@ -528,13 +560,12 @@ def rdr_to_python(rdr: EQLSingleClassRDR, case_type_is_local: bool = False) -> s
         variable_names_by_id,
         conclusion_target,
         referenced_types,
+        rule_code_map(rdr.query._conditions_root_),
     )
     body = _indent(ast_helpers.unparse_statements(body_statements), "    ")
+    body = _convert_rule_comment_markers(body)
 
     ordered_nodes = walk_rules_in_emission_order(rdr.query._conditions_root_)
-    body = _annotate_rule_comments(
-        body, ordered_nodes, rule_code_map(rdr.query._conditions_root_)
-    )
     corner_cases_dict_src = _render_corner_cases_source(
         rdr.corner_cases.to_ordered_sources(ordered_nodes), referenced_types
     )

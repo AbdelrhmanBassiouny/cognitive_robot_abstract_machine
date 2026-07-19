@@ -139,16 +139,11 @@ class VerbalizationPipeline:
         >>> VerbalizationPipeline.plain().verbalize(a(entity(variable(Robot, []))))
         'Find a Robot'
         """
-        from krrood.entity_query_language.rdr.why import WhyAnswer
-
-        if isinstance(expression, Match):
-            expression.expression.build()
-        elif isinstance(expression, WhyAnswer):
-            # A why-answer is a completed classification: the conclusion and condition expressions
-            # it carries are already built, so it routes straight to the verbalizer.
-            pass
-        elif isinstance(expression, Query):
-            expression.build()
+        match expression:
+            case Match():
+                expression.expression.build()
+            case Query():
+                expression.build()
         fragment = self._verbalizer.build(
             expression, services, performative=directive_for_backend(backend)
         )

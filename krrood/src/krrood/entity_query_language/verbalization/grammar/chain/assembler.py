@@ -27,7 +27,7 @@ from krrood.entity_query_language.verbalization.microplanning.possessive import 
     possessive_path,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Conjunctions,
+    CoordinatingConjunctions,
     Copulas,
     Logicals,
     Prepositions,
@@ -155,7 +155,7 @@ class ChainAssembler(Assembler[MappedVariable, ChainPlan]):
                 Copulas.IS.as_fragment(),
                 Logicals.EITHER.as_fragment(),
                 attribute_fragment,
-                Conjunctions.OR.as_fragment(),
+                CoordinatingConjunctions.OR.as_fragment(),
                 Logicals.NOT.as_fragment(),
             ]
         )

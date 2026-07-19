@@ -14,14 +14,18 @@ if TYPE_CHECKING:
 @dataclass
 class BindingScope:
     """
-    The deferred-constraint frame stack and the field-reference override map used when
-    verbalizing an instantiated variable.
+    Per-pass verbalization state: a generic node-substitution map, plus the
+    deferred-constraint frame stack used when verbalizing an instantiated variable.
 
-    An instantiated variable such as ``inference(Drawer)(container=fc.parent)`` is
-    rendered as *"a Drawer where the container of the Drawer is …"*: the field bindings
-    are rendered first, any constraints on those fields are deferred into a frame, and
-    the pre-rendered field fragments are registered as overrides so the deferred
-    constraints reuse them instead of re-verbalizing.
+    :attr:`binding_overrides` is a generic mechanism (read by the fold engine for any node id),
+    with two independent consumers today: :class:`~…grammar.instantiated.assembler.InstantiatedAssembler`
+    registers a field's own rendered reference so a later deferred constraint on that field reuses
+    it instead of re-verbalizing (e.g. ``inference(Drawer)(container=fc.parent)`` rendered as *"a
+    Drawer where the container of the Drawer is …"*); :class:`~…grammar.causal.assembler.CausalAssembler`
+    registers a classified case's variable as a definite instance reference (*"the Animal"*) so a
+    why-answer's conclusion and conditions read with the concrete case. :attr:`constraint_frames`
+    is instantiated-variable-specific and unrelated to :attr:`binding_overrides`; it stays here as
+    the other piece of per-pass state a grammar assembler may need to mutate mid-``realize``.
     """
 
     constraint_frames: List[List[SymbolicExpression]] = field(default_factory=list)
@@ -35,9 +39,9 @@ class BindingScope:
         default_factory=dict
     )
     """
-    Maps a child expression's ``_id_`` → a ``VerbalizationFragment`` that substitutes
-    for it on subsequent encounters, so a pre-rendered field reference is reused rather
-    than re-verbalized.
+    Maps a node's ``_id_`` → a :class:`VerbalizationFragment` that substitutes for it on
+    subsequent encounters, so a pre-rendered fragment is reused instead of being verbalized
+    again.
     """
 
     def push_constraint_frame(self) -> None:

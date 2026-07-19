@@ -61,7 +61,7 @@ from krrood.entity_query_language.verbalization.microplanning.coordination impor
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
     CoindexedPhrases,
-    Conjunctions,
+    CoordinatingConjunctions,
     copula_with,
     Keywords,
     Logicals,
@@ -131,7 +131,9 @@ class AndRule(PhraseRule):
         if len(parts) == 1:
             return parts[0]
         # Conjuncts are independent clauses, so a two-clause coordination keeps its comma.
-        return oxford_comma(parts, Conjunctions.AND.as_fragment(), pair_comma=True)
+        return oxford_comma(
+            parts, CoordinatingConjunctions.AND.as_fragment(), pair_comma=True
+        )
 
 
 class RangeFoldRule(PhraseRule):
@@ -199,13 +201,13 @@ class CoindexedFoldRule(PhraseRule):
         """
         terminals = oxford_comma(
             [self._attribute(pair) for pair in node.terminals],
-            Conjunctions.AND.as_fragment(),
+            CoordinatingConjunctions.AND.as_fragment(),
         )
         natural = coindexed_natural_parts(node)
         if natural is not None:
             hops = oxford_comma(
                 [self._attribute(natural.left_hop), self._attribute(natural.right_hop)],
-                Conjunctions.AND.as_fragment(),
+                CoordinatingConjunctions.AND.as_fragment(),
             )
             return PhraseFragment(
                 parts=[
@@ -282,7 +284,7 @@ class SharedSubjectComparisonsRule(PhraseRule):
             parts=[
                 context.child(node.subject_expression),
                 copula_with("", GrammaticalNumber.SINGULAR),
-                oxford_comma(tails, Conjunctions.OR.as_fragment()),
+                oxford_comma(tails, CoordinatingConjunctions.OR.as_fragment()),
             ]
         )
 
@@ -333,7 +335,7 @@ class SharedSubjectConjunctionRule(PhraseRule):
         return PhraseFragment(
             parts=[
                 context.child(node.subject_expression),
-                oxford_comma(tails, Conjunctions.AND.as_fragment()),
+                oxford_comma(tails, CoordinatingConjunctions.AND.as_fragment()),
             ]
         )
 
@@ -419,7 +421,7 @@ class OrRule(PhraseRule):
             parts=[
                 head,
                 Punctuation.COMMA.as_fragment(),
-                Conjunctions.OR.as_fragment(),
+                CoordinatingConjunctions.OR.as_fragment(),
                 parts[-1],
             ]
         )

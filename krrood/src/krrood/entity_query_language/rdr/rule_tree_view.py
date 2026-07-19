@@ -104,8 +104,9 @@ class RuleView:
     """The ``Add`` conclusion(s) attached to :attr:`condition` (one for single-class)."""
     depth: int
     """Refinement-nesting depth (0 = a top-level rule)."""
-    kind: str
-    """How the rule relates to its predecessor: ``"if"`` / ``"else if"`` / ``"except if"``."""
+    kind: RuleKindWord
+    """How the rule relates to its predecessor: base / refinement (except-if) / alternative
+    (else-if)."""
 
 
 def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
@@ -122,13 +123,13 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
     """
     rules: List[RuleView] = []
 
-    def visit(node: SymbolicExpression, depth: int, kind: str) -> None:
+    def visit(node: SymbolicExpression, depth: int, kind: RuleKindWord) -> None:
         if isinstance(node, Refinement):
             visit(node.left, depth, kind)
-            visit(node.right, depth + 1, "except if")
+            visit(node.right, depth + 1, RuleKindWord.REFINEMENT)
         elif isinstance(node, Alternative):
             visit(node.left, depth, kind)
-            visit(node.right, depth, "else if")
+            visit(node.right, depth, RuleKindWord.ALTERNATIVE)
         elif isinstance(node, Next):
             for child in node._operation_children_:
                 visit(child, depth, kind)
@@ -142,7 +143,7 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
                 )
             )
 
-    visit(conditions_root, 0, "if")
+    visit(conditions_root, 0, RuleKindWord.BASE)
     return rules
 
 
@@ -150,11 +151,12 @@ class RuleKindWord(enum.StrEnum):
     """The word naming a rule's relationship to its predecessor, and the letter of its code."""
 
     BASE = "base"
-    """The seed / top-level rule (kind ``"if"``); coded ``R0``."""
+    """The seed / top-level rule (tree connector ``"if"``); coded ``R0``."""
     REFINEMENT = "refinement"
-    """An except-if rule refining a more general one (kind ``"except if"``); coded ``R<n>``."""
+    """An except-if rule refining a more general one (tree connector ``"except if"``); coded
+    ``R<n>``."""
     ALTERNATIVE = "alternative"
-    """An else-if sibling rule (kind ``"else if"``); coded ``A<n>``."""
+    """An else-if sibling rule (tree connector ``"else if"``); coded ``A<n>``."""
 
     @property
     def letter(self) -> str:
@@ -168,18 +170,24 @@ class RuleKindWord(enum.StrEnum):
         """
         return "A" if self is RuleKindWord.ALTERNATIVE else "R"
 
-    @classmethod
-    def from_kind(cls, kind: str) -> RuleKindWord:
-        """:return: The rule-kind word for a :func:`walk_rules` kind string (``"if"`` → base,
-        ``"except if"`` → refinement, ``"else if"`` → alternative)."""
-        return _KIND_STRING_TO_WORD[kind]
+    @property
+    def tree_connector_word(self) -> str:
+        """:return: The control-flow word this kind reads as in the ASCII rule-tree view
+        (``"if"`` / ``"except if"`` / ``"else if"``), matching the ``with refinement(...) /
+        alternative(...)`` rule-authoring syntax.
 
-
-_KIND_STRING_TO_WORD: Dict[str, RuleKindWord] = {
-    "if": RuleKindWord.BASE,
-    "except if": RuleKindWord.REFINEMENT,
-    "else if": RuleKindWord.ALTERNATIVE,
-}
+        >>> RuleKindWord.REFINEMENT.tree_connector_word
+        'except if'
+        >>> RuleKindWord.ALTERNATIVE.tree_connector_word
+        'else if'
+        """
+        match self:
+            case RuleKindWord.REFINEMENT:
+                return "except if"
+            case RuleKindWord.ALTERNATIVE:
+                return "else if"
+            case _:
+                return "if"
 
 
 @dataclass(frozen=True)
@@ -210,10 +218,7 @@ def rule_kinds(conditions_root: SymbolicExpression) -> Dict[UUID, RuleKindWord]:
     predecessor (base / refinement / alternative), read from the display walk. The rule *index* is
     assigned separately (in emission order), so the shared code map keys the two together by id.
     """
-    return {
-        rule.condition._id_: RuleKindWord.from_kind(rule.kind)
-        for rule in walk_rules(conditions_root)
-    }
+    return {rule.condition._id_: rule.kind for rule in walk_rules(conditions_root)}
 
 
 def resolve_status(
@@ -441,7 +446,10 @@ class RuleTreeRenderer:
         connector: str,
         status: RuleStatus,
     ) -> str:
-        text = f"{rule.kind} {format_condition(rule.condition)}  →  {_format_conclusions(rule)}"
+        text = (
+            f"{rule.kind.tree_connector_word} {format_condition(rule.condition)}  →  "
+            f"{_format_conclusions(rule)}"
+        )
         if self.use_color:
             text = f"{status.color}{text}{Style.RESET_ALL}"
         return f"{connector}{text}"

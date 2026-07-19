@@ -26,7 +26,7 @@ from krrood.entity_query_language.verbalization.grammar.query.planner import (
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
-    Conjunctions,
+    CoordinatingConjunctions,
     Copulas,
     Keywords,
     OrderingRangeWords,
@@ -79,11 +79,11 @@ class GroupedByAssembler(Assembler[Query, GroupPlan]):
                     self.context.child(expression, number=GrammaticalNumber.PLURAL)
                     for expression in plan.aggregated
                 ],
-                Conjunctions.AND.as_fragment(),
+                CoordinatingConjunctions.AND.as_fragment(),
             )
             return PhraseFragment(
                 parts=[
-                    Conjunctions.AND.as_fragment(),
+                    CoordinatingConjunctions.AND.as_fragment(),
                     Articles.THE.as_fragment(),
                     aggregated_phrase,
                     Copulas.ARE.as_fragment(),

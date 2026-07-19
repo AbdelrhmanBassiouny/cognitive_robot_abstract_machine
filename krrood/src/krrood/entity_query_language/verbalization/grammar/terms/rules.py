@@ -36,7 +36,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
     RuleContext,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Conjunctions,
+    CoordinatingConjunctions,
     FallbackNouns,
     Prepositions,
     Specificity,
@@ -166,7 +166,7 @@ class LiteralRule(PhraseRule):
         if type_members is not None:
             return oxford_comma(
                 [RoleFragment.for_type(member) for member in type_members],
-                Conjunctions.AND.as_fragment(),
+                CoordinatingConjunctions.AND.as_fragment(),
             )
         return RoleFragment.for_literal(value)
 
@@ -210,7 +210,7 @@ class LiteralRule(PhraseRule):
         modifiers: List[VerbalizationFragment] = (
             [
                 Prepositions.WITH.as_fragment(),
-                oxford_comma(details, Conjunctions.AND.as_fragment()),
+                oxford_comma(details, CoordinatingConjunctions.AND.as_fragment()),
             ]
             if details
             else []

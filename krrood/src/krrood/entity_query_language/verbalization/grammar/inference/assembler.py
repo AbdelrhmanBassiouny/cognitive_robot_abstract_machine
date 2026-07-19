@@ -34,7 +34,7 @@ from krrood.entity_query_language.verbalization.grammar.inference.planner import
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
-    Conjunctions,
+    CoordinatingConjunctions,
     ExistentialPhrase,
     FallbackNouns,
     GroupKeyPhrases,
@@ -241,7 +241,7 @@ class InferenceAssembler(Assembler[Entity, RuleStructure]):
             BlockFragment(
                 header=intro,
                 items=whose_clauses,
-                conjunction=Conjunctions.AND.as_fragment(),
+                conjunction=CoordinatingConjunctions.AND.as_fragment(),
                 bulleted_header=False,
             )
         ]

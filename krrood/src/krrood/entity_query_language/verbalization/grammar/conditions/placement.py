@@ -58,7 +58,7 @@ from krrood.entity_query_language.verbalization.relational_attributes import (
     relational_verb,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Conjunctions,
+    CoordinatingConjunctions,
     Keywords,
 )
 from krrood.entity_query_language.verbalization.vocabulary.words import (
@@ -547,7 +547,7 @@ def as_subject_restrictions(
         BlockFragment(
             header=None,
             items=whose_clauses,
-            conjunction=Conjunctions.AND.as_fragment(),
+            conjunction=CoordinatingConjunctions.AND.as_fragment(),
         )
         if whose_clauses
         else None
@@ -592,4 +592,6 @@ def _join_residual(
     if not fragments:
         return None
     # Residual conjuncts are independent clauses, so a two-clause pair keeps its comma.
-    return oxford_comma(fragments, Conjunctions.AND.as_fragment(), pair_comma=True)
+    return oxford_comma(
+        fragments, CoordinatingConjunctions.AND.as_fragment(), pair_comma=True
+    )

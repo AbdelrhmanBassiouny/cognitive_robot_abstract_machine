@@ -27,7 +27,7 @@ from krrood.entity_query_language.verbalization.microplanning.possessive import 
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
-    Conjunctions,
+    CoordinatingConjunctions,
     Copulas,
     Keywords,
     Punctuation,
@@ -187,7 +187,9 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
         if binding_fragments:
             # Bindings and constraints are independent clauses → a two-clause pair keeps its comma.
             joined = oxford_comma(
-                binding_fragments, Conjunctions.AND.as_fragment(), pair_comma=True
+                binding_fragments,
+                CoordinatingConjunctions.AND.as_fragment(),
+                pair_comma=True,
             )
             modifiers.append(
                 PhraseFragment(
@@ -200,7 +202,9 @@ class InstantiatedAssembler(Assembler[InstantiatedVariable, InstantiatedPlan]):
             )
         if constraint_fragments:
             joined_constraints = oxford_comma(
-                constraint_fragments, Conjunctions.AND.as_fragment(), pair_comma=True
+                constraint_fragments,
+                CoordinatingConjunctions.AND.as_fragment(),
+                pair_comma=True,
             )
             modifiers.append(
                 PhraseFragment(

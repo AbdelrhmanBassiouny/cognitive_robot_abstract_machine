@@ -46,7 +46,7 @@ from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Conjunctions,
+    CoordinatingConjunctions,
     RangePhrases,
     SetMembership,
     copula_with,
@@ -819,7 +819,8 @@ def between_phrase(
         parts=[
             _between_operator(compact, number),
             oxford_comma(
-                [lower_fragment, upper_fragment], Conjunctions.AND.as_fragment()
+                [lower_fragment, upper_fragment],
+                CoordinatingConjunctions.AND.as_fragment(),
             ),
         ]
     )
@@ -878,6 +879,6 @@ def one_of(candidates: List[VerbalizationFragment]) -> Optional[VerbalizationFra
     return PhraseFragment(
         parts=[
             SetMembership.ONE_OF.as_fragment(),
-            oxford_comma(candidates, Conjunctions.OR.as_fragment()),
+            oxford_comma(candidates, CoordinatingConjunctions.OR.as_fragment()),
         ]
     )

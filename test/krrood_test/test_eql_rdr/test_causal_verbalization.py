@@ -74,20 +74,17 @@ class TestCausalTopLevelRule(unittest.TestCase):
 
     def test_golden_text(self):
         self.assertEqual(
-            self.answer.verbalize(),
+            verbalize_expression(self.answer),
             "the species of the Animal is mammal, "
             "because the Animal is milk, by the base rule R0",
         )
 
     def test_because_fronts_the_condition(self):
-        self.assertIn("because the Animal is milk", self.answer.verbalize())
+        self.assertIn("because the Animal is milk", verbalize_expression(self.answer))
 
     def test_conclusion_precedes_because(self):
-        surface = self.answer.verbalize()
+        surface = verbalize_expression(self.answer)
         self.assertLess(surface.index("is mammal"), surface.index("because"))
-
-    def test_verbalize_method_matches_pipeline(self):
-        self.assertEqual(self.answer.verbalize(), verbalize_expression(self.answer))
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -104,7 +101,7 @@ class TestCausalConcreteInstance(unittest.TestCase):
             Species.mammal,
             scripted_expert({Species.mammal: lambda v: v.milk == True}),
         )
-        self.surface = self.rdr.why(self.mammal).verbalize()
+        self.surface = verbalize_expression(self.rdr.why(self.mammal))
 
     def test_reads_with_the_definite_instance(self):
         self.assertIn("the Animal", self.surface)
@@ -129,7 +126,7 @@ class TestCausalCoordinatedConditions(unittest.TestCase):
                 {Species.bird: lambda v: and_(v.feathers == True, v.eggs == True)}
             ),
         )
-        self.surface = self.rdr.why(self.bird).verbalize()
+        self.surface = verbalize_expression(self.rdr.why(self.bird))
 
     def test_conditions_are_coordinated_with_and(self):
         self.assertIn(
@@ -156,7 +153,7 @@ class TestCausalRefinementRule(unittest.TestCase):
         # The over-general fish rule fires for the mammal; refining it adds an except-if.
         self.rdr.fit_case(self.fish, Species.fish, expert)
         self.rdr.fit_case(self.mammal, Species.mammal, expert)
-        self.surface = self.rdr.why(self.mammal).verbalize()
+        self.surface = verbalize_expression(self.rdr.why(self.mammal))
 
     def test_rule_identity_names_the_refinement_with_its_code(self):
         self.assertIn("by the refinement rule R1", self.surface)
@@ -184,7 +181,7 @@ class TestCausalAlternativeRule(unittest.TestCase):
         # The bird fires no existing rule, so its rule is added as an else-if alternative.
         self.rdr.fit_case(self.mammal, Species.mammal, expert)
         self.rdr.fit_case(self.bird, Species.bird, expert)
-        self.surface = self.rdr.why(self.bird).verbalize()
+        self.surface = verbalize_expression(self.rdr.why(self.bird))
 
     def test_rule_identity_names_the_alternative_with_its_code(self):
         self.assertIn("by the alternative rule A1", self.surface)
@@ -240,7 +237,7 @@ class TestCausalUnverbalizableCondition(unittest.TestCase):
         unverbalizable = ConditionAndBindings(MinimalSymbolicExpression(), {})
         answer = dataclasses.replace(answer, satisfied_conditions=(unverbalizable,))
         with self.assertRaises(UnverbalizableExpressionError):
-            answer.verbalize()
+            verbalize_expression(answer)
 
 
 if __name__ == "__main__":

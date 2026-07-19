@@ -55,7 +55,7 @@ from krrood.entity_query_language.verbalization.microplanning.referring import (
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
-    Conjunctions,
+    CoordinatingConjunctions,
     FallbackNouns,
     GroupingPhrases,
     Keywords,
@@ -382,7 +382,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         # already-introduced subject ("their department and their name"), agreeing in number.
         column_list = oxford_comma(
             [self.context.child(column) for column in columns],
-            Conjunctions.AND.as_fragment(),
+            CoordinatingConjunctions.AND.as_fragment(),
         )
         return self._query_body(
             node,
@@ -534,7 +534,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         """
         labels = oxford_comma(
             [self._group_label(key, GrammaticalNumber.PLURAL) for key in keys],
-            Conjunctions.AND.as_fragment(),
+            CoordinatingConjunctions.AND.as_fragment(),
         )
         return PhraseFragment(
             parts=[
@@ -557,7 +557,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         'For each department, report the sum of salaries of Employees'
         """
         labels = oxford_comma(
-            [self._group_label(key) for key in keys], Conjunctions.AND.as_fragment()
+            [self._group_label(key) for key in keys],
+            CoordinatingConjunctions.AND.as_fragment(),
         )
         having = node._having_expression_
         key_phrase = labels
@@ -763,7 +764,10 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         post_noun: List[VerbalizationFragment] = list(rendered.inline_modifiers)
         if rendered.relative_clauses:
             post_noun.append(
-                oxford_comma(rendered.relative_clauses, Conjunctions.AND.as_fragment())
+                oxford_comma(
+                    rendered.relative_clauses,
+                    CoordinatingConjunctions.AND.as_fragment(),
+                )
             )
         if post_noun:
             selected = PhraseFragment(parts=[selected, *post_noun])
