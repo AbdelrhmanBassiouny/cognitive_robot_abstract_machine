@@ -2,9 +2,91 @@ PR #82 (eql/causal-verbalization -> claude/rdr-why-answer-6fnw2o), draft, RDR
 causal-explanation verbalization + rule codes. Working branch:
 claude/pr-82-causal-review-t6ppd2.
 
-Status: studying the review, architecture not yet agreed with the developer.
+Status: review round DONE. All 22 threads replied-and-resolved (20 resolved, 2
+left open pending PR #83 — the boolean-predicate goldens). Pushed commit
+f9fa1252 to eql/causal-verbalization (rebased cleanly onto a mid-session
+remote restack, zero file overlap, author+committer both set to the human
+identity). PR description updated to match the final diff, session link kept.
+PR stayed draft throughout (per personal-notes default).
 
-Done so far:
+CI: re-check pending (pushed after the restack). Still expect only
+test_each_lib (coraplex) to fail per the developer's stale-base note — not
+touching it, no rebase/merge attempted beyond fast-forwarding through the
+restack's own merge commits (zero overlap with files this PR touches,
+verified via `git diff --name-only <old-base> origin/eql/causal-verbalization`
+before doing it).
+
+What shipped this round (see the PR description for the full writeup):
+- rule_tree_view.py: RuleView.kind is RuleKindWord directly now (no
+  string<->enum conversion, no _KIND_STRING_TO_WORD global); added
+  RuleKindWord.tree_connector_word (match/case, not a dict) for the ASCII-tree
+  wording.
+- why.py: dropped the now-redundant rule_kind field (rule_code.kind covers
+  it); WhyAnswer.verbalize() removed entirely (callers use
+  verbalize_expression(answer)) — this also removed rdr/why.py's last
+  reference to verbalization, so nothing needs to stay inline-imported there.
+- serialization.py: rule-comment placement is now structural — an
+  identity-keyed AST sentinel statement emitted during _emit_rule_body,
+  swapped for a real `#` comment post-unparse by exact marker match (not a
+  substring guess on "add("). Added the missing rule_code_map param doc.
+  Verified byte-for-byte identical output via the self-contained
+  test_serialization.py fixtures (no zoo dataset needed).
+- english.py: Conjunctions/CausalConnectives split into
+  CoordinatingConjunctions (FANBOYS: for/and/nor/but/or/yet/so) and
+  SubordinatingConjunctions (because/although/though/unless/whereas/once/
+  lest/while) as two sibling classes — the real grammatical distinction, not
+  a "Connectives" wrapper. Renamed Conjunctions at all ~18 call sites across
+  the grammar package (flagged the blast radius before doing it; developer
+  said go ahead).
+- pipeline.py/verbalizer.py: if-chains -> match/case; pipeline.py's dead
+  WhyAnswer no-op branch removed by construction, and its WhyAnswer import
+  along with it (verbalizer.py's WhyAnswer import stays — genuinely used —
+  just hoisted to top level).
+- causal/planner.py, causal/assembler.py: WhyAnswer import hoisted out of
+  TYPE_CHECKING to real top-level (empirically verified no cycle: temp-edited,
+  ran both import orders, reverted, full suite unaffected); quotes dropped
+  for real on the Planner[WhyAnswer,...]/Assembler[WhyAnswer,...] base-class
+  subscripts (these are eager-evaluated even under `from __future__ import
+  annotations`, since that only defers *annotations* not base-class
+  expressions — that's why they were quoted at all).
+- binding_scope.py: BindingScope's docstring re-scoped off "instantiated
+  variable" framing now that CausalAssembler is a second, unrelated consumer
+  of the generic binding_overrides map.
+- Rejected/discussed-away: no new Rule datastructure (RuleView/RuleCode
+  serve genuinely different traversal orders); no Question ABC for
+  Match/Query/WhyAnswer (match/case covers the actual need; the real O/C
+  dispatch already exists via fold/select/RULES).
+- Test updates (API-change consequences, not test-gaming): test_rule_code.py
+  swapped test_kind_from_rdr_kind_string for
+  test_tree_connector_word_matches_the_ascii_view_vocabulary (from_kind no
+  longer exists). test_causal_verbalization.py: ~15 answer.verbalize() call
+  sites -> verbalize_expression(answer); dropped
+  test_verbalize_method_matches_pipeline (moot once one side of the
+  comparison no longer exists).
+- Verified zero regressions: test_eql_rdr (25 failed/125 passed/122 skipped)
+  and test_eql/test_verbalization (2 failed/649 passed/3 skipped/34 errors)
+  both match the unmodified baseline exactly (confirmed via git stash
+  comparison) — every failure is a pre-existing local-env gap (missing
+  random_events.variable / probabilistic_model.probabilistic_circuit /
+  pandas pieces), none caused by this diff.
+- Formatting: caught and reverted two rounds of over-eager blanket
+  reformatting (black's py3.12-target Template-literal compaction unrelated
+  to my edits; scripts/format_docstrings.py rewrapping every pre-existing
+  single-line docstring in serialization.py/parts_of_speech.py to multi-line,
+  per the repo's own docformatter config, which the committed code doesn't
+  actually follow yet) — reverted both to keep the diff scoped to what this
+  PR actually needs, ran black --fast per-file instead.
+
+Remaining for next session:
+1. Confirm CI is green (or still just the known coraplex stale-base failure)
+   on the new commit.
+2. PR #83 (boolean-predicate verbalization) merges -> annotate the zoo
+   Animal dataset fields with the declared predicates, update the two open
+   goldens ("is milk"/"is feathers" -> "has milk"/"has feathers"), reply and
+   resolve the last 2 threads.
+3. Watch for any new review activity (still subscribed).
+
+Prior-round context (superseded, kept for history):
 - Fetched latest, checked out eql/causal-verbalization tracking origin.
 - Subscribed to all PR activity.
 - CI: confirmed only test_each_lib (coraplex) fails (stale-base artifact per the
