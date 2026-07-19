@@ -10,15 +10,16 @@ https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
 | #79 | `D-ui-rendering` | `D-ui-splice-fix` | `case_table.py` + 7 shell-free rendering/serialization tests |
 | #76 | `D-ui` | `D-ui-rendering` | interactive.py, magics.py, prompt_sections/examples, conftest, fitted_models, docs, 9 shell tests |
 
-Stack tips: steward's automation restacked the WHOLE stack a SECOND time
-(D-core-engine 5ccec861 -> bd6e42f4). Current heads: #78 2c2e81b5,
-#79 22476489, #76 9c7f8e6b. Verified the automation preserved my commits
-byte-for-byte: #78 delta over new base = exactly my 89-line splice fix;
-#79 = case_table + 7 tests; #76 = interactive layer. No action needed — the
-automation now clearly tracks the two intermediate branches, so the earlier
-coordination concern is resolved. Locally synced (reset --hard) to the
-restacked remotes. Assembled stack last verified 1535 passed, 5 skipped;
-fitted zoo model reloads 101/101.
+Stack tips: steward's automation has restacked the WHOLE stack THREE times
+now. Current heads (3rd restack): base D-core-engine d98d9566; #78 1e4f1fb2;
+#79 0a305c68; #76 c50d2109. Each time verified the automation preserved my
+commits byte-for-byte: #78 delta over base = exactly my 89-line splice fix
+(_last_parent_of_type_ present); #79 = case_table + 7 tests; #76 = interactive
+layer + the 2 D-deco handoff files (23 files/7266 ins, incl. rdr_conclusion_domain.py
++ test_rule_tree_view.py). No action needed — automation re-parents all three
+correctly; do NOT force-push over it. Locally synced (reset --hard) each time.
+Assembled stack last full-verified 1535 passed, 5 skipped; fitted zoo model
+reloads 101/101.
 
 `test_each_lib (krrood)` is GREEN on all three current live heads — that's
 the only job that exercises my code.
