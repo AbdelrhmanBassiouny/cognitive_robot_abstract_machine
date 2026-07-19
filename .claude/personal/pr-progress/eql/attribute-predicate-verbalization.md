@@ -30,18 +30,24 @@ approved forks + negation-scope "either".
 - Tests green (86 touched-file tests); black + docformatter; committed as human.
 - PR #83 description updated; all 29 review threads replied + resolved; kept draft.
 
-## Review round 2 (commit 1ef0b157)
+## Review round 2 (commit 1ef0b157) — DONE
 - Added real per-field docstrings to test mimics (my first "done" was false).
 - Removed the LLM aside from default_boolean_predicate docstring.
-- 3 threads resolved. 2 left OPEN awaiting user decision:
-  1. either-placement: reviewer wants it out of boolean_alternative_clause into a
-     realization/polarity pass (Polarity.OPEN on head + clause-level RealizationPass
-     placing "either" by copula-vs-do-support). Proposed; asked this-PR vs follow-up.
-  2. adjective library: list not exhaustive; offered WordNet membership check (adds
-     nltk dep, over-classifies homographs) vs keep suffix heuristic. Asked preference.
+- CI green on 1ef0b157 (all 18 checks incl. coraplex/krrood/sdt).
+- Both remaining threads now settled by user:
+  1. adjective library — user: "fine as it is now, do nothing." Kept suffix
+     heuristic; thread resolved.
+  2. either-placement — user wants it as its own follow-up PR in a NEW session;
+     asked for a study-first/plan-with-options/discuss prompt (not prescribe a
+     solution). Prompt handed off in chat; thread left OPEN as the tracking marker.
+- PR #83 review fully addressed. Still draft; do not mark ready unless told.
 
 ## Deferred / next
-- Awaiting user decision on the 2 open threads above.
+- Follow-up PR (new session): move open-boolean "either" placement out of
+  boolean_alternative_clause into a realization/negation pass (options: polarity
+  feature on head + clause-level RealizationPass, or alternatives). Off main.
 - Cross-lib CI watch (coraplex/sdt goldens may shift); fixture-gated tests need py3.12.
-- Follow-up on causal PR #82: annotate zoo Animal fields + update causal goldens
-  ("because the Animal has milk") once this lands.
+- Causal PR #82: (a) coraplex test_merge_motions CI failure is a STALE-BASE artifact
+  (main green on that job; #83 green on coraplex too) — rebase #82 onto main + re-run,
+  awaiting user go-ahead; (b) annotate zoo Animal fields + update causal goldens
+  ("because the Animal has milk") once #83 lands.
