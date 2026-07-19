@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
+from krrood.entity_query_language.rdr.exceptions import ExpertAbort
 from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.scope import get_definition_scope
 
@@ -50,48 +51,66 @@ EXIT_NAME = "exit"
 _ABORT_FLAG = "__expert_abort__"
 
 
-class ExpertAbort(Exception):
-    """Raised by :meth:`ExpertInterface.interact` when the expert cancels the session.
-
-    Carries the names of the still-missing required answers so the calling
-    :class:`Expert` can raise its own specific exception.
-    """
-
-    def __init__(self, missing: List[str]) -> None:
-        self.missing = missing
-        super().__init__(
-            f"Expert cancelled without supplying: {', '.join(missing) or '(nothing)'}"
-        )
-
-
 @dataclass
 class CaseContext:
-    """The data an expert needs to author a rule for one case."""
+    """
+    The data an expert needs to author a rule for one case.
+    """
 
     case_instance: Any
-    """The concrete case object (e.g. an ``Animal`` instance) to inspect."""
+    """
+    The concrete case object (e.g. an ``Animal`` instance) to inspect.
+    """
+
     case_variable: CanBehaveLikeAVariable
-    """The shared EQL variable the rule tree ranges over; conditions are built over it."""
+    """
+    The shared EQL variable the rule tree ranges over; conditions are built over it.
+    """
+
     current_conclusion: Any = UNSET
-    """What the RDR currently concludes for the case (``_UNSET`` if no rule fired)."""
+    """
+    What the RDR currently concludes for the case (``_UNSET`` if no rule fired).
+    """
+
     target_conclusion: Any = UNSET
-    """The known correct conclusion, or absent (sentinel) when the expert must label it."""
+    """
+    The known correct conclusion, or absent (sentinel) when the expert must label it.
+    """
+
     trace: Optional[ClassificationTrace] = None
-    """The classification trace for this case, for visualizing the rule tree (``None`` when
-    the RDR is empty / no classification was run)."""
+    """
+    The classification trace for this case, for visualizing the rule tree (``None`` when
+    the RDR is empty / no classification was run).
+    """
+
     conclusion_domain: Optional[ConclusionDomain] = None
-    """The resolved allowable-value domain of the conclusion attribute, when the expert must
-    label the case (``None`` on the conditions-only path, where the conclusion is known)."""
-    aids: List["ConclusionAid"] = field(default_factory=list)
-    """Optional task-specific aids consulted while labelling the case (presentation and/or
-    conclusion suggestion). Empty by default."""
+    """
+    The resolved allowable-value domain of the conclusion attribute, when the expert
+    must label the case (``None`` on the conditions-only path, where the conclusion is
+    known).
+    """
+
+    aids: List[ConclusionAid] = field(default_factory=list)
+    """
+    Optional task-specific aids consulted while labelling the case (presentation and/or
+    conclusion suggestion).
+
+    Empty by default.
+    """
+
     corner_case: Optional[Any] = None
-    """The corner case of the firing rule, when a rule fired during the classification trace.
-    ``None`` when no rule fired (first rule or alternative path)."""
+    """
+    The corner case of the firing rule, when a rule fired during the classification
+    trace.
+
+    ``None`` when no rule fired (first rule or alternative path).
+    """
     suggested_condition: Optional[ResolvedCondition] = None
-    """The full auto-resolved condition (expression + resolver provenance) suggested to the
-    expert in HINT mode; ``None`` when no hint is available (AUTOMATIC mode or resolver found
-    nothing)."""
+    """
+    The full auto-resolved condition (expression + resolver provenance) suggested to the
+    expert in HINT mode; ``None`` when no hint is available (AUTOMATIC mode or resolver
+    found nothing).
+    """
 
     @property
     def has_target(self) -> bool:
@@ -106,40 +125,54 @@ class CaseContext:
 
 @dataclass
 class AnswerRequest:
-    """One named answer the expert must place in the namespace, with validation."""
+    """
+    One named answer the expert must place in the namespace, with validation.
+    """
 
     name: str
-    """The namespace variable the expert assigns (e.g. ``"conditions"``)."""
+    """
+    The namespace variable the expert assigns (e.g. ``"conditions"``).
+    """
+
     validate: Callable[[Any], Optional[str]]
-    """Returns an error message if the assigned value is unacceptable, else ``None``."""
+    """
+    Returns an error message if the assigned value is unacceptable, else ``None``.
+    """
+
     example: str
     """A copy-pasteable example shown in the header (e.g. ``conditions = ...``)."""
     required: bool = True
-    """Whether the session may not complete until a valid value is supplied."""
+    """
+    Whether the session may not complete until a valid value is supplied.
+    """
+
     default: Any = None
-    """The value the answer name is seeded with in the namespace before the expert edits it
-    (e.g. ``UNSET`` to distinguish "left unset" from a deliberate ``None``, or a pre-seeded
-    suggestion)."""
+    """
+    The value the answer name is seeded with in the namespace before the expert edits it
+    (e.g. ``UNSET`` to distinguish "left unset" from a deliberate ``None``, or a pre-
+    seeded suggestion).
+    """
 
 
 @dataclass
 class ExpertInterface(ABC):
-    """The I/O strategy an :class:`Expert` uses as the interaction interface through which answers and questions are
-    communicated."""
+    """
+    The I/O strategy an :class:`Expert` uses as the interaction interface through which
+    answers and questions are communicated.
+    """
 
     on_save: Optional[Callable[[], None]] = field(default=None, kw_only=True)
-    """Zero-arg callable that persists the model state. ``None`` when no save path is
-    configured (see :attr:`~EQLSingleClassRDR.save_path`). Injected automatically by
-    :meth:`EQLSingleClassRDR.fit` when a save path is present, or supplied directly by
-    callers that need a custom persistence strategy.
+    """
+    Zero-arg callable that persists the model state.
 
-    Declared as a keyword-only field so that subclasses may still define positional
-    (non-default) constructor parameters (e.g. ``FunctionInterface.answer_fn``) without
-    violating Python's dataclass field-ordering constraint.
+    ``None`` when no save path is configured (see :attr:`~EQLSingleClassRDR.save_path`).
+    Injected automatically by :meth:`EQLSingleClassRDR.fit` when a save path is present,
+    or supplied directly by callers that need a custom persistence strategy.
     """
 
     def save(self) -> None:
-        """Persist the current model state.
+        """
+        Persist the current model state.
 
         Calls :attr:`on_save` if configured; silently no-ops otherwise so callers never
         need to guard against an unconfigured interface.
@@ -161,9 +194,10 @@ class ExpertInterface(ABC):
         step, validates, and re-prompts with an error summary on failure. An explicit
         ``exit()`` raises :class:`ExpertAbort`.
 
-        :param initial_errors: Errors from a previous interaction cycle to display on the
-            first render (e.g. a post-submission validation failure from the caller).
-        :return: ``{request.name: value}`` for every request, all validated.
+        :param initial_errors: Errors from a previous interaction cycle to display on
+            the first render (e.g. a post-submission validation failure from the
+            caller).
+        :return:``{request.name: value}`` for every request, all validated.
         """
         namespace = self._build_namespace(context, requests)
 
@@ -196,6 +230,14 @@ class ExpertInterface(ABC):
     def _validate(
         namespace: Dict[str, Any], requests: List[AnswerRequest]
     ) -> Dict[str, str]:
+        """
+        Run every request's validator against its current namespace value.
+
+        :param namespace: The interaction namespace, keyed by answer name.
+        :param requests: The answers to validate.
+        :return:``{request.name: error_message}`` for every request whose value failed
+            validation.
+        """
         errors: Dict[str, str] = {}
         for request in requests:
             message = request.validate(namespace.get(request.name))
@@ -207,6 +249,12 @@ class ExpertInterface(ABC):
     def _missing_required(
         cls, namespace: Dict[str, Any], requests: List[AnswerRequest]
     ) -> List[str]:
+        """
+        :param namespace: The interaction namespace, keyed by answer name.
+        :param requests: The answers to check.
+        :return: The names of the required requests whose current value still fails
+            validation.
+        """
         errors = cls._validate(namespace, requests)
         return [r.name for r in requests if r.required and r.name in errors]
 
@@ -216,7 +264,15 @@ class ExpertInterface(ABC):
         requests: List[AnswerRequest],
         errors: Dict[str, str],
     ) -> str:
-        """Plain-text header. Interactive subclasses may override with richer rendering."""
+        """
+        Plain-text header.
+
+        Interactive subclasses may override with richer rendering.
+        :param context: The case being labelled.
+        :param requests: The answers the expert must supply.
+        :param errors: Validation errors from the previous cycle, keyed by answer name.
+        :return: The rendered header text.
+        """
         lines: List[str] = []
         lines.append(f"  {CASE_INSTANCE_NAME}: {context.case_instance!r}")
         lines.append(f"  current: {context.current_conclusion!r}")
@@ -233,7 +289,8 @@ class ExpertInterface(ABC):
         return "\n".join(lines)
 
     def make_progress_reporter(self) -> Optional[ProgressReporter]:
-        """Return a :class:`ProgressReporter` for this interface, or ``None``.
+        """
+        Return a :class:`ProgressReporter` for this interface, or ``None``.
 
         Override in concrete subclasses that want to display a progress bar during
         fitting.  The default returns ``None`` (no progress displayed).
@@ -248,32 +305,50 @@ class ExpertInterface(ABC):
         validate: Callable[[], Dict[str, str]],
     ) -> None:
         """
-        Present ``header`` and let the expert populate the answer names in ``namespace``.
+        Present ``header`` and let the expert populate the answer names in
+        ``namespace``.
 
         Implementations must leave the expert's assignments (and any ``exit()`` flag)
         visible in ``namespace`` when they return. ``validate`` re-runs the request
-        validators against the current namespace and is available to interfaces that want
-        to enforce the post-condition before returning (e.g. veto a premature shell exit).
+        validators against the current namespace and is available to interfaces that
+        want to enforce the post-condition before returning (e.g. veto a premature shell
+        exit).
+
+        :param namespace: The interaction namespace to populate with answers.
+        :param header: The rendered header text to present to the expert.
+        :param validate: Re-runs the request validators against ``namespace``.
+        :return: None; assignments are communicated back via ``namespace``.
         """
         ...
 
 
 @dataclass
 class FunctionInterface(ExpertInterface):
-    """A non-interactive interface that delegates to a plain ``(context, requests) -> dict``.
+    """
+    A non-interactive interface that delegates to a plain ``(context, requests) ->
+    dict``.
 
     Useful for programmatic experts and as a test double: the supplied function returns the
     answers, which are written into the namespace and then validated by the normal loop.
     """
 
     answer_fn: Callable[[CaseContext, List[AnswerRequest]], Dict[str, Any]]
-    """Returns ``{name: value}`` for the requested answers. ``None`` values re-prompt
-    (which, for a deterministic function, would loop) — return :func:`abort` semantics by
-    raising :class:`ExpertAbort` instead."""
+    """
+    Returns ``{name: value}`` for the requested answers.
+
+    ``None`` values re-prompt (which, for a deterministic function, would loop) — return
+    :func:`abort` semantics by raising :class:`ExpertAbort` instead.
+    """
+
     _context: Optional[CaseContext] = field(init=False, default=None)
-    """The context of the in-flight :meth:`interact` call, threaded to :meth:`_run`."""
+    """
+    The context of the in-flight :meth:`interact` call, threaded to :meth:`_run`.
+    """
+
     _requests: List[AnswerRequest] = field(init=False, default_factory=list)
-    """The requests of the in-flight :meth:`interact` call, threaded to :meth:`_run`."""
+    """
+    The requests of the in-flight :meth:`interact` call, threaded to :meth:`_run`.
+    """
 
     def interact(
         self,

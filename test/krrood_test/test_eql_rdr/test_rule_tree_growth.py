@@ -1,5 +1,5 @@
 """
-Phase 3 tests: live rule-tree growth via insert_at / insert_refinement / insert_alternative.
+Tests for live rule-tree growth via insert_at / insert_refinement / insert_alternative.
 
 Growing a tree dynamically (outside any ``with`` block) must produce the same
 classifications as building the equivalent tree statically with ``with`` blocks.
@@ -12,9 +12,15 @@ from krrood.entity_query_language.factories import (
     alternative,
     entity,
     not_,
+    refinement,
     variable,
 )
-from krrood.entity_query_language.rules.conclusion_selector import ConclusionSelector
+from krrood.entity_query_language.query.operations import Where
+from krrood.entity_query_language.rules.conclusion_selector import (
+    Alternative,
+    ConclusionSelector,
+    Refinement as RefinementClass,
+)
 from krrood.entity_query_language.rdr.observer import classify_case
 from krrood.entity_query_language.rdr.rule_tree import (
     insert_alternative,
@@ -29,8 +35,8 @@ from .zoo_loader import load_zoo_animals
 animals, targets = load_zoo_animals()
 
 
-def first(sp: Species) -> Animal:
-    return next(a for a, t in zip(animals, targets) if t is sp)
+def first(species: Species) -> Animal:
+    return next(animal for animal, target in zip(animals, targets) if target is species)
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -183,7 +189,6 @@ class TestRuleTreeGrowth(unittest.TestCase):
             Species.fish,
         )
 
-
     def test_clone_expression_does_not_corrupt_original_parents(self):
         """
         Regression test: ``expr._node_for_new_position_()`` must NOT mutate the original
@@ -219,11 +224,13 @@ class TestRuleTreeGrowth(unittest.TestCase):
 
         # The original must be untouched.
         self.assertIs(
-            condition._parent__, orig_parent,
+            condition._parent__,
+            orig_parent,
             "Original _parent__ must not change",
         )
         self.assertEqual(
-            condition._parents_, orig_parents_before,
+            condition._parents_,
+            orig_parents_before,
             "Original _parents_ must not change",
         )
         # Clone must have its own independent lists and no parent.
@@ -231,17 +238,19 @@ class TestRuleTreeGrowth(unittest.TestCase):
         self.assertEqual(len(clone._parents_), 0, "Clone must have empty _parents_")
         self.assertEqual(len(clone._children_), 0, "Clone must have empty _children_")
         self.assertIsNot(
-            clone._parents_, condition._parents_,
+            clone._parents_,
+            condition._parents_,
             "Clone must NOT share _parents_ list with original",
         )
         self.assertIsNot(
-            clone._children_, condition._children_,
+            clone._children_,
+            condition._children_,
             "Clone must NOT share _children_ list with original",
         )
 
-
     def test_shared_anchor_refinement_does_not_corrupt_sibling_alternative(self):
-        """Regression test: inserting a refinement at a MappedVariable anchor that also
+        """
+        Regression test: inserting a refinement at a MappedVariable anchor that also
         appears as a sub-expression inside a sibling alternative condition must not
         corrupt that sibling condition.
 
@@ -323,10 +332,11 @@ class TestRuleTreeGrowth(unittest.TestCase):
             Species.reptile,
         )
 
-
     def test_insert_at_with_anchor_as_condition_raises(self):
-        """Regression: insert_at(anchor, anchor) must raise SelfReferentialInsertionError
-        before touching the tree, not silently create Refinement(backbone, backbone)."""
+        """
+        Regression: insert_at(anchor, anchor) must raise SelfReferentialInsertionError
+        before touching the tree, not silently create Refinement(backbone, backbone).
+        """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.backbone)
         with query:
@@ -347,8 +357,10 @@ class TestRuleTreeGrowth(unittest.TestCase):
         )
 
     def test_clone_expression_resets_conclusions(self):
-        """Regression: _node_for_new_position_() must reset _conclusions_ so cloned nodes
-        do not share the original's conclusion set."""
+        """
+        Regression: _node_for_new_position_() must reset _conclusions_ so cloned nodes
+        do not share the original's conclusion set.
+        """
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.backbone)
         with query:
@@ -392,10 +404,9 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
     """
 
     def test_alternative_with_bare_attr_where_condition(self):
-        """DSL: where(backbone) then alternative(backbone == False) must connect to Where."""
-        from krrood.entity_query_language.query.operations import Where
-        from krrood.entity_query_language.rules.conclusion_selector import Alternative
-
+        """
+        DSL: where(backbone) then alternative(backbone == False) must connect to Where.
+        """
         animal_var = variable(Animal, domain=[])
         query = entity(animal_var).where(animal_var.backbone)
         with query:
@@ -405,7 +416,12 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
         query.build()
 
         where_node = next(
-            (e for e in query._root_._all_expressions_ if isinstance(e, Where)), None
+            (
+                expression
+                for expression in query._root_._all_expressions_
+                if isinstance(expression, Where)
+            ),
+            None,
         )
         self.assertIsNotNone(where_node)
         self.assertIsInstance(
@@ -421,7 +437,9 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
             Species.mammal,
         )
         self.assertEqual(
-            classify_case(query, animal_var, animal_var.species, invertebrate).conclusion,
+            classify_case(
+                query, animal_var, animal_var.species, invertebrate
+            ).conclusion,
             Species.molusc,
         )
 
@@ -434,12 +452,6 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
         the molusc condition and leaving ``Where._child_ = backbone`` (bare, disconnected
         from the Refinement sub-tree).
         """
-        from krrood.entity_query_language.factories import refinement
-        from krrood.entity_query_language.query.operations import Where
-        from krrood.entity_query_language.rules.conclusion_selector import (
-            Refinement as RefinementClass,
-        )
-
         animal_var = variable(Animal, domain=[])
         query = entity(animal_var).where(animal_var.backbone)
         with query:
@@ -449,7 +461,12 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
         query.build()
 
         where_node = next(
-            (e for e in query._root_._all_expressions_ if isinstance(e, Where)), None
+            (
+                expression
+                for expression in query._root_._all_expressions_
+                if isinstance(expression, Where)
+            ),
+            None,
         )
         self.assertIsNotNone(where_node)
         self.assertIsInstance(
@@ -471,7 +488,3 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
             classify_case(query, animal_var, animal_var.species, vertebrate).conclusion,
             Species.mammal,
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

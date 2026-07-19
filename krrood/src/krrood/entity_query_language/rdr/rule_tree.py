@@ -2,20 +2,23 @@
 Live growth of an EQL rule-tree DAG.
 
 These helpers splice a new rule (a condition plus its ``Add`` conclusion) into an
-existing rule tree at an explicit anchor, without relying on the ``with`` context
-stack. They are the mechanism an RDR uses to add a refinement or alternative after
-observing a misclassification.
+existing rule tree at an explicit anchor, without relying on the ``with`` context stack.
+They are the mechanism an RDR uses to add a refinement or alternative after observing a
+misclassification.
 
 Conditions and conclusion values are live EQL expression objects, never strings.
 """
 
 from __future__ import annotations
 
-from typing_extensions import Any
+from typing_extensions import Any, Type
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.factories import add
+from krrood.entity_query_language.rdr.exceptions import (
+    ConclusionSelectorAsConditionError,
+)
 from krrood.entity_query_language.rules.conclusion_selector import (
     Alternative,
     ConclusionSelector,
@@ -24,13 +27,14 @@ from krrood.entity_query_language.rules.conclusion_selector import (
 
 
 def _insert_rule(
-    selector,
+    selector: Type[ConclusionSelector],
     anchor: SymbolicExpression,
     condition: SymbolicExpression,
     conclusion_variable: CanBehaveLikeAVariable,
     conclusion_value: Any,
 ) -> SymbolicExpression:
-    """Splice a new rule into the tree at *anchor* using *selector*.
+    """
+    Splice a new rule into the tree at *anchor* using *selector*.
 
     :param selector: A :class:`ConclusionSelector` class used as a factory
         (``Refinement`` or ``Alternative``).
@@ -41,12 +45,11 @@ def _insert_rule(
     :param conclusion_variable: The attribute the conclusion sets.
     :param conclusion_value: The value to conclude.
     :return: The newly created condition node.
-    :raises ValueError: If *condition* is a :class:`ConclusionSelector`.
+    :raises ConclusionSelectorAsConditionError: If *condition* is a
+        :class:`ConclusionSelector`.
     """
     if isinstance(condition, ConclusionSelector):
-        raise ValueError(
-            f"A ConclusionSelector cannot be used as a rule condition: {condition!r}"
-        )
+        raise ConclusionSelectorAsConditionError(condition=condition)
     new_condition = selector.insert_at(anchor, condition)
     with new_condition:
         add(conclusion_variable, conclusion_value)
@@ -65,7 +68,8 @@ def insert_refinement(
 
     :param anchor: The conditions node of the rule being refined.
     :param condition: The (live EQL) condition under which the refinement fires.
-    :param conclusion_variable: The attribute the conclusion sets (e.g. ``animal.species``).
+    :param conclusion_variable: The attribute the conclusion sets (e.g.
+        ``animal.species``).
     :param conclusion_value: The overriding conclusion value.
     :return: The newly created refinement condition node.
     """
@@ -86,7 +90,8 @@ def insert_alternative(
 
     :param anchor: The conditions node the alternative attaches beside.
     :param condition: The (live EQL) condition under which the alternative fires.
-    :param conclusion_variable: The attribute the conclusion sets (e.g. ``animal.species``).
+    :param conclusion_variable: The attribute the conclusion sets (e.g.
+        ``animal.species``).
     :param conclusion_value: The alternative conclusion value.
     :return: The newly created alternative condition node.
     """

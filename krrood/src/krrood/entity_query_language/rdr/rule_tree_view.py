@@ -61,22 +61,76 @@ DEFAULT_HEAD = 3
 #: How many rules to show at the bottom (ending on the firing rule) after the elision.
 DEFAULT_TAIL = 3
 
-#: Glyph used for the elided-rows marker.
-_VERTICAL_DOTS = "⋮"
 
-# Branch glyphs for the nesting connectors.
-_GUIDE = "│  "  # "│  "  an ancestor branch continues below
-_GAP = "   "  # the ancestor branch ended above
-_BRANCH = "├─ "  # "├─ " this node has a younger sibling
-_BRANCH_LAST = "└─ "  # "└─ " this node is the last of its siblings
+class TreeGlyph(enum.StrEnum):
+    """
+    The glyphs used to draw the rule tree: nesting connectors and the elision marker.
+    """
+
+    VERTICAL_DOTS = "⋮"
+    """
+    Marks the row where hidden (elided) rules would have been.
+    """
+
+    GUIDE = "│  "
+    """
+    A vertical guide continuing an ancestor's branch past this row.
+    """
+
+    GAP = "   "
+    """
+    Blank space where an ancestor's branch has already ended.
+    """
+    BRANCH = "├─ "
+    """
+    Connects to a rule that has later siblings at the same depth.
+    """
+    BRANCH_LAST = "└─ "
+    """
+    Connects to the last rule among its siblings at the same depth.
+    """
 
 
-class RuleStatus(enum.Enum):
-    """What happened to a rule during the classification being explained."""
+class RuleKind(enum.StrEnum):
+    """
+    How a rule relates to its predecessor in the rule tree.
+    """
+
+    IF = "if"
+    """
+    A top-level rule, not conditioned on any predecessor.
+    """
+
+    ELSE_IF = "else if"
+    """
+    An alternative, evaluated only when its predecessor did not fire.
+    """
+
+    EXCEPT_IF = "except if"
+    """
+    A refinement, evaluated only when its predecessor fired.
+    """
+
+
+class RuleStatus(enum.StrEnum):
+    """
+    What happened to a rule during the classification being explained.
+    """
 
     FIRED = "fired"
-    EVALUATED_NOT_FIRED = "evaluated"
+    """
+    The rule's condition was satisfied.
+    """
+
+    EVALUATED_NOT_FIRED = "evaluated_not_fired"
+    """
+    The rule's condition was evaluated but did not hold.
+    """
+
     NOT_EVALUATED = "skipped"
+    """
+    The rule was never evaluated (its branch was short-circuited).
+    """
 
     @property
     def color(self) -> str:
@@ -90,22 +144,31 @@ class RuleStatus(enum.Enum):
 
 @dataclass
 class RuleView:
-    """One rule (a condition plus its conclusion(s)) at a place in the rule tree.
+    """
+    One rule (a condition plus its conclusion(s)) at a place in the rule tree.
 
-    A flat, render-ready projection of a leaf condition node in the
-    ``Refinement`` / ``Alternative`` / ``Next`` selector DAG. The ``condition`` is the
-    node whose ``_id_`` the evaluation trackers key on, so status resolution is a plain
-    membership test.
+    A flat, render-ready projection of a leaf condition node in the ``Refinement`` /
+    ``Alternative`` / ``Next`` selector DAG. The ``condition`` is the node whose
+    ``_id_`` the evaluation trackers key on, so status resolution is a plain membership
+    test.
     """
 
     condition: SymbolicExpression
-    """The leaf condition node carrying the rule's conclusion(s)."""
+    """
+    The leaf condition node carrying the rule's conclusion(s).
+    """
+
     conclusions: List[Add]
-    """The ``Add`` conclusion(s) attached to :attr:`condition` (one for single-class)."""
+    """
+    The ``Add`` conclusion(s) attached to :attr:`condition` (one for single-class).
+    """
+
     depth: int
     """Refinement-nesting depth (0 = a top-level rule)."""
-    kind: str
-    """How the rule relates to its predecessor: ``"if"`` / ``"else if"`` / ``"except if"``."""
+    kind: RuleKind
+    """
+    How the rule relates to its predecessor.
+    """
 
 
 def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
@@ -113,36 +176,37 @@ def walk_rules(conditions_root: SymbolicExpression) -> List[RuleView]:
     Flatten a rule-tree selector DAG into rules in classic RDR display order.
 
     A ``Refinement``'s right branch nests one level deeper (an *except-if*); an
-    ``Alternative``'s right branch is a same-level sibling (an *else-if*). Leaf condition
-    nodes (everything that is not a :class:`ConclusionSelector`) become :class:`RuleView`
-    rows.
+    ``Alternative``'s right branch is a same-level sibling (an *else-if*). Leaf
+    condition nodes (everything that is not a :class:`ConclusionSelector`) become
+    :class:`RuleView` rows.
 
     :param conditions_root: The root of the rule tree's condition DAG.
     :return: The rules in pre-order, each tagged with its depth and kind.
     """
     rules: List[RuleView] = []
 
-    def visit(node: SymbolicExpression, depth: int, kind: str) -> None:
-        if isinstance(node, Refinement):
-            visit(node.left, depth, kind)
-            visit(node.right, depth + 1, "except if")
-        elif isinstance(node, Alternative):
-            visit(node.left, depth, kind)
-            visit(node.right, depth, "else if")
-        elif isinstance(node, Next):
-            for child in node._operation_children_:
-                visit(child, depth, kind)
-        else:
-            rules.append(
-                RuleView(
-                    condition=node,
-                    conclusions=node.conclusions_of_type(Add),
-                    depth=depth,
-                    kind=kind,
+    def visit(node: SymbolicExpression, depth: int, kind: RuleKind) -> None:
+        match node:
+            case Refinement():
+                visit(node.left, depth, kind)
+                visit(node.right, depth + 1, RuleKind.EXCEPT_IF)
+            case Alternative():
+                visit(node.left, depth, kind)
+                visit(node.right, depth, RuleKind.ELSE_IF)
+            case Next():
+                for child in node._operation_children_:
+                    visit(child, depth, kind)
+            case _:
+                rules.append(
+                    RuleView(
+                        condition=node,
+                        conclusions=node.conclusions_of_type(Add),
+                        depth=depth,
+                        kind=kind,
+                    )
                 )
-            )
 
-    visit(conditions_root, 0, "if")
+    visit(conditions_root, 0, RuleKind.IF)
     return rules
 
 
@@ -152,17 +216,18 @@ def resolve_status(
     evaluated_ids: Optional[OrderedSet[UUID]],
 ) -> RuleStatus:
     """
-    Classify a rule as fired / evaluated-not-fired / not-evaluated from the observer id-sets.
+    Classify a rule as fired / evaluated-not-fired / not-evaluated from the observer id-
+    sets.
 
     :param rule: The rule whose ``condition`` node id is looked up.
     :param satisfied_ids: Condition ids whose truth value was True (``None`` ⇒ none).
     :param evaluated_ids: Expression ids that were evaluated at all (``None`` ⇒ none).
     :return: The :class:`RuleStatus` for the rule.
     """
-    cid = rule.condition._id_
-    if satisfied_ids is not None and cid in satisfied_ids:
+    condition_id = rule.condition._id_
+    if satisfied_ids is not None and condition_id in satisfied_ids:
         return RuleStatus.FIRED
-    if evaluated_ids is not None and cid in evaluated_ids:
+    if evaluated_ids is not None and condition_id in evaluated_ids:
         return RuleStatus.EVALUATED_NOT_FIRED
     return RuleStatus.NOT_EVALUATED
 
@@ -171,30 +236,36 @@ def enforce_parent_consistency(
     statuses: List[RuleStatus],
     rules: List[RuleView],
 ) -> List[RuleStatus]:
-    """Downgrade refinement FIRED status to NOT_EVALUATED when its visual parent didn't fire.
+    """
+    Downgrade refinement FIRED status to NOT_EVALUATED when its visual parent didn't
+    fire.
 
     A refinement (except-if) at depth > 0 can only truly fire when its visual parent
     (the nearest preceding rule at depth-1) also fired — the refinement's selector
-    evaluates its right branch only when the left side was satisfied.  A FIRED status
-    on the refinement when the parent is not FIRED indicates a node-sharing issue in
-    the rule tree (e.g. the same cached condition node appearing in two branches).
-    This function corrects the display to avoid a visually nonsensical "green child
-    under a red parent".
+    evaluates its right branch only when the left side was satisfied.  A FIRED status on
+    the refinement when the parent is not FIRED indicates a node-sharing issue in the
+    rule tree (e.g. the same cached condition node appearing in two branches). This
+    function corrects the display to avoid a visually nonsensical "green child under a
+    red parent".
 
-    :param statuses: Per-rule statuses from :func:`resolve_status`.
-    :param rules: The rules in display order (from :func:`walk_rules`).
+    :param statuses: One status per rule, aligned index-for-index with ``rules``.
+    :param rules: The rules in display order.
     :return: Corrected statuses with the invariant enforced.
     """
     result = list(statuses)
-    for i, (rule, status) in enumerate(zip(rules, result)):
+    for rule_index, (rule, status) in enumerate(zip(rules, result)):
         if rule.depth == 0 or status != RuleStatus.FIRED:
             continue
-        parent_idx = next(
-            (j for j in range(i - 1, -1, -1) if rules[j].depth == rule.depth - 1),
+        parent_index = next(
+            (
+                candidate_index
+                for candidate_index in range(rule_index - 1, -1, -1)
+                if rules[candidate_index].depth == rule.depth - 1
+            ),
             None,
         )
-        if parent_idx is not None and result[parent_idx] != RuleStatus.FIRED:
-            result[i] = RuleStatus.NOT_EVALUATED
+        if parent_index is not None and result[parent_index] != RuleStatus.FIRED:
+            result[rule_index] = RuleStatus.NOT_EVALUATED
     return result
 
 
@@ -202,6 +273,7 @@ def enforce_parent_consistency(
 
 
 def _format_value(value: Any) -> str:
+    """:return: A compact, human-readable rendering of a leaf value."""
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, enum.Enum):
@@ -209,66 +281,81 @@ def _format_value(value: Any) -> str:
     return str(value)
 
 
-def _attribute_path(attr: Attribute) -> str:
-    """:return: The attribute access path with the root subject variable dropped."""
-    child = attr._child_
+def _attribute_path(attribute: Attribute) -> str:
+    """
+    :param attribute: The attribute-access node to render.
+    :return: The attribute access path with the root subject variable dropped.
+    """
+    child = attribute._child_
     if isinstance(child, Variable):
-        return attr._attribute_name_
-    return f"{format_condition(child)}.{attr._attribute_name_}"
+        return attribute._attribute_name_
+    return f"{format_condition(child)}.{attribute._attribute_name_}"
 
 
-def _format_conclusion_selector(expr: ConclusionSelector) -> str:
-    """Render a :class:`ConclusionSelector` in a compact, readable form.
+def _format_conclusion_selector(expression: ConclusionSelector) -> str:
+    """
+    Render a :class:`ConclusionSelector` in a compact, readable form.
 
     ConclusionSelectors (Alternative, Refinement, Next) are control-flow nodes, not
-    conditions. When they appear as guard expressions in backward-inference output
-    the default dataclass ``repr`` is unreadable — it dumps all internal fields
-    including ``_conclusions_``, parent references, and evaluation flags.
+    conditions. When they appear as guard expressions in backward-inference output the
+    default dataclass ``repr`` is unreadable — it dumps all internal fields including
+    ``_conclusions_``, parent references, and evaluation flags.
 
     This helper renders them via their child expressions instead.
+
+    :param expression: The selector node to render.
+    :return: The compact rendering.
     """
-    match expr:
+    match expression:
         case Alternative():
-            return f"({format_condition(expr.left)} else {format_condition(expr.right)})"
+            return f"({format_condition(expression.left)} else {format_condition(expression.right)})"
         case Refinement():
-            return f"({format_condition(expr.left)} except if {format_condition(expr.right)})"
+            return f"({format_condition(expression.left)} except if {format_condition(expression.right)})"
         case Next():
-            children = ", ".join(format_condition(c) for c in expr._operation_children_)
+            children = ", ".join(
+                format_condition(c) for c in expression._operation_children_
+            )
             return f"next ({children})"
         case _:
-            return expr.__class__.__name__
+            return expression.__class__.__name__
 
 
-def format_condition(expr: Any) -> str:
+def format_condition(expression: Any) -> str:
     """
     Render a condition expression as a compact, prefix-stripped string.
 
     e.g. ``case_variable.legs == 4`` becomes ``legs == 4``; an ``AND`` of comparators is
     joined with ``and``. Anything unrecognised falls back to its ``repr``.
+
+    :param expression: The condition expression to render.
+    :return: The compact rendering.
     """
-    match expr:
+    match expression:
         case ConclusionSelector():
-            return _format_conclusion_selector(expr)
+            return _format_conclusion_selector(expression)
         case Comparator():
-            return f"{format_condition(expr.left)} {expr._name_} {format_condition(expr.right)}"
+            return f"{format_condition(expression.left)} {expression._name_} {format_condition(expression.right)}"
         case AND():
-            return f"{format_condition(expr.left)} and {format_condition(expr.right)}"
+            return f"{format_condition(expression.left)} and {format_condition(expression.right)}"
         case OR():
-            return f"{format_condition(expr.left)} or {format_condition(expr.right)}"
+            return f"{format_condition(expression.left)} or {format_condition(expression.right)}"
         case Not():
-            return f"not {format_condition(expr._child_)}"
+            return f"not {format_condition(expression._child_)}"
         case Attribute():
-            return _attribute_path(expr)
+            return _attribute_path(expression)
         case Literal():
-            return _format_value(expr._value_)
+            return _format_value(expression._value_)
         case Variable():
-            return expr._name_
+            return expression._name_
         case _:
-            return repr(expr)
+            return repr(expression)
 
 
 def format_conclusion(add: Add) -> str:
-    """:return: A compact ``attribute = value`` rendering of an ``Add`` conclusion."""
+    """
+    :param add: The conclusion node to render.
+    :return: A compact ``attribute = value`` rendering of an ``Add`` conclusion.
+    """
     variable = add.variable
     name = (
         variable._attribute_name_
@@ -286,6 +373,10 @@ def format_conclusion(add: Add) -> str:
 
 
 def _format_conclusions(rule: RuleView) -> str:
+    """
+    :param rule: The rule whose conclusions are rendered.
+    :return: The rule's conclusions rendered and joined, or ``"?"`` if it has none.
+    """
     if not rule.conclusions:
         return "?"
     return ", ".join(format_conclusion(add) for add in rule.conclusions)
@@ -295,48 +386,76 @@ def _format_conclusions(rule: RuleView) -> str:
 
 
 def _continues_at(depths: List[int], index: int, level: int) -> bool:
-    """:return: True if the ancestor at ``level`` has a later sibling (draw a guide)."""
-    for j in range(index + 1, len(depths)):
-        if depths[j] < level:
+    """
+    :param depths: The depth of every rule, in display order.
+    :param index: The rule currently being drawn.
+    :param level: The ancestor nesting level being checked.
+    :return: True if the ancestor at ``level`` has a later sibling (draw a guide).
+    """
+    for depth_index in range(index + 1, len(depths)):
+        if depths[depth_index] < level:
             return False
-        if depths[j] == level:
+        if depths[depth_index] == level:
             return True
     return False
 
 
 def _is_last_at(depths: List[int], index: int, level: int) -> bool:
-    """:return: True if the node at ``index`` is the last of its siblings at ``level``."""
-    for j in range(index + 1, len(depths)):
-        if depths[j] < level:
+    """
+    :param depths: The depth of every rule, in display order.
+    :param index: The rule currently being drawn.
+    :param level: The nesting level being checked.
+    :return: True if the node at ``index`` is the last of its siblings at ``level``.
+    """
+    for depth_index in range(index + 1, len(depths)):
+        if depths[depth_index] < level:
             return True
-        if depths[j] == level:
+        if depths[depth_index] == level:
             return False
     return True
 
 
 def _connector(depths: List[int], index: int) -> str:
-    """Build the ``│ ├─ └─`` prefix for a node from the flat list of depths."""
+    """
+    Build the ``│ ├─ └─`` prefix for a node from the flat list of depths.
+
+    :param depths: The depth of every rule, in display order.
+    :param index: The rule to build the connector prefix for.
+    :return: The connector prefix.
+    """
     depth = depths[index]
     if depth == 0:
         return ""
     parts = [
-        _GUIDE if _continues_at(depths, index, level) else _GAP
+        TreeGlyph.GUIDE if _continues_at(depths, index, level) else TreeGlyph.GAP
         for level in range(1, depth)
     ]
-    parts.append(_BRANCH_LAST if _is_last_at(depths, index, depth) else _BRANCH)
+    parts.append(
+        TreeGlyph.BRANCH_LAST if _is_last_at(depths, index, depth) else TreeGlyph.BRANCH
+    )
     return "".join(parts)
 
 
 @dataclass
 class RuleTreeRenderer:
-    """Renders a flat list of :class:`RuleView` rows as a coloured, elided text tree."""
+    """
+    Renders a flat list of :class:`RuleView` rows as a coloured, elided text tree.
+    """
 
     head: int = DEFAULT_HEAD
-    """How many rules to show before the elision marker."""
+    """
+    How many rules to show before the elision marker.
+    """
+
     tail: int = DEFAULT_TAIL
-    """How many rules (ending on the firing rule) to show after the elision marker."""
+    """
+    How many rules (ending on the firing rule) to show after the elision marker.
+    """
+
     use_color: bool = True
-    """Whether to wrap each rule line in its status colour."""
+    """
+    Whether to wrap each rule line in its status colour.
+    """
 
     def render(
         self,
@@ -354,14 +473,14 @@ class RuleTreeRenderer:
         """
         if not rules:
             return ""
-        depths = [r.depth for r in rules]
+        depths = [rule.depth for rule in rules]
         statuses = [
-            resolve_status(r, satisfied_ids, evaluated_ids) for r in rules
+            resolve_status(rule, satisfied_ids, evaluated_ids) for rule in rules
         ]
         statuses = enforce_parent_consistency(statuses, rules)
         lines = [
-            self._render_row(rule, _connector(depths, i), statuses[i])
-            for i, rule in enumerate(rules)
+            self._render_row(rule, _connector(depths, index), statuses[index])
+            for index, rule in enumerate(rules)
         ]
         return "\n".join(self._elide(lines, len(rules), fired_index))
 
@@ -371,6 +490,12 @@ class RuleTreeRenderer:
         connector: str,
         status: RuleStatus,
     ) -> str:
+        """
+        :param rule: The rule to render.
+        :param connector: The nesting-connector prefix for this row (from :func:`_connector`).
+        :param status: The rule's status, driving the row's colour.
+        :return: The rendered, single-line row.
+        """
         text = f"{rule.kind} {format_condition(rule.condition)}  →  {_format_conclusions(rule)}"
         if self.use_color:
             text = f"{status.color}{text}{Style.RESET_ALL}"
@@ -379,30 +504,45 @@ class RuleTreeRenderer:
     def _elide(
         self, lines: List[str], total: int, fired_index: Optional[int]
     ) -> List[str]:
-        """Keep the first :attr:`head` rows + the :attr:`tail` rows ending on the fired row."""
+        """
+        Keep the first :attr:`head` rows + the :attr:`tail` rows ending on the fired
+        row.
+
+        :param lines: The fully rendered rows, in display order.
+        :param total: The total number of rows.
+        :param fired_index: Index of the fired row; the elided tail ends here (defaults
+            to the last row when nothing fired).
+        :return: The elided list of rows, with a hidden-count marker in place of any
+            rows dropped from the middle.
+        """
         anchor = fired_index if fired_index is not None else total - 1
         tail_start = max(0, anchor - self.tail + 1)
         # Contiguous (head reaches the tail window): show straight through to the anchor.
         if tail_start <= self.head:
             return lines[: anchor + 1]
         hidden = tail_start - self.head
-        marker = f"{Fore.LIGHTBLACK_EX}{_GAP}{_VERTICAL_DOTS}  ({hidden} hidden){Style.RESET_ALL}"
+        marker = f"{Fore.LIGHTBLACK_EX}{TreeGlyph.GAP}{TreeGlyph.VERTICAL_DOTS}  ({hidden} hidden){Style.RESET_ALL}"
         return lines[: self.head] + [marker] + lines[tail_start : anchor + 1]
 
 
 def _fired_index(
     rules: List[RuleView], firing_anchor_id: Optional[UUID]
 ) -> Optional[int]:
+    """
+    :param rules: The rules in display order.
+    :param firing_anchor_id: The id of the condition node that fired, or ``None``.
+    :return: The index of the fired rule in ``rules``, or ``None`` if none fired.
+    """
     if firing_anchor_id is None:
         return None
-    for i, rule in enumerate(rules):
+    for index, rule in enumerate(rules):
         if rule.condition._id_ == firing_anchor_id:
-            return i
+            return index
     return None
 
 
 def render_rule_tree(
-    trace: "ClassificationTrace",
+    trace: ClassificationTrace,
     *,
     head: int = DEFAULT_HEAD,
     tail: int = DEFAULT_TAIL,

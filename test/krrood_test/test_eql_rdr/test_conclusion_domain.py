@@ -1,5 +1,5 @@
 """
-Phase 1 tests: resolving an RDR conclusion attribute's allowable-value domain from its type.
+Tests for resolving an RDR conclusion attribute's allowable-value domain from its type.
 
 Covers the enumerable (Enum / bool), open (str / arbitrary), Union, non-Optional and
 unresolvable cases, plus the display / membership / example helpers.
@@ -116,12 +116,10 @@ class TestConclusionDomainHelpers(unittest.TestCase):
 
     def test_example_uses_first_member_when_enumerable(self):
         domain = resolve_conclusion_domain(Animal, "species")
-        self.assertTrue(domain.example_for("conclusion").startswith("conclusion = Species."))
+        self.assertTrue(
+            domain.example_for("conclusion").startswith("conclusion = Species.")
+        )
 
     def test_example_shows_type_when_open(self):
         domain = resolve_conclusion_domain(Tag, "name")
         self.assertEqual(domain.example_for("conclusion"), "conclusion = <str>")
-
-
-if __name__ == "__main__":
-    unittest.main()
