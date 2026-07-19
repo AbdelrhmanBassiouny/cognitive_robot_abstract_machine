@@ -66,6 +66,26 @@ the developer actively drafting a new live review (`_pronominalises` param-doc c
 Claude-Code footer, at commit 068c374e). Did NOT touch it. Posted a status update via
 `add_issue_comment` instead and paused inline replies/resolves until his review is submitted.
 
-NEXT: wait for the developer's pending review to submit (webhook will deliver it), then
-reply-and-resolve the 12 (now 13, incl. `_pronominalises`) mechanical threads, and get his answer
-on the 3 design questions before touching `IsReachable`'s signature or the assembler doctest.
+His review submitted (webhook delivered it) with 3 more comments: `%%` dividers on
+`test_predicate_clauses.py` + "put this in AGENTS.md", and a second `IsReachable` "add another
+argument" reminder on `test_predicate_fragment_verbalization.py`. AskUserQuestion errored again
+(same known failure mode); proceeded on his own converging GitHub signal (repeated "apply
+everywhere" + a second reminder) rather than re-asking. Implemented (commit `de16f6e5`):
+`IsReachable` is now two fields (`location`, `body`), verbalizing *"a location is reachable for a
+Robot"* — updated every doctest/test/doc site (verified each rendering against the live venv rather
+than guessing strings, e.g. two same-noun `Robot` operands correctly disambiguate to *"a Robot is
+reachable for another Robot"*). Fixed the assembler `_where_block` doctest's nonsensical example
+(conditioned on a *different* robot's battery) to condition on the *same* robot's own battery via
+`Match.variable`, reading *"Generate a Robot given that its name is 'R2', where its battery is
+greater than 50"* — kept `Generate` as the doctest's backend, explicitly did NOT change the
+Selective backend's actual default (a separate, more consequential question), and said so in the
+reply, leaving that one thread unresolved pending his answer. Converted
+`test_predicate_clauses.py`'s box-drawing dividers to `%%` (whole file, not just my added section)
+and documented the `%%` convention in AGENTS.md's Testing section. All fixed threads
+replied-and-resolved (17 of 18; the Generate-vs-Find default question left open). PR description
+updated to match (surface table, design bullets). Full suite re-verified: 701 passed, same 2
+pre-existing failures.
+
+NEXT: wait for the developer's answer on the Generate-vs-Find backend default (only remaining open
+thread), then reply-and-resolve it. Otherwise watch for further re-review / approval / ready
+instruction.
