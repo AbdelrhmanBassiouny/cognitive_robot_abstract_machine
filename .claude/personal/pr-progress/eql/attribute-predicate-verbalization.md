@@ -40,7 +40,8 @@ approved forks + negation-scope "either".
   2. either-placement — user wants it as its own follow-up PR in a NEW session;
      asked for a study-first/plan-with-options/discuss prompt (not prescribe a
      solution). Prompt handed off in chat; thread left OPEN as the tracking marker.
-- PR #83 review fully addressed. Still draft; do not mark ready unless told.
+- PR #83 review fully addressed. User marked it READY FOR REVIEW themselves
+  (2026-07-19) — leave it ready (their explicit action); do not re-draft.
 
 ## Deferred / next
 - Follow-up PR (new session): move open-boolean "either" placement out of
