@@ -47,7 +47,24 @@ approved forks + negation-scope "either".
   boolean_alternative_clause into a realization/negation pass (options: polarity
   feature on head + clause-level RealizationPass, or alternatives). Off main.
 - Cross-lib CI watch (coraplex/sdt goldens may shift); fixture-gated tests need py3.12.
-- Causal PR #82: (a) coraplex test_merge_motions CI failure is a STALE-BASE artifact
-  (main green on that job; #83 green on coraplex too) — rebase #82 onto main + re-run,
-  awaiting user go-ahead; (b) annotate zoo Animal fields + update causal goldens
-  ("because the Animal has milk") once #83 lands.
+- Causal PR #82 (branch eql/causal-verbalization) — big review (~22 comments) arrived.
+  Investigated: #82 is STACKED on a deep unmerged chain (base
+  claude/rdr-why-answer-6fnw2o -> D-core-*/RDR-refactor stack; W1 NOT in main), so
+  the coraplex test_merge_motions CI red is a stale-base artifact of the STACK and
+  needs a RESTACK via the user's restacking workflow, NOT a rebase-onto-main from me
+  (that would replay the whole stack). Do NOT attempt a manual rebase/merge here.
+  Recommendation accepted by planning: handle the WHOLE #82 review (mechanical +
+  architecture) in one fresh dedicated session, because the mechanical fixes land on
+  the same files the architecture redesign rewrites (serialization.py,
+  rule_tree_view.py, pipeline.py, verbalizer.py, english.py). Handoff prompt drafted
+  in chat. Central architecture theme: replace string-based rule kind + post-hoc
+  string-search comment annotation with a structured Rule/kind (RuleView.kind ->
+  StrEnum unified with RuleKindWord; drop from_kind + the global map) and emit the
+  code comment structurally during generation; plus Question base class for
+  Match/Query/Why (open-closed), Connectives parent for the causal connective, and
+  the mechanical batch. That session maintains #82's own pr-progress note
+  (eql/causal-verbalization.md) via save-pr-progress.sh; I did NOT touch #82.
+- Boolean-attr dependency: once #83 lands, annotate zoo Animal fields + update #82
+  causal goldens ("because the Animal has milk").
+- Note: this sits alongside the PR #33 P1-P4 roadmap (PRs #86/#87/#88/#33) in the
+  personal notes — separate work, situational awareness only.
