@@ -41,7 +41,13 @@ subprocess timeout). Asked the user via AskUserQuestion before acting (CI
 reruns are a visible, resource-consuming action); they said re-run. First
 rerun_failed_jobs attempt got 403 "workflow already running" (coraplex was
 still in progress); retried once the full run completed (coraplex finished
-success at 19:00:09) — queued successfully. Watching for the retry result.
+success at 19:00:09) — queued successfully.
+
+Result: giskardpy passed on retry (19:03:14-19:16:03), confirming it was
+flakiness, not a real regression. CI is now 18/18 green on 2bb7503e.
+mergeable_state: clean. Re-checked review activity: still exactly 22 threads,
+20 resolved + 2 open (the #83 ones, as expected), no new plain-conversation
+comments. This round of the review is fully done pending only PR #83.
 
 CI: re-check pending on 2bb7503e. Still expect only test_each_lib (coraplex)
 to fail per the developer's stale-base note — not touching it, no
