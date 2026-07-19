@@ -16,8 +16,28 @@ Done:
 Verified: surface test 3/3, util test 7/7, `test_verbalization/` green bar 2 pre-existing
 `jpt`-import env failures (unrelated).
 
-Draft PR: #86 (off `main`, subscribed to all events). Watching CI; re-arm hourly check-in
-until merged/closed.
+Draft PR: #86 (off `main`, subscribed to all events).
 
-Next: get PR #86 CI green and reviewed → merge before #33 rebases. Then P2 (operand-naming
-architecture) is the keystone that gates #33.
+Review round 1 (5 comments), addressed and pushed in 92d4a9b3:
+- Code changes, threads resolved: `class_implements_own_method` redesigned to take two
+  already-resolved methods instead of `(cls, base_class, method_name)` (no more
+  `getattr_static`); `phrase_rule._is_guarded` reverted to the plain `is not` comparison
+  (`when` is never a classmethod/staticmethod, so the util was needless indirection there).
+- Explained, thread resolved (no code change): why `assert_every_callable_has_a_fragment`
+  isn't redundant with Python's abstractmethod enforcement (the coverage assertion explicitly
+  excludes fragment-less classes, so only this one catches them, and immediately rather than
+  lazily).
+- Open, awaiting developer decision (replied with reasoning + a question, NOT resolved):
+  whether `SymbolicCallableOverride.operands` should narrow from `Dict[str, Any]` to a
+  `(name, types: Tuple[Type,...])`-shaped list; whether the three separate `assert_*` tests
+  should collapse into one `SNAPSHOT.test()` (offered an additive convenience method instead
+  of replacing them).
+
+Note: personal-notes had a save race with a concurrent P2 session — my first "P1 done" edit to
+this file got clobbered by a later save from that session (which only had P2's edit, not
+mine). Re-applied here; P2's own entry above was left untouched. Watch for this if working
+notes concurrently with another session.
+
+Next: watching CI on 92d4a9b3 (self check-in loop). Once the two open threads get a decision
+from the developer, apply/skip accordingly, then merge before #33 rebases. P2 is already done
+(PR #87) in parallel.
