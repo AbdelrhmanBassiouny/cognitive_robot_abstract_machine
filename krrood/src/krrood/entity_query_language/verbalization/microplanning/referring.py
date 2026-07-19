@@ -215,6 +215,24 @@ class ReferringExpressions:
         return cls(disambiguation_map=labels, numbered_labels=numbered)
 
     @classmethod
+    def from_expressions(
+        cls, expressions: List[SymbolicExpression]
+    ) -> ReferringExpressions:
+        """Build the disambiguation map over several expressions at once.
+
+        Verbalizing each expression then shares this map, so a referent appearing in more than one (e.g.
+        the same pose in a navigate act and a monitor act) is named once and corefers across them.
+
+        :param expressions: The expressions to scan together, in order.
+        :return: An instance whose disambiguation map spans all of *expressions*.
+        """
+        for expression in expressions:
+            if isinstance(expression, Query):
+                expression.build()
+        labels, numbered = cls._group_referents_over(expressions)
+        return cls(disambiguation_map=labels, numbered_labels=numbered)
+
+    @classmethod
     def _build_disambiguation_map(
         cls, expression: SymbolicExpression
     ) -> Tuple[Dict[uuid.UUID, str], Dict[uuid.UUID, str]]:
@@ -239,6 +257,52 @@ class ReferringExpressions:
         if isinstance(expression, Query):
             expression.build()
         return cls._group_referents_by_canonical(expression).labels()
+
+    @classmethod
+    def _group_referents_over(
+        cls, expressions: List[SymbolicExpression]
+    ) -> Tuple[Dict[uuid.UUID, str], Dict[uuid.UUID, str]]:
+        """Group the numberable referents across *expressions* into one ``(labels, numbered)`` map, so
+        a referent shared across them is named once and numbering stays consistent (used to verbalize a
+        composed plan). A single-element list reproduces the per-expression numbering.
+
+        :param expressions: The expressions to scan together, in order.
+        :return: ``(labels, numbered)`` spanning all of *expressions*.
+        """
+        members_by_canonical: Dict[uuid.UUID, List[uuid.UUID]] = defaultdict(list)
+        canonicals_by_type: Dict[str, List[uuid.UUID]] = defaultdict(list)
+        type_of_canonical: Dict[uuid.UUID, str] = {}
+        seen_ids: Set[uuid.UUID] = set()
+
+        for expression in expressions:
+            suppressed = cls._aggregation_source_ids(expression)
+            aliases = referent_aliases(expression)
+            for node in expression._all_expressions_:
+                type_name = cls._numberable_type_name(node)
+                if (
+                    type_name is None
+                    or node._id_ in suppressed
+                    or node._id_ in seen_ids
+                ):
+                    continue
+                seen_ids.add(node._id_)
+                canonical = aliases.get(node._id_, node._id_)
+                if canonical not in type_of_canonical:
+                    type_of_canonical[canonical] = type_name
+                    canonicals_by_type[type_name].append(canonical)
+                members_by_canonical[canonical].append(node._id_)
+
+        labels: Dict[uuid.UUID, str] = {}
+        numbered: Dict[uuid.UUID, str] = {}
+        for type_name, canonicals in canonicals_by_type.items():
+            is_numbered = len(canonicals) > 1
+            for ordinal, canonical in enumerate(canonicals, 1):
+                label = f"{type_name} {ordinal}" if is_numbered else type_name
+                for member in members_by_canonical[canonical]:
+                    labels[member] = label
+                    if is_numbered:
+                        numbered[member] = label
+        return labels, numbered
 
     @classmethod
     def _group_referents_by_canonical(

@@ -76,9 +76,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         inline_predict = self._inline_predict(predict_groups, plan)
 
         header_parts: List[VerbalizationFragment] = [
-            (
-                self.context.services.performative_override or Directive.GENERATE
-            ).as_fragment(),
+            self.context.register.opener_fragment(Directive.GENERATE),
             self.context.child(plan.selection),
         ]
         if inline_predict is not None:
@@ -181,7 +179,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         if not points:
             return None
         return BlockFragment(
-            header=Keywords.GIVEN_THAT.as_fragment(),
+            header=self.context.register.binding_connective.as_fragment(),
             items=points,
             conjunction=Conjunctions.AND.as_fragment(),
         )

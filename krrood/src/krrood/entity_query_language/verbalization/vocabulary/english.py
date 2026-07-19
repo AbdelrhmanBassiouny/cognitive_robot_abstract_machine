@@ -183,14 +183,11 @@ class CommonGroupKeyWord(PlainWord):
 
 
 class Keywords(VocabEnum):
-    """
-    EQL structural keywords (IF, THEN, FIND, WHERE, etc.).
-    """
+    """EQL structural keywords (IF, THEN, WHERE, etc.). The query opener verbs (*"Find"* /
+    *"Generate"* / *"Report"*) live on :class:`Directive`, not here."""
 
     IF = KeyWord("If")
     THEN = KeyWord("then")
-    FIND = KeyWord("Find")
-    REPORT = KeyWord("report")
     FOR = KeyWord("for")
     FOR_EACH = KeyWord("For each")
     SUCH_THAT = KeyWord("such that")
@@ -209,13 +206,98 @@ class Keywords(VocabEnum):
 
 
 class Directive(VocabEnum):
-    """
-    The imperative verb that opens a request: *"Find"* a match in the domain,
-    or *"Generate"* an underspecified one.
+    """The verb that opens a request, naming what it *does*. The single source of the three
+    directive words -- each the class name of the matching
+    :class:`~krrood.entity_query_language.performatives.QuerySpeechAct`:
+
+    - ``FIND`` -- search the domain for the matches a description names (the default).
+    - ``GENERATE`` -- construct the underspecified instance a generative request leaves open.
+    - ``REPORT`` -- present the results a query computes or groups.
+
+    Each assembler passes its own default to :meth:`~…register.Register.opener_fragment` -- a match
+    defaults to ``GENERATE``, a query to ``FIND`` or ``REPORT`` by its shape -- so the opener words
+    live here in one place rather than split across this enum, ``Keywords``, and the speech-act
+    classes.
     """
 
     FIND = KeyWord("Find")
+    """Search the domain for matches (*"Find a Robot …"*)."""
     GENERATE = KeyWord("Generate")
+    """Construct an underspecified instance (*"Generate a Position …"*)."""
+    REPORT = KeyWord("report")
+    """Present computed or grouped results (*"Report the distinct departments"*); capitalised by the
+    sentence-initial pass, lower-case mid-sentence (*"For each department, report …"*)."""
+
+
+class Adverbs(VocabEnum):
+    """Connective adverbs -- words that modify a clause to sequence or qualify it relative to a
+    neighbour, rather than bind two clauses grammatically.
+
+    Split out as their own part of speech (not lumped with conjunctions or complementizers) because
+    an adverb sits *inside* the second clause as a modifier, so the engine places it after the comma
+    and inflects nothing: *"A, then B"*, *"A, otherwise B"*, *"do A, B, and C simultaneously"*.
+
+    Use one of these when sequencing or qualifying whole acts in a composition (the
+    :class:`~krrood.entity_query_language.performatives.Composition` combinators); use
+    :class:`SubordinatingConjunctions` instead when one clause is grammatically subordinate to the
+    other (*"…, while …"*).
+    """
+
+    THEN = PlainWord("then")
+    """Temporal sequencing -- the next step happens after the previous one (*"A, then B"*)."""
+    OTHERWISE = PlainWord("otherwise")
+    """Fallback -- the next step happens only if the previous one fails (*"try A, otherwise B"*)."""
+    SIMULTANEOUSLY = PlainWord("simultaneously")
+    """Concurrency -- the steps happen at the same time (*"try A, B, or C simultaneously"*)."""
+
+
+class SubordinatingConjunctions(VocabEnum):
+    """Conjunctions that attach a subordinate (dependent) clause to a main clause.
+
+    Distinct from :class:`Adverbs` because the word grammatically *governs* the clause it heads,
+    turning it into a modifier of the main clause rather than a standalone step: the main clause
+    carries the act, the subordinate clause runs alongside it (*"navigate to X, while monitoring
+    whether …"*). Distinct from :class:`Conjunctions` (which coordinate clauses of equal rank).
+
+    Use one of these to subordinate one act to another -- e.g. the concurrent *"while"* clauses a
+    :class:`~krrood.entity_query_language.performatives.Parallel` composition builds.
+    """
+
+    WHILE = PlainWord("while")
+    """Introduces a clause that runs concurrently with the main clause (*"…, while …-ing"*)."""
+
+
+class Complementizers(VocabEnum):
+    """Words that introduce a *declarative* complement clause -- a subordinate clause asserting a
+    proposition that completes the verb (*"Achieve that the gripper holds the body"*).
+
+    Kept separate from :class:`QuestionWords` because a complementizer frames its clause as a
+    statement (something to be made true), whereas an interrogative frames it as a question
+    (something to be asked or decided). The choice changes the speech act, not just the wording, so
+    each act picks the introducer matching its force.
+
+    Use one of these for an act whose content is a goal/assertion (e.g. ``Achieve``).
+    """
+
+    THAT = PlainWord("that")
+    """Introduces a declarative complement -- the proposition to be made true (*"Achieve that …"*)."""
+
+
+class QuestionWords(VocabEnum):
+    """Interrogatives that introduce an *embedded question* -- a subordinate clause framing its
+    content as a question rather than an assertion (*"Monitor whether …"*, *"Explain why …"*).
+
+    Kept separate from :class:`Complementizers` (declarative *"that"*) because an interrogative
+    frames the clause as something to be asked or decided, which is a different speech act. The two
+    members ask different questions, so each act picks the one matching what it interrogates.
+
+    Use one of these for an act whose content is a question (e.g. ``Monitor``, ``Explain``).
+    """
+
+    WHETHER = PlainWord("whether")
+    """Introduces a yes/no embedded question -- whether a condition holds (*"Monitor whether …"*)."""
+    WHY = PlainWord("why")
+    """Introduces a reason-seeking embedded question -- why something holds (*"Explain why …"*)."""
 
 
 class Logicals(VocabEnum):
