@@ -23,6 +23,15 @@ fitted zoo model reloads 101/101.
 `test_each_lib (krrood)` is GREEN on all three current live heads — that's
 the only job that exercises my code.
 
+D-deco-session handoff landed on #76 (commit bf5b63c3, on top of restacked
+9c7f8e6b): `doc/eql/user/rdr_conclusion_domain.py` (the Exhibit domain my
+`eql_rdr_conclusion_asking.md` worked example imports — was dangling) and
+`test_rule_tree_view.py` (renderer coverage; imports IPythonInterface so it
+must live in #76, not the shell-free #79). Verified: test_rule_tree_view 20
+passed, doc import satisfied. Replied on #76 + posted correction that I could
+NOT delete `D-deco-rehome-handoff` (git proxy blocks ref deletion) — the
+sibling session should delete that staging branch; its content is landed.
+
 ## Split rationale + dependency facts
 
 - Runtime DAG: case_table + magics are leaves; prompt_examples→case_table;
