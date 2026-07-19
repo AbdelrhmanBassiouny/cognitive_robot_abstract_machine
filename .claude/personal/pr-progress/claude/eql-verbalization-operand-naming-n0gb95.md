@@ -153,7 +153,34 @@ skips), no exclusions needed any more. Re-verify new doctests against this harne
 instead of assuming they're inert; and remember `pyjpt` is installable in this sandbox if the jpt gap
 resurfaces.
 
-NEXT: wait for the developer's answers on the two held design questions (Literal/LSP, example-domain
-prefixing) and the doctest-placement-rules discussion. Otherwise watch for further re-review /
-approval / ready instruction. PR description kept current (surface table now includes the Find/Generate
-backend-param example; design bullets mention the later rounds).
+### Round 4 follow-up — developer answered the two "give me a prompt" asks, plus one mechanical fix
+
+The developer responded to round 4's held items:
+- Posted two standalone copyable prompts as GitHub replies (also saved to scratchpad for this
+  session): one for a future PR investigating the `Literal`/`Variable` LSP question, one for a
+  future PR writing general doctest-placement conventions (candidate rules drafted in the prompt
+  itself) + sweeping `krrood.entity_query_language.verbalization` for existing violations. Both
+  threads resolved — the ask ("give me a prompt") is fully satisfied; the actual work is deferred
+  to fresh sessions/PRs off `main`, not done here.
+- Gave my opinion on the `example_domain.py` prefixing question: prefer prefixing the *file*
+  (`_example_domain.py`) over every class inside it — confirmed zero wildcard imports of the
+  module exist anywhere in the repo, so the collision risk the class-prefix idea guards against
+  is hypothetical, and the file-level prefix gives the same "internal, not public API" signal at
+  far lower blast radius (one import-path rename vs. every class name + doctest string + rendered
+  surface + test/doc reference). Asked the developer to confirm which they want; thread left open
+  pending that answer.
+- Removed the leftover "Disambiguation is `_distinguished`'s own doctest..." pointer sentence
+  from `_noun_phrase`'s docstring per the developer's explicit "not needed here" — full
+  verbalization suite re-verified green first (710 passed, 3 unrelated skips, via a freshly
+  `uv`-provisioned venv in this session's container — the earlier venv312 sandbox didn't persist
+  across sessions; `uv run pytest ... --confcutdir=test/krrood_test` bypasses the root conftest's
+  sdt/coraplex heavy deps for krrood-only runs). black + docformatter clean. Committed
+  (`ab8f8791`) and pushed. Thread resolved now that the fix actually landed.
+- PR stayed draft throughout (already was); description left as-is (no substantive behavior
+  change this round).
+
+NEXT: wait for the developer's answers on the two still-open design questions (Literal/LSP —
+prompt delivered, work deferred to its own PR; example-domain file-vs-class prefixing — my
+opinion posted, awaiting their choice) and the doctest-placement-rules discussion (prompt
+delivered, work deferred to its own PR). Otherwise watch for further re-review / approval / ready
+instruction. PR description kept current.
