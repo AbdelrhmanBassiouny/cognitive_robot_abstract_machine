@@ -211,7 +211,20 @@ Two quick review comments landed together:
   lockfile-resolved set. A bare system `pip install` in this container fails outright (broken
   `distutils`/`install_layout` in the system Python) — always route through `uv`.
 
-NEXT: wait for the developer's answer on the one remaining open design question (Literal/LSP —
-prompt delivered, work deferred to its own PR) and on the doctest-placement-rules discussion
-(prompt delivered, work deferred to its own PR — not blocking this PR). Otherwise watch for
-further re-review / approval / ready instruction. PR description kept current.
+### Round 6 — marked ready for review
+
+Developer converted the PR out of draft (`draft: false`) at HEAD `452374a1`, no push from me
+triggered it so no draft-reversion applies (that rule only fires after *I* push a change to an
+already-ready PR). Verified with a fresh fetch per the webhook notice's own caution: confirmed
+`draft: false`, `merged: false`, still open. No auto-merge/queue state to restore — this was a
+draft→ready transition, not the reverse the notice warns about. CI for `452374a1` was mid-run at
+the time (most of the 18 checks already green, a handful still in progress, zero failures) —
+watching it through to completion; required reviews now gate merge as normal since it's no longer
+a draft. Standing rule still applies going forward: if I push another commit to this PR, convert
+it back to draft immediately, and only mark ready again on explicit instruction.
+
+NEXT: watch CI to completion on `452374a1` and report/act if anything fails. Wait for the
+developer's answer on the one remaining open design question (Literal/LSP — prompt delivered,
+work deferred to its own PR) and on the doctest-placement-rules discussion (prompt delivered, work
+deferred to its own PR — not blocking this PR). Otherwise watch for a review/approval/merge
+decision now that it's out of draft. PR description kept current.
