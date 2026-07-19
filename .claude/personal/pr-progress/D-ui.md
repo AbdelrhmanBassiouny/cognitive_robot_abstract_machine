@@ -24,6 +24,16 @@ reloads 101/101.
 `test_each_lib (krrood)` is GREEN on all three current live heads — that's
 the only job that exercises my code.
 
+KNOWN krrood-job FLAKE (don't mistake for a real regression): a collection-time
+TOCTOU race under pytest-xdist — `test/krrood_test/conftest.py`'s ORM-interface
+regeneration writes `ormatic_interface.*.tmp` inside `dataset/` and os.replace()s
+it, so a worker can try to collect another worker's in-flight temp file ->
+`ERROR collecting .../dataset/__init__.py  AssertionError: PosixPath('.../
+ormatic_interface.*.tmp') is not a file`. Pre-existing on `main` (conftest ORM
+logic unchanged), shared infra, AGENTS.md says don't hand-edit ORM regen. Flagged
+by the D-store session (seen on #80). If a future krrood-job failure on my heads
+shows THIS signature, it's the flake — re-run, don't debug my code.
+
 D-deco-session handoff landed on #76 (commit bf5b63c3, on top of restacked
 9c7f8e6b): `doc/eql/user/rdr_conclusion_domain.py` (the Exhibit domain my
 `eql_rdr_conclusion_asking.md` worked example imports — was dangling) and
