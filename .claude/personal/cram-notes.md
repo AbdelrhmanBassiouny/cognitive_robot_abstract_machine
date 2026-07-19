@@ -149,7 +149,48 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   Same-noun pairs read "a X … another X" (indefinite alternative, not "the other X" on first
   mention); larger groups use ordinals, not numbers. Full suite verified against baseline
   (zero regressions).
-- P3 [ ] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). Dep: P2.
+- P3 [x] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). DONE & pushed
+  to `claude/eql-verbalization-p3-albw76`, PR #88 (draft, base `claude/eql-verbalization-operand-naming-n0gb95`,
+  subscribed to all activity). Branch merges in P1 (#86) too: P1 had already extracted exactly
+  the first-order-rendering mechanism this phase needed
+  (`SymbolicSurfaceSnapshot.placeholder_operands`/`rendered_surface`) into production code, so
+  building on it directly avoided a duplicate parallel mechanism — confirmed with the developer
+  (AskUserQuestion) before merging P1 in, since the written plan only listed "Dep: P2". PR #88's
+  diff therefore also carries P1's + P2's commits (only the last commit is new); noted explicitly
+  in the PR description so review isn't confused about authorship.
+  - Abstract→concrete-subclass expansion lives in `operand_head_noun` (`referring.py`): triggers
+    on `inspect.isabstract(type_)` (not "has subclasses" — a concrete base with subclasses of its
+    own, e.g. `SemanticAnnotation`, is still named directly), bounded by the existing
+    `MAX_SET_MEMBERS` cap reused from `coordination.py` (a family above the cap falls back to
+    naming the abstract type directly, confirmed with the developer). Confirmed with the
+    developer (AskUserQuestion) rather than assumed.
+  - Divergence from decision 3's literal example: renders as *"a Body or Region"* (one shared
+    determiner over a bare disjunctive compound head) rather than *"a Body or a Region"*
+    (repeated article per alternative). Getting the repeated-article form would require growing
+    `NounPhrase` to support multiple independently-determined heads instead of one; the bare
+    compound reuses `NounPhrase`'s existing determiner/coreference/pronoun machinery completely
+    unchanged. Flagged explicitly in the PR description as a trade-off, not silently decided —
+    open to revisiting if a repeated article is wanted after all.
+  - `operand_head_noun`/`NounForm`/`ReferringExpressions` (previously `str`-only) now also thread
+    `Tuple[type, ...]` alternatives alongside the plain noun text; `VariableRule.build`
+    (`rules.py`) is the single chokepoint that builds the compound fragment (each alternative
+    individually source-linked via `RoleFragment.for_type`). `_plural` intentionally left
+    untouched (pluralizing a disjunctive head is unhandled, falls back to the plain joined-text
+    string with no individual links — an accepted, documented limitation; real population-count
+    aggregation over an abstract-typed variable is a rare edge case).
+  - First-order (value-agnostic) form promoted to production: `placeholder_operands`/
+    `first_order_form` extracted as standalone functions in `surface_verification.py`;
+    `SymbolicSurfaceSnapshot` now delegates to them instead of owning the logic. Value-using form
+    is simply the existing `verbalize_expression` path over a bound expression — both share the
+    same operand-naming resolution, proven by a test that asserts they agree when operand types
+    match.
+  - Tests: krrood-internal mimics only (`Shape`/`Circle`/`Square`, an over-cap `Polygon` family of
+    7, a concrete `ConcreteBase` with subclasses) in `test_operand_referring.py` +
+    new `test_first_order_form.py`. Full `test_eql/` + `test_class_diagram/` suite green (1112
+    passed, 3 skipped) apart from one pre-existing missing-`mypy` collection error, unrelated.
+    black + docformatter applied. CI just kicked off on PR #88 at last check.
+  - Real end-to-end proof against the actual `Visible`/`Body`/`Region` sdt predicates waits for
+    P4 (those predicates aren't migrated to classes yet).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
