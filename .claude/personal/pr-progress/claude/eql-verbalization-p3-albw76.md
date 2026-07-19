@@ -1,10 +1,13 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status: pushed (4 commits), draft PR #88 open, base `claude/eql-verbalization-operand-naming-n0gb95`
-(P2), merges in P1 (#86) too. Subscribed to activity. Review round 1 (3 comments) fully handled;
-review round 2 (1 comment, design question) fixed and resolved too; review round 3 (1 comment, test
-quality) fixed and resolved too. Developer's answer on the base/stacking question (round 1's
-general comment) is still pending. Hourly check-in loop active.
+Status: pushed (4 commits), PR #88 marked **ready for review** by the developer (no longer draft) —
+base still `claude/eql-verbalization-operand-naming-n0gb95` (P2), merges in P1 (#86) too. Subscribed
+to activity. Review round 1 (3 comments) fully handled; review round 2 (1 comment, design question)
+fixed and resolved too; review round 3 (1 comment, test quality) fixed and resolved too. Developer's
+answer on the base/stacking question (round 1's general comment) is still pending, but marking it
+ready-for-review may itself be the answer (proceeding with current stacking) -- not assumed, just
+noted. CI green so far (16/18 checks passed, 2 still running, none failed) at last check. Hourly
+check-in loop active.
 
 ## What's done
 - Merged P1 into the P3 branch (one conflict, in `verbalization_surfaces.py`'s import block —
