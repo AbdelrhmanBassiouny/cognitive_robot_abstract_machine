@@ -105,6 +105,20 @@ class UnsupportedNodeForSerialization(DataclassException):
 
 
 @dataclass
+class NoConclusionToExplainError(DataclassException):
+    """Raised when a why-question is asked about a case for which no rule fired."""
+
+    case: Any
+    """The case that produced no conclusion, so there is nothing to explain."""
+
+    def error_message(self) -> str:
+        return f"No rule fired for {self.case!r}, so there is no conclusion to explain."
+
+    def suggest_correction(self) -> str:
+        return "Fit a rule that classifies this case before asking why it was concluded."
+
+
+@dataclass
 class EmptyRuleTreeError(DataclassException):
     """Raised when serializing an RDR that has no rules yet."""
 

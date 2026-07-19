@@ -13,6 +13,7 @@ when given, otherwise asking the expert for both the conclusion and its conditio
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from typing_extensions import (
@@ -20,6 +21,7 @@ from typing_extensions import (
     Callable,
     Dict,
     Iterator,
+    List,
     Optional,
     Tuple,
     Type,
@@ -29,9 +31,14 @@ from typing_extensions import (
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.observer import ClassificationTrace
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
 from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.entity_query_language.rdr.why import (
+    RDRConclusionExplanation,
+    WhyAnswer,
+)
 
 #: Ground truth: either a single conclusion shared by every case, or a per-case callable.
 GroundTruth = Union[Any, Callable[[Any], Any]]
@@ -43,6 +50,54 @@ ModelKey = Tuple[Type, str]
 def key_from_attribute(attribute: Attribute) -> ModelKey:
     """:return: The registry key for an EQL attribute expression (e.g. ``animal.species``)."""
     return (attribute._child_._type_, attribute._attribute_name_)
+
+
+class InferenceStrategy(ABC):
+    """How :meth:`RDRBackend.infer` turns a case into a conclusion.
+
+    The default :class:`FastInference` just classifies. :class:`ExplainingInference` wraps
+    that fast path to also retain the per-result
+    :class:`~krrood.entity_query_language.rdr.observer.ClassificationTrace`, so inference
+    and explanation share one evaluation without the fast path paying for it.
+    """
+
+    @abstractmethod
+    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> Any:
+        """:return: The conclusion inferred for ``case`` by ``rdr``."""
+
+
+@dataclass
+class FastInference(InferenceStrategy):
+    """Classify with no explanatory retention — the default, unchanged fast path."""
+
+    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> Any:
+        return rdr.classify(case)
+
+
+@dataclass
+class ExplainingInference(InferenceStrategy):
+    """Classify while retaining a trace (and conclusion explanation) per inferred result."""
+
+    traces: List[ClassificationTrace] = field(default_factory=list)
+    """One classification trace per concluded case, in inference order."""
+    _explanations: List[RDRConclusionExplanation] = field(
+        default_factory=list, repr=False
+    )
+    """Conclusion explanations for the traces whose rule fired, built as each case concludes."""
+
+    def conclude(self, rdr: EQLSingleClassRDR, case: Any) -> Any:
+        trace = rdr._trace(case)
+        self.traces.append(trace)
+        if trace.fired_conclusion is not None:
+            corner_case = rdr.corner_cases.get(trace.firing_anchor_id)
+            self._explanations.append(
+                RDRConclusionExplanation(WhyAnswer.from_trace(trace, corner_case))
+            )
+        return trace.conclusion
+
+    def explanations(self) -> List[RDRConclusionExplanation]:
+        """:return: A conclusion explanation for each concluded case whose rule fired."""
+        return list(self._explanations)
 
 
 @dataclass
@@ -76,6 +131,7 @@ class RDRBackend:
         query: Any,
         ground_truth: Optional[GroundTruth] = None,
         fill_in_place: bool = False,
+        strategy: Optional[InferenceStrategy] = None,
     ) -> Iterator[Any]:
         """
         Lazily infer ``query``'s ``...`` attribute on each filtered instance.
@@ -88,8 +144,12 @@ class RDRBackend:
         :param fill_in_place: When ``True``, set the attribute on each instance and yield the
             instance. Otherwise (default) yield a :class:`UnificationDict` mapping the case
             variable to the instance and the target attribute to the inferred value.
+        :param strategy: How each case is concluded. Defaults to :class:`FastInference`; pass
+            an :class:`ExplainingInference` to retain a trace and conclusion explanation per
+            result without altering the yielded values.
         :return: A lazy iterator of :class:`UnificationDict` (default) or filled instances.
         """
+        strategy = strategy if strategy is not None else FastInference()
         statement = UnderspecifiedMatch(query)
         key = self._key(statement)
         if key not in self.models:
@@ -97,7 +157,7 @@ class RDRBackend:
         rdr = self.models[key]
         target = statement.single_target()
         for case in statement.filtered_cases():
-            value = rdr.classify(case)
+            value = strategy.conclude(rdr, case)
             if fill_in_place:
                 setattr(case, target.attribute_name, value)
                 yield case

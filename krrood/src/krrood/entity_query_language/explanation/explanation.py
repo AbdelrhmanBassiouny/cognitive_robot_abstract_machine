@@ -4,6 +4,7 @@ import ast
 import linecache
 import textwrap
 import weakref
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
@@ -240,14 +241,38 @@ class ConditionAndBindings:
             return f"{self.condition} ({','.join(str(child) for child in self.condition._children_)})"
 
 
+class Explanation(ABC):
+    """Common interface for a retrievable explanation of an inferred value.
+
+    Both EQL inference (:class:`InferenceExplanation`) and RDR attribute conclusions
+    (:class:`~krrood.entity_query_language.rdr.why.RDRConclusionExplanation`) present the
+    satisfied conditions that justify a value, so a caller can explain either kind of
+    conclusion through the same abstraction.
+    """
+
+    @abstractmethod
+    def get_satisfied_conditions_and_their_bindings(self) -> List[ConditionAndBindings]:
+        """:return: The satisfied conditions justifying the explained value, with bindings."""
+
+    def get_satisfied_conditions_as_string(self) -> str:
+        """Render all satisfied conditions as a single ``\\nAND ``-joined string.
+
+        :return: The joined satisfied conditions, or an empty string when none were satisfied.
+        """
+        return "\nAND ".join(
+            str(c) for c in self.get_satisfied_conditions_and_their_bindings()
+        )
+
+
 @dataclass
-class InferenceExplanation(Symbol):
+class InferenceExplanation(Explanation, Symbol):
     """
     Explanation of how an instance was created through inference.
 
     Inherits from :class:`~krrood.symbol_graph.symbol_graph.Symbol` so that every
     explanation is a first-class entity in the SymbolGraph and therefore queryable
-    via EQL like any other domain object.
+    via EQL like any other domain object, and from :class:`Explanation` so RDR
+    conclusions can be explained through the same abstraction.
 
     Lifecycle is tied to the inferred instance: the instance stores a strong reference
     to this object via its ``_inference_explanation_`` attribute (see
@@ -300,18 +325,6 @@ class InferenceExplanation(Symbol):
         if self._instance_ref is None:
             return None
         return self._instance_ref()
-
-    def get_satisfied_conditions_as_string(self) -> str:
-        """
-        Render all satisfied conditions as a single string, with each condition
-        separated by ' AND '.
-
-        :return: A string containing all satisfied conditions joined by ``\\nAND ``, or
-            an empty string when no conditions were satisfied.
-        """
-        return "\nAND ".join(
-            str(c) for c in self.get_satisfied_conditions_and_their_bindings()
-        )
 
     def get_satisfied_conditions_and_their_bindings(self) -> List[ConditionAndBindings]:
         """

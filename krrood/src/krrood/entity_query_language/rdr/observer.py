@@ -173,6 +173,9 @@ class ClassificationTrace:
     """The condition node of the rule that produced the winning conclusion."""
     conclusion: Any = UNSET
     """The inferred conclusion (``UNSET`` if no rule fired)."""
+    fired_conclusion: Optional[FiredConclusion] = None
+    """The winning capture (its ``Add`` node and result bindings), ``None`` if no rule
+    fired. Retained so an explanation can select its content without re-evaluating."""
 
     @property
     def firing_anchor_id(self) -> Optional[UUID]:
@@ -196,6 +199,7 @@ class ClassificationTrace:
             evaluated_expression_ids=evaluated_ids,
             firing_anchor=fired.anchor if fired is not None else None,
             conclusion=observer.conclusion,
+            fired_conclusion=fired,
         )
 
 

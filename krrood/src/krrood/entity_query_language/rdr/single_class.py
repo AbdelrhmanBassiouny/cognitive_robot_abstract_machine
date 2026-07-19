@@ -58,6 +58,13 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
     DEFAULT_TAIL,
     render_rule_tree,
 )
+from krrood.entity_query_language.rdr.exceptions import NoConclusionToExplainError
+from krrood.entity_query_language.rdr.why import (
+    CONTRAST_NOT_IMPLEMENTED,
+    RDRConclusionExplanation,
+    WhyAnswer,
+    WhyQuestion,
+)
 from krrood.entity_query_language.rdr.serialization import save_rdr_with_case
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
@@ -203,6 +210,42 @@ class EQLSingleClassRDR:
         return render_rule_tree(
             self._trace(case), head=head, tail=tail, use_color=use_color
         )
+
+    def why(self, case: Any) -> WhyAnswer:
+        """Explain why ``case`` was given its conclusion.
+
+        :param case: The case whose conclusion to explain.
+        :return: The :class:`~krrood.entity_query_language.rdr.why.WhyAnswer` naming the
+            fired rule, its conditions, and the corner case it was created for.
+        :raises NoConclusionToExplainError: When no rule fires for ``case``.
+        """
+        return self.answer_why(WhyQuestion(case=case))
+
+    def answer_why(self, question: WhyQuestion) -> WhyAnswer:
+        """Answer a :class:`~krrood.entity_query_language.rdr.why.WhyQuestion`.
+
+        :param question: The question to answer.
+        :return: The assembled why-answer.
+        :raises NotImplementedError: When ``question`` is contrastive (reserved).
+        :raises NoConclusionToExplainError: When no rule fires for the questioned case.
+        """
+        if question.is_contrastive:
+            raise NotImplementedError(CONTRAST_NOT_IMPLEMENTED)
+        trace = None if self.query is None else self._trace(question.case)
+        if trace is None or trace.fired_conclusion is None:
+            raise NoConclusionToExplainError(question.case)
+        corner_case = self.corner_cases.get(trace.firing_anchor_id)
+        return WhyAnswer.from_trace(trace, corner_case)
+
+    def explain(self, case: Any) -> RDRConclusionExplanation:
+        """Explain ``case``'s conclusion through the shared explanation abstraction.
+
+        :param case: The case whose conclusion to explain.
+        :return: An :class:`~krrood.entity_query_language.rdr.why.RDRConclusionExplanation`
+            wrapping the :meth:`why` answer.
+        :raises NoConclusionToExplainError: When no rule fires for ``case``.
+        """
+        return RDRConclusionExplanation(self.why(case))
 
     def fit_case(
         self, case: Any, target: Any = UNSET, expert: Optional[Expert] = None
