@@ -112,6 +112,25 @@ main … D-core-engine (#68) -> D-ui (#76) -> D-store (#80) -> D-deco (#77)
   Reverted the regenerated ormatic_interface.py diff as usual. No
   new comments on #76/#77/#80; steward's eql_rdr_refactor_plan.md
   call still outstanding.
+- 2026-07-19 (webhook): CI check `test_each_lib (krrood)` failed on
+  #80 at the restack-#3 tip (07cb6831) — a THIRD, new-type flake
+  (not one of the two previously known ones). Investigated via job
+  logs: it's a collection-time TOCTOU race, not a real test failure
+  (2370 passed, 9 skipped, only 1 collection error). Root cause:
+  `test/krrood_test/conftest.py::generate_sqlalchemy_interface`
+  regenerates ormatic_interface.py atomically via a NamedTemporaryFile
+  written *inside the same directory* pytest-xdist workers are
+  scanning, then os.replace()s it into place; a worker's directory
+  listing can catch another worker's in-flight .tmp file, which is
+  gone by the time pytest lazily tries to collect it ->
+  `AssertionError: PosixPath(...ormatic_interface.<hash>.py.tmp) is
+  not a file`. Confirmed pre-existing on main (`git diff main..D-store
+  -- test/krrood_test/conftest.py` shows only docformatter whitespace
+  noise, the temp-file-in-same-dir logic is unchanged) — not
+  introduced by this stack, not in #80/#77's own diff. Per AGENTS.md
+  (don't touch ormatic_interface.py machinery myself), reported on #76
+  for the developer's awareness rather than fixed; no action taken on
+  #80/#77. Will note if it recurs.
 
 ## Next
 
