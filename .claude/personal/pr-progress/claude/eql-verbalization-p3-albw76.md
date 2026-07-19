@@ -1,9 +1,9 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status: pushed (2 commits), draft PR #88 open, base `claude/eql-verbalization-operand-naming-n0gb95`
-(P2), merges in P1 (#86) too. Subscribed to activity. First review round landed (3 comments handled,
-see below); developer's follow-up on the base/stacking question is pending. Hourly check-in
-scheduled (~16:26 UTC on 2026-07-19).
+Status: pushed (3 commits), draft PR #88 open, base `claude/eql-verbalization-operand-naming-n0gb95`
+(P2), merges in P1 (#86) too. Subscribed to activity. Review round 1 (3 comments) fully handled;
+review round 2 (1 comment, design question) fixed and resolved too. Developer's answer on the
+base/stacking question (round 1's general comment) is still pending. Hourly check-in loop active.
 
 ## What's done
 - Merged P1 into the P3 branch (one conflict, in `verbalization_surfaces.py`'s import block —
@@ -33,6 +33,16 @@ scheduled (~16:26 UTC on 2026-07-19).
   if this stacking is more confusing than it's worth: (i) wait for #86+#87 to land on `main` and
   rebase P3 there, or (ii) target `main` directly and call out the P1+P2 overlap in the
   description instead of via the base branch. Awaiting the developer's preference.
+- **Review round 2** (1 item, pushed 19280e06): "Why does a first_order_form take overrides?" — a
+  real design flaw, not just a question: a truly value-agnostic rendering needs nothing external,
+  so `operand_overrides` had no business being on the general `placeholder_operands`/
+  `first_order_form` signatures — it exists only because `SymbolicSurfaceSnapshot`'s committed
+  example sentences need a real value for a field whose fragment reads it directly (e.g. `HasType`'s
+  `types_`). Removed the parameter from both general functions; `SymbolicSurfaceSnapshot.
+  placeholder_operands` now calls the override-free general function and layers its own
+  registered overrides on top itself, keeping that concern local to the snapshot. Retargeted the
+  two override tests at `SymbolicSurfaceSnapshot` directly instead of the free functions. Replied
+  and resolved.
 
 ## Next
 - Wait for the developer's answer on the base/stacking question (comment above) — be ready to
