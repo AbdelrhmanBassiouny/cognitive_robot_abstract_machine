@@ -59,22 +59,36 @@ main … D-core-engine (#68) -> D-ui (#76) -> D-store (#80) -> D-deco (#77)
   identical old vs new). Re-verified on the new tip: test_rdr_file_store
   21 passed, test_rdr_decorator 20 passed, full test_eql_rdr 518 passed/
   2 skipped.
-- Rehome files NOT yet landed on D-ui (still needed) — the old
-  D-deco-rehome-handoff branch had gone stale (base drifted through the
-  new restack), so I recreated it fresh off the current D-ui tip with the
-  same two files, re-verified green (test_rule_tree_view 20 passed), and
-  force-pushed. Still just a staging branch, not a PR.
-- New CI flake found on #77's current head: semantic_digital_twin ->
-  test_multi_sim.py::test_world_sim_state_sync (physics-settling
-  assertion). Confirmed unrelated: same job passes on #80, whose only
-  diff from #77 is the decorator commit, which never touches
-  semantic_digital_twin/physics_simulators. Documented in #77's
-  description and flagged on #76; no fix needed here.
-- #77 description updated with the restack note + the new flake's
-  known-failures entry. Posted update comment on #76.
+- New CI flake found: semantic_digital_twin -> test_multi_sim.py::
+  test_world_sim_state_sync (physics-settling assertion). Confirmed
+  unrelated: same job passes on #80, whose only diff from #77 is the
+  decorator commit, which never touches semantic_digital_twin/
+  physics_simulators. Documented in #77's description and flagged on
+  #76; no fix needed here.
+- 2026-07-19 (later): steward landed the rehome — single commit
+  bf5b63c3 "Add conclusion-domain doc fixture + rule-tree renderer
+  test" on D-ui, content byte-identical to what I staged (diffed
+  handoff branch vs new D-ui: empty). D-core-engine also advanced
+  (already incorporated into the new D-ui — confirmed ancestor).
+  Rebuilt D-store (cherry-pick 0c4938d3 -> f1de44d9) and D-deco
+  (cherry-pick 7e89ec60 -> c675dd49) onto the new tips; both diffed
+  content-identical to originals before pushing. Re-verified:
+  test_rdr_file_store + test_rdr_decorator 41 passed, full
+  test_eql_rdr 538 passed/2 skipped (the +20 vs before = 
+  test_rule_tree_view.py now included via the landed D-ui rehome).
+  ORM artifacts reverted. Force-pushed both branches.
+- Attempted to delete the now-landed D-deco-rehome-handoff staging
+  branch; the delete push failed with HTTP 403 (proxy/auth scope
+  issue specific to branch deletion, pushes/fetches otherwise fine).
+  Left it in place — harmless now that its content has landed;
+  revisit deletion later if the permission allows.
+- #77 description updated (verification numbers, known-failures
+  list including both confirmed-unrelated flakes, restack history).
 
 ## Next
 
-- Babysit #80 and #77 until merged/closed (#80 merges first). Watch for
-  the steward landing the rehome files onto D-ui (then delete
-  D-deco-rehome-handoff) and their eql_rdr_refactor_plan.md decision.
+- Babysit #80 and #77 until merged/closed (#80 merges first).
+- Still waiting: steward's call on eql_rdr_refactor_plan.md (land on
+  #68 with an index entry, or drop) — posted, no reply yet.
+- Retry deleting D-deco-rehome-handoff (origin) when a working delete
+  path is available — currently 403s.
