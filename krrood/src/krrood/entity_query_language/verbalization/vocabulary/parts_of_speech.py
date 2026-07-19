@@ -31,7 +31,7 @@ from krrood.entity_query_language.verbalization.microplanning.possessive import 
 )
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Conjunctions,
+    CoordinatingConjunctions,
     Copulas,
     Prepositions,
     SetMembership,
@@ -251,8 +251,9 @@ class DisjunctivePhrase(ClauseElement):
     rendered by :meth:`~…fragments.base.RoleFragment.for_value` (a class as a linked
     type reference, any other value as a literal) and joined with *"or"*. An author
     writes ``DisjunctivePhrase(field)`` rather than reaching for the low-level
-    :func:`~…fragments.base.oxford_comma` / :class:`Conjunctions` builders. A field
-    bound to a single (non- iterable) value keeps that value's own rendered fragment.
+    :func:`~…fragments.base.oxford_comma` / :class:`CoordinatingConjunctions` builders.
+    A field bound to a single (non- iterable) value keeps that value's own rendered
+    fragment.
     """
 
     members: Union[Iterable, VerbalizationField]
@@ -280,7 +281,7 @@ class DisjunctivePhrase(ClauseElement):
             return Noun(self.members).as_fragment()
         return oxford_comma(
             [RoleFragment.for_value(member) for member in value],
-            Conjunctions.OR.as_fragment(),
+            CoordinatingConjunctions.OR.as_fragment(),
         )
 
 
@@ -294,8 +295,8 @@ class ConjunctivePhrase(ClauseElement):
     Each item is rendered through its ``as_fragment`` and the parts are joined with
     *"and"* (an oxford comma before the final conjunct). An author writes
     ``ConjunctivePhrase(operands)`` rather than reaching for the low- level
-    :func:`~…fragments.base.oxford_comma` / :class:`Conjunctions` builders, so the
-    conjunction pattern lives in one place.
+    :func:`~…fragments.base.oxford_comma` / :class:`CoordinatingConjunctions` builders,
+    so the conjunction pattern lives in one place.
     """
 
     items: Iterable[ClauseConstituent]
@@ -319,7 +320,7 @@ class ConjunctivePhrase(ClauseElement):
         """
         return oxford_comma(
             [item.as_fragment() for item in self.items],
-            Conjunctions.AND.as_fragment(),
+            CoordinatingConjunctions.AND.as_fragment(),
         )
 
 

@@ -50,7 +50,7 @@ from krrood.entity_query_language.verbalization.microplanning.possessive import 
 )
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
 from krrood.entity_query_language.verbalization.vocabulary.english import (
-    Conjunctions,
+    CoordinatingConjunctions,
     Punctuation,
 )
 
@@ -105,7 +105,7 @@ class SelectionAssembler:
             selections = [self.one(variable, number) for variable in variables]
         else:
             selections = self._folded(variables)
-        return oxford_comma(selections, Conjunctions.AND.as_fragment())
+        return oxford_comma(selections, CoordinatingConjunctions.AND.as_fragment())
 
     def one(
         self, variable: SymbolicExpression, number: GrammaticalNumber

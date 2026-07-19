@@ -57,10 +57,10 @@ class TestRuleCodeValueObject(unittest.TestCase):
             hash(RuleCode(1, RuleKindWord.ALTERNATIVE)),
         )
 
-    def test_kind_from_rdr_kind_string(self):
-        self.assertIs(RuleKindWord.from_kind("except if"), RuleKindWord.REFINEMENT)
-        self.assertIs(RuleKindWord.from_kind("else if"), RuleKindWord.ALTERNATIVE)
-        self.assertIs(RuleKindWord.from_kind("if"), RuleKindWord.BASE)
+    def test_tree_connector_word_matches_the_ascii_view_vocabulary(self):
+        self.assertEqual(RuleKindWord.BASE.tree_connector_word, "if")
+        self.assertEqual(RuleKindWord.REFINEMENT.tree_connector_word, "except if")
+        self.assertEqual(RuleKindWord.ALTERNATIVE.tree_connector_word, "else if")
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")

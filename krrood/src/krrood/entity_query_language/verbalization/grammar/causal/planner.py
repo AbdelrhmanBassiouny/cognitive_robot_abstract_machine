@@ -10,12 +10,12 @@ from krrood.entity_query_language.core.expression_structure import chain_root
 from krrood.entity_query_language.query.aggregation_structure import (
     unwrap_result_quantifiers,
 )
+from krrood.entity_query_language.rdr.why import WhyAnswer
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 from krrood.entity_query_language.verbalization.vocabulary.english import FallbackNouns
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.rule_tree_view import RuleCode
-    from krrood.entity_query_language.rdr.why import WhyAnswer
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,7 @@ class CausalStructure:
 
 
 @dataclass
-class CausalPlanner(Planner["WhyAnswer", CausalStructure]):
+class CausalPlanner(Planner[WhyAnswer, CausalStructure]):
     """
     Decompose a :class:`~krrood.entity_query_language.rdr.why.WhyAnswer` into a
     :class:`CausalStructure`: the conclusion the rule reached, the satisfied conditions that justify

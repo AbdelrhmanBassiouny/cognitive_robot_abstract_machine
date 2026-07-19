@@ -75,8 +75,6 @@ class WhyAnswer:
     """The condition expression of the rule that fired (the firing anchor)."""
     add_node: Add
     """The ``Add`` conclusion node that produced :attr:`conclusion`."""
-    rule_kind: str
-    """How the fired rule relates to its predecessor: ``"if"`` / ``"else if"`` / ``"except if"``."""
     rule_depth: int
     """The fired rule's refinement-nesting depth (``0`` = a top-level rule)."""
     rule_code: RuleCode
@@ -97,9 +95,7 @@ class WhyAnswer:
         :return: The assembled :class:`WhyAnswer`.
         """
         fired = trace.fired_conclusion
-        rule_kind, rule_depth = _placement_of(
-            trace.rule_tree_root, trace.firing_anchor_id
-        )
+        rule_depth = _depth_of(trace.rule_tree_root, trace.firing_anchor_id)
         rule_code = rule_code_map(trace.rule_tree_root).get(
             trace.firing_anchor_id, RuleCode(0, RuleKindWord.BASE)
         )
@@ -107,25 +103,11 @@ class WhyAnswer:
             conclusion=trace.conclusion,
             condition=trace.firing_anchor,
             add_node=fired.add_node,
-            rule_kind=rule_kind,
             rule_depth=rule_depth,
             rule_code=rule_code,
             satisfied_conditions=_satisfied_conditions_of(trace),
             corner_case=corner_case,
         )
-
-    def verbalize(self) -> str:
-        """Render this answer as a plain-text causal explanation.
-
-        :return: *"<conclusion> because <conditions>, by the <kind> rule"* — the conclusion the
-            rule reached, the satisfied conditions that justify it (read with the concrete case,
-            *"the Animal"*), and the identity of the rule that fired.
-        """
-        from krrood.entity_query_language.verbalization.pipeline import (
-            verbalize_expression,
-        )
-
-        return verbalize_expression(self)
 
 
 @dataclass(frozen=True)
@@ -146,19 +128,19 @@ class RDRConclusionExplanation(Explanation):
         return list(self.why_answer.satisfied_conditions)
 
 
-def _placement_of(
+def _depth_of(
     rule_tree_root: Optional[SymbolicExpression], firing_anchor_id: Any
-) -> Tuple[str, int]:
-    """Find the fired rule's kind and depth by matching its condition node in the tree.
+) -> int:
+    """Find the fired rule's refinement-nesting depth by matching its condition node in the tree.
 
     :param rule_tree_root: The root of the rule tree's condition DAG.
     :param firing_anchor_id: The ``_id_`` of the fired rule's condition node.
-    :return: The ``(kind, depth)`` of the fired rule.
+    :return: The depth of the fired rule (``0`` = a top-level rule).
     """
     for rule in walk_rules(rule_tree_root):
         if rule.condition._id_ == firing_anchor_id:
-            return rule.kind, rule.depth
-    return "if", 0
+            return rule.depth
+    return 0
 
 
 def _satisfied_conditions_of(

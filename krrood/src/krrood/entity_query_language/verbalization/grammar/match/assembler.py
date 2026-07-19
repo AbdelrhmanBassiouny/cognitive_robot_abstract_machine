@@ -32,7 +32,7 @@ from krrood.entity_query_language.verbalization.grammar.match.planner import (
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Absence,
     Articles,
-    Conjunctions,
+    CoordinatingConjunctions,
     Copulas,
     Directive,
     Keywords,
@@ -121,7 +121,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         noun = "values" if len(attributes) > 1 else "value"
         return PhraseFragment(
             parts=[
-                Conjunctions.AND.as_fragment(),
+                CoordinatingConjunctions.AND.as_fragment(),
                 Keywords.PREDICT.as_fragment(),
                 self._owned_attributes(attributes, group.object),
                 WordFragment(text=noun),
@@ -140,7 +140,10 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         points = [self._predict_point(group, plan) for group in predict_groups]
         return BlockFragment(
             header=PhraseFragment(
-                parts=[Conjunctions.AND.as_fragment(), Keywords.PREDICT.as_fragment()]
+                parts=[
+                    CoordinatingConjunctions.AND.as_fragment(),
+                    Keywords.PREDICT.as_fragment(),
+                ]
             ),
             items=points,
         )
@@ -183,7 +186,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         return BlockFragment(
             header=Keywords.GIVEN_THAT.as_fragment(),
             items=points,
-            conjunction=Conjunctions.AND.as_fragment(),
+            conjunction=CoordinatingConjunctions.AND.as_fragment(),
         )
 
     def _concrete_points(self, group: AttributeGroup) -> List[VerbalizationFragment]:
@@ -258,7 +261,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         """
         value_list = oxford_comma(
             [self.context.child(a.value, as_value=True) for a in concrete],
-            Conjunctions.AND.as_fragment(),
+            CoordinatingConjunctions.AND.as_fragment(),
         )
         return PhraseFragment(
             parts=[
@@ -320,7 +323,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         return BlockFragment(
             header=Keywords.WHERE.as_fragment(),
             items=points,
-            conjunction=Conjunctions.AND.as_fragment(),
+            conjunction=CoordinatingConjunctions.AND.as_fragment(),
         )
 
     # %% shared
@@ -341,4 +344,4 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             )
             for attribute in attributes
         ]
-        return oxford_comma(fragments, Conjunctions.AND.as_fragment())
+        return oxford_comma(fragments, CoordinatingConjunctions.AND.as_fragment())

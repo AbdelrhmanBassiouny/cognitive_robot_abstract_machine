@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.rdr.why import WhyAnswer
 from krrood.entity_query_language.verbalization.context import MicroplanningServices
 from krrood.entity_query_language.verbalization.engine import fold, root_context
 from krrood.entity_query_language.verbalization.fragments.base import (
@@ -95,13 +96,13 @@ class EQLVerbalizer:
             query for a ``Match``, the firing condition for a ``WhyAnswer`` (both non-foldable
             roots), or *expression* itself for an ordinary node.
         """
-        from krrood.entity_query_language.rdr.why import WhyAnswer
-
-        if isinstance(expression, Match):
-            return expression.expression
-        if isinstance(expression, WhyAnswer):
-            return expression.condition
-        return expression
+        match expression:
+            case Match():
+                return expression.expression
+            case WhyAnswer():
+                return expression.condition
+            case _:
+                return expression
 
     @staticmethod
     def _match_context(services: MicroplanningServices) -> RuleContext:
