@@ -24,12 +24,37 @@ class Species(enum.Enum):
     """
 
     mammal = 1
+    """
+    UCI category code 1.
+    """
+
     bird = 2
+    """
+    UCI category code 2.
+    """
+
     reptile = 3
+    """
+    UCI category code 3.
+    """
     fish = 4
+    """
+    UCI category code 4.
+    """
     amphibian = 5
+    """
+    UCI category code 5.
+    """
+
     insect = 6
+    """
+    UCI category code 6.
+    """
+
     molusc = 7
+    """
+    UCI category code 7.
+    """
 
     def __repr__(self) -> str:
         return f"Species.{self.name}"
@@ -45,41 +70,89 @@ class Animal:
     """
 
     name: str
-    """The animal's name (its identifying label in the dataset)."""
+    """
+    The animal's name (its identifying label in the dataset).
+    """
+
     hair: bool
-    """Whether the animal has hair."""
+    """
+    Whether the animal has hair.
+    """
+
     feathers: bool
-    """Whether the animal has feathers."""
+    """
+    Whether the animal has feathers.
+    """
     eggs: bool
-    """Whether the animal lays eggs."""
+    """
+    Whether the animal lays eggs.
+    """
     milk: bool
-    """Whether the animal produces milk."""
+    """
+    Whether the animal produces milk.
+    """
+
     airborne: bool
-    """Whether the animal can fly."""
+    """
+    Whether the animal can fly.
+    """
+
     aquatic: bool
-    """Whether the animal lives in water."""
+    """
+    Whether the animal lives in water.
+    """
+
     predator: bool
-    """Whether the animal preys on other animals."""
+    """
+    Whether the animal preys on other animals.
+    """
+
     toothed: bool
-    """Whether the animal has teeth."""
+    """
+    Whether the animal has teeth.
+    """
     backbone: bool
-    """Whether the animal has a backbone."""
+    """
+    Whether the animal has a backbone.
+    """
     breathes: bool
-    """Whether the animal breathes air."""
+    """
+    Whether the animal breathes air.
+    """
+
     venomous: bool
-    """Whether the animal is venomous."""
+    """
+    Whether the animal is venomous.
+    """
+
     fins: bool
-    """Whether the animal has fins."""
+    """
+    Whether the animal has fins.
+    """
+
     legs: int
-    """The number of legs the animal has."""
+    """
+    The number of legs the animal has.
+    """
+
     tail: bool
-    """Whether the animal has a tail."""
+    """
+    Whether the animal has a tail.
+    """
     domestic: bool
-    """Whether the animal is domesticated."""
+    """
+    Whether the animal is domesticated.
+    """
+
     catsize: bool
-    """Whether the animal is approximately cat-sized or larger."""
+    """
+    Whether the animal is approximately cat-sized or larger.
+    """
+
     species: Optional[Species] = None
-    """The animal's species; ``None`` when unclassified (the attribute the RDR predicts)."""
+    """
+    The animal's species; ``None`` when unclassified (the attribute the RDR predicts).
+    """
 
 
 def make_animal(name: str, **kwargs) -> Animal:

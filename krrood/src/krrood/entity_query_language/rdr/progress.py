@@ -111,6 +111,28 @@ def _make_tqdm(total: int, description: str, use_color: bool) -> tqdm.tqdm:
 
 
 @dataclass
+class RecordedCall:
+    """
+    One lifecycle call captured by :class:`SpyProgressReporter`.
+    """
+
+    method_name: str
+    """
+    The name of the :class:`ProgressReporter` method that was called.
+    """
+
+    args: Tuple
+    """
+    The positional arguments the method was called with.
+    """
+
+    kwargs: Dict
+    """
+    The keyword arguments the method was called with.
+    """
+
+
+@dataclass
 class SpyProgressReporter(ProgressReporter):
     """
     A test double that records calls to :class:`ProgressReporter` without displaying
@@ -120,19 +142,21 @@ class SpyProgressReporter(ProgressReporter):
     the right order.
     """
 
-    events: List[Tuple[str, Tuple, Dict]] = field(init=False, default_factory=list)
+    events: List[RecordedCall] = field(init=False, default_factory=list)
     """
-    The ordered sequence of recorded ``(method_name, args, kwargs)`` calls.
+    The ordered sequence of recorded lifecycle calls.
     """
 
     def start(self, total: int, description: str = "") -> None:
-        self.events.append(("start", (total,), {"description": description}))
+        self.events.append(
+            RecordedCall("start", (total,), {"description": description})
+        )
 
     def update(self, n: int = 1) -> None:
-        self.events.append(("update", (n,), {}))
+        self.events.append(RecordedCall("update", (n,), {}))
 
     def reset(self, total: int) -> None:
-        self.events.append(("reset", (total,), {}))
+        self.events.append(RecordedCall("reset", (total,), {}))
 
     def finish(self) -> None:
-        self.events.append(("finish", (), {}))
+        self.events.append(RecordedCall("finish", (), {}))

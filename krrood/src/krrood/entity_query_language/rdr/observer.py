@@ -142,9 +142,9 @@ class ConclusionObserver(EvaluationObserver):
         The distinct inferred values observed (order-preserving).
         """
         seen: List[Any] = []
-        for f in self.fired:
-            if f.value not in seen:
-                seen.append(f.value)
+        for fired_conclusion in self.fired:
+            if fired_conclusion.value not in seen:
+                seen.append(fired_conclusion.value)
         return seen
 
 
@@ -234,6 +234,7 @@ class ClassificationTrace:
     """
     The condition node of the rule that produced the winning conclusion.
     """
+
     conclusion: Any = UNSET
     """
     The inferred conclusion (``UNSET`` if no rule fired).

@@ -68,10 +68,27 @@ class TreeGlyph(enum.StrEnum):
     """
 
     VERTICAL_DOTS = "⋮"
+    """
+    Marks the row where hidden (elided) rules would have been.
+    """
+
     GUIDE = "│  "
+    """
+    A vertical guide continuing an ancestor's branch past this row.
+    """
+
     GAP = "   "
+    """
+    Blank space where an ancestor's branch has already ended.
+    """
     BRANCH = "├─ "
+    """
+    Connects to a rule that has later siblings at the same depth.
+    """
     BRANCH_LAST = "└─ "
+    """
+    Connects to the last rule among its siblings at the same depth.
+    """
 
 
 class RuleKind(enum.StrEnum):
@@ -80,18 +97,40 @@ class RuleKind(enum.StrEnum):
     """
 
     IF = "if"
+    """
+    A top-level rule, not conditioned on any predecessor.
+    """
+
     ELSE_IF = "else if"
+    """
+    An alternative, evaluated only when its predecessor did not fire.
+    """
+
     EXCEPT_IF = "except if"
+    """
+    A refinement, evaluated only when its predecessor fired.
+    """
 
 
-class RuleStatus(enum.Enum):
+class RuleStatus(enum.StrEnum):
     """
     What happened to a rule during the classification being explained.
     """
 
     FIRED = "fired"
-    EVALUATED_NOT_FIRED = "evaluated"
+    """
+    The rule's condition was satisfied.
+    """
+
+    EVALUATED_NOT_FIRED = "evaluated_not_fired"
+    """
+    The rule's condition was evaluated but did not hold.
+    """
+
     NOT_EVALUATED = "skipped"
+    """
+    The rule was never evaluated (its branch was short-circuited).
+    """
 
     @property
     def color(self) -> str:
@@ -334,7 +373,10 @@ def format_conclusion(add: Add) -> str:
 
 
 def _format_conclusions(rule: RuleView) -> str:
-    """:return: The rule's conclusions rendered and joined, or ``"?"`` if it has none."""
+    """
+    :param rule: The rule whose conclusions are rendered.
+    :return: The rule's conclusions rendered and joined, or ``"?"`` if it has none.
+    """
     if not rule.conclusions:
         return "?"
     return ", ".join(format_conclusion(add) for add in rule.conclusions)
