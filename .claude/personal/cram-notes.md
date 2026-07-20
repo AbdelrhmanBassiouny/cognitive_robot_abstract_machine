@@ -139,7 +139,7 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   No deps.
 - P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
   gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`.
-  PR #87 (draft, base main, subscribed to all activity, all 12 review threads resolved).
+  PR #87 (currently draft — see below, base main, subscribed to all activity).
   Redesigned after developer review (see PR-progress section above for the full account):
   operand naming and disambiguation now live entirely in `ReferringExpressions`/
   `DistinguisherIndex` (coreference-driven, identity-keyed) instead of a parallel predicate-side
@@ -149,6 +149,31 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   Same-noun pairs read "a X … another X" (indefinite alternative, not "the other X" on first
   mention); larger groups use ordinals, not numbers. Full suite verified against baseline
   (zero regressions).
+  Fourth review round (2026-07-20, 4 threads) handled in a follow-up session dispatched as
+  branch `claude/pr-87-review-feedback-22080p` — that designated branch turned out to be a
+  fresh, unrelated branch off `main` rather than PR #87's actual head, so (per the developer's
+  explicit confirmation via AskUserQuestion) the fixes were made directly on
+  `claude/eql-verbalization-operand-naming-n0gb95` instead and pushed there (commit b938e46c),
+  since that is the only branch that actually updates PR #87. All 4 threads addressed and
+  resolved: removed `_OPERAND_DISPLAY_NAME_OBJECT` and its per-field
+  `GrammarMetadata(display_name="object")` declarations on `IsClass.obj`, `RuntimeType.obj`,
+  `HasType.variable`, `Is.first_entity`/`second_entity`, `IsSameSemanticEntity.entity_1`/
+  `entity_2` (`predicate.py`, `factories.py`, `role_predicates.py`) — `operand_head_noun` now
+  infers `"object"` straight from a field's `Any` annotation (via the raw dataclass field type,
+  not `typing.get_type_hints`, to avoid evaluating unrelated `TYPE_CHECKING`-only forward refs
+  elsewhere on the class), so no metadata is needed for those generically-named fields; a field
+  genuinely typed `object` (e.g. `IsReachable.location`) is untouched and still falls back to
+  its own field name. Also replaced the plain-prose "(Dale & Reiter's Incremental Algorithm...)"
+  mention in `operand_head_noun`'s docstring with a proper `:cite:t:`dale1995gricean`` citation
+  (that bib entry already existed and is used the same way elsewhere in the file). Verified:
+  full `test_verbalization/` suite (710 passed/3 skipped, same pre-existing skips as before) +
+  the doctest harness (70/70) + every other krrood_test suite referencing the touched predicate
+  classes (`test_match.py`, `test_rendering.py`, `test_core/test_queries.py`,
+  `test_core/test_rules.py`, `test_patterns/test_role.py` — 150 passed) green in a fresh
+  Python-3.12 venv (root venv was 3.11, which silently breaks `make_dataclass(module=...)` in
+  `class_diagram.py` — needed `/usr/bin/python3.12` explicitly). All 4 review threads
+  reply-and-resolved; PR converted back to draft after the push per personal convention (it had
+  been marked ready for review by the developer at the 2026-07-19 checkpoint).
 - P3 [x] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). DONE & pushed
   to `claude/eql-verbalization-p3-albw76`, PR #88 (draft, base `claude/eql-verbalization-operand-naming-n0gb95`,
   subscribed to all activity). Branch merges in P1 (#86) too: P1 had already extracted exactly
