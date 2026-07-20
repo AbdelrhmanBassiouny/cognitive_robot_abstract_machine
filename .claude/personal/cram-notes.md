@@ -174,6 +174,26 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   `class_diagram.py` — needed `/usr/bin/python3.12` explicitly). All 4 review threads
   reply-and-resolved; PR converted back to draft after the push per personal convention (it had
   been marked ready for review by the developer at the 2026-07-19 checkpoint).
+  Immediate re-review (same day, commit b938e46c → 3 more threads): developer pushed back on the
+  Any-type-hint inference itself — wanted `get_type_hints_of_object` (the forward-ref-safe utility
+  in `class_diagrams/utils.py`) instead of the raw-annotation-string compare, and for the Any/object
+  case to fall back to the plain field name rather than hardcoding `"object"` ("don't skip it and
+  don't just name it object"), plus shorter docstrings. Net effect: fully reverted
+  `operand_head_noun` to its pre-b938e46c logic (deleted `_field_declares_no_type` outright — once
+  the outcome is unconditionally "fall back to field name," the type check has no behavioral role
+  left, so `get_type_hints_of_object` ends up unneeded rather than swapped in) and shortened the
+  docstring substantially. Separately, two of the reviewer's three comments were "no abbreviations,
+  `object`" on `IsClass.obj`/`RuntimeType.obj` specifically — renamed both fields to `object`
+  (`self.obj`→`self.object`, `fields["obj"]`→`fields["object"]`), which alone gives them a readable
+  surface through the ordinary field-name fallback. Deliberately did *not* rename
+  `HasType.variable`/`Is.first_entity`/`second_entity`/`IsSameSemanticEntity.entity_1`/`entity_2` —
+  those aren't abbreviations and weren't flagged; updated `verbalization_surfaces.py`'s snapshot to
+  their new field-name-based text instead (*"a variable is of type Integer"*, *"a first entity is
+  the same object as a second entity"*, *"an entity 1 is the same entity as an entity 2"*) and
+  flagged in the reply that a reword is available if wanted. Pushed as commit 3dfa895b; full
+  krrood EQL + patterns suite green (1159 passed/3 skipped) after fixing the one surface-snapshot
+  regression the revert caused. All 3 threads reply-and-resolved; PR description updated to match
+  (the surfaces table and the five-predicates bullet were stale); PR stayed in draft (already was).
 - P3 [x] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). DONE & pushed
   to `claude/eql-verbalization-p3-albw76`, PR #88 (draft, base `claude/eql-verbalization-operand-naming-n0gb95`,
   subscribed to all activity). Branch merges in P1 (#86) too: P1 had already extracted exactly
