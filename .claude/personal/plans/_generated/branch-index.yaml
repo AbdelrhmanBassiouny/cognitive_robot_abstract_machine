@@ -2,6 +2,9 @@
 # Maps each item branch to the plan id that tracks it, so session-start.sh
 # can auto-load the parent plan for whatever branch is checked out.
 branches:
+  claude/entity-query-parent-props-w789od: dag-facade-hardening
+  conditions-root-drop-dead-parent-recovery: dag-facade-hardening
+  claude/dag-parent-root-and-querygraph-followups: dag-facade-hardening
   query-class-refactor: rdr-refactor
   eql-core-prep: rdr-refactor
   code-extraction: rdr-refactor
@@ -15,7 +18,6 @@ branches:
   D-core-support: rdr-refactor
   D-core-engine: rdr-refactor
   rdr-engine: rdr-refactor
-  conditions-root-drop-dead-parent-recovery: rdr-refactor
   D-ui-splice-fix: rdr-refactor
   D-ui-rendering: rdr-refactor
   D-ui: rdr-refactor

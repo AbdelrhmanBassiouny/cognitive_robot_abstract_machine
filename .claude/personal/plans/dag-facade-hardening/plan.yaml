@@ -1,0 +1,112 @@
+schema_version: 1
+id: dag-facade-hardening
+title: "DAG-vs-tree facade hardening in SymbolicExpression"
+description: >
+  Close the design smell where EQL's SymbolicExpression - a genuine rooted
+  DAG (shared subexpressions; _parents_ is a list) - exposes tree-shaped
+  _parent_/_root_ accessors (a single first-attached "primary" parent and a
+  walk up that chain). The in-flight stack (#89/#90/#92) already fixed the
+  individual leaks via evaluation-scoped context; this plan does the
+  root-cause hardening they deferred: make the structural accessors hard to
+  misuse, fix the remaining QuantifiedConditional cache-staleness bug, and add
+  a systematic audit plus a guard test.
+default_repo: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 96
+
+waves:
+  - id: wave-0
+    name: "Wave 0 - prerequisite leak-fixes (in-flight)"
+    description: >
+      The already-open stack that fixes the individual shared-node leaks by
+      resolving the owner from evaluation-scoped context instead of the
+      structural pointer. This plan composes on top of it.
+  - id: wave-1
+    name: "Wave 1 - root-cause hardening & audit"
+    description: >
+      The make-it-hard-to-misuse work those PRs consciously deferred.
+
+tracks:
+  - id: leak-fixes
+    name: "In-flight leak-fixes (#89/#90/#92)"
+    wave: wave-0
+  - id: bugs-and-audit
+    name: "Remaining bug + systematic audit"
+    wave: wave-1
+  - id: facade-rename
+    name: "Facade rename + reusable accessor + guard"
+    wave: wave-1
+
+items:
+  - id: pr-90-is-condition-participant
+    title: "Fix is_condition_participant misclassifying nodes shared across queries"
+    branch: claude/entity-query-parent-props-w789od
+    pr: 90
+    track: leak-fixes
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01EnQyPLtnuwLdmQ5RvmwZtg
+    notes: >
+      bug label; open draft, mergeable clean. Adds TruthValueOperatorChildren
+      to EvaluationContext (per-pass parent) - the exact latent bug flagged
+      during this plan's design as the TDD seed.
+
+  - id: pr-89-drop-dead-parent-recovery
+    title: "Drop the dead _last_parent_of_type_ conditions-root recovery"
+    branch: conditions-root-drop-dead-parent-recovery
+    pr: 89
+    track: leak-fixes
+    depends_on: []
+    status: in_progress
+    notes: >
+      Open draft (mergeable_state unstable at last check). Removes
+      _last_parent_of_type_; extends ActiveConditionsRoot.has_condition().
+      Also tracked in rdr-refactor as a side-quest that unblocks #41.
+
+  - id: pr-92-shared-node-followups
+    title: "Fix two more shared-node bugs found while following up on #90"
+    branch: claude/dag-parent-root-and-querygraph-followups
+    pr: 92
+    track: leak-fixes
+    depends_on: [pr-90-is-condition-participant]
+    status: in_progress
+    session: https://claude.ai/code/session_01NUtpYahbtZiRK7ijBXp5gi
+    notes: >
+      bug label; open draft, mergeable clean. Fixes _root_-based query_root
+      via OutermostQueryClaim + a QueryGraph memoization order-bug. Merges in
+      #90. Explicitly flags the QuantifiedConditional cache staleness as
+      out-of-scope - picked up by this plan's Wave 1.
+
+  - id: quantified-conditional-and-audit
+    title: "Fix QuantifiedConditional cache staleness + systematic shared-node audit"
+    branch: null
+    pr: null
+    track: bugs-and-audit
+    depends_on: [pr-89-drop-dead-parent-recovery, pr-90-is-condition-participant, pr-92-shared-node-followups]
+    status: not_started
+    notes: >
+      bug-labeled PR. Phase C: stop caching a per-query value on a shared
+      Exists/ForAll node (_ids_of_variables_to_add_to_sources_, a
+      @cached_property over _root_query_ at logical_quantifiers.py:147); resolve
+      the owning query from context (reuse #92's OutermostQueryClaim) and key
+      any cache by owning-query id on EvaluationContext. Phase D (audit half):
+      enumerate remaining semantic _root_/_root_query_/_parent_ reads and
+      per-node caches, TDD a shared-node regression test for each unsafe one,
+      fix via the context accessor. TDD throughout; krrood-internal mimics only.
+
+  - id: facade-rename-and-guard
+    title: "Rename structural accessors + reusable ownership accessor + guard test"
+    branch: null
+    pr: null
+    track: facade-rename
+    depends_on: [quantified-conditional-and-audit]
+    status: not_started
+    notes: >
+      Sequenced last to rebase cleanly (largest diff; collides with the
+      leak-fix stack). Phase A: rename _parent__/_parent_ -> _structural_parent_
+      and _root_ -> _structural_root_ (keep _parents_ authoritative); update the
+      construction/layout call sites. Phase B: consolidate the "resolve from
+      evaluation context else structural fallback" pattern into one reusable
+      EvaluationContext accessor (Open/Closed), behaviour-preserving. Phase D
+      (guard half): architectural test asserting semantic modules never
+      reference the _structural_* accessors, so the class cannot silently
+      reappear.
