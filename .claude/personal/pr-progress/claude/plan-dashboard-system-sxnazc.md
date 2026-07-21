@@ -1,4 +1,25 @@
-# Plan-dashboard system — status: implemented, committed (f224198d), pushed. No PR opened yet (not asked for).
+# Plan-dashboard system — status: PR #91 open (draft, base main), subscribed to all activity.
+
+## PR #91
+- https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
+- Contains only the main-bound infra (hooks + skill), per the user's request to keep it separate
+  from the personal-notes data (schema/rdr-refactor migration, which stays on `claude/personal-notes`
+  and is never part of any PR).
+- Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar generalization,
+  added after a follow-up request - see below).
+- CI: pending as of PR creation (0 checks reported yet). No review comments yet. Scheduled an ~1h
+  send_later check-in; re-arms silently if nothing's actionable.
+
+## Follow-up request handled after initial delivery
+- Stacked/indented item rendering: items within a track now indent by same-track `depends_on` depth,
+  capped at level 4; a chain deeper than that wraps back to level 0 with a left-edge arrow chip back
+  to the real parent ("◄ continues from ..."). Generalized in SKILL.md (not plan-specific), applied to
+  the real rdr-refactor dashboard (verified: S0-steward's 14-item chain wraps twice, exactly as
+  expected: levels 0-4, wrap, 0-4, wrap, 0-1).
+- Summary sidebar added: sticky aside with status counts + a computed "what to do next" list (drift
+  fixes first, then items whose dependencies are all done ("ready to start"), then blocked items with
+  a partially-done dependency set ("blocker may be cleared")). Also generalized in SKILL.md.
+- Republished the same dashboard Artifact URL in place (55da1cc9-...) reflecting both changes.
 
 ## Delivered
 - Schema: `.claude/personal/plans/<plan-id>/{plan.yaml,roadmap.md}` on `claude/personal-notes`
