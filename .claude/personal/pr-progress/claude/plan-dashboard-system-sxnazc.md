@@ -7,11 +7,37 @@
   and is never part of any PR).
 - Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar
   generalization), 66dd5792 (plan-create skill), d11aab31 (roadmap.md rendering fix),
-  1f5590fd (tracking-PR mailbox - see below). PR description updated to match all five.
+  1f5590fd (tracking-PR mailbox), 6845687f (tracking_issue migration - see below). PR description
+  updated to match all six.
 - CI: last known GREEN as of 66dd5792 (18/18); the `test_each_lib (semantic_digital_twin)` flake
-  confirmed as a flake there, not a regression. Not yet re-checked on d11aab31/1f5590fd - next
+  confirmed as a flake there, not a regression. Not yet re-checked on the four commits since - next
   check-in will confirm. No review or conversation comments as of the last check-in. Still draft,
   awaiting review.
+
+## Follow-up request #5 (user enabled Issues -> migrate off the tracking-PR fallback)
+- User enabled GitHub Issues on the repo (in direct response to the tracking-PR workaround's
+  documented trade-off) and said so. Per my own documented contingency ("if Issues are ever enabled
+  here, a tracking Issue would be the more natural fit and this step should switch to that instead"),
+  migrated for real rather than just updating docs:
+  - Created real issue #94 for rdr-refactor (title `[plan-tracking] rdr-refactor`), confirmed
+    subscribe_pr_activity works on a plain issue number exactly like a PR (no separate
+    issue-subscription tool exists - this is the SAME generic subscription mechanism).
+  - Closed PR #93 with an explanatory comment pointing at #94, unsubscribed from it. Tried deleting
+    its now-unneeded branch `plan-tracking-rdr-refactor` - blocked by the same git-proxy ref-delete
+    limitation noted elsewhere (D-ui.md) - harmless, human can delete via GitHub UI if wanted.
+  - Schema: `tracking_pr` -> `tracking_issue` (plans/README.md + rdr-refactor's plan.yaml, pushed to
+    personal-notes as a4090401). Field describes the mailbox's ROLE, not the literal GitHub object
+    type - kept the PR-based empty-commit fallback documented for any repo that has Issues disabled,
+    under the same field name, since which mechanism applies is a per-repo fact that can change (as
+    it just did here).
+  - plan-create: step 5 now creates a real issue by default, falls back to the tracking-PR trick
+    only on a 410. Also fixed a real gap noticed while touching its tool list: it never had
+    mcp__github__create_pull_request even under the original PR-only design.
+  - session-start.sh: renamed the grep/sed extraction (still dependency-free, no python3 added),
+    verified end-to-end on the real D-ui branch again - correctly surfaces "#94" now.
+  - Dashboard: link now uses issue_read's own `html_url` rather than guessing /issues/ vs /pull/ -
+    more robust than assuming based on which field is set. Republished (55da1cc9-... in place).
+  - Pushed as 6845687f; PR #91 description updated to cover all 6 commits now on it.
 
 ## Follow-up request #4 (tracking-PR mailbox for structural changes)
 - Answered the "should this go through a comment on the plan PR" design question from before:
