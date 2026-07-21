@@ -37,6 +37,70 @@ AND compounds; a rule's condition reused as a different query's filter after its
 tree was built; and `Refinement.insert_at` called directly with an already-parented
 condition (the literal clone-before-splice path `insert_refinement` uses).
 
+## CRITICAL: a real regression was found in review (2026-07-21) and fixed — read before touching this PR again
+The developer (via a review comment, commit-style but posted as a plain PR comment)
+found a genuine gap the "1275 tests, zero calls" exhaustive verification missed: a
+variable first used ONLY as a selected/output variable of a `Filter`-less query
+(`entity(flag)`, no `.where(...)`), then reused as a *different* query's
+where-condition, lost `satisfied_condition_ids` on the second query's evaluation.
+Reproduced exactly as given, confirmed it passes on `main` and fails on this branch's
+prior state. Root cause: the variable's primary `_parent_` is fixed at its first,
+`Filter`-less attachment, so the simplified `_conditions_root_` fallback (`self._root_`)
+lands on that same wrong root — and `SatisfiedConditionTracker.on_conclusions_processed`
+(`evaluation.py`) then spuriously matches `expression._conditions_root_ is
+expression._root_`, incorrectly triggering its "no where-clause" bypass.
+
+Did NOT reinstate `_last_parent_of_type_`. Investigated why the ambiguity was reachable
+specifically here and fixed it at the source instead: `on_conclusions_processed` is only
+ever invoked (per its one call site in `_evaluate_conclusions_and_update_bindings_`)
+after the caller already confirmed `expression` is the pass's active conditions root via
+`evaluation_context.active_conditions_root.is_active_root(self)` — so recomputing
+`_conditions_root_` on that same (possibly-shared) node a second time is both redundant
+and, in this exact shape, wrong. The real, unambiguous answer to "does this pass have a
+genuine Filter condition" is decided once, correctly, when `ActiveConditionsRoot.claim()`
+runs on the evaluation's own STARTING expression (never itself a shared/reused node,
+since `.evaluate()`'s caller is always a fresh top-level query). Extended
+`ActiveConditionsRoot` with `has_condition()`, computed at claim time as `root is not
+originating_expression._root_` (NOT `root is not originating_expression` — a `Query`
+wrapper's `_conditions_root_`/`_root_` both delegate to its compiled product, a
+different object from the wrapper itself, so comparing against the wrapper directly gives
+false positives for the plain Filter-less case; caught this via a real test failure
+before shipping it). `SatisfiedConditionTracker` now consults `has_condition()` instead
+of recomputing anything. This is the same evaluation-scoped explicit-context-threading
+pattern already used for the neighboring "which Filter's pass is running" question —
+applied to the one place that had been silently bypassing it.
+
+TDD: added the exact reported repro as `test_satisfied_condition_ids_for_a_variable_
+first_used_in_a_filterless_query` in `test_explanation.py` (that file already had the
+`satisfied_condition_ids` test pattern via `_get_true_results`/`_get_satisfied_names`),
+confirmed it fails against the prior code and passes with the fix. Added direct unit
+tests for `ActiveConditionsRoot.has_condition()` in `test_evaluation_context.py`
+(`_NodeStub` extended with a `_root_` attribute, defaulting to self). Full test_eql/
+test_ormatic/test_class_diagrams/test_ripple_down_rules: 1282 passed, 9 skipped.
+Re-verified against PR #78's branch (see reconciliation below) after fixing a
+mechanical error in my OWN merge-probe conflict resolution — not a problem with this
+PR's actual content, but worth knowing about if merge-probing #78 again: `D-ui-splice-fix`
+already carries PR #67's fix, which moved `active_conditions_root.claim(...)` OUTSIDE
+the `if owns_an_evaluation_context:` guard (unconditional, called from every node) so
+that `classify_case`/`trace_case`'s pre-installed-context pattern still gets a claim.
+When resolving the textual conflict between that placement and my added second
+argument, I initially kept MY placement (still inside the `if` block), silently
+reverting #67's fix — this caused `test_single_class_rdr.py`/`test_ask_for_rule.py`/etc.
+to hang or fail on the merged probe branch. Not a bug in `main`/this PR itself (which
+never had #67's restructuring to begin with — verified the actual committed PR branch
+passes 1282/1282 both before and after this whole detour). Fixed by keeping the claim
+call unconditional (outside the `if`) with my 2-arg signature, on the SCRATCH probe
+branch only. Also found and confirmed pre-existing, unrelated to this PR entirely (via
+checking out `D-ui-splice-fix`'s own files with zero trace of this PR's diff): a hang in
+`test_single_class_rdr.py`/`test_underspecified_rdr_integration.py` on that branch's
+current tip. Flagged it in the PR #89 comment reply for the record; not investigated
+further, not this PR's problem.
+
+Pushed as commit `c69b6e9d`. Replied on the PR comment thread explaining the fix. PR
+description updated to match. Still draft, CI was 18/18 green as of the previous push;
+re-check CI on `c69b6e9d` specifically next time this PR is touched (not yet confirmed
+green on this exact commit as of this note).
+
 ## IMPORTANT reconciliation with PR #78 (found 2026-07-20, same day)
 PR #78 (`D-ui-splice-fix`, base `D-core-engine`) independently **reintroduced
 `_last_parent_of_type_`** for a real, proven bug: reloading a human-fitted zoo model
