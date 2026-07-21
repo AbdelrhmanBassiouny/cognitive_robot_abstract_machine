@@ -8,11 +8,36 @@
 - Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar
   generalization), 66dd5792 (plan-create skill), d11aab31 (roadmap.md rendering fix),
   1f5590fd (tracking-PR mailbox), 6845687f (tracking_issue migration), 2947dd1f (plan-mode-approval
-  input clarification - see below, tiny doc-only commit, did not re-update PR description for it).
-- CI: mergeable_state clean, still pending/no checks reported yet for 6845687f as of the last
-  check-in (~09:03); re-armed for another ~1h. No review or conversation comments.
-- 2026-07-21 ~14:32 check-in: CI fully green (18/18) on latest head 2947dd1f, mergeable_state
-  clean, no review/conversation comments. Still draft, awaiting review. Re-armed for another ~1h.
+  input clarification), c77cda67 (script extraction + genericization - see below). PR description
+  updated to match all 8 commits.
+- 2026-07-21 ~14:32 check-in: CI fully green (18/18) on head 2947dd1f, mergeable_state clean.
+
+## Review round (2026-07-21, 6 threads on 2947dd1f)
+- 4 threads: "remove explicit rdr-refactor mention" (plan-create x2, plan-dashboard x2) - all
+  genuine, both SKILL.md files are meant to be fully generic. Fixed by removing every named
+  reference to the rdr-refactor plan as an example. Replied + resolved all 4.
+- 1 thread: "why does the skill know how to render the dashboard, shouldn't this be a script?" -
+  correct and important: I'd only prototyped the rendering logic in an uncommitted scratch file,
+  so every real /plan-dashboard run would have had the LLM re-derive the markdown converter,
+  drift/status logic, and stacking algorithm from prose each time. Fixed for real: extracted to
+  `.claude/skills/plan-dashboard/{render_common,build_dashboard,build_index}.py` (+ their HTML
+  templates), all committed and tested - build_dashboard.py now also owns manifest validation
+  (moved out of SKILL.md prose too), confirmed it rejects a broken depends_on/track reference with
+  a clear error. SKILL.md rewritten to describe what to gather + how to invoke the script, not the
+  algorithm. Replied + resolved.
+- 1 thread: "can rendering/status updates be a GitHub workflow instead of tokens?" - real
+  constraint found and explained: the Artifact tool (which is what actually publishes to
+  claude.ai/code/artifact/...) only exists inside a live Claude session - a GitHub Actions runner
+  cannot call it, so full workflow automation of the CURRENT hosting mechanism isn't possible.
+  Replied with the actual tradeoff (GitHub Pages + real automation but a different URL/hosting,
+  vs. keeping Artifact hosting but still needing a session to fire - now much cheaper, just
+  "run script, call Artifact"). Asked which they want, and whether to revisit the periodic-Routine
+  idea they declined earlier now that there's a concrete reason to. NOT resolved - awaiting answer.
+- Regenerated + republished the live rdr-refactor dashboard from the new committed script's own
+  output (confirmed byte-compatible with the prior prose-derived version). One stray duplicate
+  Artifact was minted using the wrong file path during this (82418c3c-...) before I caught it and
+  republished to the correct original path (55da1cc9-...) - the stray one is harmless/private,
+  left alone.
 
 ## Follow-up request #6 (formalize the plan-mode -> plan-dashboard hook)
 - User asked me to walk through how a normal session (plan-mode: describe features -> Claude drafts
