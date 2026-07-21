@@ -5,12 +5,29 @@
 - Contains only the main-bound infra (hooks + skill), per the user's request to keep it separate
   from the personal-notes data (schema/rdr-refactor migration, which stays on `claude/personal-notes`
   and is never part of any PR).
-- Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar generalization,
-  added after a follow-up request - see below).
-- CI: pending as of PR creation (0 checks reported yet). No review comments yet. Scheduled an ~1h
-  send_later check-in; re-arms silently if nothing's actionable.
+- Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar
+  generalization), 66dd5792 (plan-create skill - see below). PR description updated to match all
+  three.
+- CI: one failure seen (`test_each_lib (semantic_digital_twin)` - a ROS WorldSynchronizer test with
+  a fixed `time.sleep(1)` race, unrelated to this PR's diff (hooks/skills only, no Python touched);
+  attempted a rerun but the matrix run was still in_progress so GitHub rejected it (`workflow is
+  already running`) - the standing ~1h check-in will re-verify once the run finishes. No review
+  comments yet.
 
-## Follow-up request handled after initial delivery
+## plan-create skill (added after a second follow-up request: "I want a skill or an agent that
+## automates plan creation")
+- New `.claude/skills/plan-create/SKILL.md` (`/plan-create <plan-id>`): gathers a new plan's scope
+  (existing freeform doc to migrate / named branches+PRs to cross-check live / conversation), drafts
+  plan.yaml+roadmap.md, validates against the same checks plan-dashboard runs, asks via
+  AskUserQuestion before assuming any real structural judgment call, then runs save-plan.sh and
+  plan-dashboard itself. Does not invent a new write path - reuses the existing marker+save-plan.sh
+  bootstrap flow (still documented as the manual fallback).
+- Fixed a real gap found while wiring this in: plan-dashboard's SKILL.md already instructed loading
+  the `artifact-design` skill but its `allowed-tools` frontmatter never listed `Skill` - added it.
+- Updated save-plan.sh's header comment, hooks/README.md, and plans/README.md (personal-notes) to
+  point at the new skill as the recommended path, keeping the hand-written flow documented too.
+
+## Follow-up request #1 (dependency stacking + sidebar)
 - Stacked/indented item rendering: items within a track now indent by same-track `depends_on` depth,
   capped at level 4; a chain deeper than that wraps back to level 0 with a left-edge arrow chip back
   to the real parent ("◄ continues from ..."). Generalized in SKILL.md (not plan-specific), applied to
