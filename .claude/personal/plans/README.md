@@ -101,11 +101,19 @@ drift out of sync with the manifests it's derived from.
 in some plan's `items[]`, exactly like the existing per-branch PR-progress
 lookup already does for `pr-progress/<branch>.md`.
 
-## Creating or editing a plan
+## Creating a new plan
 
-Edit (or create) `plans/<plan-id>/plan.yaml` and `roadmap.md` directly (in
-`CLAUDE.local.md` if a session already pulled the plan in, or by fetching
-`claude/personal-notes` otherwise), then run
+`.claude/skills/plan-create/SKILL.md` (on `main`, `/plan-create <plan-id>`) automates this:
+gathers the plan's scope (an existing freeform roadmap doc to migrate, named branches/PRs to
+cross-check live, or plain conversation), drafts a schema-conformant `plan.yaml`/`roadmap.md`,
+validates it against the same checks `plan-dashboard` runs, asks before assuming anything that's a
+real structural judgment call, then runs `save-plan.sh` and `/plan-dashboard` itself. This is how
+`rdr-refactor` (this repo's reference plan) was produced, done by hand before the skill existed.
+
+## Editing an existing plan
+
+Edit `plans/<plan-id>/plan.yaml` and `roadmap.md` directly (in `CLAUDE.local.md` if a session
+already pulled the plan in, or by fetching `claude/personal-notes` otherwise), then run
 
 ```bash
 "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id>
