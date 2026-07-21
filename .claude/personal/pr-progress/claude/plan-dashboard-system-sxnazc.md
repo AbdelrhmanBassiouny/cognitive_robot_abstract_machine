@@ -6,8 +6,9 @@
   from the personal-notes data (schema/rdr-refactor migration, which stays on `claude/personal-notes`
   and is never part of any PR).
 - Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar
-  generalization), 66dd5792 (plan-create skill - see below). PR description updated to match all
-  three.
+  generalization), 66dd5792 (plan-create skill), d11aab31 (roadmap.md rendering fix - see below).
+  PR description updated to match the first three; not yet re-updated for d11aab31 (small/internal
+  enough to skip, consider adding a line if asked to touch the description again).
 - CI: GREEN. The `test_each_lib (semantic_digital_twin)` flake (ROS WorldSynchronizer
   `time.sleep(1)` race) confirmed as a flake, not a regression - it passed clean on the next
   commit's run (66dd5792, all 18/18 checks green, `mergeable_state: clean`). No review or
@@ -26,6 +27,36 @@
   the `artifact-design` skill but its `allowed-tools` frontmatter never listed `Skill` - added it.
 - Updated save-plan.sh's header comment, hooks/README.md, and plans/README.md (personal-notes) to
   point at the new skill as the recommended path, keeping the hand-written flow documented too.
+
+## Follow-up request #3 (roadmap.md rendering + open design question)
+- User asked "does the dashboard reread the roadmap? so if the roadmap was updated or the plan.yaml,
+  it will be updated?" - answer: plan.yaml yes (fresh git show every run), roadmap.md was fetched
+  but NEVER actually rendered anywhere in the real build script - a genuine gap between SKILL.md's
+  vague "render inline or summarize" instruction and what got built. User said fix it.
+- Fixed: build_dashboard.py now has a real (dependency-free, no `pip install markdown`) block-level
+  markdown->HTML converter - headings, paragraphs, ul/ol with proper wrapped-continuation-line
+  joining (first attempt broke on this - bullets/numbered lists were splitting across lines
+  incorrectly, fixed with a proper block-accumulation rewrite), fenced code, GFM tables (the one
+  real table in rdr-refactor's roadmap.md was rendering as a wall of raw pipe characters before this).
+  Rendered into a collapsed-by-default `<details>` "Background & history" section right under the
+  masthead. Verified tag-balanced (details/div/ul/ol/table/tr/code all matched). Republished
+  (55da1cc9-... in place). Tightened plan-dashboard's SKILL.md from "render inline or summarize" to
+  a concrete, non-optional instruction (summarizing defeats the point of the manifest/roadmap split).
+  Pushed as d11aab31.
+- Open design question (asked, NOT YET implemented - answered with a recommendation, awaiting
+  confirmation): user asked whether sessions proposing structural plan changes (new phases,
+  deferring tracks, etc.) should post a comment somewhere for a single "planning session" to apply,
+  so only one session ever writes structural changes. My recommendation: a dedicated per-plan
+  GitHub tracking Issue (not a PR - plans aren't inherently PRs) as the stable mailbox; worker
+  sessions comment-propose there instead of editing plan.yaml directly unless they ARE the
+  designated planning/steward session for that plan; a single session applies accumulated proposals
+  and replies-and-resolves each comment thread once applied. This mirrors the S0-steward pattern
+  already used for real in rdr-refactor (workers flag things to the steward rather than touching
+  shared coordination themselves - see D-ui.md's "Flag to steward (S0): #78 may still fold into #68"
+  for a real precedent). Would need: a new optional `tracking_issue` field in the plan.yaml schema,
+  plan-create creating the issue when bootstrapping a new plan, and a standing-instruction addition
+  to session-start.sh's plan-section header + both skill docs. NOT built yet - waiting on the user
+  to confirm this design before touching session-start.sh/schema/skill docs for it.
 
 ## Follow-up request #1 (dependency stacking + sidebar)
 - Stacked/indented item rendering: items within a track now indent by same-track `depends_on` depth,
