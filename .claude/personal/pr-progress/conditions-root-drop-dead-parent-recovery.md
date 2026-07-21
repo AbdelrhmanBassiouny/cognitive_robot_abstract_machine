@@ -180,6 +180,21 @@ itself — re-read it directly rather than trusting this summary once acting on 
 0/Why-track items, since several per-PR notes (D-ui.md especially) have their own
 detailed restack/flake history worth checking before touching those branches.
 
+## 2026-07-21 (later) — restack + a flaky CI failure, left alone on purpose
+Branch got auto-restacked onto a newer `main` (merge commit `49383ac1`, PR base sha
+advanced). One CI job failed on the new tip: `test_each_lib (semantic_digital_twin)`
+→ `test_multi_sim.py::test_world_sim_state_sync`, a MuJoCo physics-settling timing
+assertion (dropped box's final position off by fractions of a meter) — confirmed
+unrelated: the `krrood` job itself (the one that actually exercises this PR's diff)
+passed, and this PR never touches `semantic_digital_twin`/physics code at all. Asked
+the user whether to trigger a rerun; they declined answering via the structured
+question and said to continue, so left CI as-is rather than rerunning unilaterally
+(reruns are a visible, resource-consuming action per this repo's own established
+precedent — don't do it without clear approval). `mergeable_state` is currently
+"unstable" because of this one red job, not a real conflict. Re-check on the next
+check-in; rerun only if explicitly asked, or note it again if it's still red and
+blocking.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
