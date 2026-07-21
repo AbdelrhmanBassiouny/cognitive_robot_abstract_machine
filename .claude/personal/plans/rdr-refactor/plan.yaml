@@ -18,7 +18,6 @@ description: >
   integration, and TMS justifications on top of EQL — plus the Why &
   Montessori explanation track that was prioritized alongside it.
 default_repo: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-roadmap: roadmap.md
 
 waves:
   - id: wave-0

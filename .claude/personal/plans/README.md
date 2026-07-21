@@ -33,7 +33,7 @@ title: "Human-readable title"
 description: >
   One short paragraph. Long-form narrative goes in roadmap.md, not here.
 default_repo: <owner>/<repo>   # used by every item unless it sets its own `repo`
-roadmap: roadmap.md            # filename of the sibling narrative doc
+                                # (roadmap.md is a fixed sibling filename, not configurable)
 
 waves:                         # ordered phases, purely organizational
   - id: <wave-id>
