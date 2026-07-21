@@ -11,6 +11,8 @@
   input clarification - see below, tiny doc-only commit, did not re-update PR description for it).
 - CI: mergeable_state clean, still pending/no checks reported yet for 6845687f as of the last
   check-in (~09:03); re-armed for another ~1h. No review or conversation comments.
+- 2026-07-21 ~14:32 check-in: CI fully green (18/18) on latest head 2947dd1f, mergeable_state
+  clean, no review/conversation comments. Still draft, awaiting review. Re-armed for another ~1h.
 
 ## Follow-up request #6 (formalize the plan-mode -> plan-dashboard hook)
 - User asked me to walk through how a normal session (plan-mode: describe features -> Claude drafts
