@@ -289,8 +289,13 @@ automates):
   `/plan-dashboard` skill's live GitHub cross-check exists to catch
   automatically instead of requiring a session to notice it by accident.
 - PR #83 (`eql/attribute-predicate-verbalization`) is open as **not
-  draft**, unlike every other PR in this programme — flagged, not yet
-  resolved one way or the other.
+  draft**. Checking the live state of the whole programme while migrating
+  it to `plan.yaml` (2026-07-21) found this isn't unique to #83: #58, #39,
+  #53, #41, and #63–#67 (the lower two-thirds of the S0 stack) are also
+  open as non-draft — likely marked ready deliberately once each stabilized,
+  consistent with the always-drafts-until-ready personal convention, not a
+  slip. Not flagged as an issue; noted here since the original draft of
+  this addendum incorrectly called #83 unique.
 
 Once #89 merges, the restacking bot should cascade the fix down through
 #58 → #39 → #53 → #41, clearing #41's conflict for free. Verify that

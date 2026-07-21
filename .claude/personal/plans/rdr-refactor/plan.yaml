@@ -320,9 +320,10 @@ items:
     session: https://claude.ai/code/session_01JCEFrP4eBx2pgmf5FarFLm
     notes: >
       Sibling fix, not part of the original wave plan; blocks W2's last 2
-      open review threads. NOTE: currently open as non-draft, unlike every
-      other PR in this programme — worth a second look against the
-      always-drafts personal convention.
+      open review threads. Open as non-draft (ready for review) — same as
+      several of the S0 stack items (#58/#39/#53/#41/#63-#67), so not
+      unique to this PR; each was presumably marked ready deliberately once
+      stable, per the always-drafts-until-ready personal convention.
 
   - id: rdr-why-query-surface
     title: "why(...) EQL factory + docs + bibliography"
