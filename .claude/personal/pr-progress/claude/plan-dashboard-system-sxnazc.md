@@ -7,12 +7,25 @@
   and is never part of any PR).
 - Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar
   generalization), 66dd5792 (plan-create skill), d11aab31 (roadmap.md rendering fix),
-  1f5590fd (tracking-PR mailbox), 6845687f (tracking_issue migration - see below). PR description
-  updated to match all six.
-- CI: last known GREEN as of 66dd5792 (18/18); the `test_each_lib (semantic_digital_twin)` flake
-  confirmed as a flake there, not a regression. Not yet re-checked on the four commits since - next
-  check-in will confirm. No review or conversation comments as of the last check-in. Still draft,
-  awaiting review.
+  1f5590fd (tracking-PR mailbox), 6845687f (tracking_issue migration), 2947dd1f (plan-mode-approval
+  input clarification - see below, tiny doc-only commit, did not re-update PR description for it).
+- CI: mergeable_state clean, still pending/no checks reported yet for 6845687f as of the last
+  check-in (~09:03); re-armed for another ~1h. No review or conversation comments.
+
+## Follow-up request #6 (formalize the plan-mode -> plan-dashboard hook)
+- User asked me to walk through how a normal session (plan-mode: describe features -> Claude drafts
+  a markdown plan -> user approves) should connect to the dashboard/tracking-issue/skills system,
+  then said to formalize it. Answer given: the two are different layers (native plan-mode = ephemeral,
+  per-task; plan-dashboard = persistent, multi-session) and the hook point is the moment right after
+  plan-mode approval, judging scope.
+- Formalized as a new standing rule in cram-notes.md ("## Plan-mode approval -> persistent plans",
+  pushed to personal-notes as 94278860): after approval, if the work is multi-PR/session, either
+  `/plan-create` a new plan (feeding it the approved plan-mode markdown as source) or fold it into
+  an existing plan (edit directly if designated session, else comment-propose on tracking_issue).
+  If single-PR/session, do nothing extra.
+- Also clarified plan-create's SKILL.md step 2 (pushed as 2947dd1f): an already-approved plan-mode
+  plan from the same conversation is explicitly valid input under "existing freeform doc to migrate"
+  - no need to have it saved to a file first.
 
 ## Follow-up request #5 (user enabled Issues -> migrate off the tracking-PR fallback)
 - User enabled GitHub Issues on the repo (in direct response to the tracking-PR workaround's
