@@ -34,6 +34,7 @@ description: >
   One short paragraph. Long-form narrative goes in roadmap.md, not here.
 default_repo: <owner>/<repo>   # used by every item unless it sets its own `repo`
                                 # (roadmap.md is a fixed sibling filename, not configurable)
+tracking_pr: <int, optional>   # see "Proposing structural changes" below
 
 waves:                         # ordered phases, purely organizational
   - id: <wave-id>
@@ -124,6 +125,31 @@ pushes data only — it does not publish the dashboard Artifact itself (that
 requires a live Claude session, since only a session can call the
 `Artifact` tool). `save-plan.sh` prints a reminder to run
 `/plan-dashboard <plan-id>` afterward to actually republish it.
+
+## Proposing structural changes (single-writer via a tracking PR)
+
+Editing `status`, `notes`, or `blockers` on an item you're actively working is a normal edit — do it
+directly, as above. **Structural** changes (adding a wave, deferring a track, splitting an item,
+reprioritizing) are different: they're judgment calls about the whole plan, not just the one item a
+session happens to be sitting on, so they shouldn't come from every session that touches the plan
+independently pushing its own reorganization.
+
+If a plan has a `tracking_pr` (its number, in the repo named by `default_repo`), any session that
+isn't explicitly the plan's designated planning/steward session, and identifies a structural change
+worth making, **comments on that PR proposing it** instead of editing `plan.yaml` directly — the
+tracking PR is a coordination mailbox, not a code change (an empty commit, permanently draft,
+subscribable exactly like any other PR). The designated planning session reads new comments,
+applies the ones it agrees with, and replies-and-resolves each thread once applied. This mirrors the
+S0-steward pattern already used for real in `rdr-refactor` (worker sessions flag things to the
+steward rather than touching shared coordination themselves).
+
+Why a PR and not a GitHub Issue: this repo has Issues disabled, and a PR is the only native,
+commentable, subscribable GitHub artifact available as a result. `/plan-create` creates the tracking
+PR (an empty-commit branch off `main`, titled `[plan-tracking] <plan-id>`) when bootstrapping a new
+plan and records its number as `tracking_pr` in `plan.yaml`.
+
+If a plan has no `tracking_pr` set, there's no mailbox yet — structural edits go straight to
+`plan.yaml` as before (single-session plans, or ones predating this convention, don't need one).
 
 ## Generating a dashboard
 
