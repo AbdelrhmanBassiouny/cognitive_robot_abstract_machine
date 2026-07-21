@@ -34,7 +34,7 @@ description: >
   One short paragraph. Long-form narrative goes in roadmap.md, not here.
 default_repo: <owner>/<repo>   # used by every item unless it sets its own `repo`
                                 # (roadmap.md is a fixed sibling filename, not configurable)
-tracking_pr: <int, optional>   # see "Proposing structural changes" below
+tracking_issue: <int, optional> # see "Proposing structural changes" below
 
 waves:                         # ordered phases, purely organizational
   - id: <wave-id>
@@ -126,7 +126,7 @@ requires a live Claude session, since only a session can call the
 `Artifact` tool). `save-plan.sh` prints a reminder to run
 `/plan-dashboard <plan-id>` afterward to actually republish it.
 
-## Proposing structural changes (single-writer via a tracking PR)
+## Proposing structural changes (single-writer via a tracking issue)
 
 Editing `status`, `notes`, or `blockers` on an item you're actively working is a normal edit — do it
 directly, as above. **Structural** changes (adding a wave, deferring a track, splitting an item,
@@ -134,21 +134,26 @@ reprioritizing) are different: they're judgment calls about the whole plan, not 
 session happens to be sitting on, so they shouldn't come from every session that touches the plan
 independently pushing its own reorganization.
 
-If a plan has a `tracking_pr` (its number, in the repo named by `default_repo`), any session that
+If a plan has a `tracking_issue` (its number, in the repo named by `default_repo`), any session that
 isn't explicitly the plan's designated planning/steward session, and identifies a structural change
-worth making, **comments on that PR proposing it** instead of editing `plan.yaml` directly — the
-tracking PR is a coordination mailbox, not a code change (an empty commit, permanently draft,
-subscribable exactly like any other PR). The designated planning session reads new comments,
-applies the ones it agrees with, and replies-and-resolves each thread once applied. This mirrors the
-S0-steward pattern already used for real in `rdr-refactor` (worker sessions flag things to the
-steward rather than touching shared coordination themselves).
+worth making, **comments on that issue proposing it** instead of editing `plan.yaml` directly — it's
+a coordination mailbox, not a work item, and is subscribable exactly like a PR (confirmed: GitHub
+issue-comment subscription works identically whether the number is an issue or a PR). The designated
+planning session reads new comments, applies the ones it agrees with, and replies-and-resolves each
+thread once applied. This mirrors the S0-steward pattern already used for real in `rdr-refactor`
+(worker sessions flag things to the steward rather than touching shared coordination themselves).
+`/plan-create` creates the tracking issue (titled `[plan-tracking] <plan-id>`) when bootstrapping a
+new plan and records its number as `tracking_issue` in `plan.yaml`.
 
-Why a PR and not a GitHub Issue: this repo has Issues disabled, and a PR is the only native,
-commentable, subscribable GitHub artifact available as a result. `/plan-create` creates the tracking
-PR (an empty-commit branch off `main`, titled `[plan-tracking] <plan-id>`) when bootstrapping a new
-plan and records its number as `tracking_pr` in `plan.yaml`.
+**Fallback when a repo has Issues disabled**: some repos (this one did, briefly) disable Issues
+entirely — GitHub returns a `410` on creation attempts. When that happens, `/plan-create` falls back
+to an empty-commit, permanently-draft **tracking PR** instead (same subscribable-mailbox mechanism,
+just a PR instead of an issue) and still records its number under the same `tracking_issue` field —
+the field name describes the *role* (a tracking mailbox), not literally "must be a GitHub Issue
+object." Whoever reads it should check which kind it actually is (an issue-vs-PR read call
+distinguishes them) before building a link, rather than assuming.
 
-If a plan has no `tracking_pr` set, there's no mailbox yet — structural edits go straight to
+If a plan has no `tracking_issue` set, there's no mailbox yet — structural edits go straight to
 `plan.yaml` as before (single-session plans, or ones predating this convention, don't need one).
 
 ## Generating a dashboard

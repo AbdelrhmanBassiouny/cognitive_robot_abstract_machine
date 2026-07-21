@@ -18,7 +18,7 @@ description: >
   integration, and TMS justifications on top of EQL — plus the Why &
   Montessori explanation track that was prioritized alongside it.
 default_repo: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-tracking_pr: 93   # coordination mailbox for structural changes - see plans/README.md "Proposing structural changes"
+tracking_issue: 94   # coordination mailbox for structural changes - see plans/README.md "Proposing structural changes" (was PR #93, closed, while Issues were briefly disabled on this repo)
 
 waves:
   - id: wave-0
