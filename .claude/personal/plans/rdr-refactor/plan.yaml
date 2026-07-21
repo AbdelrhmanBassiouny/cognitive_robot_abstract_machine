@@ -102,7 +102,7 @@ items:
     track: S0-steward
     depends_on: [eql-core-prep]
     status: in_progress
-    notes: "Open, CI green; picked up an in-review label 2026-07-20."
+    notes: "Open, CI green; picked up an in-review label 2026-07-20. TEST EDIT verifying save-plan.sh round-trip."
 
   - id: code-generation-extract
     title: "Extract code_generation package (generation half)"
