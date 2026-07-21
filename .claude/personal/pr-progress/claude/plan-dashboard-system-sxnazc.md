@@ -8,11 +8,11 @@
 - Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar
   generalization), 66dd5792 (plan-create skill - see below). PR description updated to match all
   three.
-- CI: one failure seen (`test_each_lib (semantic_digital_twin)` - a ROS WorldSynchronizer test with
-  a fixed `time.sleep(1)` race, unrelated to this PR's diff (hooks/skills only, no Python touched);
-  attempted a rerun but the matrix run was still in_progress so GitHub rejected it (`workflow is
-  already running`) - the standing ~1h check-in will re-verify once the run finishes. No review
-  comments yet.
+- CI: GREEN. The `test_each_lib (semantic_digital_twin)` flake (ROS WorldSynchronizer
+  `time.sleep(1)` race) confirmed as a flake, not a regression - it passed clean on the next
+  commit's run (66dd5792, all 18/18 checks green, `mergeable_state: clean`). No review or
+  conversation comments as of the 2026-07-21 ~08:18 check-in. Still draft, awaiting review;
+  re-armed for another ~1h check-in.
 
 ## plan-create skill (added after a second follow-up request: "I want a skill or an agent that
 ## automates plan creation")
