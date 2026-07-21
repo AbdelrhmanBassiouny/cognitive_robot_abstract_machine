@@ -6,14 +6,35 @@
   from the personal-notes data (schema/rdr-refactor migration, which stays on `claude/personal-notes`
   and is never part of any PR).
 - Commits: f224198d (hooks + skill), b59c9b54 (dependency-stacking + next-steps sidebar
-  generalization), 66dd5792 (plan-create skill), d11aab31 (roadmap.md rendering fix - see below).
-  PR description updated to match the first three; not yet re-updated for d11aab31 (small/internal
-  enough to skip, consider adding a line if asked to touch the description again).
-- CI: GREEN. The `test_each_lib (semantic_digital_twin)` flake (ROS WorldSynchronizer
-  `time.sleep(1)` race) confirmed as a flake, not a regression - it passed clean on the next
-  commit's run (66dd5792, all 18/18 checks green, `mergeable_state: clean`). No review or
-  conversation comments as of the 2026-07-21 ~08:18 check-in. Still draft, awaiting review;
-  re-armed for another ~1h check-in.
+  generalization), 66dd5792 (plan-create skill), d11aab31 (roadmap.md rendering fix),
+  1f5590fd (tracking-PR mailbox - see below). PR description updated to match all five.
+- CI: last known GREEN as of 66dd5792 (18/18); the `test_each_lib (semantic_digital_twin)` flake
+  confirmed as a flake there, not a regression. Not yet re-checked on d11aab31/1f5590fd - next
+  check-in will confirm. No review or conversation comments as of the last check-in. Still draft,
+  awaiting review.
+
+## Follow-up request #4 (tracking-PR mailbox for structural changes)
+- Answered the "should this go through a comment on the plan PR" design question from before:
+  confirmed empirically that GitHub Issues are DISABLED on this repo (410 on create attempt) - so
+  the tracking-issue design I'd proposed is dead, and a tracking PR (the user's original instinct)
+  is actually the only viable mechanism. Pivoted cleanly, explained why to the user.
+- Built for real against rdr-refactor: branch `plan-tracking-rdr-refactor` (empty commit off main,
+  no file changes ever) -> draft PR #93 "[plan-tracking] rdr-refactor". Subscribed via
+  subscribe_pr_activity - confirmed it works identically to a normal PR (user's follow-up question,
+  verified not assumed). NOT running the normal CI-babysit loop on #93 (nothing to test, no code) -
+  just staying subscribed to catch new comments.
+- Schema: new optional `tracking_pr: <int>` field (plans/README.md + rdr-refactor's plan.yaml, both
+  pushed). New "Proposing structural changes" section in plans/README.md documents the convention.
+- plan-create SKILL.md: new step 5 (renumbered 6-9 after it) creates the tracking PR when
+  bootstrapping a plan (asks first, default yes unless clearly single-session-owned), subscribes,
+  records tracking_pr.
+- session-start.sh: extracts tracking_pr via grep/sed (same dependency-free approach as
+  plan_id_for_branch, no new python3 dependency on every session start) and adds a standing-
+  instruction paragraph to the plan-manifest header telling a session which side of the convention
+  it's on. Verified on D-ui test worktree: correctly extracted "#93" and surfaced the note.
+- plan-dashboard SKILL.md + the real dashboard: added a "Propose a structural change ->" link in
+  the header when tracking_pr is set. Republished (55da1cc9-... in place).
+- Pushed as 1f5590fd; PR #91 description updated to cover all 5 commits now on it.
 
 ## plan-create skill (added after a second follow-up request: "I want a skill or an agent that
 ## automates plan creation")
