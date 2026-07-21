@@ -53,6 +53,23 @@ into every session by the `.claude/hooks/session-start.sh` hook (see the
   must live only in the PR-progress section, which is stored on the
   `claude/personal-notes` branch and is never merged.
 
+## Plan-mode approval → persistent plans
+
+- The moment a normal Claude Code plan-mode plan is approved, before implementing, judge whether
+  the work spans multiple PRs/branches/sessions to complete. If it's contained in one PR from this
+  session, just implement it - do not invoke anything below for it.
+- If it spans multiple PRs/sessions:
+  - **No existing plan covers it**: invoke `/plan-create <plan-id>`, handing it the just-approved
+    plan-mode markdown directly as source material - it's valid input under that skill's "existing
+    freeform doc to migrate" case even though it only lives in this conversation, not a file.
+  - **An existing plan covers/extends it** (check auto-discovery on the current branch, or ask):
+    if this session is that plan's designated planning/steward session, edit `plan.yaml` directly
+    and run `save-plan.sh` + `/plan-dashboard <plan-id>`; otherwise comment-propose it on the
+    plan's `tracking_issue` instead of editing directly - see
+    `.claude/personal/plans/README.md`'s "Proposing structural changes" section.
+- This is the moment that decides whether the plan gets captured durably or evaporates once the
+  session ends - do not let it pass by default.
+
 <!--
 Add new personal-only rules below this line. Keep each rule short and
 imperative, same style as above.
