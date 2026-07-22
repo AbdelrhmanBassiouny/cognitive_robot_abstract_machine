@@ -65,6 +65,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Keywords,
     Prepositions,
     Punctuation,
+    Directive,
     RankingWords,
 )
 
@@ -229,7 +230,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 self._sentence_initial(Keywords.FOR.as_fragment()),
                 subject_noun,
                 Punctuation.COMMA.as_fragment(),
-                Keywords.REPORT.as_fragment(),
+                Directive.REPORT.as_fragment(),
             ]
         )
         return self._query_body(
@@ -371,11 +372,11 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 plan,
                 subject_noun,
                 where_items=[self._where_clause(plan)],
-                find_header=self._sentence_initial(Keywords.REPORT.as_fragment()),
+                find_header=self._sentence_initial(Directive.REPORT.as_fragment()),
             )
         header = PhraseFragment(
             parts=[
-                self._sentence_initial(Keywords.REPORT.as_fragment()),
+                self._sentence_initial(Directive.REPORT.as_fragment()),
                 Punctuation.COMMA.as_fragment(),
                 Keywords.FOR.as_fragment(),
                 subject_noun,
@@ -484,7 +485,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         header = (
             self._for_each_header(report.group_keys, node)
             if report.is_grouped
-            else self._sentence_initial(Keywords.REPORT.as_fragment())
+            else self._sentence_initial(Directive.REPORT.as_fragment())
         )
         return self._query_body(
             node,
@@ -512,7 +513,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 plan,
                 self._distinct_keys(report.group_keys),
                 where_items=[self._where_clause(plan)],
-                find_header=self._sentence_initial(Keywords.REPORT.as_fragment()),
+                find_header=self._sentence_initial(Directive.REPORT.as_fragment()),
             )
         return self._query_body(
             node,
@@ -607,7 +608,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
                 Keywords.FOR_EACH.as_fragment(),
                 key_phrase,
                 Punctuation.COMMA.as_fragment(),
-                Keywords.REPORT.as_fragment(),
+                Directive.REPORT.as_fragment(),
             ]
         )
 
@@ -662,7 +663,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         surface = ranking_surface(RankingRequest(plan=plan.ranking))
         return PhraseFragment(
             parts=[
-                Keywords.FIND.as_fragment(),
+                Directive.FIND.as_fragment(),
                 Articles.THE.as_fragment(),
                 surface.pre_head,
             ]
@@ -671,8 +672,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
     def _verb(self, plan: QueryPlan) -> VerbalizationFragment:
         """:return: the opening verb — *"Report"* when the query is a report (its plan aggregates,
         groups, or orders the results — the three :class:`ReportKind` variants, all of which present
-        a summary rather than search for individual matches), a backend-chosen *"Generate"* /
-        *"Find"* when a performative override is set, else *"Find"* (a search).
+        a summary rather than search for individual matches), else *"Find"* (a search), or the
+        register's fixed opener when one is set (an act's imperative framing, or a backend-resolved
+        performative override).
 
         It emits only the leading word of the shown output: this ordered query presents results, so
         it produces *"Report"* rather than *"Find"*:
@@ -682,11 +684,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         'Report Employees ordered by their salaries from lowest to highest'
         """
         if plan.report is not None:
-            return self._sentence_initial(Keywords.REPORT.as_fragment())
-        override = self.context.services.performative_override
-        if override is not None:
-            return override.as_fragment()
-        return Keywords.FIND.as_fragment()
+            return self._sentence_initial(Directive.REPORT.as_fragment())
+        return self.context.register.opener_fragment(Directive.FIND)
 
     def _subject_number(self, plan: QueryPlan) -> GrammaticalNumber:
         """:return: the grammatical number of the rendered subject — plural for a ranking of several

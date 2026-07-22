@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.microplanning.referring import (
         ReferringExpressions,
     )
+    from krrood.entity_query_language.verbalization.vocabulary.register import Register
 
 
 @dataclass(frozen=True)
@@ -134,6 +135,22 @@ class RuleContext:
     def microplan(self) -> Microplan:
         """:return: The plan read model (each node's plan computed once and shared)."""
         return self.services.microplan
+
+    @property
+    def register(self) -> Register:
+        """:return: The register to verbalize in. An explicit :attr:`~MicroplanningServices.register`
+        (an act's imperative framing) wins; else a backend-resolved
+        :attr:`~MicroplanningServices.performative_override` becomes the register's fixed opener;
+        else the default query register."""
+        from krrood.entity_query_language.verbalization.vocabulary.register import (
+            Register,
+        )
+
+        if self.services.register is not None:
+            return self.services.register
+        if self.services.performative_override is not None:
+            return Register(fixed_opener=self.services.performative_override)
+        return Register()
 
 
 class PhraseRule(ABC):
