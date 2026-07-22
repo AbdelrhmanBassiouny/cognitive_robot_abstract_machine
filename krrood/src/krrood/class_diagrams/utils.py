@@ -14,6 +14,7 @@ from uuid import UUID
 import typing_extensions
 from typing_extensions import (
     Any,
+    Callable,
     Dict,
     List,
     Optional,
@@ -46,6 +47,43 @@ def classes_of_module(module) -> List[Type]:
         if inspect.isclass(obj) and obj.__module__ == module.__name__:
             result.append(obj)
     return result
+
+
+def class_implements_own_method(candidate: Callable, inherited: Callable) -> bool:
+    """
+    Whether a resolved method belongs to a different implementation than the one it
+    would otherwise inherit.
+
+    Both arguments are ordinary attribute lookups on a class (e.g.
+    ``Subclass.method_name`` and ``BaseClass.method_name``), so a plain method, a
+    ``classmethod``, or a ``staticmethod`` all compare correctly. Accessing a
+    ``classmethod`` produces a new bound-method object on every lookup, bound to
+    whichever class did the accessing, so comparing those directly would report every
+    class as overriding, even one that never touched the method; unwrapping to
+    ``__func__`` first compares the underlying function instead, which is the same
+    object for every class that inherits it unchanged. A plain method or
+    ``staticmethod`` access is already the bare function, so no unwrapping is needed
+    there.
+
+    :param candidate: The method as resolved via attribute access on the candidate
+        class.
+    :param inherited: The same-named method as resolved via attribute access on the base
+        class whose implementation counts as not overridden.
+    :return: True when *candidate* is a different underlying function than *inherited*.
+    """
+    return _underlying_function(candidate) is not _underlying_function(inherited)
+
+
+def _underlying_function(method: Callable) -> Callable:
+    """
+    The plain function a resolved method wraps.
+
+    :param method: A method as resolved via attribute access on a class.
+    :return: ``method.__func__`` when *method* is a bound method (a ``classmethod``
+        accessed via its class), otherwise *method* itself (a plain function or
+        ``staticmethod`` access is already bare).
+    """
+    return method.__func__ if hasattr(method, "__func__") else method
 
 
 def behaves_like_a_built_in_type(
