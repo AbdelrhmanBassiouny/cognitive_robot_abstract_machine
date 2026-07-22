@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 import pickle
 from dataclasses import dataclass, field
 
+import pandas as pd
 import sqlalchemy
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import (
@@ -14,7 +16,7 @@ from sqlalchemy.orm import (
     MappedColumn,
 )
 from typing_extensions import Tuple, List, Set, Optional, Self, ClassVar
-from ucimlrepo import fetch_ucirepo
+from ucimlrepo import DatasetNotFoundError, fetch_ucirepo
 
 from krrood.ripple_down_rules.datastructures.case import (
     Case,
@@ -24,65 +26,95 @@ from krrood.ripple_down_rules.datastructures.enums import Category
 from krrood.ripple_down_rules.datastructures.tracked_object import TrackedObjectMixin
 from krrood.ripple_down_rules.rdr_decorators import RDRDecorator
 
+logger = logging.getLogger(__name__)
 
-def load_cached_dataset(cache_file):
+
+@dataclass
+class ZooDataset:
+    """
+    The feature, target, and id columns of the zoo dataset, as fetched from the UCI ML
+    repository or loaded from cache.
+    """
+
+    features: pd.DataFrame
+    """
+    The feature columns of the dataset.
+    """
+
+    targets: pd.DataFrame
+    """
+    The target column(s) of the dataset.
+    """
+
+    ids: pd.DataFrame
+    """
+    The identifier column(s) of the dataset.
+    """
+
+
+def load_cached_dataset(cache_file) -> Optional[ZooDataset]:
     """
     Loads the dataset from cache if it exists.
     """
-    dataset = {}
     if ".pkl" not in cache_file:
         cache_file += ".pkl"
-    for key in ["features", "targets", "ids"]:
+    parts = {}
+    for key in ("features", "targets", "ids"):
         part_file = cache_file.replace(".pkl", f"_{key}.pkl")
         if not os.path.exists(part_file):
             return None
         with open(part_file, "rb") as f:
-            dataset[key] = pickle.load(f)
-    return dataset
+            parts[key] = pickle.load(f)
+    return ZooDataset(**parts)
 
 
-def save_dataset_to_cache(dataset, cache_file):
+def save_dataset_to_cache(dataset: ZooDataset, cache_file):
     """
     Saves only essential parts of the dataset to cache.
     """
-    dataset_to_cache = {
-        "features": dataset.data.features,
-        "targets": dataset.data.targets,
-        "ids": dataset.data.ids,
-    }
-
-    for key, value in dataset_to_cache.items():
-        with open(cache_file.replace(".pkl", f"_{key}.pkl"), "wb") as f:
-            pickle.dump(dataset_to_cache[key], f)
-    print("Dataset cached successfully.")
+    with open(cache_file.replace(".pkl", "_features.pkl"), "wb") as f:
+        pickle.dump(dataset.features, f)
+    with open(cache_file.replace(".pkl", "_targets.pkl"), "wb") as f:
+        pickle.dump(dataset.targets, f)
+    with open(cache_file.replace(".pkl", "_ids.pkl"), "wb") as f:
+        pickle.dump(dataset.ids, f)
+    logger.info("Dataset cached successfully.")
 
 
-def get_dataset(dataset_id, cache_file: Optional[str] = None):
+def get_dataset(dataset_id, cache_file: Optional[str] = None) -> Optional[ZooDataset]:
     """
     Fetches dataset from cache or downloads it if not available.
+
+    Returns ``None`` if the dataset cannot be downloaded because the UCI ML repository
+    server is unreachable or does not have the dataset available, instead of raising, so
+    callers can skip gracefully.
     """
     if cache_file is not None:
         if not cache_file.endswith(".pkl"):
             cache_file += ".pkl"
     dataset = load_cached_dataset(cache_file) if cache_file else None
-    if dataset is None:
-        print("Downloading dataset...")
+    if dataset is not None:
+        return dataset
 
-        dataset = fetch_ucirepo(id=dataset_id)
+    logger.info("Downloading dataset...")
+    try:
+        fetched = fetch_ucirepo(id=dataset_id)
+    except (ConnectionError, DatasetNotFoundError) as error:
+        logger.error(f"Failed to fetch dataset ({error}).")
+        return None
 
-        # Check if dataset is valid before caching
-        if dataset is None or not hasattr(dataset, "data"):
-            print("Error: Failed to fetch dataset.")
-            return None
+    # Check if dataset is valid before caching
+    if fetched is None or not hasattr(fetched, "data"):
+        logger.error("Failed to fetch dataset.")
+        return None
 
-        if cache_file:
-            save_dataset_to_cache(dataset, cache_file)
-
-        dataset = {
-            "features": dataset.data.features,
-            "targets": dataset.data.targets,
-            "ids": dataset.data.ids,
-        }
+    dataset = ZooDataset(
+        features=fetched.data.features,
+        targets=fetched.data.targets,
+        ids=fetched.data.ids,
+    )
+    if cache_file:
+        save_dataset_to_cache(dataset, cache_file)
 
     return dataset
 
@@ -97,17 +129,19 @@ def load_zoo_dataset(
     :return: all cases and targets.
     """
     # fetch dataset
-    try:
-        zoo = get_dataset(111, cache_file)
-    except ConnectionError:
-        print("Error: Failed to fetch dataset. Please check your internet connection.")
+    zoo = get_dataset(111, cache_file)
+    if zoo is None:
+        logger.error(
+            "Failed to fetch dataset. Please check your internet connection or the "
+            "dataset server availability."
+        )
         return [], []
 
     # data (as pandas dataframes)
-    X = zoo["features"]
-    y = zoo["targets"]
+    X = zoo.features
+    y = zoo.targets
     # get ids as list of strings
-    ids = zoo["ids"].values.flatten()
+    ids = zoo.ids.values.flatten()
     all_cases = create_cases_from_dataframe(X, name="Animal")
 
     category_names = [
