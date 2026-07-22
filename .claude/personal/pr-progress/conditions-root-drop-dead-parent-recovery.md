@@ -195,6 +195,19 @@ precedent — don't do it without clear approval). `mergeable_state` is currentl
 check-in; rerun only if explicitly asked, or note it again if it's still red and
 blocking.
 
+## 2026-07-22 — second restack, another unrelated flake, left alone
+Branch restacked again (now 6 commits, base advanced to `efad238d`, head `5ce760af`).
+One more CI failure, different job this time: `test_each_lib (coraplex/scripts/
+test_notebook_examples.sh)` — a `treon`-run Jupyter notebook (`motion_designator.ipynb`)
+hit `zmq.error.ZMQError: Address already in use` from a leftover kernel process, then
+`RuntimeError: Kernel didn't respond in 60 seconds`. Pure Jupyter/ZMQ port-contention
+flake in coraplex's notebook test infra, zero relation to this PR's `entity_query_
+language` diff — confirmed via job log, and the `krrood` job itself passed. Did not
+rerun (same "don't rerun without clear approval" default as the 2026-07-21 note above;
+the user directed "continue" rather than answering the rerun question, so treating that
+as staying with the default of not taking the visible/resource-consuming action
+unprompted). Re-check next time this PR is touched — rerun only if asked.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
