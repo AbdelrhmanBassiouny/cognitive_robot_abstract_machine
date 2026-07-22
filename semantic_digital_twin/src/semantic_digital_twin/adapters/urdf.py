@@ -15,6 +15,8 @@ from semantic_digital_twin.exceptions import NegativeConnectionVelocity
 from semantic_digital_twin.spatial_types.derivatives import Derivatives, DerivativeMap
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
+    Point3,
+    RotationMatrix,
     Vector3,
 )
 from semantic_digital_twin.utils import (
@@ -23,6 +25,7 @@ from semantic_digital_twin.utils import (
     robot_name_from_urdf_string,
 )
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connection_properties import JointDynamics
 from semantic_digital_twin.world_description.connections import (
     RevoluteConnection,
     PrismaticConnection,
@@ -39,6 +42,10 @@ from semantic_digital_twin.world_description.geometry import (
     Mesh,
     Scale,
     Color,
+)
+from semantic_digital_twin.world_description.inertial_properties import (
+    Inertial,
+    InertiaTensor,
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Connection
@@ -275,8 +282,30 @@ class URDFParser:
             offset=offset,
             axis=Vector3(*map(int, joint.axis), reference_frame=parent),
             raw_dof=dof,
+            dynamics=self.parse_dynamics(joint),
         )
         return result
+
+    def parse_dynamics(self, joint: urdfpy.Joint) -> JointDynamics:
+        """
+        Parses the dynamic properties of a URDF joint.
+
+        Properties the joint leaves undeclared keep their default. URDF has no notion of
+        an armature, which models the rotor inertia of a transmission, so that one is
+        always left to the simulator.
+
+        :param joint: The URDF joint whose ``dynamics`` element is parsed.
+        :return: The dynamic properties of the joint.
+        """
+        if joint.dynamics is None:
+            return JointDynamics()
+
+        damping = joint.dynamics.damping
+        dry_friction = joint.dynamics.friction
+        return JointDynamics(
+            damping=damping if damping is not None else 0.0,
+            dry_friction=dry_friction if dry_friction is not None else 0.0,
+        )
 
     def parse_link(self, link: urdfpy.Link, parent_frame: PrefixedName) -> Body:
         """
@@ -293,7 +322,47 @@ class URDFParser:
         collisions = self.parse_geometry(link.collisions, body)
         body.visual = visuals
         body.collision = collisions
+        inertial = self.parse_inertial(link, body)
+        if inertial is not None:
+            body.inertial = inertial
         return body
+
+    def parse_inertial(self, link: urdfpy.Link, body: Body) -> Optional[Inertial]:
+        """
+        Parses the inertial properties of a URDF link.
+
+        URDF expresses the inertia tensor in the inertial frame of the link, so it is
+        rotated into the link frame, which is the frame :class:`Inertial` expects.
+
+        :param link: The URDF link whose ``inertial`` element is parsed.
+        :param body: The body the properties belong to, used as their reference frame.
+        :return: The inertial properties, or ``None`` if the link declares none.
+        """
+        if link.inertial is None:
+            return None
+
+        origin = link.inertial.origin
+        center_of_mass = origin.xyz if origin is not None else [0.0, 0.0, 0.0]
+        roll_pitch_yaw = origin.rpy if origin is not None else [0.0, 0.0, 0.0]
+
+        urdf_inertia = link.inertial.inertia
+        inertia_in_inertial_frame = InertiaTensor.from_values(
+            ixx=urdf_inertia.ixx,
+            iyy=urdf_inertia.iyy,
+            izz=urdf_inertia.izz,
+            ixy=urdf_inertia.ixy,
+            ixz=urdf_inertia.ixz,
+            iyz=urdf_inertia.iyz,
+        )
+        link_R_inertial = RotationMatrix.from_rpy(*roll_pitch_yaw).to_np()[:3, :3]
+        inertia = link_R_inertial @ inertia_in_inertial_frame.data @ link_R_inertial.T
+        inertia_in_link_frame = InertiaTensor(data=inertia)
+
+        return Inertial(
+            mass=link.inertial.mass,
+            center_of_mass=Point3(*center_of_mass, reference_frame=body),
+            inertia=inertia_in_link_frame,
+        )
 
     def parse_geometry(
         self,
