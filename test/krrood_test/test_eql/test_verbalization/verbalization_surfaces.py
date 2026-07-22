@@ -2,17 +2,15 @@
 Committed verbalization surfaces: the sentence each covered symbolic callable renders.
 
 This is the snapshot for :mod:`test_verbalization_surfaces` -- one
-:class:`VerbalizationSurface` per covered symbolic callable, referencing the class
-itself (so a rename or removal breaks this import) and its approved sentence. Update an
-entry when an intentional wording change makes the surface-match test print a new
-sentence.
+:class:`~krrood.entity_query_language.verbalization.surface_verification.VerbalizationSurface` per
+covered symbolic callable, referencing the class itself (so a rename or removal breaks this import)
+and its approved sentence. Update an entry when an intentional wording change makes the surface-match
+test print a new sentence.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from typing_extensions import Tuple, Type
+from typing_extensions import Tuple
 
 from krrood.entity_query_language.factories import (
     AttributeOwnerClass,
@@ -25,37 +23,16 @@ from krrood.entity_query_language.factories import (
     NodeType,
     RuntimeType,
 )
-from krrood.entity_query_language.predicate import (
-    HasType,
-    HasTypes,
-    Is,
-    Length,
-    SymbolicCallable,
-)
+from krrood.entity_query_language.predicate import HasType, HasTypes, Is, Length
 from krrood.entity_query_language.verbalization.example_domain import (
     IsReachable,
     WorksIn,
 )
+from krrood.entity_query_language.testing.surface_verification import (
+    VerbalizationSurface,
+)
 from krrood.inheritance_path_length import InheritancePathLength
 from krrood.patterns.role_predicates import IsSameSemanticEntity
-
-
-@dataclass(frozen=True)
-class VerbalizationSurface:
-    """
-    One symbolic callable and the sentence it verbalizes to.
-    """
-
-    callable_class: Type[SymbolicCallable]
-    """
-    The symbolic function or predicate whose surface this records.
-    """
-
-    sentence: str
-    """
-    The approved sentence it renders with the test's placeholder operands.
-    """
-
 
 SURFACES: Tuple[VerbalizationSurface, ...] = (
     VerbalizationSurface(
