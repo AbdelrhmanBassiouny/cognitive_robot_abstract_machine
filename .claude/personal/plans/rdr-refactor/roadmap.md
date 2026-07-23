@@ -300,3 +300,58 @@ automates):
 Once #89 merges, the restacking bot should cascade the fix down through
 #58 → #39 → #53 → #41, clearing #41's conflict for free. Verify that
 actually happens; nudge manually if the bot doesn't pick it up.
+
+## 6. Addendum (2026-07-23) — PR #68 review: the D-core-engine split + the expert-framework tracks
+
+The PR #68 (`D-core-engine`) review — 71 inline threads plus a request to split
+the mostly-test mega-slice into topic-oriented PRs — resolved as follows.
+
+**The split.** `D-core-engine` is superseded by three stacked, topic-oriented
+PRs, each carrying its own tests: `d-core-expert` (`expert.py`) →
+`d-core-single-class` (`single_class.py`, the engine) → `d-core-backend`
+(`backend.py`, the underspecified-query backend). The three form a linear stack
+in that dependency order; the backend is the new tip. Everything that was stacked
+on `D-core-engine` (`D-ui-splice-fix`, `rdr-why-answer`, `rdr-feature-registry`,
+`rdr-multi-class`) re-points onto `d-core-backend`. PR #68 is closed once the
+three open. Steward notified via #94.
+
+**Engine design decisions locked in the review** (carried by the split PRs):
+classify() returns `UNSET` (not `None`) when no rule fires; non-convergence raises
+`RDRDidNotConvergeError` (a `DataclassException`) and `max_passes` is removed
+(oscillation detection plus a termination test bound it); a new `rdr/exceptions.py`
+holds the `DataclassException` hierarchy; conclusion validation moves onto
+`ConclusionDomain`; an `AnswerName` enum replaces the duplicated `"conditions"`/
+`"conclusion"` strings; `CaseContext` is built by the engine and threaded down as a
+parameter object (engine owns the facts, the expert augments with its aids/
+suggestion); progress and save use Null-Object defaults to retire the
+`if ... is not None` guards; `backend.infer` splits into a pure `infer` (yields
+`UnificationDict`) and an eager `fill`; docs stop restating field docs and stop
+mentioning plans/phases/history. The auto condition-resolver plus `resolution_mode`
+are kept, minimally tidied, in the interim — the resolver's `_try_auto_resolve`
+eligibility clauses are marked as the seed for the capability-guarded Expert below.
+
+**Three new tracks capture the larger ideas surfaced in the review**, all blocked
+until the Wave-0 engine stack lands on main; literature pointers recorded per item
+for a design-time review when each PR is picked up:
+
+- **Expert framework** (new wave; track `expert-capabilities`). Promote each
+  expert's applicability to a first-class, evaluable EQL *capability guard* so the
+  engine gates delegation on the guard, not the type (ISP + LSP) — the current auto
+  condition-resolver becomes one such expert whose guard is exactly its
+  `_try_auto_resolve` clauses, retiring `resolution_mode`. Then cooperating experts
+  (Hint mode as composition) and capability verbalization ("why can / can't this
+  expert handle this situation?", reusing the rule-tree explanation machinery). Lit:
+  blackboard knowledge-source activation conditions (Hearsay-II/BB1), Contract-Net
+  eligibility, Chain-of-Responsibility `canHandle`; mixed-initiative/critiquing
+  systems for the ensembles.
+- **Audience-dependent explanation rendering** (track `comms-track`, in the
+  why-montessori wave). Separate an explanation's content from its rendering, chosen
+  from the recipient's model: natural language for humans, the raw EQL expression
+  for programs. Lit: user-tailored NLG (Paris), Reiter & Dale, Grice's maxims,
+  Sperber & Wilson relevance theory; the EQL-as-formal-derivation vs NL-gloss
+  distinction ties to Wave-3 TMS justifications.
+- **Engine runtime behaviour** (track `engine-runtime`, Wave 1). Beyond the interim
+  classify()→`UNSET`: no-rule-fired modes (warn-and-skip, ask an available expert, a
+  user-provided default conclusion) and conclusion provenance (rule vs default vs
+  expert vs unset), coordinating with Wave-3 JTMS justifications; unresolved cases
+  stored for later expert review.

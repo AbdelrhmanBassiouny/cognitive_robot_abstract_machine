@@ -17,6 +17,9 @@ branches:
   D-core-serialization: rdr-refactor
   D-core-support: rdr-refactor
   D-core-engine: rdr-refactor
+  D-core-expert: rdr-refactor
+  D-core-single-class: rdr-refactor
+  D-core-backend: rdr-refactor
   rdr-engine: rdr-refactor
   D-ui-splice-fix: rdr-refactor
   D-ui-rendering: rdr-refactor

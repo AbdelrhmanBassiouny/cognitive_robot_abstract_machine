@@ -1,461 +1,540 @@
-# Plan manifest — schema_version 1. See ../README.md for the full schema
-# reference and .claude/skills/plan-dashboard/SKILL.md (on main) for how this
-# file is read and cross-checked against live GitHub state.
-#
-# `status` here is always the session's own manual planning assessment
-# (not_started | in_progress | blocked | deferred | done). It never encodes
-# draft/ready-for-review/merged/CI state — that is fetched live from GitHub
-# by the dashboard skill every time it runs, so it can never go stale in this
-# file. The skill flags any item where `status` looks inconsistent with what
-# GitHub actually reports (e.g. status: in_progress on a PR that's already
-# merged).
 schema_version: 1
 id: rdr-refactor
-title: "RDR / EQL Master Roadmap"
-description: >
-  Programme to land the EQL-native RDR engine, the feature layer ("poor
-  man's Rete"), MCRDR/GRDR multi-tree engines, concept trees (NRDR), OO
-  integration, and TMS justifications on top of EQL — plus the Why &
-  Montessori explanation track that was prioritized alongside it.
+title: RDR / EQL Master Roadmap
+description: 'Programme to land the EQL-native RDR engine, the feature layer ("poor man''s Rete"), MCRDR/GRDR
+  multi-tree engines, concept trees (NRDR), OO integration, and TMS justifications on top of EQL — plus
+  the Why & Montessori explanation track that was prioritized alongside it.
+
+  '
 default_repo: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-tracking_issue: 94   # coordination mailbox for structural changes - see plans/README.md "Proposing structural changes" (was PR #93, closed, while Issues were briefly disabled on this repo)
-
+tracking_issue: 94
 waves:
-  - id: wave-0
-    name: "Wave 0 — finish landing the engine"
-  - id: why-montessori
-    name: "Why & Montessori track (priority after Wave 0)"
-  - id: wave-1
-    name: "Wave 1 — independent foundations"
-  - id: wave-2
-    name: "Wave 2 — concept trees"
-  - id: wave-3
-    name: "Wave 3 — OO integration + TMS"
-
+- id: wave-0
+  name: Wave 0 — finish landing the engine
+- id: why-montessori
+  name: Why & Montessori track (priority after Wave 0)
+- id: wave-1
+  name: Wave 1 — independent foundations
+- id: wave-2
+  name: Wave 2 — concept trees
+- id: wave-3
+  name: Wave 3 — OO integration + TMS
+- id: expert-framework
+  name: Expert framework — capability-declaring experts + collaboration
 tracks:
-  - id: S0-steward
-    name: "Steward — the split-PR stack"
-    wave: wave-0
-    description: >
-      Babysit the open stack bottom-up; merge in dependency order; propagate
-      restacks forward after each merge.
-  - id: S1-d-ui
-    name: "D-ui — interactive expert interface"
-    wave: wave-0
-  - id: S2-d-deco
-    name: "D-deco — @rdr decorator + file store"
-    wave: wave-0
-  - id: S3-docs
-    name: "Docs — re-land the architecture brief"
-    wave: wave-0
-  - id: oo-prototypes
-    name: "OO-track prototypes (stale bases, harvested by Wave 3)"
-    wave: wave-3
-  - id: why-track
-    name: "Why track (W1-W3, C1)"
-    wave: why-montessori
-  - id: montessori-track
-    name: "Montessori demo (M1-M2, deferred)"
-    wave: why-montessori
-  - id: track-f
-    name: "Track F — feature layer"
-    wave: wave-1
-  - id: track-g
-    name: "Track G — multi-tree engines (MCRDR/GRDR)"
-    wave: wave-1
-  - id: track-t
-    name: "Track T — truth unification"
-    wave: wave-1
-  - id: concept-trees-track
-    name: "Concept trees (NRDR)"
-    wave: wave-2
-  - id: oo-definitions-track
-    name: "OO integration"
-    wave: wave-3
-  - id: justifications-track
-    name: "TMS justifications"
-    wave: wave-3
+- id: S0-steward
+  name: Steward — the split-PR stack
+  wave: wave-0
+  description: 'Babysit the open stack bottom-up; merge in dependency order; propagate restacks forward
+    after each merge.
 
+    '
+- id: S1-d-ui
+  name: D-ui — interactive expert interface
+  wave: wave-0
+- id: S2-d-deco
+  name: D-deco — @rdr decorator + file store
+  wave: wave-0
+- id: S3-docs
+  name: Docs — re-land the architecture brief
+  wave: wave-0
+- id: oo-prototypes
+  name: OO-track prototypes (stale bases, harvested by Wave 3)
+  wave: wave-3
+- id: why-track
+  name: Why track (W1-W3, C1)
+  wave: why-montessori
+- id: montessori-track
+  name: Montessori demo (M1-M2, deferred)
+  wave: why-montessori
+- id: track-f
+  name: Track F — feature layer
+  wave: wave-1
+- id: track-g
+  name: Track G — multi-tree engines (MCRDR/GRDR)
+  wave: wave-1
+- id: track-t
+  name: Track T — truth unification
+  wave: wave-1
+- id: concept-trees-track
+  name: Concept trees (NRDR)
+  wave: wave-2
+- id: oo-definitions-track
+  name: OO integration
+  wave: wave-3
+- id: justifications-track
+  name: TMS justifications
+  wave: wave-3
+- id: expert-capabilities
+  name: Capability-guarded experts + ensembles
+  wave: expert-framework
+- id: comms-track
+  name: Audience-dependent explanation rendering
+  wave: why-montessori
+- id: engine-runtime
+  name: Engine runtime behaviour (no-fire handling, defaults, provenance)
+  wave: wave-1
 items:
-  # --- S0: the split-PR stack, bottom-up ---
-  - id: query-class-refactor
-    title: "EQL query refactor: spec/product lifecycle, subquery caching, result-transformer pipeline"
-    branch: query-class-refactor
-    pr: 5
-    track: S0-steward
-    depends_on: []
-    status: done
-    notes: "Merged to main."
+- id: query-class-refactor
+  title: 'EQL query refactor: spec/product lifecycle, subquery caching, result-transformer pipeline'
+  branch: query-class-refactor
+  pr: 5
+  track: S0-steward
+  depends_on: []
+  status: done
+  notes: Merged to main.
+- id: eql-core-prep
+  title: EQL core semantics (foundation for the RDR engine)
+  branch: eql-core-prep
+  pr: 28
+  track: S0-steward
+  depends_on:
+  - query-class-refactor
+  status: done
+  notes: Merged to main.
+- id: code-extraction
+  title: Extract source-extraction utilities into krrood.code_generation
+  branch: code-extraction
+  pr: 58
+  track: S0-steward
+  depends_on:
+  - eql-core-prep
+  status: in_progress
+  notes: Open, CI green; picked up an in-review label 2026-07-20.
+- id: code-generation-extract
+  title: Extract code_generation package (generation half)
+  branch: code-generation-extract
+  pr: 39
+  track: S0-steward
+  depends_on:
+  - code-extraction
+  status: in_progress
+- id: ripple-down-rules-refactor
+  title: ripple_down_rules refactor (reconciled to code_generation)
+  branch: ripple-down-rules-refactor
+  pr: 53
+  track: S0-steward
+  depends_on:
+  - code-generation-extract
+  status: in_progress
+  notes: 'Replaces closed PR #40. Qt/GUI + JSON serialization removed here.'
+- id: rdr-backward-inference
+  title: 'RDR engine: backward inference + condition resolvers'
+  branch: rdr-backward-inference
+  pr: 41
+  track: S0-steward
+  depends_on:
+  - ripple-down-rules-refactor
+  status: blocked
+  blockers:
+  - 'Real merge conflict in base_expressions.py over whether _last_parent_of_type_ should exist (automated
+    restacking bot flagged needs-resolution); resolution lands via PR #89 (conditions-root-drop-dead-parent-recovery).'
+- id: D-core-aid
+  title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
+  branch: D-core-aid
+  pr: 63
+  track: S0-steward
+  depends_on:
+  - rdr-backward-inference
+  status: in_progress
+- id: D-core-underspecified
+  title: 'RDR engine: underspecified-match adapter'
+  branch: D-core-underspecified
+  pr: 64
+  track: S0-steward
+  depends_on:
+  - D-core-aid
+  status: in_progress
+- id: D-core-corner-case
+  title: 'RDR engine: corner-case provenance store'
+  branch: D-core-corner-case
+  pr: 65
+  track: S0-steward
+  depends_on:
+  - D-core-underspecified
+  status: in_progress
+- id: D-core-serialization
+  title: 'RDR engine: rule-tree unparser (rdr_to_python)'
+  branch: D-core-serialization
+  pr: 66
+  track: S0-steward
+  depends_on:
+  - D-core-corner-case
+  status: in_progress
+- id: D-core-support
+  title: 'RDR engine: observer, rule-tree view, and remaining support modules'
+  branch: D-core-support
+  pr: 67
+  track: S0-steward
+  depends_on:
+  - D-core-serialization
+  status: in_progress
+- id: D-core-engine
+  title: 'RDR engine: EQLSingleClassRDR core inference engine'
+  branch: D-core-engine
+  pr: 68
+  track: S0-steward
+  depends_on:
+  - D-core-support
+  status: deferred
+  notes: 'Superseded by the topic split (d-core-expert -> d-core-single-class -> d-core-backend) after
+    the PR #68 review asked to split the mega-slice. PR #68 closed once the split PRs open.'
+- id: d-core-expert
+  title: 'RDR engine: Expert policy split'
+  branch: D-core-expert
+  pr: null
+  track: S0-steward
+  depends_on:
+  - D-core-support
+  status: not_started
+  notes: expert.py + its tests; DataclassException hierarchy, validators on ConclusionDomain, AnswerName
+    enum.
+- id: d-core-single-class
+  title: 'RDR engine: EQLSingleClassRDR core inference engine'
+  branch: D-core-single-class
+  pr: null
+  track: S0-steward
+  depends_on:
+  - d-core-expert
+  status: not_started
+  notes: single_class.py + engine tests; classify->UNSET, raise+drop max_passes, CaseContext object, Null-Object
+    progress/save.
+- id: d-core-backend
+  title: 'RDR engine: underspecified-query RDR backend'
+  branch: D-core-backend
+  pr: null
+  track: S0-steward
+  depends_on:
+  - d-core-single-class
+  status: not_started
+  notes: backend.py + its test; infer/fill split, typed ModelKey, key_from_attribute -> helpers.py. New
+    stack tip.
+- id: rdr-engine-umbrella
+  title: RDR/EQL engine umbrella (superseded by the split stack)
+  branch: rdr-engine
+  pr: 38
+  track: S0-steward
+  depends_on:
+  - eql-core-prep
+  status: deferred
+  notes: 'Closed unmerged once the remainder was split into #58..#68 above.'
+- id: conditions-root-drop-dead-parent-recovery
+  title: Drop the dead _last_parent_of_type_ conditions-root recovery
+  branch: conditions-root-drop-dead-parent-recovery
+  pr: 89
+  track: S0-steward
+  depends_on: []
+  status: in_progress
+  notes: 'Side-quest off main, not part of the original wave plan: removes _conditions_root_''s dead fallback
+    (distinct from insert_at''s own live use of the same method name, independently reintroduced by #78
+    for a real bug — the two were verified fully compatible). Unblocks rdr-backward-inference''s (#41)
+    merge conflict once merged; verify the restacking bot cascades the fix through #58/#39/#53/#41 afterward.
 
-  - id: eql-core-prep
-    title: "EQL core semantics (foundation for the RDR engine)"
-    branch: eql-core-prep
-    pr: 28
-    track: S0-steward
-    depends_on: [query-class-refactor]
-    status: done
-    notes: "Merged to main."
+    '
+- id: D-ui-splice-fix
+  title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
+  branch: D-ui-splice-fix
+  pr: 78
+  track: S1-d-ui
+  depends_on:
+  - d-core-backend
+  status: in_progress
+  session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
+  notes: 'bug label. Reintroduces _last_parent_of_type_ for insert_at''s anchor-parent recovery — a real,
+    proven bug distinct from PR #89''s target.'
+- id: D-ui-rendering
+  title: 'RDR engine: case-table rendering + serialization test coverage'
+  branch: D-ui-rendering
+  pr: 79
+  track: S1-d-ui
+  depends_on:
+  - D-ui-splice-fix
+  status: in_progress
+  session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
+- id: D-ui
+  title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
+  branch: D-ui
+  pr: 76
+  track: S1-d-ui
+  depends_on:
+  - D-ui-rendering
+  status: in_progress
+  session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
+- id: D-store
+  title: 'D-store: RDRFileStore for the @rdr model-file lifecycle'
+  branch: D-store
+  pr: 80
+  track: S2-d-deco
+  depends_on:
+  - D-ui
+  status: in_progress
+  notes: Path resolution + model-file lifecycle; standalone, no decorator dependency.
+- id: D-deco
+  title: 'D-deco: @rdr decorator + RDR file store (final rdr-engine slice)'
+  branch: D-deco
+  pr: 77
+  track: S2-d-deco
+  depends_on:
+  - D-store
+  status: in_progress
+  notes: rdr() factory + RDRWrapper, retargeted from D-ui base to D-store.
+- id: rdr-architecture-brief
+  title: Re-land RDR architecture brief and its bibliography as a docs-only page
+  branch: rdr/architecture-brief
+  pr: 75
+  track: S3-docs
+  depends_on: []
+  status: in_progress
+  notes: 'Re-lands closed PR #20''s content. CI green, mergeable clean, awaiting review as of the last
+    steward restack check-in.'
+- id: rdr-oo-recognition
+  title: 'OO recognition layer: candidate generators + definitions'
+  branch: rdr/oo-recognition
+  pr: 21
+  track: oo-prototypes
+  depends_on: []
+  status: deferred
+  notes: Prototype input for Wave 3's rdr/oo-definitions, then close. Base is stale (rdr/oo-plan), do
+    not merge as-is.
+- id: rdr-backend-unification
+  title: Unify recognition with the query/reasoning backend frontend
+  branch: rdr/backend-unification
+  pr: 22
+  track: oo-prototypes
+  depends_on:
+  - rdr-oo-recognition
+  status: deferred
+  notes: 'Same disposition as #21: harvested by Wave 3, then closed.'
+- id: rdr-why-answer
+  title: 'Why-question core: WhyQuestion/WhyAnswer, EQLSingleClassRDR.why(case)'
+  branch: claude/rdr-why-answer-6fnw2o
+  pr: 81
+  track: why-track
+  depends_on:
+  - d-core-backend
+  status: in_progress
+  session: https://claude.ai/code/session_01V2DJMF1C2bQjhLcPo5sFkx
+  notes: 'W1. KNOWN-STALE per-branch progress note: pr-progress/rdr/why-answer.md still says "Not started"
+    even though this PR is real, open, and W2/W3 already build on it — the exact drift class this system
+    exists to catch. This entry reflects the verified live state, not that note.
 
-  - id: code-extraction
-    title: "Extract source-extraction utilities into krrood.code_generation"
-    branch: code-extraction
-    pr: 58
-    track: S0-steward
-    depends_on: [eql-core-prep]
-    status: in_progress
-    notes: "Open, CI green; picked up an in-review label 2026-07-20."
+    '
+- id: eql-causal-verbalization
+  title: '"because" vocabulary + causal grammar assembler, WhyAnswer.verbalize()'
+  branch: eql/causal-verbalization
+  pr: 82
+  track: why-track
+  depends_on:
+  - rdr-why-answer
+  status: in_progress
+  notes: 'W2. Deep in review: 20/22 threads resolved, 2 blocked on PR #83''s boolean-predicate goldens.'
+- id: eql-attribute-predicate-verbalization
+  title: Verbalize boolean-attribute conditions as declarable predicates
+  branch: eql/attribute-predicate-verbalization
+  pr: 83
+  track: why-track
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01JCEFrP4eBx2pgmf5FarFLm
+  notes: 'Sibling fix, not part of the original wave plan; blocks W2''s last 2 open review threads. Open
+    as non-draft (ready for review) — same as several of the S0 stack items (#58/#39/#53/#41/#63-#67),
+    so not unique to this PR; each was presumably marked ready deliberately once stable, per the always-drafts-until-ready
+    personal convention.
 
-  - id: code-generation-extract
-    title: "Extract code_generation package (generation half)"
-    branch: code-generation-extract
-    pr: 39
-    track: S0-steward
-    depends_on: [code-extraction]
-    status: in_progress
+    '
+- id: rdr-why-query-surface
+  title: why(...) EQL factory + docs + bibliography
+  branch: rdr/why-query-surface
+  pr: 84
+  track: why-track
+  depends_on:
+  - eql-causal-verbalization
+  status: in_progress
+  session: https://claude.ai/code/session_0148J38dvujaob3AYJqfNzwa
+  notes: W3. %why magic deferred until D-ui (#76) lands.
+- id: rdr-decision-queries
+  title: Backend explanation semantics + the decision-query pattern
+  branch: rdr/decision-queries
+  pr: 85
+  track: why-track
+  depends_on:
+  - eql-causal-verbalization
+  status: in_progress
+  session: https://claude.ai/code/session_013NepUGgubeWHnLT5TUPLdu
+  notes: C1. Reframed 2026-07-17 (ExplainableChoice protocol dropped as YAGNI). Coordinates with W3 via
+    a shared ExplanationCarrier seam.
+- id: montessori-choice-policies
+  title: 'Demo policy wiring: pick/hole policy RDRs as decision queries'
+  branch: montessori/choice-policies
+  pr: null
+  track: montessori-track
+  depends_on:
+  - rdr-decision-queries
+  status: deferred
+  blockers:
+  - Deferred until Tom's montessori_ijcai branch is ready.
+  notes: M1. The generic half (decision-query semantics) already proceeds as C1; only the demo-specific
+    remainder is left here.
+- id: montessori-why-demo
+  title: Narrated demo loop, headless CI mode, README
+  branch: montessori/why-demo
+  pr: null
+  track: montessori-track
+  depends_on:
+  - montessori-choice-policies
+  - eql-causal-verbalization
+  status: deferred
+  notes: M2.
+- id: rdr-feature-registry
+  title: Feature layer core, the "poor man's Rete"
+  branch: rdr/feature-registry
+  pr: null
+  track: track-f
+  depends_on:
+  - d-core-backend
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 stack lands on main.
+  notes: Registry + CaseView memoization + EQL name resolution.
+- id: rdr-feature-capture
+  title: KA-time feature capture
+  branch: rdr/feature-capture
+  pr: null
+  track: track-f
+  depends_on:
+  - rdr-feature-registry
+  status: not_started
+  notes: '%feature magic, AST-hash dedup, registry autocomplete.'
+- id: rdr-multi-class
+  title: 'MCRDR port: multi-valued attributes'
+  branch: rdr/multi-class
+  pr: null
+  track: track-g
+  depends_on:
+  - d-core-backend
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 stack lands on main.
+  notes: Lifts the single-valued guard in underspecified.py.
+- id: rdr-general-fixpoint
+  title: GRDR naive fixpoint engine
+  branch: rdr/general-fixpoint
+  pr: null
+  track: track-g
+  depends_on:
+  - rdr-multi-class
+  status: not_started
+  notes: Monotonic-conclusions contract + recorded dependency edges.
+- id: eql-truth-unification
+  title: Unified OperationResult truth
+  branch: eql/truth-unification
+  pr: null
+  track: track-t
+  depends_on:
+  - eql-core-prep
+  status: not_started
+  notes: 'Design doc krrood/doc/eql/developer/operation_result_truth_unification.md (on abdel/rdr/oo-plan).
+    Drops OperationResult.is_false, truth always read from bindings[self._id_]. Originally blocked on
+    #28 merging to avoid stack conflicts in core/base_expressions.py — #28 is merged now, so this is unblocked;
+    verify no new conflicts before starting.
 
-  - id: ripple-down-rules-refactor
-    title: "ripple_down_rules refactor (reconciled to code_generation)"
-    branch: ripple-down-rules-refactor
-    pr: 53
-    track: S0-steward
-    depends_on: [code-generation-extract]
-    status: in_progress
-    notes: "Replaces closed PR #40. Qt/GUI + JSON serialization removed here."
+    '
+- id: rdr-concept-trees
+  title: NRDR concept layer
+  branch: rdr/concept-trees
+  pr: null
+  track: concept-trees-track
+  depends_on:
+  - rdr-feature-registry
+  - rdr-general-fixpoint
+  status: blocked
+  blockers:
+  - Blocked on Track F (rdr/feature-registry) and Track G (rdr/general-fixpoint).
+  notes: 'Concept declaration, explicit DependencyGraph, stratified order, semi-naive firing, cornerstone-regression
+    gate on shared-feature/ concept edits. Likely splits into 2-3 stacked PRs at execution time; this
+    item is the umbrella placeholder.
 
-  - id: rdr-backward-inference
-    title: "RDR engine: backward inference + condition resolvers"
-    branch: rdr-backward-inference
-    pr: 41
-    track: S0-steward
-    depends_on: [ripple-down-rules-refactor]
-    status: blocked
-    blockers:
-      - "Real merge conflict in base_expressions.py over whether _last_parent_of_type_ should exist (automated restacking bot flagged needs-resolution); resolution lands via PR #89 (conditions-root-drop-dead-parent-recovery)."
-
-  - id: D-core-aid
-    title: "RDR engine: ConclusionAid (expert-labelling assistance)"
-    branch: D-core-aid
-    pr: 63
-    track: S0-steward
-    depends_on: [rdr-backward-inference]
-    status: in_progress
-
-  - id: D-core-underspecified
-    title: "RDR engine: underspecified-match adapter"
-    branch: D-core-underspecified
-    pr: 64
-    track: S0-steward
-    depends_on: [D-core-aid]
-    status: in_progress
-
-  - id: D-core-corner-case
-    title: "RDR engine: corner-case provenance store"
-    branch: D-core-corner-case
-    pr: 65
-    track: S0-steward
-    depends_on: [D-core-underspecified]
-    status: in_progress
-
-  - id: D-core-serialization
-    title: "RDR engine: rule-tree unparser (rdr_to_python)"
-    branch: D-core-serialization
-    pr: 66
-    track: S0-steward
-    depends_on: [D-core-corner-case]
-    status: in_progress
-
-  - id: D-core-support
-    title: "RDR engine: observer, rule-tree view, and remaining support modules"
-    branch: D-core-support
-    pr: 67
-    track: S0-steward
-    depends_on: [D-core-serialization]
-    status: in_progress
-
-  - id: D-core-engine
-    title: "RDR engine: EQLSingleClassRDR core inference engine"
-    branch: D-core-engine
-    pr: 68
-    track: S0-steward
-    depends_on: [D-core-support]
-    status: in_progress
-    notes: >
-      Split tip carrying the full core rdr/ package (aid, backend,
-      backward_inference, conclusion_domain, condition_resolver,
-      corner_case, expert, function_case, interface, observer, progress,
-      rule_tree, rule_tree_view, serialization, single_class,
-      underspecified) and its tests. Replaces closed PR #60.
-
-  - id: rdr-engine-umbrella
-    title: "RDR/EQL engine umbrella (superseded by the split stack)"
-    branch: rdr-engine
-    pr: 38
-    track: S0-steward
-    depends_on: [eql-core-prep]
-    status: deferred
-    notes: "Closed unmerged once the remainder was split into #58..#68 above."
-
-  - id: conditions-root-drop-dead-parent-recovery
-    title: "Drop the dead _last_parent_of_type_ conditions-root recovery"
-    branch: conditions-root-drop-dead-parent-recovery
-    pr: 89
-    track: S0-steward
-    depends_on: []
-    status: in_progress
-    notes: >
-      Side-quest off main, not part of the original wave plan: removes
-      _conditions_root_'s dead fallback (distinct from insert_at's own live
-      use of the same method name, independently reintroduced by #78 for a
-      real bug — the two were verified fully compatible). Unblocks
-      rdr-backward-inference's (#41) merge conflict once merged; verify the
-      restacking bot cascades the fix through #58/#39/#53/#41 afterward.
-
-  # --- S1: D-ui, stacked on D-core-engine ---
-  - id: D-ui-splice-fix
-    title: "RDR engine: fix rule-tree splice for attributes reused across sibling branches"
-    branch: D-ui-splice-fix
-    pr: 78
-    track: S1-d-ui
-    depends_on: [D-core-engine]
-    status: in_progress
-    session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
-    notes: "bug label. Reintroduces _last_parent_of_type_ for insert_at's anchor-parent recovery — a real, proven bug distinct from PR #89's target."
-
-  - id: D-ui-rendering
-    title: "RDR engine: case-table rendering + serialization test coverage"
-    branch: D-ui-rendering
-    pr: 79
-    track: S1-d-ui
-    depends_on: [D-ui-splice-fix]
-    status: in_progress
-    session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
-
-  - id: D-ui
-    title: "RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)"
-    branch: D-ui
-    pr: 76
-    track: S1-d-ui
-    depends_on: [D-ui-rendering]
-    status: in_progress
-    session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
-
-  # --- S2: D-deco, stacked on D-ui ---
-  - id: D-store
-    title: "D-store: RDRFileStore for the @rdr model-file lifecycle"
-    branch: D-store
-    pr: 80
-    track: S2-d-deco
-    depends_on: [D-ui]
-    status: in_progress
-    notes: "Path resolution + model-file lifecycle; standalone, no decorator dependency."
-
-  - id: D-deco
-    title: "D-deco: @rdr decorator + RDR file store (final rdr-engine slice)"
-    branch: D-deco
-    pr: 77
-    track: S2-d-deco
-    depends_on: [D-store]
-    status: in_progress
-    notes: "rdr() factory + RDRWrapper, retargeted from D-ui base to D-store."
-
-  # --- S3: docs, parallel, off main ---
-  - id: rdr-architecture-brief
-    title: "Re-land RDR architecture brief and its bibliography as a docs-only page"
-    branch: rdr/architecture-brief
-    pr: 75
-    track: S3-docs
-    depends_on: []
-    status: in_progress
-    notes: "Re-lands closed PR #20's content. CI green, mergeable clean, awaiting review as of the last steward restack check-in."
-
-  # --- OO-track prototypes: stale bases, harvested by Wave 3 ---
-  - id: rdr-oo-recognition
-    title: "OO recognition layer: candidate generators + definitions"
-    branch: rdr/oo-recognition
-    pr: 21
-    track: oo-prototypes
-    depends_on: []
-    status: deferred
-    notes: "Prototype input for Wave 3's rdr/oo-definitions, then close. Base is stale (rdr/oo-plan), do not merge as-is."
-
-  - id: rdr-backend-unification
-    title: "Unify recognition with the query/reasoning backend frontend"
-    branch: rdr/backend-unification
-    pr: 22
-    track: oo-prototypes
-    depends_on: [rdr-oo-recognition]
-    status: deferred
-    notes: "Same disposition as #21: harvested by Wave 3, then closed."
-
-  # --- Why track ---
-  - id: rdr-why-answer
-    title: "Why-question core: WhyQuestion/WhyAnswer, EQLSingleClassRDR.why(case)"
-    branch: claude/rdr-why-answer-6fnw2o
-    pr: 81
-    track: why-track
-    depends_on: [D-core-engine]
-    status: in_progress
-    session: https://claude.ai/code/session_01V2DJMF1C2bQjhLcPo5sFkx
-    notes: >
-      W1. KNOWN-STALE per-branch progress note: pr-progress/rdr/why-answer.md
-      still says "Not started" even though this PR is real, open, and W2/W3
-      already build on it — the exact drift class this system exists to
-      catch. This entry reflects the verified live state, not that note.
-
-  - id: eql-causal-verbalization
-    title: "\"because\" vocabulary + causal grammar assembler, WhyAnswer.verbalize()"
-    branch: eql/causal-verbalization
-    pr: 82
-    track: why-track
-    depends_on: [rdr-why-answer]
-    status: in_progress
-    notes: "W2. Deep in review: 20/22 threads resolved, 2 blocked on PR #83's boolean-predicate goldens."
-
-  - id: eql-attribute-predicate-verbalization
-    title: "Verbalize boolean-attribute conditions as declarable predicates"
-    branch: eql/attribute-predicate-verbalization
-    pr: 83
-    track: why-track
-    depends_on: []
-    status: in_progress
-    session: https://claude.ai/code/session_01JCEFrP4eBx2pgmf5FarFLm
-    notes: >
-      Sibling fix, not part of the original wave plan; blocks W2's last 2
-      open review threads. Open as non-draft (ready for review) — same as
-      several of the S0 stack items (#58/#39/#53/#41/#63-#67), so not
-      unique to this PR; each was presumably marked ready deliberately once
-      stable, per the always-drafts-until-ready personal convention.
-
-  - id: rdr-why-query-surface
-    title: "why(...) EQL factory + docs + bibliography"
-    branch: rdr/why-query-surface
-    pr: 84
-    track: why-track
-    depends_on: [eql-causal-verbalization]
-    status: in_progress
-    session: https://claude.ai/code/session_0148J38dvujaob3AYJqfNzwa
-    notes: "W3. %why magic deferred until D-ui (#76) lands."
-
-  - id: rdr-decision-queries
-    title: "Backend explanation semantics + the decision-query pattern"
-    branch: rdr/decision-queries
-    pr: 85
-    track: why-track
-    depends_on: [eql-causal-verbalization]
-    status: in_progress
-    session: https://claude.ai/code/session_013NepUGgubeWHnLT5TUPLdu
-    notes: "C1. Reframed 2026-07-17 (ExplainableChoice protocol dropped as YAGNI). Coordinates with W3 via a shared ExplanationCarrier seam."
-
-  - id: montessori-choice-policies
-    title: "Demo policy wiring: pick/hole policy RDRs as decision queries"
-    branch: montessori/choice-policies
-    pr: null
-    track: montessori-track
-    depends_on: [rdr-decision-queries]
-    status: deferred
-    blockers:
-      - "Deferred until Tom's montessori_ijcai branch is ready."
-    notes: "M1. The generic half (decision-query semantics) already proceeds as C1; only the demo-specific remainder is left here."
-
-  - id: montessori-why-demo
-    title: "Narrated demo loop, headless CI mode, README"
-    branch: montessori/why-demo
-    pr: null
-    track: montessori-track
-    depends_on: [montessori-choice-policies, eql-causal-verbalization]
-    status: deferred
-    notes: "M2."
-
-  # --- Wave 1 ---
-  - id: rdr-feature-registry
-    title: "Feature layer core, the \"poor man's Rete\""
-    branch: rdr/feature-registry
-    pr: null
-    track: track-f
-    depends_on: [D-core-engine]
-    status: blocked
-    blockers:
-      - "Blocked until the Wave-0 stack lands on main."
-    notes: "Registry + CaseView memoization + EQL name resolution."
-
-  - id: rdr-feature-capture
-    title: "KA-time feature capture"
-    branch: rdr/feature-capture
-    pr: null
-    track: track-f
-    depends_on: [rdr-feature-registry]
-    status: not_started
-    notes: "%feature magic, AST-hash dedup, registry autocomplete."
-
-  - id: rdr-multi-class
-    title: "MCRDR port: multi-valued attributes"
-    branch: rdr/multi-class
-    pr: null
-    track: track-g
-    depends_on: [D-core-engine]
-    status: blocked
-    blockers:
-      - "Blocked until the Wave-0 stack lands on main."
-    notes: "Lifts the single-valued guard in underspecified.py."
-
-  - id: rdr-general-fixpoint
-    title: "GRDR naive fixpoint engine"
-    branch: rdr/general-fixpoint
-    pr: null
-    track: track-g
-    depends_on: [rdr-multi-class]
-    status: not_started
-    notes: "Monotonic-conclusions contract + recorded dependency edges."
-
-  - id: eql-truth-unification
-    title: "Unified OperationResult truth"
-    branch: eql/truth-unification
-    pr: null
-    track: track-t
-    depends_on: [eql-core-prep]
-    status: not_started
-    notes: >
-      Design doc krrood/doc/eql/developer/operation_result_truth_unification.md
-      (on abdel/rdr/oo-plan). Drops OperationResult.is_false, truth always
-      read from bindings[self._id_]. Originally blocked on #28 merging to
-      avoid stack conflicts in core/base_expressions.py — #28 is merged now,
-      so this is unblocked; verify no new conflicts before starting.
-
-  # --- Wave 2 ---
-  - id: rdr-concept-trees
-    title: "NRDR concept layer"
-    branch: rdr/concept-trees
-    pr: null
-    track: concept-trees-track
-    depends_on: [rdr-feature-registry, rdr-general-fixpoint]
-    status: blocked
-    blockers:
-      - "Blocked on Track F (rdr/feature-registry) and Track G (rdr/general-fixpoint)."
-    notes: >
-      Concept declaration, explicit DependencyGraph, stratified order,
-      semi-naive firing, cornerstone-regression gate on shared-feature/
-      concept edits. Likely splits into 2-3 stacked PRs at execution time;
-      this item is the umbrella placeholder.
-
-  # --- Wave 3 ---
-  - id: rdr-oo-definitions
-    title: "OO integration: definitions, candidate generators, taxonomy discriminators"
-    branch: rdr/oo-definitions
-    pr: null
-    track: oo-definitions-track
-    depends_on: [rdr-concept-trees]
-    status: blocked
-    blockers:
-      - "Blocked on rdr/concept-trees."
-    notes: "Harvests prototypes #21/#22 (rdr-oo-recognition, rdr-backend-unification), then closes both."
-
-  - id: rdr-justifications
-    title: "TMS (JTMS) justification recording"
-    branch: rdr/justifications
-    pr: null
-    track: justifications-track
-    depends_on: [rdr-concept-trees, eql-truth-unification]
-    status: blocked
-    blockers:
-      - "Blocked on eql/truth-unification (single truth source) and rdr/general-fixpoint (dependency graph + blackboard)."
-    notes: "Justification value object + JustificationRecorder(EvaluationObserver) + retraction propagation over the dependency graph."
+    '
+- id: rdr-oo-definitions
+  title: 'OO integration: definitions, candidate generators, taxonomy discriminators'
+  branch: rdr/oo-definitions
+  pr: null
+  track: oo-definitions-track
+  depends_on:
+  - rdr-concept-trees
+  status: blocked
+  blockers:
+  - Blocked on rdr/concept-trees.
+  notes: 'Harvests prototypes #21/#22 (rdr-oo-recognition, rdr-backend-unification), then closes both.'
+- id: rdr-justifications
+  title: TMS (JTMS) justification recording
+  branch: rdr/justifications
+  pr: null
+  track: justifications-track
+  depends_on:
+  - rdr-concept-trees
+  - eql-truth-unification
+  status: blocked
+  blockers:
+  - Blocked on eql/truth-unification (single truth source) and rdr/general-fixpoint (dependency graph
+    + blackboard).
+  notes: Justification value object + JustificationRecorder(EvaluationObserver) + retraction propagation
+    over the dependency graph.
+- id: expert-capability-guards
+  title: 'Capability-guarded Expert: EQL eligibility guards, resolver-as-expert'
+  branch: null
+  pr: null
+  track: expert-capabilities
+  depends_on:
+  - d-core-single-class
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 engine stack lands on main.
+  notes: 'Abstract Expert declares full question vocabulary; each impl carries an evaluable EQL capability
+    guard. Lit: blackboard activation conditions, Contract-Net, Chain-of-Responsibility.'
+- id: expert-ensembles
+  title: 'Cooperating experts: Hint mode as composition, multi-expert ensembles'
+  branch: null
+  pr: null
+  track: expert-capabilities
+  depends_on:
+  - expert-capability-guards
+  status: blocked
+  blockers:
+  - Blocked on expert-capability-guards.
+  notes: 'Multiple experts assisting each other. Lit: mixed-initiative / critiquing systems.'
+- id: expert-capability-verbalization
+  title: 'Verbalize expert capabilities: why-can / why-cannot handle a situation'
+  branch: null
+  pr: null
+  track: expert-capabilities
+  depends_on:
+  - expert-capability-guards
+  - rdr-why-answer
+  status: blocked
+  blockers:
+  - Blocked on expert-capability-guards and W1 (rdr-why-answer).
+  notes: The guard is EQL, so it is inspectable and verbalizable. Ties to the Why track.
+- id: explanation-rendering-by-audience
+  title: 'Explanation rendering by recipient: NL for humans, EQL for programs'
+  branch: null
+  pr: null
+  track: comms-track
+  depends_on:
+  - eql-causal-verbalization
+  status: blocked
+  blockers:
+  - Blocked on W2 (eql-causal-verbalization).
+  notes: 'Separate explanation content from rendering, chosen from the recipient model. Lit: user-tailored
+    NLG (Paris), Reiter & Dale, Grice, Sperber & Wilson.'
+- id: no-rule-fired-resolution
+  title: 'No-rule-fired handling: warn / ask-expert / default-conclusion modes + provenance'
+  branch: null
+  pr: null
+  track: engine-runtime
+  depends_on:
+  - d-core-single-class
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 engine stack lands on main.
+  notes: Beyond interim classify->UNSET. Conclusion provenance coordinates with Wave-3 JTMS (rdr-justifications).
