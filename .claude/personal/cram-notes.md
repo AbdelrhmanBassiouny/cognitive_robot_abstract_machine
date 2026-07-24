@@ -119,8 +119,11 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   no env hacks.
 
 ### The four PRs  ( [ ] todo / [~] in progress / [x] done )
-- P1 [x] done — branch `claude/eql-verbalization-p1-surface-verification-eqltzc`, off `main`,
-  PR #86 (draft, subscribed to all activity). Extracted `surface_verification.py`
+- P1 [x] **merged to `main`** (PR #86) — branch `claude/eql-verbalization-p1-surface-verification-eqltzc`,
+  off `main`. `surface_verification.py` was itself later moved to
+  `krrood.entity_query_language.testing.surface_verification` by further main-branch work (not this
+  plan's own session) — P3 picked up that move on its 2026-07-24 rebase, see P3's entry below.
+  Extracted `surface_verification.py`
   (`VerbalizationSurface`, `SymbolicCallableOverride`, `SymbolicSurfaceSnapshot`) and rewired
   krrood's surface test/snapshot onto it; general `class_implements_own_method` added to
   `class_diagrams/utils.py`, unit-tested. Review round (5 comments) addressed and pushed
@@ -154,9 +157,12 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   krrood surface test 3/3, util test 7/7, `test_verbalization/` green bar 2 pre-existing
   `jpt`-import env failures (unrelated, present on `main` too). Must merge before #33 rebases.
   No deps.
-- P2 [x] general, off `main` — operand-naming architecture (decisions 1, 2, 4). Keystone;
-  gates #33 and P3. No deps. DONE & pushed to `claude/eql-verbalization-operand-naming-n0gb95`.
-  PR #87 (currently draft — see below, base main, subscribed to all activity).
+- P2 [x] **merged to `main`** (PR #87), general, off `main` — operand-naming architecture
+  (decisions 1, 2, 4). Keystone; gated #33 and P3. Also picked up a `Distinguisher` refactor
+  (single frozen dataclass → `Distinguisher(ABC)` base with `AlternativeDistinguisher`/
+  `OrdinalDistinguisher` subclasses) as part of its continued review before merging — P3's
+  2026-07-24 rebase onto `main` picked that up too (no P3-side change needed, non-overlapping
+  code). Originally pushed to `claude/eql-verbalization-operand-naming-n0gb95`.
   Redesigned after developer review (see PR-progress section above for the full account):
   operand naming and disambiguation now live entirely in `ReferringExpressions`/
   `DistinguisherIndex` (coreference-driven, identity-keyed) instead of a parallel predicate-side
@@ -246,13 +252,45 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     is simply the existing `verbalize_expression` path over a bound expression — both share the
     same operand-naming resolution, proven by a test that asserts they agree when operand types
     match.
-  - Tests: krrood-internal mimics only (`Shape`/`Circle`/`Square`, an over-cap `Polygon` family of
-    7, a concrete `ConcreteBase` with subclasses) in `test_operand_referring.py` +
-    new `test_first_order_form.py`. Full `test_eql/` + `test_class_diagram/` suite green (1112
-    passed, 3 skipped) apart from one pre-existing missing-`mypy` collection error, unrelated.
-    black + docformatter applied. CI just kicked off on PR #88 at last check.
+  - Tests: krrood-internal mimics only (`Shape`/`Circle`/`Square`, an `Instrument`/`Drum`/`Flute`/
+    `Harp` three-member family, an over-cap `Polygon` family of 7, a concrete `ConcreteBase` with
+    subclasses) in `test_operand_referring.py` + new `test_first_order_form.py`.
   - Real end-to-end proof against the actual `Visible`/`Body`/`Region` sdt predicates waits for
     P4 (those predicates aren't migrated to classes yet).
+  - **Review round 3** (oxford_comma question, pushed dbc4444f): `operand_head_noun`'s abstract-
+    type label used a manual `" or ".join(...)` instead of reusing `disjunctive_type_head`'s
+    Oxford-comma joining — a real latent bug (2 alternatives happened to agree, 3+ would've
+    silently diverged, e.g. "Drum or Flute or Harp" vs the real "Drum, Flute, or Harp"). Fixed to
+    reuse `disjunctive_type_head` directly; the `Instrument` family locks it in. Resolved.
+  - **Review round 4** (`first_order_form` overrides question, pushed 19280e06): a truly
+    value-agnostic rendering needs nothing external, so `operand_overrides` had no business on
+    the general `placeholder_operands`/`first_order_form` signatures — moved into
+    `SymbolicSurfaceSnapshot` itself, which layers its own registered overrides on top. Resolved.
+  - **Review round 5** (test-quality question, pushed 68cea9fd): the override test asserted the
+    overridden and un-overridden renderings were *equal* — proved nothing, since the mimic
+    predicate's fragment never read the overridden field. Gave the mimic's fragment a second
+    clause reading that field too, so the override's effect became genuinely visible in the
+    rendered sentence. Resolved.
+  - **2026-07-24 rebase** (base retargeted from P2's branch to `main`, now that #86+#87 merged):
+    fetched main (which had ~5 days of substantial unrelated activity — a `code_generation`
+    package extraction, `robokudo`/`semantic_digital_twin` work, `surface_verification.py` moved
+    to `krrood.entity_query_language.testing.surface_verification`, and P2's own continued
+    review round moving `Distinguisher` to an ABC hierarchy and `GrammarMetadata` to
+    `krrood.entity_query_language.verbalization.grammar_metadata`). CI had failed with
+    `ImportError: cannot import name 'GrammarMetadata'` — fixed the two stale
+    `krrood.patterns.field_metadata` imports (`referring.py`, `test_operand_referring.py`) to the
+    new module, confirmed the only other CI failure (`test_world_sim_state_sync` in
+    `semantic_digital_twin`) is an unrelated pre-existing flaky physics-settling test. Then merged
+    `main` into the branch directly (3 conflicts, all mechanical import-only: `referring.py`'s
+    import block, a duplicate `GrammarMetadata` import in `test_operand_referring.py`, an unused
+    `SymbolicCallable` import in `verbalization_surfaces.py` — verified via a disposable
+    `git worktree` trial merge first that nothing deeper conflicted, given `Distinguisher`'s ABC
+    refactor lives in the same file) and fixed `test_first_order_form.py`'s import of
+    `surface_verification` to the new `testing` package path. `mergeable_state` now `clean`; PR
+    base retargeted to `main`; description updated to reflect the now-focused diff (7 files,
+    +733/-72, no more phantom P1/P2 content). Full `test/krrood_test/` suite green (2012 passed, 9
+    skipped) apart from two pre-existing unrelated failures (`graphviz`/`dot` missing in this
+    sandbox). black + docformatter applied throughout.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
