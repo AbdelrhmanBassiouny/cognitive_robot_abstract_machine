@@ -110,7 +110,9 @@
       "head": "D-core-serialization",
       "base": "D-core-corner-case",
       "draft": false,
-      "labels": []
+      "labels": [
+        "needs-resolution"
+      ]
     },
     {
       "number": 67,
