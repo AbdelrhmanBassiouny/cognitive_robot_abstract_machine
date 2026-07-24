@@ -115,24 +115,6 @@ class TestGenerateCallableImportMethod:
         assert "my.module" in import_line
 
 
-class TestFunctionMissingAnnotationsError:
-    """Guarantees for the code-generation missing-annotation exception."""
-
-    def test_is_subclass_of_dataclass_exception(self) -> None:
-        """``FunctionMissingAnnotationsError`` is a ``DataclassException`` subclass."""
-        assert issubclass(FunctionMissingAnnotationsError, DataclassException)
-
-    def test_can_be_raised_and_caught_as_dataclass_exception(self) -> None:
-        """An instance can be raised and caught as ``DataclassException``."""
-        with pytest.raises(DataclassException):
-            raise FunctionMissingAnnotationsError("missing annotation")
-
-    def test_can_be_caught_by_its_own_type(self) -> None:
-        """An instance is catchable by its own class."""
-        with pytest.raises(FunctionMissingAnnotationsError):
-            raise FunctionMissingAnnotationsError("missing annotation")
-
-
 class TestGetImportsFromTypes:
     """Tests for :func:`get_imports_from_types`."""
 

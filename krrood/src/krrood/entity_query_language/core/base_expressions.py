@@ -56,6 +56,7 @@ A dictionary for expressions' bindings in EQL that maps the expression's unique
 identifier to its value.
 """
 
+
 @dataclass(eq=False)
 class SymbolicExpression(ABC):
     """
@@ -271,6 +272,29 @@ class SymbolicExpression(ABC):
         if parent is self._parent__:
             self._parent__ = self._parents_[-1] if self._parents_ else None
 
+    def _last_parent_of_type_(
+        self, *types: Type[SymbolicExpression]
+    ) -> Optional[SymbolicExpression]:
+        """
+        :return: The most recently attached direct parent that is an instance of any of *types*,
+            or ``None``.
+
+        A node reused in more than one query/subquery keeps a direct parent per position, but only
+        one of them is ``_parent_`` (the first one attached — see the ``_parent_`` setter). Walking
+        the ``_parent_`` chain from such a node therefore reaches whichever context it was first
+        embedded in, not necessarily the one currently asking. This checks *this node's own*
+        `_parents_` directly (no multi-hop walk) for one matching *types*, so callers that need "the
+        Filter/ConclusionSelector directly owning me" find it regardless of which parent is primary.
+        """
+        return next(
+            (
+                parent
+                for parent in reversed(self._parents_)
+                if isinstance(parent, types)
+            ),
+            None,
+        )
+
     def _update_children_(
         self, *children: SymbolicExpression
     ) -> Tuple[SymbolicExpression, ...]:
@@ -422,7 +446,7 @@ class SymbolicExpression(ABC):
         return current_result
 
     def conclusions_of_type(
-            self, conclusion_type: Type[ConclusionType]
+        self, conclusion_type: Type[ConclusionType]
     ) -> List[ConclusionType]:
         """:return: The conclusions attached to this expression that are instances of *conclusion_type*."""
         return [
@@ -486,15 +510,28 @@ class SymbolicExpression(ABC):
     def _conditions_root_(self) -> Optional[SymbolicExpression]:
         """
         :return: The root of the symbolic expression graph that contains conditions, or None if no conditions found.
+
+        ..note:: A node reused across separate queries or subqueries (for example a shared
+            sub-expression wrapped in a second ``Filter`` by a derived/introspection query) has a
+            direct ``Filter`` parent that may not be reachable by walking up from ``self._root_``,
+            since that walk follows only the primary ``_parent_`` — whichever context first attached
+            it. :meth:`_last_parent_of_type_` recovers the owning ``Filter`` directly from this
+            node's own parents when the graph walk misses it.
         """
-        return next(
+        root_via_graph = next(
             (
                 expr.condition
                 for expr in self._all_expressions_
                 if isinstance(expr, Filter)
             ),
-            self._root_,
+            None,
         )
+        if root_via_graph is not None:
+            return root_via_graph
+        filter_parent = self._last_parent_of_type_(Filter)
+        if filter_parent is not None:
+            return filter_parent.condition
+        return self._root_
 
     @property
     def _root_(self) -> SymbolicExpression:
@@ -620,8 +657,7 @@ class SymbolicExpression(ABC):
             by walking the subtree.
         """
         return any(
-            isinstance(descendant, expression_type)
-            for descendant in self._descendants_
+            isinstance(descendant, expression_type) for descendant in self._descendants_
         )
 
     @classmethod
@@ -814,8 +850,10 @@ class TruthValueOperator(SymbolicExpression, ABC):
         for result in child._evaluate_(sources):
             if result.has_value:
                 yield OperationResult(
-                    result.bindings, result.is_condition_false,
-                    result.operand, result.previous_operation_result,
+                    result.bindings,
+                    result.is_condition_false,
+                    result.operand,
+                    result.previous_operation_result,
                 )
             else:
                 yield result
@@ -868,6 +906,8 @@ class Filter(DerivedExpression, TruthValueOperator, ABC):
     @property
     def _name_(self):
         return self.__class__.__name__
+
+
 @dataclass
 class OperationResult:
     """
@@ -884,10 +924,12 @@ class OperationResult:
     Whether the operation resulted in a false value (i.e., The operation condition was
     not satisfied)
     """
+
     operand: Optional[SymbolicExpression] = None
     """
     The operand that produced the result.
     """
+
     previous_operation_result: Optional[OperationResult] = None
     """
     The result of the operation that was evaluated before this one.
@@ -936,15 +978,13 @@ class OperationResult:
     @property
     def is_condition_false(self) -> bool:
         """
-        Canonical condition-truth rule used by :meth:`~krrood.entity_query_language.core
-        .base_expressions.TruthValueOperator._evaluate_child_as_condition_` and :meth:`~
-        krrood.entity_query_language.core.base_expressions.SymbolicExpression._evaluate_
-        conclusions_and_update_bindings_`.
+        The canonical condition-truth rule: for expressions that bind a direct value
+        (``Attribute``, ``Comparator``, ``Variable``, …) truth is derived from the
+        value's boolean content.
 
-        For expressions that bind a direct value (``Attribute``, ``Comparator``,
-        ``Variable``, …) truth is derived from the value's boolean content.  For logical
-        operators that manage their own ``is_false`` flag (``NOT``, ``AND``, ``OR``, …)
-        and produce no direct value, the flag is used as-is.
+        For logical operators that manage their own
+        ``is_false`` flag (``NOT``, ``AND``, ``OR``, …) and produce no direct value, the
+        flag is used as-is.
         """
         if self.has_value:
             return not (
@@ -994,6 +1034,8 @@ class OperationResult:
             and self.operand == other.operand
             and self.previous_operation_result == other.previous_operation_result
         )
+
+
 class UnificationDict(UserDict):
     """
     A dictionary which maps all expressions that are on a single variable to the

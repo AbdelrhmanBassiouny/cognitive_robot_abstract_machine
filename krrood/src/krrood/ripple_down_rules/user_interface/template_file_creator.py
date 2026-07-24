@@ -378,9 +378,12 @@ class TemplateFileCreator:
                 )
                 break
         if updates:
-            all_code_lines = extract_function_source(
-                [func_name], source=source, join_lines=False
-            ).source_of(func_name)
+            extracted_function = extract_function_source([func_name], source=source)
+            all_code_lines = next(
+                definition.lines
+                for definition in extracted_function.definitions
+                if definition.name == func_name
+            )
             return all_code_lines, updates
         else:
             print_func(
