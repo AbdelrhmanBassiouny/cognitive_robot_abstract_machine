@@ -1781,5 +1781,5 @@ from krrood.code_generation.type_hints import (  # noqa: E402, F401
     value_to_source,
     get_types_to_import_from_function_type_hints as get_types_to_import_from_func_type_hints,
     get_types_to_import_from_type_hints,
-    stringify_hint,
+    stringify_type_hint as stringify_hint,
 )

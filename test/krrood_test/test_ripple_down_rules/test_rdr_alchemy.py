@@ -45,9 +45,9 @@ class TestAlchemyRDR(TestCase):
         zoo = get_dataset(111, cls.cache_file)
 
         # get data and targets (as pandas dataframes)
-        X = zoo["features"]
-        y = zoo["targets"]
-        names = zoo["ids"].values.flatten()
+        X = zoo.features
+        y = zoo.targets
+        names = zoo.ids.values.flatten()
         X.loc[:, "name"] = names
 
         cls._init_session_and_insert_data(X)

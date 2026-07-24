@@ -1,8 +1,8 @@
-"""Utilities for extracting source code from Python modules, files, and ASTs.
+"""
+Utilities for extracting source code from Python modules, files, and ASTs.
 
-These functions extract function/class source code and parse import statements.
-They are distinct from the code-generation utilities in
-:mod:`krrood.code_generation`.
+These functions extract function/class source code and parse import statements. They are
+distinct from the code-generation utilities in :mod:`krrood.code_generation`.
 """
 
 from __future__ import annotations
@@ -11,12 +11,11 @@ import ast
 import inspect
 import logging
 import os
-import textwrap
 import types
 from collections import defaultdict
 from dataclasses import dataclass, field
 from importlib.util import resolve_name
-from typing import Dict, List, Optional, Set, Tuple, Type, Union
+from typing import Dict, List, Optional, Set, Tuple, Type
 
 from krrood.exceptions import (
     ModuleNotFoundForConvertingImportsToAbsolute,
@@ -32,39 +31,65 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LineSpan:
-    """The inclusive start and end line numbers of a definition in its source."""
+    """
+    The inclusive start and end line numbers of a definition in its source.
+    """
 
     start_line: int
-    """The one-based line number where the definition begins."""
+    """
+    The one-based line number where the definition begins.
+    """
 
     end_line: int
-    """The one-based line number where the definition ends."""
+    """
+    The one-based line number where the definition ends.
+    """
 
 
 @dataclass
 class ExtractedDefinition:
-    """A single function or class definition extracted from source code."""
+    """
+    A single function or class definition extracted from source code.
+    """
 
     name: str
-    """The name of the extracted definition."""
+    """
+    The name of the extracted definition.
+    """
 
-    source: Union[str, List[str]]
-    """The definition source, joined into a single string or kept as a list of
-    lines depending on the extraction request."""
+    lines: List[str]
+    """
+    The lines of source code the definition occupies, in file order.
+    """
 
     line_span: LineSpan
-    """The start/end line numbers the definition occupies in its source."""
+    """
+    The start/end line numbers the definition occupies in its source.
+    """
+
+    @property
+    def source(self) -> str:
+        """
+        The definition source, joined into a single newline-separated string.
+        """
+        return "\n".join(self.lines)
 
 
 @dataclass
 class ExtractedSource:
-    """The definitions extracted from a piece of Python source code."""
+    """
+    The definitions extracted from a piece of Python source code.
+    """
 
     definitions: List[ExtractedDefinition] = field(default_factory=list)
-    """The extracted definitions, in the order they appear in the source."""
+    """
+    The extracted definitions, in the order they appear in the source.
+    """
 
-    def source_of(self, name: str) -> Union[str, List[str]]:
-        """Return the extracted source of the definition named *name*.
+    def source_of(self, name: str) -> str:
+        """
+        Return the extracted source of the definition named *name*, joined into a single
+        string.
 
         :param name: The definition name to look up.
         :raises KeyError: If no extracted definition carries that name.
@@ -87,15 +112,16 @@ def extract_imports_from(
     exclude_libraries: Optional[List[str]] = None,
     convert_relative_to_absolute: bool = False,
 ) -> List[str]:
-    """Extract import statements from a module, source, file path, or AST.
+    """
+    Extract import statements from a module, source, file path, or AST.
 
     :param module: The module to extract imports from.
     :param file_path: The file path to extract imports from.
     :param source: The source code to extract imports from.
     :param ast_tree: The ast tree to extract imports from.
     :param exclude_libraries: A list of libraries to exclude from the imports.
-    :param convert_relative_to_absolute: Whether to convert relative imports
-        to absolute.
+    :param convert_relative_to_absolute: Whether to convert relative imports to
+        absolute.
     :returns: A sorted list of import-line strings.
     """
     exclude_libraries = exclude_libraries or []
@@ -115,14 +141,16 @@ def _resolve_import_tree(
     ast_tree: Optional[ast.AST],
     convert_relative_to_absolute: bool,
 ) -> Tuple[ast.AST, Optional[str]]:
-    """Resolve the AST to walk and the enclosing module name for relative-import conversion.
+    """
+    Resolve the AST to walk and the enclosing module name for relative-import
+    conversion.
 
     :param module: The module to extract imports from.
     :param file_path: The file path to extract imports from.
     :param source: The source code to extract imports from.
     :param ast_tree: The ast tree to extract imports from.
-    :param convert_relative_to_absolute: Whether relative imports will be converted
-        to absolute, which requires a module or file to anchor them to.
+    :param convert_relative_to_absolute: Whether relative imports will be converted to
+        absolute, which requires a module or file to anchor them to.
     :raises NoSourceDataToParseImportsFrom: If no module, file, source, or AST is given.
     :raises ModuleNotFoundForConvertingImportsToAbsolute: If asked to convert relative
         imports to absolute without a module or file to anchor them to.
@@ -153,15 +181,17 @@ def _collect_imports_from_tree(
     convert_relative_to_absolute: bool,
     current_module_name: Optional[str],
 ) -> Tuple[Set[str], Dict[str, Set[str]]]:
-    """Walk *tree* and collect plain (``import x``) and ``from``-imports separately.
+    """
+    Walk *tree* and collect plain (``import x``) and ``from``-imports separately.
 
     :param tree: The AST to walk.
     :param exclude_libraries: Module names to exclude from the result.
-    :param convert_relative_to_absolute: Whether to resolve relative ``from``-imports
-        to their absolute module name.
-    :param current_module_name: The enclosing module name relative imports resolve against.
-    :returns: The plain-imported module names, and a mapping of ``from``-module name
-        to the names imported from it.
+    :param convert_relative_to_absolute: Whether to resolve relative ``from``-imports to
+        their absolute module name.
+    :param current_module_name: The enclosing module name relative imports resolve
+        against.
+    :returns: The plain-imported module names, and a mapping of ``from``-module name to
+        the names imported from it.
     """
     import_modules: Set[str] = set()
     from_imports: Dict[str, Set[str]] = defaultdict(set)
@@ -183,11 +213,13 @@ def _collect_imports_from_tree(
 def _collect_plain_import(
     node: ast.Import, exclude_libraries: List[str], import_modules: Set[str]
 ) -> None:
-    """Add the module names of an ``import x`` statement to *import_modules*.
+    """
+    Add the module names of an ``import x`` statement to *import_modules*.
 
     :param node: The ``import`` AST node.
     :param exclude_libraries: Module names to skip.
-    :param import_modules: The set of collected plain-import module names, updated in place.
+    :param import_modules: The set of collected plain-import module names, updated in
+        place.
     """
     for alias in node.names:
         if alias.name in exclude_libraries:
@@ -205,14 +237,17 @@ def _collect_from_import(
     current_module_name: Optional[str],
     from_imports: Dict[str, Set[str]],
 ) -> None:
-    """Add the names of a ``from x import y`` statement to *from_imports*, keyed by module.
+    """
+    Add the names of a ``from x import y`` statement to *from_imports*, keyed by module.
 
     :param node: The ``from ... import`` AST node.
     :param exclude_libraries: Module names to skip.
-    :param convert_relative_to_absolute: Whether to resolve a relative *node.module*
-        to its absolute module name.
-    :param current_module_name: The enclosing module name relative imports resolve against.
-    :param from_imports: The collected ``from``-module to imported-names mapping, updated in place.
+    :param convert_relative_to_absolute: Whether to resolve a relative *node.module* to
+        its absolute module name.
+    :param current_module_name: The enclosing module name relative imports resolve
+        against.
+    :param from_imports: The collected ``from``-module to imported-names mapping,
+        updated in place.
     """
     if node.module and node.module in exclude_libraries:
         return
@@ -230,7 +265,9 @@ def _collect_from_import(
 def _format_import_lines(
     import_modules: Set[str], from_imports: Dict[str, Set[str]]
 ) -> List[str]:
-    """Render collected import data as sorted ``import``/``from ... import`` line strings.
+    """
+    Render collected import data as sorted ``import``/``from ... import`` line
+    strings.
 
     :param import_modules: The plain-imported module names.
     :param from_imports: The ``from``-module name to imported-names mapping.
@@ -253,15 +290,14 @@ def extract_function_source(
     names: List[str],
     file_path: Optional[str] = None,
     source: Optional[str] = None,
-    join_lines: bool = True,
     include_signature: bool = True,
 ) -> ExtractedSource:
-    """Extract the source code of functions from a file and/or source string.
+    """
+    Extract the source code of functions from a file and/or source string.
 
     :param names: The names of the functions to extract; empty extracts all.
     :param file_path: The path to the file to read the source from.
     :param source: The source code to extract from, when no file is given.
-    :param join_lines: Whether to join the lines of each definition.
     :param include_signature: Whether to include the function signature.
     :returns: The extracted function definitions.
     """
@@ -270,7 +306,6 @@ def extract_function_source(
         names,
         file_path=file_path,
         source=source,
-        join_lines=join_lines,
         include_signature=include_signature,
     )
 
@@ -279,15 +314,14 @@ def extract_class_source(
     names: List[str],
     file_path: Optional[str] = None,
     source: Optional[str] = None,
-    join_lines: bool = True,
     include_signature: bool = True,
 ) -> ExtractedSource:
-    """Extract the source code of classes from a file and/or source string.
+    """
+    Extract the source code of classes from a file and/or source string.
 
     :param names: The names of the classes to extract; empty extracts all.
     :param file_path: The path to the file to read the source from.
     :param source: The source code to extract from, when no file is given.
-    :param join_lines: Whether to join the lines of each definition.
     :param include_signature: Whether to include the class signature.
     :returns: The extracted class definitions.
     """
@@ -296,7 +330,6 @@ def extract_class_source(
         names,
         file_path=file_path,
         source=source,
-        join_lines=join_lines,
         include_signature=include_signature,
     )
 
@@ -306,16 +339,15 @@ def _extract_definitions(
     names: List[str],
     file_path: Optional[str],
     source: Optional[str],
-    join_lines: bool,
     include_signature: bool,
 ) -> ExtractedSource:
-    """Walk the top-level AST and collect definitions of *definition_type*.
+    """
+    Walk the top-level AST and collect definitions of *definition_type*.
 
     :param definition_type: The AST node type to collect (function or class).
     :param names: The names to collect; empty collects every matching node.
     :param file_path: The file to read the source from, when *source* is absent.
     :param source: The source code to walk.
-    :param join_lines: Whether to join the lines of each definition.
     :param include_signature: Whether to include the definition signature.
     :raises SourceDataNotProvided: If neither a file path nor source is given.
     :returns: The extracted definitions in source order.
@@ -338,15 +370,10 @@ def _extract_definitions(
         definition_lines = lines[node.lineno - 1 : node.end_lineno]
         if not include_signature:
             definition_lines = definition_lines[1:]
-        definition_source = (
-            textwrap.dedent("\n".join(definition_lines))
-            if join_lines
-            else definition_lines
-        )
         extracted.definitions.append(
             ExtractedDefinition(
                 name=node.name,
-                source=definition_source,
+                lines=definition_lines,
                 line_span=LineSpan(node.lineno, node.end_lineno),
             )
         )
