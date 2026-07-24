@@ -117,8 +117,10 @@ its tests.
 
 ### OO-track prototypes (stale bases — do not merge as-is)
 
-- #20 (closed unmerged): architecture brief + bibliography. Re-land as the
-  small docs PR `rdr/architecture-brief` off main.
+- #20 (closed unmerged): architecture brief + bibliography. Re-landed once
+  as `rdr/architecture-brief` (PR #75, also closed 2026-07-24 without
+  merging — see the Wave Final addendum below); the branch is kept for a
+  third landing once the engine is stable.
 - #21 `rdr/oo-recognition` (draft): `rdr/recognition/` package — definition,
   engine, registry, candidate generators, `has_candidates`, predicates +
   `test_recognition.py`. Prototype input for Wave 3.
@@ -150,9 +152,6 @@ sequential.
   (decorator + docs), on the new `D-ui` tip. The sweep that made #38's diff
   reach zero is dissolved now that #38 is closed; its two keeper files are
   rehomed to #76 (steward hand-off).
-- **S3 (docs, off main):** `rdr/architecture-brief` — re-land the closed
-  #20 content (`rdr_architecture_plan.md` + bibliography). Trivial,
-  independent, unblocks every Wave-1+ session's shared context.
 
 ### Why & Montessori track — PRIORITY after Wave 0 (decided 2026-07-16)
 
@@ -228,17 +227,26 @@ Full design: plan session 2026-07-16; per-PR notes exist for every branch.
   the dependency graph (needs Track T's unified truth). Plan:
   `pr-progress/rdr/justifications.md`.
 
+### Wave Final — land once the RDR engine is stable
+
+- **`rdr/architecture-brief`** (docs-final track): re-land the closed #20 /
+  #75 content (`rdr_architecture_plan.md` + bibliography). Deliberately
+  deferred past Wave 3 (see the 2026-07-24 addendum below) rather than
+  landed early off `main` — the brief documents the architecture as a
+  finished whole, which reads oddly while the engine underneath it is
+  still being restacked wave by wave.
+
 ### Dependency graph
 
 ```
 main ── stack #5…#68 ── D-ui ── D-store ── D-deco   (Wave 0, sequential chain)
-main ── rdr/architecture-brief                   (Wave 0, parallel)
 land ─┬─ rdr/feature-registry ── rdr/feature-capture   (Track F)
       ├─ rdr/multi-class ── rdr/general-fixpoint       (Track G)
       └─ eql/truth-unification                          (Track T)
 F + G ── rdr/concept-trees                       (Wave 2)
-Wave2 ─┬─ rdr/oo-definitions                     (Wave 3)
-       └─ rdr/justifications  (also needs T)     (Wave 3)
+Wave2 ─┬─ rdr/oo-definitions ──┐                 (Wave 3)
+       └─ rdr/justifications ──┴─ rdr/architecture-brief   (Wave Final)
+          (also needs T)
 ```
 
 ## 4. Standing conventions for every session in this programme
@@ -355,3 +363,32 @@ for a design-time review when each PR is picked up:
   user-provided default conclusion) and conclusion provenance (rule vs default vs
   expert vs unset), coordinating with Wave-3 JTMS justifications; unresolved cases
   stored for later expert review.
+
+## 7. Addendum (2026-07-24) — `rdr-architecture-brief` repositioned to Wave Final
+
+A session dispatched to investigate whether PR #75 (`rdr/architecture-brief`) was
+still needed — since `plan.yaml` already tracks it as the `S3-docs` item — checked
+with the plan owner instead of assuming. The owner's call: the architecture brief
+reads as a description of a *finished* system, so landing it mid-refactor (as a
+Wave-0 "trivial, independent" doc PR, the original S3 framing) was the wrong
+sequencing — it should be the *last* PR, once the engine it describes is actually
+stable.
+
+Applied directly (authorized by the plan owner in-session, same convention as the
+2026-07-23 D-core-engine split above):
+
+- New wave `wave-final` + track `docs-final`, replacing `S3-docs` (removed —
+  nothing else used it).
+- `rdr-architecture-brief` item: `track` → `docs-final`, `status` → `deferred`,
+  `depends_on` → `[rdr-oo-definitions, rdr-justifications]` (Wave 3's two tips, a
+  best-guess proxy for "the engine is stable" — revisit the exact edge when this
+  item is next picked up), `pr` → `null`.
+- **PR #75 closed, not merged.** Its branch `rdr/architecture-brief` is kept
+  as-is (not deleted) so the already-refreshed content (the post-split
+  `krrood/src/krrood/entity_query_language/rdr/` repo-mapping table, the
+  `rdr/serialization.py` auto-serialization claim, the de-`eql_rdr`'d
+  mentions) doesn't need re-doing when this item is eventually picked back up
+  — only a re-verify against whatever the engine looks like by then.
+- Flagged on the tracking issue (#94) per the structural-change convention,
+  since this session isn't the plan's designated steward session even though
+  the owner authorized the edit directly.

@@ -21,6 +21,8 @@ waves:
   name: Wave 3 — OO integration + TMS
 - id: expert-framework
   name: Expert framework — capability-declaring experts + collaboration
+- id: wave-final
+  name: Wave Final — land once the RDR engine is stable
 tracks:
 - id: S0-steward
   name: Steward — the split-PR stack
@@ -34,9 +36,6 @@ tracks:
   wave: wave-0
 - id: S2-d-deco
   name: D-deco — @rdr decorator + file store
-  wave: wave-0
-- id: S3-docs
-  name: Docs — re-land the architecture brief
   wave: wave-0
 - id: oo-prototypes
   name: OO-track prototypes (stale bases, harvested by Wave 3)
@@ -74,6 +73,9 @@ tracks:
 - id: engine-runtime
   name: Engine runtime behaviour (no-fire handling, defaults, provenance)
   wave: wave-1
+- id: docs-final
+  name: Docs — land the architecture brief once the engine is stable
+  wave: wave-final
 items:
 - id: query-class-refactor
   title: 'EQL query refactor: spec/product lifecycle, subquery caching, result-transformer pipeline'
@@ -281,12 +283,18 @@ items:
 - id: rdr-architecture-brief
   title: Re-land RDR architecture brief and its bibliography as a docs-only page
   branch: rdr/architecture-brief
-  pr: 75
-  track: S3-docs
-  depends_on: []
-  status: in_progress
-  notes: 'Re-lands closed PR #20''s content. CI green, mergeable clean, awaiting review as of the last
-    steward restack check-in.'
+  pr: null
+  track: docs-final
+  depends_on:
+  - rdr-oo-definitions
+  - rdr-justifications
+  status: deferred
+  notes: 'Repositioned 2026-07-24 from S3-docs/wave-0 to the final wave: the doc describes the
+    architecture as a finished whole, so it reads better landed once the engine is actually stable
+    (Wave 3 done) rather than mid-refactor. PR #75 (which re-landed closed PR #20''s content; CI
+    was green, mergeable clean) was closed for now; branch rdr/architecture-brief is kept so the
+    content can be re-landed without redoing the work. depends_on is a best-guess placeholder for
+    "engine stable" (Wave 3''s two tips) — revisit the exact edge when this item is picked up.'
 - id: rdr-oo-recognition
   title: 'OO recognition layer: candidate generators + definitions'
   branch: rdr/oo-recognition
