@@ -1,13 +1,23 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status: pushed (4 commits), PR #88 marked **ready for review** by the developer (no longer draft) —
-base still `claude/eql-verbalization-operand-naming-n0gb95` (P2), merges in P1 (#86) too. Subscribed
-to activity. Review round 1 (3 comments) fully handled; review round 2 (1 comment, design question)
-fixed and resolved too; review round 3 (1 comment, test quality) fixed and resolved too. Developer's
-answer on the base/stacking question (round 1's general comment) is still pending, but marking it
-ready-for-review may itself be the answer (proceeding with current stacking) -- not assumed, just
-noted. CI green so far (16/18 checks passed, 2 still running, none failed) at last check. Hourly
-check-in loop active.
+Status (2026-07-24, after a ~5 day gap): pushed (11 commits total), PR #88 ready for review (not
+draft), **base retargeted to `main`** now that #86 (P1) and #87 (P2) both merged there -- diff is
+now genuinely just P3's own work (7 files, +733/-72), `mergeable_state: clean`. Subscribed to
+activity. All 5 review rounds so far resolved (oxford_comma bug, overrides-on-first_order_form
+design flaw, override-test-quality gap, plus the original 3-comment round). Description and a
+fresh issue comment updated to reflect the rebase. Hourly check-in loop active; PR still not
+merged/closed, so subscription continues.
+
+### 2026-07-24 rebase (see the roadmap section above for the full account)
+`main` had ~5 days of substantial unrelated activity by the time this session resumed, including
+P2's own continued review (a `Distinguisher` ABC refactor, `GrammarMetadata` moved to
+`krrood.entity_query_language.verbalization.grammar_metadata`) and unrelated work that moved
+`surface_verification.py` to `krrood.entity_query_language.testing.surface_verification`. Two CI
+checks failed on the stale `GrammarMetadata` import path; fixed both occurrences, confirmed the
+`Distinguisher` refactor doesn't overlap with P3's own changes (verified via a disposable
+`git worktree` trial merge before touching the real branch), then merged `main` in for real (3
+mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of the moved
+`surface_verification` module, and reran the full suite (2012 passed) before pushing.
 
 ## What's done
 - Merged P1 into the P3 branch (one conflict, in `verbalization_surfaces.py`'s import block —
