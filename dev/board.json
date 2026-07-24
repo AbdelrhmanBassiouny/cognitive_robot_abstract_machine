@@ -1,0 +1,235 @@
+{
+  "pull_requests": [
+    {
+      "number": 14,
+      "head": "claude/performatives-clean",
+      "base": "claude/split-performatives-prs-xbluus",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 15,
+      "head": "claude/eql-performatives-unify",
+      "base": "claude/performatives-clean",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 21,
+      "head": "rdr/oo-recognition",
+      "base": "rdr/oo-plan",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 22,
+      "head": "rdr/backend-unification",
+      "base": "rdr/oo-recognition",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 33,
+      "head": "eql-symbolic-function-sdt",
+      "base": "main",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 34,
+      "head": "eql-symbolic-function-coraplex-experiments",
+      "base": "eql-symbolic-function-sdt",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 35,
+      "head": "eql-symbolic-function-operand-view",
+      "base": "eql-symbolic-function-coraplex-experiments",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 36,
+      "head": "eql-symbolic-function-remove-decorator",
+      "base": "eql-symbolic-function-operand-view",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 41,
+      "head": "rdr-backward-inference",
+      "base": "ripple-down-rules-refactor",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 53,
+      "head": "ripple-down-rules-refactor",
+      "base": "code-generation-extract",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 54,
+      "head": "claude/split-performatives-prs-xbluus",
+      "base": "claude/split-performatives-prs-xbluus-agreement",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 55,
+      "head": "claude/split-performatives-prs-xbluus-agreement",
+      "base": "main",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 63,
+      "head": "D-core-aid",
+      "base": "rdr-backward-inference",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 64,
+      "head": "D-core-underspecified",
+      "base": "D-core-aid",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 65,
+      "head": "D-core-corner-case",
+      "base": "D-core-underspecified",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 66,
+      "head": "D-core-serialization",
+      "base": "D-core-corner-case",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 67,
+      "head": "D-core-support",
+      "base": "D-core-serialization",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 68,
+      "head": "D-core-engine",
+      "base": "D-core-support",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 76,
+      "head": "D-ui",
+      "base": "D-ui-rendering",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 77,
+      "head": "D-deco",
+      "base": "D-store",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 78,
+      "head": "D-ui-splice-fix",
+      "base": "D-core-engine",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 79,
+      "head": "D-ui-rendering",
+      "base": "D-ui-splice-fix",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 80,
+      "head": "D-store",
+      "base": "D-ui",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 81,
+      "head": "claude/rdr-why-answer-6fnw2o",
+      "base": "D-core-engine",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 82,
+      "head": "eql/causal-verbalization",
+      "base": "claude/rdr-why-answer-6fnw2o",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 84,
+      "head": "rdr/why-query-surface",
+      "base": "eql/causal-verbalization",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 85,
+      "head": "rdr/decision-queries",
+      "base": "eql/causal-verbalization",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 88,
+      "head": "claude/eql-verbalization-p3-albw76",
+      "base": "main",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 89,
+      "head": "conditions-root-drop-dead-parent-recovery",
+      "base": "main",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 90,
+      "head": "claude/entity-query-parent-props-w789od",
+      "base": "main",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 91,
+      "head": "claude/plan-dashboard-system-sxnazc",
+      "base": "main",
+      "draft": false,
+      "labels": []
+    },
+    {
+      "number": 92,
+      "head": "claude/dag-parent-root-and-querygraph-followups",
+      "base": "main",
+      "draft": true,
+      "labels": []
+    },
+    {
+      "number": 97,
+      "head": "claude/verbalization-surfaces-autogen-sh2saj",
+      "base": "main",
+      "draft": true,
+      "labels": []
+    }
+  ]
+}
