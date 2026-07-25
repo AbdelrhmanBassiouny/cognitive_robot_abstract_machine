@@ -1,7 +1,7 @@
-# Plan-dashboard system — status: PR #91 open (draft, base main), 3 review rounds addressed
-# (62222c34, 9d4f7c6e, 25e9f3cc). 47 of 49 inline threads replied-and-resolved; 2 left open
-# (template-logic-design, proceeded without confirmation - see round 3 entry). Subscribed to
-# all activity.
+# Plan-dashboard system — status: PR #91 open (draft, base main), 4 review rounds addressed
+# (62222c34, 9d4f7c6e, 25e9f3cc, e258ac9a/28cadbf9). 48 of 50 inline threads replied-and-resolved;
+# 2 left open (template-logic-design, proceeded without confirmation - see round 3 entry).
+# Subscribed to all activity.
 
 ## Review round (2026-07-25, 26 new threads on 023a63ec + a top-level "handle my feedback,
 ## clean up the code" review) — DONE, pushed as 62222c34
@@ -173,6 +173,31 @@ line differently." PR description updated with a "Review round 3" section; PR dr
 reconfirmed (was already draft, explicitly re-set via update_pull_request just in case). Pushed as
 25e9f3cc ("Third review round: move template logic to Python, require confirmation before
 structural plan edits").
+
+## Review round 4 (2026-07-25, 1 new thread on 25e9f3cc) — DONE, pushed as e258ac9a + 28cadbf9
+Reviewer's follow-up on round 3's repo->repository rename: the plan.yaml wire schema itself still
+had the abbreviations, only Python/template identifiers had been fixed. Renamed the schema's own
+field names: `pr` -> `pull_request_number`, `repo` -> `repository`, `default_repo` ->
+`default_repository`. `build_dashboard.py`'s `Item.from_mapping`/`Plan.from_mapping` now read the
+spelled-out keys; both SKILL.md docs describing the schema and the test fixture updated to match
+(e258ac9a, on the main PR branch).
+
+Since plan.yaml's schema doc (`plans/README.md`) and the two real plans (`rdr-refactor`,
+`dag-facade-hardening`) live on `claude/personal-notes`, migrated those too via a disposable
+worktree (same pattern save-plan.sh uses) so they keep validating: schema doc's example block and
+prose, all `pr:`/`default_repo:` occurrences in both plan.yaml files (45 in rdr-refactor, 5 in
+dag-facade-hardening) - pushed to personal-notes as 9832ec51. Also updated the "Proposing structural
+changes" section there to require asking the user in-session first, matching round 3's
+session-start.sh convention, which plans/README.md hadn't caught up to yet.
+
+While validating both real plans end-to-end against the renamed schema (not just eyeballing the
+sed), found a genuine pre-existing bug unrelated to the rename: `Wave` was missing the
+`description` field the schema has always documented (`Track` already had it) - `Plan.from_mapping`
+crashed on `dag-facade-hardening/plan.yaml`, which actually uses a wave description, while
+`rdr-refactor` happened not to and so never caught it. Fixed: added the field, rendered it under the
+wave eyebrow in dashboard.html (28cadbf9, main PR branch). Confirmed both real plans validate and
+render cleanly end-to-end after all of the above. Test suite grew 60 -> 62. Thread replied-and-
+resolved; PR description updated with a "Review round 4" section.
 
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
