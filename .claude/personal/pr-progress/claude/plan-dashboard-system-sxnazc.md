@@ -1,5 +1,7 @@
-# Plan-dashboard system — status: PR #91 open (draft, base main), 2 review rounds addressed
-# (62222c34, 9d4f7c6e), all 42 inline threads replied-and-resolved, subscribed to all activity.
+# Plan-dashboard system — status: PR #91 open (draft, base main), 3 review rounds addressed
+# (62222c34, 9d4f7c6e, 25e9f3cc). 47 of 49 inline threads replied-and-resolved; 2 left open
+# (template-logic-design, proceeded without confirmation - see round 3 entry). Subscribed to
+# all activity.
 
 ## Review round (2026-07-25, 26 new threads on 023a63ec + a top-level "handle my feedback,
 ## clean up the code" review) — DONE, pushed as 62222c34
@@ -120,6 +122,57 @@ review round: Jinja2/markdown libraries, ValidationProblem hierarchy"). PR descr
 to add a "Review round 2" section and to fix the now-stale "single-writer/steward" coordination
 paragraph in the Summary. PR was already draft (round 1 left it that way), stayed draft - no
 new push-then-forgot-to-redraft gap this round since it was draft the whole time.
+
+## Review round 3 (2026-07-25, 7 new threads on 9d4f7c6e) — DONE, pushed as 25e9f3cc
+Two reviewer comments pushed back hard on round 2's Jinja2 migration: the templates had ended up
+with computed logic in them (ternaries, arithmetic, dict lookups, a `| format` filter) rather than
+being pure placeholders, which is exactly the anti-pattern "templates are placeholders, logic is in
+Python" is meant to prevent. One of the two (`index.html`) explicitly asked to discuss the cleanest
+options before acting; the other (`dashboard.html`) stated the preference directly. Tried
+AskUserQuestion to check in before implementing (matching this plan's own "ask before structural
+changes" convention in spirit) but the question was interrupted/dismissed four times in a row with
+"continue" - read as a signal to proceed with the sensible engineering call rather than keep
+blocking, per the auto-mode guidance to make a reasonable call and let the user redirect if needed.
+Proceeded, but left both threads open (not resolved) and said so explicitly in the replies, since
+this was a real design ask that didn't get an actual confirmation - genuinely different from the
+other 5 threads in this round, which were unambiguous asks or answerable questions and got resolved.
+
+Design landed on: precompute every *computed* display value in Python (CSS classes, URLs, indent
+styles, dependency-chip text, percentage labels), keep `{% for %}`/`{% if %}` in the templates only
+for iteration and block-presence decisions (has a PR, has notes, has dependencies, ...) - that's
+the templating engine's own vocabulary in any engine, including logic-less ones like Mustache,
+not "computed logic". Concretely: `Item.status_and_drift_css_class`, `Item.pull_request_url`,
+`Item.dependency_chips` (a new `DependencyChip` dataclass replacing the old dict-lookup-and-ternary
+macro), `StackedItem.indent_style`, `TrackSection.empty_state_message`, `Plan.repository_url`,
+`PlanSummary.css_class`, `PlanSummary.completion_percentage_label`. `item_card`'s macro signature
+shrank from `(stacked, items_by_identifier, default_repo)` to just `(stacked)` since it no longer
+needs any lookup context. `Item.notes` is now stripped once in `from_mapping` instead of `.strip()`
+at render time (moving that one bit of string-processing logic out of the template too). Added
+direct unit tests for the new properties (not just indirectly through full-page rendering) - test
+count 53 -> 60, all still green after an end-to-end manual render check of both dashboard.html and
+index.html to make sure the design change didn't silently break anything the assertions missed.
+
+Other 5 threads, all straightforward:
+- "repo" renamed to "repository" throughout Python/template identifiers (`Item.repo` ->
+  `Item.repository`, `Plan.default_repo` -> `Plan.default_repository`, template vars/macro params
+  too) - wire YAML keys (`repo`/`default_repo`) unchanged, same precedent as the earlier `pr` ->
+  `pull_request_number` rename.
+- session-start.sh/hooks/README.md: a session must now ask the user in-session (e.g.
+  AskUserQuestion) before making a structural plan.yaml edit, not just comment on the tracking
+  issue after the fact - the reviewer's explicit follow-up on last round's coordination-model
+  decision.
+- render_common.py: added a worked example comment (h1->h4, h5->h6-capped) above
+  `_HEADING_TAG_PATTERN`, and docstrings under `_HEADING_LEVEL_SHIFT`/`_MAXIMUM_HEADING_LEVEL`.
+- Answered (no code change, resolved): `UnknownWave.wave: Any` is deliberate, mirroring the other
+  `ValidationProblem` fields that capture untrusted, not-yet-validated raw YAML - narrowing it would
+  just move the type error downstream instead of fixing anything.
+
+**Result**: 5 of 7 threads replied-and-resolved; the 2 template-logic-design threads replied but
+left open, flagged explicitly as "proceeded without your confirmation, tell me if you'd draw the
+line differently." PR description updated with a "Review round 3" section; PR draft state
+reconfirmed (was already draft, explicitly re-set via update_pull_request just in case). Pushed as
+25e9f3cc ("Third review round: move template logic to Python, require confirmation before
+structural plan edits").
 
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
