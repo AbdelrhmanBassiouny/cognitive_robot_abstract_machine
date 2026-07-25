@@ -126,24 +126,30 @@ requires a live Claude session, since only a session can call the
 `Artifact` tool). `save-plan.sh` prints a reminder to run
 `/plan-dashboard <plan-id>` afterward to actually republish it.
 
-## Proposing structural changes (single-writer via a tracking issue)
+## Proposing structural changes (broadcast via a tracking issue)
 
 Editing `status`, `notes`, or `blockers` on an item you're actively working is a normal edit — do it
 directly, as above. **Structural** changes (adding a wave, deferring a track, splitting an item,
 reprioritizing) are different: they're judgment calls about the whole plan, not just the one item a
-session happens to be sitting on, so they shouldn't come from every session that touches the plan
-independently pushing its own reorganization.
+session happens to be sitting on — but there is no designated steward gatekeeping them. Any session
+can make one directly.
 
 If a plan has a `tracking_issue` (its number, in the repo named by `default_repo`), any session that
-isn't explicitly the plan's designated planning/steward session, and identifies a structural change
-worth making, **comments on that issue proposing it** instead of editing `plan.yaml` directly — it's
-a coordination mailbox, not a work item, and is subscribable exactly like a PR (confirmed: GitHub
-issue-comment subscription works identically whether the number is an issue or a PR). The designated
-planning session reads new comments, applies the ones it agrees with, and replies-and-resolves each
-thread once applied. This mirrors the S0-steward pattern already used for real in `rdr-refactor`
-(worker sessions flag things to the steward rather than touching shared coordination themselves).
-`/plan-create` creates the tracking issue (titled `[plan-tracking] <plan-id>`) when bootstrapping a
-new plan and records its number as `tracking_issue` in `plan.yaml`.
+makes a structural change **also comments on that issue describing it**, in addition to editing
+`plan.yaml` directly — it's a coordination mailbox, not a work item, and is subscribable exactly like
+a PR (confirmed: GitHub issue-comment subscription works identically whether the number is an issue
+or a PR). This is not a proposal awaiting approval from a gatekeeping session: the user reviews
+structural changes there themselves, and the comment is the shared record every other session working
+the plan can check. `/plan-create` creates the tracking issue (titled `[plan-tracking] <plan-id>`)
+when bootstrapping a new plan and records its number as `tracking_issue` in `plan.yaml`.
+
+**Real-time awareness for sessions actively working an item.** A session working an item in a plan
+that has a `tracking_issue` should also subscribe to that issue (in addition to its own item's PR) —
+not just the session making a structural change. Since every structural change is posted there,
+subscribing turns the tracking issue into a broadcast channel: a change lands in every actively
+subscribed session's conversation as it happens, not only picked up by `session-start.sh`'s
+auto-discovery on that session's *next* fresh start. `session-start.sh`'s written header reminds a
+session of this when it auto-discovers the plan.
 
 **Fallback when a repo has Issues disabled**: some repos (this one did, briefly) disable Issues
 entirely — GitHub returns a `410` on creation attempts. When that happens, `/plan-create` falls back
