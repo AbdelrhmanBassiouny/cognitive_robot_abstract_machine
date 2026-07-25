@@ -10,7 +10,7 @@ description: >
   root-cause hardening they deferred: make the structural accessors hard to
   misuse, fix the remaining QuantifiedConditional cache-staleness bug, and add
   a systematic audit plus a guard test.
-default_repo: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 96
 
 waves:
@@ -40,7 +40,7 @@ items:
   - id: pr-90-is-condition-participant
     title: "Fix is_condition_participant misclassifying nodes shared across queries"
     branch: claude/entity-query-parent-props-w789od
-    pr: 90
+    pull_request_number: 90
     track: leak-fixes
     depends_on: []
     status: in_progress
@@ -53,7 +53,7 @@ items:
   - id: pr-89-drop-dead-parent-recovery
     title: "Drop the dead _last_parent_of_type_ conditions-root recovery"
     branch: conditions-root-drop-dead-parent-recovery
-    pr: 89
+    pull_request_number: 89
     track: leak-fixes
     depends_on: []
     status: in_progress
@@ -65,7 +65,7 @@ items:
   - id: pr-92-shared-node-followups
     title: "Fix two more shared-node bugs found while following up on #90"
     branch: claude/dag-parent-root-and-querygraph-followups
-    pr: 92
+    pull_request_number: 92
     track: leak-fixes
     depends_on: [pr-90-is-condition-participant]
     status: in_progress
@@ -79,7 +79,7 @@ items:
   - id: quantified-conditional-and-audit
     title: "Fix QuantifiedConditional cache staleness + systematic shared-node audit"
     branch: null
-    pr: null
+    pull_request_number: null
     track: bugs-and-audit
     depends_on: [pr-89-drop-dead-parent-recovery, pr-90-is-condition-participant, pr-92-shared-node-followups]
     status: not_started
@@ -96,7 +96,7 @@ items:
   - id: facade-rename-and-guard
     title: "Rename structural accessors + reusable ownership accessor + guard test"
     branch: null
-    pr: null
+    pull_request_number: null
     track: facade-rename
     depends_on: [quantified-conditional-and-audit]
     status: not_started

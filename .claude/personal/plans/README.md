@@ -32,8 +32,8 @@ id: <plan-id>                  # matches the directory name
 title: "Human-readable title"
 description: >
   One short paragraph. Long-form narrative goes in roadmap.md, not here.
-default_repo: <owner>/<repo>   # used by every item unless it sets its own `repo`
-                                # (roadmap.md is a fixed sibling filename, not configurable)
+default_repository: <owner>/<repo>   # used by every item unless it sets its own `repository`
+                                       # (roadmap.md is a fixed sibling filename, not configurable)
 tracking_issue: <int, optional> # see "Proposing structural changes" below
 
 waves:                         # ordered phases, purely organizational
@@ -57,8 +57,8 @@ items:                         # the actual trackable units of work — flat,
                                  # for why those two can differ).
     title: "What this item does"
     branch: <branch-name>       # the actual git branch, once one exists
-    repo: null                  # optional, overrides default_repo
-    pr: <int or null>           # the real GitHub PR number, once one exists
+    repository: null            # optional, overrides default_repository
+    pull_request_number: <int or null>  # the real GitHub PR number, once one exists
     track: <track-id>
     depends_on: [<item-id>, ...]  # structural/stacking dependency, by item id
     status: not_started | in_progress | blocked | deferred | done
@@ -132,11 +132,14 @@ Editing `status`, `notes`, or `blockers` on an item you're actively working is a
 directly, as above. **Structural** changes (adding a wave, deferring a track, splitting an item,
 reprioritizing) are different: they're judgment calls about the whole plan, not just the one item a
 session happens to be sitting on — but there is no designated steward gatekeeping them. Any session
-can make one directly.
+can make one directly, but only after asking the user in the session itself (e.g. via
+`AskUserQuestion`) — a structural change is the user's call, not something to infer and apply
+unilaterally just because editing the manifest directly is technically allowed.
 
-If a plan has a `tracking_issue` (its number, in the repo named by `default_repo`), any session that
-makes a structural change **also comments on that issue describing it**, in addition to editing
-`plan.yaml` directly — it's a coordination mailbox, not a work item, and is subscribable exactly like
+Once confirmed, if a plan has a `tracking_issue` (its number, in the repository named by
+`default_repository`), the session **also comments on that issue describing the change**, in
+addition to editing `plan.yaml` directly — it's a coordination mailbox, not a work item, and is
+subscribable exactly like
 a PR (confirmed: GitHub issue-comment subscription works identically whether the number is an issue
 or a PR). This is not a proposal awaiting approval from a gatekeeping session: the user reviews
 structural changes there themselves, and the comment is the shared record every other session working

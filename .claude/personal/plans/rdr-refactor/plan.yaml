@@ -6,7 +6,7 @@ description: 'Programme to land the EQL-native RDR engine, the feature layer ("p
   the Why & Montessori explanation track that was prioritized alongside it.
 
   '
-default_repo: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 94
 waves:
 - id: wave-0
@@ -80,7 +80,7 @@ items:
 - id: query-class-refactor
   title: 'EQL query refactor: spec/product lifecycle, subquery caching, result-transformer pipeline'
   branch: query-class-refactor
-  pr: 5
+  pull_request_number: 5
   track: S0-steward
   depends_on: []
   status: done
@@ -88,7 +88,7 @@ items:
 - id: eql-core-prep
   title: EQL core semantics (foundation for the RDR engine)
   branch: eql-core-prep
-  pr: 28
+  pull_request_number: 28
   track: S0-steward
   depends_on:
   - query-class-refactor
@@ -97,7 +97,7 @@ items:
 - id: code-extraction
   title: Extract source-extraction utilities into krrood.code_generation
   branch: code-extraction
-  pr: 58
+  pull_request_number: 58
   track: S0-steward
   depends_on:
   - eql-core-prep
@@ -106,7 +106,7 @@ items:
 - id: code-generation-extract
   title: Extract code_generation package (generation half)
   branch: code-generation-extract
-  pr: 39
+  pull_request_number: 39
   track: S0-steward
   depends_on:
   - code-extraction
@@ -114,7 +114,7 @@ items:
 - id: ripple-down-rules-refactor
   title: ripple_down_rules refactor (reconciled to code_generation)
   branch: ripple-down-rules-refactor
-  pr: 53
+  pull_request_number: 53
   track: S0-steward
   depends_on:
   - code-generation-extract
@@ -123,7 +123,7 @@ items:
 - id: rdr-backward-inference
   title: 'RDR engine: backward inference + condition resolvers'
   branch: rdr-backward-inference
-  pr: 41
+  pull_request_number: 41
   track: S0-steward
   depends_on:
   - ripple-down-rules-refactor
@@ -134,7 +134,7 @@ items:
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
-  pr: 63
+  pull_request_number: 63
   track: S0-steward
   depends_on:
   - rdr-backward-inference
@@ -142,7 +142,7 @@ items:
 - id: D-core-underspecified
   title: 'RDR engine: underspecified-match adapter'
   branch: D-core-underspecified
-  pr: 64
+  pull_request_number: 64
   track: S0-steward
   depends_on:
   - D-core-aid
@@ -150,7 +150,7 @@ items:
 - id: D-core-corner-case
   title: 'RDR engine: corner-case provenance store'
   branch: D-core-corner-case
-  pr: 65
+  pull_request_number: 65
   track: S0-steward
   depends_on:
   - D-core-underspecified
@@ -158,7 +158,7 @@ items:
 - id: D-core-serialization
   title: 'RDR engine: rule-tree unparser (rdr_to_python)'
   branch: D-core-serialization
-  pr: 66
+  pull_request_number: 66
   track: S0-steward
   depends_on:
   - D-core-corner-case
@@ -166,7 +166,7 @@ items:
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
-  pr: 67
+  pull_request_number: 67
   track: S0-steward
   depends_on:
   - D-core-serialization
@@ -174,7 +174,7 @@ items:
 - id: D-core-engine
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-engine
-  pr: 68
+  pull_request_number: 68
   track: S0-steward
   depends_on:
   - D-core-support
@@ -184,7 +184,7 @@ items:
 - id: d-core-expert
   title: 'RDR engine: Expert policy split'
   branch: D-core-expert
-  pr: null
+  pull_request_number: null
   track: S0-steward
   depends_on:
   - D-core-support
@@ -194,7 +194,7 @@ items:
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
-  pr: null
+  pull_request_number: null
   track: S0-steward
   depends_on:
   - d-core-expert
@@ -204,7 +204,7 @@ items:
 - id: d-core-backend
   title: 'RDR engine: underspecified-query RDR backend'
   branch: D-core-backend
-  pr: null
+  pull_request_number: null
   track: S0-steward
   depends_on:
   - d-core-single-class
@@ -214,7 +214,7 @@ items:
 - id: rdr-engine-umbrella
   title: RDR/EQL engine umbrella (superseded by the split stack)
   branch: rdr-engine
-  pr: 38
+  pull_request_number: 38
   track: S0-steward
   depends_on:
   - eql-core-prep
@@ -223,7 +223,7 @@ items:
 - id: conditions-root-drop-dead-parent-recovery
   title: Drop the dead _last_parent_of_type_ conditions-root recovery
   branch: conditions-root-drop-dead-parent-recovery
-  pr: 89
+  pull_request_number: 89
   track: S0-steward
   depends_on: []
   status: in_progress
@@ -236,7 +236,7 @@ items:
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix
-  pr: 78
+  pull_request_number: 78
   track: S1-d-ui
   depends_on:
   - d-core-backend
@@ -247,7 +247,7 @@ items:
 - id: D-ui-rendering
   title: 'RDR engine: case-table rendering + serialization test coverage'
   branch: D-ui-rendering
-  pr: 79
+  pull_request_number: 79
   track: S1-d-ui
   depends_on:
   - D-ui-splice-fix
@@ -256,7 +256,7 @@ items:
 - id: D-ui
   title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
   branch: D-ui
-  pr: 76
+  pull_request_number: 76
   track: S1-d-ui
   depends_on:
   - D-ui-rendering
@@ -265,7 +265,7 @@ items:
 - id: D-store
   title: 'D-store: RDRFileStore for the @rdr model-file lifecycle'
   branch: D-store
-  pr: 80
+  pull_request_number: 80
   track: S2-d-deco
   depends_on:
   - D-ui
@@ -274,7 +274,7 @@ items:
 - id: D-deco
   title: 'D-deco: @rdr decorator + RDR file store (final rdr-engine slice)'
   branch: D-deco
-  pr: 77
+  pull_request_number: 77
   track: S2-d-deco
   depends_on:
   - D-store
@@ -283,7 +283,7 @@ items:
 - id: rdr-architecture-brief
   title: Re-land RDR architecture brief and its bibliography as a docs-only page
   branch: rdr/architecture-brief
-  pr: null
+  pull_request_number: null
   track: docs-final
   depends_on:
   - rdr-oo-definitions
@@ -298,7 +298,7 @@ items:
 - id: rdr-oo-recognition
   title: 'OO recognition layer: candidate generators + definitions'
   branch: rdr/oo-recognition
-  pr: 21
+  pull_request_number: 21
   track: oo-prototypes
   depends_on: []
   status: deferred
@@ -307,7 +307,7 @@ items:
 - id: rdr-backend-unification
   title: Unify recognition with the query/reasoning backend frontend
   branch: rdr/backend-unification
-  pr: 22
+  pull_request_number: 22
   track: oo-prototypes
   depends_on:
   - rdr-oo-recognition
@@ -316,7 +316,7 @@ items:
 - id: rdr-why-answer
   title: 'Why-question core: WhyQuestion/WhyAnswer, EQLSingleClassRDR.why(case)'
   branch: claude/rdr-why-answer-6fnw2o
-  pr: 81
+  pull_request_number: 81
   track: why-track
   depends_on:
   - d-core-backend
@@ -330,7 +330,7 @@ items:
 - id: eql-causal-verbalization
   title: '"because" vocabulary + causal grammar assembler, WhyAnswer.verbalize()'
   branch: eql/causal-verbalization
-  pr: 82
+  pull_request_number: 82
   track: why-track
   depends_on:
   - rdr-why-answer
@@ -339,7 +339,7 @@ items:
 - id: eql-attribute-predicate-verbalization
   title: Verbalize boolean-attribute conditions as declarable predicates
   branch: eql/attribute-predicate-verbalization
-  pr: 83
+  pull_request_number: 83
   track: why-track
   depends_on: []
   status: in_progress
@@ -353,7 +353,7 @@ items:
 - id: rdr-why-query-surface
   title: why(...) EQL factory + docs + bibliography
   branch: rdr/why-query-surface
-  pr: 84
+  pull_request_number: 84
   track: why-track
   depends_on:
   - eql-causal-verbalization
@@ -363,7 +363,7 @@ items:
 - id: rdr-decision-queries
   title: Backend explanation semantics + the decision-query pattern
   branch: rdr/decision-queries
-  pr: 85
+  pull_request_number: 85
   track: why-track
   depends_on:
   - eql-causal-verbalization
@@ -374,7 +374,7 @@ items:
 - id: montessori-choice-policies
   title: 'Demo policy wiring: pick/hole policy RDRs as decision queries'
   branch: montessori/choice-policies
-  pr: null
+  pull_request_number: null
   track: montessori-track
   depends_on:
   - rdr-decision-queries
@@ -386,7 +386,7 @@ items:
 - id: montessori-why-demo
   title: Narrated demo loop, headless CI mode, README
   branch: montessori/why-demo
-  pr: null
+  pull_request_number: null
   track: montessori-track
   depends_on:
   - montessori-choice-policies
@@ -396,7 +396,7 @@ items:
 - id: rdr-feature-registry
   title: Feature layer core, the "poor man's Rete"
   branch: rdr/feature-registry
-  pr: null
+  pull_request_number: null
   track: track-f
   depends_on:
   - d-core-backend
@@ -407,7 +407,7 @@ items:
 - id: rdr-feature-capture
   title: KA-time feature capture
   branch: rdr/feature-capture
-  pr: null
+  pull_request_number: null
   track: track-f
   depends_on:
   - rdr-feature-registry
@@ -416,7 +416,7 @@ items:
 - id: rdr-multi-class
   title: 'MCRDR port: multi-valued attributes'
   branch: rdr/multi-class
-  pr: null
+  pull_request_number: null
   track: track-g
   depends_on:
   - d-core-backend
@@ -427,7 +427,7 @@ items:
 - id: rdr-general-fixpoint
   title: GRDR naive fixpoint engine
   branch: rdr/general-fixpoint
-  pr: null
+  pull_request_number: null
   track: track-g
   depends_on:
   - rdr-multi-class
@@ -436,7 +436,7 @@ items:
 - id: eql-truth-unification
   title: Unified OperationResult truth
   branch: eql/truth-unification
-  pr: null
+  pull_request_number: null
   track: track-t
   depends_on:
   - eql-core-prep
@@ -450,7 +450,7 @@ items:
 - id: rdr-concept-trees
   title: NRDR concept layer
   branch: rdr/concept-trees
-  pr: null
+  pull_request_number: null
   track: concept-trees-track
   depends_on:
   - rdr-feature-registry
@@ -466,7 +466,7 @@ items:
 - id: rdr-oo-definitions
   title: 'OO integration: definitions, candidate generators, taxonomy discriminators'
   branch: rdr/oo-definitions
-  pr: null
+  pull_request_number: null
   track: oo-definitions-track
   depends_on:
   - rdr-concept-trees
@@ -477,7 +477,7 @@ items:
 - id: rdr-justifications
   title: TMS (JTMS) justification recording
   branch: rdr/justifications
-  pr: null
+  pull_request_number: null
   track: justifications-track
   depends_on:
   - rdr-concept-trees
@@ -491,7 +491,7 @@ items:
 - id: expert-capability-guards
   title: 'Capability-guarded Expert: EQL eligibility guards, resolver-as-expert'
   branch: null
-  pr: null
+  pull_request_number: null
   track: expert-capabilities
   depends_on:
   - d-core-single-class
@@ -503,7 +503,7 @@ items:
 - id: expert-ensembles
   title: 'Cooperating experts: Hint mode as composition, multi-expert ensembles'
   branch: null
-  pr: null
+  pull_request_number: null
   track: expert-capabilities
   depends_on:
   - expert-capability-guards
@@ -514,7 +514,7 @@ items:
 - id: expert-capability-verbalization
   title: 'Verbalize expert capabilities: why-can / why-cannot handle a situation'
   branch: null
-  pr: null
+  pull_request_number: null
   track: expert-capabilities
   depends_on:
   - expert-capability-guards
@@ -526,7 +526,7 @@ items:
 - id: explanation-rendering-by-audience
   title: 'Explanation rendering by recipient: NL for humans, EQL for programs'
   branch: null
-  pr: null
+  pull_request_number: null
   track: comms-track
   depends_on:
   - eql-causal-verbalization
@@ -538,7 +538,7 @@ items:
 - id: no-rule-fired-resolution
   title: 'No-rule-fired handling: warn / ask-expert / default-conclusion modes + provenance'
   branch: null
-  pr: null
+  pull_request_number: null
   track: engine-runtime
   depends_on:
   - d-core-single-class
