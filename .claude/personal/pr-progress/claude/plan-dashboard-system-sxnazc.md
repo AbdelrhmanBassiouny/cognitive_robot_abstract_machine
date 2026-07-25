@@ -1,13 +1,23 @@
 # Plan-dashboard system — status: PR #91 open (draft, base main), subscribed to all activity.
 
 ## Review round (2026-07-25, 26 new threads on 023a63ec + a top-level "handle my feedback,
-## clean up the code" review) — IN PROGRESS
+## clean up the code" review) — DONE, pushed as 62222c34
 Session dispatched to branch `claude/pr-91-review-feedback-aqdu0o` (the assigned task branch),
 but that branch didn't exist and isn't PR #91's head (`claude/plan-dashboard-system-sxnazc` is) -
 confirmed with the user via AskUserQuestion (same situation as PR #87's precedent) that fixes
-should go directly on the real PR head branch instead. Working there.
+should go directly on the real PR head branch instead. Worked there.
 
-Plan (tracked as TaskCreate tasks #1-#11 this session):
+Also found and fixed a real environment problem while testing save-plan.sh: this sandbox's
+ambient git identity was `Claude <noreply@anthropic.com>`, violating AGENTS.md's Version
+Control policy - some earlier commits on this PR/branch (and the disposable self-test commit
+this session made before catching it) carry that identity. Fixed going forward by exporting
+GIT_AUTHOR_NAME/EMAIL + GIT_COMMITTER_NAME/EMAIL inline in the same Bash call as every commit
+(shell state doesn't persist between tool calls, so this must be repeated each time, not set
+once) rather than touching git config. Cleaned up the disposable test commit with a
+correctly-authored revert. Flagged to the user in the summary PR comment that older commits may
+still need cleanup if they care.
+
+Plan (tracked as TaskCreate tasks #1-#11 this session, all completed):
 1. Remove remaining `rdr-refactor`/`rdr-roadmap.md` mentions: hooks/README.md:216,
    plan-create/SKILL.md:183 (the "I still see rdr-refactor" follow-up on an already-"fixed" thread -
    a real miss, only `SKILL.md`'s body text had been swept before, not the historical-note asides).
@@ -37,6 +47,17 @@ Plan (tracked as TaskCreate tasks #1-#11 this session):
     globally" instruction on the top-level review.
 11. Reply-and-resolve every thread once genuinely addressed; leave open (reply only) any thread
     that's a question rather than an actionable ask, per the personal convention.
+
+**Result**: all 11 tasks done, pushed as commit 62222c34 (16 files, +2021/-561, new
+`tests/` dir with 50 pytest tests). 25 of 26 inline threads replied-and-resolved; 1 left
+open (reply only) - the "should non-steward sessions edit the manifest directly + comment"
+design question, since it's a real coordination-model choice for the user to make, not
+something to redecide unilaterally. Also replied to the top-level "handle my feedback, clean
+up the code" review with a summary comment. PR description updated to describe this round;
+PR was already draft, stayed draft. `subscribe_pr_activity` call this session failed
+("Could not subscribe to this PR") - unclear if another mechanism already covers it or the
+session's subscription silently didn't take; worth a manual check if events don't show up
+on a future push.
 
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
