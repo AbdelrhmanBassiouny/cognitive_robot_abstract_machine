@@ -1,9 +1,11 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-24, after a ~5 day gap): pushed (11 commits total), PR #88 ready for review (not
-draft), **base retargeted to `main`** now that #86 (P1) and #87 (P2) both merged there -- diff is
-now genuinely just P3's own work (7 files, +733/-72), `mergeable_state: clean`. Subscribed to
-activity. All 5 review rounds so far resolved (oxford_comma bug, overrides-on-first_order_form
+Status (2026-07-24, after a ~5 day gap): pushed (11 commits total). PR #88 was briefly ready for
+review, then the developer converted it back to **draft** themselves (not me -- per personal
+convention, never mark it ready again without being explicitly asked). Base retargeted to `main`
+now that #86 (P1) and #87 (P2) both merged there -- diff is now genuinely just P3's own work (7
+files, +733/-72), `mergeable_state: clean`. Subscribed to activity. All 5 review rounds so far
+resolved (oxford_comma bug, overrides-on-first_order_form
 design flaw, override-test-quality gap, plus the original 3-comment round). Description and a
 fresh issue comment updated to reflect the rebase. Hourly check-in loop active; PR still not
 merged/closed, so subscription continues.
