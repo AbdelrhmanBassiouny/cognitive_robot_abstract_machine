@@ -232,13 +232,12 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     `MAX_SET_MEMBERS` cap reused from `coordination.py` (a family above the cap falls back to
     naming the abstract type directly, confirmed with the developer). Confirmed with the
     developer (AskUserQuestion) rather than assumed.
-  - Divergence from decision 3's literal example: renders as *"a Body or Region"* (one shared
-    determiner over a bare disjunctive compound head) rather than *"a Body or a Region"*
-    (repeated article per alternative). Getting the repeated-article form would require growing
-    `NounPhrase` to support multiple independently-determined heads instead of one; the bare
-    compound reuses `NounPhrase`'s existing determiner/coreference/pronoun machinery completely
-    unchanged. Flagged explicitly in the PR description as a trade-off, not silently decided —
-    open to revisiting if a repeated article is wanted after all.
+  - Renders per decision 3's literal example, *"a Body or a Region"* — each alternative gets its
+    own repeated indefinite article. The PR originally shipped a bare-compound-head divergence
+    (*"a Body or Region"*, one shared determiner, reusing `NounPhrase` completely unchanged) to
+    avoid growing `NounPhrase`; review round 11 pushed back on that divergence and it was
+    reverted in favour of decision 3 as written — see that round's entry below for the
+    `NounPhrase.additional_heads` mechanism that replaced it.
   - `operand_head_noun`/`NounForm`/`ReferringExpressions` (previously `str`-only) now also thread
     `Tuple[type, ...]` alternatives alongside the plain noun text; `VariableRule.build`
     (`rules.py`) is the single chokepoint that builds the compound fragment (each alternative
@@ -291,6 +290,57 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     +733/-72, no more phantom P1/P2 content). Full `test/krrood_test/` suite green (2012 passed, 9
     skipped) apart from two pre-existing unrelated failures (`graphviz`/`dot` missing in this
     sandbox). black + docformatter applied throughout.
+  - **Review round 6** (2026-07-25, reconciliation question): asked whether the branch was still
+    reconciled with `main` and the `VerbalizationSurface` changes. Checked `git log` for commits on
+    `main` since the 2026-07-24 rebase touching `krrood/entity_query_language/verbalization/` or
+    `krrood/entity_query_language/testing/` — none (the ~78 newer commits are all unrelated
+    `semantic_digital_twin`/`ripple_down_rules`/mujoco/robocasa work). Replied confirming, not
+    resolved (informational, matches past practice for this kind of question).
+  - **Review round 7** (`_concrete_type_alternatives`/`operand_type_alternatives` returning
+    `Optional[Tuple[...]]`, 2 comments): "why not just return an empty tuple?" — both functions,
+    `NounForm.type_alternatives`, and `ReferringExpressions.type_alternatives_of` now use `()`
+    throughout instead of `None`/`Optional`; `_HeadNounGrouping.add`'s `type_alternatives` param
+    defaults to `()` too. Both threads reply-and-resolved.
+  - **Review round 8** (`disjunctive_type_head`'s manual `oxford_comma`/`Conjunctions.OR` call):
+    "isn't there a `DisjunctivePhrase` in parts of speech that does exactly this?" — yes; swapped
+    the manual join for `DisjunctivePhrase(alternatives).as_fragment()`. Resolved (though this
+    function's role narrowed further in round 11 — see below).
+  - **Review round 9** ("cannonical" ambiguous, 2 comments): renamed every "canonical"-family
+    identifier in `referring.py` to "representative" — `canonical_of`→`representative_of`,
+    `noun_of_canonical`→`noun_of_representative`, `canonicals_by_noun`→`representatives_by_noun`,
+    `members_by_canonical`→`members_by_representative`, `_noun_of_canonical`→
+    `_noun_of_representative`, `_type_alternatives_of_canonical`→
+    `_type_alternatives_of_representative`, plus local variables and docstrings. Verified a
+    case-insensitive grep for "canonical" across the file afterward returns zero matches. Both
+    threads reply-and-resolved.
+  - **Review round 10** ("make all these classes as dataclasses", `test_operand_referring.py`):
+    `@dataclass`-decorated every mimic class lacking it — `Shape`/`Circle`/`Square`,
+    `Instrument`/`Drum`/`Flute`/`Harp`, `Polygon` and its seven concrete subclasses, `ConcreteBase`/
+    `ConcreteBaseVariant`, `Sensor` — plus the equivalent classes in `test_first_order_form.py`
+    (`Igniter`, `Fastener`/`Bolt`/`Screw`) for consistency, since the same rule applies there too
+    though not explicitly flagged. Resolved.
+  - **Review round 11** (the repeated-article pushback — "shouldn't there be an `a` before
+    square?"): the shipped divergence (one shared article, *"a Body or Region"*) was wrong; the
+    developer wanted decision 3's original *"a Body or a Region"*. A naive fix (bake a second
+    article into the disjunctive text, leave the outer phrase's determiner bare) would have been
+    wrong on repeat/definite mention (*"the Circle or a Square"*, mixed definiteness). Instead
+    `NounPhrase` gained `additional_heads: List[VerbalizationFragment]` — further disjunctive
+    heads sharing the phrase's definiteness/number/alternative/ordinal, each choosing its own
+    article independently. `DeterminerProcessor._lower_noun_phrase` now builds one
+    determiner-and-head group per head (factored into a new `_head_group` helper) and joins them
+    with "or" (Oxford-comma style at 3+, via the existing `oxford_comma`); falls back to exactly
+    the old single-head behaviour when `additional_heads` is empty, so the ~10 other `NounPhrase`
+    call sites are unaffected. `VariableRule.build` now constructs the `NounPhrase` directly from
+    `NounForm.type_alternatives` (first alternative as `head`, rest as `additional_heads`) instead
+    of going through `disjunctive_type_head`, which is now solely `operand_head_noun`'s internal
+    same-noun grouping-key text generator (its own docstring, and `NounForm.type_alternatives`'s,
+    updated to say so explicitly). Updated the affected end-to-end sentences (*"a Circle or a
+    Square is warm"*, *"a Drum, a Flute, or a Harp is warm"*, `first_order_form`'s *"a Bolt or a
+    Screw is secure"*). Full `test_verbalization/` suite green (756/3 skipped); full
+    `test/krrood_test/` suite unchanged from the 2026-07-24 baseline (2012 passed, same 2
+    pre-existing unrelated `graphviz` failures). Pushed as commit 33a8da5b; PR description
+    rewritten to describe the repeated-article design instead of the old shared-article
+    trade-off. Resolved.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
