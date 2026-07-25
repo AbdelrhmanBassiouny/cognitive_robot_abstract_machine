@@ -1,4 +1,5 @@
-# Plan-dashboard system — status: PR #91 open (draft, base main), subscribed to all activity.
+# Plan-dashboard system — status: PR #91 open (draft, base main), 2 review rounds addressed
+# (62222c34, 9d4f7c6e), all 42 inline threads replied-and-resolved, subscribed to all activity.
 
 ## Review round (2026-07-25, 26 new threads on 023a63ec + a top-level "handle my feedback,
 ## clean up the code" review) — DONE, pushed as 62222c34
@@ -58,6 +59,67 @@ PR was already draft, stayed draft. `subscribe_pr_activity` call this session fa
 ("Could not subscribe to this PR") - unclear if another mechanism already covers it or the
 session's subscription silently didn't take; worth a manual check if events don't show up
 on a future push.
+
+## Review round 2 (2026-07-25, 16 new threads on 62222c34 + the design-question follow-up
+## comment) — DONE, pushed as 9d4f7c6e
+User answered the open design question directly (not via review comment): any session may edit
+plan.yaml structure directly (no steward), must always comment on the tracking issue, and
+sessions actively working an item should subscribe to the tracking issue itself for realtime
+awareness of structural changes other sessions make. Confirmed via AskUserQuestion: chose
+"Subscribe to tracking issue" over posting a comment to every affected session's PR (subscribing
+reuses the existing subscribe_pr_activity mechanism, which already works identically on a plain
+issue number, and scales without an N-PR fan-out on every structural edit).
+
+Implemented for real (not just answered in a reply):
+- session-start.sh: TRACKING_ISSUE_NOTE rewritten to state the any-session-edits model, require
+  a comment on the tracking issue for every structural change, and tell an actively-working
+  session to subscribe to the tracking issue in addition to its own item's PR.
+- hooks/README.md: matching rewrite of the tracking-issue paragraph (was still describing a
+  "designated planning/steward session" model).
+- PR #91's own description: "Single-writer coordination" section renamed and rewritten to match
+  (was stale from before this decision).
+
+Other 15 threads, all code-level follow-ups on round 1's rewrite:
+- render_common.py: hand-rolled markdown block parser replaced with the real `markdown` library
+  (tables + fenced_code extensions); only the heading-level-shift logic stayed custom. Verified
+  actual output via direct experimentation (paragraph continuation keeps literal newline, links
+  get no target=_blank, raw inline HTML passes through unescaped) before writing tests against it
+  - disclosed both behavior differences from the old hand-rolled version as accepted trade-offs
+    in the reply rather than silently absorbing them.
+- build_dashboard.py/build_index.py: all hand-built HTML-string methods deleted, replaced with
+  Jinja2 templates (templates/dashboard.html, templates/index.html) - autoescape on by default,
+  `| safe` used explicitly only at the one deliberately-unescaped call site (pre-rendered roadmap
+  HTML). Python side now returns plain data (StackedItem/TrackSection/WaveSection dataclasses)
+  for the templates to iterate, not markup.
+- ValidationProblem redesigned from ValidationProblemKind (enum) + generic dataclass into an ABC
+  with one concrete dataclass subclass per problem (DuplicateItemId, UnknownTrack, UnknownStatus,
+  InvalidDependsOn, UnknownDependency, UnknownWave, InvalidSchemaVersion), each owning its own
+  describe(). Caught and fixed my own bug mid-edit: first pass used a list comprehension for
+  DuplicateItemId's payload, which would double-count an id appearing 3+ times - reverted to the
+  original set-based dedup wrapped in sorted().
+- LiveState gained an explicit NO_PULL_REQUEST member (replaces a `None` special-case, keeps the
+  existing live-none CSS class); Item.pr -> Item.pull_request_number, DashboardRenderer.pr_data ->
+  pull_requests_by_repository (wire format / YAML key `pr` unchanged, only the Python identifiers
+  spelled out); "GFM" spelled out to "GitHub-flavored markdown" in prose.
+- save-plan.sh's two inline `python3 -c` snippets extracted into a real, tested, documented script
+  (plan_manifest_tools.py, read-id + regenerate-branch-index subcommands).
+- Docstring audit pass: every previously-undocumented public method in build_dashboard.py got one
+  (7 describe() overrides, _load_pull_requests_by_repository, _classify_items, _live_state_of,
+  _drift_description_of, _compute_next_steps, _status_counts, the nested walk() in
+  _build_track_stack).
+- Replied (no code change) to: why conftest.py uses a sys.path shim instead of a package
+  __init__.py (script is a standalone tool, not a package); why Plan/Item are real dataclasses
+  and not raw dicts in the tests too; that a plan id is a deliberate kebab-case slug, not a UUID.
+- README.md: added the missed "local-code-review" skill bullet to the dev-tools section (the
+  skill existed already, just wasn't linked yet).
+
+**Result**: all 16 threads replied-and-resolved (including the design-question thread, now
+genuinely answered and acted on rather than left open). Test suite grew 50 -> 53 passing; CI's
+pip-install list extended with jinja2 + markdown. Pushed as 9d4f7c6e (commit message: "Second
+review round: Jinja2/markdown libraries, ValidationProblem hierarchy"). PR description rewritten
+to add a "Review round 2" section and to fix the now-stale "single-writer/steward" coordination
+paragraph in the Summary. PR was already draft (round 1 left it that way), stayed draft - no
+new push-then-forgot-to-redraft gap this round since it was draft the whole time.
 
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
