@@ -1,5 +1,43 @@
 # Plan-dashboard system — status: PR #91 open (draft, base main), subscribed to all activity.
 
+## Review round (2026-07-25, 26 new threads on 023a63ec + a top-level "handle my feedback,
+## clean up the code" review) — IN PROGRESS
+Session dispatched to branch `claude/pr-91-review-feedback-aqdu0o` (the assigned task branch),
+but that branch didn't exist and isn't PR #91's head (`claude/plan-dashboard-system-sxnazc` is) -
+confirmed with the user via AskUserQuestion (same situation as PR #87's precedent) that fixes
+should go directly on the real PR head branch instead. Working there.
+
+Plan (tracked as TaskCreate tasks #1-#11 this session):
+1. Remove remaining `rdr-refactor`/`rdr-roadmap.md` mentions: hooks/README.md:216,
+   plan-create/SKILL.md:183 (the "I still see rdr-refactor" follow-up on an already-"fixed" thread -
+   a real miss, only `SKILL.md`'s body text had been swept before, not the historical-note asides).
+2. Centralize plan.yaml/roadmap.md path construction: add plan_manifest_path/plan_roadmap_path to
+   resolve-personal-notes-config.sh, use from session-start.sh + save-plan.sh instead of each
+   re-deriving the literal path. Fixes save-plan.sh's INDEX_PATH duplicating the already-sourced
+   PLAN_BRANCH_INDEX_PATH constant (a real bug the reviewer's "hardcoded/repeated strings" comment
+   caught).
+3. branch-index.yaml's pseudo-YAML (matched via fixed-string grep, per the reviewer's "more
+   deterministic/standard format" question) -> real TSV, awk-parsed. Fully regenerated every
+   save-plan.sh run, so no migration needed.
+4. save-plan.sh: add --manifest/--roadmap file flags so plan-create doesn't need the
+   marker-edit-CLAUDE.local.md dance just to bootstrap a new plan (reviewer's "can this be
+   automated" question on the marker flow).
+5. Design-question threads answered inline (track vs wave definition, depends_on already supports
+   multiple ids - just undocumented, "should sessions edit manifest + comment on steward issue" -
+   answering with reasoning, not silently redeciding the already-locked-in tracking_issue design).
+6-7. build_dashboard.py/build_index.py/render_common.py: StrEnum + dataclasses throughout (Plan/
+   Wave/Track/Item/ValidationProblem/Summary; markdown_to_html's tuple-tagged blocks -> typed
+   classes), no abbreviations, full type hints + RST docstrings, match/case where it clarifies,
+   HTML building restructured into smaller named helpers (kept dependency-free - no templating
+   engine - per render_common.py's own stated design goal).
+8. pytest tests for all three scripts + a new lightweight (non-docker-matrix) CI job.
+9. Root README.md: new dev-tools section linking hooks/README.md + both skill READMEs.
+10. Global sweep of AGENTS.md rules (abbreviations, hardcoded strings, dataclasses, docs/type
+    hints) across every file this PR touches, per the reviewer's explicit "apply my local comments
+    globally" instruction on the top-level review.
+11. Reply-and-resolve every thread once genuinely addressed; leave open (reply only) any thread
+    that's a question rather than an actionable ask, per the personal convention.
+
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
 - Contains only the main-bound infra (hooks + skill), per the user's request to keep it separate
