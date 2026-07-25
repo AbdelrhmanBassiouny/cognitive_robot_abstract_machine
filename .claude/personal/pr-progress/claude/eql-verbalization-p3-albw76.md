@@ -1,14 +1,13 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-24, after a ~5 day gap): pushed (11 commits total). PR #88 was briefly ready for
-review, then the developer converted it back to **draft** themselves (not me -- per personal
-convention, never mark it ready again without being explicitly asked). Base retargeted to `main`
-now that #86 (P1) and #87 (P2) both merged there -- diff is now genuinely just P3's own work (7
-files, +733/-72), `mergeable_state: clean`. Subscribed to activity. All 5 review rounds so far
-resolved (oxford_comma bug, overrides-on-first_order_form
-design flaw, override-test-quality gap, plus the original 3-comment round). Description and a
-fresh issue comment updated to reflect the rebase. Hourly check-in loop active; PR still not
-merged/closed, so subscription continues.
+Status (2026-07-25): pushed (12 commits total). Still **draft** (developer converted it back
+themselves earlier; per personal convention never marked ready again without being explicitly
+asked). Base `main` (#86/#87 both merged there), `mergeable_state: unstable` per GitHub's own
+report though confirmed reconciled (no relevant `main` commits since the last rebase — see round 6
+below). Subscribed to activity. 11 review rounds total, all reply-and-resolved except round 6
+(reconciliation question — informational, no action to resolve). Description rewritten twice: once
+for the 2026-07-24 rebase, once for round 11's repeated-article redesign. Hourly check-in loop
+active; PR still not merged/closed, so subscription continues.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -70,10 +69,11 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   swapped for an equivalent placeholder variable). Replied and resolved.
 
 ## Next
-- Wait for the developer's answer on the base/stacking question (comment above) — be ready to
-  either rebase onto `main` once #86/#87 merge, or re-target the PR base to `main` directly.
-- Otherwise keep watching CI and any further review comments via the hourly check-in (webhooks
-  don't cover CI success, new pushes, or merge-conflict transitions).
-- If review pushes back on the shared-article ("a Body or Region") vs repeated-article
-  ("a Body or a Region") choice, revisit `NounPhrase`'s single-head assumption.
+- Rounds 6-11 (reconciliation, optional→tuple x2, DisjunctivePhrase reuse, "canonical" rename x2,
+  dataclasses, repeated article) all addressed and pushed (33a8da5b) this session; PR still open,
+  keep watching CI and any further review comments via the hourly check-in (webhooks don't cover
+  CI success, new pushes, or merge-conflict transitions).
+- `mergeable_state` reported "unstable" at last check (not "clean") — worth a status re-check next
+  session even though the reconciliation investigation found nothing outstanding; GitHub's
+  mergeable-state cache can lag a push.
 - P4 (sdt = PR #33 rebase) still needs P1 + P2 + P3 all merged to main first.
