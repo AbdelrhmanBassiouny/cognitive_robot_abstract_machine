@@ -1,8 +1,10 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-26): pushed (15 commits total, ea595142 latest). Still **draft** (developer
-converted it back themselves earlier; per personal convention never marked ready again without
-being explicitly asked). Base `main` (#86/#87 both merged there). Subscribed to activity. 14 review
+Status (2026-07-26): pushed (15 commits total, ea595142 latest). Marked **ready for review by the
+developer themselves** (not by me) after ea595142 — per personal convention I don't override their
+own explicit un-drafting; the "convert back to draft after any push" rule applies only to my own
+pushes going forward, so the next commit I push (if any) should re-draft it as usual. Base `main`
+(#86/#87 both merged there). Subscribed to activity. 14 review
 rounds total, all now reply-and-resolved except round 6 (reconciliation question, informational —
 nothing to resolve). Both threads round 12 left open pending discussion are now closed: the
 grammar-justification one the developer resolved themselves after reading the Apple/Banana
