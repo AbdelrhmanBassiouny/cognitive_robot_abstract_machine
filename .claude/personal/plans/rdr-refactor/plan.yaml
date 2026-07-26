@@ -101,8 +101,8 @@ items:
   track: S0-steward
   depends_on:
   - eql-core-prep
-  status: in_progress
-  notes: Open, CI green; picked up an in-review label 2026-07-20.
+  status: done
+  notes: Merged out-of-band 2026-07-21 (branch pushed directly, then closed by hand; GitHub never set merged_at, so this PR carries a manually-applied 'merged' label instead). Previously open, CI green; picked up an in-review label 2026-07-20.
 - id: code-generation-extract
   title: Extract code_generation package (generation half)
   branch: code-generation-extract
@@ -110,7 +110,7 @@ items:
   track: S0-steward
   depends_on:
   - code-extraction
-  status: in_progress
+  status: done
 - id: ripple-down-rules-refactor
   title: ripple_down_rules refactor (reconciled to code_generation)
   branch: ripple-down-rules-refactor
@@ -118,7 +118,7 @@ items:
   track: S0-steward
   depends_on:
   - code-generation-extract
-  status: in_progress
+  status: done
   notes: 'Replaces closed PR #40. Qt/GUI + JSON serialization removed here.'
 - id: rdr-backward-inference
   title: 'RDR engine: backward inference + condition resolvers'
@@ -342,12 +342,12 @@ items:
   pull_request_number: 83
   track: why-track
   depends_on: []
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_01JCEFrP4eBx2pgmf5FarFLm
-  notes: 'Sibling fix, not part of the original wave plan; blocks W2''s last 2 open review threads. Open
-    as non-draft (ready for review) — same as several of the S0 stack items (#58/#39/#53/#41/#63-#67),
-    so not unique to this PR; each was presumably marked ready deliberately once stable, per the always-drafts-until-ready
-    personal convention.
+  notes: 'Merged 2026-07-21. Sibling fix, not part of the original wave plan; blocked W2''s last 2 open
+    review threads until it landed. Was open as non-draft (ready for review) before merging — same as
+    several of the S0 stack items (#58/#39/#53/#41/#63-#67), so not unique to this PR; each was presumably
+    marked ready deliberately once stable, per the always-drafts-until-ready personal convention.
 
     '
 - id: rdr-why-query-surface
