@@ -29,24 +29,50 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   output). Full `test_verbalization/` suite green (737/3 skipped). Pushed as commit
   51be24de.
 
+- Ruff check-vs-format question resolved and thread closed: confirmed empirically
+  (diffed check-only vs format-only vs both against the real generated source) that
+  `run_ruff_check_on_file` and `run_ruff_format_on_file` do non-overlapping jobs
+  (import sort/typing-modernization vs line-wrap/quote-style) -- both calls stay.
+- Conftest-driven regeneration (developer confirmed: run at every test run, from
+  conftest, like ormatic, reusable for any package): added
+  `regenerate_verbalization_surfaces(package, destination)` to `surface_generation.py`
+  (atomic temp-file + `os.replace`, mirroring `generate_sqlalchemy_interface()`);
+  `test/krrood_test/conftest.py` calls it right after the ormatic one. Deleted the now-
+  obsolete `krrood/scripts/generate_verbalization_surfaces.py`, deleted
+  `test_verbalization_surfaces.py` (its two assertions became tautological once the
+  file is always freshly regenerated before it's imported), and deleted
+  `test_generated_krrood_module_matches_the_committed_file` from
+  `test_surface_generation.py` for the identical reason (explicit developer ask,
+  flagged the CI-visibility trade-off this accepts, matching the `ormatic_interface.py`
+  precedent already in this repo). Kept the one test that exercises generation logic
+  against a small controlled domain. Verified: `test_verbalization/` +
+  `test_code_generation/` + `test_class_diagram/` green (876 passed/3 skips), full
+  `test/krrood_test/` green (2003 passed/6 skipped, only the 2 pre-existing unrelated
+  `graphviz`/`dot` failures). Pushed as commit 12247569. PR description rewritten to
+  match. Both clean-fix threads + both newly-clear threads (conftest scope, ruff
+  check-vs-format, and the byte-comparison-test question) replied and resolved.
+
 ### Open (awaiting developer reply, not resolved)
-- `SURFACES_MODULE_PATH` hard-coded as a global: asked whether the ask is (a) derive
-  the path from the target package itself (like `generate_orm.py` does, still a
-  manually-run script) or (b) actually trigger generation from a package's
-  `conftest.py` -- a bigger, different-in-kind change from a human-run/reviewed
-  script. Not implementing either until the scope is confirmed.
 - `OverriddenOperand`/`SymbolicCallable._placeholder_operand_overrides_` in
-  `predicate.py`: developer questioned whether this testing-only mechanism belongs in
-  source at all. Verified every real call site (`match.py`, `explanation.py`,
-  `exceptions.py` doctest) -- `HasType`/`HasTypes.types_` is always a literal type,
-  never symbolic, so this isn't really an "override" of a symbolic operand. Proposed:
-  move the special-casing into `placeholder_operands()` itself (detect `Type`/
-  `Tuple[Type, ...]`-typed fields and supply a literal default automatically), which
-  would delete `OverriddenOperand` and `_placeholder_operand_overrides_` entirely --
-  the opposite direction from round 2's own request to move overrides onto the
-  classes. Awaiting confirmation before touching it either way.
+  `predicate.py`: developer rejected the type-based auto-detection I'd proposed ("no
+  rule to automate by type") and floated two alternatives instead: (a) detect from the
+  verbalization fragment's own implementation that it accesses a field's raw value, or
+  (b) always fall back to first-order form. Replied with concrete problems for each
+  against `HasType` specifically: (a) the fragment's `fields["types_"]` access is
+  syntactically identical to every other field access -- nothing to distinguish by
+  inspection at that layer, asked for a concrete statement shape to detect if they mean
+  something more specific; (b) first-order form renders every operand generically and
+  would lose the named "Integer" example the committed surface actually wants, unless
+  scoped per-field -- which is functionally the override mechanism again. Also still
+  need to apply their "hard-wired example-value tests, not exhaustive per-class" testing
+  convention once the mechanism itself is settled. Not implementing until they clarify.
+- Subscription: `subscribe_pr_activity` failed twice in a row with a generic error (not
+  the "already watched by a steward" message the tool documents) -- PR has no watching
+  label, so cause unclear. Flagged to the developer rather than retried further; may be
+  worth trying again next session.
 
 ### Next
-- Once the developer answers both open threads, implement whichever design they pick,
-  regenerate the snapshot again if the predicate.py mechanism changes, keep tests
-  green, then push and reply-resolve.
+- Once the developer clarifies the OverriddenOperand mechanism, implement it, add the
+  hard-wired example-value tests they asked for, regenerate the snapshot if wording
+  changes, keep tests green, then push and reply-resolve.
+- Retry `subscribe_pr_activity` next session if the developer wants events watched.
