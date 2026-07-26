@@ -65,10 +65,38 @@ directly, and the failure shape (paused/interrupted motion states, threading, 28
 simulated run) is equally consistent with a flake. The re-run on 43971581 decides it —
 do not claim the fix resolved it without that evidence.
 
+## Commit 3 (7280394b) — truth bindings kept out of a result's unification
+
+`test_merge_motions` failed **identically on both 465dd92c and 43971581** — same test,
+same motion list — so it is reproducible, not the flake the first round assumed. Traced
+the real path this time: coraplex's `pre_condition` monitor
+(`plans/condition_nodes.py::condition_monitor`) calls krrood's `evaluate_condition`,
+which is `any(condition.evaluate())`. (`paused#N`/`interrupted#N` in the failure list are
+plain per-tick status monitors that never reach DONE, so they appear in any such list —
+`pre_condition#6` is the only EQL one.)
+
+Comparing `evaluate_condition` against an `origin/main` worktree over ten condition
+shapes found one divergence: a satisfied `exists(...)` gave False on main, True on the
+branch. Cause: operators now bind their truth, and `_process_result_`'s `UnificationDict`
+included those truth bindings as if they were selected values (`{…, AND: True}`). For a
+quantifier, whose result bindings are otherwise empty, that flipped an empty/falsy
+mapping to non-empty/truthy — exactly what `any()` reads. `_unification_of_` now excludes
+bindings of truth-valued expressions. Parity with main restored on all ten shapes.
+
+**Deliberately preserved main's `exists`-as-condition answer (False) even though True
+looks more correct** — silently improving semantics under downstream packages inside a
+refactor is what caused this. Flagged in the commit message as a separate pre-existing
+bug worth its own change.
+
+Full suite after: 2004 passed / 2 failed (same pre-existing graphviz failures).
+
+**Still unproven**: that this fixes coraplex. Can't run coraplex locally (needs
+mujoco/giskardpy/ROS). The CI re-run on 7280394b is the evidence — if `test_merge_motions`
+fails a third time the diagnosis is still incomplete; keep tracing, do not call it fixed.
+
 ## Next
 
-- Watch CI run 30223586478 on 43971581, especially `test_each_lib (coraplex)`. If
-  `test_merge_motions` fails again, trace the real coraplex path rather than assuming.
+- Watch CI on 7280394b, especially `test_each_lib (coraplex)`.
 - Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
   Wave-0 stack, which still contests `base_expressions.py`.
 - Answer review comments; keep the PR in draft after each push.
