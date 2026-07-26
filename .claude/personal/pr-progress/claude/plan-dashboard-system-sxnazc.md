@@ -1,5 +1,6 @@
 # Plan-dashboard system — status: PR #91 open (draft, base main), 4 review rounds addressed
-# (62222c34, 9d4f7c6e, 25e9f3cc, e258ac9a/28cadbf9). 48 of 50 inline threads replied-and-resolved;
+# (62222c34, 9d4f7c6e, 25e9f3cc, e258ac9a/28cadbf9) plus 2 real-usage follow-ups (4a3ac61a/20ad78c8
+# bug fixes, 8b486fed manifest auto-sync). 48 of 50 inline review threads replied-and-resolved;
 # 2 left open (template-logic-design, proceeded without confirmation - see round 3 entry).
 # Subscribed to all activity.
 
@@ -264,6 +265,46 @@ that had described a since-changed "still open" state (now stale text nobody wou
 as current). Regenerated + republished the dashboard with the corrected manifest and the
 individually-verified pr_data.json - `drift_count` now genuinely 0. Pushed to personal-notes as
 88584c13.
+
+## Follow-up (2026-07-26, same day) - user asked for the underlying fix: auto-sync plan.yaml
+## from GitHub instead of hand-editing it every time - DONE, pushed 8b486fed + 09af69c2
+User's real question after the manual fix above: "who updates plan.yaml regularly? It should get
+these states from GitHub automatically instead of hardcoding them." Fair - I'd just done by hand
+exactly the kind of fix a session should never have to be asked for twice. Answered directly:
+nobody updates it automatically today; the daily Routine only renders the dashboard, it never
+writes back, so the only paths are a session updating its own item's status as it works, or
+someone spotting a drift flag and asking for a manual fix (i.e. what had just happened).
+
+Design: NOT all status drift is auto-correctable - `blocked`/`deferred`/`in_progress` are planning
+judgments GitHub can't derive (a still-open PR doesn't tell you *why*). But exactly one direction
+is unambiguous: GitHub confirms a PR merged -> the item is done, full stop. Built
+`sync_manifest_status.py` to apply exactly that correction, wired into SKILL.md's refresh flow to
+run (and push its correction to personal-notes) before every dashboard render. Every other drift
+kind stays a flag for a human, unchanged.
+
+Implementation notably tried and rejected a full YAML load-mutate-dump round trip, including via
+`ruamel.yaml` (a "preserves formatting" library) - empirically verified against the real
+rdr-refactor plan.yaml that even ruamel re-flows long wrapped strings and normalizes `null`
+spellings on every write (240 diff lines for a no-op round trip). Went back to the same
+surgical text-line-patching technique used for the manual fix above instead: find each item's
+block by its `- id:` boundary, replace only its `status:` line, leave everything else
+byte-for-byte untouched. `classify_live_state`/`load_pull_requests_by_repository` extracted to
+module-level functions in build_dashboard.py (previously a private method + private function) so
+the new script reuses the exact same classification logic instead of duplicating it - confirmed
+no behavior change via the existing 73-test suite before adding new tests.
+
+Verified end-to-end, not just unit tests: ran against the real (already-fixed) rdr-refactor
+plan.yaml - correctly found nothing to correct; then synthetically reverted one item's status
+back to `in_progress` in a scratch copy and confirmed the script recovered a file byte-for-byte
+identical to the correct manifest. Checked whether the daily Routine itself needed updating -
+it doesn't, since its prompt already delegates to `/plan-dashboard <plan-id>` rather than
+reimplementing the steps, so it picks up the new SKILL.md step automatically next run (confirmed
+via `list_triggers`). Also updated `plans/README.md`'s "Why status is deliberately thin" section
+on personal-notes (09af69c2) to document the one auto-corrected exception, referencing this
+session's history as the concrete motivating example. Test suite grew 73 -> 84. Pushed 8b486fed
+(main PR branch) + 09af69c2 (personal-notes). PR description updated with an "Auto-sync manifest
+status to done" section; verified PR still draft this round (didn't drift to ready-for-review this
+time, unlike round 4).
 
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
