@@ -740,3 +740,54 @@ text for `<[a-zA-Z/]` before submitting per the now-standing habit from the thre
 incidents this session; none found. Committed and pushed to `claude/plan-dashboard-system-sxnazc`
 (413d168d); PR #91 description updated with a new "Require a full roadmap.md read before asking
 the user anything" section; draft state confirmed intact.
+
+## Add a Review button + "Ready to review" sidebar section (2026-07-26, same day) - DONE, pushed 784713f4
+User asked for two things: (1) a review button on draft PRs that opens the PR on GitHub, (2) a
+sidebar section listing PRs to review, limited to ones with no dependency or whose dependency is
+"already reviewed" and "marked ready for review" and not blocked. Genuinely ambiguous given this
+repo's real workflow (every PR of mine stays in GitHub-draft state even once the underlying work
+is actually done, per personal convention - see cram-notes.md's PR section) - asked two clarifying
+questions (AskUserQuestion) before implementing rather than guessing:
+1. What counts as "ready for review" - user answered in free text: an open, non-draft PR means
+   *already reviewed by me*; a draft PR depending on it can *now* be reviewed. This confirms the
+   whole feature's vocabulary: "needs review" = open + draft (not GitHub's own "ready for review"
+   meaning, which is the opposite - reserved for "I already reviewed it").
+2. What counts as a dependency being "already reviewed" for inclusion purposes - offered three
+   options (done/merged; dependency itself also has an open PR; dependency has a real recorded
+   GitHub review). User picked the middle, looser one: dependency just needs its own open PR
+   (draft or not) - not necessarily merged, not necessarily itself non-draft.
+
+Implemented in `build_dashboard.py`:
+- `Item.needs_review: bool` (true iff `live_state is LiveState.OPEN_DRAFT`) and
+  `Item.has_open_pull_request` property (`live_state in (OPEN_DRAFT, OPEN_READY)`), both filled in
+  during `_classify_items`'s first pass (own-item-only, no cross-item dependency, unlike `action`).
+- New `_compute_ready_to_review()`: item qualifies if `needs_review`, not blocked, and every
+  `depends_on` entry (if any) satisfies `has_open_pull_request` - matches the user's answers
+  exactly (dependency need not be non-draft, just open).
+- `DashboardSummary` gained `ready_to_review: list[str]`, threaded through `to_json_dict()` and
+  `render()`'s template context, matching the existing `ready_to_start`/`blocker_maybe_cleared`
+  pattern. Also fixed two now-stale docstrings on `ready_to_start`/`blocker_maybe_cleared` while
+  touching this area (they still described the pre-bugfix semantics from two rounds ago).
+
+Implemented in `dashboard.html`:
+- `item_card` macro: a `.review-button` (distinct blue/`--status-progress` accent from the teal
+  `.action-button`, since it's a different kind of action - external navigation, not clipboard-copy)
+  shown whenever `item.needs_review`, linking straight to `item.pull_request_url`.
+- Sidebar: new "Ready to review" `.next-group` (placed second, right after "Fix the manifest" and
+  before "Ready to start" - reviewing existing work outranks starting new work), each `<li>` a flex
+  row with the existing navigate-and-highlight link plus a second small "Review →" link straight to
+  the PR, so the sidebar itself is one-click actionable without needing to scroll to the card first.
+
+Added 16 new tests (121 total): `needs_review`/`has_open_pull_request` unit tests, `_compute_
+ready_to_review` scenarios (no-dependency, blocked-excluded, dependency-with-no-PR-excluded,
+dependency-with-open-PR-included regardless of its own draft state), and render-level checks for
+the review button's presence/absence and the sidebar section's markup. Verified end-to-end against
+the real `rdr-refactor` plan (not synthetic-only): 13 items have an open draft PR and get the
+card-level button; 11 of those qualify for the sidebar list, and wrote a one-off script to confirm
+the 2 exclusions are both correctly explained by their shared dependency (`d-core-backend`) having
+no PR open at all yet - matches the design exactly. Republished the live dashboard Artifact in
+place (60a2f66a-...). Updated `plan-dashboard/SKILL.md`'s script-description paragraph and its
+"Report back" step to mention the new button/list. Committed and pushed to
+`claude/plan-dashboard-system-sxnazc` (784713f4); PR #91 description updated (Summary paragraph +
+new round section + refreshed test-plan, 121 tests / nine `/plan-dashboard` invocations); grepped
+the PR body for stray `<[a-zA-Z/]` before submitting (none found); draft state confirmed intact.
