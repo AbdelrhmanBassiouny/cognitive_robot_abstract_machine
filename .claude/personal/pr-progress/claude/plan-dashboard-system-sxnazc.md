@@ -821,3 +821,46 @@ already-documented `semantic_digital_twin` flake (`test_each_lib (semantic_digit
 failing on `test_world_sim_state_sync`) seen on the three prior commits too - unrelated to this
 PR's diff (touches only `.claude/skills/plan-dashboard/`); the dedicated `test_claude_dev_tooling`
 pytest job passed cleanly.
+
+## Subscribe plan-item-kickoff to its plan's tracking_issue in step 1 (2026-07-26, same day) - DONE, pushed 7f59cd63
+User asked for a real coverage gap to be closed: `plans/README.md` already says a session
+actively working an item should subscribe to its plan's `tracking_issue`, and `session-start.sh`
+handles that - but only at true session start. A session that runs `/plan-item-kickoff`, gets its
+plan approved, and keeps implementing in that same continuous session (creates the branch, opens
+the PR, all without a fresh `session-start.sh` ever firing) was never subscribed - despite being
+exactly the session most likely to keep going straight into implementation. User asked for the
+subscribe call in step 1 ("Resolve the item"), right after identifying the plan/item and reading
+`tracking_issue`, before gathering dependency/sibling context - and to keep it fully generic (no
+plan-specific names), matching the rest of the skill.
+
+Implemented exactly that: `plan-item-kickoff/SKILL.md` step 1 now subscribes to `tracking_issue`
+via `mcp__Claude_Code_Remote__subscribe_pr_activity` (same tool `plan-create` already uses for
+this - matched that choice over the `mcp__github__` variant for consistency) as soon as the
+plan/item resolve, before step 2's dependency/sibling gathering. Skipped entirely when the plan
+has no `tracking_issue` (some plans don't have one). Added the tool to the skill's `allowed-tools`
+frontmatter.
+
+Before wiring this in, verified the user's own report: they'd tried subscribing to a plain GitHub
+issue (rdr-refactor's real tracking issue, #94) via both the `mcp__github__` and
+`mcp__Claude_Code_Remote__` variants and gotten "Could not subscribe to this PR" both times, which
+contradicts this PR's own earlier claim that subscription was "confirmed working on it identically
+to a PR." Reproduced the exact same error on #94 with both variants - then, to isolate whether this
+was issue-specific, also tried the identical call against PR #91 itself (this session's own PR,
+which has been actively and successfully subscribed to and receiving webhook events the entire
+session). That call failed too, with the same error. That rules out anything issue-vs-PR-specific:
+whatever's failing is a transient problem with the subscribe call in this session right now, not a
+regression tied to plain-issue numbers specifically. Given that, per the user's own request, made
+the new step non-fatal: a subscribe error is noted in passing when presenting the plan (step 5)
+rather than failing the skill - subscribing is a convenience for staying aware of concurrent
+structural changes, not a precondition for planning the item.
+
+Documentation-only change (SKILL.md prose, no test suite applies). Grepped the PR body for stray
+`<[a-zA-Z/]` before submitting (none found). Pushed to `claude/plan-dashboard-system-sxnazc`
+(7f59cd63); PR #91 description updated with a new round section, and the existing test-plan line
+claiming subscription was "confirmed working" on #94 softened to reflect the now-reproduced
+current failure rather than continuing to overclaim; draft state confirmed intact.
+
+Noted but not acted on (out of the scope the user asked for): `plan-item-resolve/SKILL.md` reads
+`tracking_issue` comments (step 2-ish) but doesn't subscribe to it either - the same coverage gap
+exists there. Flagged to the user in the summary; not fixed since only `plan-item-kickoff` was
+requested.
