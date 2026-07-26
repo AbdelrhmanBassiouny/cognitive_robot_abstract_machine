@@ -791,3 +791,33 @@ place (60a2f66a-...). Updated `plan-dashboard/SKILL.md`'s script-description par
 `claude/plan-dashboard-system-sxnazc` (784713f4); PR #91 description updated (Summary paragraph +
 new round section + refreshed test-plan, 121 tests / nine `/plan-dashboard` invocations); grepped
 the PR body for stray `<[a-zA-Z/]` before submitting (none found); draft state confirmed intact.
+
+## Make the sidebar scrollable + move "Ready to review" to the end (2026-07-26, same day) - DONE, pushed 13655a87
+User reported the sidebar was now too long with many items and had no scroll, and asked for the
+"Ready to review" group to move from second to last (it was pushing earlier, more actionable
+groups out of view). Two small, purely presentational fixes:
+- `aside.sidebar` gained `max-height: calc(100vh - 3rem)` + `overflow-y: auto` so it scrolls
+  internally instead of growing unbounded, while staying `position: sticky`. The existing
+  `@media (max-width: 860px)` breakpoint (where the sidebar goes `position: static`) now also
+  resets `max-height: none; overflow-y: visible` so mobile scrolling isn't affected.
+- Reordered the "What to do next" card's four groups so "Ready to review" renders last, after
+  "Fix the manifest", "Ready to start", and "Blocker may be cleared" - the outer
+  `{% if drift_items or ready_to_review or ready_to_start or blocker_maybe_cleared %}` guard was
+  left as-is since order inside an `or` doesn't matter.
+
+Added 1 regression test (`test_render_shows_ready_to_review_section_last_in_the_sidebar`, 122
+total) asserting the "Ready to review" heading's string offset is after "Ready to start"'s.
+Verified in a real headless Chromium session (Playwright) against the real `rdr-refactor`
+dashboard, not just by CSS inspection: `scrollHeight` (1947px) exceeds `clientHeight` (852px) with
+`overflow-y: auto` computed, programmatically setting `scrollTop` actually moves it, and the
+rendered heading order is Ready to start / Blocker may be cleared / Ready to review. Republished
+the live dashboard Artifact in place (60a2f66a-...). `scripts/format_docstrings.py` run on the
+modified test file (no logic changes, only additions - the file had no prior docstring gaps).
+Committed and pushed to `claude/plan-dashboard-system-sxnazc` (13655a87); PR #91 description
+updated with a new round section + refreshed test-plan (122 tests, ten `/plan-dashboard`
+invocations); grepped the PR body for stray `<[a-zA-Z/]` before submitting (none found); draft
+state confirmed intact (`draft: true` on re-fetch). CI on this head shows the same pre-existing,
+already-documented `semantic_digital_twin` flake (`test_each_lib (semantic_digital_twin)` job
+failing on `test_world_sim_state_sync`) seen on the three prior commits too - unrelated to this
+PR's diff (touches only `.claude/skills/plan-dashboard/`); the dedicated `test_claude_dev_tooling`
+pytest job passed cleanly.
