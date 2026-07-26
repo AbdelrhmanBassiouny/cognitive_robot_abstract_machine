@@ -549,3 +549,32 @@ dependency, correctly lost theirs. Republished the live dashboard Artifact in pl
 (60a2f66a-...). Committed and pushed to `claude/plan-dashboard-system-sxnazc` (b8c07487); PR #91
 description updated with a new "Gate Start now on dependency readiness" section and refreshed
 test-plan bullets (93 tests, five `/plan-dashboard` invocations); draft state re-confirmed intact.
+
+## Make "what to do next" sidebar entries navigate to their item card (2026-07-26, same day) - DONE, pushed ada693b2
+User asked for the sidebar's drift/ready-to-start/blocker-maybe-cleared entries to be clickable,
+jumping to and highlighting the referenced item's card. Implemented in `dashboard.html`:
+- Each item card (`item_card` macro) now carries `id="item-{{ item.identifier }}"`.
+- Every sidebar `<li>` across all three "what to do next" groups now wraps its content in
+  `<a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}"
+  onclick="planDashboardHighlightItem(event, this)">` - a real anchor href first (works with JS
+  disabled/broken, consistent with the "Start now" button's own graceful-degradation stance), with
+  the onclick layering on a nicer experience: smooth-scroll (`scrollIntoView({behavior: "smooth",
+  block: "center"})`) plus a temporary highlight class, matching the existing
+  `planDashboardCopyKickoffCommand` script's structure/naming style.
+- New `.item-highlighted` CSS class + `@keyframes plan-dashboard-highlight-pulse` (2.2s box-shadow/
+  background pulse using the existing `--accent`/`--accent-tint` theme vars) added near the other
+  `.item.status-*`/`.item.has-drift` rules; `.next-item-link` gets a hover background and loses the
+  underline, `display: block` so the whole row is clickable rather than just the title text.
+- Used `document.getElementById` (not a CSS attribute-selector string built from the identifier) to
+  avoid any risk of special characters in an identifier breaking a querySelector call - ids handle
+  arbitrary strings safely, selectors don't without escaping.
+
+Added 3 new tests (96 total): item card gets the expected `id="item-a"`, a ready-to-start sidebar
+entry links to its card (`href`/`data-item-identifier`/`onclick` all asserted), and a drift sidebar
+entry does the same. Verified end-to-end against the real `rdr-refactor` render (not just unit
+tests): extracted every `id="item-…"` and every sidebar `href="#item-…"` from the generated HTML
+and confirmed via `comm` that every href resolves to a real id on the page (zero unmatched).
+Republished the live dashboard Artifact in place (60a2f66a-...). Committed and pushed to
+`claude/plan-dashboard-system-sxnazc` (ada693b2); PR #91 description updated with a new "Make what
+to do next entries jump to their item card" section and refreshed test-plan bullets (96 tests, six
+`/plan-dashboard` invocations); draft state confirmed intact throughout.
