@@ -300,10 +300,13 @@ branch on a ROS dependency; resolve it non-blockingly and let CI be the final ch
      sitting on GitHub.
   3. Label the fork PR `needs-resolution` (union with its existing labels, per the LABELS ARE REPLACE
      rule above) so the state is visible on the board even if no session is listening, and so you never
-     re-attempt the same failing restack on it every run — skip any branch carrying `needs-resolution`
-     in Phase 2 until the label is gone.
-  4. On a later run, once a `needs-resolution` branch restacks clean again, that means someone resolved
-     it: clear the label and proceed normally.
+     re-attempt the same failing restack on it every run.
+  4. At the START of every Phase 2 pass, for each branch currently carrying `needs-resolution`, fetch
+     its `mergeable_state` from the GitHub MCP (`pull_request_read` → `get`). If `mergeable_state` is
+     NOT `dirty` (i.e. `clean` or `unstable`), the conflict is resolved — clear `needs-resolution`
+     (LABELS ARE REPLACE: full current label set minus `needs-resolution`) and include the branch in
+     the restack plan normally. Only keep the label and skip the branch when `mergeable_state` is
+     `dirty`.
   Record every branch you delegate this run — the FINISH summary must report it (below), since a
   delegated comment is not guaranteed to be seen and I am always the fallback.
 - Keep restacking / promoting the other branches in parallel while CI chews on the ones you pushed —
@@ -320,7 +323,8 @@ Collect the fork PRs to promote this run:
 - EVERY branch `python dev/stack.py next --porcelain` names — it prints ONE `name<TAB>pr` line per FREE
   slot (`wip_cap` minus the stacks already in review), each from a distinct independent stack, in
   round-robin order. If two slots are free it names two branches; promote them all. Skip any that
-  already carry `cram2-link-sent` (a link is already pending for it) — but still process the others.
+  already carry `cram2-link-sent` when deciding whether to build a new link — but still process the
+  others.
 
 For each collected fork PR (head branch B):
 1. Try to open its cram2 PR directly via the GitHub MCP — base `cram2/main`, head
@@ -335,10 +339,13 @@ For each collected fork PR (head branch B):
    isn't open until I click Create; I add `in-review` then (the housekeeping step above clears
    `cram2-link-sent`).
 
-After processing them all, if you collected any create-links, deliver them to me by putting them at the
-very TOP of your FINISH summary — this routine is configured to EMAIL its result, so the summary IS the
-email. List each PR's number, title, branch, and its one-click create-link. This top-of-summary
-placement is REQUIRED and is what reaches me; set `cram2-link-sent` once a link is in the summary.
+After processing them all, compile ALL pending cram2 create-links — both (a) any new links built this
+run AND (b) any fork PR that already carries `cram2-link-sent` but is not yet `in-review` (re-listed
+from a prior run; rebuild the link from the branch name and PR title using the same URL format). Deliver
+ALL of them at the very TOP of your FINISH summary — this routine is configured to EMAIL its result, so
+the summary IS the email. List each PR's number, title, branch, and its one-click create-link. This
+top-of-summary placement is REQUIRED and is what reaches me; set `cram2-link-sent` only on newly built
+links (do NOT set it again on PRs that already carry it).
 (The Gmail connector can only draft, not send, so do NOT rely on it for delivery. If you want, you MAY
 additionally `create_draft` a copy to bido.bassuny@gmail.com — it lands in my Drafts, unsent — but the
 summary is the real delivery, never a draft.)
@@ -347,14 +354,16 @@ If `next` prints nothing and there are no such bug PRs, the cap is full or nothi
 nothing.
 
 FINISH
-If you collected any cram2 create-links, they go FIRST, at the very top of this summary (that is how I
-receive them by email). Right after them, list every branch you DELEGATED this run (Phase 2): its PR
-number and branch, the conflicting files or the failing check, the session link you addressed the
-comment to (or "no session link found in the PR body" if none), and a link to the comment you posted —
-this section is REQUIRED whenever you delegated anything, for the same reason as create-links: it's how
-I find out. Then summarise: what you closed, restacked, and promoted, and anything you stopped on. The
-board Action has already republished Pages from your state changes — you do not touch `board.html` or
-any Artifact.
+The TOP of the FINISH summary must list ALL pending cram2 create-links: (a) any new links built this
+run, and (b) any fork PR currently carrying `cram2-link-sent` but not yet `in-review` (re-listed from
+prior runs, link rebuilt from branch name + PR title). This section must appear at the top even when no
+new links were built this run, as long as any pending ones exist — that is how I receive them by email.
+Right after them, list every branch you DELEGATED this run (Phase 2): its PR number and branch, the
+conflicting files or the failing check, the session link you addressed the comment to (or "no session
+link found in the PR body" if none), and a link to the comment you posted — this section is REQUIRED
+whenever you delegated anything, for the same reason as create-links: it's how I find out. Then
+summarise: what you closed, restacked, and promoted, and anything you stopped on. The board Action has
+already republished Pages from your state changes — you do not touch `board.html` or any Artifact.
 ```
 
 The promote step is gated by `stack.py next`, which only ever names un-drafted branches under the cap —
