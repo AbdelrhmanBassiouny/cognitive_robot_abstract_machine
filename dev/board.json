@@ -1,0 +1,351 @@
+{
+  "pull_requests": [
+    {
+      "number": 14,
+      "head": "claude/performatives-clean",
+      "base": "claude/split-performatives-prs-xbluus",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01XqcJKbqDoptTKDYVQ3AHyB)_",
+      "turn": null
+    },
+    {
+      "number": 15,
+      "head": "claude/eql-performatives-unify",
+      "base": "claude/performatives-clean",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01XqcJKbqDoptTKDYVQ3AHyB)_",
+      "turn": null
+    },
+    {
+      "number": 21,
+      "head": "rdr/oo-recognition",
+      "base": "rdr/oo-plan",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 22,
+      "head": "rdr/backend-unification",
+      "base": "rdr/oo-recognition",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 33,
+      "head": "eql-symbolic-function-sdt",
+      "base": "main",
+      "draft": true,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01NXXMnSr76G4xKsTWMTyJNx)_",
+      "turn": 2
+    },
+    {
+      "number": 34,
+      "head": "eql-symbolic-function-coraplex-experiments",
+      "base": "eql-symbolic-function-sdt",
+      "draft": true,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01NXXMnSr76G4xKsTWMTyJNx)_",
+      "turn": null
+    },
+    {
+      "number": 35,
+      "head": "eql-symbolic-function-operand-view",
+      "base": "eql-symbolic-function-coraplex-experiments",
+      "draft": true,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01NXXMnSr76G4xKsTWMTyJNx)_",
+      "turn": null
+    },
+    {
+      "number": 36,
+      "head": "eql-symbolic-function-remove-decorator",
+      "base": "eql-symbolic-function-operand-view",
+      "draft": false,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01NXXMnSr76G4xKsTWMTyJNx",
+      "turn": null
+    },
+    {
+      "number": 41,
+      "head": "rdr-backward-inference",
+      "base": "ripple-down-rules-refactor",
+      "draft": false,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 54,
+      "head": "claude/split-performatives-prs-xbluus",
+      "base": "claude/split-performatives-prs-xbluus-agreement",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01XqcJKbqDoptTKDYVQ3AHyB)_",
+      "turn": null
+    },
+    {
+      "number": 55,
+      "head": "claude/split-performatives-prs-xbluus-agreement",
+      "base": "main",
+      "draft": true,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01XqcJKbqDoptTKDYVQ3AHyB)_",
+      "turn": 3
+    },
+    {
+      "number": 63,
+      "head": "D-core-aid",
+      "base": "rdr-backward-inference",
+      "draft": false,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 64,
+      "head": "D-core-underspecified",
+      "base": "D-core-aid",
+      "draft": false,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 65,
+      "head": "D-core-corner-case",
+      "base": "D-core-underspecified",
+      "draft": false,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 66,
+      "head": "D-core-serialization",
+      "base": "D-core-corner-case",
+      "draft": false,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 67,
+      "head": "D-core-support",
+      "base": "D-core-serialization",
+      "draft": false,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 68,
+      "head": "D-core-engine",
+      "base": "D-core-support",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01UttYwPj1giTUC1r3DKFqyo)_",
+      "turn": null
+    },
+    {
+      "number": 76,
+      "head": "D-ui",
+      "base": "D-ui-rendering",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy",
+      "turn": null
+    },
+    {
+      "number": 77,
+      "head": "D-deco",
+      "base": "D-store",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01C5ssGqC7GrrJMY6LJNrGfE",
+      "turn": null
+    },
+    {
+      "number": 78,
+      "head": "D-ui-splice-fix",
+      "base": "D-core-engine",
+      "draft": true,
+      "labels": [
+        "bug",
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy",
+      "turn": null
+    },
+    {
+      "number": 79,
+      "head": "D-ui-rendering",
+      "base": "D-ui-splice-fix",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy",
+      "turn": null
+    },
+    {
+      "number": 80,
+      "head": "D-store",
+      "base": "D-ui",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01C5ssGqC7GrrJMY6LJNrGfE",
+      "turn": null
+    },
+    {
+      "number": 81,
+      "head": "claude/rdr-why-answer-6fnw2o",
+      "base": "D-core-engine",
+      "draft": true,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01V2DJMF1C2bQjhLcPo5sFkx",
+      "turn": null
+    },
+    {
+      "number": 82,
+      "head": "eql/causal-verbalization",
+      "base": "claude/rdr-why-answer-6fnw2o",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_018TDLJcTEz7RN1tBbTcYV4V",
+      "turn": null
+    },
+    {
+      "number": 84,
+      "head": "rdr/why-query-surface",
+      "base": "eql/causal-verbalization",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_0148J38dvujaob3AYJqfNzwa",
+      "turn": null
+    },
+    {
+      "number": 85,
+      "head": "rdr/decision-queries",
+      "base": "eql/causal-verbalization",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_013NepUGgubeWHnLT5TUPLdu",
+      "turn": null
+    },
+    {
+      "number": 88,
+      "head": "claude/eql-verbalization-p3-albw76",
+      "base": "main",
+      "draft": false,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_013vWowa4wCGUA893PZbjev7",
+      "turn": 4
+    },
+    {
+      "number": 89,
+      "head": "conditions-root-drop-dead-parent-recovery",
+      "base": "main",
+      "draft": true,
+      "labels": [],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01RSGX4auPKxNkRqP6s4kSSm",
+      "turn": 4
+    },
+    {
+      "number": 90,
+      "head": "claude/entity-query-parent-props-w789od",
+      "base": "main",
+      "draft": true,
+      "labels": [
+        "bug"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01EnQyPLtnuwLdmQ5RvmwZtg",
+      "turn": 4
+    },
+    {
+      "number": 91,
+      "head": "claude/plan-dashboard-system-sxnazc",
+      "base": "main",
+      "draft": false,
+      "labels": [
+        "cram2-link-sent"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01QSTqKnh5DGrYrFK6XoHg5q",
+      "turn": 4
+    },
+    {
+      "number": 92,
+      "head": "claude/dag-parent-root-and-querygraph-followups",
+      "base": "main",
+      "draft": true,
+      "labels": [
+        "bug"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_01NUtpYahbtZiRK7ijBXp5gi",
+      "turn": 4
+    },
+    {
+      "number": 97,
+      "head": "claude/verbalization-surfaces-autogen-sh2saj",
+      "base": "main",
+      "draft": false,
+      "labels": [
+        "needs-resolution"
+      ],
+      "ci": null,
+      "session": "https://claude.ai/code/session_014WZyanPqXp3fWBw8EkwfAU",
+      "turn": 4
+    }
+  ]
+}
