@@ -43,9 +43,32 @@ filters internally. Also rejected the doc's `_is_false_flag` transition: it keep
 a bool in the second positional slot, so a missed call site compiles with wrong
 semantics.
 
+## Commit 2 (43971581) — truth reading moved onto the expression
+
+Found while investigating the coraplex CI failure at 465dd92c. Commit 1 derived every
+result's truth from the operand's binding uniformly, so a query selecting `0`, `False`
+or an empty collection reported itself unsatisfied — a query's binding is its
+*selection*, not a truth claim. `evaluate()` hid it (a query isn't a truth-recording
+root, so it's never filtered by truth); only a consumer reading a query result's truth
+saw it. Proved by probing an `origin/main` worktree: main gives `(True, [0]), (True,
+[1])` for `entity(variable_from([0, 1]))`, commit 1 gave `(False, [0])`.
+
+Fix: `SymbolicExpression._result_is_false_(result)` — the expression answers, not the
+result. Default is the binding-truthiness rule (what a bare-condition variable needs,
+and what an operator's boolean binding already means); `Query` overrides to never false.
+Two red tests first, both green after. Full suite 2002 passed / 2 failed (the same two
+pre-existing graphviz `test_object_diagram.py` failures).
+
+**Not established**: that this fix explains the coraplex `test_merge_motions` failure.
+Nothing in `coraplex/src` or `semantic_digital_twin/src` reads `is_true`/`is_false`
+directly, and the failure shape (paused/interrupted motion states, threading, 28-min
+simulated run) is equally consistent with a flake. The re-run on 43971581 decides it —
+do not claim the fix resolved it without that evidence.
+
 ## Next
 
-- Drive CI to green (18 checks; was still running at hand-off).
+- Watch CI run 30223586478 on 43971581, especially `test_each_lib (coraplex)`. If
+  `test_merge_motions` fails again, trace the real coraplex path rather than assuming.
 - Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
   Wave-0 stack, which still contests `base_expressions.py`.
 - Answer review comments; keep the PR in draft after each push.
