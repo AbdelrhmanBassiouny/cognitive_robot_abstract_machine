@@ -921,3 +921,83 @@ genuinely `deferred` and this wasn't a regression. Republished the live dashboar
 description updated with a new round section + refreshed test-plan (125 tests, eleven
 `/plan-dashboard` invocations); grepped the PR body for stray `<[a-zA-Z/]` before submitting (none
 found); draft state confirmed intact.
+
+## Review round: type safety sweep, ItemAction hierarchy, extract embedded bash into scripts
+## (2026-07-26, same day) - DONE, pushed 8c7e955f
+User asked to read the latest review comments and handle them: 24 new inline threads landed on
+509b7026, across `build_dashboard.py`, `sync_manifest_status.py`, both test suites, and all three
+SKILL.md files.
+
+**Type safety.** `PullRequestRecord.state` -> `PullRequestState(StrEnum)` (`OPEN`/`CLOSED`)
+instead of a raw string; `merged_at` -> a real `datetime` (parsed via `datetime.fromisoformat`,
+handles GitHub's trailing "Z" natively on 3.11+) instead of `str`; the one GitHub label this code
+inspects for an out-of-band merge got a named `OUT_OF_BAND_MERGE_LABEL` module constant instead of
+a bare `"merged"` literal at its one call site (`labels` itself stays `list[str]` - an open-ended,
+repo-defined vocabulary this codebase doesn't control, so it can't be an enum).
+`sync_manifest_status.py`'s `StatusCorrection.previous_status` -> `ItemStatus` instead of `str`; a
+missing `status:` line now raises a new `MissingStatusLineError(ValueError)` instead of a bare
+`ValueError` (subclassing kept existing `pytest.raises(ValueError, ...)` tests passing unchanged).
+
+**`ItemAction` -> class hierarchy.** The reviewer's own two-comment thread first suggested a plain
+enum, then self-corrected: actions carry per-instance arguments (`plan_id`, `item_identifier`), so
+they can't be enum members. Landed as an ABC (`ItemAction`, frozen dataclass) with an abstract
+`skill_command_name` property each subclass (`StartNowAction`, `ResolveAction`) contributes, and a
+`command` property on the base assembling the clipboard string once. Verified via direct REPL:
+subclasses instantiate correctly, `ItemAction(...)` directly raises `TypeError: Can't instantiate
+abstract class`.
+
+**Design pushback - asked, not implemented.** Two duplicate threads (build_dashboard.py's and
+SKILL.md's) asked whether an out-of-band merge could be detected via local branch-ancestry
+checking against `main` instead of relying on the manually-applied `"merged"` label. Asked the
+user directly (AskUserQuestion) rather than guessing, since it's a real reliability tradeoff:
+GitHub deletes a merged PR's branch by default, so ancestry can't distinguish "merged then
+deleted" from "abandoned then deleted", and it would add a local-git-fetch dependency the skill
+doesn't otherwise need. User chose "Keep current design" - both threads replied with that
+reasoning and resolved (a genuine answer, not a deflection, so resolving was correct here unlike
+the three below).
+
+**Design pushback - replied, left open.** Three more threads (two on the same module-level regex
+constants in `sync_manifest_status.py`, one asking for a full custom dataclass-based YAML
+writer/parser instead of the targeted regex line-patch) got a reasoned reply but were deliberately
+**left open**, not resolved - they're judgment calls without explicit confirmation, matching the
+personal convention that a thread should only resolve once the reviewer's literal ask is done, not
+merely explained away.
+
+**Test suites.** Every `item()`/`PullRequestRecord()` call site (96 + 28 occurrences, via a scripted
+regex substitution) now passes real `ItemStatus`/`PullRequestState` enum members instead of raw
+strings; every "pr" abbreviation in a test identifier spelled out to "pull_request" (13 renames
+across both files, e.g. `no_pr_item` -> `no_pull_request_item`); `test_sync_manifest_status.py`'s
+embedded `MANIFEST_TEXT` triple-quoted string replaced with a real `tests/fixtures/manifest.yaml`
+file read from disk (byte-identical content verified via Python before switching).
+
+**Extracted embedded bash into real scripts** (the largest single ask - a session was previously
+expected to improvise two worktree-push sketches and a multi-step bash sequence from SKILL.md
+prose every run). New `.claude/hooks/write-personal-notes-file.sh`: generic
+commit-and-push-one-file-to-`claude/personal-notes` helper (`--source`/`--destination`/`--message`),
+replacing both embedded worktree sketches. New `.claude/skills/plan-dashboard/refresh_dashboard.sh`:
+orchestrates `sync_manifest_status.py` -> a conditional push via the new hook (only if corrections
+were made) -> `build_dashboard.py`, replacing step 2's entire embedded bash sequence with one script
+call; verified its output is **byte-identical** to `build_dashboard.py`'s direct output against the
+real `rdr-refactor` plan, checked twice (once right after writing it, again after the round's
+docformatter pass). New `.claude/skills/plan-dashboard/requirements.txt` (pyyaml/jinja2/markdown)
+replaces the hardcoded `pip install` line in both `SKILL.md` and `.github/workflows/ci.yml`, so the
+two lists can't drift apart - had to `git add -f` past `.gitignore`'s blanket `*.txt` rule (diagnosed
+via `git check-ignore -v`).
+
+**Shared dependency-readiness script** (closes the exact gap thread #24 flagged): new
+`.claude/skills/plan-dashboard/check_dependency_readiness.py` reuses
+`build_dashboard.py`'s own `Item.is_ready_to_unblock_dependents()` and `classify_live_state`
+directly - `plan-item-kickoff` and `plan-item-resolve` (which had each re-derived the same
+readiness rule in their own SKILL.md prose) now both call it instead, so the two skills and the
+dashboard can never silently disagree about what counts as ready. 7 new tests
+(`test_check_dependency_readiness.py`).
+
+Full suite grew 125 -> 132 (all green, run via the exact CI invocation path
+`.claude/skills/plan-dashboard/tests` from repo root - a bare `tests/` after `cd`-ing around
+accidentally picks up an unrelated top-level `test/conftest.py` that imports `numpy`). Pushed as
+commit 8c7e955f. All 24 threads replied to; 21 resolved, 3 left open (the module-level-regex x2 +
+YAML-rewrite threads). PR description rewritten with a new round section + refreshed test-plan (132
+tests, twelve `/plan-dashboard` invocations, `refresh_dashboard.sh`'s byte-identical verification
+added); grepped the draft PR body for stray `<[a-zA-Z/]` before submitting (none found); re-fetched
+after submitting and confirmed the body landed byte-correct (head SHA 8c7e955f matches) and `draft:
+true` still intact.
