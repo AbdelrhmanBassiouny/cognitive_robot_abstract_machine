@@ -80,6 +80,21 @@ what happened to `rdr-refactor`'s own `rdr/why-answer` item (see its
 `plan.yaml` note and `roadmap.md`'s 2026-07-20 addendum for the real
 example).
 
+**One exception, corrected automatically.** Most drift needs a person to
+interpret it — GitHub's state alone can't say whether a still-open PR means
+"blocked", "deferred", or just "in progress", and a mismatched PR number
+usually means the manifest was mistyped, not that GitHub is wrong. But
+"GitHub confirms this PR is merged" has exactly one correct manifest state:
+`done`. There's nothing to interpret, so `/plan-dashboard` doesn't just flag
+it — `sync_manifest_status.py` corrects `status` to `done` for exactly that
+case, in `plan.yaml` itself, every run, before rendering. Every other kind
+of drift is still left as a flag for a human. (This is itself a fix for a
+real recurrence: four `rdr-refactor` items sat drift-flagged as "merged but
+marked in_progress" for days after a session fixed the *live-state
+classification* bug that had been masking one of them, because nobody had
+gone back and edited the manifest — see the session history around
+2026-07-26 for the full account.)
+
 ### Why items are flat, not nested under wave/track
 
 A track can span or reprioritize across waves (see `why-track` in
