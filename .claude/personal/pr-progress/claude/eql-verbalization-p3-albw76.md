@@ -1,13 +1,19 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-25): pushed (12 commits total). Still **draft** (developer converted it back
-themselves earlier; per personal convention never marked ready again without being explicitly
-asked). Base `main` (#86/#87 both merged there), `mergeable_state: unstable` per GitHub's own
-report though confirmed reconciled (no relevant `main` commits since the last rebase — see round 6
-below). Subscribed to activity. 11 review rounds total, all reply-and-resolved except round 6
-(reconciliation question — informational, no action to resolve). Description rewritten twice: once
-for the 2026-07-24 rebase, once for round 11's repeated-article redesign. Hourly check-in loop
-active; PR still not merged/closed, so subscription continues.
+Status (2026-07-26): pushed (13 commits total, a4a69b06 latest). Still **draft** (developer
+converted it back themselves earlier; per personal convention never marked ready again without
+being explicitly asked). Base `main` (#86/#87 both merged there). Subscribed to activity. 12 review
+rounds total: 10 reply-and-resolved, 2 deliberately left open — round 6 (reconciliation question,
+informational) and two threads of round 12 where the developer explicitly said "discuss with me"
+(the `NounPhrase.additional_heads` design, and the grammatical justification for the repeated
+article) — replied with full reasoning but did not resolve, awaiting their response. Description
+rewritten twice so far: once for the 2026-07-24 rebase, once for round 11's repeated-article
+redesign; no further rewrite needed for round 12 (no user-visible behaviour changed, only internal
+layering + docstring wording). CI on the latest push (33a8da5b, before round 12's a4a69b06) was
+green except the known pre-existing `test_world_sim_state_sync` flake in `semantic_digital_twin`
+(confirmed unrelated — 1 of 861 tests, a physics-settling tolerance flake present on `main` too);
+`krrood`'s own job passed. CI for a4a69b06 not yet checked. Hourly check-in loop active; PR still
+not merged/closed, so subscription continues.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -69,11 +75,15 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   swapped for an equivalent placeholder variable). Replied and resolved.
 
 ## Next
-- Rounds 6-11 (reconciliation, optional→tuple x2, DisjunctivePhrase reuse, "canonical" rename x2,
-  dataclasses, repeated article) all addressed and pushed (33a8da5b) this session; PR still open,
-  keep watching CI and any further review comments via the hourly check-in (webhooks don't cover
-  CI success, new pushes, or merge-conflict transitions).
-- `mergeable_state` reported "unstable" at last check (not "clean") — worth a status re-check next
-  session even though the reconciliation investigation found nothing outstanding; GitHub's
-  mergeable-state cache can lag a push.
+- Round 12 (2 fixed-and-resolved: import layering via new `disjunctive_phrase()` in
+  `coordination.py`, "representative referent" docstring consistency pass; 2 left open on purpose
+  since the developer explicitly said "discuss with me" — the `NounPhrase.additional_heads`
+  design question and the grammatical justification for the repeated article) pushed as a4a69b06.
+  Genuinely waiting on the developer's response to those two before doing anything further with
+  them — do not unilaterally refactor `NounPhrase` again without their reply.
+- CI not yet checked for a4a69b06 (only checked through 33a8da5b, which was green except the known
+  pre-existing `semantic_digital_twin` flake) — check next session.
+- `mergeable_state` reported "unstable" at the 33a8da5b check (not "clean") — re-verify at the next
+  status check; GitHub's mergeable-state cache can lag a push, and the reconciliation investigation
+  (round 6) found nothing actually outstanding against `main`.
 - P4 (sdt = PR #33 rebase) still needs P1 + P2 + P3 all merged to main first.
