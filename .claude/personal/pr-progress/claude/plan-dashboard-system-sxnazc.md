@@ -502,3 +502,21 @@ time, unlike round 4).
 - Optional follow-ups not requested: a periodic Routine backstop (deferred per user's answer above);
   migrating the separate EQL-verbalization P1-P4 roadmap (in CLAUDE.local.md's cram-notes section)
   onto this same schema as a second plan, if ever wanted.
+
+## PR body corruption fix (2026-07-26, same day)
+Found while wrapping up the "Start now" button work: re-fetching PR #91's body via
+`pull_request_read` after the update showed every angle-bracket command placeholder
+(`<plan-id>`, `<item-id>`) had been silently stripped by the `update_pull_request` API path (not
+by GitHub's renderer - this was the raw stored body), leaving corrupted text like
+"`/plan-item-kickoff  `" (double space, no placeholder) at both mentions, plus
+"`/plan-dashboard `"/"`/plan-create `" (single missing placeholder each) and an empty `` `` ``
+where "<github-webhook-activity>" should have been. Root cause not fully isolated (didn't matter
+for the fix) - angle brackets inside backtick code spans going through this specific API field
+don't survive, unlike the same syntax in a committed SKILL.md file (raw file content, never
+touches this path) which is unaffected and needs no change.
+
+Fix: rewrote the whole PR body using bracket-free placeholders (`PLAN_ID`/`ITEM_ID`) instead of
+`<plan-id>`/`<item-id>`, and reworded the webhook-events mention to prose ("webhook activity
+events") instead of a literal tag-like code span. Re-submitted via `update_pull_request`,
+re-fetched and confirmed byte-correct this time; `draft: true` also confirmed still intact (no
+recurrence of the earlier draft-state flakiness this round).
