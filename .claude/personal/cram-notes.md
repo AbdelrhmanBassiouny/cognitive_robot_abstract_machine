@@ -341,6 +341,36 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     pre-existing unrelated `graphviz` failures). Pushed as commit 33a8da5b; PR description
     rewritten to describe the repeated-article design instead of the old shared-article
     trade-off. Resolved.
+  - **Review round 12** (2026-07-26, 4 comments): (a) `NounPhrase.additional_heads` design
+    question — "why must they be distinct alternatives, why a separate attribute, discuss with
+    me." Replied with reasoning rather than a code change: distinctness isn't required or checked
+    (a caller could pass duplicates, they'd just render pointlessly, e.g. "a Body or a Body");
+    considered unifying `head`+`additional_heads` into one `heads: Tuple[...]` but rejected it —
+    `head` is structurally special (ordinal/pre_head attach only there, it's the phonology anchor
+    for the ordinary non-disjunctive case), so merging would hide that asymmetry behind an
+    implicit "index 0 is special" rule instead of stating it in the type, and would touch ~20
+    unrelated `NounPhrase(head=...)` call sites for no benefit. Recommended keeping the shipped
+    shape; **left unresolved**, awaiting the developer's response (explicit "discuss with me").
+    (b) "Isn't this more grammatically correct than a single article? Discuss with me" (defending
+    the repeated-article choice) — replied with the concrete argument: a shared article is
+    provably wrong the moment two alternatives need different articles (e.g. `Apple`/`Banana` —
+    no single "a"/"an" works for both), which `_concrete_type_alternatives` can't rule out since it
+    accepts any abstract base's subclass names; repeated article is immune by construction. Cited
+    Fowler's/CGEL as secondary style support. **Left unresolved** (explicit discuss request).
+    (c) "Is it fine that referring.py imports from parts_of_speech? Shared low-level impl instead?"
+    — a real layering violation: `parts_of_speech.py` (vocabulary) already imports from
+    `microplanning.coordination`/`possessive`, so `referring.py` (microplanning) importing back
+    from `parts_of_speech` crossed the boundary both ways. Fixed: added `disjunctive_phrase()` to
+    `microplanning.coordination` (next to the near-identical existing `one_of()`); both
+    `DisjunctivePhrase.as_fragment` and `disjunctive_type_head` now call it, and `referring.py`'s
+    import of `vocabulary.parts_of_speech` is gone entirely. Resolved. (d) "Representative what?
+    Same problem as canonical, needs a complementary word" — round 9's rename fixed the ambiguous
+    word but left "representative" bare as a noun in several docstrings; standardized on
+    "representative referent" throughout the file (every field docstring in `DistinguisherIndex`/
+    `_HeadNounGrouping`, `distinguisher_for`, `add`, `head_nouns`, `type_alternatives`,
+    `_group_referents_by_noun`, `referent_aliases`). Resolved. Pushed as commit a4a69b06; full
+    `test_verbalization/` suite green (756/3 skipped), full `test/krrood_test/` suite unchanged
+    (2012 passed, same 2 pre-existing `graphviz` failures).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
