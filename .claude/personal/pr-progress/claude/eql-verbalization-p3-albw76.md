@@ -1,19 +1,19 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-26): pushed (13 commits total, a4a69b06 latest). Still **draft** (developer
+Status (2026-07-26): pushed (14 commits total, e66bf4b5 latest). Still **draft** (developer
 converted it back themselves earlier; per personal convention never marked ready again without
-being explicitly asked). Base `main` (#86/#87 both merged there). Subscribed to activity. 12 review
-rounds total: 10 reply-and-resolved, 2 deliberately left open — round 6 (reconciliation question,
-informational) and two threads of round 12 where the developer explicitly said "discuss with me"
-(the `NounPhrase.additional_heads` design, and the grammatical justification for the repeated
-article) — replied with full reasoning but did not resolve, awaiting their response. Description
-rewritten twice so far: once for the 2026-07-24 rebase, once for round 11's repeated-article
-redesign; no further rewrite needed for round 12 (no user-visible behaviour changed, only internal
-layering + docstring wording). CI on the latest push (33a8da5b, before round 12's a4a69b06) was
-green except the known pre-existing `test_world_sim_state_sync` flake in `semantic_digital_twin`
-(confirmed unrelated — 1 of 861 tests, a physics-settling tolerance flake present on `main` too);
-`krrood`'s own job passed. CI for a4a69b06 not yet checked. Hourly check-in loop active; PR still
-not merged/closed, so subscription continues.
+being explicitly asked). Base `main` (#86/#87 both merged there). Subscribed to activity. 13 review
+rounds total, all now reply-and-resolved except round 6 (reconciliation question, informational —
+nothing to resolve). Both threads round 12 left open pending discussion are now closed: the
+grammar-justification one the developer resolved themselves after reading the Apple/Banana
+argument; the `additional_heads` design one they replied "Ok keep it, however I'd like to see how
+this behaves on repeat mention" — which led straight to round 13 finding and fixing a real bug (see
+below). Description rewritten twice so far: once for the 2026-07-24 rebase, once for round 11's
+repeated-article redesign; no further rewrite needed for rounds 12-13 (no further user-visible
+surface change, only internal layering/bugfix/docstring wording). CI checked through 33a8da5b
+(green except the known pre-existing `test_world_sim_state_sync` flake in `semantic_digital_twin`,
+confirmed unrelated); not yet checked for a4a69b06 or e66bf4b5. Hourly check-in loop active; PR
+still not merged/closed, so subscription continues.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -75,14 +75,14 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   swapped for an equivalent placeholder variable). Replied and resolved.
 
 ## Next
-- Round 12 (2 fixed-and-resolved: import layering via new `disjunctive_phrase()` in
-  `coordination.py`, "representative referent" docstring consistency pass; 2 left open on purpose
-  since the developer explicitly said "discuss with me" — the `NounPhrase.additional_heads`
-  design question and the grammatical justification for the repeated article) pushed as a4a69b06.
-  Genuinely waiting on the developer's response to those two before doing anything further with
-  them — do not unilaterally refactor `NounPhrase` again without their reply.
-- CI not yet checked for a4a69b06 (only checked through 33a8da5b, which was green except the known
-  pre-existing `semantic_digital_twin` flake) — check next session.
+- Round 13 closed out both threads round 12 had left open: the grammar-justification one was
+  resolved by the developer directly; the `additional_heads` one asked to see repeat-mention
+  behavior, which surfaced and fixed a real bug (`CoreferenceProcessor._reduced`/`_rebuilt`
+  dropping `additional_heads` on a definite repeat mention — see the roadmap section above for the
+  full account) plus a permanent regression test. Pushed as e66bf4b5. All rounds now
+  reply-and-resolved except round 6 (informational, nothing to resolve).
+- CI not yet checked for a4a69b06 or e66bf4b5 (only checked through 33a8da5b, which was green
+  except the known pre-existing `semantic_digital_twin` flake) — check next session.
 - `mergeable_state` reported "unstable" at the 33a8da5b check (not "clean") — re-verify at the next
   status check; GitHub's mergeable-state cache can lag a push, and the reconciliation investigation
   (round 6) found nothing actually outstanding against `main`.
