@@ -883,3 +883,41 @@ draft state confirmed intact.
 
 Both `plan-item-kickoff` and `plan-item-resolve` now cover the same real gap identically. No
 further known gaps of this kind remain in either skill.
+
+## Exclude deferred items from Ready to review (2026-07-26, same day) - DONE, pushed 509b7026
+User sent a screenshot of the live rdr-refactor dashboard: `D-core-engine` (id `D-core-engine`,
+status `deferred`) was showing up in the "Ready to review" sidebar list with a card-level
+"Review" button, and asked why. Root cause: `_compute_ready_to_review` only excludes `BLOCKED`
+status (`if not item.needs_review or item.status is ItemStatus.BLOCKED: continue`) - matching the
+original feature request's literal "is not blocked" wording, but nothing excludes `DEFERRED`.
+`D-core-engine`'s own notes say it's superseded by the topic split (d-core-expert ->
+d-core-single-class -> d-core-backend) and its PR (#68) will be closed rather than merged once the
+split PRs open - so surfacing it as worth reviewing was actively misleading, not just a technical
+edge case.
+
+Asked via AskUserQuestion which of three options to take: exclude deferred entirely (treat like
+blocked, and also hide the card-level button since deferred specifically means "not being
+pursued"); exclude only items explicitly marked superseded (would need a new field); or leave
+as-is and just fix this one item. User picked the first (recommended) option.
+
+Implemented by folding the exclusion into `Item.needs_review` itself rather than only in
+`_compute_ready_to_review`: `item.needs_review = item.live_state is LiveState.OPEN_DRAFT and
+item.status is not ItemStatus.DEFERRED`. Since both the card's Review button and the sidebar list
+key off `needs_review`, one change fixes both without risking them drifting apart - this is
+deliberately asymmetric with `BLOCKED` (a blocked item keeps its card button, only loses the
+sidebar-list entry), per the option's own description. Updated both affected docstrings
+(`Item.needs_review`, `_compute_ready_to_review`) to explain the asymmetry.
+
+Added 3 tests (125 total): `needs_review` false for a deferred item with an open draft PR,
+`ready_to_review` empty for one, and a render-level check confirming no `review-button` class
+renders for one. Formatted via `scripts/format_docstrings.py`; ran the three review-button tests
+individually afterward to double-check the edit that inserted the new test between two existing
+ones hadn't disturbed either neighbor's assertions - all three passed independently. Verified
+against the real `rdr-refactor` dashboard: `D-core-engine`
+plus two other deferred items (`rdr-oo-recognition`, `rdr-backend-unification`) dropped out of the
+"Ready to review" list, 12 -> 9 - all three double-checked against the manifest to confirm they're
+genuinely `deferred` and this wasn't a regression. Republished the live dashboard Artifact in place
+(60a2f66a-...). Committed and pushed to `claude/plan-dashboard-system-sxnazc` (509b7026); PR #91
+description updated with a new round section + refreshed test-plan (125 tests, eleven
+`/plan-dashboard` invocations); grepped the PR body for stray `<[a-zA-Z/]` before submitting (none
+found); draft state confirmed intact.
