@@ -864,3 +864,22 @@ Noted but not acted on (out of the scope the user asked for): `plan-item-resolve
 `tracking_issue` comments (step 2-ish) but doesn't subscribe to it either - the same coverage gap
 exists there. Flagged to the user in the summary; not fixed since only `plan-item-kickoff` was
 requested.
+
+## Close the same gap in plan-item-resolve (2026-07-26, same day) - DONE, pushed 7bf295b0
+User confirmed: "yes do that" - close the identical tracking-issue-subscription gap in
+`plan-item-resolve/SKILL.md` that had been flagged but left out of scope in the previous round.
+Applied the exact same fix, adapted for this skill's own wording: step 1 now subscribes to
+`tracking_issue` via `mcp__Claude_Code_Remote__subscribe_pr_activity` right after resolving the
+plan/item, before gathering any state (mergeable status, CI, review comments, dependency
+recheck). Skipped entirely when the plan has no `tracking_issue`; non-fatal if the subscribe call
+errors (noted in passing when presenting the plan in step 5, matching `plan-item-kickoff`'s
+phrasing). Added the tool to the skill's `allowed-tools` frontmatter.
+
+Documentation-only change (SKILL.md prose, no test suite applies). Grepped the PR body for stray
+`<[a-zA-Z/]` before submitting (none found). Pushed to `claude/plan-dashboard-system-sxnazc`
+(7bf295b0); PR #91 description updated with a new round section, and the test-plan line about the
+`subscribe_pr_activity` failure reworded to cover both skills instead of just `plan-item-kickoff`;
+draft state confirmed intact.
+
+Both `plan-item-kickoff` and `plan-item-resolve` now cover the same real gap identically. No
+further known gaps of this kind remain in either skill.
