@@ -51,6 +51,13 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   `graphviz`/`dot` failures). Pushed as commit 12247569. PR description rewritten to
   match. Both clean-fix threads + both newly-clear threads (conftest scope, ruff
   check-vs-format, and the byte-comparison-test question) replied and resolved.
+- Docstring wording (2 threads, "don't mention ormatic/sqlalchemy at all"): removed the
+  ormatic/`sqlalchemy_generator`/`ormatic_interface.py` comparisons from
+  `surface_generation.py`'s module docstring and `regenerate_verbalization_surfaces`'s
+  own docstring, and from `test_surface_generation.py`'s module docstring -- these
+  testing modules shouldn't reference ormatic in their own documentation even though the
+  design was modeled on it. Verified `test_verbalization/` green (734/3 skipped) after.
+  Pushed as commit 7192661. Both threads replied and resolved.
 
 ### Open (awaiting developer reply, not resolved)
 - `OverriddenOperand`/`SymbolicCallable._placeholder_operand_overrides_` in
