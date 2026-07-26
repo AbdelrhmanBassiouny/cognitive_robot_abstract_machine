@@ -199,6 +199,49 @@ wave eyebrow in dashboard.html (28cadbf9, main PR branch). Confirmed both real p
 render cleanly end-to-end after all of the above. Test suite grew 60 -> 62. Thread replied-and-
 resolved; PR description updated with a "Review round 4" section.
 
+## Bug reports from real usage (2026-07-26, via chat, not a review) — DONE, pushed as 4a3ac61a + 20ad78c8
+User ran the daily plan-dashboard Routine, looked at the refreshed rdr-refactor dashboard, and
+flagged two things by screenshot rather than a review comment. Both were genuine bugs, confirmed
+against live GitHub data (not just taken on faith) before fixing:
+
+1. **"the red items are all merged why are they marked dead and closed instead of Done?"** -
+   checked all 4 drift-flagged items' real PR state. 3 of 4 (#39/#53/#83) were correctly
+   classified MERGED - that's the drift detector doing its job (manifest status is stale, not a
+   bug). #58 was the real bug: fetched its actual GitHub data and found `merged: false` but
+   `labels: ["in-review", "merged"]` - it was merged out-of-band (branch pushed directly, PR
+   closed by hand, so GitHub never set `merged_at`) and the user's own convention is to hand-label
+   it "merged" in that case. `PullRequestRecord` gained a `labels` field and a `was_merged`
+   property checking both `merged_at` and the label; `_live_state_of` now uses it. SKILL.md's
+   pr_data.json instructions updated to fetch labels. Pushed 4a3ac61a.
+2. **"prs that should be in ready to start but are not, like the expert pr"** - checked
+   d-core-expert's manifest (`depends_on: [D-core-support]`) against D-core-support's real GitHub
+   state (open, PR #67, not merged) - correctly excluded under the *old* "ready to start" rule
+   (all dependencies fully done/merged). But checked how D-core-engine (#68, the item d-core-expert
+   replaces) was actually built: its PR is based directly on D-core-support's branch while #67 is
+   still open - stacking on an open-but-ready dependency is this repo's normal workflow, so
+   requiring full merge first was stricter than reality. Added
+   `Item.is_ready_to_unblock_dependents()` (done/merged, or live_state OPEN_READY - a draft still
+   doesn't count) and switched `_compute_next_steps` to use it for both ready-to-start and
+   blocker-maybe-cleared. Confirmed via AskUserQuestion-less direct chat (asked in prose, user
+   answered "it should be that the dependency is ready for review" directly) before implementing -
+   this was a real semantics change affecting every plan, not a one-line fix, so didn't want to
+   guess. Pushed 20ad78c8.
+
+Both fixes verified against the actual rdr-refactor data (not just synthetic tests) before calling
+it done: rebuilt pr_data.json from a live bulk `list_pull_requests` fetch (all 26 referenced PRs
+found on one page, no fallback needed) with labels included, ran `build_dashboard.py` for real -
+PR #58 now shows "merged", d-core-expert now appears in ready-to-start. Republished the live
+dashboard Artifact in place (found via `Artifact({action: "list"})` that the URL had rotated to
+60a2f66a-... since the last note here - the personal-notes-cached `dashboard-urls.yaml` already
+had the right one, confirming the routine's own caching works correctly; the tracking issue #94's
+body still linked the old 55da1cc9-... URL from when it was first created, fixed that too via
+issue_write). Test suite grew 62 -> 73 (was_merged x4, is_ready_to_unblock_dependents x4,
+ready-to-start integration x2). Both commits on the main PR branch
+(`claude/plan-dashboard-system-sxnazc`), not yet reviewed by the user as PR comments - this was
+direct chat, so no thread to reply-and-resolve; PR description not yet updated for these two
+commits (worth doing next time this PR gets touched, or the description will read stale against
+its actual commit list).
+
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
 - Contains only the main-bound infra (hooks + skill), per the user's request to keep it separate
