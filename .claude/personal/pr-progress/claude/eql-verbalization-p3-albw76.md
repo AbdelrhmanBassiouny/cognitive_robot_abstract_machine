@@ -1,19 +1,23 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-26): pushed (14 commits total, e66bf4b5 latest). Still **draft** (developer
+Status (2026-07-26): pushed (15 commits total, ea595142 latest). Still **draft** (developer
 converted it back themselves earlier; per personal convention never marked ready again without
-being explicitly asked). Base `main` (#86/#87 both merged there). Subscribed to activity. 13 review
+being explicitly asked). Base `main` (#86/#87 both merged there). Subscribed to activity. 14 review
 rounds total, all now reply-and-resolved except round 6 (reconciliation question, informational —
 nothing to resolve). Both threads round 12 left open pending discussion are now closed: the
 grammar-justification one the developer resolved themselves after reading the Apple/Banana
 argument; the `additional_heads` design one they replied "Ok keep it, however I'd like to see how
-this behaves on repeat mention" — which led straight to round 13 finding and fixing a real bug (see
-below). Description rewritten twice so far: once for the 2026-07-24 rebase, once for round 11's
-repeated-article redesign; no further rewrite needed for rounds 12-13 (no further user-visible
-surface change, only internal layering/bugfix/docstring wording). CI checked through 33a8da5b
-(green except the known pre-existing `test_world_sim_state_sync` flake in `semantic_digital_twin`,
-confirmed unrelated); not yet checked for a4a69b06 or e66bf4b5. Hourly check-in loop active; PR
-still not merged/closed, so subscription continues.
+this behaves on repeat mention" — which led straight to round 13 finding and fixing a real bug,
+and round 14 adding the pronoun-path companion test (see below). Description rewritten twice so
+far: once for the 2026-07-24 rebase, once for round 11's repeated-article redesign; no further
+rewrite needed for rounds 12-14 (no further user-visible surface change, only internal
+layering/bugfix/docstring/test wording). CI checked through e66bf4b5: `krrood`'s own job green;
+a `coraplex` job failure (an `ormatic_interface.py` regeneration/`ruff format` internal error) and
+the recurring pre-existing `semantic_digital_twin` flake (`test_world_sim_state_sync`) both
+confirmed unrelated to this PR — neither touches any file this PR changes, and the `coraplex` one
+is deliberately left alone per AGENTS.md's guidance never to hand-fix `ormatic_interface.py`. CI
+for ea595142 not yet checked. Hourly check-in loop active; PR still not merged/closed, so
+subscription continues.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -79,10 +83,13 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   resolved by the developer directly; the `additional_heads` one asked to see repeat-mention
   behavior, which surfaced and fixed a real bug (`CoreferenceProcessor._reduced`/`_rebuilt`
   dropping `additional_heads` on a definite repeat mention — see the roadmap section above for the
-  full account) plus a permanent regression test. Pushed as e66bf4b5. All rounds now
-  reply-and-resolved except round 6 (informational, nothing to resolve).
-- CI not yet checked for a4a69b06 or e66bf4b5 (only checked through 33a8da5b, which was green
-  except the known pre-existing `semantic_digital_twin` flake) — check next session.
+  full account) plus a permanent regression test. Round 14 followed up with the pronoun-path
+  companion test, plus two more docstring/AGENTS.md polish items. Pushed as ea595142. All rounds
+  now reply-and-resolved except round 6 (informational, nothing to resolve).
+- CI checked through e66bf4b5: `krrood`'s own job green; the `coraplex` ORM-regeneration failure
+  and the pre-existing `semantic_digital_twin` flake are both confirmed unrelated (see round 14
+  above) — do not attempt to fix either from this PR. CI for ea595142 not yet checked, do that
+  next.
 - `mergeable_state` reported "unstable" at the 33a8da5b check (not "clean") — re-verify at the next
   status check; GitHub's mergeable-state cache can lag a push, and the reconciliation investigation
   (round 6) found nothing actually outstanding against `main`.
