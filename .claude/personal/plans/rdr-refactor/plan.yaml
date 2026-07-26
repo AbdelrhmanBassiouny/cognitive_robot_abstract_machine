@@ -442,16 +442,23 @@ items:
   notes: Monotonic-conclusions contract + recorded dependency edges.
 - id: eql-truth-unification
   title: Unified OperationResult truth
-  branch: eql/truth-unification
-  pull_request_number: null
+  branch: claude/eql-truth-unification-refactor-pfux7f
+  pull_request_number: 99
   track: track-t
   depends_on:
   - eql-core-prep
-  status: not_started
-  notes: 'Design doc krrood/doc/eql/developer/operation_result_truth_unification.md (on abdel/rdr/oo-plan).
-    Drops OperationResult.is_false, truth always read from bindings[self._id_]. Originally blocked on
-    #28 merging to avoid stack conflicts in core/base_expressions.py — #28 is merged now, so this is unblocked;
-    verify no new conflicts before starting.
+  status: in_progress
+  session: https://claude.ai/code/session_01YTSdjBA54dAdBxsCujdjTX
+  notes: 'Implemented and pushed as PR #99 (draft, off main). The OperationResult.is_false field is dropped;
+    is_false reads bindings[operand._id_] directly and is_condition_false is gone. Branch is the session''s
+    designated claude/... branch, not the originally planned eql/truth-unification. Two deliberate divergences
+    from the design doc, which predates the current code: (1) the invariant needed qualifying — an expression
+    has one binding, and for Entity/aggregators/arithmetic that binding is the selected value, so taken
+    verbatim the doc dropped query results whose value was 0 or empty; a new TruthValuedExpression tells
+    truth-binding from value-binding expressions apart and only truth-recording roots are filtered by truth.
+    (2) The _is_false_flag transition was rejected — removing the field outright makes a missed call site
+    fail loudly instead of silently compiling. _evaluate_child_as_condition_ was kept (now a pass-through)
+    so PRs #90/#92 keep their recording hook. Design doc landed with the PR, rewritten to match.
 
     '
 - id: rdr-concept-trees
