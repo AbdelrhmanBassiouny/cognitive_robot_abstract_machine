@@ -371,6 +371,29 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     `_group_referents_by_noun`, `referent_aliases`). Resolved. Pushed as commit a4a69b06; full
     `test_verbalization/` suite green (756/3 skipped), full `test/krrood_test/` suite unchanged
     (2012 passed, same 2 pre-existing `graphviz` failures).
+  - **Review round 13** (2026-07-26, 3 comments, same day as round 12): (a) the grammar-
+    justification thread (round 12b) got no further reply from the developer — they resolved it
+    themselves after reading the Apple/Banana argument, no action needed. (b) follow-up on the
+    `additional_heads` design thread (round 12a): "Ok keep it, however I'd like to see how this
+    behaves — e.g. re-mentioning the variable elsewhere in the query." Built exactly that
+    scenario (`and_(AbstractOperandRole(shape), VisibleFromSensor(shape, sensor))` — a second,
+    non-pronoun mention) and it exposed a real bug: `CoreferenceProcessor._reduced()` (the
+    definite-repeat-mention path) rebuilt `NounPhrase` from scratch naming only
+    head/number/definiteness/referent_id/alternative/ordinal — `additional_heads` was never
+    listed, so a repeat mention silently dropped every alternative but the first ("the Circle"
+    instead of "the Circle or the Square"). `_rebuilt()` had a milder version (preserved via
+    `replace()` but never walked). Fixed both to propagate + walk `additional_heads` exactly like
+    `head`; added a permanent regression test
+    (`test_reused_abstract_operand_reads_as_a_definite_disjunction_on_repeat_mention`). Resolved.
+    (c) "Don't mention users/callers in a docstring, it goes stale — add this to AGENTS.md" (on
+    `disjunctive_phrase`'s docstring, which had named `DisjunctivePhrase`/`disjunctive_type_head`
+    as its "the shared building block behind" callers) — reworded to describe behavior/contract
+    only; added the rule to `AGENTS.md`'s Documentation section. Resolved. Also fixed, unprompted
+    but same underlying issue: an awkward doubled "representative referent *representative*"
+    docstring phrase from round 12's rename pass (developer flagged it directly) — reworded.
+    Pushed as commit e66bf4b5; full `test_verbalization/` suite green (757/3 skipped, +1 for the
+    new regression test), full `test/krrood_test/` suite green (2013 passed, same 2 pre-existing
+    unrelated `graphviz` failures).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
