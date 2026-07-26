@@ -666,3 +666,40 @@ PR-body corruption bug from earlier in the session recurred - text I wrote this 
 what I'd sent; fixed by rewording all three spots to avoid raw angle brackets in backticks
 (`item-ITEM_ID`, "anchor link" instead of naming the `<a>` tag, `/model MODEL_ID`) and resubmitted -
 confirmed byte-correct on the next fetch.
+
+## Fix the model picker not opening (2026-07-26, same day) - DONE, pushed 798a9b03
+User reported the model dropdown added last round doesn't open. Investigated with actual browser
+automation rather than guessing from the DOM/CSS (which looked completely correct on inspection) -
+used Playwright against a real headless Chromium to check `elementFromPoint` at the select's
+center, computed styles, and ancestor pointer-events/overflow/z-index chain; found nothing
+programmatically wrong. Concluded (and this matches known behavior) the real cause: a published
+Artifact page renders inside a sandboxed iframe, and native `<select>` popup rendering is a known
+failure case in that context - it can look entirely valid in the DOM while the browser simply never
+paints the popup.
+
+Replaced the native `<select>` with a hand-built dropdown in `dashboard.html`: a `.model-picker`
+span wrapping a toggle `<button>` and a `<ul role="listbox">` positioned `fixed` (coordinates
+computed from the toggle's own `getBoundingClientRect()` at open time via
+`planDashboardToggleModelPicker`, so it can't be clipped by `.item`'s own `overflow: hidden` the
+way a `position: absolute` list nested inside would be). `planDashboardSelectModel` updates the
+toggle's label and a `data-model` attribute on the picker; closes on outside click (document-level
+listener) or Escape. `planDashboardCopyActionCommand` now reads `data-model` off the adjacent
+`.model-picker` instead of a `<select>`'s `.value`.
+
+Verified for real this time, not just by static inspection (since a native select's DOM/CSS also
+looked fine and still failed in the wild) - ran the actual generated dashboard HTML in a real
+headless Chromium session via Playwright: clicked the toggle and confirmed the list's computed
+`display` genuinely becomes `block`, clicked the "Opus 5" option and confirmed the toggle label
+updates and the list closes, then clicked the paired action button and read the OS clipboard back -
+confirmed the copied text is exactly `/model claude-opus-5\n/plan-item-resolve rdr-refactor
+rdr-backward-inference` for a real item on the real rdr-refactor plan.
+
+Updated the `test_render_offers_every_model_option_in_each_action_buttons_dropdown` test to check
+the new `data-value`/`<li>` markup instead of `<option>`, plus an explicit assertion that
+`model-select` (the removed native-select class) is gone. Full suite still 109 tests, all green.
+Republished the live dashboard Artifact in place (60a2f66a-...). Committed and pushed to
+`claude/plan-dashboard-system-sxnazc` (798a9b03); PR #91 description updated with a new "Fix the
+model picker not opening" section (caught and fixed the same angle-bracket-in-backtick corruption
+bug a third time in text I wrote for this section - `` `<select>` ``, `` `<button>` ``, `` `<ul>` ``
+- before submitting, by grepping the draft body for `<[a-zA-Z/]` first this time instead of relying
+on re-fetch-and-diff after the fact); draft state confirmed intact.
