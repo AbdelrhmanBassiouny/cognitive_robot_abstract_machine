@@ -1,16 +1,17 @@
 """
 Resolve the set of values an RDR conclusion attribute may take, from its declared type.
 
-When the expert labels a case with no ground truth (the ``ask_for_rule`` path), the RDR can
-derive *what the conclusion is allowed to be* directly from the conclusion attribute's type
-hint — without asking. For an :class:`enum.Enum` (or ``bool``) the allowable values are a
-finite, enumerable set; for an open type (``str`` / an arbitrary class) the domain is not
-enumerable and we fall back to a type check.
+When the expert labels a case with no ground truth (the ``ask_for_rule`` path), the RDR
+can derive *what the conclusion is allowed to be* directly from the conclusion
+attribute's type hint — without asking. For an :class:`enum.Enum` (or ``bool``) the
+allowable values are a finite, enumerable set; for an open type (``str`` / an arbitrary
+class) the domain is not enumerable and we fall back to a type check.
 
-:class:`ConclusionDomain` is that resolved description; :func:`resolve_conclusion_domain`
-builds one for ``owner_type.attribute_name``. Both are consumed by the conclusion validator
-(reject out-of-domain answers) and by the interactive shell (show the allowable values, inject
-enum members for tab-completion, source the example).
+:class:`ConclusionDomain` is that resolved description;
+:func:`resolve_conclusion_domain` builds one for ``owner_type.attribute_name``. Both are
+consumed by the conclusion validator (reject out-of-domain answers) and by the
+interactive shell (show the allowable values, inject enum members for tab-completion,
+source the example).
 """
 
 from __future__ import annotations
@@ -23,6 +24,14 @@ from typing_extensions import Any, Dict, Optional, Tuple, get_args
 
 from krrood.class_diagrams.exceptions import CouldNotResolveType
 from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annotation
+from krrood.entity_query_language.rdr.exceptions import (
+    ConclusionMayNotBeNone,
+    ConclusionNotInDomain,
+    ConclusionRequired,
+    ConclusionWrongType,
+)
+from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.exceptions import DataclassException
 
 #: The runtime type of ``None``, used to detect ``Optional`` / ``... | None`` annotations.
 _NONE_TYPE = type(None)
@@ -30,18 +39,32 @@ _NONE_TYPE = type(None)
 
 @dataclass(frozen=True)
 class ConclusionDomain:
-    """The values an RDR conclusion attribute may take, resolved from its declared type."""
+    """
+    The values an RDR conclusion attribute may take, resolved from its declared type.
+    """
 
     expected_types: Tuple[type, ...]
-    """The declared non-``None`` types of the attribute (``isinstance`` targets). Empty when
-    the annotation could not be resolved (then any non-``None`` value is accepted)."""
+    """
+    The declared non-``None`` types of the attribute (``isinstance`` targets).
+
+    Empty when the annotation could not be resolved (then any non-``None`` value is
+    accepted).
+    """
+
     members: Tuple[Any, ...]
-    """The enumerable allowable values (Enum members, or ``True``/``False``); empty when the
-    domain is not enumerable."""
+    """
+    The enumerable allowable values (Enum members, or ``True``/``False``); empty when
+    the domain is not enumerable.
+    """
+
     is_enumerable: bool
-    """Whether the domain is a finite, enumerable set (an Enum or ``bool``)."""
+    """
+    Whether the domain is a finite, enumerable set (an Enum or ``bool``).
+    """
     allows_none: bool
-    """Whether the declared type admits ``None`` (an ``Optional`` / ``... | None`` annotation)."""
+    """
+    Whether the declared type admits ``None`` (an ``Optional`` / ``... | None`` annotation).
+    """
 
     @property
     def type_display(self) -> str:
@@ -72,12 +95,47 @@ class ConclusionDomain:
             return f"{name} = {self.members[0]!r}"
         return f"{name} = <{self.type_display}>"
 
+    def hint(self) -> str:
+        """:return: A short clause naming the allowable values (enumerable) or expected type."""
+        if self.is_enumerable:
+            return f"one of: {self.display()}"
+        return f"a {self.type_display}"
+
+    def validate(self, value: Any, allow_unset: bool) -> Optional[DataclassException]:
+        """
+        Validate a conclusion answer against this domain.
+
+        Checks layer in order: an *unset* answer (the ``UNSET`` sentinel) is acceptable only
+        when ``allow_unset`` (a current conclusion already stands and is not known to be
+        wrong); ``None`` only when this domain admits it; an enumerable domain requires
+        membership; otherwise the value must be an instance of the expected type(s). An
+        unresolved domain (no expected types) accepts any non-``None`` value.
+
+        :param value: The conclusion answer to validate.
+        :param allow_unset: Whether leaving the conclusion unset is acceptable.
+        :return: The exception describing why ``value`` is unacceptable, or ``None``.
+        """
+        if value is UNSET:
+            return None if allow_unset else ConclusionRequired(self)
+        if value is None:
+            return None if self.allows_none else ConclusionMayNotBeNone(self)
+        if self.is_enumerable:
+            return None if self.contains(value) else ConclusionNotInDomain(value, self)
+        if self.expected_types:
+            return (
+                None
+                if isinstance(value, self.expected_types)
+                else ConclusionWrongType(value, self)
+            )
+        return None
+
     def namespace_bindings(self) -> Dict[str, Any]:
         """
         Names to inject into the expert's shell so the allowable values tab-complete.
 
-        :return: ``{EnumType.__name__: EnumType}`` for each Enum among the expected types (so
-            the expert can type ``Species.<tab>``); empty for non-enumerable / builtin domains.
+        :return:``{EnumType.__name__: EnumType}`` for each Enum among the expected types
+            (so the expert can type ``Species.<tab>``); empty for non-enumerable /
+            builtin domains.
         """
         bindings: Dict[str, Any] = {}
         for expected in self.expected_types:

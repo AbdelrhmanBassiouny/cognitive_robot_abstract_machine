@@ -29,6 +29,7 @@ from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVari
 from krrood.entity_query_language.rdr.exceptions import ExpertAbort
 from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.scope import get_definition_scope
+from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -134,9 +135,9 @@ class AnswerRequest:
     The namespace variable the expert assigns (e.g. ``"conditions"``).
     """
 
-    validate: Callable[[Any], Optional[str]]
+    validate: Callable[[Any], Optional[DataclassException]]
     """
-    Returns an error message if the assigned value is unacceptable, else ``None``.
+    Returns the exception describing why the assigned value is unacceptable, else ``None``.
     """
 
     example: str
@@ -184,7 +185,7 @@ class ExpertInterface(ABC):
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, str]] = None,
+        initial_errors: Optional[Dict[str, DataclassException]] = None,
     ) -> Dict[str, Any]:
         """
         Drive the request loop until every required answer validates.
@@ -201,10 +202,10 @@ class ExpertInterface(ABC):
         """
         namespace = self._build_namespace(context, requests)
 
-        def validate() -> Dict[str, str]:
+        def validate() -> Dict[str, DataclassException]:
             return self._validate(namespace, requests)
 
-        errors: Dict[str, str] = initial_errors or {}
+        errors: Dict[str, DataclassException] = initial_errors or {}
         while True:
             header = self._render_header(context, requests, errors)
             self._run(namespace, header, validate)
@@ -229,20 +230,20 @@ class ExpertInterface(ABC):
     @staticmethod
     def _validate(
         namespace: Dict[str, Any], requests: List[AnswerRequest]
-    ) -> Dict[str, str]:
+    ) -> Dict[str, DataclassException]:
         """
         Run every request's validator against its current namespace value.
 
         :param namespace: The interaction namespace, keyed by answer name.
         :param requests: The answers to validate.
-        :return:``{request.name: error_message}`` for every request whose value failed
+        :return:``{request.name: exception}`` for every request whose value failed
             validation.
         """
-        errors: Dict[str, str] = {}
+        errors: Dict[str, DataclassException] = {}
         for request in requests:
-            message = request.validate(namespace.get(request.name))
-            if message is not None:
-                errors[request.name] = message
+            error = request.validate(namespace.get(request.name))
+            if error is not None:
+                errors[request.name] = error
         return errors
 
     @classmethod
@@ -262,7 +263,7 @@ class ExpertInterface(ABC):
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        errors: Dict[str, str],
+        errors: Dict[str, DataclassException],
     ) -> str:
         """
         Plain-text header.
@@ -284,8 +285,8 @@ class ExpertInterface(ABC):
             "EQL RDR — supply the answer(s) above, then press Ctrl-D to submit "
             f"(call {EXIT_NAME}() to cancel):"
         )
-        for name, message in errors.items():
-            lines.append(f"[error] {name}: {message}")
+        for name, error in errors.items():
+            lines.append(f"[error] {name}: {error}")
         return "\n".join(lines)
 
     def make_progress_reporter(self) -> Optional[ProgressReporter]:
@@ -354,7 +355,7 @@ class FunctionInterface(ExpertInterface):
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, str]] = None,
+        initial_errors: Optional[Dict[str, DataclassException]] = None,
     ) -> Dict[str, Any]:
         self._context = context
         self._requests = requests
