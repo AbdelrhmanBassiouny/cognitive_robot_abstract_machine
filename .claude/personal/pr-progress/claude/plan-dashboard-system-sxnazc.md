@@ -578,3 +578,91 @@ Republished the live dashboard Artifact in place (60a2f66a-...). Committed and p
 `claude/plan-dashboard-system-sxnazc` (ada693b2); PR #91 description updated with a new "Make what
 to do next entries jump to their item card" section and refreshed test-plan bullets (96 tests, six
 `/plan-dashboard` invocations); draft state confirmed intact throughout.
+
+## Hide done items by default + per-status action buttons + model picker (2026-07-26, same day) - DONE, pushed 8da942c7
+User asked for five things in one request: (1) done/merged items hidden by default with a sidebar
+toggle to reveal them; (2) when hidden, a dependent's indentation dedents as if it had no
+dependency on a hidden item, not just one level shallower; (3) every not-done/not-merged chip gets
+an action button with a status-appropriate label (blocked -> "Resolve" was the user's own example);
+(4) a real bug: the sidebar showed "backward inference" as ready-to-start when it's actually
+blocked - should show as an actionable "resolve" item instead; (5) the resolve button should run a
+skill that gathers PR/issue state and proposes a plan, preferring a known existing session first.
+
+Asked two clarifying questions before implementing (AskUserQuestion): what in-progress/deferred
+buttons should say (answered: "Resume"/"Reconsider", same underlying resolve skill just reworded),
+and whether the resolve skill's session-reuse check could only be best-effort given no
+session-liveness tool exists here (user overrode this entirely: "always start fresh", i.e. drop the
+known-session-check idea altogether) - and in the same answer added a new requirement: every action
+button (including the existing Start now) needs an adjacent model-choice dropdown.
+
+Implemented in `build_dashboard.py`:
+- New `ItemAction(label, command)` dataclass replaces the old kickoff-only `Item.kickoff_command`
+  field with a general `Item.action` covering every non-done status. `_action_for(item)`: DONE ->
+  None; NOT_STARTED -> "Start now" (`/plan-item-kickoff`, still gated on `_dependencies_are_ready`,
+  unchanged); BLOCKED/IN_PROGRESS/DEFERRED -> "Resolve"/"Resume"/"Reconsider" respectively, all
+  routing to a new `/plan-item-resolve` command, ungated (investigating a stalled item is always
+  actionable regardless of dependency state, unlike starting fresh).
+- New `ModelOption(value, label)` dataclass + module-level `AVAILABLE_MODELS` list (session default,
+  Opus 5, Sonnet 5, Haiku 4.5, Fable 5) passed into the template as `available_models`.
+- Real bug fix in `_compute_next_steps`: a BLOCKED item with every dependency ready was landing in
+  `ready_to_start` (via the shared `_dependencies_are_ready` check not distinguishing status) instead
+  of `blocker_maybe_cleared`. Now explicitly gated on `item.status is ItemStatus.NOT_STARTED` for the
+  ready-to-start branch; a blocked item lands in blocker-maybe-cleared once *any* dependency is
+  ready (partial or full - reworded the sidebar reason text to match, dropping "not all").
+- `StackedItem` gained `indent_level_with_done_hidden`/`wrap_parent_with_done_hidden`, computed by a
+  new memoized recursive `visible_stack_position()` inside `_build_track_stack` that treats a `done`
+  same-track dependency as if it weren't a dependency at all (not just one level shallower) -
+  verified it correctly skips multi-hop chains of done items and never points a wrap-arrow at a
+  hidden (done) item. `indent_style` now emits both levels as CSS custom properties
+  (`--indent-level`/`--indent-level-hidden-done`) instead of a single computed `margin-left`, so the
+  client-side toggle needs no re-render.
+
+Implemented in `dashboard.html`:
+- `<div class="page hide-done" id="plan-dashboard-page">` - NOTE: this fragment has no `<body>` tag
+  of its own (the Artifact publish pipeline supplies it), so "hide by default" and the toggle target
+  had to be a class on this div, not `document.body` as I first assumed before catching it via a
+  grep for `<body`. All the new CSS keys off `.page.hide-done` accordingly, e.g.
+  `.page.hide-done .item.status-done { display: none; }` and a parallel rule swapping which
+  `--indent-level*` variable feeds `.item`'s `margin-left`.
+- Sidebar `<label class="done-toggle">` checkbox (unchecked = hidden, the default) toggles the class.
+- Item cards now render two wrap-arrow divs (`.wrap-arrow-all`/`.wrap-arrow-hidden-done`), CSS-toggled
+  by the same page class, so the "continues from X" label is also correct in both views.
+- Unified `action_button(item)` macro replaces the old Start-now-only button block: renders a
+  `<select class="model-select">` (one `<option>` per `AVAILABLE_MODELS` entry) beside a
+  `<button data-action-command="...">`. Renamed `start-now-button` CSS/JS identifiers to the generic
+  `action-button` throughout.
+- `planDashboardCopyKickoffCommand` replaced with `planDashboardCopyActionCommand`: reads the
+  button's `previousElementSibling` (the select) for the chosen model, prepends `/model <value>\n`
+  to the base command when a model was picked, otherwise copies the command alone - same
+  clipboard-write-with-textarea-fallback logic as before, just parameterized.
+
+Added 24 new/changed tests (109 total): per-status action label/command (start/resolve/resume/
+reconsider), the dependency-readiness gate still working post-refactor, the sidebar bug-fix
+regression (blocked item with all dependencies ready lands in blocker_maybe_cleared, never
+ready_to_start), hidden-done dedent at one hop / through a chain / only-the-immediate-dependency
+(not the whole ancestor chain) / wrap-parent-never-done, and render-level checks for the toggle
+checkbox + `class="page hide-done"` default + every model option present in the dropdown + both
+CSS-variable indent levels on a real dependent's `style` attribute.
+
+Verified end-to-end against the real rdr-refactor data (not just synthetic tests): action-button
+counts matched status counts exactly (2 Start now among 6 not-started - unchanged from the earlier
+dependency-gating fix, 11 Resolve, 15 Resume, 7 Reconsider); the previously-mis-bucketed "RDR
+engine: backward inference + condition resolvers" moved from `ready_to_start` to
+`blocker_maybe_cleared`; spot-checked several real items' `--indent-level`/`--indent-level-hidden-done`
+pairs and confirmed dedent-to-zero on items chained behind done ancestors while an in-progress
+dependency left the indent unchanged. Republished the live dashboard Artifact in place
+(60a2f66a-...). New `.claude/skills/plan-item-resolve/SKILL.md` mirrors `plan-item-kickoff`'s
+structure (resolve item -> gather state including PR mergeable/CI/review comments/tracking-issue
+discussion/dependency regressions -> propose a plan via plan mode, never touching code) but starts
+fresh every time per the user's explicit "always start fresh" answer - no session-liveness check
+attempted. README.md dev-tools section got a matching bullet. Committed and pushed to
+`claude/plan-dashboard-system-sxnazc` (8da942c7); PR #91 description updated (Summary section +
+new round section + refreshed test-plan, 109 tests / seven `/plan-dashboard` invocations).
+
+Also fixed, while updating the PR description this round: the exact same angle-bracket-in-backtick
+PR-body corruption bug from earlier in the session recurred - text I wrote this round
+(`` `id="item-<identifier>"` ``, `` `<a>` ``, `` `/model <id>` ``) got silently stripped by
+`update_pull_request` again. Caught it by re-fetching the PR after submitting and diffing against
+what I'd sent; fixed by rewording all three spots to avoid raw angle brackets in backticks
+(`item-ITEM_ID`, "anchor link" instead of naming the `<a>` tag, `/model MODEL_ID`) and resubmitted -
+confirmed byte-correct on the next fetch.
