@@ -703,3 +703,40 @@ model picker not opening" section (caught and fixed the same angle-bracket-in-ba
 bug a third time in text I wrote for this section - `` `<select>` ``, `` `<button>` ``, `` `<ul>` ``
 - before submitting, by grepping the draft body for `<[a-zA-Z/]` first this time instead of relying
 on re-fetch-and-diff after the fact); draft state confirmed intact.
+
+## Follow-up chat exchanges (2026-07-26, same day)
+Two quick chat questions, no code change:
+- "why does clicking Resolve copy a command instead of opening a session and executing it there?"
+  - answered from the already-established artifact-capabilities constraint (only `downloads`/`mcp`
+    exist, neither can spawn a session), and offered two real alternatives if wanted (a
+    create_new_session_on_fire Routine, or a user-built bookmarklet/companion app) - user didn't
+    ask for either to be built.
+- "what's the point of the model dropdown then, if it's just clipboard-copy anyway?" - answered
+  honestly: it only saves typing the `/model MODEL_ID` line yourself before pasting; on "Session
+  default" it's a no-op. Offered to remove it if not valuable; user said keep it as is.
+
+## Require a full roadmap.md read before asking the user anything (2026-07-26, same day) - DONE, pushed 413d168d
+User reported a real usability problem while actually using `plan-item-kickoff`: it missed a
+decision already recorded in `roadmap.md` and asked the user about it instead of finding it,
+requiring a manual "read the roadmap again" correction mid-session. Root cause, on inspection:
+step 2's roadmap instruction in both `plan-item-kickoff` and `plan-item-resolve` said to grep for
+the item's own id/branch/title and treated that as sufficient - but a roadmap's own decisions
+sections ("Finalized design decisions", "Decisions locked in", a track's design notes, a prior
+review round's resolution) don't necessarily name every item they bind, so a grep-only pass misses
+exactly this kind of already-settled call by design, not by bad luck.
+
+Fixed both SKILL.md files identically: step 2's roadmap bullet now requires a full read of
+`roadmap.md` before drafting anything, with grep kept only as a supplementary pass for catching
+focused mentions a full read might skim past - and an explicit instruction to say which sections
+were read in full versus grepped if a full read is genuinely impractical (large roadmap), rather
+than silently reading only part of it and presenting the plan as comprehensive regardless. Also
+added an explicit check-before-asking gate at the start of step 5 (propose the plan): re-check the
+already-gathered context for an existing answer before raising anything as an open question to the
+user, and if something is still asked, say what was checked so the user can correct it quickly with
+a pointer instead of re-explaining from scratch.
+
+Documentation-only change (SKILL.md prose, no code) - no test suite applies. Grepped the PR-body
+text for `<[a-zA-Z/]` before submitting per the now-standing habit from the three prior corruption
+incidents this session; none found. Committed and pushed to `claude/plan-dashboard-system-sxnazc`
+(413d168d); PR #91 description updated with a new "Require a full roadmap.md read before asking
+the user anything" section; draft state confirmed intact.
