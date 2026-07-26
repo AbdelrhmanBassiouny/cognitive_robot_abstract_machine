@@ -184,13 +184,20 @@ items:
 - id: d-core-expert
   title: 'RDR engine: Expert policy split'
   branch: D-core-expert
-  pull_request_number: null
+  pull_request_number: 98
   track: S0-steward
   depends_on:
   - D-core-support
-  status: not_started
-  notes: expert.py + its tests; DataclassException hierarchy, validators on ConclusionDomain, AnswerName
-    enum.
+  status: in_progress
+  session: https://claude.ai/code/session_01Gid5Qw9cbedssFEqojo1SK
+  notes: 'expert.py + its tests; DataclassException hierarchy, validators on ConclusionDomain, AnswerName
+    enum. Done and pushed as PR #98 (draft): AnswerName is a StrEnum (not str+Enum);
+    CaseContext is now built by the caller, not by Expert, per roadmap.md''s locked
+    decision; interface.py''s AnswerRequest.validate/ExpertInterface.interact also
+    retyped to carry the exception itself (touches D-core-support''s file, confirmed
+    with the developer). test_ask_for_rule.py from the D-core-engine mega-branch is
+    actually an EQLSingleClassRDR integration test in disguise and was not ported -
+    flagged for d-core-single-class to pick up instead.'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
