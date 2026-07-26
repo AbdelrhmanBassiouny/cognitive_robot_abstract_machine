@@ -520,3 +520,32 @@ Fix: rewrote the whole PR body using bracket-free placeholders (`PLAN_ID`/`ITEM_
 events") instead of a literal tag-like code span. Re-submitted via `update_pull_request`,
 re-fetched and confirmed byte-correct this time; `draft: true` also confirmed still intact (no
 recurrence of the earlier draft-state flakiness this round).
+
+## Gate "Start now" button on dependency readiness (2026-07-26, same day) - DONE, pushed b8c07487
+User pointed out the "Start now" button should only appear once an item's dependencies are
+actually ready, not just because the item itself is `not_started` - the shipped version ignored
+`depends_on` entirely. Fixed in `build_dashboard.py`: `_kickoff_command_of` now also requires
+`_dependencies_are_ready(item)` (new helper, vacuously true for no dependencies), reusing
+`Item.is_ready_to_unblock_dependents()` - the same check `_compute_next_steps`'s "ready to start"
+sidebar list already used - and `_compute_next_steps` itself now calls the same helper instead of
+its own separately-maintained `ready_count == len(dependencies)` comparison, so both call sites
+agree by construction.
+
+Found and fixed a real ordering bug while implementing this: `_classify_items` computed each
+item's `live_state` and its `kickoff_command` in the same single pass over `plan.items`, so a
+dependency listed *after* its dependent in the manifest would still have its default
+`live_state` (`NO_PULL_REQUEST`) when the dependent's readiness was checked. Split into two
+passes - live state (+ drift + PR url) for every item first, then dependency-derived fields
+(chips + kickoff command) for every item - and added an explicit regression test constructing
+the dependency-listed-after-dependent case to lock it in.
+
+Added 5 new tests (93 total): not-ready-dependency, ready-via-done, ready-via-open-review,
+not-ready-via-draft, and the order-independence case. `scripts/format_docstrings.py` run on the
+touched files (black reformatted unrelated whitespace, no logic changes). Verified end-to-end
+against the real `rdr-refactor` plan (not just synthetic tests): of its 6 not-started items, only
+`d-core-expert` and `eql-truth-unification` (whose sole dependency is respectively open-ready and
+done) still show a button; the other 4, chained behind a still-not-started or still-drafted
+dependency, correctly lost theirs. Republished the live dashboard Artifact in place
+(60a2f66a-...). Committed and pushed to `claude/plan-dashboard-system-sxnazc` (b8c07487); PR #91
+description updated with a new "Gate Start now on dependency readiness" section and refreshed
+test-plan bullets (93 tests, five `/plan-dashboard` invocations); draft state re-confirmed intact.
