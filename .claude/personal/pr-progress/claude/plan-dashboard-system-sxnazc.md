@@ -237,10 +237,33 @@ had the right one, confirming the routine's own caching works correctly; the tra
 body still linked the old 55da1cc9-... URL from when it was first created, fixed that too via
 issue_write). Test suite grew 62 -> 73 (was_merged x4, is_ready_to_unblock_dependents x4,
 ready-to-start integration x2). Both commits on the main PR branch
-(`claude/plan-dashboard-system-sxnazc`), not yet reviewed by the user as PR comments - this was
-direct chat, so no thread to reply-and-resolve; PR description not yet updated for these two
-commits (worth doing next time this PR gets touched, or the description will read stale against
-its actual commit list).
+(`claude/plan-dashboard-system-sxnazc`) - direct chat, so no thread to reply-and-resolve. PR
+description updated with a "Bug fixes from real usage" section; PR draft state needed
+re-asserting (had somehow flipped to ready-for-review between rounds - `update_pull_request`
+with `draft: true` took effect on retry, unclear why the first attempt after round 4 didn't
+stick).
+
+## Follow-up (2026-07-26, same day) - rdr-refactor manifest itself was still stale - DONE, pushed 88584c13
+User looked at the republished dashboard and asked why the merged PRs were still flagged red/
+"stale" - a fair question, since from the outside it looks like the same bug. Explained: the
+label fix made the *live-state badges* correctly say "Merged" for all 4 (confirmed in the
+screenshot), but the *manifest* (`plan.yaml`) itself still said `status: in_progress` for those
+4 items - the drift banner is the dashboard correctly reporting that mismatch, not a residual
+bug. The actual remaining fix was a data edit, not a code edit.
+
+Before touching it, re-verified all 26 referenced PRs **individually** (`pull_request_read`, not
+the bulk `list_pull_requests` call) - the user's own routine-generated report (screenshot) had
+flagged that the bulk list API returned `merged: false` for PRs later confirmed merged
+individually, so bulk data wasn't trustworthy enough to act on without cross-checking. All 26
+individual results were internally consistent this time (no bulk/individual mismatch found in
+this pass). Updated the 4 genuinely-merged items' `status: in_progress` -> `status: done` in
+`rdr-refactor/plan.yaml` (code-extraction/#58, code-generation-extract/#39,
+ripple-down-rules-refactor/#53, eql-attribute-predicate-verbalization/#83) via the same
+disposable-worktree pattern as the wire-key migration; also refreshed two item `notes` fields
+that had described a since-changed "still open" state (now stale text nobody would want to read
+as current). Regenerated + republished the dashboard with the corrected manifest and the
+individually-verified pr_data.json - `drift_count` now genuinely 0. Pushed to personal-notes as
+88584c13.
 
 ## PR #91
 - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/91 — draft, base `main`.
