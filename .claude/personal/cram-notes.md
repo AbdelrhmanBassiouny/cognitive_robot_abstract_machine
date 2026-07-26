@@ -394,6 +394,31 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     Pushed as commit e66bf4b5; full `test_verbalization/` suite green (757/3 skipped, +1 for the
     new regression test), full `test/krrood_test/` suite green (2013 passed, same 2 pre-existing
     unrelated `graphviz` failures).
+  - **Review round 14** (2026-07-26, 3 comments, same day as round 13): (a) round 13's `add`
+    docstring fix ("the representative referent *representative* names") was itself flagged
+    "again awkward wording" — simplified further by dropping the attempt to redefine
+    "representative" inline entirely; the method now just says "Record *referent_id* as a member
+    of *representative*, registering it under *noun* …", relying on the class's own field
+    docstrings to already establish what a representative referent is. Resolved. (b) "Will these
+    ever pronominalise to 'it'? Maybe in a full query? Add tests" (on the repeat-mention
+    regression test from round 13) — yes; added
+    `test_reused_abstract_operand_pronominalises_on_every_mention_within_its_scope`, the pronoun
+    companion to round 13's definite-repeat test: a disjunctively-typed variable as a full
+    entity-query subject pronominalises to "it" on *every* mention inside that WHERE scope (not
+    just the first repeat), while the one spelled-out first mention keeps the full disjunction —
+    together the two tests cover both branches `CoreferenceProcessor` can take on a repeat
+    mention of a disjunctive head. Resolved. (c) "Point AGENTS.md's docformatter rule at the
+    actual repo script instead" — changed "Always run `docformatter`..." to "Always run
+    `scripts/format_docstrings.py` (black + docformatter)...", matching what every P1–P4 session
+    actually runs. Resolved. Pushed as commit ea595142; full `test_verbalization/` suite green
+    (758/3 skipped, +1 for the new pronoun test), full `test/krrood_test/` suite green (2014
+    passed, same 2 pre-existing unrelated `graphviz` failures). Also noted: CI on this same head
+    SHA showed a `coraplex` job failure (an `ormatic_interface.py` regeneration/`ruff format`
+    internal error) and the recurring pre-existing `semantic_digital_twin` flake
+    (`test_world_sim_state_sync`) — both confirmed unrelated to this PR (neither touches any file
+    this PR changes; the `coraplex` one is an ORM-generation issue this session correctly left
+    alone per AGENTS.md's guidance never to hand-fix `ormatic_interface.py`). `krrood`'s own job
+    passed.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
