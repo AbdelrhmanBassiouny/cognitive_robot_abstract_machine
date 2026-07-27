@@ -94,9 +94,38 @@ Full suite after: 2004 passed / 2 failed (same pre-existing graphviz failures).
 mujoco/giskardpy/ROS). The CI re-run on 7280394b is the evidence — if `test_merge_motions`
 fails a third time the diagnosis is still incomplete; keep tracing, do not call it fixed.
 
+## Commits 4 and 5 — the actual coraplex cause (CI GREEN on 6ddb9b4a)
+
+- **4b2d75cd** restored the fresh-result emission in `_evaluate_child_as_condition_` (the
+  observers fill `evaluated_expression_ids`/`satisfied_condition_ids` only where unset, so
+  a passed-through child result carried a nested evaluation's record outward). Correct
+  in itself; did NOT fix coraplex — it failed a 4th time.
+- **6ddb9b4a** is the real fix, and it is a COST bug, not semantics. `Predicate.__bool__`
+  calls `__call__()`; `IsObjectReachableBy` (the ReachAction pre-condition in
+  `test_merge_motions`) deepcopies the world and runs a full reachability simulation.
+  Truth used to be a stored field derived once; making it a property re-derived from the
+  binding meant every read re-ran the predicate. Measured with a counting value: main
+  reads it 1x per bare condition, the branch read it 4x — four simulations inside a
+  ThreadedPredicateMonitor racing the executor's bounded tick budget, so the monitor
+  never resolved. Fix: memoize truth per OperationResult, and check `_records_truth_`
+  before asking a root for truth.
+
+**Lesson for the rest of this programme**: krrood's own suite cannot catch this class —
+it uses cheap comparators. A refactor that changes *when* or *how often* truth is derived
+is a behavioural change for downstream packages whose bound values have expensive
+`__bool__`. Benchmarking with comparators proves nothing; count reads with a
+`__bool__`-counting stand-in instead.
+
+Residual (accepted, coraplex green with it): a bare condition reads truth 2x vs main's
+1x — the conditions-root check in `_evaluate_conclusions_and_update_bindings_` that the
+satisfied-conditions observer requires. Bounded, no longer multiplies.
+
 ## Next
 
-- Watch CI on 7280394b, especially `test_each_lib (coraplex)`.
+- All 18 CI checks green on 6ddb9b4a. PR is draft with 5 commits; consider squashing the
+  four follow-up fixes into the refactor before asking for review.
+- Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
+  Wave-0 stack, which still contests `base_expressions.py`.
 - Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
   Wave-0 stack, which still contests `base_expressions.py`.
 - Answer review comments; keep the PR in draft after each push.
