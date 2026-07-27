@@ -120,10 +120,33 @@ Residual (accepted, coraplex green with it): a bare condition reads truth 2x vs 
 1x — the conditions-root check in `_evaluate_conclusions_and_update_bindings_` that the
 satisfied-conditions observer requires. Bounded, no longer multiplies.
 
+## Commit 6 (d50cf1d8) — the "accepted" residual was not acceptable
+
+The user merged main (934c8ce4), bringing PR #477 *end-motion-slowdown* + velocity-
+convergence changes. Coraplex failed AGAIN, new signature including `MoveTCP#0` (a motion
+task, not just monitors). Branch alone was green at 6ddb9b4a; main alone green on coraplex
+at b0268aaa; only the combination failed.
+
+Cause: the residual I had documented as "accepted, bounded" — truth read 2x vs main's 1x.
+#477 tightened exactly that timing margin. **Lesson: a known cost regression left in place
+because it is "bounded" is still a regression; downstream timing budgets are not ours to
+spend.** Closed to exact parity, no semantic change:
+- tracker checks its structural guard before reading truth;
+- `_evaluate_conclusions_and_update_bindings_` reads truth only when conclusions exist;
+- `OperationResult._as_fresh_observation_` carries the read truth across the condition
+  re-emission (same operand + bindings, so re-deriving was waste).
+
+Verified vs an origin/main worktree: 1/1/2 reads on both (was 1/1/3, originally 4/1/…).
+
 ## Next
 
-- All 18 CI checks green on 6ddb9b4a. PR is draft with 5 commits; consider squashing the
-  four follow-up fixes into the refactor before asking for review.
+- **ef7bb044: coraplex GREEN, 18/19 checks green.** Only red is
+  `test_world_sim_state_sync` (sdt), the physics flake that also fails on plain main.
+- PR is draft with 6 commits; consider squashing the five follow-up fixes into the
+  refactor before asking for review.
+- Two follow-ups deserving their own PRs: `evaluate_condition` on a satisfied bare
+  `exists(...)` returns False on main too (real bug, deliberately preserved here); and
+  the sdt `test_world_sim_state_sync` flake is worth a look by whoever owns multi-sim.
 - Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
   Wave-0 stack, which still contests `base_expressions.py`.
 - Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
