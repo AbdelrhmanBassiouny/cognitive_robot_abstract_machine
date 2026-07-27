@@ -136,6 +136,22 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   + `test_class_diagram/` (142 passed) green, regeneration confirmed idempotent. Pushed
   as commit db128409 (fetched fresh immediately before pushing this time -- no collision).
   Thread replied and resolved.
+- Follow-up round (2026-07-27, same day, 4 more threads on the rename commit): (a)
+  the generated module's constant was still `RESULTS` (all-caps) -- lowercased to
+  `results` in the jinja template and every docstring reference; (b) `SymbolicResultSnapshot`
+  renamed to `VerbalizationResultsOfPackage` per explicit instruction (not a discussion
+  this time); (c)+(d) traced the generated `verbalization_results.py` line the developer
+  anchored two comments to back to `krrood.patterns.role_predicates.IsSameSemanticEntity`
+  -- renamed its `entity_1`/`entity_2` fields to `first_entity`/`second_entity` (only
+  one call site referenced the field by name, `test_queries.py`'s
+  `matches[0].entity_1`; every other call site already used positional args) and
+  changed its verbalization fragment from "is the same entity as" to "is the same
+  semantic entity as", matching the class's own name -- updated
+  `test_role_predicate_verbalization.py`'s expected sentence to match. Verified: full
+  `test_verbalization/` + `test_patterns/test_role.py` + `test_core/test_queries.py` +
+  `test_code_generation/` + `test_class_diagram/` green (983 passed, 3 pre-existing
+  skips). Pushed as commit 3f806e2e (fetched fresh first, no collision). All 4 threads
+  replied and resolved.
 
 ### Next
 - Once the developer clarifies the OverriddenOperand mechanism, implement it, add the
