@@ -1001,3 +1001,100 @@ tests, twelve `/plan-dashboard` invocations, `refresh_dashboard.sh`'s byte-ident
 added); grepped the draft PR body for stray `<[a-zA-Z/]` before submitting (none found); re-fetched
 after submitting and confirmed the body landed byte-correct (head SHA 8c7e955f matches) and `draft:
 true` still intact.
+
+## Review round: label taxonomy, ItemAction ClassVar, centralized tool paths
+## (2026-07-27, same day) - DONE, pushed b590607d
+User asked to get the latest review comments and handle them: 25 new inline threads landed on
+8c7e955f, across `build_dashboard.py`, `sync_manifest_status.py`, `check_dependency_readiness.py`,
+`refresh_dashboard.sh`, both test suites, all three plan-*/SKILL.md files, and `ci.yml`.
+
+**Label taxonomy** (the "be critical" thread). Developer pushed back on the prior round's
+open-ended-`labels`-plus-one-constant design: "don't we use in-review and bug labels too? Can we
+have an identified_label property?" Landed exactly that idea, pluralized: `PullRequestLabel(StrEnum)`
+with `MERGED`/`IN_REVIEW`/`BUG`, plus `PullRequestRecord.identified_labels` (a
+`frozenset[PullRequestLabel]`) that recognizes the known subset and silently excludes anything else -
+kept `labels` itself as `list[str]` since real automation on this very PR (`cram2-link-sent`) proves
+GitHub's label vocabulary genuinely is open-ended beyond what this codebase controls. `was_merged`
+now checks `PullRequestLabel.MERGED in identified_labels`. Documented all three labels' meaning/owner
+in a new `.claude/hooks/README.md` section (the developer's explicit ask). 3 new tests.
+
+**`ItemAction.skill_command_name` -> `ClassVar[str]`.** Reviewer noticed it never varies per
+instance (only `label` does - "Resolve"/"Resume"/"Reconsider" on the same `ResolveAction`) so
+shouldn't be an abstract property. Converted to a per-subclass class attribute; disclosed the one
+real tradeoff in the reply rather than hiding it - a bare `ItemAction(...)` now constructs
+successfully and only fails (`AttributeError`) on first `.command` access, instead of the old
+construction-time `TypeError` from `@abstractmethod`. Verified via direct Python REPL both
+subclasses still work and the tradeoff is real.
+
+**`check_dependency_readiness.py`**: `pull_requests_by_repository` now typed
+`PullRequestsByRepository` (the existing alias) instead of `dict[str, dict[str, Any]]`.
+
+**"PR" abbreviation sweep** (a new, distinct complaint from prior rounds' identifier renames - this
+one was about the English word "PR" in prose/docstrings/rendered strings, not code identifiers).
+Swept `build_dashboard.py`, `sync_manifest_status.py`, `check_dependency_readiness.py`, both HTML
+templates (rendered UI text: "No PR yet" -> "No pull request yet", "open draft PR, ready for your
+review" -> "...pull request..."), and the tests asserting that exact text. Deliberately did NOT
+rename the established `--pr-data` CLI flag / `pr_data.json` filename (referenced everywhere: every
+SKILL.md, all three scripts, CI) or sweep the same abbreviation across SKILL.md/README prose more
+broadly (found zero occurrences there on a corrected repo-root grep - my first grep attempt gave a
+false "zero" because cwd had drifted into a subdirectory, silently matching no files) - explained
+this scoping choice in the reply rather than silently under- or over-delivering.
+
+**Test-file fixes:** `test_build_dashboard.py`'s `item()` helper gained full type hints (was
+untyped except one param) and its docstring's broken mid-sentence line break was fixed. Added a
+paragraph above the drift-test section explaining what "drift" means (a reviewer question, not just
+a nitpick - genuinely undocumented anywhere central before this). 3 new tests for
+`identified_labels`. `test_sync_manifest_status.py`'s `plan()`/`item()` helpers gained docstrings
+explaining they deliberately build raw `yaml.safe_load`-shaped dicts, not `Item`/`Plan` dataclasses
+(so `status` staying a bare string there - which prompted a "why isn't this StrEnum" question - is
+correct, not an oversight) plus type hints; a comment above `MANIFEST_TEXT` explaining what it is.
+
+**Centralized tool paths** (~9 threads, all "same comment on spelled out script/hook paths, put
+them somewhere common"). Added `PLAN_DASHBOARD_DIR` and per-script path constants
+(`BUILD_DASHBOARD_SCRIPT`, `SYNC_MANIFEST_STATUS_SCRIPT`, `CHECK_DEPENDENCY_READINESS_SCRIPT`,
+`REFRESH_DASHBOARD_SCRIPT`, `REFRESH_DASHBOARD_SUPPORT_SCRIPT`, `WRITE_PERSONAL_NOTES_FILE_SCRIPT`,
+`PLAN_DASHBOARD_REQUIREMENTS_FILE`, `PLAN_DASHBOARD_TESTS_DIR`) to
+`resolve-personal-notes-config.sh` - already sourced by every relevant script, so no new source
+statement was needed in `refresh_dashboard.sh`, and `PLANS_DIR` (pre-existing) covered one more
+literal path. Updated `refresh_dashboard.sh`, all three plan-*/SKILL.md files' bash blocks, and
+`ci.yml`'s `test_claude_dev_tooling` job to source the config and use the variables. Called out one
+irreducible exception explicitly (in a code comment and in the reply): locating
+`resolve-personal-notes-config.sh` itself must stay a literal relative path, since it's the file
+that defines every other constant - nothing "more common" exists to point to for that one bootstrap
+line. One thread (a plain-prose mention of `save-plan.sh` in a sentence, not inside an executed bash
+block) was replied-and-resolved with an explanation of why the mechanism doesn't apply there rather
+than force a variable substitution into prose text.
+
+**`refresh_dashboard.sh`'s two inline `python3 -c` snippets** extracted into new
+`refresh_dashboard_support.py` (`count-corrected`/`merge-summaries` subcommands, argparse-based),
+with 3 new tests (`test_refresh_dashboard_support.py`).
+
+**New shared `.claude/skills/plan-dashboard/dependency-readiness.md`** closes the "can these mcp
+commands also be put somewhere common" duplication (~4 threads): the bulk-fetch-PR-data +
+`check_dependency_readiness.py` procedure, previously restated near-verbatim in both
+`plan-item-kickoff` and `plan-item-resolve`'s SKILL.md, now lives once and both skills reference it.
+Flagged one real, honest limit in the reply: MCP tool names (unlike file paths) can't be aliased
+through a shared shell variable or Python import - they're fixed platform identifiers each skill's
+own `allowed-tools` frontmatter must independently declare, a structural property of how Claude Code
+skills work, not something a shared doc can eliminate.
+
+**Design discussion, replied not resolved** (the `sync_manifest_status.py` regex-vs-full-YAML-
+round-trip "discuss this with me" thread, a continuation from last round). Rather than repeat
+reasoning, ran a real experiment: round-tripped the actual `rdr-refactor` plan.yaml (562 lines)
+through `yaml.safe_load`/`yaml.safe_dump` with zero other changes - 168 lines differ (88 even with
+line-wrap width set arbitrarily high to disable re-wrapping entirely), purely from pyyaml re-flowing
+existing multi-line `description`/`notes` block scalars into its own wrapping style, not from any
+key or value actually changing. This directly answers the developer's question ("are key names
+always preserved? yes - that was never the actual risk; the real cost is re-wrap noise on every
+run") with hard data instead of assertion. Left the thread open per their explicit "discuss this
+with me" rather than presuming it's settled.
+
+Full suite grew 132 -> 138 (all green). Verified `refresh_dashboard.sh`'s output stays
+byte-identical to `build_dashboard.py`'s direct output after this round's path-centralization
+refactor too (diffed twice against the real `rdr-refactor` plan). Ran
+`scripts/format_docstrings.py` (black + docformatter) on every touched Python file before
+committing. Pushed as commit b590607d. All 25 threads replied to; 24 resolved, 1 left open (the
+YAML round-trip discussion above). PR description rewritten with a new round section + refreshed
+test-plan (138 tests, thirteen `/plan-dashboard` invocations); grepped the draft PR body for stray
+`<[a-zA-Z/]` before submitting (none found); re-fetched after submitting and confirmed the body
+landed byte-correct (head SHA b590607d matches) and `draft: true` still intact.
