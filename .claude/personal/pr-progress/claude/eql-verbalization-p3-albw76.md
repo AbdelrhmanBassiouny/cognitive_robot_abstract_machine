@@ -1,25 +1,23 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-26): pushed (15 commits total, ea595142 latest). Marked **ready for review by the
-developer themselves** (not by me) after ea595142 — per personal convention I don't override their
-own explicit un-drafting; the "convert back to draft after any push" rule applies only to my own
-pushes going forward, so the next commit I push (if any) should re-draft it as usual. Base `main`
-(#86/#87 both merged there). Subscribed to activity. 14 review
-rounds total, all now reply-and-resolved except round 6 (reconciliation question, informational —
-nothing to resolve). Both threads round 12 left open pending discussion are now closed: the
-grammar-justification one the developer resolved themselves after reading the Apple/Banana
-argument; the `additional_heads` design one they replied "Ok keep it, however I'd like to see how
-this behaves on repeat mention" — which led straight to round 13 finding and fixing a real bug,
-and round 14 adding the pronoun-path companion test (see below). Description rewritten twice so
+Status (2026-07-27): pushed (17 commits total, 91e3ca4b latest). Back in **draft** (developer had
+marked it ready for review themselves after round 14; I converted it back to draft after round
+15's push, per personal convention — that rule applies to my own pushes, not the developer's own
+un-drafting, so it stayed ready across the gap between those two events). Base `main` (#86/#87
+both merged there). Subscribed to activity. 15 review rounds total, all now reply-and-resolved
+except round 6 (reconciliation question, informational — nothing to resolve). An unexpected
+`Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed directly on
+this branch mid-round-15, from outside this session — see the roadmap section above for the full
+investigation and how it was reconciled (rebase, not force-push). Description rewritten twice so
 far: once for the 2026-07-24 rebase, once for round 11's repeated-article redesign; no further
-rewrite needed for rounds 12-14 (no further user-visible surface change, only internal
-layering/bugfix/docstring/test wording). CI checked through e66bf4b5: `krrood`'s own job green;
-a `coraplex` job failure (an `ormatic_interface.py` regeneration/`ruff format` internal error) and
-the recurring pre-existing `semantic_digital_twin` flake (`test_world_sim_state_sync`) both
-confirmed unrelated to this PR — neither touches any file this PR changes, and the `coraplex` one
-is deliberately left alone per AGENTS.md's guidance never to hand-fix `ormatic_interface.py`. CI
-for ea595142 not yet checked. Hourly check-in loop active; PR still not merged/closed, so
-subscription continues.
+rewrite needed for rounds 12-15 (no further user-visible surface change, only internal
+layering/bugfix/docstring/test/doctest-harness wording). CI checked through e66bf4b5: `krrood`'s
+own job green; a `coraplex` job failure (an `ormatic_interface.py` regeneration/`ruff format`
+internal error) and the recurring pre-existing `semantic_digital_twin` flake
+(`test_world_sim_state_sync`) both confirmed unrelated to this PR. CI for ea595142/91e3ca4b not
+yet checked (the latter is on top of the unexpected main-merge too, so worth a full check, not
+just krrood's job). Hourly check-in loop active; PR still not merged/closed, so subscription
+continues.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -86,13 +84,21 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   behavior, which surfaced and fixed a real bug (`CoreferenceProcessor._reduced`/`_rebuilt`
   dropping `additional_heads` on a definite repeat mention — see the roadmap section above for the
   full account) plus a permanent regression test. Round 14 followed up with the pronoun-path
-  companion test, plus two more docstring/AGENTS.md polish items. Pushed as ea595142. All rounds
-  now reply-and-resolved except round 6 (informational, nothing to resolve).
-- CI checked through e66bf4b5: `krrood`'s own job green; the `coraplex` ORM-regeneration failure
-  and the pre-existing `semantic_digital_twin` flake are both confirmed unrelated (see round 14
-  above) — do not attempt to fix either from this PR. CI for ea595142 not yet checked, do that
-  next.
+  companion test, plus two more docstring/AGENTS.md polish items. Pushed as ea595142.
+- Round 15 (docstring narrative/all-caps cleanup + AGENTS.md rules, first_order_form doctest +
+  doctest-harness extension to the `testing` package, missing `:param:` docs in
+  `determiner_processor.py`) all reply-and-resolved. Pushed as 91e3ca4b, on top of an unexpected
+  `Claude <noreply@anthropic.com>`-authored merge-from-main commit that appeared on this branch
+  mid-round (see the roadmap section's "Unexpected merge on the branch" entry for the full
+  investigation) — reconciled via a plain rebase (no force-push), one leftover unused import
+  fixed, full suite re-verified green. All rounds now reply-and-resolved except round 6
+  (informational, nothing to resolve). PR converted back to draft after this push per personal
+  convention (was ready-for-review from the developer's own round-14 action).
+- CI checked through e66bf4b5 only; CI for ea595142 and 91e3ca4b (the latter on top of the
+  unexpected main-merge, so worth checking more than just krrood's job) not yet checked — do that
+  next session.
 - `mergeable_state` reported "unstable" at the 33a8da5b check (not "clean") — re-verify at the next
   status check; GitHub's mergeable-state cache can lag a push, and the reconciliation investigation
-  (round 6) found nothing actually outstanding against `main`.
+  (round 6) found nothing actually outstanding against `main` at that time (though the branch has
+  since picked up a large unrelated main-merge — re-check reconciliation too).
 - P4 (sdt = PR #33 rebase) still needs P1 + P2 + P3 all merged to main first.
