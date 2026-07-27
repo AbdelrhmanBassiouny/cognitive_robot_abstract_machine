@@ -1178,3 +1178,38 @@ reopened `save-plan.sh` thread), 1 left open (the irreducible bootstrap-line thr
 description updated with a new round section + refreshed test-plan; grepped the draft PR body for
 stray `<[a-zA-Z/]` before submitting (none found); re-fetched after submitting and confirmed the
 body landed byte-correct (head SHA 5eaee881 matches) and `draft: true` still intact.
+
+## Review round: spell out remaining Doc/PR abbreviations, use PLANS_DIR in plan-create
+## (2026-07-27, same day) - DONE, pushed 49dddc3a
+User asked to check the latest review comments and handle them: 5 new threads landed on
+5eaee881, all direct follow-ups on the prior round's constant-naming sweep.
+
+- **`DEPENDENCY_READINESS_DOC` → `DEPENDENCY_READINESS_DOCUMENT`** ("Doc is an abbreviation, use
+  Document"). Updated both consumers (`plan-item-kickoff`/`plan-item-resolve` SKILL.md, each
+  referencing it twice: the step-1 comment naming what the sourced config defines, and step 2's
+  `${DEPENDENCY_READINESS_DOCUMENT}` usage).
+- **`PR_DATA_FETCHING_DOC` → `PULL_REQUEST_DATA_FETCHING_DOCUMENT`** - two separate threads landed
+  on the same identifier ("Same doc comment" and, separately, "Pull request not PR" targeting the
+  "PR_" prefix specifically) - both abbreviations fixed in one rename. Grepped first to confirm no
+  other file referenced this constant by its `${VAR}` name (only `resolve-personal-notes-config.sh`
+  itself defines it; `pr-data-fetching.md`/`dependency-readiness.md`/`build_dashboard.py` all
+  reference the underlying `pr-data-fetching.md` file by bare filename, not the shell variable), so
+  this was the only file needing the edit.
+- **`plan-create/SKILL.md` now uses the pre-existing `PLANS_DIR` constant** ("Don't we have a
+  variable name for plans directory?") instead of repeating the literal
+  `.claude/personal/plans/<plan-id>/plan.yaml` path prefix in step 1's prose - added a short note
+  that `PLANS_DIR` is defined by the config script sourced just above.
+
+All three changes are pure shell/markdown renames with no behavior change - ran the full 138-test
+`.claude/skills/plan-dashboard/tests` suite anyway to confirm nothing broke (still 138/138 green,
+no new tests needed since nothing here is testable Python logic), and `bash -n` on the edited
+config script. No Python files touched, so no `format_docstrings.py` run needed this round. Pushed
+as commit 49dddc3a; all 5 threads replied to and resolved (all were unambiguous, fully-actionable
+renames with no design judgment call, unlike some of the prior round's threads that stayed open).
+PR description updated with a new round section; grepped the draft PR body for stray `<[a-zA-Z/]`
+before submitting (none found); re-fetched after submitting and confirmed the body landed
+byte-correct (head SHA 49dddc3a matches, `draft: true` still intact) - note the re-fetched body
+comes back with HTML-entity-encoded apostrophes/quotes (`&#39;`, `&#34;`) throughout, which is a
+consistent encoding artifact of the API response itself (applied uniformly to the whole body, not
+selective like the earlier angle-bracket-stripping bug), not corruption - no placeholder or content
+was dropped or altered.
