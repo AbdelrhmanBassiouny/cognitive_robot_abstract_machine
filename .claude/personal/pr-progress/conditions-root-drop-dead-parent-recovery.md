@@ -289,6 +289,76 @@ the user directed "continue" rather than answering the rerun question, so treati
 as staying with the default of not taking the visible/resource-consuming action
 unprompted). Re-check next time this PR is touched — rerun only if asked.
 
+## 2026-07-27 (later) — follow-up round on the already-addressed review
+
+IMPORTANT process lesson: this session was dispatched to "handle the review
+comments" and redid the entire 8-comment round from scratch before noticing it was
+ALREADY DONE. Both `mcp__github__pull_request_read` (review threads showed
+`is_resolved: false`) and the local git ref (2 commits behind) were stale at session
+start. The round had in fact been handled at 07:43-07:46 in `486dfeb5` + `596b7d08`,
+with replies on all 9 threads. **Re-fetch the branch (`git fetch`) AND re-read the
+threads before starting work on any "handle the review" task** — a stale thread list
+is not proof the work is outstanding. The duplicated work was discarded (kept locally
+on branch `review-followup-local`), branch reset to origin, nothing force-pushed.
+
+What did ship (commit `b5d72adb`, pushed): four genuine loose ends the previous round
+left, approved by the user before pushing.
+1. `_conditions_root_` and `_has_condition_` each walked `_all_expressions_` for a
+   `Filter` independently — two implementations of one question. Both now derive from
+   a single new `_filter_condition_` property (gating Filter's condition, or `None`).
+2. `_conditions_root_` was annotated `Optional[SymbolicExpression]` + documented as
+   returning None, but never returns None (fallback is `_root_`). Tightened on both
+   `SymbolicExpression` and `Query`'s override.
+3. `Query._root_`'s docstring justified the override by the
+   `_conditions_root_ is _root_` comparison **this PR deletes** — stale the moment the
+   fix landed. Rewritten to describe the actual behaviour (root-relative resolution
+   must reach the compiled product), matching how `_all_expressions_`/`_descendants_`
+   are explained.
+4. The filter-less regression test's `satisfied_condition_ids == set()` assertion:
+   reasoning was right (bare variable isn't an `is_condition_participant`) but an
+   empty-set assertion cannot distinguish "tracked the right ids" from "tracked
+   nothing", which is exactly the failure mode being guarded. Shared node changed from
+   a bare variable to a `Comparator` (`value > 5`) — same bug shape, exact expected
+   value `{condition._id_}`. Re-verified it still fails against pre-fix source
+   `8ce63b0d` (`satisfied_condition_ids` is `None`). This one revisits a decision the
+   reviewer had already accepted and resolved, so it was called out explicitly in the
+   PR comment with an offer to revert.
+
+Verification env note (reusable): no pytest in the sandbox. Built a venv at
+`$SCRATCHPAD/venv` with `/usr/bin/python3.12` (NOT `python3`, which is 3.11 and breaks
+`make_dataclass(module=...)`), then `pip install pytest ./random_events
+./probabilistic_model casadi objgraph mypy black docformatter tqdm` + `pip install -e
+./krrood --no-deps` (editable, or source edits don't take effect). Run with
+`--confcutdir=test/krrood_test` to dodge the root `test/conftest.py`'s
+semantic_digital_twin/mujoco chain. Results: 1332 passed, 6 skipped across
+test_eql/test_ormatic/test_class_diagrams/test_ripple_down_rules/
+test_underspecified_knowledge; the only 2 failures are `test_object_diagram`'s missing
+Graphviz `dot` binary, confirmed identical on a stashed clean tree.
+
+Two traps hit while verifying, worth remembering:
+- Running the suite regenerates `drawer_explanation.pdf` and `query_graph.pdf`.
+  `git checkout --` them before committing (happened twice).
+- `git checkout <sha> -- <paths>` **stages** those paths. After restoring the working
+  tree by hand, `git diff` compares against the stale index and shows phantom changes.
+  `git reset` (mixed) fixes it. Nearly mistook this for formatter churn.
+- `scripts/format_docstrings.py` reflows unrelated pre-existing docstrings in files it
+  touches (`EvaluationContext` fields, four `test_rules.py` one-liners). Revert that
+  churn to keep the diff focused.
+
+PR #78 cross-check redone against my signature change: only overlap is one mechanical
+conflict in `base_expressions.py` (resolution: keep #78's *unconditional* `claim()`
+placement — outside the `owns_an_evaluation_context` guard, per PR #67 — with this
+branch's argument list). The merged state's 2 failures
+(`test_conclusions_fire_with_a_pre_installed_evaluation_context`,
+`test_conclusions_respect_a_bare_attribute_conditions_root_truthiness`) **already fail
+on #78's own tip**, verified separately — not caused by #89.
+
+PR description rewritten to match; explanatory comment posted
+(`#issuecomment-5088926308`). PR still draft. Branch note: the session's designated
+branch `claude/rdr-refactor-conditions-root-recovery-31difc` held unrelated
+plan-dashboard commits, so (user-confirmed via AskUserQuestion, same as PR #87's
+precedent) the push went to PR #89's real head `conditions-root-drop-dead-parent-recovery`.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
