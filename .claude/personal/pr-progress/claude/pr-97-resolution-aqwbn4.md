@@ -103,21 +103,44 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   scoped per-field -- which is functionally the override mechanism again. Also still
   need to apply their "hard-wired example-value tests, not exhaustive per-class" testing
   convention once the mechanism itself is settled. Not implementing until they clarify.
-- "Surface" rename (see above): awaiting developer's choice of scheme (A/"Example" vs
-  B/"Entry") and scope (this PR vs. separate PR against `main`, since some of the
-  affected names originate in already-merged #86).
 - Subscription: `subscribe_pr_activity` failed twice in a row with a generic error (not
   the "already watched by a steward" message the tool documents) -- PR has no watching
   label, so cause unclear. Flagged to the developer rather than retried further; may be
   worth trying again next session.
 
+### Done (2026-07-27, continued)
+- "Surface" rename: developer answered directly -- "Use Result instead of Surface"
+  (neither of the two proposed schemes). Scoped the actual blast radius first: grepped
+  for the specific identifiers (`VerbalizationSurface`, `SymbolicSurfaceSnapshot`,
+  `surface_generation`/`surface_verification`, `covered_surfaces`, `rendered_surface`,
+  `verbalization_surfaces`) rather than the bare word "surface" -- found only 6 files,
+  all within this mechanism; the earlier "docs reference them" claim didn't hold up
+  (grepped `user/verbalization.md`/`developer/verbalization.md` directly, zero matches),
+  and the unrelated `RankingSurface` class + generic English "surface" usages elsewhere
+  are untouched since they were never in scope. `surface_verification.py` originating in
+  #86 turned out not to be a real scope fork either -- `surface_generation.py` imports
+  `VerbalizationSurface`/`SymbolicSurfaceSnapshot` directly from it, so renaming one
+  without the other would just break the import; did both.
+  Renamed: `surface_verification.py`→`result_verification.py`,
+  `surface_generation.py`→`result_generation.py`,
+  `templates/verbalization_surfaces.py.jinja`→`verbalization_results.py.jinja`,
+  `test_surface_generation.py`→`test_result_generation.py`, generated
+  `verbalization_surfaces.py`→`verbalization_results.py` (regenerated via conftest, not
+  hand-edited); `VerbalizationSurface`→`VerbalizationResult`,
+  `SymbolicSurfaceSnapshot`→`SymbolicResultSnapshot`, `surfaces`→`results` throughout,
+  `SURFACES`→`RESULTS`, plus every derived method name (`covered_results`,
+  `rendered_result`, `assert_results_cover_every_callable`,
+  `assert_declared_results_render_as_stated`, `regenerate_verbalization_results`,
+  `VerbalizationResultGenerator`). Updated `conftest.py`'s call site and PR title/body.
+  Verified: full `test_verbalization/` (734 passed/3 skipped) + `test_code_generation/`
+  + `test_class_diagram/` (142 passed) green, regeneration confirmed idempotent. Pushed
+  as commit db128409 (fetched fresh immediately before pushing this time -- no collision).
+  Thread replied and resolved.
+
 ### Next
 - Once the developer clarifies the OverriddenOperand mechanism, implement it, add the
   hard-wired example-value tests they asked for, regenerate the snapshot if wording
   changes, keep tests green, then push and reply-resolve.
-- Once the developer picks a rename scheme + scope, implement it (mind that some names
-  originate in #86/main if scope includes them).
 - Retry `subscribe_pr_activity` next session if the developer wants events watched.
-- Watch for further concurrent-session collisions on this PR -- always fetch the real
-  branch fresh before pushing, and diff before assuming a rejected push means conflict
-  resolution is needed by hand.
+- Keep fetching the real branch fresh immediately before every push -- confirmed this
+  avoids the collision seen earlier in this same PR.
