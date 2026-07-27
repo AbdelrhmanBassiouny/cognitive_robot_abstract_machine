@@ -419,6 +419,50 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     this PR changes; the `coraplex` one is an ORM-generation issue this session correctly left
     alone per AGENTS.md's guidance never to hand-fix `ormatic_interface.py`). `krrood`'s own job
     passed.
+  - **Unexpected merge on the branch** (2026-07-27, discovered mid-round-15): pushing round 15's
+    commit hit a non-fast-forward rejection — `origin/claude/eql-verbalization-p3-albw76` had
+    moved to a merge commit (`6b51075e`, "Merge remote-tracking branch 'origin/main'") authored
+    as `Claude <noreply@anthropic.com>` — **not by this session**, and in direct violation of
+    AGENTS.md's Version Control rule (commits must be the human identity, never an assistant
+    identity/`noreply@anthropic.com`). Investigated before doing anything: diffed my last commit
+    against that merge commit's tree for the one file it touched that overlaps this PR
+    (`test_operand_referring.py`) and confirmed every P3 class/test survived intact — the only
+    real change was a one-line `FieldMetadata(other_metadata=[...])` → `GrammarMetadata(...)`
+    update reflecting an unrelated main-branch API simplification. Did **not** attempt to rewrite
+    or force-push to fix the bad authorship (that would rewrite already-pushed shared history
+    unilaterally, which AGENTS.md and this session's own conventions rule out without explicit
+    permission) — instead did a plain `git rebase origin/<branch>` (safe: only replays this
+    session's own not-yet-pushed commit, touches nothing already on the remote), fixed one
+    resulting unused `FieldMetadata` import the merge's API change left behind, verified the full
+    suite, and pushed normally (fast-forward, no force). Flagged the authorship-policy violation
+    to the user for their awareness; not something to silently ignore, but also not something to
+    unilaterally "fix" via history rewrite.
+  - **Review round 15** (2026-07-27, 3 comments): (a) "docstrings read like a conversation, talk
+    about hypothetical bad designs instead of being short/to the point, no comparison, no
+    historical context — make this a rule in AGENTS.md and apply everywhere; also don't scream
+    words in all caps, check and fix everywhere; apply the formatting script to all modified
+    files." Added both rules to AGENTS.md's Documentation section. Trimmed every narrative/
+    comparison docstring this PR's `additional_heads` work had introduced (`NounPhrase.
+    additional_heads`, `disjunctive_type_head`, `NounForm.type_alternatives`, `DeterminerProcessor.
+    _head_group`, `CoreferenceProcessor._reduced`) down to plain statements of behavior. Fixed the
+    three leftover ALL-CAPS "VALUE" instances in `surface_verification.py` (pre-existing from P1,
+    not this round's own writing, but part of this PR's diff) to RST `*value*`. Ran
+    `scripts/format_docstrings.py` on every touched file. Resolved. (b) "`first_order_form`/
+    `placeholder_operands` missing a doctest example, and it needs to be added to the auto-tested
+    doctests" — added `>>> first_order_form(IsReachable)` / `placeholder_operands(IsReachable)`
+    examples (reusing the same shared example-domain predicate every other doctest in the codebase
+    already uses); discovered `surface_verification.py` lives in `krrood.entity_query_language.
+    testing`, outside the `verbalization` package `test_rule_doctests.py` auto-discovers by
+    walking, so the new doctest would have silently never run — extended that harness to also
+    walk the `testing` package and added a regression test locking in the new coverage. Resolved.
+    (c) "add and check parameter docstrings everywhere" (on `determiner_processor.py`) —
+    `_head_group` had zero `:param:` entries for its 4 parameters and `_lower_noun_phrase` had a
+    `:return:` but no `:param:`; added both. Resolved. Pushed as commit 91e3ca4b (on top of the
+    unexpected merge, reconciled as above); full `test_verbalization/` suite green (760/3
+    skipped), full `test/krrood_test/` suite green (2012 passed — count shifted from the
+    unrelated main-merge's own test changes, not this PR — same 2 pre-existing `graphviz`
+    failures). PR was ready-for-review (developer's own action from round 14's check-in); per
+    personal convention, converted back to draft after this round's push.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
