@@ -1098,3 +1098,83 @@ YAML round-trip discussion above). PR description rewritten with a new round sec
 test-plan (138 tests, thirteen `/plan-dashboard` invocations); grepped the draft PR body for stray
 `<[a-zA-Z/]` before submitting (none found); re-fetched after submitting and confirmed the body
 landed byte-correct (head SHA b590607d matches) and `draft: true` still intact.
+
+## Review round: Dir rename, save-plan.sh constant, mcp-tool/doc-path dedup
+## (2026-07-27, same day) - DONE, pushed 5eaee881
+User asked to check the latest review comments and handle them: 9 new threads landed on b590607d.
+One was a reopened follow-up on an already-resolved thread from the prior round (the developer
+added a third comment - "Do you think hooks should also be stored in known variable names?" -
+which GitHub surfaced as unresolved again); the other 8 were genuinely new, mostly continuing
+pressure on the prior round's path-centralization work.
+
+**`save-plan.sh` follow-up (reopened thread) - checked, not assumed.** Rather than reflexively
+defending the prior round's "prose doesn't need a variable" answer, actually grepped every
+reference to `save-plan.sh` across the repo first. Found a real one: `plan-create/SKILL.md` step 7
+invokes it from an executed bash block (`.claude/hooks/save-plan.sh <plan-id> --manifest ...
+--roadmap ...`), the same duplication risk already fixed for the plan-dashboard scripts. Added
+`SAVE_PLAN_SCRIPT` to `resolve-personal-notes-config.sh` and switched that call site to
+`bash "${SAVE_PLAN_SCRIPT}" ...`; added an explicit `source` block to plan-create's step 1 so the
+constant is defined when step 7 needs it. Contrasted this explicitly in the reply with the other
+hook scripts (`save-personal-notes.sh`, `create-personal-notes-branch.sh`,
+`configure-personal-notes.sh`) - all confirmed (by grep, not assumption) to be one-time
+human-copy-paste setup commands per `hooks/README.md`, never invoked from another script's
+executed bash - so no equivalent duplication risk exists there, and no constants were added for
+them.
+
+**`PLAN_DASHBOARD_DIR` → `PLAN_DASHBOARD_DIRECTORY`** ("Dir is an abbreviation. Also add comments
+that explain what each variable is or does.") - renamed it and its sibling
+`PLAN_DASHBOARD_TESTS_DIR` → `PLAN_DASHBOARD_TESTS_DIRECTORY` (only other call site: `ci.yml`).
+Left the older, pre-existing `PLANS_DIR`/`HOOKS_DIR` (defined several rounds before this PR's own
+scope, used far more widely) out of this specific sweep - explained the scoping choice in the
+reply rather than silently expanding or silently skipping. Added an individual comment above each
+`*_SCRIPT`/`*_FILE`/`*_DOC` constant explaining what it is and who calls it, replacing the one
+block comment that used to cover the whole group.
+
+**MCP tool names - the harder ask, three separate "use the shared variable name" comments.**
+Re-examined my prior round's dismissal ("MCP tool names can't be shell variables, so no
+centralization is possible") and concluded it was half right, half too quick: true that an actual
+tool call always needs the literal name (Claude Code's tool-calling mechanism has no
+shell-expansion), but that doesn't mean the *documentation* can't still have one canonical name
+instead of retyping the raw string in N places - the same principle already applied to file paths.
+Added `GITHUB_LIST_PULL_REQUESTS_TOOL`/`GITHUB_PULL_REQUEST_READ_TOOL` as explicitly-labeled
+documentation-only aliases (the comment states plainly they're never live-substituted into a real
+call). While tracing every place these two tool names were mentioned to decide where the new
+constants should actually apply, found a real, previously-unnoticed three-way duplication: the
+"bulk-fetch pull request state into pr_data.json" procedure was independently restated almost
+verbatim in `build_dashboard.py`'s module docstring, `plan-dashboard/SKILL.md` step 2, *and*
+`dependency-readiness.md` (which I'd only just extracted last round, already re-duplicating it
+a third time without noticing). Extracted a new shared `pr-data-fetching.md`; all three now
+reference it instead of restating the GitHub API calls.
+
+**`DEPENDENCY_READINESS_DOC` constant** - `plan-item-kickoff`/`plan-item-resolve` were still
+naming `dependency-readiness.md` by its full literal path in prose (reopened as "Doesn't this have
+a shared variable name to use here instead of the full skill path?" / "Use shared variable name
+instead of re-mentioning full string path" x2). Added the constant; both skills' step 1 now
+explicitly `source .claude/hooks/resolve-personal-notes-config.sh` (neither did before this round)
+so it's defined by the time step 2 references `${DEPENDENCY_READINESS_DOC}`.
+
+**One thread resolved by deletion, not aliasing.** `dependency-readiness.md`'s own opening
+sentence pointed at "`plan-dashboard/SKILL.md` step 1" to explain how to source the config script -
+but the very next lines already showed the literal `source` command directly, so the cross-reference
+carried zero information the reader didn't already have on the next line. Deleted it outright
+rather than routing it through a variable that would have been equally redundant.
+
+**One thread replied, deliberately left open.** The literal `source .claude/hooks/resolve-personal-notes-config.sh`
+bootstrap line inside `dependency-readiness.md`'s own code block ("Make and use shared variables
+for hooks as well instead of the full hook path and name") - this is the same irreducible-bootstrap
+case explained in the prior round for `refresh_dashboard.sh`'s equivalent line: it's the literal
+first command that has to run before any constant it defines exists to be referenced, so nothing
+"more shared" exists yet for it to point at. Added a short comment saying exactly this in the file
+itself. Did not resolve the thread since the literal ask (make this specific line use a shared
+variable) genuinely can't be done - replied with the reasoning and left it open for the developer
+to push back on if they see something I'm missing.
+
+138 tests still passing (no test coverage applies to doc/comment-only changes; verified
+`bash -n`/`py_compile`/`ci.yml` YAML parse all still clean, and re-ran the byte-identical
+`refresh_dashboard.sh`-vs-`build_dashboard.py` check once more after the rename - still identical).
+Ran `scripts/format_docstrings.py` on the one touched Python file (`build_dashboard.py`'s
+docstring edit). Pushed as commit 5eaee881. All 9 threads replied to; 8 resolved (including the
+reopened `save-plan.sh` thread), 1 left open (the irreducible bootstrap-line thread above). PR
+description updated with a new round section + refreshed test-plan; grepped the draft PR body for
+stray `<[a-zA-Z/]` before submitting (none found); re-fetched after submitting and confirmed the
+body landed byte-correct (head SHA 5eaee881 matches) and `draft: true` still intact.
