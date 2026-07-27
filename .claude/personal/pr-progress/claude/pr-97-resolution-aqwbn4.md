@@ -59,6 +59,36 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   design was modeled on it. Verified `test_verbalization/` green (734/3 skipped) after.
   Pushed as commit 7192661. Both threads replied and resolved.
 
+- Review round (2026-07-27, 5 threads): found that ANOTHER session had already handled
+  this exact round independently and pushed straight to the real branch as commit
+  ca3139bb, before I got to push my own equivalent fix (my push was rejected as stale).
+  Diffed the two: functionally identical on `templates/__init__.py` (byte-identical) and
+  `predicate.py`/`AGENTS.md` (trivial wording/ordering only) -- theirs was a strict
+  superset, since it also added summary-sentence docstrings to
+  `covered_callables()`/`covered_surfaces()` (the "is the doc format correct" thread,
+  which I hadn't gotten to) and had already replied-and-resolved 4 of the 5 threads.
+  Reconciled by discarding my redundant local commit (f66402c4) entirely and hard-
+  resetting both this branch and the designated task branch to ca3139bb -- did NOT
+  force-push over their work. Re-ran `uv sync` (main had advanced substantially further
+  underneath, ~90 unrelated commits) and verified `test_verbalization/` still green
+  (734 passed/3 skipped) on the reconciled tree. PR base auto-updated to latest `main`
+  (b0268aaa), diff still the same focused 11 files/+276/-108, label now `in-review`.
+  4 of 5 threads already resolved by the other session; the 5th (`templates/__init__.py`
+  emptied) was also already resolved. No new action needed from me this round beyond
+  verifying and reconciling.
+- New thread from that round, NOT resolved (correctly -- explicit "discuss with me"):
+  reviewers dislike the name "Surface" everywhere (`VerbalizationSurface`,
+  `SymbolicSurfaceSnapshot`, `surface_generation.py`/`surface_verification.py`, the
+  generated `verbalization_surfaces.py` module itself). The other session already
+  proposed two renaming schemes (A: "Example" -- `VerbalizationExample`,
+  `SymbolicVerbalizationSnapshot`, `rendered_sentence()`, etc.; B: "Entry", same shape)
+  and flagged a scope question: `VerbalizationSurface`/`SymbolicSurfaceSnapshot`/
+  `surface_verification.py` originate in #86 (P1), already merged to `main`, and are
+  referenced from `user/verbalization.md`/`developer/verbalization.md` -- so a full
+  rename touches files this PR didn't originate. Awaiting the developer's choice of
+  scheme and scope (in this PR vs. a separate PR against `main`) before touching
+  anything.
+
 ### Open (awaiting developer reply, not resolved)
 - `OverriddenOperand`/`SymbolicCallable._placeholder_operand_overrides_` in
   `predicate.py`: developer rejected the type-based auto-detection I'd proposed ("no
@@ -73,6 +103,9 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   scoped per-field -- which is functionally the override mechanism again. Also still
   need to apply their "hard-wired example-value tests, not exhaustive per-class" testing
   convention once the mechanism itself is settled. Not implementing until they clarify.
+- "Surface" rename (see above): awaiting developer's choice of scheme (A/"Example" vs
+  B/"Entry") and scope (this PR vs. separate PR against `main`, since some of the
+  affected names originate in already-merged #86).
 - Subscription: `subscribe_pr_activity` failed twice in a row with a generic error (not
   the "already watched by a steward" message the tool documents) -- PR has no watching
   label, so cause unclear. Flagged to the developer rather than retried further; may be
@@ -82,4 +115,9 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
 - Once the developer clarifies the OverriddenOperand mechanism, implement it, add the
   hard-wired example-value tests they asked for, regenerate the snapshot if wording
   changes, keep tests green, then push and reply-resolve.
+- Once the developer picks a rename scheme + scope, implement it (mind that some names
+  originate in #86/main if scope includes them).
 - Retry `subscribe_pr_activity` next session if the developer wants events watched.
+- Watch for further concurrent-session collisions on this PR -- always fetch the real
+  branch fresh before pushing, and diff before assuming a rejected push means conflict
+  resolution is needed by hand.
