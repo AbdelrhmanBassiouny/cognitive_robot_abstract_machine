@@ -140,13 +140,94 @@ whether #89 has merged to main yet; no coordination needed between the two PRs, 
 no changes needed to #89 as a result of this finding.
 
 ## Status
-Draft PR, CI green (18/18), `mergeable_state: clean`. One review thread (asking for
-broader test coverage) replied-to and resolved. PR description updated with the full
-history/verification (not yet updated with the #78 reconciliation — consider adding
-a short note there too, low priority since it doesn't change #89's content).
-Subscribed to all PR activity; hourly check-ins scheduled via `send_later` (re-arms
-itself silently when nothing's actionable — confirmed CI still green / no new
-comments as of the last two check-ins).
+Draft PR (still draft — no push has ever marked it ready). `mergeable_state: unstable`
+as of the 2026-07-27 push (head `596b7d08`), because of the pre-existing
+`test_world_sim_state_sync` MuJoCo flake (see 2026-07-27 entry below) — not a real
+conflict. 9 review threads total, all replied-to and resolved (the original
+broader-coverage one from 2026-07-20, plus the 8-comment round from 2026-07-27). PR
+description updated to reflect the 2026-07-27 round (design change to
+`ActiveConditionsRoot.claim`, the specific-value test assertions, the AGENTS.md rule
+addition) and the #78 reconciliation.
+
+## 2026-07-27 — restack + 8-comment review round, all addressed
+Branch had been restacked several times since the 2026-07-22 note (base now `main`
+directly, 229 files/18k+ lines of unrelated churn from the rest of the repo moving —
+confirmed via `git log` that none of it touches this PR's own files). A CI check
+fired first: `test_each_lib (semantic_digital_twin)` → the same
+`test_world_sim_state_sync` MuJoCo physics-settling flake seen on 2026-07-21/22
+(different job, same root cause: box doesn't reach target position within tolerance).
+Confirmed unrelated again via job log; did not rerun (same no-rerun-without-approval
+default). Then a real 8-comment review round landed, all on the previous
+`has_condition`-via-`ActiveConditionsRoot` design and its tests:
+
+1. `evaluation.py` `on_conclusions_processed`: hash-comment block → proper docstring.
+2. `base_expressions.py` `_conditions_root_`: `expr` loop variable → `expression`
+   (no-abbreviations rule).
+3. `evaluation_context.py` `ActiveConditionsRoot.claim`: reviewer flagged the
+   `root is not originating_expression._root_` identity-comparison inference as "weird
+   and unintuitive" — agreed, and it was also the awkward bit the Query-wrapper caveat
+   existed to explain. Replaced it with an explicit `has_condition: bool` parameter;
+   `claim()` no longer takes `originating_expression` at all. The caller
+   (`SymbolicExpression._evaluate_`) now computes that boolean via a new, symmetrically-
+   named `_has_condition_` property (walks `_all_expressions_` for a `Filter`, same as
+   `_conditions_root_` does, just answering the yes/no question directly instead of
+   returning the condition). This is a real design improvement, not just a docstring
+   fix — the caller no longer needs to reverse-engineer "was there a Filter" from an
+   identity comparison against a value it has to reason about the provenance of.
+4. `test_evaluation_context.py` `_NodeStub`: converted to `@dataclass` per the "always
+   use dataclass" rule; simplified to a single `_id_` field since it no longer needs
+   `_root_` at all now that `claim()` dropped `originating_expression`.
+5-7. Three `test_rules.py` assertions (`shared_subexpression`/`refinement_condition`/
+   `new_condition` `._conditions_root_ is not None`) — reviewer wanted the actual
+   expected value asserted, not just non-nullness. Probed each empirically with a
+   throwaway script rather than guessing:
+   - `shared_subexpression._conditions_root_ is first_compound` (had to name the
+     previously-inline `and_(...)` to assert against it) — deterministic because the
+     subexpression's primary parent is fixed at first attachment.
+   - `refinement_condition._conditions_root_ is query._conditions_root_` — resolves to
+     the *originally owning* query's own conditions root (a `Refinement`, not the plain
+     top-level condition, since `Add(...)` was used inside `with query:`), never
+     `other_query`'s.
+   - `new_condition._conditions_root_ is query._conditions_root_` — after `insert_at`
+     splices it into `query`'s (the anchor's) rule tree, it resolves into that same
+     tree's (now-grown) conditions root.
+   Mind the gap: initially cross-wired two of these three replies (posted the
+   `refinement_condition` explanation onto the `new_condition`/`insert_at` thread and
+   left the actual `refinement_condition` thread unanswered) — caught it by re-checking
+   `original_line` on each reply via the API before resolving, posted a correction on
+   the wrong thread and the correct reply on the right one. Worth double-checking
+   `original_line`/diff_hunk content against intent before replying when several
+   same-file comments land in one batch — this is the second time in this PR's history
+   a batched round caused a mis-targeted reply (see P1's note in the roadmap for the
+   first).
+8. `test_explanation.py` filter-less-query regression test: reviewer asked what it
+   tests and, again, why only `is not None`. Traced the actual expected value: `flag`
+   is a bare variable (not Comparator/Predicate/LogicalOperator), so
+   `is_condition_participant` correctly excludes it — the true expected value is an
+   *empty* `OrderedSet`, not "some ids". Reworded the docstring to say so explicitly
+   and tightened the assertion to `== set()` (strictly stronger than `is not None`:
+   catches both the old `None` regression and a wrong non-empty result). The comment
+   also asked to add a Testing rule to AGENTS.md about specific assertions — added it
+   ("Make assertions as specific as possible: when the correct expected value can be
+   determined, assert equality to that value rather than only a weaker check such as
+   not-None or not-empty") in its own commit.
+
+Verified locally: set up a proper local test environment for the first time this
+PR (`/tmp/krrood-venv`, Python 3.12 — python3.11 breaks `make_dataclass(module=...)` in
+`class_diagram.py`, matching the P1-P4 roadmap's known caveat; needed `--confcutdir=
+test/krrood_test` to dodge the root `test/conftest.py`'s full semantic_digital_twin/
+mujoco/ROS dependency chain, plus `pip install inflection` for `code_generation.naming`,
+a new dependency that arrived via the restack). Full `test/krrood_test/test_eql` +
+`test_ripple_down_rules`: **1188 passed, 6 skipped** both before and after the fix
+commit. `scripts/format_docstrings.py` (black + docformatter) run on every touched
+file. Reverted two incidental PDF diffs (`drawer_explanation.pdf`, `query_graph.pdf`)
+that a test run regenerated as a side effect — not part of this change.
+
+Two commits pushed: `486dfeb5` (the 7 code/test fixes above) and `596b7d08` (the
+AGENTS.md rule, kept separate since it's a docs-only, cross-cutting change rather
+than part of this PR's actual fix). All 8 new threads plus the original 2026-07-20
+thread (9 total) replied-to and resolved. PR description rewritten to describe the
+final `has_condition`-parameter design and this round's outcome.
 
 ## The bigger picture (found while answering "what's the rest of the refactor plan")
 There's a much larger master roadmap than what loaded into any single session:
