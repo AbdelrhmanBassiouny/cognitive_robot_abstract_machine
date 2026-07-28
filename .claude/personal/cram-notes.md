@@ -463,6 +463,32 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     unrelated main-merge's own test changes, not this PR — same 2 pre-existing `graphviz`
     failures). PR was ready-for-review (developer's own action from round 14's check-in); per
     personal convention, converted back to draft after this round's push.
+  - **Type-verbalization scatter audit** (2026-07-28, direct chat question, not a GitHub review
+    comment): developer asked whether Type-verbalization logic is spread across too many places
+    and to discuss before fixing. Dispatched a research subagent to map every call site under
+    `verbalization/` that renders a Python `type`. Finding: mostly a clean layered pipeline
+    (`type_noun` → `RoleFragment.for_type`/`for_value` → `disjunctive_phrase`/`one_of` →
+    `referring.py`'s abstract→concrete expansion → `OneOf`/`DisjunctivePhrase` → `HasType`/
+    `HasTypes`) — most cross-file references are legitimate reuse, not duplication. Three
+    exceptions found and discussed: (1) "is this a homogeneous tuple/list of classes" reimplemented
+    3x (`value_lexicon.value_phrase`, `LiteralRule._type_members`, `OneOf`'s `are_types`); (2)
+    `value_phrase`'s tuple-of-types branch is dead code (shadowed by `LiteralRule`'s own tuple
+    handling) *and* contradicts it (joins with "or", unlinked, vs. `LiteralRule`'s "and", linked);
+    (3) "class name with a fallback" written 3x (`type_noun`, `FallbackNouns.name_of`,
+    `InstantiatedPlanner._type_name`), neither of the latter two delegating to `type_noun`. User
+    approved fixing all three. Fixed (1)+(2): extracted `type_members()` to `value_lexicon.py`,
+    pointed `LiteralRule`/`OneOf` at it, deleted `value_phrase`'s dead/contradictory branch.
+    **Did NOT fix (3)** after empirically testing it first: routing `FallbackNouns.name_of`
+    through `type_noun` broke `test_limit_verbalization.py` — a bare-`int`-typed query subject is
+    *regression-tested* to read "the top three ints" (raw lowercase `__name__`), a deliberately
+    different grammatical role from `type_noun`'s "Integer" value/literal convention, not an
+    accidental duplicate; reverted that one change. Also left `InstantiatedPlanner._type_name`
+    alone — its `_type_` is typed `Union[Type[T], Callable]`, broader than `type_noun` safely
+    handles (a `functools.partial`-like callable lacking `__name__` would crash it), so unifying
+    would be a regression risk for a case that isn't really "the same thing" after all. Pushed as
+    commit 99ea09ee; full `test_verbalization/` suite green (760/3 skipped), full
+    `test/krrood_test/` suite green (2012 passed, same 2 pre-existing `graphviz` failures).
+    `mergeable_state` now reports `clean`.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
