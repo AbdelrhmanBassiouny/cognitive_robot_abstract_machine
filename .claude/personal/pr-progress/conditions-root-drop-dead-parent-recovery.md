@@ -462,6 +462,29 @@ Synced local branch (fast-forward), ran a quick sanity subset
 didn't break anything, and confirmed fresh CI kicked off on the new head with no
 failures so far as of this note.
 
+Several further silent restacks followed (base advancing each time, no PR-content
+changes), all fast-forwarded locally and confirmed CI-green with no new comments —
+not worth individual entries.
+
+## 2026-07-28 (later still, again) — real merge conflict from a restack, resolved
+`mergeable_state` went `unstable` → `unknown` → `dirty` across three check-ins (head
+unchanged at `5003e470`) — the `dirty` state was the first actual conflict this PR has
+hit from a restack (previous ones were always clean auto-merges). Probed it in a
+disposable worktree first rather than guessing: `git merge origin/main` against the PR
+branch produces exactly one conflict, in `AGENTS.md`'s Testing section — `main` had
+appended 5 new unrelated bullets (CI safety / credentials / no-inline-snippets /
+mock-over-live / live-API-test rules) at the same anchor line (right after "assertions
+should be as specific as possible") that this PR's own new bullet was appended to.
+Purely additive on both sides, no semantic overlap. Resolved by keeping both blocks
+(this PR's line first, then main's five), verified with a quick sanity subset
+(`test_explanation.py` + `test_core`, 246 passed — merge only touched a docs file, nothing
+code-side), and pushed the merge commit (`2811fd29`, base now `5d27d729`). Per the
+personal convention this session's own pushes always convert the PR back to draft
+regardless of its prior ready-for-review state, so converted it back to draft
+immediately after pushing. Fresh CI kicked off on the merge commit with nothing
+failed as of this note — `mergeable_state` cleared to `unstable` (CI-pending, not a
+conflict) right after the push, confirming the conflict itself is resolved.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
