@@ -1,7 +1,7 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-28): pushed (19 commits total, d45003c7 latest). Still in **draft**. Base `main`
-(#86/#87 both merged there). Subscribed to activity. 16 review threads total, all now
+Status (2026-07-28): pushed (20 commits total, 88c95ed2 latest). Still in **draft**. Base `main`
+(#86/#87 both merged there). Subscribed to activity. 17 review threads total, all now
 reply-and-resolved except round 6 (reconciliation question, informational — nothing to resolve).
 An unexpected `Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed
 directly on this branch mid-round-15, from outside this session — see the roadmap section above
@@ -13,11 +13,11 @@ the limit-wording correction, which is a genuine (small) surface-text fix alread
 description's existing text). CI checked through 91e3ca4b: `krrood`'s own job green; a `coraplex`
 job failure (an `ormatic_interface.py` regeneration/`ruff format` internal error) and the
 recurring pre-existing `semantic_digital_twin` flake (`test_world_sim_state_sync`) both confirmed
-unrelated to this PR. CI for 99ea09ee/c1e95cbe/d45003c7 not yet checked. `mergeable_state` reports
-`unstable` as of the last PR `get` call (2026-07-28) — worth re-checking against `main` next
-session (nothing outstanding was found the last time this was investigated, per round 6, but that
-was before several more commits landed). Hourly check-in loop active; PR still not merged/closed,
-so subscription continues.
+unrelated to this PR. CI for 99ea09ee/c1e95cbe/d45003c7/88c95ed2 not yet checked. `mergeable_state`
+reports `unstable` as of the last PR `get` call (2026-07-28, re-checked after 88c95ed2 — unchanged)
+— worth re-checking against `main` next session (nothing outstanding was found the last time this
+was investigated, per round 6, but that was before several more commits landed). Hourly check-in
+loop active; PR still not merged/closed, so subscription continues.
 
 ### Round 16 (2026-07-28, 1 comment): `type_members` should accept any iterable
 `type_members` (`value_lexicon.py`) only accepted `tuple`/`list`; the developer asked for any
@@ -27,6 +27,22 @@ Fixed: `isinstance(value, (str, bytes)) or not isinstance(value, Iterable)` guar
 wrapped for determinism). `LiteralRule`/`OneOf` call sites unaffected (contract unchanged). Full
 `test_verbalization` suite green (760/3 skipped), full `test/krrood_test` suite green (2012
 passed, same 2 pre-existing unrelated `graphviz` failures). Pushed as d45003c7; reply-and-resolved.
+
+### Round 17 (2026-07-28, 1 comment, same line as round 16): reuse the existing `is_iterable`
+Immediate follow-up: "There's a helper for checking for iterables in krrood use it, and if needed
+extend it." Found `krrood.entity_query_language.utils.is_iterable` (already the shared convention
+across `comparator.py`, `base_expressions.py`, `variable.py`, `ripple_down_rules/utils.py`) and
+swapped `type_members`'s inline check for it. No extension needed — `is_iterable` excludes
+`str`/`bytes`/`bytearray` like the round-16 inline check did, but also excludes a bare `type`
+itself, which the inline check didn't; that matters because a class's metaclass can define
+`__iter__` (an `Enum` subclass iterates its members), so `is_iterable` rules a bare class out up
+front rather than relying on the downstream `all(isinstance(member, type) ...)` guard to reject it
+(which it would have, harmlessly — not a live bug, but `is_iterable` is more direct). Confirmed
+`krrood.entity_query_language.utils` has no runtime-level internal imports (only a
+`TYPE_CHECKING`-guarded one), so importing `is_iterable` into `value_lexicon.py` carries no
+circular-import risk. Full `test_verbalization` suite green (760/3 skipped), full
+`test/krrood_test` suite green (2012 passed, same 2 pre-existing unrelated `graphviz` failures).
+Pushed as 88c95ed2; reply-and-resolved.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -108,8 +124,8 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   its follow-up correction (c1e95cbe, `FallbackNouns.name_of` → `type_noun` after all, per the
   developer overriding my initial "leave it" call — see the roadmap section's "Type-verbalization
   scatter audit"/"Follow-up correction" entries) are direct chat requests, not GitHub review
-  rounds; CI for 99ea09ee/c1e95cbe/d45003c7 (round 16, "any iterable" fix, see above) not yet
-  checked — do that next session.
+  rounds; CI for 99ea09ee/c1e95cbe/d45003c7 (round 16)/88c95ed2 (round 17, reuse `is_iterable`, see
+  above) not yet checked — do that next session.
 - `mergeable_state` reports "unstable" as of the last `get` call (2026-07-28) — re-verify against
   `main` next session; nothing outstanding was found the last time this was investigated (round
   6), but several commits have landed on both branches since.
