@@ -1,23 +1,32 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-27): pushed (17 commits total, 91e3ca4b latest). Back in **draft** (developer had
-marked it ready for review themselves after round 14; I converted it back to draft after round
-15's push, per personal convention — that rule applies to my own pushes, not the developer's own
-un-drafting, so it stayed ready across the gap between those two events). Base `main` (#86/#87
-both merged there). Subscribed to activity. 15 review rounds total, all now reply-and-resolved
-except round 6 (reconciliation question, informational — nothing to resolve). An unexpected
-`Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed directly on
-this branch mid-round-15, from outside this session — see the roadmap section above for the full
-investigation and how it was reconciled (rebase, not force-push). Description rewritten twice so
-far: once for the 2026-07-24 rebase, once for round 11's repeated-article redesign; no further
-rewrite needed for rounds 12-16 (no user-visible surface change from any of them, only internal
-layering/bugfix/docstring/test/doctest-harness/consolidation wording, except the limit-wording
-correction below, which is a genuine (small) surface-text fix). CI checked through 91e3ca4b:
-`krrood`'s own job green; a `coraplex` job failure (an `ormatic_interface.py` regeneration/`ruff
-format` internal error) and the recurring pre-existing `semantic_digital_twin` flake
-(`test_world_sim_state_sync`) both confirmed unrelated to this PR. CI for 99ea09ee/c1e95cbe not
-yet checked. `mergeable_state` reports `clean`. Hourly check-in loop active; PR still not
-merged/closed, so subscription continues.
+Status (2026-07-28): pushed (19 commits total, d45003c7 latest). Still in **draft**. Base `main`
+(#86/#87 both merged there). Subscribed to activity. 16 review threads total, all now
+reply-and-resolved except round 6 (reconciliation question, informational — nothing to resolve).
+An unexpected `Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed
+directly on this branch mid-round-15, from outside this session — see the roadmap section above
+for the full investigation and how it was reconciled (rebase, not force-push). Description
+rewritten twice so far: once for the 2026-07-24 rebase, once for round 11's repeated-article
+redesign; no further rewrite needed since (no user-visible surface change from any subsequent
+round, only internal layering/bugfix/docstring/test/doctest-harness/consolidation wording, except
+the limit-wording correction, which is a genuine (small) surface-text fix already covered by the
+description's existing text). CI checked through 91e3ca4b: `krrood`'s own job green; a `coraplex`
+job failure (an `ormatic_interface.py` regeneration/`ruff format` internal error) and the
+recurring pre-existing `semantic_digital_twin` flake (`test_world_sim_state_sync`) both confirmed
+unrelated to this PR. CI for 99ea09ee/c1e95cbe/d45003c7 not yet checked. `mergeable_state` reports
+`unstable` as of the last PR `get` call (2026-07-28) — worth re-checking against `main` next
+session (nothing outstanding was found the last time this was investigated, per round 6, but that
+was before several more commits landed). Hourly check-in loop active; PR still not merged/closed,
+so subscription continues.
+
+### Round 16 (2026-07-28, 1 comment): `type_members` should accept any iterable
+`type_members` (`value_lexicon.py`) only accepted `tuple`/`list`; the developer asked for any
+iterable, matching `DisjunctivePhrase.as_fragment`'s existing "iterable, not str/bytes" pattern.
+Fixed: `isinstance(value, (str, bytes)) or not isinstance(value, Iterable)` guard, then convert to
+`list` and check every member is a `type`. Added a `set`-based doctest example (`sorted(...)`-
+wrapped for determinism). `LiteralRule`/`OneOf` call sites unaffected (contract unchanged). Full
+`test_verbalization` suite green (760/3 skipped), full `test/krrood_test` suite green (2012
+passed, same 2 pre-existing unrelated `graphviz` failures). Pushed as d45003c7; reply-and-resolved.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -99,7 +108,9 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   its follow-up correction (c1e95cbe, `FallbackNouns.name_of` → `type_noun` after all, per the
   developer overriding my initial "leave it" call — see the roadmap section's "Type-verbalization
   scatter audit"/"Follow-up correction" entries) are direct chat requests, not GitHub review
-  rounds; CI for both not yet checked — do that next session.
-- `mergeable_state` reports "clean" (checked after 99ea09ee) — the reconciliation concern from
-  earlier rounds is resolved.
+  rounds; CI for 99ea09ee/c1e95cbe/d45003c7 (round 16, "any iterable" fix, see above) not yet
+  checked — do that next session.
+- `mergeable_state` reports "unstable" as of the last `get` call (2026-07-28) — re-verify against
+  `main` next session; nothing outstanding was found the last time this was investigated (round
+  6), but several commits have landed on both branches since.
 - P4 (sdt = PR #33 rebase) still needs P1 + P2 + P3 all merged to main first.
