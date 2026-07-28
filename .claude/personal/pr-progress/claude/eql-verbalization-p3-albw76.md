@@ -13,11 +13,13 @@ the limit-wording correction, which is a genuine (small) surface-text fix alread
 description's existing text). CI checked through 91e3ca4b: `krrood`'s own job green; a `coraplex`
 job failure (an `ormatic_interface.py` regeneration/`ruff format` internal error) and the
 recurring pre-existing `semantic_digital_twin` flake (`test_world_sim_state_sync`) both confirmed
-unrelated to this PR. CI for 99ea09ee/c1e95cbe/d45003c7/88c95ed2 not yet checked. `mergeable_state`
-reports `unstable` as of the last PR `get` call (2026-07-28, re-checked after 88c95ed2 — unchanged)
-— worth re-checking against `main` next session (nothing outstanding was found the last time this
-was investigated, per round 6, but that was before several more commits landed). Hourly check-in
-loop active; PR still not merged/closed, so subscription continues.
+unrelated to this PR. CI checked through 88c95ed2 (all 19 check runs): a "failure" webhook fired
+while several jobs (`coraplex`, `krrood`, `giskardpy`, `semantic_digital_twin`) were still
+in_progress; polled `get_check_runs` until they all finished — every job passed, including
+`coraplex` (which just took ~28 minutes, longer than usual, and briefly looked like the source of
+the failure webhook before it went green). No code fix was needed; the failure notification
+appears to have reflected a transient/retried state, not an actual break. `mergeable_state` is back
+to `clean`. Hourly check-in loop active; PR still not merged/closed, so subscription continues.
 
 ### Round 16 (2026-07-28, 1 comment): `type_members` should accept any iterable
 `type_members` (`value_lexicon.py`) only accepted `tuple`/`list`; the developer asked for any
