@@ -393,7 +393,27 @@ format_docstrings.py` run; reverted the `drawer_explanation.pdf`/`query_graph.pd
 regen artifacts again (same trap as the 2026-07-27 note — happened a third time,
 worth just checking for these two files by habit after any local test run on this
 branch from now on). Pushed as `d248328e`. All 3 threads replied-to and resolved. PR
-description updated to describe the extraction. CI kicked off on the new push,
+description updated to describe the extraction.
+
+## 2026-07-28 (later) — immediate 1-comment follow-up on `_names_for_ids_`
+Same day, next comment batch, on the method the previous round had just added:
+"why loop over all expressions? don't we already have a helper that caches these
+given an id? And is this only for this node + descendants — if so name it that way."
+Both right. `_get_expression_by_id_` already existed (per-instance `_expression_id_cache_`
+dict plus an evaluation-scoped index) — the loop-and-check-membership implementation
+was reinventing it. Rewrote to `{self._get_expression_by_id_(id_)._name_ for id_ in ids}`;
+renamed `_names_for_ids_` → `_subtree_names_for_ids_` (fixed the reviewer's suggested
+spelling "descendent" → "descendant"/"subtree" to match the codebase's own
+`_descendants_` spelling) with a docstring stating the precondition explicitly: ids
+must belong to this node's own subtree. Note this technically resolves through the
+whole tree internally (`_get_expression_by_id_`'s fallback walks from `_root_`), not
+just self+descendants — harmless in practice since every caller only ever passes ids
+that are already within this node's own subtree by construction (satisfied_condition_ids
+computed from this same node's own evaluation pass), and if that precondition were ever
+violated the lookup now raises `NoExpressionFoundForGivenID` instead of silently
+excluding the id, which is the more correct failure mode per AGENTS.md. Verified:
+`test_explanation.py` 33 passed; full `test_eql`/`test_ripple_down_rules` 1188 passed.
+Pushed as `4c01e286`. Thread replied-to and resolved. CI kicked off on the new push,
 not yet resolved as of this note — re-check next check-in.
 
 ## Next
