@@ -174,9 +174,27 @@ open review thread on this PR** (only the subscription flag remains open, see ab
 Noticed the PR had been marked ready-for-review (not by this session) before this push;
 converted back to draft after pushing, per personal convention.
 
+### Done (2026-07-28, continued) -- another concurrent-session collision, reconciled
+New review comment on the same thread: "Make the key a dataclass instead of a tuple.
+[...] two fields on for the callable and one for the field name." Implemented
+`PlaceholderField(callable_class, field_name)` (frozen dataclass) as
+`PLACEHOLDER_EXAMPLE_VALUES`'s key, committed, and on fetch-before-push found ANOTHER
+session had independently pushed the identical fix first (`1e263066`, "Turn
+PLACEHOLDER_EXAMPLE_VALUES's key into a PlaceholderExampleField dataclass") -- same
+shape, only the dataclass name differed (`PlaceholderExampleField` vs my
+`PlaceholderField`) and it had already replied-and-resolved the thread. Reconciled by
+discarding my redundant local commit and hard-resetting both this branch and the
+designated task branch to `1e263066` -- did not force-push over their work. Verified
+`test_verbalization/` still green (735 passed/3 skipped) on the reconciled tree. Posted
+one more confirming reply on the (already-resolved) thread for the record.
+This is now the second time a concurrent session has raced this same PR to an identical
+fix (see the "Surface"-rename-round entry above for the first) -- the fetch-immediately-
+before-push habit is catching these before any work gets lost, but expect more of this
+on an actively-reviewed PR; always diff a rejected push before assuming a real conflict.
+
 ### Next
 - Retry `subscribe_pr_activity` next session if the developer wants events watched.
-- Keep fetching the real branch fresh immediately before every push -- confirmed this
-  avoids the collision seen earlier in this same PR.
+- Keep fetching the real branch fresh immediately before every push -- this has now
+  caught two concurrent-session collisions on this PR without losing work either time.
 - No open review threads remain as of this update -- next session should check for new
   ones before assuming there's nothing to do.
