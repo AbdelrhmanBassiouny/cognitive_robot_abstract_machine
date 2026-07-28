@@ -1765,7 +1765,7 @@ class MujocoBuilder(MultiSimBuilder):
     def _end_build(self, file_path: str):
         self._build_equalities()
         self._build_tendons()
-        self.spec.compile()
+        compiled_model = self.spec.compile()
         self.spec.to_file(file_path)
         import xml.etree.ElementTree as ET
 
@@ -1793,21 +1793,74 @@ class MujocoBuilder(MultiSimBuilder):
         key_element = ET.SubElement(keyframe_element, "key")
         key_element.set("name", "home")
         key_element.set("time", "0")
-        qpos = []
-        for body in self.world.bodies:
-            parent_connection = body.parent_connection
-            if (
-                isinstance(parent_connection, self._ignore_connection_types)
-                or parent_connection is None
-            ):
-                continue
-            qpos += [
-                self.world.state[dof.id].position
-                for dof in parent_connection.active_dofs
-                + parent_connection.passive_dofs
-            ]
-        key_element.set("qpos", " ".join(map(str, qpos)))
+        key_element.set(
+            "qpos", " ".join(map(str, self._compute_keyframe_qpos(compiled_model)))
+        )
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
+
+    def _compute_keyframe_qpos(self, compiled_model: mujoco.MjModel) -> List[float]:
+        """
+        Builds the ``home`` keyframe's qpos vector in the exact joint order
+        the compiled MuJoCo model expects.
+
+        Deliberately walks ``compiled_model``'s own joints rather than
+        ``self.world.bodies``: the two orders do not generally match (e.g.
+        this was found to reverse the order of a scene's free-floating
+        bodies), and getting that order wrong silently assigns one body's
+        qpos values to a different body. Every generated MuJoCo joint is
+        named after its owning Connection (see e.g.
+        MultiSimSynchronizer._resolve_qpos_adr, which relies on the same
+        invariant), so each joint is resolved back to its Connection by
+        name rather than by position.
+        """
+        qpos = []
+        for joint_id in range(compiled_model.njnt):
+            joint_name = mujoco.mj_id2name(
+                compiled_model, mujoco.mjtObj.mjOBJ_JOINT, joint_id
+            )
+            connection = self.world.get_connection_by_name(joint_name)
+            if compiled_model.jnt_type[joint_id] == mujoco.mjtJoint.mjJNT_FREE:
+                qpos += self._keyframe_qpos_for_free_connection(connection)
+            else:
+                qpos += [
+                    self.world.state[dof.id].position
+                    for dof in connection.active_dofs + connection.passive_dofs
+                ]
+        return qpos
+
+    def _keyframe_qpos_for_free_connection(
+        self, connection: Connection6DoF
+    ) -> List[float]:
+        """
+        Returns a free joint's qpos: the child body's ABSOLUTE pose
+        relative to its parent -- position, then a scalar-first
+        ``(w, x, y, z)`` quaternion -- which is what MuJoCo expects for a
+        freejoint.
+
+        This is *not* the same as the connection's own DOF values. Those
+        DOFs are relative to the connection's own
+        ``parent_T_connection_expression`` baseline (e.g. a prop's parsed
+        MJCF ``<body pos="...">``), so for any body that hasn't moved since
+        being parsed they're all zero/identity. Exporting them directly
+        would place every never-moved free body at its parent's origin
+        instead of its actual spawn pose -- the cause of free bodies
+        (props, unattached objects, ...) spawning at (0, 0, 0) regardless
+        of where their MJCF placed them.
+        """
+        parent_T_child = self.world.compute_forward_kinematics_np(
+            connection.parent, connection.child
+        )
+        xyz = parent_T_child[:3, 3]
+        quat_xyzw = Rotation.from_matrix(parent_T_child[:3, :3]).as_quat()
+        return [
+            float(xyz[0]),
+            float(xyz[1]),
+            float(xyz[2]),
+            float(quat_xyzw[3]),
+            float(quat_xyzw[0]),
+            float(quat_xyzw[1]),
+            float(quat_xyzw[2]),
+        ]
 
     def _build_body(self, body: Body):
         self._build_mujoco_body(body=body)
