@@ -441,6 +441,27 @@ Verified: `test_explanation.py` 33 passed; full `test_eql`/`test_ripple_down_rul
 stuck-CI situation too, incidentally — the new push superseded the hung
 `probabilistic_model` run with a fresh one.
 
+Two more unrelated CI flakes on this same head, both confirmed via job log and left
+alone (no rerun without approval): `random_events` job hit a transient Bazel/GitHub-CDN
+`500 Internal Server Error` fetching `rules_shell-v0.2.0.tar.gz` (pure network flake,
+this PR doesn't touch `random_events`'s build at all); `semantic_digital_twin` job hit
+the same recurring `test_world_sim_state_sync` MuJoCo physics-settling assertion seen
+repeatedly throughout this PR's history.
+
+## 2026-07-28 (later still) — developer pushed directly + marked PR ready for review
+The developer pushed their own commit (`9456ea55`, correct human authorship,
+`abdelrhman_bassuny@hotmail.com`) trimming the previous round's `_get_expression_names_
+by_their_ids_` docstring back down to a plain `:return:` line — dropping the rationale/
+comparison prose (matches the "docstrings shouldn't read like a conversation" rule
+from the parallel P1-P4 EQL-verbalization roadmap). Then marked the PR ready for
+review themselves (no longer draft). Per the personal convention, "convert back to
+draft after pushing any commit" applies to pushes *this session* makes — a developer's
+own explicit ready-for-review action is not something to override; left it as ready.
+Synced local branch (fast-forward), ran a quick sanity subset
+(`test_explanation.py` + `test_core`, 246 passed) to confirm the docstring-only trim
+didn't break anything, and confirmed fresh CI kicked off on the new head with no
+failures so far as of this note.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
