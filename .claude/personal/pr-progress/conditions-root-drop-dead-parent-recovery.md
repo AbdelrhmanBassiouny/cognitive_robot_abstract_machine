@@ -359,6 +359,43 @@ branch `claude/rdr-refactor-conditions-root-recovery-31difc` held unrelated
 plan-dashboard commits, so (user-confirmed via AskUserQuestion, same as PR #87's
 precedent) the push went to PR #89's real head `conditions-root-drop-dead-parent-recovery`.
 
+## 2026-07-28 — 3-comment review round: extract test helpers into production methods
+Restacked branch pulled first (47 commits behind, all unrelated churn elsewhere in the
+repo). Three new review comments, all on the `test_explanation.py` helpers the
+filter-less-query regression test had introduced:
+
+1. `_get_true_results`: "can this be a method on `SymbolicExpression`/`Query` instead
+   of a test function? Check if something similar already exists. How is it different
+   from `.tolist()`?" — checked first (grepped for other `is_true`-filtering in
+   production code) and found `evaluate()` already had almost the identical filter
+   inline: `(self._process_result_(res) for res in self._evaluate_() if res.is_true)`.
+   Extracted it into `SymbolicExpression._true_results_()`, had `evaluate()` call it
+   too. Real answer on `.tolist()`: not interchangeable — `tolist()`/`evaluate()` map
+   through `_process_result_` into user-facing output values, which is exactly what
+   discards the raw `OperationResult` (and its `satisfied_condition_ids`) these tests
+   need. `_true_results_()` returns the pre-mapping raw results; `_get_true_results`
+   stays as a thin test wrapper (`query.build()` + `list(query._true_results_())`).
+2. `_get_satisfied_names`: "same comment applies." No existing similar method found.
+   Added `SymbolicExpression._names_for_ids_(ids)` (self + `_descendants_`, matching
+   the helper's exact prior semantics — deliberately not `_all_expressions_`, which
+   would walk the *whole* tree from the top root rather than just this node's own
+   subtree). Deleted the test helper entirely; every call site now calls
+   `condition_root._names_for_ids_(ids)` directly.
+3. One test (`test_satisfied_conditions_and_both_true`) had `_get_satisfied_names`'s
+   body duplicated inline instead of calling it — reviewer caught it, replaced with a
+   direct call to the new `_names_for_ids_` method.
+
+Verified: `test_eql`/`test_ripple_down_rules` 1188 passed; full
+`test_eql`/`test_ormatic`/`test_class_diagram`/`test_ripple_down_rules`/
+`test_underspecified_knowledge` 1384 passed, 6 skipped, no failures (grew from 1332
+via unrelated upstream test additions picked up by the restack). `scripts/
+format_docstrings.py` run; reverted the `drawer_explanation.pdf`/`query_graph.pdf`
+regen artifacts again (same trap as the 2026-07-27 note — happened a third time,
+worth just checking for these two files by habit after any local test run on this
+branch from now on). Pushed as `d248328e`. All 3 threads replied-to and resolved. PR
+description updated to describe the extraction. CI kicked off on the new push,
+not yet resolved as of this note — re-check next check-in.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
