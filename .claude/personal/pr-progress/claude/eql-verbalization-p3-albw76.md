@@ -10,14 +10,13 @@ except round 6 (reconciliation question, informational — nothing to resolve). 
 this branch mid-round-15, from outside this session — see the roadmap section above for the full
 investigation and how it was reconciled (rebase, not force-push). Description rewritten twice so
 far: once for the 2026-07-24 rebase, once for round 11's repeated-article redesign; no further
-rewrite needed for rounds 12-15 (no further user-visible surface change, only internal
-layering/bugfix/docstring/test/doctest-harness wording). CI checked through e66bf4b5: `krrood`'s
-own job green; a `coraplex` job failure (an `ormatic_interface.py` regeneration/`ruff format`
-internal error) and the recurring pre-existing `semantic_digital_twin` flake
-(`test_world_sim_state_sync`) both confirmed unrelated to this PR. CI for ea595142/91e3ca4b not
-yet checked (the latter is on top of the unexpected main-merge too, so worth a full check, not
-just krrood's job). Hourly check-in loop active; PR still not merged/closed, so subscription
-continues.
+rewrite needed for rounds 12-16 (no user-visible surface change from any of them, only internal
+layering/bugfix/docstring/test/doctest-harness/consolidation wording). CI checked through
+91e3ca4b: `krrood`'s own job green; a `coraplex` job failure (an `ormatic_interface.py`
+regeneration/`ruff format` internal error) and the recurring pre-existing `semantic_digital_twin`
+flake (`test_world_sim_state_sync`) both confirmed unrelated to this PR. CI for 99ea09ee (the
+Type-verbalization consolidation) not yet checked. `mergeable_state` now reports `clean`. Hourly
+check-in loop active; PR still not merged/closed, so subscription continues.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -94,11 +93,10 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   fixed, full suite re-verified green. All rounds now reply-and-resolved except round 6
   (informational, nothing to resolve). PR converted back to draft after this push per personal
   convention (was ready-for-review from the developer's own round-14 action).
-- CI checked through e66bf4b5 only; CI for ea595142 and 91e3ca4b (the latter on top of the
-  unexpected main-merge, so worth checking more than just krrood's job) not yet checked — do that
-  next session.
-- `mergeable_state` reported "unstable" at the 33a8da5b check (not "clean") — re-verify at the next
-  status check; GitHub's mergeable-state cache can lag a push, and the reconciliation investigation
-  (round 6) found nothing actually outstanding against `main` at that time (though the branch has
-  since picked up a large unrelated main-merge — re-check reconciliation too).
+- CI checked through 91e3ca4b (both `krrood`'s job and the wider run, given the unexpected
+  main-merge underneath it — see round 15). CI for 99ea09ee (the Type-verbalization consolidation,
+  a direct chat request rather than a GitHub review round — see the roadmap section's
+  "Type-verbalization scatter audit" entry) not yet checked — do that next session.
+- `mergeable_state` now reports "clean" (checked after 99ea09ee) — the reconciliation concern from
+  earlier rounds is resolved.
 - P4 (sdt = PR #33 rebase) still needs P1 + P2 + P3 all merged to main first.
