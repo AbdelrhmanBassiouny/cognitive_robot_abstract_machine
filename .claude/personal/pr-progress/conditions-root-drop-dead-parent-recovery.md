@@ -416,6 +416,31 @@ excluding the id, which is the more correct failure mode per AGENTS.md. Verified
 Pushed as `4c01e286`. Thread replied-to and resolved. CI kicked off on the new push,
 not yet resolved as of this note — re-check next check-in.
 
+While CI for `4c01e286` was running, `test_each_lib (probabilistic_model)` hung on its
+"Install dependencies" step for over an hour (every sibling job finished in under 15
+minutes) — flagged it to the user rather than rerunning unilaterally; the user didn't
+answer the rerun question directly and instead sent the standard recurring check-in
+prompt twice, so treated that as staying with this PR's established no-rerun-without-
+explicit-approval default (same as the 2026-07-21/07-22 precedent) and just kept
+reporting it as still stuck each check-in.
+
+## 2026-07-28 (yet later) — immediate 1-comment follow-up: name still overstated scope + Set→List bug
+Same day, next comment batch, on the method the previous round had just renamed to
+`_subtree_names_for_ids_`: "there's nothing in this method that makes sure the ids are
+in this node's subtree, it's just getting names by id — if that's intended, name it
+`_get_expression_names_by_their_ids_`. And why is this a `set()`? Are names guaranteed
+unique? Won't that remove needed ones?" Both right, and the second one is a real latent
+bug, not a nit: expression names collide (e.g. `and_(x > 5, y > 3)` has two `>`
+comparators), so a `Set[str]` result could silently collapse two genuinely-satisfied,
+distinct conditions into a single `">"` entry — indistinguishable from only one being
+satisfied. Renamed to `_get_expression_names_by_their_ids_` and changed the return type
+to `List[str]` (one entry per id, in input order); all 5 call sites in
+`test_explanation.py` updated, `in`/`not in` assertions still work unchanged on a list.
+Verified: `test_explanation.py` 33 passed; full `test_eql`/`test_ripple_down_rules`
+1188 passed. Pushed as `b054a048`. Thread replied-to and resolved. This resolved the
+stuck-CI situation too, incidentally — the new push superseded the hung
+`probabilistic_model` run with a fresh one.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
