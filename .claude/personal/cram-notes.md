@@ -501,6 +501,14 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     the *only* test file affected by grepping the full suite run. Pushed as commit c1e95cbe; full
     `test_verbalization/` suite green (760/3 skipped), full `test/krrood_test/` suite green (2012
     passed, same 2 pre-existing `graphviz` failures).
+  - **Review round 16** (2026-07-28, 1 comment): "This should be any iterable, not just list and
+    tuple" (on `type_members`, `value_lexicon.py`, added by round-`99ea09ee`'s consolidation) —
+    broadened the guard to `isinstance(value, (str, bytes)) or not isinstance(value, Iterable)`,
+    matching `DisjunctivePhrase.as_fragment`'s existing "any iterable, not str/bytes" convention;
+    added a `set`-based doctest (`sorted(...)`-wrapped for determinism). `LiteralRule`/`OneOf` call
+    sites unaffected (contract unchanged). Pushed as commit d45003c7; full `test_verbalization/`
+    suite green (760/3 skipped), full `test/krrood_test/` suite green (2012 passed, same 2
+    pre-existing `graphviz` failures). Reply-and-resolved.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
