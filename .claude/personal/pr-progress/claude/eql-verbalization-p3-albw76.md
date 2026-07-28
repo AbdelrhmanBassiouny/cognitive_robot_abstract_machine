@@ -1,6 +1,8 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-28): pushed (20 commits total, 88c95ed2 latest). Still in **draft**. Base `main`
+Status (2026-07-28): pushed (20 commits total, 88c95ed2 latest). Developer marked it **ready for
+review** themselves after CI went green; per personal convention that stands until my own next
+push (which would re-draft it). Base `main`
 (#86/#87 both merged there). Subscribed to activity. 17 review threads total, all now
 reply-and-resolved except round 6 (reconciliation question, informational — nothing to resolve).
 An unexpected `Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed
