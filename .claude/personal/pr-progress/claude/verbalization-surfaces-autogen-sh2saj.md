@@ -4,9 +4,8 @@ mirroring the ormatic_interface.py conftest.py-regeneration pattern. Off
 main, PR #39 (code-generation-extract) + PR #87 (operand-naming) merged
 first.
 
-Status: implementation complete, all 21 review threads resolved, PR is
-draft (personal convention), pushed as 1e263066, CI was pending on this
-head as of the last check.
+Status: MERGED. All 21 review threads resolved; final head 1e263066; CI
+green; session auto-unsubscribed on merge. Nothing further to do.
 
 History: another concurrent session instance implemented and pushed
 f786a908 (PLACEHOLDER_EXAMPLE_VALUES module-level dict keyed by
