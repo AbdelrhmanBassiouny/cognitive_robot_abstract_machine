@@ -489,6 +489,18 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     commit 99ea09ee; full `test_verbalization/` suite green (760/3 skipped), full
     `test/krrood_test/` suite green (2012 passed, same 2 pre-existing `graphviz` failures).
     `mergeable_state` now reports `clean`.
+  - **Follow-up correction** (2026-07-28, same day): developer overrode the (3) decision above —
+    "the limit verbalization should [read] the top three Integers", i.e. the `int`-as-query-subject
+    wording that `test_limit_verbalization.py` had locked in ("the top three ints") was itself the
+    stray inconsistency, not a deliberate convention; the fix should go through after all.
+    Re-applied `FallbackNouns.name_of` → `type_noun`, and updated all 6 affected assertions in
+    `test_limit_verbalization.py` to the "Integer"/"Integers" wording (a legitimate spec
+    correction from the developer, not test-cheating — AGENTS.md's "never modify the test when
+    fixing a failing test" is about not papering over a bug, not about refusing an explicit
+    behavior-change instruction from the person who owns the intended output). Verified this was
+    the *only* test file affected by grepping the full suite run. Pushed as commit c1e95cbe; full
+    `test_verbalization/` suite green (760/3 skipped), full `test/krrood_test/` suite green (2012
+    passed, same 2 pre-existing `graphviz` failures).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
