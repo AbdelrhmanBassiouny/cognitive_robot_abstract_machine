@@ -4,20 +4,27 @@ mirroring the ormatic_interface.py conftest.py-regeneration pattern. Off
 main, PR #39 (code-generation-extract) + PR #87 (operand-naming) merged
 first.
 
-Status: implementation complete, all 20 review threads resolved, PR is
-draft (personal convention), CI running on head f786a908.
+Status: implementation complete, all 21 review threads resolved, PR is
+draft (personal convention), pushed as 1e263066, CI was pending on this
+head as of the last check.
 
-This session's own contribution to this round: independently arrived at
-the same fix for the last open thread (predicate.py:446, "value given to a
-field is a Literal or small domain, rendered by its own value") that
-another concurrent session instance had already implemented and pushed as
-f786a908 first. Verified the two approaches were equivalent (module-level
-PLACEHOLDER_EXAMPLE_VALUES dict vs. an instance-field operand_overrides
-dict on VerbalizationResultsOfPackage), confirmed the pushed version was
-already fully tested (735 + 984 passed) and its thread already
-reply-and-resolved, then discarded this session's uncommitted duplicate
-work (git stash + reset --hard to origin) rather than pushing a
-conflicting commit.
+History: another concurrent session instance implemented and pushed
+f786a908 (PLACEHOLDER_EXAMPLE_VALUES module-level dict keyed by
+(callable, field name) tuple, replacing OverriddenOperand/
+_placeholder_operand_overrides_ in predicate.py entirely) while this
+session was independently building an equivalent fix; verified the two
+approaches were equivalent and discarded this session's uncommitted
+duplicate work rather than push a conflicting commit.
 
-Next: wait for CI on f786a908 to finish; if green, nothing further needed
-until the developer reviews again; if red, investigate and fix.
+This round: developer asked (result_verification.py:38) to turn
+PLACEHOLDER_EXAMPLE_VALUES's tuple key into a dataclass with
+callable_class/field_name fields. Added PlaceholderExampleField (frozen
+dataclass), re-keyed the registry and placeholder_operands()'s lookup on
+it, ran scripts/format_docstrings.py, verified full test_verbalization/ +
+test_patterns/ + test_class_diagrams/ green (1184 passed, 3 pre-existing
+skips, same known ruff-version regeneration noise reverted before
+committing). Pushed as 1e263066, replied-and-resolved the thread, updated
+the PR description to mention the dataclass key.
+
+Next: wait for CI on 1e263066; if green, nothing further needed until the
+developer reviews again; if red, investigate and fix.
