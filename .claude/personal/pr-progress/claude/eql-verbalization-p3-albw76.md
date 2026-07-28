@@ -11,12 +11,13 @@ this branch mid-round-15, from outside this session — see the roadmap section 
 investigation and how it was reconciled (rebase, not force-push). Description rewritten twice so
 far: once for the 2026-07-24 rebase, once for round 11's repeated-article redesign; no further
 rewrite needed for rounds 12-16 (no user-visible surface change from any of them, only internal
-layering/bugfix/docstring/test/doctest-harness/consolidation wording). CI checked through
-91e3ca4b: `krrood`'s own job green; a `coraplex` job failure (an `ormatic_interface.py`
-regeneration/`ruff format` internal error) and the recurring pre-existing `semantic_digital_twin`
-flake (`test_world_sim_state_sync`) both confirmed unrelated to this PR. CI for 99ea09ee (the
-Type-verbalization consolidation) not yet checked. `mergeable_state` now reports `clean`. Hourly
-check-in loop active; PR still not merged/closed, so subscription continues.
+layering/bugfix/docstring/test/doctest-harness/consolidation wording, except the limit-wording
+correction below, which is a genuine (small) surface-text fix). CI checked through 91e3ca4b:
+`krrood`'s own job green; a `coraplex` job failure (an `ormatic_interface.py` regeneration/`ruff
+format` internal error) and the recurring pre-existing `semantic_digital_twin` flake
+(`test_world_sim_state_sync`) both confirmed unrelated to this PR. CI for 99ea09ee/c1e95cbe not
+yet checked. `mergeable_state` reports `clean`. Hourly check-in loop active; PR still not
+merged/closed, so subscription continues.
 
 ### 2026-07-24 rebase (see the roadmap section above for the full account)
 `main` had ~5 days of substantial unrelated activity by the time this session resumed, including
@@ -94,9 +95,11 @@ mechanical import-only conflicts), fixed `test_first_order_form.py`'s import of 
   (informational, nothing to resolve). PR converted back to draft after this push per personal
   convention (was ready-for-review from the developer's own round-14 action).
 - CI checked through 91e3ca4b (both `krrood`'s job and the wider run, given the unexpected
-  main-merge underneath it — see round 15). CI for 99ea09ee (the Type-verbalization consolidation,
-  a direct chat request rather than a GitHub review round — see the roadmap section's
-  "Type-verbalization scatter audit" entry) not yet checked — do that next session.
-- `mergeable_state` now reports "clean" (checked after 99ea09ee) — the reconciliation concern from
+  main-merge underneath it — see round 15). The Type-verbalization consolidation (99ea09ee) and
+  its follow-up correction (c1e95cbe, `FallbackNouns.name_of` → `type_noun` after all, per the
+  developer overriding my initial "leave it" call — see the roadmap section's "Type-verbalization
+  scatter audit"/"Follow-up correction" entries) are direct chat requests, not GitHub review
+  rounds; CI for both not yet checked — do that next session.
+- `mergeable_state` reports "clean" (checked after 99ea09ee) — the reconciliation concern from
   earlier rounds is resolved.
 - P4 (sdt = PR #33 rebase) still needs P1 + P2 + P3 all merged to main first.
