@@ -89,20 +89,7 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   scheme and scope (in this PR vs. a separate PR against `main`) before touching
   anything.
 
-### Open (awaiting developer reply, not resolved)
-- `OverriddenOperand`/`SymbolicCallable._placeholder_operand_overrides_` in
-  `predicate.py`: developer rejected the type-based auto-detection I'd proposed ("no
-  rule to automate by type") and floated two alternatives instead: (a) detect from the
-  verbalization fragment's own implementation that it accesses a field's raw value, or
-  (b) always fall back to first-order form. Replied with concrete problems for each
-  against `HasType` specifically: (a) the fragment's `fields["types_"]` access is
-  syntactically identical to every other field access -- nothing to distinguish by
-  inspection at that layer, asked for a concrete statement shape to detect if they mean
-  something more specific; (b) first-order form renders every operand generically and
-  would lose the named "Integer" example the committed surface actually wants, unless
-  scoped per-field -- which is functionally the override mechanism again. Also still
-  need to apply their "hard-wired example-value tests, not exhaustive per-class" testing
-  convention once the mechanism itself is settled. Not implementing until they clarify.
+### Open (not resolved)
 - Subscription: `subscribe_pr_activity` failed twice in a row with a generic error (not
   the "already watched by a steward" message the tool documents) -- PR has no watching
   label, so cause unclear. Flagged to the developer rather than retried further; may be
@@ -153,10 +140,43 @@ Every commit made here is mirrored with a force-with-lease push to that branch.
   skips). Pushed as commit 3f806e2e (fetched fresh first, no collision). All 4 threads
   replied and resolved.
 
+### Done (2026-07-28) -- OverriddenOperand mechanism resolved
+Developer answered the outstanding design question directly (not "discuss with me" this
+round): "when symbolic callables are part of a query and the value given to one of the
+fields of the callable is a Literal or a small domain [...] it can be rendered by its
+domain values [...] fields['name'] [...] refer[s] to the symbolic variable that
+represents this field in the query." Traced this through the actual code before
+implementing (asked to go ahead only after presenting findings in chat, not on GitHub):
+`RenderedFields.__getitem__` (`predicate.py`) already unwraps a `Literal` child to its
+concrete `.value`; `DisjunctivePhrase` (used by `HasType`/`HasTypes`'s own fragment)
+already reads `.value` and names it when present -- confirmed empirically that
+`HasType(variable(object, []), int)` auto-wraps `int` as a `Literal` child and renders
+"a variable is of type Integer" with zero special-casing anywhere in the rendering
+pipeline. So `OverriddenOperand`/`_placeholder_operand_overrides_` was never really
+special-casing *rendering* -- it only existed because `placeholder_operands()`
+unconditionally wraps every field as a placeholder `Variable`, so the raw child is never
+a `Literal` and `.value` has nothing to show.
+Implemented: removed `OverriddenOperand` and `_placeholder_operand_overrides_` from
+`predicate.py` entirely (`HasType`/`HasTypes` no longer know anything about testing).
+`result_verification.py` gained a small module-level `PLACEHOLDER_EXAMPLE_VALUES: Dict[
+Tuple[Type[SymbolicCallable], str], Any]` registry (currently `{(HasType, "types_"):
+int, (HasTypes, "types_"): (int, str)}`); `placeholder_operands()` checks it before
+falling back to a placeholder variable. Added one focused test
+(`test_placeholder_example_value_names_itself_instead_of_a_placeholder`) proving the
+mechanism against `HasType`/`HasTypes` directly, per their "hard-wired example-value
+tests, not exhaustive per-class" ask from an earlier round -- not a new per-class test
+for every symbolic callable. Verified: full `test_verbalization/` (735 passed) +
+`test_core/test_queries.py` + `test_patterns/test_role.py` + `test_code_generation/` +
+`test_class_diagram/` (984 passed total, 3 pre-existing skips); regenerated snapshot is
+byte-identical to before (same sentences, cleaner mechanism). Pushed as commit f786a908
+(fetched fresh first, no collision). Thread replied and resolved -- **this was the last
+open review thread on this PR** (only the subscription flag remains open, see above).
+Noticed the PR had been marked ready-for-review (not by this session) before this push;
+converted back to draft after pushing, per personal convention.
+
 ### Next
-- Once the developer clarifies the OverriddenOperand mechanism, implement it, add the
-  hard-wired example-value tests they asked for, regenerate the snapshot if wording
-  changes, keep tests green, then push and reply-resolve.
 - Retry `subscribe_pr_activity` next session if the developer wants events watched.
 - Keep fetching the real branch fresh immediately before every push -- confirmed this
   avoids the collision seen earlier in this same PR.
+- No open review threads remain as of this update -- next session should check for new
+  ones before assuming there's nothing to do.
