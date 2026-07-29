@@ -1,0 +1,47 @@
+## PR #101 — Add /setup-personal-notes, a guided one-time setup command
+
+Branch `claude/patch-pr-rheubx`, based directly on `origin/main` (bcd322c2), draft,
+subscribed to all activity.
+
+### Origin
+Not a plan item and not a session-authored design: the user handed over a ready
+`git format-patch` file (`0001-Add-setup-personal-notes...patch`) and asked for it to
+go up as a new PR. Scope is therefore exactly the patch — no additions, no cleanup.
+
+### Plan
+1. [x] Verify the branch's base — it was already exactly at `origin/main`, so no
+   rebase/restack was needed.
+2. [x] `git apply --check` (clean), then `git am` to preserve the patch's own author
+   (Abdelrhman Bassiouny) and commit message.
+3. [x] Fix the committer identity: `git am` recorded `Claude <noreply@anthropic.com>`
+   as *committer* (author was already correct). Repo git config was set to that
+   assistant identity — reset it to the human's name/email and `--amend --no-edit`.
+   AGENTS.md forbids an assistant identity as either author or committer.
+4. [x] Verify the new tooling actually works rather than trusting the diff:
+   `check-setup.sh` on this clone (correctly flagged the 2 uninstalled dashboard
+   requirements, exit 1; exit 0 after installing them), and confirm no stale
+   `plans/README.md` references survive the schema-doc move.
+5. [x] Run the tests: 12/12 in the new `test_check_setup_sh.py`, 215/215 across
+   `.claude/hooks/tests/` + `.claude/skills/plan-dashboard/tests/`.
+6. [x] Confirm CI covers the new suite — `ci.yml`'s `test_claude_dev_tooling` job
+   already runs `${HOOKS_TESTS_DIRECTORY}`, so no workflow change is needed. Tests
+   use a local `git init --bare` fixture, so they need no network or credentials.
+7. [x] Push, open as draft (personal convention), subscribe to PR activity.
+8. [ ] Watch CI to green; handle review comments.
+
+### What this PR contains
+`/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
+`check-setup.sh` (read-only TSV setup inspection, the single source of truth for
+"is this clone set up?"); step 0 prerequisite checks wired into `plan-create`,
+`plan-dashboard`, `plan-item-kickoff`, `plan-item-resolve`; and the `plan.yaml`
+schema reference moved from the personal-notes branch to `main` as
+`plan-dashboard/plan-schema.md`, with every reference repointed.
+
+### Next steps
+- Watch CI. The known pre-existing unrelated flake on this repo is
+  `test_world_sim_state_sync` (semantic_digital_twin physics settling) — if it
+  fails, confirm it against `main` before treating it as this PR's problem. This
+  PR touches only `.claude/`, so any failure outside `test_claude_dev_tooling` is
+  almost certainly not caused by it.
+- Handle review comments: reply, then resolve only once genuinely done.
+- Re-arm the ~hourly self check-in until the PR is merged or closed.
