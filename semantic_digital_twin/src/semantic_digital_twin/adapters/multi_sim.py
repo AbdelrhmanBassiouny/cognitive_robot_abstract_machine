@@ -2998,9 +2998,42 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         """
         Find the MuJoCo actuator driving ``connection``'s DOF, or ``None`` if
         no actuator is associated with it.
+
+        Handles both transmission kinds:
+
+        * a **direct joint** transmission, where the actuator lists the
+          connection's own DOF (e.g. the Panda arm's ``joint1``..``joint7``);
+        * a **tendon** transmission, where the actuator lists the *tendon's*
+          DOF instead of any joint's. The Panda gripper is the motivating
+          case: ``/actuator8`` claims a DOF named ``/split``, and it is the
+          ``/split`` tendon that wraps ``/finger_joint1`` and
+          ``/finger_joint2``. Matching only on the connection's own DOF finds
+          nothing for either finger, which silently leaves ``ctrl`` for the
+          entire gripper unwritten -- the actuator then holds whatever
+          setpoint it was last given (the keyframe's) no matter what the
+          controller commands, so the gripper never opens or closes.
         """
-        return next(
+        direct = next(
             (a for a in self._world.actuators if connection.raw_dof in a.dofs),
+            None,
+        )
+        if direct is not None:
+            return direct
+
+        tendon_names = {
+            tendon.name
+            for tendon in self._world.simulator_additional_properties
+            if isinstance(tendon, MujocoTendon)
+            and connection.name.name in tendon.joints
+        }
+        if not tendon_names:
+            return None
+        return next(
+            (
+                actuator
+                for actuator in self._world.actuators
+                if any(dof.name.name in tendon_names for dof in actuator.dofs)
+            ),
             None,
         )
 
