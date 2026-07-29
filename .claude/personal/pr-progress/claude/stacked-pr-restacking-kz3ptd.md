@@ -27,4 +27,10 @@ fork repo/branch/upstream as repository variables. PR 1 rule: no repo names outs
 defaults + doc examples. Long-term option kept open (not now): lift into a standalone plugin/template
 repo for per-user cross-repo install.
 
-Next: user approval -> /plan-create workflow-unification -> dispatch PR 1 on claude/patch-pr-rheubx.
+DONE 2026-07-29: plan approved and created — .claude/personal/plans/workflow-unification/
+(9 items, 4 tracks, 3 waves), tracking issue #102 (subscribed), dashboard published:
+https://claude.ai/code/artifact/36572776-4278-447a-8133-e087096b9cb8 (URL cached in
+_generated/dashboard-urls.yaml). PR #101 now carries `in-review` (promoted to cram2).
+
+Next: dispatch PR 1 (stack-tooling-on-main) on claude/patch-pr-rheubx; immediate-wave items
+(eql-roadmap-migration, session-hooks-retirement) can start any time.
