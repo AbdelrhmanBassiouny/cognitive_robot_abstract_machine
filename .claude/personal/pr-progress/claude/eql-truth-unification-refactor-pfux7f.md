@@ -235,6 +235,23 @@ one out — `Union`'s own subclass `Next` renders under `ConclusionSelector`, so
 the graph was ever labelled "Union" except the one class that is not a union. Thread
 resolved. Full suite: 2015 passed / 2 pre-existing graphviz failures.
 
+## f8a8fe56 — first fully green run, 20/20
+
+The user merged main in (`52f4f745`, bringing PR #475 eql-verbalization-p3) and marked
+the PR **ready for review** at 16:43Z. Do not convert it back to draft unless *I* push.
+
+Run 30474103931/30474103937: **all 20 checks green** — coraplex (26 min) *and*
+semantic_digital_twin, so even the `test_world_sim_state_sync` flake passed this round.
+This is the first completed CI run covering the concatenation fix (commit 8); the four
+review rounds before it each landed faster than CI could finish, so every intermediate
+run (e85b6c03, 13241772, c9724caf, fa5e3457) was superseded mid-flight, and the last
+complete run before this was 16ad47d3, which predates the fix.
+
+Verified the user's main-merge locally before trusting it: 2044 passed / 2 failed (the
+constant graphviz pair). Count rose from 2015 because main brought 29 new verbalization
+tests. No semantic conflict with the `Union` split or the `_subtree_expressions_with_ids_`
+rename. mergeable_state now `clean`. Description refreshed to name this head and result.
+
 ## Next
 
 - **ef7bb044: coraplex GREEN, 18/19 checks green.** Only red is
