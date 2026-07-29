@@ -223,12 +223,20 @@ failures.
 
 Full suite: 2015 passed / 2 pre-existing graphviz failures.
 
+## Review round 4 (fa5e3457) — Union kept, display name fixed
+
+Developer answered the open `Union` question: **option (1), keep it** — no code change,
+`c9724caf`'s class docstring already covers it. They also spotted that `query_graph.py`
+rendered `Concatenation` under the display name `"Union"`. Removed the override rather
+than replacing it: `name` already defaults to `expression.__class__.__name__`, so
+deleting the line yields `"Concatenation"` with no redundant assignment; the colour entry
+stays. Verified directly via `ColorLegend.from_expression`. The label was already the odd
+one out — `Union`'s own subclass `Next` renders under `ConclusionSelector`, so nothing in
+the graph was ever labelled "Union" except the one class that is not a union. Thread
+resolved. Full suite: 2015 passed / 2 pre-existing graphviz failures.
+
 ## Next
 
-- **Awaiting a decision on whether `Union` should be deleted** (thread
-  `PRRT_kwDOQhJw3c6U1B63`). If yes: `Next(TruthValuedExpression,
-  EvaluatesChildrenInSequence, ConclusionSelector)`, and move the
-  `test_union_reports_the_truth_value_of_each_child_result` test onto whatever survives.
 - **ef7bb044: coraplex GREEN, 18/19 checks green.** Only red is
   `test_world_sim_state_sync` (sdt), the physics flake that also fails on plain main.
   CI on e85b6c03 queued at time of writing — watch it, though the round touched no logic.
