@@ -509,6 +509,36 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     sites unaffected (contract unchanged). Pushed as commit d45003c7; full `test_verbalization/`
     suite green (760/3 skipped), full `test/krrood_test/` suite green (2012 passed, same 2
     pre-existing `graphviz` failures). Reply-and-resolved.
+  - **Review round 17** (2026-07-28, 1 comment, immediate follow-up to round 16): "There's a
+    helper for checking for iterables in krrood use it, and if needed extend it." Found
+    `krrood.entity_query_language.utils.is_iterable` (the shared convention across
+    `comparator.py`, `base_expressions.py`, `variable.py`, `ripple_down_rules/utils.py`) and
+    swapped `type_members`'s inline check for it — no extension needed, it already excludes a
+    bare `type` too (relevant since a class's metaclass can define `__iter__`, e.g. an `Enum`
+    subclass iterates its members). Pushed as commit 88c95ed2; full `test_verbalization/` suite
+    green (760/3 skipped), full `test/krrood_test/` suite green (2012 passed, same 2
+    pre-existing `graphviz` failures). Reply-and-resolved.
+  - **Restacking conflict** (2026-07-29): the stacking routine flagged a real conflict restacking
+    onto `main` — an unrelated `main` PR had renamed the whole verbalization-testing snapshot
+    mechanism (`SymbolicSurfaceSnapshot`→`VerbalizationResultsOfPackage`, `surface_verification.py`
+    →`result_verification.py`, plus auto-generating the snapshot module from `conftest.py`) *and*
+    replaced this PR's own reviewed per-instance `operand_overrides` design with a single global
+    `PLACEHOLDER_EXAMPLE_VALUES` dict, which cannot express `test_first_order_form.py`'s
+    test-scoped `Kindled`/`catalyst`→`"ash"` override without polluting production code. Confirmed
+    this via `main`'s own new test file (only ever registers real production classes there) before
+    treating it as a genuine design regression rather than a simple rename. Asked the developer via
+    `AskUserQuestion` rather than picking a side; they chose to restore scoped overrides. Kept
+    `main`'s global registry and `PlaceholderExampleField` key type, added an `operand_overrides`
+    field back onto `VerbalizationResultsOfPackage` keyed by that same type (one key shape, not
+    two), and restored the free-standing `placeholder_operands`/`first_order_form` functions
+    delegating to the same global lookup. Took `main`'s deletion of the superseded
+    `test_verbalization_surfaces.py`/`verbalization_surfaces.py` (replaced by the auto-generated
+    `test_result_generation.py`/`verbalization_results.py`) and fixed one stale
+    `surface_verification`→`result_verification` string in `test_rule_doctests.py`. Full
+    `test_verbalization/` suite green (761/3 skipped), full `test/krrood_test/` suite green (2013
+    passed, same 2 pre-existing `graphviz` failures). Merge commit + a black-formatting follow-up
+    pushed as 872ea244a; replied on the PR explaining the resolution; converted back to draft per
+    personal convention.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
