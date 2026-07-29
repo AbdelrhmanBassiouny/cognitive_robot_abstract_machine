@@ -71,6 +71,30 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
       attempt was already refused with 403 (run still in progress) and is not being
       retried.
     - Everything else on the current run is green, `test_claude_dev_tooling` included.
+11. [x] Review round 1 (12 comments, 2026-07-29), pushed as 8a2f1cf2:
+    - Test structure: `_run_git` was verbatim-duplicated in `test_save_plan_sh.py`, and
+      the two `scratch_repo` fixtures repeated the same git init/bare-remote/notes-branch
+      sequence. Both moved onto a `ScratchRepository` dataclass
+      (`tests/scratch_repository.py`) with the initialized repository as a `conftest.py`
+      fixture; `cwd` is gone (it's the object's `project_root`), everything documented.
+    - Typing: `SetupReport` is a dataclass, the `(status, detail)` tuple is a
+      `CheckResult` dataclass read via fields, and `SetupCheck`/`CheckStatus` are
+      StrEnums (checked first — no existing enum to reuse; the only `.claude/` StrEnums
+      are `build_dashboard.py`'s four, none about setup checks).
+    - Labels: added skill step 8 — checks `merged`/`bug`/`in-review` exist in the fork
+      and offers to create them. No create-label tool exists in the GitHub MCP server
+      (only `get_label`), so creation shells out to `gh label create` and says so plainly
+      when `gh` is absent. Runs even on the fast path, since `check-setup.sh` can't see
+      labels; fast-path wording updated to match.
+    - README wording: `e.g.`, "see it in action", direct branch condition.
+    - Also fixed a stale `.claude/skills/cram-setup` pointer (no such skill).
+    - 11 of 12 threads reply-and-resolved. **Left open deliberately:** the "does this
+      need a skill at all?" question — replied with the accounting (every mechanical step
+      is already a script call; only the remote-ownership check and the label check need
+      a session) and proposed a `setup-personal-notes.sh --remote <x>` that would make
+      steps 4–7+9 runnable with no session, shrinking the skill to the two session-only
+      parts. Asked whether to do it in this PR or a follow-up. **Awaiting answer.**
+12. [ ] Watch for the answer on that thread; handle further review comments.
 
 ### What this PR contains
 `/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
