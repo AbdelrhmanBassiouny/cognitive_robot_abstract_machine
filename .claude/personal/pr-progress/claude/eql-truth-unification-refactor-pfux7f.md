@@ -138,17 +138,41 @@ spend.** Closed to exact parity, no semantic change:
 
 Verified vs an origin/main worktree: 1/1/2 reads on both (was 1/1/3, originally 4/1/…).
 
+## Review round 1 (e85b6c03) — 9 comments, all answered and resolved
+
+Rename-and-delete only, no behavioural change. Full suite before push: 2014 passed / 2
+failed (the two constant graphviz `test_object_diagram.py` failures).
+
+- **Abbreviations in `logical_quantifiers.py`** (3 comments: `val`, `var_val`,
+  `cond_val`) — swept both quantifier functions rather than the three flagged lines:
+  `val`/`var_val`→`variable_result`, `cond_val`/`condition_val`→`condition_result`,
+  `sol`→`solution`, `condition_val_bindings`→`condition_bindings`.
+- **"Is `TruthValuedExpression` redundant?"** — answered with a cross-cut table produced
+  by actually enumerating the classes; it is not co-extensive with `TruthValueOperator`
+  in either direction.
+- **"Wouldn't a mixin be better than the `_records_truth_` flag?"** — agreed; the flag
+  said the same thing the type already says, so it is gone. `evaluate()` now checks
+  `isinstance(self, TruthValuedExpression)` directly.
+- **"Should `_result_is_false_` live on `OperationResult`?"** — explained it is already
+  the split arrangement asked for: the result caches, the expression decides.
+- **"Should `Query._result_is_false_` raise instead?"** — no; instrumented it and found
+  `where(subquery)` legitimately asks it twice per evaluation.
+- **Test asserted on class names, not types** — agreed, changed to `isinstance` against
+  imported `AND`/`OR`.
+- **"Remove the design doc"** — removed; nothing referenced it. Its two divergences are
+  now recorded in the PR description instead, and noted in the reply so they aren't lost
+  with the file.
+
 ## Next
 
 - **ef7bb044: coraplex GREEN, 18/19 checks green.** Only red is
   `test_world_sim_state_sync` (sdt), the physics flake that also fails on plain main.
-- PR is draft with 6 commits; consider squashing the five follow-up fixes into the
-  refactor before asking for review.
+  CI on e85b6c03 queued at time of writing — watch it, though the round touched no logic.
+- PR is draft with 7 commits; consider squashing the follow-up fixes into the refactor
+  before asking for review.
 - Two follow-ups deserving their own PRs: `evaluate_condition` on a satisfied bare
   `exists(...)` returns False on main too (real bug, deliberately preserved here); and
   the sdt `test_world_sim_state_sync` flake is worth a look by whoever owns multi-sim.
-- Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
-  Wave-0 stack, which still contests `base_expressions.py`.
 - Expect conflicts with #89/#90/#92 (same two functions) and a restack through the
   Wave-0 stack, which still contests `base_expressions.py`.
 - Answer review comments; keep the PR in draft after each push.
