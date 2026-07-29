@@ -575,6 +575,24 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     `test_verbalization/` suite green (764/3 skipped, +3 new tests), full `test/krrood_test/`
     suite green (2016 passed, same 2 pre-existing unrelated `graphviz` failures).
     Reply-and-resolved.
+  - **Review round 20** (2026-07-29, same day, 3 comments): (a) "why manually add `**operands`? can't
+    we just add what we want to add?" — a real simplification: `_example_operands_` never actually
+    depended on the rest of the placeholder dict, so dropped the parameter entirely —
+    `_example_operands_(cls) -> Dict[str, Any]` now just returns the override values
+    (`{"types_": int}` for `HasType`), and `VerbalizationResultsOfPackage.placeholder_operands`
+    merges them in itself. (b) "very big header docstring, summarize it a lot, describe what is,
+    not what was before" — trimmed `result_verification.py`'s module docstring from 4 paragraphs
+    to 2. (c) "why extra quotes around `ash`?" (on the `Kindled`/`catalyst`→`"ash"` test assertion)
+    — explained this is pre-existing `value_lexicon.value_phrase` behavior (any non-type/enum/
+    datetime literal renders via `repr(value)`, so a plain string always renders quoted), already
+    visible elsewhere in the codebase (`VariableRule._domain_choice`'s own doctest: *"one of 'Sales'
+    or 'Eng'"*); no code change needed there, just an explanation. All 3 reply-and-resolved. Pushed
+    as commit 138f40e43, then rebased (no force-push) onto another unexpected
+    `Claude <noreply@anthropic.com>`-authored merge that landed on the branch mid-round from
+    outside this session (`f5d1c8831`, merging in an unrelated plan-dashboard-skill PR #479 —
+    verified zero overlap with this PR's own files via `git diff` before rebasing) → final commit
+    c185b648d. Full `test_verbalization/` suite green (764/3 skipped), full `test/krrood_test/`
+    suite green (2016 passed, same 2 pre-existing unrelated `graphviz` failures).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
