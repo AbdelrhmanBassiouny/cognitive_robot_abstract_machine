@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 STUB_SOURCE_DIRECTORY = Path(__file__).parent / "stubs"
@@ -44,6 +44,12 @@ class StubExecutableDirectory:
     path: Path
     """
     The directory the stubs are installed into, prepended to ``PATH``.
+    """
+
+    mirrored_path_entries: dict[str, str] = field(default_factory=dict)
+    """
+    Mirror directory built for each ``PATH`` entry that had to hide an executable, keyed
+    by the original entry so repeated calls reuse one mirror instead of rebuilding it.
     """
 
     @classmethod
@@ -85,10 +91,9 @@ class StubExecutableDirectory:
         ``PATH``, every real credential and personal-notes setting removed, then
         *overrides* applied.
 
-        :param hidden_executables: Executables to make unfindable, by dropping every
-            ``PATH`` entry that provides one. Selecting a fallback backend has to be
-            deterministic whether or not the machine running the tests happens to have
-            the preferred one installed.
+        :param hidden_executables: Executables to make unfindable, so that selecting a
+            fallback backend is deterministic whether or not the machine running the
+            tests happens to have the preferred one installed.
         :param overrides: Variables the test sets deliberately, such as the stubs' own
             ``STUB_*`` controls or a token to select the ``curl`` fallback.
         :return: The environment to hand to :func:`subprocess.run`.
@@ -100,13 +105,42 @@ class StubExecutableDirectory:
             and not name.startswith(PERSONAL_NOTES_VARIABLE_PREFIX)
         }
         path_entries = [
-            entry
+            self.path_entry_hiding(entry, hidden_executables)
             for entry in environment.get("PATH", "").split(os.pathsep)
             if entry
-            and not any(
-                (Path(entry) / executable).exists() for executable in hidden_executables
-            )
         ]
         environment["PATH"] = os.pathsep.join([str(self.path), *path_entries])
         environment.update(overrides)
         return environment
+
+    def path_entry_hiding(
+        self, directory: str, hidden_executables: Sequence[str]
+    ) -> str:
+        """
+        Return *directory*, or a mirror of it that omits *hidden_executables*.
+
+        Mirrored by symlinking every other entry, rather than dropping the whole
+        ``PATH`` entry: the directory providing the executable to hide is typically
+        ``/usr/bin``, which also provides ``bash``, ``git`` and everything else a hook
+        script runs, so removing it outright leaves nothing to run the test with.
+
+        :param directory: One ``PATH`` entry.
+        :param hidden_executables: Names that must not be findable through the result.
+        :return: The same directory when it provides none of them, otherwise the path to
+            a mirror directory that hides exactly those names.
+        """
+        source = Path(directory)
+        if not source.is_dir():
+            return directory
+        shadowed = [name for name in hidden_executables if (source / name).exists()]
+        if not shadowed:
+            return directory
+
+        mirror = self.path.parent / f"path-{len(self.mirrored_path_entries)}-hiding"
+        if directory not in self.mirrored_path_entries:
+            mirror.mkdir()
+            for entry in source.iterdir():
+                if entry.name not in shadowed:
+                    (mirror / entry.name).symlink_to(entry)
+            self.mirrored_path_entries[directory] = str(mirror)
+        return self.mirrored_path_entries[directory]
