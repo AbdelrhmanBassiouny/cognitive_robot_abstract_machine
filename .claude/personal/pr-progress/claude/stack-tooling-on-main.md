@@ -13,9 +13,16 @@ explicit choice during kickoff, over the item notes' literal "port everything").
 - resolve-personal-notes-config.sh + ci.yml wired with STACK_* constants.
 - 237 tests passing (hooks + plan-dashboard + new stack tests); format_docstrings.py run.
 - Branch pushed, PR #106 opened as a draft against claude/patch-pr-rheubx (PR #101).
+- First CI run: all 20 checks green, mergeable_state clean.
+- First review round (4 line comments from AbdelrhmanBassiouny) addressed and resolved
+  (commit 1afebec3): dropped a stale `restack.js` mention from README's hygiene bullets,
+  trimmed a krrood/ORM procedural block duplicating ROUTINE.md's Phase 2, removed the
+  "board and restack workflow" section (roadmap info that belongs in the PR description,
+  not the README), and reworded three stack.py docstrings that named "the routine" as a
+  caller instead of documenting the contract (AGENTS.md convention).
 
 **Next:**
-- Subscribe to PR #106 activity and watch for CI/review.
+- Keep watching PR #106 for further CI/review activity.
 - Flag on the PR (or fix directly if trivial): design decision 1 in roadmap.md looks like
   a stale cross-reference ("/setup-personal-notes (PR #101) already creates"
   .claude/personal/stack.toml - it's actually setup-stacked-prs-skill, PR 2).
