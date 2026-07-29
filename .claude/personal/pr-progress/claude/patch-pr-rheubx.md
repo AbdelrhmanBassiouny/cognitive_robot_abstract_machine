@@ -1,7 +1,10 @@
 ## PR #101 — Add /setup-personal-notes, a guided one-time setup command
 
-Branch `claude/patch-pr-rheubx`, based directly on `origin/main` (bcd322c2), draft,
-subscribed to all activity.
+Branch `claude/patch-pr-rheubx`, based directly on `origin/main` (bcd322c2),
+subscribed to all activity. Marked **ready for review** by the developer on
+2026-07-29 (their own action, so not converted back to draft — the personal
+convention applies after a push of mine, and there has been none since).
+`mergeable_state: clean` as of head 8a2f1cf2; all 12 review threads resolved.
 
 ### Origin
 Not a plan item and not a session-authored design: the user handed over a ready
