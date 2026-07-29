@@ -1,5 +1,9 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
+**MERGED to `main` (2026-07-29).** This PR is finished — no further work on this branch.
+The next phase (P4, sdt = PR #33) is a separate PR/branch; see the roadmap section in this
+file for its checklist. Session unsubscribed automatically on merge.
+
 Status (2026-07-29): pushed (25 commits total, fd4f91f7c latest). Developer marked it **ready for
 review** themselves after this commit's CI went green; per personal convention that stands until
 my own next push (which would re-draft it). Base `main`
