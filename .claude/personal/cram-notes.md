@@ -80,7 +80,8 @@ imperative, same style as above.
 Cross-PR roadmap for the semantic_digital_twin verbalization review on PR #33. Every
 session working P1–P4 below: READ this section first, keep its status current (check off
 items, record decisions and any agreed divergence), and run `save-personal-notes.sh` when
-it changes. #32 (SymbolicFunction migration) is merged to `main`.
+it changes. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged to `main`.
+P4 (sdt = PR #33) is the only phase left.
 
 ### Finalized design decisions
 1. Operand naming: grammatical metadata on the field → field/attribute name → type name
@@ -217,9 +218,8 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
   krrood EQL + patterns suite green (1159 passed/3 skipped) after fixing the one surface-snapshot
   regression the revert caused. All 3 threads reply-and-resolved; PR description updated to match
   (the surfaces table and the five-predicates bullet were stale); PR stayed in draft (already was).
-- P3 [x] general, on P2 — value-agnostic + concrete-subclass forms (decision 3). DONE & pushed
-  to `claude/eql-verbalization-p3-albw76`, PR #88 (draft, base `claude/eql-verbalization-operand-naming-n0gb95`,
-  subscribed to all activity). Branch merges in P1 (#86) too: P1 had already extracted exactly
+- P3 [x] **merged to `main`** (PR #88) — branch `claude/eql-verbalization-p3-albw76`, general, on
+  P2 — value-agnostic + concrete-subclass forms (decision 3). Branch merged in P1 (#86) too: P1 had already extracted exactly
   the first-order-rendering mechanism this phase needed
   (`SymbolicSurfaceSnapshot.placeholder_operands`/`rendered_surface`) into production code, so
   building on it directly avoided a duplicate parallel mechanism — confirmed with the developer
@@ -621,7 +621,8 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     failures). No further out-of-session merge landed this round (checked via `git fetch` before
     pushing — clean fast-forward).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
-  all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
+  all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3 — all three now
+  merged to `main` (#86, #87, #88), so P4 is unblocked and ready to start.
 
 ### P4 sdt checklist (reasoning/predicates.py, queries.py, robot_predicates.py; test snapshot)
 - Reachable: remove `fields["tip"].name`; reword ("a Pose is reachable …"); Pose hint (dec 6).
