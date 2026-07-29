@@ -102,7 +102,20 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
     resolved. A copyable kickoff prompt for a fresh session was handed to the user in
     the session chat (not written to any tracked file — it describes work that doesn't
     exist yet). The follow-up depends on #101 merging first.
-13. [ ] Handle further review comments; watch for merge/close.
+13. [x] Out-of-session merge on the branch (2026-07-29 ~17:10): head moved
+    8a2f1cf2 → caa8d1dc, a `Merge remote-tracking branch 'origin/main'` authored
+    **and** committed as `Claude <noreply@anthropic.com>` — not by this session, and
+    against AGENTS.md's Version Control rule. Third such incident on this fork
+    (6b51075e and f5d1c883 on the P3 branch before it). Verified before doing
+    anything: `git diff 8a2f1cf2..caa8d1dc -- .claude/` is **empty**, and the branch's
+    diff vs base is still exactly 21 files / +1598 / −434 — the merge only pulled in
+    main's newly-landed P3 verbalization work (PR #475) and touched nothing this PR
+    owns. Fast-forwarded the local branch (no local commits to lose). Did **not**
+    rewrite the bad authorship: that means force-pushing shared history unilaterally,
+    which the same precedent rules out without explicit permission. Flagged to the user.
+    `test_claude_dev_tooling` green on the new head; `mergeable_state: unstable` is
+    just the robotics matrix still running.
+14. [ ] Handle further review comments; watch for merge/close.
 
 ### What this PR contains
 `/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
