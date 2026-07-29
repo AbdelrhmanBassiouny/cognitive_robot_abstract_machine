@@ -593,6 +593,23 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     verified zero overlap with this PR's own files via `git diff` before rebasing) → final commit
     c185b648d. Full `test_verbalization/` suite green (764/3 skipped), full `test/krrood_test/`
     suite green (2016 passed, same 2 pre-existing unrelated `graphviz` failures).
+  - **Review round 21** (2026-07-29, same day, follow-up on round 20c): developer asked for "a
+    copyable prompt that actually removes these quotes cleanly from all string values," reasoning
+    Type/Enum values are already differentiated by colour/hyperlinks. Checked that claim before
+    drafting anything: `PlainFormatter` (`rendering/formatter.py`) has **no** colour/hyperlink
+    markup at all — only `ANSIFormatter`/`HTMLFormatter` do — and `verbalize_expression`'s default
+    path (`VerbalizationPipeline.plain()`) uses `PlainFormatter`, as does virtually every existing
+    test and every committed snapshot. So today the quotes are the *only* plain-text signal
+    distinguishing a literal value from a bare noun; dropping them unconditionally is a real
+    design question, not a safe mechanical cleanup. Did not implement anything (out of scope for
+    this focused P3 PR — it's a cross-cutting change to `value_lexicon.value_phrase`'s core
+    convention, would touch every package's committed snapshot). Instead drafted a self-contained,
+    copyable prompt for a follow-up session: states the goal, leads with the `PlainFormatter`
+    caveat as the first thing to resolve (don't assume the answer), narrows the actual code change
+    to `value_phrase`'s `str` case specifically (not a blanket `repr()` removal, since
+    `int`/`float`/`bool` already render unquoted), and lists the follow-up work (docstring/doctest
+    update, regenerate every package's snapshot, grep+update hardcoded quoted-string assertions).
+    Posted as a reply, thread resolved (no code change requested in this PR).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
