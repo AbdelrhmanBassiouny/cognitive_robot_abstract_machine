@@ -34,6 +34,15 @@ class ExecutionEnvironment:
     environment.
     """
 
+    real_time_pacing: bool = False
+    """
+    Whether the simulated tick loop is paced to wall-clock time instead of
+    running as fast as the QP solve allows. Needed whenever any DOF the motion
+    drives is physically simulated rather than kinematically teleported, so
+    Giskard's belief of that DOF's position does not race ahead of where it has
+    actually, physically settled.
+    """
+
     previous_type: ExecutionType = field(init=False, default=None)
     """
     Type of the execution environment before setting it, used for nested environments.
@@ -42,6 +51,12 @@ class ExecutionEnvironment:
     previous_collision_avoidance: bool = field(init=False, default=False)
     """
     Collision avoidance setting before entering this environment, used for nested
+    environments.
+    """
+
+    previous_real_time_pacing: bool = field(init=False, default=False)
+    """
+    Real-time pacing setting before entering this environment, used for nested
     environments.
     """
 
@@ -54,8 +69,10 @@ class ExecutionEnvironment:
         """
         self.previous_type = GiskardExecutable.execution_type
         self.previous_collision_avoidance = GiskardExecutable.collision_avoidance
+        self.previous_real_time_pacing = GiskardExecutable.real_time_pacing
         GiskardExecutable.execution_type = self.execution_type
         GiskardExecutable.collision_avoidance = self.collision_avoidance
+        GiskardExecutable.real_time_pacing = self.real_time_pacing
 
     def __exit__(self, _type, value, traceback):
         """
@@ -66,6 +83,7 @@ class ExecutionEnvironment:
         """
         GiskardExecutable.execution_type = self.previous_type
         GiskardExecutable.collision_avoidance = self.previous_collision_avoidance
+        GiskardExecutable.real_time_pacing = self.previous_real_time_pacing
 
     def __call__(self, collision_avoidance: bool = False):
         """
