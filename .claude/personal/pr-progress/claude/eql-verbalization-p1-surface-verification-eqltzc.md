@@ -68,3 +68,13 @@ on that — not something to act on unprompted; watching for further movement.
 
 Next: watching for merge/close (self check-in loop). P2 (PR #87) is already done in parallel;
 P1 merging is the last thing standing between here and #33's rebase.
+
+### PR #86 MERGED (2026-07-22) — closed out
+
+No further review rounds after round 2 above; the PR merged as-is. `surface_verification.py`
+was itself later renamed/moved by unrelated main-branch work — first to
+`krrood.entity_query_language.testing.surface_verification` (picked up by P3's 2026-07-24
+rebase), then again to `krrood.entity_query_language.testing.result_verification`
+(`VerbalizationResultsOfPackage`, picked up by P3's 2026-07-29 restacking-conflict
+resolution — see `pr-progress/claude/eql-verbalization-p3-albw76.md`) — neither rename is
+this branch's own work. P1 is DONE; no further action on this branch.
