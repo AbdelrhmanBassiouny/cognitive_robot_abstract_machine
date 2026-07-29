@@ -163,6 +163,45 @@ failed (the two constant graphviz `test_object_diagram.py` failures).
   now recorded in the PR description instead, and noted in the reply so they aren't lost
   with the file.
 
+## Review round 2 (13241772) — a real bug, found by a review question
+
+"Why is a Union a TruthValuedExpression? and where is it used?" — investigating it found
+a regression this PR had introduced and shipped.
+
+`Concatenation` inherits `Union`, which commit 1 made a `TruthValuedExpression`. But
+`Concatenation` overrides `_evaluate__` to bind the **value** its child selected, not
+that child's truth. Both things the marker controls then misfired:
+
+    list(concatenation(variable_from([0, 1]), variable_from([2])).evaluate())
+    main:   [0, 1, 2]
+    branch: [{Variable(int, ...): 1}, {Variable(int, ...): 2}]
+
+The falsy `0` filtered out by the root truth filter, and the values replaced by the
+underlying variable bindings because the concatenation's own binding was excluded from
+`_unification_of_`. The existing `test_concatenate` hid it by wrapping the concatenation
+in `entity(...)`, where the query is the root and the concatenation's truth is never the
+filter. **Lesson: every test for this PR's new marker went through a query root; the
+bare-expression shape was the untested one.**
+
+Fix: split the child-chaining out of `Union` into `EvaluatesChildrenInSequence`. `Union`
+(and `Next`) keeps the marker because it genuinely binds a truth; `Concatenation` builds
+on the base without it. Red-first test on the bare concatenation. Output matches main
+exactly again for both shapes.
+
+Also this round:
+- `_get_satisfied_expressions` (test-local) moved onto `SymbolicExpression` as
+  `_expressions_with_ids_`, per review — which also collapsed a duplicate, since the
+  pre-existing `_get_satisfied_names` did the same walk and now maps `_name_` over it.
+- Two PDFs (`drawer_explanation.pdf`, `query_graph.pdf`) had been swept into `e85b6c03`
+  by a careless `git add` — they are render artifacts the explanation tests write to the
+  repo root. Restored to main's bytes. **They are already in `.gitignore` (lines 152,
+  154) yet tracked, so the ignore rule never applies** — any test run re-dirties them.
+  Offered an untracking follow-up PR; not done here (out of scope). Watch for this on
+  every future commit from this repo: check `git status` before `git add`.
+
+All 4 threads reply-and-resolved. Full suite: 2015 passed / 2 pre-existing graphviz
+failures.
+
 ## Next
 
 - **ef7bb044: coraplex GREEN, 18/19 checks green.** Only red is
