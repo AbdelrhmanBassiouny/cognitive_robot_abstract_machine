@@ -183,3 +183,22 @@ or committer, and no Co-Authored-By trailer for Claude; a plain "Made with the h
 Claude." line in the body is fine. Open the PR as a draft, include a link to the session
 that created it, and subscribe to its activity.
 ```
+
+## Addendum: tag-push and branch-delete are unavailable from a Claude Code session (2026-07-29)
+
+`/plan-item-kickoff workflow-unification session-hooks-retirement` verified the item's premise
+(`claude/session-hooks`'s tip is a literal `git merge-base --is-ancestor` ancestor of `main`, safe
+to retire) and got a tag-then-delete plan approved and attempted in the same session. Both
+operations failed with a real, reproducible `403` through the session's git proxy — creating or
+updating a branch works, but `git push <tag>` and `git push origin --delete <branch>` are both
+rejected outright. No GitHub MCP tool substitutes either (`create_branch` only creates from a
+source branch; there is no delete-branch or create-tag tool). This reads as a deliberate platform
+safety boundary against destructive/irreversible ref operations from an agent session, not a
+misconfiguration or something to route around.
+
+Consequence for this plan: both `session-hooks-retirement` and `tooling-branch-retirement` (the
+same tag-then-delete shape, later in the `cutover` wave) need their tag-push and branch-delete
+steps run outside the harness — from the user's own machine, or via `gh api`/a broader-scoped
+token — even though everything upstream of that (verification, drafting the tag message, the
+plan-manifest update itself) can still run in a session. `session-hooks-retirement`'s `blockers`
+carries the exact prepared commands.
