@@ -86,11 +86,13 @@ items:
       Stacking does not wait for the merge.
 
   - id: stack-tooling-on-main
-    branch: null
     title: "PR 1: stack workflow tooling on main (.claude/stack/)"
+    branch: claude/stack-tooling-on-main
+    pull_request_number: 106
     track: stack-tooling
     depends_on: [setup-personal-notes-pr101]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01Y9egTHHu5RTXmkFL4SwXM9
     notes: >
       Base claude/patch-pr-rheubx. Port stack.py minus the dead stack-turn/round-robin
       subsystem (wip_cap=1000000 makes it decide nothing); per-user config overrides read
@@ -100,6 +102,17 @@ items:
       (dead: forbidden by the routine, assumes local ROS). Tests via PR #101's
       ScratchRepository machinery. Review risk: bringing 741-line stack.py to AGENTS.md
       standards. Rule: no repo names outside stack.toml defaults + doc examples.
+
+      PR #106 opened as a draft. Scope narrowed by user decision during kickoff: this PR
+      ships only the core read-only commands (status/check/next/restack-plan) plus the new
+      config layering - board.json export and board.html rendering are deferred entirely to
+      PR 3 (shared-pr-state-chips) / PR 4 (stack-board-single-site), not ported here even
+      though the item's own notes read as "port everything minus round-robin". 237 tests
+      passing (.claude/hooks/tests + plan-dashboard/tests + the new stack/tests). Also
+      flagged on the PR: design decision 1's "(which /setup-personal-notes (PR #101) already
+      creates)" looks like a stale cross-reference - it's setup-stacked-prs-skill (PR 2) that
+      actually writes .claude/personal/stack.toml, per that item's own notes and PR #101's
+      description. Worth a one-line correction here when convenient; doesn't block anything.
 
   - id: setup-stacked-prs-skill
     branch: null

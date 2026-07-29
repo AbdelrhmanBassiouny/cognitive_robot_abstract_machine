@@ -45,3 +45,4 @@ rdr/concept-trees	rdr-refactor
 rdr/oo-definitions	rdr-refactor
 rdr/justifications	rdr-refactor
 claude/patch-pr-rheubx	workflow-unification
+claude/stack-tooling-on-main	workflow-unification
