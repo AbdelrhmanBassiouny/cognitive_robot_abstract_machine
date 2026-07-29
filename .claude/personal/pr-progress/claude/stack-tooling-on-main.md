@@ -25,6 +25,10 @@ explicit choice during kickoff, over the item notes' literal "port everything").
   unrelated to this PR's `.claude/`-only diff and failing identically on the base
   branch (PR #101 / claude/patch-pr-rheubx). Noted on the PR as not mine to fix;
   waiting for the base to recover.
+- Follow-up review comment: "via the GitHub MCP" in stack.py's module docstring still
+  named a caller (anything with MCP access), the same issue as "the routine" from the
+  first round. Dropped that clause entirely (commit 001b4f95) - the docstring doesn't
+  need to say how board.json gets refreshed at all.
 
 **Next:**
 - Once semantic_digital_twin's test_world_sim_state_sync recovers on the base branch
