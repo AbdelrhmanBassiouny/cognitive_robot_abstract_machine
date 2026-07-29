@@ -115,6 +115,7 @@ def fixture_scene(tmp_path, monkeypatch):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
 
+    monkeypatch.setenv("CRAM_VIZ_DATA", str(tmp_path))
     monkeypatch.setenv("CRAM_VIZ_SCENES", str(tmp_path / "scenes"))
     monkeypatch.setenv("CRAM_VIZ_SCENE", "fixture")
     monkeypatch.setenv("CRAM_VIZ_ARCHITECTURE", str(arch))

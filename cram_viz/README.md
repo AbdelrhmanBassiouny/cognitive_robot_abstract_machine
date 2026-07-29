@@ -18,8 +18,18 @@ cram-viz-live path/to/demo.py             # run a demo with the live bridge
 ```
 
 Scene bundles are **generated artifacts** (tens of MB per scene) and are not
-part of the repository. The onboarder writes them to `~/.cram_viz/scenes` by
-default; point elsewhere with `CRAM_VIZ_SCENES=/path`. Select a scene with
+part of this repository — ready-made demo recordings live in
+[sunava/cram-scenes](https://github.com/sunava/cram-scenes), wired as an
+**optional** submodule:
+
+```bash
+git submodule update --init cram_viz/scenes    # ready-made demo scenes (optional)
+```
+
+The viewer looks for bundles in this order: `CRAM_VIZ_SCENES=/path` (env
+override) → the initialized submodule `cram_viz/scenes` → `~/.cram_viz/scenes`
+(where the onboarder writes by default). Live visualization and freshly
+onboarded scenes need none of the ready-made bundles. Select a scene with
 `?scene=<name>` or `CRAM_VIZ_SCENE=<name>`.
 
 ## Panels — how the UI is composed

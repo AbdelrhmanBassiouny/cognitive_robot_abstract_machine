@@ -177,7 +177,8 @@ def _cram_root():
 
 
 def _arch_cache():
-    return os.path.join(str(paths.scenes_dir().parent), "arch_cache.json")
+    # always in the writable data dir — scenes_dir() may be a read-only checkout
+    return os.path.join(str(paths.data_dir()), "arch_cache.json")
 SKIP_DIRS = {"__pycache__", "node_modules", "doc", "docs", "resources", "build", "dist", "plugins"}
 PKG_DESCRIPTIONS = {
     "krrood": "knowledge representation & reasoning through OO design (home of EQL)",

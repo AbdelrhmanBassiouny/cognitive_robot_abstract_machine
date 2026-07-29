@@ -2,10 +2,16 @@
 
 The frontend (``web/``) ships inside the package. Scene bundles are GENERATED
 artifacts (tens to hundreds of MB per scene, produced by ``cram-viz-onboard``)
-and are deliberately not part of the repository — they live in a data directory
-that defaults to ``~/.cram_viz/scenes`` and can be pointed anywhere:
+and are deliberately not part of this repository — they are versioned in
+https://github.com/sunava/cram-scenes, wired here as the OPTIONAL submodule
+``cram_viz/scenes`` (live visualization and freshly onboarded scenes work
+without it). :func:`scenes_dir` looks in this order:
 
-    CRAM_VIZ_SCENES=/path/to/scenes           scene bundles (onboarder output)
+    1. CRAM_VIZ_SCENES=/path/to/scenes        explicit override
+    2. cram_viz/scenes                        the submodule, if initialized
+                                              (git submodule update --init cram_viz/scenes)
+    3. ~/.cram_viz/scenes                     default data directory
+
     CRAM_VIZ_ARCHITECTURE=/path/to/repo       CRAM repo scanned by the KB graph
 """
 
@@ -18,12 +24,31 @@ from pathlib import Path
 WEB_ROOT = Path(__file__).resolve().parent / "web"
 
 
+def data_dir() -> Path:
+    """Writable per-user data directory (architecture scan cache, defaults)."""
+    env = os.environ.get("CRAM_VIZ_DATA")
+    if env:
+        return Path(env).expanduser()
+    return Path.home() / ".cram_viz"
+
+
+#: the optional cram-scenes submodule checkout (``<member dir>/scenes``)
+SCENES_SUBMODULE = WEB_ROOT.parents[2] / "scenes"
+
+
 def scenes_dir() -> Path:
-    """Directory holding the onboarded scene bundles (``<name>/scene.json``)."""
+    """Directory holding the onboarded scene bundles (``<name>/scene.json``).
+
+    Search order: ``CRAM_VIZ_SCENES`` env var, then the initialized
+    cram-scenes submodule, then ``~/.cram_viz/scenes``. An un-initialized
+    submodule is an empty directory and is skipped (index.json is the marker).
+    """
     env = os.environ.get("CRAM_VIZ_SCENES")
     if env:
         return Path(env).expanduser()
-    return Path.home() / ".cram_viz" / "scenes"
+    if (SCENES_SUBMODULE / "index.json").is_file():
+        return SCENES_SUBMODULE
+    return data_dir() / "scenes"
 
 
 def architecture_root() -> Path:
