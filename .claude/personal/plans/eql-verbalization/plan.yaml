@@ -22,6 +22,7 @@ tracks:
 
 items:
   - id: p1-surface-verification
+    title: "P1: extract the verbalization surface-verification framework"
     branch: claude/eql-verbalization-p1-surface-verification-eqltzc
     pull_request_number: 86
     track: framework-migration
@@ -37,6 +38,7 @@ items:
       pr-progress/claude/eql-verbalization-p1-surface-verification-eqltzc.md.
 
   - id: p2-operand-naming
+    title: "P2: redesign operand naming and same-noun disambiguation"
     branch: claude/eql-verbalization-operand-naming-n0gb95
     pull_request_number: 87
     track: framework-migration
@@ -50,6 +52,7 @@ items:
       history: pr-progress/claude/eql-verbalization-operand-naming-n0gb95.md.
 
   - id: p3-concrete-subclass-expansion
+    title: "P3: abstract-to-concrete-subclass expansion + first-order rendering"
     branch: claude/eql-verbalization-p3-albw76
     pull_request_number: 88
     track: framework-migration
@@ -63,6 +66,7 @@ items:
       history: pr-progress/claude/eql-verbalization-p3-albw76.md.
 
   - id: p4-sdt-migration
+    title: "P4: migrate semantic_digital_twin predicates off the framework"
     branch: eql-symbolic-function-sdt
     pull_request_number: 33
     track: framework-migration
