@@ -42,7 +42,17 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
    "this walkthrough assumes you've already followed" — its own intro (rewritten by the
    original patch) no longer assumes that, and with the README now pointing readers
    into the walkthrough, the stale line pointed them straight back out.
-10. [ ] Watch CI to green; handle review comments.
+10. [~] Watch CI to green; handle review comments.
+    - CI failure on 53abfdc (`test_each_lib (semantic_digital_twin)`) investigated and
+      confirmed **not** caused by this PR: single failure was
+      `test_multi_sim.py::test_world_sim_state_sync` (1 failed, 871 passed), and the
+      identical failure is on `main` itself at 05fee32 (2026-07-28, predates this
+      branch) with near-identical numbers — box ends at ~origin, expected
+      `[0.3, 0.2, 0.15]`, both runs. Not a marginal-tolerance flake: the target pose
+      appears not to be applied at all, intermittently. Worth its own investigation,
+      out of scope here. Posted the evidence once on the PR thread; did not fix.
+    - `test_claude_dev_tooling` (the job covering these changes) green on every push.
+    - CI re-running on head 8ad4d612 as of the last check.
 
 ### What this PR contains
 `/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
