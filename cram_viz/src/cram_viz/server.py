@@ -192,7 +192,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
     """A ready-to-serve ThreadingTCPServer (port 0 = ephemeral, for tests)."""
     socketserver.TCPServer.allow_reuse_address = True
-    return socketserver.ThreadingTCPServer(("", port), Handler)
+    return socketserver.ThreadingTCPServer(("127.0.0.1", port), Handler)
 
 
 def main(argv=None) -> None:
