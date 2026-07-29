@@ -43,13 +43,13 @@ items:
     title: "Migrate the EQL living roadmap out of cram-notes.md into its own plan"
     track: personal-data
     depends_on: []
-    status: not_started
+    status: done
     notes: >
-      Run /plan-create eql-verbalization from the cram-notes living-roadmap section
-      (~10k tokens loaded every session today); fold P1-P3 review-round logs into the
-      existing pr-progress files; slim cram-notes.md to pure conventions; fix the stale
-      "hook lives on claude/session-hooks" reference; delete superseded rdr-roadmap.md.
-      No PR — personal-notes branch only.
+      Done. Ran /plan-create eql-verbalization from the cram-notes living-roadmap section;
+      folded the P1-P3 review-round logs into the three pr-progress files; slimmed
+      cram-notes.md to pure conventions; fixed the stale "hook lives on
+      claude/session-hooks" reference; deleted superseded rdr-roadmap.md. No PR —
+      personal-notes branch only.
 
   - id: session-hooks-retirement
     branch: null
