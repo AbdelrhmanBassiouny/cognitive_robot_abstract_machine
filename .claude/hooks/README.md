@@ -31,7 +31,18 @@ It is safe to re-run: on a clone that's already set up it reports what it found 
 You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff` and
 `/plan-item-resolve` each offer it if something is missing.
 
-To do the same by hand:
+Or without a session at all — the same setup, non-interactively:
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/setup-personal-notes.sh" --remote <name-or-url> \
+  [--starter-notes] [--create-labels]
+```
+
+`--remote` is required: guessing it wrong pushes your notes to a repository you may not own. It
+verifies the remote is yours, needing either the `gh` CLI or `GH_TOKEN`/`GITHUB_TOKEN`, and reports
+rather than guesses when it has neither.
+
+The individual steps, if you'd rather drive them yourself:
 
 ```bash
 "$CLAUDE_PROJECT_DIR/.claude/hooks/create-personal-notes-branch.sh"           # create the branch

@@ -248,6 +248,21 @@ SETUP_PERSONAL_NOTES_DIRECTORY=".claude/skills/setup-personal-notes"
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
 CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
+# setup-personal-notes.sh: performs the whole setup non-interactively, gating
+# each step on check-setup.sh's verdict. The mechanical half of
+# /setup-personal-notes, extracted so the setup needs no session at all.
+SETUP_PERSONAL_NOTES_SCRIPT=".claude/hooks/setup-personal-notes.sh"
+# github-api.sh: the GitHub lookups that setup needs - who you are
+# authenticated as, which repository a remote points at, and whether a label
+# exists. Sourced, not executed.
+GITHUB_API_SCRIPT=".claude/hooks/github-api.sh"
+# create-personal-notes-branch.sh: creates the notes branch on the resolved
+# remote with an empty notes file, refusing if it already exists anywhere.
+CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"
+# session-start.sh: the SessionStart hook itself, which writes CLAUDE.local.md.
+# Named here because setup runs it directly, so a fresh clone picks the notes up
+# without waiting for the next session.
+SESSION_START_SCRIPT=".claude/hooks/session-start.sh"
 # prerequisite-check.md: the shared "run check-setup.sh, offer
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
