@@ -610,6 +610,16 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     `int`/`float`/`bool` already render unquoted), and lists the follow-up work (docstring/doctest
     update, regenerate every package's snapshot, grep+update hardcoded quoted-string assertions).
     Posted as a reply, thread resolved (no code change requested in this PR).
+  - **Review round 22** (2026-07-29, same day, 2 comments): (a) "rename to
+    `_example_operand_values_`" — renamed the hook everywhere (`SymbolicCallable`/`HasType`/
+    `HasTypes` in `predicate.py`, `result_verification.py`, both test files' mimics and
+    docstrings). (b) "remove any mentions of methods or classes, the two-line summary above is
+    enough" (on `result_verification.py`'s module docstring, already trimmed once in round 20b) —
+    cut it further to just the two-line summary, nothing else. Both reply-and-resolved. Pushed as
+    commit fd4f91f7c; full `test_verbalization/` suite green (764/3 skipped), full
+    `test/krrood_test/` suite green (2016 passed, same 2 pre-existing unrelated `graphviz`
+    failures). No further out-of-session merge landed this round (checked via `git fetch` before
+    pushing — clean fast-forward).
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
