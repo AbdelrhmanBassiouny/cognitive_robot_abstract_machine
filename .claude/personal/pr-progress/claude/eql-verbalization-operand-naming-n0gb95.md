@@ -1,3 +1,23 @@
+**P2** of the EQL verbalization follow-up (PR #33 review) — operand-naming architecture. Gated
+P3 and P4.
+
+First cut named operands by field over type and disambiguated same-noun operands with a
+parallel, predicate-side mechanism. Review contested the design, not the goal: type should win
+when informative, disambiguation belongs to the existing coreference/referring machinery keyed
+on referent identity, and "the other X" is the wrong determiner for a fresh referent. Redesigned
+so operand naming and disambiguation live entirely in `ReferringExpressions`/`DistinguisherIndex`
+(coreference-driven, identity-keyed) instead of a parallel predicate-side module —
+`operand_naming.py` and its heuristics (generic-name list, ordinal stripping, occurrence-count
+anonymity) were deleted. Final precedence: operand's own type wins when informative → field
+metadata → field name → "object". Same-noun pairs read "a X … another X" (indefinite
+alternative, not "the other X" on first mention); larger groups use ordinals, not numbers. Full
+suite verified against baseline (zero regressions).
+
+Also picked up a `Distinguisher` refactor (single frozen dataclass → `Distinguisher(ABC)` base
+with `AlternativeDistinguisher`/`OrdinalDistinguisher` subclasses) as part of its continued
+review before merging — P3's 2026-07-24 rebase onto `main` picked that up too (no P3-side change
+needed, non-overlapping code).
+
 Task: "check the latest reviews of pr 87 and handle them."
 
 This designated branch (`claude/pr-87-review-feedback-22080p`) turned out to be a fresh branch
@@ -9,23 +29,44 @@ work directly on the PR's real branch instead.
 Done: found PR #87's latest (2026-07-20) review round — 4 unresolved threads asking to remove
 the `_OPERAND_DISPLAY_NAME_OBJECT` field-metadata pattern in favor of inferring the "object"
 display name from a field's own `Any` type hint, plus one RST-citation fix. Fixed all 4 on
-`claude/eql-verbalization-operand-naming-n0gb95` (commit b938e46c), verified the full test
-suite green, replied to and resolved all 4 threads, and returned PR #87 to draft.
+`claude/eql-verbalization-operand-naming-n0gb95` (commit b938e46c): removed
+`_OPERAND_DISPLAY_NAME_OBJECT` and its per-field `GrammarMetadata(display_name="object")`
+declarations on `IsClass.obj`, `RuntimeType.obj`, `HasType.variable`, `Is.first_entity`/
+`second_entity`, `IsSameSemanticEntity.entity_1`/`entity_2` (`predicate.py`, `factories.py`,
+`role_predicates.py`) — `operand_head_noun` now infers `"object"` straight from a field's `Any`
+annotation (via the raw dataclass field type, not `typing.get_type_hints`, to avoid evaluating
+unrelated `TYPE_CHECKING`-only forward refs elsewhere on the class), so no metadata is needed for
+those generically-named fields; a field genuinely typed `object` (e.g. `IsReachable.location`)
+is untouched and still falls back to its own field name. Also replaced the plain-prose "(Dale &
+Reiter's Incremental Algorithm...)" mention in `operand_head_noun`'s docstring with a proper
+`:cite:t:`dale1995gricean`` citation. Verified the full test suite green, replied to and resolved
+all 4 threads, and returned PR #87 to draft. Verified: full `test_verbalization/` suite (710
+passed/3 skipped, same pre-existing skips as before) + the doctest harness (70/70) + every other
+krrood_test suite referencing the touched predicate classes (`test_match.py`, `test_rendering.py`,
+`test_core/test_queries.py`, `test_core/test_rules.py`, `test_patterns/test_role.py` — 150
+passed) green in a fresh Python-3.12 venv (root venv was 3.11, which silently breaks
+`make_dataclass(module=...)` in `class_diagram.py` — needed `/usr/bin/python3.12` explicitly).
 
 A same-day follow-up review (3 more threads, on commit b938e46c) pushed back on the Any-inference
 mechanism itself: use the existing `get_type_hints_of_object` utility instead of a raw-annotation
 compare, and fall back to the plain field name for Any/object fields rather than hardcoding
-"object" — plus rename the two actual abbreviations (`IsClass.obj`/`RuntimeType.obj` → `object`).
-Fixed on the same branch (commit 3dfa895b): fully reverted `operand_head_noun` to its pre-b938e46c
-logic (the type check became a no-op once the fallback is unconditional, so it was deleted rather
-than reimplemented with `get_type_hints_of_object`), renamed the two `obj` fields, left the other
-non-abbreviated generic fields (`variable`, `first_entity`/`second_entity`, `entity_1`/`entity_2`)
-untouched, and updated the `verbalization_surfaces.py` snapshot to match. Verified full krrood EQL
-+ patterns suite green (1159 passed/3 skipped). All 3 threads reply-and-resolved; PR description
-updated to match; PR stayed in draft.
-
-Full details recorded under P2 in the "EQL verbalization follow-up plan" section above — that is
-now the single source of truth for this PR's status, not this block.
+"object" ("don't skip it and don't just name it object"), plus shorter docstrings. Fixed on the
+same branch (commit 3dfa895b): fully reverted `operand_head_noun` to its pre-b938e46c logic
+(deleted `_field_declares_no_type` outright — once the outcome is unconditionally "fall back to
+field name," the type check has no behavioral role left, so `get_type_hints_of_object` ends up
+unneeded rather than swapped in) and shortened the docstring substantially. Separately, two of
+the reviewer's three comments were "no abbreviations, `object`" on `IsClass.obj`/`RuntimeType.obj`
+specifically — renamed both fields to `object` (`self.obj`→`self.object`,
+`fields["obj"]`→`fields["object"]`), which alone gives them a readable surface through the
+ordinary field-name fallback. Deliberately did *not* rename `HasType.variable`/`Is.first_entity`/
+`second_entity`/`IsSameSemanticEntity.entity_1`/`entity_2` — those aren't abbreviations and
+weren't flagged; updated the `verbalization_surfaces.py` snapshot to their new field-name-based
+text instead (*"a variable is of type Integer"*, *"a first entity is the same object as a second
+entity"*, *"an entity 1 is the same entity as an entity 2"*) and flagged in the reply that a
+reword is available if wanted. Verified full krrood EQL + patterns suite green (1159 passed/3
+skipped) after fixing the one surface-snapshot regression the revert caused. All 3 threads
+reply-and-resolved; PR description updated to match (the surfaces table and the five-predicates
+bullet were stale); PR stayed in draft.
 
 Next: nothing further queued for this designated branch; it was not used for any commits (still
 sits at `main`'s tip). Future PR #87 review rounds should continue to be tracked under P2 above.
