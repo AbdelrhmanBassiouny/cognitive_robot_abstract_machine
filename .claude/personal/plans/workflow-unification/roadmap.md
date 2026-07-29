@@ -95,3 +95,91 @@ running unchanged off the old tooling branch.
   to port + delete + standards, not a redesign.
 - **Dashboard URL change**: moving plan dashboards from Artifacts to Pages changes their URLs
   (`_generated/dashboard-urls.yaml` becomes legacy); bookmarks need one update.
+
+## Dispatch prompt: setup-personal-notes-script (added 2026-07-29)
+
+Item `setup-personal-notes-script` (stack-tooling track). The user supplied this implementation
+prompt verbatim; hand it to the implementing session unchanged. Precondition it enforces itself:
+PR #101 must be MERGED first — branch off `main`, never off the PR head.
+
+```
+Extract a deterministic setup script from the /setup-personal-notes skill, in the
+AbdelrhmanBassiouny/cognitive_robot_abstract_machine fork.
+
+## Context
+
+PR #101 added `/setup-personal-notes` (.claude/skills/setup-personal-notes/SKILL.md), a
+skill that takes a clone from "I have a fork and nothing else" to working personal
+notes, PR progress and plan dashboards. Review raised: does this need a skill at all,
+or could it be a plain script? The accounting: every mechanical step is already a
+script call, and only two things genuinely require a session —
+
+1. deciding whether the resolved notes remote is the user's own fork (needs the
+   authenticated GitHub identity via mcp__github__get_me; a git remote URL doesn't say
+   who owns it, and getting it wrong pushes someone's personal notes to a repository
+   they don't control), and
+2. checking the `merged` / `bug` / `in-review` labels exist (GitHub API).
+
+Everything else is either a script invocation or a question with a good default. The
+agreed follow-up is to make the mechanical part runnable with no session at all.
+
+This work depends on PR #101 being merged. Branch off `main` once it has; if it hasn't,
+stop and say so rather than branching off the PR head.
+
+## What to build
+
+`.claude/hooks/setup-personal-notes.sh --remote <name-or-url> [--starter-notes]`,
+performing what are currently the skill's steps 4-7 and 9, in order, non-interactively:
+
+- point `claude.personalNotesRemote` at `--remote`
+- create the notes branch via `create-personal-notes-branch.sh`
+- seed the notes file from `starter-notes.md` via `write-personal-notes-file.sh`, only
+  when `--starter-notes` is passed
+- `pip install -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"`, reporting rather than
+  aborting if it fails (everything except plan dashboards works without it)
+- run `session-start.sh` so the current clone picks the notes up
+- finish by running `check-setup.sh` and printing its report
+
+Requirements:
+
+- Idempotent, and safe to re-run on an already-set-up clone: each underlying script
+  already refuses or no-ops appropriately; preserve that rather than working around it.
+- Source `resolve-personal-notes-config.sh` for every path and setting. Do not hardcode
+  paths that already have constants there, and add new constants there if you need them.
+- Do not duplicate any of `check-setup.sh`'s logic. It stays the single read-only source
+  of truth for "is this clone set up?" — call it, don't reimplement it.
+- `--remote` is required. Refusing to guess is the entire reason this can be a script:
+  the guess is the part that needs a session.
+- Fail with a clear message on unknown flags and on a missing `--remote`.
+
+Then shrink SKILL.md to just the session-only parts: resolve whether the remote is the
+user's (get_me), ask if it isn't, invoke the script, then do the label check (step 8,
+which must keep running even on the already-set-up fast path since `check-setup.sh`
+cannot see labels). Note there is no create-label tool in the GitHub MCP server — only
+`get_label` — so creation shells out to `gh label create`, and says so plainly when `gh`
+is absent rather than pretending it acted.
+
+Update `.claude/hooks/README.md`'s by-hand section to mention the new script, and keep
+its length discipline: it was deliberately cut from 378 to ~140 lines, so add lines
+only where a reader needs them to act.
+
+## Tests
+
+Add a test module under `.claude/hooks/tests/`, reusing the existing `ScratchRepository`
+(tests/scratch_repository.py) and the `scratch_repository` fixture in conftest.py rather
+than building a new scratch layout. Cover at least: a missing `--remote` fails; a full
+run leaves check-setup.sh exiting 0; `--starter-notes` seeds the file and its absence
+leaves it empty; a second run changes nothing. CI already runs
+`${HOOKS_TESTS_DIRECTORY}` in the `test_claude_dev_tooling` job, so no workflow change
+is needed — but the tests must not need network access or credentials.
+
+## Conventions
+
+Follow AGENTS.md. Specifically: dataclasses, no abbreviations in any identifier, RST
+docstrings on every field and method, absolute top-level imports, guard clauses over
+nesting. Run `scripts/format_docstrings.py` on every file you touch. Commit as the human
+user (their configured git user.name/user.email) — never an assistant identity as author
+or committer, and no Co-Authored-By trailer for Claude; a plain "Made with the help of
+Claude." line in the body is fine. Open the PR as a draft, include a link to the session
+that created it, and subscribe to its activity.
+```

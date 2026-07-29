@@ -107,6 +107,23 @@ items:
       bootstrap. Recorded decision (user can override): for cram2 itself, personal config
       lives on the personal-notes branch, not a per-user dev branch.
 
+  - id: setup-personal-notes-script
+    branch: null
+    title: "Extract a deterministic setup script from /setup-personal-notes"
+    track: stack-tooling
+    depends_on: [setup-personal-notes-pr101]
+    status: not_started
+    notes: >
+      PR #101 review follow-up: move the skill's mechanical steps (4-7, 9) into a
+      non-interactive .claude/hooks/setup-personal-notes.sh --remote <name-or-url>
+      [--starter-notes], and shrink SKILL.md to the genuinely session-only parts
+      (get_me remote-ownership check, label check — creation shells out to gh).
+      Stronger dependency than the dashboard's usual open-ready rule: requires #101
+      MERGED — branch off main after the merge, never off the PR head; stop and say so
+      if it hasn't merged. Full dispatch prompt verbatim in roadmap.md under
+      "Dispatch prompt: setup-personal-notes-script". If this lands before PR 2
+      (/setup-stacked-prs), PR 2 should mirror the same script/skill split.
+
   - id: shared-pr-state-chips
     branch: null
     title: "PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards"
