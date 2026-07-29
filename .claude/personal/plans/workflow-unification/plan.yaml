@@ -14,33 +14,26 @@ tracking_issue: 102
 
 waves:
   - id: immediate
-    branch: null
     name: "Immediate cleanups"
     description: "Independent of upstream review; can start now."
   - id: upstream
-    branch: null
     name: "Tooling to main via cram2"
     description: "The stacked PRs on top of PR #101; land through cram2 review."
   - id: cutover
-    branch: null
     name: "Cutover & retirement"
     description: "After the upstream wave reaches cram2/main and fork main fast-forwards."
 
 tracks:
   - id: personal-data
-    branch: null
     name: "Personal-notes slimming"
     wave: immediate
   - id: stack-tooling
-    branch: null
     name: "Stack tooling & setup skill"
     wave: upstream
   - id: dashboards
-    branch: null
     name: "Dashboard unification"
     wave: upstream
   - id: cutover
-    branch: null
     name: "Cutover & retirements"
     wave: cutover
 
