@@ -539,6 +539,26 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     passed, same 2 pre-existing `graphviz` failures). Merge commit + a black-formatting follow-up
     pushed as 872ea244a; replied on the PR explaining the resolution; converted back to draft per
     personal convention.
+  - **Review round 18** (2026-07-29, 1 comment, on the merge/restack commit): developer proposed a
+    better design for `PLACEHOLDER_EXAMPLE_VALUES` itself — a per-class method (like
+    `_verbalization_fragment_`) instead of a global dict, explicitly asking to discuss and be
+    critical before implementing. Agreed it's a real improvement, for a reason beyond the one
+    stated: the global dict can only ever hold entries for `krrood`'s own classes (`HasType`/
+    `HasTypes`) since `krrood` must stay self-contained (AGENTS.md) and can never import another
+    workspace package's predicate class to add an entry for it — a real layering violation the
+    just-merged `main` design can't avoid once `semantic_digital_twin` needs its own override
+    (P4 almost certainly will). A per-class method sidesteps this entirely. Flagged one thing not
+    to assume away: this PR's own `test_first_order_form.py` `Kindled`/`catalyst`→`"ash"` override
+    is a different kind of thing (test-mechanism-proving, not a domain truth about `Kindled`), so
+    recommended keeping the just-restored per-instance `operand_overrides` for that case alongside
+    the new class method for "field is intrinsically never a real operand." Asked two clarifying
+    questions before implementing: (1) exact method signature — proposed
+    `_example_operands_(cls, operands: Dict[str, Any]) -> Dict[str, Any]` taking/returning the raw
+    placeholder-operands dict (not `RenderedFields`, which is post-render), default identity;
+    (2) host class — proposed `SymbolicCallable` (which is what `placeholder_operands` already
+    types `cls` as) over the developer's stated `Verbalizable` (`SymbolicCallable` is currently
+    `Verbalizable`'s only subclass, so moot in practice, but asked rather than assumed). Replied,
+    not yet resolved — awaiting the developer's answer before implementing.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
