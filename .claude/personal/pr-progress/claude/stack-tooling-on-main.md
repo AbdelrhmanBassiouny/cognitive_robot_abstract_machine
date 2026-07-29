@@ -20,8 +20,15 @@ explicit choice during kickoff, over the item notes' literal "port everything").
   "board and restack workflow" section (roadmap info that belongs in the PR description,
   not the README), and reworded three stack.py docstrings that named "the routine" as a
   caller instead of documenting the contract (AGENTS.md convention).
+- CI check `test_each_lib (semantic_digital_twin) / test` went red on commit 1afebec3
+  (`test_world_sim_state_sync`, a MuJoCo settling-position assertion) - confirmed
+  unrelated to this PR's `.claude/`-only diff and failing identically on the base
+  branch (PR #101 / claude/patch-pr-rheubx). Noted on the PR as not mine to fix;
+  waiting for the base to recover.
 
 **Next:**
+- Once semantic_digital_twin's test_world_sim_state_sync recovers on the base branch
+  (PR #101), merge/rebase onto it so this PR's CI re-runs against the fixed base.
 - Keep watching PR #106 for further CI/review activity.
 - Flag on the PR (or fix directly if trivial): design decision 1 in roadmap.md looks like
   a stale cross-reference ("/setup-personal-notes (PR #101) already creates"
