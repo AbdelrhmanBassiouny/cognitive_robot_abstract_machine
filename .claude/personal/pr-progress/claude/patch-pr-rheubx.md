@@ -94,7 +94,12 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
       a session) and proposed a `setup-personal-notes.sh --remote <x>` that would make
       steps 4–7+9 runnable with no session, shrinking the skill to the two session-only
       parts. Asked whether to do it in this PR or a follow-up. **Awaiting answer.**
-12. [ ] Watch for the answer on that thread; handle further review comments.
+12. [x] Answer received (2026-07-29): the `setup-personal-notes.sh` extraction is a
+    **follow-up**, not part of this PR. Thread reply-and-resolved; all 12 threads now
+    resolved. A copyable kickoff prompt for a fresh session was handed to the user in
+    the session chat (not written to any tracked file — it describes work that doesn't
+    exist yet). The follow-up depends on #101 merging first.
+13. [ ] Handle further review comments; watch for merge/close.
 
 ### What this PR contains
 `/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
