@@ -1,0 +1,147 @@
+schema_version: 1
+id: workflow-unification
+title: "Workflow & tooling unification (stack workflow, personal notes, dashboards)"
+description: >
+  Unify the distributed workflow tooling into four clean homes: reviewed machinery on
+  main via cram2 (stack tooling, ROUTINE.md doctrine, setup skill — stacked on PR #101),
+  personal data/config on claude/personal-notes only, one auto-publishing Pages site for
+  the stack board and all plan dashboards (with LOC/CI chips everywhere), and a slim
+  pointer Routine. Then retire the superseded session-hooks and stack-workflow-tooling
+  branches. Portability rule throughout: runnable on repos other than cram2 (native or
+  fork-overlay install, no hardcoded repo names outside config defaults).
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+
+waves:
+  - id: immediate
+    name: "Immediate cleanups"
+    description: "Independent of upstream review; can start now."
+  - id: upstream
+    name: "Tooling to main via cram2"
+    description: "The stacked PRs on top of PR #101; land through cram2 review."
+  - id: cutover
+    name: "Cutover & retirement"
+    description: "After the upstream wave reaches cram2/main and fork main fast-forwards."
+
+tracks:
+  - id: personal-data
+    name: "Personal-notes slimming"
+    wave: immediate
+  - id: stack-tooling
+    name: "Stack tooling & setup skill"
+    wave: upstream
+  - id: dashboards
+    name: "Dashboard unification"
+    wave: upstream
+  - id: cutover
+    name: "Cutover & retirements"
+    wave: cutover
+
+items:
+  - id: eql-roadmap-migration
+    title: "Migrate the EQL living roadmap out of cram-notes.md into its own plan"
+    track: personal-data
+    depends_on: []
+    status: not_started
+    notes: >
+      Run /plan-create eql-verbalization from the cram-notes living-roadmap section
+      (~10k tokens loaded every session today); fold P1-P3 review-round logs into the
+      existing pr-progress files; slim cram-notes.md to pure conventions; fix the stale
+      "hook lives on claude/session-hooks" reference; delete superseded rdr-roadmap.md.
+      No PR — personal-notes branch only.
+
+  - id: session-hooks-retirement
+    title: "Tag and delete the superseded claude/session-hooks branch"
+    track: personal-data
+    depends_on: []
+    status: not_started
+    notes: >
+      main carries a strict superset (+1237/-6); nothing at runtime reads the branch
+      (settings.json and hooks load from the checked-out branch). Tag for history first.
+
+  - id: setup-personal-notes-pr101
+    title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
+    branch: claude/patch-pr-rheubx
+    pull_request_number: 101
+    track: stack-tooling
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01GR1i6dZb8goJpCZBMCnVLM
+    notes: >
+      Pre-existing PR, not authored by this plan; tracked because everything in the
+      upstream wave stacks on its branch. Live state at plan creation: open, ready,
+      mergeable clean, label cram2-link-sent (awaiting the one-click cram2 create).
+      Stacking does not wait for the merge.
+
+  - id: stack-tooling-on-main
+    title: "PR 1: stack workflow tooling on main (.claude/stack/)"
+    track: stack-tooling
+    depends_on: [setup-personal-notes-pr101]
+    status: not_started
+    notes: >
+      Base claude/patch-pr-rheubx. Port stack.py minus the dead stack-turn/round-robin
+      subsystem (wip_cap=1000000 makes it decide nothing); per-user config overrides read
+      from the personal-notes branch (.claude/personal/stack.toml). Add generic ROUTINE.md
+      (canonical doctrine; kills the drifted duplicate in dev/README.md and its
+      subscribe_pr_activity contradiction) and a ~1-page full-picture README. No restack.js
+      (dead: forbidden by the routine, assumes local ROS). Tests via PR #101's
+      ScratchRepository machinery. Review risk: bringing 741-line stack.py to AGENTS.md
+      standards. Rule: no repo names outside stack.toml defaults + doc examples.
+
+  - id: setup-stacked-prs-skill
+    title: "PR 2: /setup-stacked-prs guided one-command setup skill"
+    track: stack-tooling
+    depends_on: [stack-tooling-on-main]
+    status: not_started
+    notes: >
+      Mirrors PR #101's pattern (read-only check-stack-setup.sh + guided skill +
+      prerequisite-check.md on /setup-personal-notes). Two install modes: native (tooling
+      on the target repo's main) and fork-overlay (creates/updates a never-merged tooling
+      branch on the user's fork from the skill's canonical files; re-running is the
+      updater). Creates missing labels (in-review, rebase, needs-resolution), writes
+      personal stack.toml, emits the ~10-line Routine prompt, offers stack-board repo
+      bootstrap. Recorded decision (user can override): for cram2 itself, personal config
+      lives on the personal-notes branch, not a per-user dev branch.
+
+  - id: shared-pr-state-chips
+    title: "PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards"
+    track: dashboards
+    depends_on: [stack-tooling-on-main]
+    status: not_started
+    notes: >
+      Extract one PR-state fetch/compute module (CI rollup, LOC vs base, mergeable probe,
+      session-link parse) shared by stack.py and plan-dashboard's pr-data fetching; add
+      board-semantics chips to build_dashboard.py items; add a headless static-HTML build
+      entrypoint for the Pages Action (Artifact path keeps working during transition).
+
+  - id: stack-board-single-site
+    title: "PR 4: stack-board Action builds board + all plan dashboards on one Pages site"
+    repository: AbdelrhmanBassiouny/stack-board
+    track: cutover
+    depends_on: [stack-tooling-on-main, shared-pr-state-chips]
+    status: not_started
+    notes: >
+      board.yml checks out fork main (not the tooling branch) + fetches personal-notes for
+      plans and config; publishes _site/ = board index + plans/<id>/ per plan, refreshed
+      every poll with no live session. Parameterize repo/branch/upstream as repository
+      variables (portability). Fix the three inconsistent poll-interval statements.
+      dashboard-urls.yaml / Artifact publishing become optional legacy.
+
+  - id: routine-cutover
+    title: "Slim the live Routine to hard rules + a pointer at .claude/stack/ROUTINE.md"
+    track: cutover
+    depends_on: [stack-tooling-on-main]
+    status: not_started
+    notes: >
+      No PR — claude.ai/code/routines change. Only after PR 1 is on cram2/main and fork
+      main fast-forwards. HARD RULES (never subscribe; end turn on webhook events) stay
+      inline in the Routine prompt; everything else moves to ROUTINE.md.
+
+  - id: tooling-branch-retirement
+    title: "Tag and delete claude/stack-workflow-tooling after one green cycle"
+    track: cutover
+    depends_on: [routine-cutover, stack-board-single-site]
+    status: not_started
+    notes: >
+      Only after one full routine cycle and one board-Action cycle run green on the new
+      paths. Tag for history first.

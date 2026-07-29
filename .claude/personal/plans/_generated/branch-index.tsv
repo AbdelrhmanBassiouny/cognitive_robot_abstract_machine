@@ -36,7 +36,8 @@ rdr/feature-registry	rdr-refactor
 rdr/feature-capture	rdr-refactor
 rdr/multi-class	rdr-refactor
 rdr/general-fixpoint	rdr-refactor
-eql/truth-unification	rdr-refactor
+claude/eql-truth-unification-refactor-pfux7f	rdr-refactor
 rdr/concept-trees	rdr-refactor
 rdr/oo-definitions	rdr-refactor
 rdr/justifications	rdr-refactor
+claude/patch-pr-rheubx	workflow-unification
