@@ -32,5 +32,13 @@ DONE 2026-07-29: plan approved and created — .claude/personal/plans/workflow-u
 https://claude.ai/code/artifact/36572776-4278-447a-8133-e087096b9cb8 (URL cached in
 _generated/dashboard-urls.yaml). PR #101 now carries `in-review` (promoted to cram2).
 
-Next: dispatch PR 1 (stack-tooling-on-main) on claude/patch-pr-rheubx; immediate-wave items
-(eql-roadmap-migration, session-hooks-retirement) can start any time.
+Progress 2026-07-29 (late): PR 1 done as draft #106 (claude/stack-tooling-on-main). Both
+immediate-wave items done by other sessions (eql-verbalization plan created; session-hooks branch
+deleted by user — tag-push/branch-delete 403 from sessions, see roadmap addendum). Plan now 11
+items: added setup-personal-notes-script (user prompt in roadmap.md) and
+dev-tooling-python-package (package created in PR 3, migration last in upstream wave). NOTE: a
+concurrent-save race clobbered the other session's manifest edits once (save-plan.sh is
+last-writer-wins whole-file); merged and restored — refetch personal-notes before every save.
+
+Next: PR 1 (#106) awaits self-review/un-draft; then PR 2/PR 3 dispatch; leftover
+origin/claude/push-scope-test-zsq7jc needs out-of-harness deletion.
