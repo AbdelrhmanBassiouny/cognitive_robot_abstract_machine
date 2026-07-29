@@ -1,185 +1,447 @@
-"""The recorded demo scene as an EQL (Entity Query Language) knowledge base.
-
-EQL is krrood's pythonic relational query language. This module models the
-recorded coraplex/giskardpy episode — bench objects, robot parts, action
-episodes, per-joint motion — as plain dataclasses and exposes:
-
-    fresh_namespace()  -> dict for evaluating one EQL query (fresh variables)
-    run_query(code)    -> execute an EQL query string, return JSON-able result
-    graph_payload()    -> nodes/edges/details/presets for the UI knowledge graph
-    view_payload(name) -> one of the graph-panel tabs (knowledge / kinematics /
-                          plan / chart)
-
-krrood is imported lazily: without it the static viewer still works, only the
-EQL panel is unavailable. Scene bundles are read from paths.scenes_dir().
 """
+The recorded demo scene as an EQL (Entity Query Language) knowledge base.
+
+EQL is krrood's pythonic relational query language. This module models the recorded
+coraplex/giskardpy episode — bench objects, robot parts, action episodes, per-joint
+motion — as plain dataclasses and exposes:
+
+fresh_namespace()  -> dict for evaluating one EQL query (fresh variables)
+run_query(code)    -> execute an EQL query string, return JSON-able result
+graph_payload()    -> nodes/edges/details/presets for the UI knowledge graph
+view_payload(name) -> one of the graph-panel tabs (knowledge / kinematics /
+plan / chart)
+
+krrood is imported lazily: without it the static viewer still works, only the EQL panel
+is unavailable. Scene bundles are read from paths.scenes_dir().
+"""
+
+from __future__ import annotations
+
 import ast
 import json
-import math
+import logging
 import os
+import re
+from collections import Counter, defaultdict
 from dataclasses import dataclass, fields, is_dataclass
-from typing import Optional
+
+from typing_extensions import Any, Dict, List, Optional, Tuple
+
+from krrood.entity_query_language import factories as eql_factories
 
 from cram_viz import paths
 
 
-def scene_name():
-    """Active scene: $CRAM_VIZ_SCENE, else the scenes index default."""
-    env = os.environ.get("CRAM_VIZ_SCENE")
-    if env:
-        return env
+def scene_name() -> Optional[str]:
+    """
+    The active scene: ``CRAM_VIZ_SCENE``, else the scenes-index default.
+    """
+    environment_override = os.environ.get("CRAM_VIZ_SCENE")
+    if environment_override:
+        return environment_override
     try:
         index = json.load(open(os.path.join(str(paths.scenes_dir()), "index.json")))
         return index["default"]
-    except Exception:
+    except (OSError, ValueError, KeyError):
         return None
 
 
-def scene_dir():
-    n = scene_name()
-    return os.path.join(str(paths.scenes_dir()), n) if n else None
+def scene_dir() -> Optional[str]:
+    """
+    Directory of the active scene bundle, or None without one.
+    """
+    name = scene_name()
+    return os.path.join(str(paths.scenes_dir()), name) if name else None
 
 
-def load_scene():
-    """(scene.json, trajectory.json) of the active scene, or ({}, {})."""
-    d = scene_dir()
-    if not d:
+def load_scene() -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    The active scene's (scene.json, trajectory.json), or ``({}, {})``.
+    """
+    directory = scene_dir()
+    if not directory:
         return {}, {}
     try:
-        sc = json.load(open(os.path.join(d, "scene.json")))
-    except Exception:
+        scene = json.load(open(os.path.join(directory, "scene.json")))
+    except (OSError, ValueError):
         return {}, {}
     try:
-        tr = json.load(open(os.path.join(d, sc.get("trajectory", "trajectory.json"))))
-    except Exception:
-        tr = {}
-    return sc, tr
+        trajectory = json.load(
+            open(os.path.join(directory, scene.get("trajectory", "trajectory.json")))
+        )
+    except (OSError, ValueError):
+        trajectory = {}
+    return scene, trajectory
 
 
-def load_urdf():
-    """Parse the active scene's ROBOT urdf into (links, joints) for the
-    kinematic-tree drill view. Regex parse — the bundled URDFs are flat."""
-    import re
-    sc, _ = load_scene()
-    robot_model = next((m for m in sc.get("models", []) if m.get("robot")), None)
-    d = scene_dir()
-    if not robot_model or not d:
+def load_urdf() -> Tuple[List[str], List[Dict[str, str]]]:
+    """
+    Parse the active scene's robot URDF into (links, joints).
+
+    Used by the kinematic-tree view; a regex parse suffices because the bundled URDFs
+    are flat.
+    """
+    scene, _ = load_scene()
+    robot_model = next(
+        (model for model in scene.get("models", []) if model.get("robot")), None
+    )
+    directory = scene_dir()
+    if not robot_model or not directory:
         return [], []
     try:
-        txt = open(os.path.join(d, robot_model["urdf"]), encoding="utf-8", errors="replace").read()
+        text = open(
+            os.path.join(directory, robot_model["urdf"]),
+            encoding="utf-8",
+            errors="replace",
+        ).read()
     except OSError:
         return [], []
-    links = re.findall(r'<link\s+name="([^"]+)"', txt)
+    links = re.findall(r'<link\s+name="([^"]+)"', text)
     joints = []
-    for m in re.finditer(r'<joint\s+name="([^"]+)"\s+type="([^"]+)">(.*?)</joint>', txt, re.S):
-        body = m.group(3)
+    for joint in re.finditer(
+        r'<joint\s+name="([^"]+)"\s+type="([^"]+)">(.*?)</joint>', text, re.S
+    ):
+        body = joint.group(3)
         parent = re.search(r'<parent\s+link="([^"]+)"', body)
         child = re.search(r'<child\s+link="([^"]+)"', body)
         if parent and child:
-            joints.append({"name": m.group(1), "type": m.group(2),
-                           "parent": parent.group(1), "child": child.group(1)})
+            joints.append(
+                {
+                    "name": joint.group(1),
+                    "type": joint.group(2),
+                    "parent": parent.group(1),
+                    "child": child.group(1),
+                }
+            )
     return links, joints
 
 
-# ---------------------------------------------------------------- the model --
+# %% the entity model ---------------------------------------------------------
 @dataclass(unsafe_hash=True)
 class Position:
-    x: float
-    y: float
-    z: float
+    """
+    A world position in metres.
+    """
 
-    def __repr__(self):
+    x: float
+    """
+    World x coordinate.
+    """
+
+    y: float
+    """
+    World y coordinate.
+    """
+
+    z: float
+    """
+    World z coordinate.
+    """
+
+    def __repr__(self) -> str:
         return "(%.2f, %.2f, %.2f)" % (self.x, self.y, self.z)
 
 
 @dataclass(unsafe_hash=True)
 class Gripper:
-    name: str
-    side: str
-    opening_m: float = 0.085          # Robotiq 2F-85
+    """
+    An end effector of the recorded robot.
+    """
 
+    name: str
+    """
+    Part name from the scene's robot annotation.
+    """
+
+    side: str
+    """
+    Body side the gripper belongs to ('left' / 'right').
+    """
+
+    opening_m: float = 0.085
+    """
+    Maximum opening width in metres (Robotiq 2F-85 default).
+    """
 
 @dataclass(unsafe_hash=True)
 class Arm:
+    """
+    A manipulator of the recorded robot.
+    """
+
     name: str
+    """
+    Part name from the scene's robot annotation.
+    """
+
     side: str
+    """
+    Body side of the arm ('left' / 'right').
+    """
+
     robot: str
+    """
+    Name of the robot this arm belongs to.
+    """
+
     gripper: Gripper
+    """
+    The end effector mounted on this arm.
+    """
 
 
 @dataclass(unsafe_hash=True)
 class Robot:
+    """
+    The robot that executed the recorded episode.
+    """
+
     name: str
+    """
+    Robot name from the scene bundle.
+    """
+
     arm_count: int
+    """
+    Number of annotated arms.
+    """
 
 
 @dataclass(unsafe_hash=True)
 class BenchObject:
+    """
+    A loose object (or named location) in the scene.
+    """
+
     name: str
+    """
+    Object identifier, e.g. ``milk``.
+    """
+
     kind: str
+    """
+    ``object`` for graspable things, ``location`` for named areas.
+    """
+
     label: str
+    """
+    Human-readable display name.
+    """
+
     height_m: float
+    """
+    Approximate object height in metres.
+    """
+
     position: Position
+    """
+    Spawn position recorded at frame 0 of the episode.
+    """
 
 
 @dataclass(unsafe_hash=True)
 class ActionEpisode:
+    """
+    One executed plan segment of the recording.
+    """
+
     name: str
+    """
+    Segment step name, e.g. ``transport_milk``.
+    """
+
     index: int
+    """
+    Position of the episode in execution order.
+    """
+
     start_frame: int
+    """
+    First trajectory frame of the episode.
+    """
+
     end_frame: int
+    """
+    Frame after the last trajectory frame of the episode.
+    """
+
     duration_s: float
+    """
+    Episode duration in seconds.
+    """
+
     performed_by: Optional[Arm]
+    """
+    The arm that performed the manipulation, if any.
+    """
+
     picks: Optional[BenchObject]
+    """
+    The object the episode picks up, if any.
+    """
+
     places_at: Optional[BenchObject]
+    """
+    The location the object is placed at, if any.
+    """
 
 
 @dataclass(unsafe_hash=True)
 class JointMotion:
+    """
+    Per-joint motion statistics over the whole recorded trajectory.
+    """
+
     name: str
-    arm_side: str                     # 'left' | 'right'
+    """
+    Joint name (without the model prefix).
+    """
+
+    arm_side: str
+    """
+    Body side the joint belongs to ('left' / 'right' / 'body' / …).
+    """
+
     min_rad: float
+    """
+    Smallest recorded joint position (radians or metres).
+    """
+
     max_rad: float
+    """
+    Largest recorded joint position (radians or metres).
+    """
+
     range_rad: float
+    """Travelled range, ``max_rad - min_rad``."""
 
 
-# ---- the CRAM architecture itself, scanned from ~/cognitive_robot_abstract_machine
+# %% the CRAM architecture entities --------------------------------------------
 @dataclass(unsafe_hash=True)
 class Package:
+    """
+    A top-level package of the CRAM repository.
+    """
+
     name: str
+    """
+    Directory name, e.g. ``coraplex``.
+    """
+
     description: str
+    """
+    One-line description (curated, or the first README line).
+    """
+
     module_count: int
+    """
+    Number of Python modules in the package.
+    """
+
     class_count: int
+    """
+    Number of classes defined in the package.
+    """
 
 
 @dataclass(unsafe_hash=True)
 class SubPackage:
-    name: str                         # qualified, e.g. 'coraplex.plans'
+    """
+    A qualified subpackage, e.g. ``coraplex.plans``.
+    """
+
+    name: str
+    """
+    Qualified name, e.g. ``coraplex.plans``.
+    """
+
     package: str
+    """
+    The top-level package this subpackage belongs to.
+    """
+
     module_count: int
+    """
+    Number of modules in the subpackage.
+    """
+
     class_count: int
+    """
+    Number of classes defined in the subpackage.
+    """
 
 
 @dataclass(unsafe_hash=True)
 class PythonClass:
+    """
+    A class found by the static scan of the CRAM repository.
+    """
+
     name: str
+    """
+    Class name.
+    """
+
     package: str
-    subpackage: str                   # 'coraplex.plans' (== package for top-level modules)
-    module: str                       # repo-relative module path
-    bases: tuple                      # names of direct base classes
+    """
+    Top-level package the class is defined in.
+    """
+
+    subpackage: str
+    """
+    Qualified subpackage (equal to ``package`` for top-level modules).
+    """
+
+    module: str
+    """
+    Repository-relative module path.
+    """
+
+    bases: tuple
+    """
+    Names of the direct base classes.
+    """
+
     methods: int
-    doc: str                          # first docstring line ('' if none)
+    """
+    Number of methods defined on the class.
+    """
+
+    doc: str
+    """
+    First docstring line, or ``''``.
+    """
 
 
-# -------------------------------------------- scan the CRAM architecture ----
-def _cram_root():
+# %% scan the CRAM architecture --------------------------------------------------
+def _cram_root() -> str:
+    """
+    The CRAM repository the architecture graph is scanned from.
+    """
     return str(paths.architecture_root())
 
 
-def _arch_cache():
-    # always in the writable data dir — scenes_dir() may be a read-only checkout
+def _architecture_cache() -> str:
+    """
+    Path of the scan cache — always in the writable data directory, because the scenes
+    checkout may be read-only.
+    """
     return os.path.join(str(paths.data_dir()), "arch_cache.json")
-SKIP_DIRS = {"__pycache__", "node_modules", "doc", "docs", "resources", "build", "dist", "plugins"}
+
+
+#: directories never descended into during the architecture scan
+SKIP_DIRS = {
+    "__pycache__",
+    "node_modules",
+    "doc",
+    "docs",
+    "resources",
+    "build",
+    "dist",
+    "plugins",
+}
+
+#: curated one-line descriptions for the well-known workspace packages
 PKG_DESCRIPTIONS = {
     "krrood": "knowledge representation & reasoning through OO design (home of EQL)",
     "coraplex": "the plan executive: designators, plans, locations",
@@ -198,252 +460,452 @@ PKG_DESCRIPTIONS = {
 }
 
 
-def _first_readme_line(d):
+def _first_readme_line(directory: str) -> str:
+    """
+    The first non-empty line of a directory's README, or ``''``.
+    """
     for name in ("README.md", "readme.md"):
-        p = os.path.join(d, name)
-        if os.path.exists(p):
-            for line in open(p, encoding="utf-8", errors="replace"):
+        readme_path = os.path.join(directory, name)
+        if os.path.exists(readme_path):
+            for line in open(readme_path, encoding="utf-8", errors="replace"):
                 line = line.strip().lstrip("#").strip()
                 if line:
                     return line[:120]
     return ""
 
 
-def scan_architecture():
-    """AST-scan the CRAM repo: packages, classes, cross-package imports.
-    Static parse only — nothing is imported. Cached to disk keyed by file count."""
-    packages, classes, imports = [], [], {}
+def scan_architecture() -> (
+    Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Tuple[str, str]]]
+):
+    """
+    Statically scan the CRAM repository for its architecture graph.
+
+    :return: (packages, classes, import edges between packages). A pure ``ast`` parse —
+        nothing is imported.
+    """
+    packages: List[Dict[str, Any]] = []
+    classes: List[Dict[str, Any]] = []
+    imports: Dict[str, set] = {}
     cram_root = _cram_root()
     if not os.path.isdir(cram_root):
         return packages, classes, []
 
-    pkg_dirs = {"root": cram_root}
-    for e in sorted(os.listdir(cram_root)):
-        d = os.path.join(cram_root, e)
-        if os.path.isdir(d) and not e.startswith(".") and e not in SKIP_DIRS and "egg-info" not in e:
-            pkg_dirs[e] = d
-    pkg_names = set(pkg_dirs)
+    package_dirs = {"root": cram_root}
+    for entry in sorted(os.listdir(cram_root)):
+        directory = os.path.join(cram_root, entry)
+        if (
+            os.path.isdir(directory)
+            and not entry.startswith(".")
+            and entry not in SKIP_DIRS
+            and "egg-info" not in entry
+        ):
+            package_dirs[entry] = directory
+    package_names = set(package_dirs)
 
-    per_pkg = {}
-    for pkg, base in pkg_dirs.items():
-        mods = 0
+    modules_per_package: Dict[str, int] = {}
+    for package, base in package_dirs.items():
+        module_count = 0
         for dirpath, dirnames, filenames in os.walk(base):
-            dirnames[:] = [x for x in dirnames if not x.startswith(".") and x not in SKIP_DIRS]
-            if pkg == "root":
-                dirnames[:] = []                    # root package = top-level scripts only
-            for fn in filenames:
-                if not fn.endswith(".py"):
+            dirnames[:] = [
+                name
+                for name in dirnames
+                if not name.startswith(".") and name not in SKIP_DIRS
+            ]
+            if package == "root":
+                dirnames[:] = []  # root package = top-level scripts only
+            for filename in filenames:
+                if not filename.endswith(".py"):
                     continue
-                path = os.path.join(dirpath, fn)
+                path = os.path.join(dirpath, filename)
                 try:
-                    tree = ast.parse(open(path, encoding="utf-8", errors="replace").read())
+                    tree = ast.parse(
+                        open(path, encoding="utf-8", errors="replace").read()
+                    )
                 except SyntaxError:
                     continue
-                mods += 1
-                rel = os.path.relpath(path, cram_root)[:-3].replace(os.sep, ".")
-                for node in ast.walk(tree):
-                    if isinstance(node, ast.ClassDef):
-                        bases = tuple(
-                            b.id if isinstance(b, ast.Name) else (b.attr if isinstance(b, ast.Attribute) else "?")
-                            for b in node.bases
-                        )
-                        doc = (ast.get_docstring(node) or "").strip().split("\n")[0][:140]
-                        methods = sum(1 for x in node.body
-                                      if isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef)))
-                        classes.append(dict(name=node.name, package=pkg, module=rel,
-                                            bases=list(bases), methods=methods, doc=doc))
-                    elif isinstance(node, (ast.Import, ast.ImportFrom)):
-                        roots = ([a.name.split(".")[0] for a in node.names]
-                                 if isinstance(node, ast.Import)
-                                 else [(node.module or "").split(".")[0]] if node.level == 0 else [])
-                        for r in roots:
-                            if r in pkg_names and r != pkg:
-                                imports.setdefault(pkg, set()).add(r)
-        per_pkg[pkg] = mods
+                module_count += 1
+                module = os.path.relpath(path, cram_root)[:-3].replace(os.sep, ".")
+                _collect_classes_and_imports(
+                    tree, package, module, package_names, classes, imports
+                )
+        modules_per_package[package] = module_count
 
-    from collections import Counter
-    ccount = Counter(c["package"] for c in classes)
-    for pkg in pkg_dirs:
-        desc = PKG_DESCRIPTIONS.get(pkg) or _first_readme_line(pkg_dirs[pkg])
-        packages.append(dict(name=pkg, description=desc,
-                             module_count=per_pkg.get(pkg, 0), class_count=ccount.get(pkg, 0)))
-    dep_edges = sorted((a, b) for a, deps in imports.items() for b in deps)
-    return packages, classes, dep_edges
+    class_counts = Counter(entry["package"] for entry in classes)
+    for package in package_dirs:
+        description = PKG_DESCRIPTIONS.get(package) or _first_readme_line(
+            package_dirs[package]
+        )
+        packages.append(
+            dict(
+                name=package,
+                description=description,
+                module_count=modules_per_package.get(package, 0),
+                class_count=class_counts.get(package, 0),
+            )
+        )
+    dependency_edges = sorted(
+        (source, target) for source, targets in imports.items() for target in targets
+    )
+    return packages, classes, dependency_edges
 
 
-def load_architecture():
-    """scan_architecture() with a JSON disk cache (a full scan takes seconds)."""
-    # A full scan takes seconds, so it is cached in the data directory, keyed
-    # by the scanned root; a cache from another root is rescanned.
-    cram_root = _cram_root()
-    have_repo = os.path.isdir(cram_root)
+def _collect_classes_and_imports(
+    tree: ast.Module,
+    package: str,
+    module: str,
+    package_names: set,
+    classes: List[Dict[str, Any]],
+    imports: Dict[str, set],
+) -> None:
+    """
+    Collect class definitions and cross-package imports from one module.
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            bases = tuple(
+                (
+                    base.id
+                    if isinstance(base, ast.Name)
+                    else (base.attr if isinstance(base, ast.Attribute) else "?")
+                )
+                for base in node.bases
+            )
+            doc = (ast.get_docstring(node) or "").strip().split("\n")[0][:140]
+            methods = sum(
+                1
+                for member in node.body
+                if isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+            classes.append(
+                dict(
+                    name=node.name,
+                    package=package,
+                    module=module,
+                    bases=list(bases),
+                    methods=methods,
+                    doc=doc,
+                )
+            )
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            if isinstance(node, ast.Import):
+                roots = [alias.name.split(".")[0] for alias in node.names]
+            elif node.level == 0:
+                roots = [(node.module or "").split(".")[0]]
+            else:
+                roots = []
+            for root in roots:
+                if root in package_names and root != package:
+                    imports.setdefault(package, set()).add(root)
+
+
+def _load_architecture_cache(cram_root: str, require_classes: bool) -> Optional[tuple]:
+    """
+    The cached scan if it is usable, else None.
+
+    A cache written for another repository root is not trusted (unless no repository
+    exists at all, in which case any cache beats nothing).
+    """
     try:
-        cached = json.load(open(_arch_cache()))
-        if cached.get("version") == 2 and (not have_repo or cached.get("cram_root") == cram_root):
-            return cached["packages"], cached["classes"], [tuple(e) for e in cached["deps"]]
-    except Exception:
-        pass
-    if not have_repo:
+        cached = json.load(open(_architecture_cache()))
+    except (OSError, ValueError):
+        return None
+    if cached.get("version") != 2:
+        return None
+    if os.path.isdir(cram_root) and cached.get("cram_root") != cram_root:
+        return None
+    if require_classes and not cached.get("classes"):
+        return None
+    return (
+        cached["packages"],
+        cached["classes"],
+        [tuple(edge) for edge in cached["deps"]],
+    )
+
+
+def load_architecture() -> (
+    Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Tuple[str, str]]]
+):
+    """
+    :func:`scan_architecture` behind a JSON disk cache.
+
+    A full scan takes seconds, so results are cached in the data directory, keyed by the
+    scanned root; a cache from another root is rescanned.
+    """
+    cram_root = _cram_root()
+    cached = _load_architecture_cache(cram_root, require_classes=False)
+    if cached is not None:
+        return cached
+    if not os.path.isdir(cram_root):
         return [], [], []
-    packages, classes, deps = scan_architecture()
+    packages, classes, dependency_edges = scan_architecture()
     if not classes:
         # a checkout exists but yielded nothing (empty or partial clone) — fall
         # back to the cache rather than losing the architecture graph
-        try:
-            cached = json.load(open(_arch_cache()))
-            if cached.get("version") == 2 and cached.get("classes"):
-                return cached["packages"], cached["classes"], [tuple(e) for e in cached["deps"]]
-        except Exception:
-            pass
-        return packages, classes, deps
-    try:
-        os.makedirs(os.path.dirname(_arch_cache()), exist_ok=True)
-        json.dump({"version": 2, "cram_root": cram_root, "packages": packages,
-                   "classes": classes, "deps": deps}, open(_arch_cache(), "w"))
-    except Exception:
-        pass
-    return packages, classes, deps
+        return _load_architecture_cache(cram_root, require_classes=True) or (
+            packages,
+            classes,
+            dependency_edges,
+        )
+    os.makedirs(os.path.dirname(_architecture_cache()), exist_ok=True)
+    json.dump(
+        {
+            "version": 2,
+            "cram_root": cram_root,
+            "packages": packages,
+            "classes": classes,
+            "deps": dependency_edges,
+        },
+        open(_architecture_cache(), "w"),
+    )
+    return packages, classes, dependency_edges
 
 
-def _side_of_name(name):
-    n = name.lower()
-    if "left" in n or n.startswith("l_"):
+def _side_of_name(name: str) -> str:
+    """
+    Body side encoded in a part/link name: 'left', 'right' or ``''``.
+    """
+    lowered = name.lower()
+    if "left" in lowered or lowered.startswith("l_"):
         return "left"
-    if "right" in n or n.startswith("r_"):
+    if "right" in lowered or lowered.startswith("r_"):
         return "right"
     return ""
 
 
 class KB:
-    def __init__(self):
-        sc, tr = load_scene()
-        fps = sc.get("fps", 30)
-        parts = (sc.get("robot") or {}).get("parts") or {}
-        robot_name = (sc.get("robot") or {}).get("name", "robot")
-        robot_prefix = (sc.get("robot") or {}).get("prefix", "")
+    """
+    The recorded episode as EQL-queryable entities.
 
-        # scene objects (spawn poses were recorded at frame 0 of the episode)
-        self.objects = []
-        by_id = {}
-        for o in sc.get("objects") or []:
-            obj = BenchObject(name=o["id"], kind="object", label=o["id"].replace("_", " ").title(),
-                              height_m=0.1, position=Position(*[round(v, 3) for v in o["spawn"][:3]]))
-            self.objects.append(obj)
-            by_id[o["id"]] = obj
-        place_area = None
-        if sc.get("placeTarget"):
-            pt = sc["placeTarget"]
-            place_area = BenchObject(name="place_area", kind="location", label="Place area",
-                                     height_m=0.0,
-                                     position=Position(round(pt["pos"][0], 3), round(pt["pos"][1], 3), pt.get("z", 0)))
-            self.objects.append(place_area)
+    Built once from the active scene bundle plus a static scan of the CRAM repository;
+    every attribute is a plain list of dataclass instances that EQL variables range
+    over.
+    """
 
-        # arms + grippers straight from the recorded robot annotation parts.
-        # Gripper keywords take precedence — robot names can contain 'arm'
-        # themselves (g-ARM-i), so 'arm' alone must not decide.
-        grip_parts = [p for p in parts
-                      if any(k in p.lower() for k in ("gripper", "hand", "effector"))]
-        arm_parts = [p for p in parts if p not in grip_parts and "arm" in p.lower()]
-        self.grippers, self.arms = [], []
-        for ap in sorted(arm_parts):
-            side = _side_of_name(ap) or "n/a"
-            gp = next((g for g in grip_parts if _side_of_name(g) == side), None)
-            gripper = Gripper(gp or (ap + "_ee"), side)
-            self.grippers.append(gripper)
-            self.arms.append(Arm(ap, side, robot_name, gripper))
+    def __init__(self) -> None:
+        scene, trajectory = load_scene()
+        frames_per_second = scene.get("fps", 30)
+        parts = (scene.get("robot") or {}).get("parts") or {}
+        robot_name = (scene.get("robot") or {}).get("name", "robot")
+        robot_prefix = (scene.get("robot") or {}).get("prefix", "")
+
+        self.objects = self._build_objects(scene)
+        objects_by_id = {entity.name: entity for entity in self.objects}
+        place_area = objects_by_id.get("place_area")
+
+        self.grippers, self.arms = self._build_arms(parts, robot_name)
         self.robot = Robot(robot_name, arm_count=len(self.arms))
+        self.episodes = self._build_episodes(
+            scene, frames_per_second, objects_by_id, place_area
+        )
+        self.joints = self._build_joint_motions(trajectory, parts, robot_prefix)
 
-        def arm_for(segment):
+        packages, classes, dependency_edges = load_architecture()
+        self.packages = [Package(**entry) for entry in packages]
+        self.classes = [
+            PythonClass(
+                name=entry["name"],
+                package=entry["package"],
+                subpackage=self._subpackage_of(entry["package"], entry["module"]),
+                module=entry["module"],
+                bases=tuple(entry["bases"]),
+                methods=entry["methods"],
+                doc=entry["doc"],
+            )
+            for entry in classes
+        ]
+        self.package_deps = dependency_edges
+        self.subpackages = self._build_subpackages(self.classes)
+
+    @staticmethod
+    def _build_objects(scene: Dict[str, Any]) -> List[BenchObject]:
+        """
+        Scene objects (spawn poses recorded at frame 0) plus the place area.
+        """
+        objects = []
+        for entry in scene.get("objects") or []:
+            objects.append(
+                BenchObject(
+                    name=entry["id"],
+                    kind="object",
+                    label=entry["id"].replace("_", " ").title(),
+                    height_m=0.1,
+                    position=Position(
+                        *[round(value, 3) for value in entry["spawn"][:3]]
+                    ),
+                )
+            )
+        if scene.get("placeTarget"):
+            target = scene["placeTarget"]
+            objects.append(
+                BenchObject(
+                    name="place_area",
+                    kind="location",
+                    label="Place area",
+                    height_m=0.0,
+                    position=Position(
+                        round(target["pos"][0], 3),
+                        round(target["pos"][1], 3),
+                        target.get("z", 0),
+                    ),
+                )
+            )
+        return objects
+
+    @staticmethod
+    def _build_arms(
+        parts: Dict[str, Any], robot_name: str
+    ) -> Tuple[List[Gripper], List[Arm]]:
+        """
+        Arms and grippers from the recorded robot annotation parts.
+
+        Gripper keywords take precedence — robot names can contain 'arm' themselves, so
+        'arm' alone must not decide.
+        """
+        gripper_parts = [
+            part
+            for part in parts
+            if any(
+                keyword in part.lower() for keyword in ("gripper", "hand", "effector")
+            )
+        ]
+        arm_parts = [
+            part
+            for part in parts
+            if part not in gripper_parts and "arm" in part.lower()
+        ]
+        grippers, arms = [], []
+        for arm_part in sorted(arm_parts):
+            side = _side_of_name(arm_part) or "n/a"
+            gripper_part = next(
+                (part for part in gripper_parts if _side_of_name(part) == side), None
+            )
+            gripper = Gripper(gripper_part or (arm_part + "_ee"), side)
+            grippers.append(gripper)
+            arms.append(Arm(arm_part, side, robot_name, gripper))
+        return grippers, arms
+
+    def _build_episodes(
+        self,
+        scene: Dict[str, Any],
+        frames_per_second: int,
+        objects_by_id: Dict[str, BenchObject],
+        place_area: Optional[BenchObject],
+    ) -> List[ActionEpisode]:
+        """
+        Action episodes from the recorded plan segments.
+        """
+
+        def arm_for(segment: Dict[str, Any]) -> Optional[Arm]:
             hint = (segment.get("arm") or "").lower()
-            for a in self.arms:
-                if a.side and a.side in hint:
-                    return a
+            for arm in self.arms:
+                if arm.side and arm.side in hint:
+                    return arm
             return self.arms[0] if self.arms and segment.get("picks") else None
 
-        self.episodes = []
-        for i, s in enumerate(sc.get("segments") or []):
-            picks = by_id.get(s.get("picks"))
-            self.episodes.append(ActionEpisode(
-                name=s["step"], index=i,
-                start_frame=s["start"], end_frame=s["end"],
-                duration_s=round((s["end"] - s["start"]) / max(1, fps), 1),
-                performed_by=arm_for(s) if picks else None,
-                picks=picks,
-                places_at=place_area if picks else None,
-            ))
+        episodes = []
+        for index, segment in enumerate(scene.get("segments") or []):
+            picks = objects_by_id.get(segment.get("picks"))
+            episodes.append(
+                ActionEpisode(
+                    name=segment["step"],
+                    index=index,
+                    start_frame=segment["start"],
+                    end_frame=segment["end"],
+                    duration_s=round(
+                        (segment["end"] - segment["start"]) / max(1, frames_per_second),
+                        1,
+                    ),
+                    performed_by=arm_for(segment) if picks else None,
+                    picks=picks,
+                    places_at=place_area if picks else None,
+                )
+            )
+        return episodes
 
-        # per-joint motion statistics over the whole recorded trajectory
-        lo, hi = {}, {}
-        for fr in tr.get("frames") or []:
-            for k, v in fr.items():
-                if k not in lo or v < lo[k]:
-                    lo[k] = v
-                if k not in hi or v > hi[k]:
-                    hi[k] = v
+    @staticmethod
+    def _build_joint_motions(
+        trajectory: Dict[str, Any], parts: Dict[str, Any], robot_prefix: str
+    ) -> List[JointMotion]:
+        """
+        Per-joint motion statistics over the whole recorded trajectory.
+        """
+        minimum: Dict[str, float] = {}
+        maximum: Dict[str, float] = {}
+        for frame in trajectory.get("frames") or []:
+            for joint, value in frame.items():
+                if joint not in minimum or value < minimum[joint]:
+                    minimum[joint] = value
+                if joint not in maximum or value > maximum[joint]:
+                    maximum[joint] = value
 
-        link_to_part = {}
-        for p, links in parts.items():
-            for l in links:
-                link_to_part[l] = p
+        link_to_part = {link: part for part, links in parts.items() for link in links}
 
-        def side_of(key):
-            prefix, _, rest = key.partition("/")
+        def side_of(key: str) -> str:
+            prefix, _, joint_name = key.partition("/")
             if "/" not in key:
-                prefix, rest = "", key
+                prefix, joint_name = "", key
             if robot_prefix and prefix != robot_prefix:
                 return "environment"
-            part = link_to_part.get(rest.replace("_joint", "_link"))
-            if part:
-                s = _side_of_name(part)
-                if s:
-                    return s
-            s = _side_of_name(rest)
-            return s or "body"
+            part = link_to_part.get(joint_name.replace("_joint", "_link"))
+            if part and _side_of_name(part):
+                return _side_of_name(part)
+            return _side_of_name(joint_name) or "body"
 
-        self.joints = [
-            JointMotion(name=k.partition("/")[2] or k, arm_side=side_of(k),
-                        min_rad=round(lo[k], 3), max_rad=round(hi[k], 3),
-                        range_rad=round(hi[k] - lo[k], 3))
-            for k in sorted(lo)
+        return [
+            JointMotion(
+                name=key.partition("/")[2] or key,
+                arm_side=side_of(key),
+                min_rad=round(minimum[key], 3),
+                max_rad=round(maximum[key], 3),
+                range_rad=round(maximum[key] - minimum[key], 3),
+            )
+            for key in sorted(minimum)
         ]
 
-        # the CRAM architecture itself: packages + every Python class in the repo
-        pkgs, clss, deps = load_architecture()
-        self.packages = [Package(**p) for p in pkgs]
+    @staticmethod
+    def _subpackage_of(package: str, module: str) -> str:
+        """
+        Qualified subpackage of a module path.
 
-        def sub_of(pkg, module):
-            # 'coraplex.src.coraplex.plans.designator' -> 'coraplex.plans';
-            # top-level modules collapse onto the package itself
-            parts = module.split(".")
-            if parts and parts[0] == pkg:
-                parts = parts[1:]
-            while parts and parts[0] in ("src", pkg):
-                parts = parts[1:]
-            return pkg + "." + parts[0] if len(parts) >= 2 else pkg
+        ``coraplex.src.coraplex.plans.designator`` → ``coraplex.plans``; top-level
+        modules collapse onto the package itself.
+        """
+        segments = module.split(".")
+        if segments and segments[0] == package:
+            segments = segments[1:]
+        while segments and segments[0] in ("src", package):
+            segments = segments[1:]
+        return package + "." + segments[0] if len(segments) >= 2 else package
 
-        self.classes = [PythonClass(name=c["name"], package=c["package"],
-                                    subpackage=sub_of(c["package"], c["module"]),
-                                    module=c["module"], bases=tuple(c["bases"]),
-                                    methods=c["methods"], doc=c["doc"])
-                        for c in clss]
-        self.package_deps = deps
-
-        from collections import defaultdict
-        mods, ccnt = defaultdict(set), defaultdict(int)
-        for c in self.classes:
-            if c.subpackage != c.package:
-                mods[(c.package, c.subpackage)].add(c.module)
-                ccnt[c.subpackage] += 1
-        self.subpackages = [
-            SubPackage(name=s, package=p, module_count=len(mods[(p, s)]), class_count=ccnt[s])
-            for (p, s) in sorted(mods)
+    @staticmethod
+    def _build_subpackages(classes: List[PythonClass]) -> List[SubPackage]:
+        """
+        Subpackage entities aggregated from the scanned classes.
+        """
+        modules = defaultdict(set)
+        class_counts = defaultdict(int)
+        for entry in classes:
+            if entry.subpackage != entry.package:
+                modules[(entry.package, entry.subpackage)].add(entry.module)
+                class_counts[entry.subpackage] += 1
+        return [
+            SubPackage(
+                name=subpackage,
+                package=package,
+                module_count=len(modules[(package, subpackage)]),
+                class_count=class_counts[subpackage],
+            )
+            for (package, subpackage) in sorted(modules)
         ]
 
 
-_kb = None
+_kb: Optional[KB] = None
 
 
-def get_kb():
+def get_kb() -> KB:
+    """
+    The process-wide knowledge base, built on first use.
+    """
     global _kb
     if _kb is None:
         _kb = KB()
@@ -451,102 +913,175 @@ def get_kb():
 
 
 def reset_kb():
-    """Drop the cached KB (tests point CRAM_VIZ_SCENES at fixtures)."""
+    """
+    Drop the cached KB (tests point CRAM_VIZ_SCENES at fixtures).
+    """
     global _kb
     _kb = None
 
 
-# -------------------------------------------------------------- EQL session --
-# factories re-exported into every query namespace
+# %% EQL session -----------------------------------------------------------------
+#: EQL factories re-exported into every query namespace
 _FACTORY_NAMES = [
-    "entity", "set_of", "variable", "an", "a", "the", "and_", "or_", "not_",
-    "contains", "in_", "exists", "for_all", "count", "count_all", "average",
-    "sum", "min", "max", "mode", "distinct", "flat_variable", "variable_from",
+    "entity",
+    "set_of",
+    "variable",
+    "an",
+    "a",
+    "the",
+    "and_",
+    "or_",
+    "not_",
+    "contains",
+    "in_",
+    "exists",
+    "for_all",
+    "count",
+    "count_all",
+    "average",
+    "sum",
+    "min",
+    "max",
+    "mode",
+    "distinct",
+    "flat_variable",
+    "variable_from",
 ]
 
 
-def fresh_namespace():
-    from krrood.entity_query_language import factories as F
+def fresh_namespace() -> Dict[str, Any]:
+    """
+    A namespace for evaluating one EQL query (fresh variables each time).
+    """
     kb = get_kb()
-    ns = {n: getattr(F, n) for n in _FACTORY_NAMES if hasattr(F, n)}
-    ns.update(
-        Position=Position, Gripper=Gripper, Arm=Arm, Robot=Robot,
-        BenchObject=BenchObject, ActionEpisode=ActionEpisode, JointMotion=JointMotion,
-        Package=Package, SubPackage=SubPackage, PythonClass=PythonClass,
-        objects=kb.objects, episodes=kb.episodes, arms=kb.arms,
-        grippers=kb.grippers, joints=kb.joints, robots=[kb.robot],
-        packages=kb.packages, subpackages=kb.subpackages, classes=kb.classes,
+    namespace = {
+        name: getattr(eql_factories, name)
+        for name in _FACTORY_NAMES
+        if hasattr(eql_factories, name)
+    }
+    namespace.update(
+        Position=Position,
+        Gripper=Gripper,
+        Arm=Arm,
+        Robot=Robot,
+        BenchObject=BenchObject,
+        ActionEpisode=ActionEpisode,
+        JointMotion=JointMotion,
+        Package=Package,
+        SubPackage=SubPackage,
+        PythonClass=PythonClass,
+        objects=kb.objects,
+        episodes=kb.episodes,
+        arms=kb.arms,
+        grippers=kb.grippers,
+        joints=kb.joints,
+        robots=[kb.robot],
+        packages=kb.packages,
+        subpackages=kb.subpackages,
+        classes=kb.classes,
     )
     # ready-made query variables so one-liners stay short
-    ns["obj"] = F.variable(BenchObject, domain=kb.objects)
-    ns["ep"] = F.variable(ActionEpisode, domain=kb.episodes)
-    ns["arm"] = F.variable(Arm, domain=kb.arms)
-    ns["j"] = F.variable(JointMotion, domain=kb.joints)
-    ns["rob"] = F.variable(Robot, domain=[kb.robot])
-    ns["pkg"] = F.variable(Package, domain=kb.packages)
-    ns["sub"] = F.variable(SubPackage, domain=kb.subpackages)
-    ns["cls"] = F.variable(PythonClass, domain=kb.classes)
-    return ns
+    namespace["obj"] = eql_factories.variable(BenchObject, domain=kb.objects)
+    namespace["ep"] = eql_factories.variable(ActionEpisode, domain=kb.episodes)
+    namespace["arm"] = eql_factories.variable(Arm, domain=kb.arms)
+    namespace["j"] = eql_factories.variable(JointMotion, domain=kb.joints)
+    namespace["rob"] = eql_factories.variable(Robot, domain=[kb.robot])
+    namespace["pkg"] = eql_factories.variable(Package, domain=kb.packages)
+    namespace["sub"] = eql_factories.variable(SubPackage, domain=kb.subpackages)
+    namespace["cls"] = eql_factories.variable(PythonClass, domain=kb.classes)
+    return namespace
 
 
-def _entity_name(v):
-    return getattr(v, "name", None)
+def _entity_name(value: Any) -> Optional[str]:
+    """
+    The entity's name attribute, or None for non-entities.
+    """
+    return getattr(value, "name", None)
 
 
-def _jsonable(v):
-    if is_dataclass(v) and not isinstance(v, type):
-        return _entity_name(v) or repr(v)
-    if isinstance(v, float):
-        return round(v, 4)
-    if isinstance(v, (str, int, bool)) or v is None:
-        return v
-    return repr(v)
+def _jsonable(value: Any) -> Any:
+    """
+    A JSON-serializable rendering of one query result value.
+    """
+    if is_dataclass(value) and not isinstance(value, type):
+        return _entity_name(value) or repr(value)
+    if isinstance(value, float):
+        return round(value, 4)
+    if isinstance(value, (str, int, bool)) or value is None:
+        return value
+    return repr(value)
 
 
-def run_query(code, limit=200):
-    """Execute an EQL query string; the last expression is the query."""
-    ns = fresh_namespace()
+def run_query(code: str, limit: int = 200) -> Dict[str, Any]:
+    """
+    Execute an EQL query string and return a JSON-able result payload.
+
+    The last expression of ``code`` is the query; preceding statements are executed as
+    setup.
+
+    :param code: The EQL query source.
+    :param limit: Maximum number of result rows to return.
+    """
+    namespace = fresh_namespace()
     tree = ast.parse(code, mode="exec")
     if not tree.body:
         raise ValueError("empty query")
     last = tree.body[-1]
     if isinstance(last, ast.Expr):
         if len(tree.body) > 1:
-            pre = ast.Module(body=tree.body[:-1], type_ignores=[])
-            exec(compile(pre, "<eql>", "exec"), ns)
-        result = eval(compile(ast.Expression(last.value), "<eql>", "eval"), ns)
+            preamble = ast.Module(body=tree.body[:-1], type_ignores=[])
+            exec(compile(preamble, "<eql>", "exec"), namespace)
+        result = eval(compile(ast.Expression(last.value), "<eql>", "eval"), namespace)
     else:
-        exec(compile(tree, "<eql>", "exec"), ns)
-        result = ns.get("result")
+        exec(compile(tree, "<eql>", "exec"), namespace)
+        result = namespace.get("result")
 
     if hasattr(result, "evaluate"):
         result = result.evaluate()
-
-    rows, highlight, more = [], [], False
-    if result is None:
-        pass
-    elif isinstance(result, (str, int, float, bool)):
-        rows.append({"value": _jsonable(result)})
-    elif is_dataclass(result) and not isinstance(result, type):
-        rows.append(_entity_row(result, highlight))
-    else:
-        try:
-            it = iter(result)
-        except TypeError:
-            rows.append({"value": _jsonable(result)})
-            it = None
-        if it is not None:
-            for item in it:
-                if len(rows) >= limit:
-                    more = True
-                    break
-                rows.append(_item_row(item, highlight))
+    rows, highlight, more = _result_rows(result, limit)
     kind = "rows" if rows and "__entity__" not in rows[0] else "entities"
-    return {"ok": True, "kind": kind, "rows": rows, "count": len(rows),
-            "more": more, "highlight": sorted(set(highlight))}
+    return {
+        "ok": True,
+        "kind": kind,
+        "rows": rows,
+        "count": len(rows),
+        "more": more,
+        "highlight": sorted(set(highlight)),
+    }
 
 
-def _entity_row(item, highlight):
+def _result_rows(
+    result: Any, limit: int
+) -> Tuple[List[Dict[str, Any]], List[str], bool]:
+    """
+    Render a query result into (answer rows, highlight ids, truncated).
+    """
+    rows: List[Dict[str, Any]] = []
+    highlight: List[str] = []
+    if result is None:
+        return rows, highlight, False
+    if isinstance(result, (str, int, float, bool)):
+        rows.append({"value": _jsonable(result)})
+        return rows, highlight, False
+    if is_dataclass(result) and not isinstance(result, type):
+        rows.append(_entity_row(result, highlight))
+        return rows, highlight, False
+    try:
+        iterator = iter(result)
+    except TypeError:
+        rows.append({"value": _jsonable(result)})
+        return rows, highlight, False
+    for item in iterator:
+        if len(rows) >= limit:
+            return rows, highlight, True
+        rows.append(_item_row(item, highlight))
+    return rows, highlight, False
+
+
+def _entity_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
+    """
+    One entity as an answer row; collects the ids to highlight.
+    """
     name = _entity_name(item)
     if name:
         highlight.append(name)
@@ -555,91 +1090,213 @@ def _entity_row(item, highlight):
         highlight.append(item.subpackage)
         highlight.append(item.package)
     row = {"__entity__": name or repr(item), "__type__": type(item).__name__}
-    for f in fields(item):
-        if f.name != "name":
-            row[f.name] = _jsonable(getattr(item, f.name))
+    for entity_field in fields(item):
+        if entity_field.name != "name":
+            row[entity_field.name] = _jsonable(getattr(item, entity_field.name))
     return row
 
 
-def _item_row(item, highlight):
+def _item_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
+    """
+    One arbitrary query result item as an answer row.
+    """
     if is_dataclass(item) and not isinstance(item, type):
         return _entity_row(item, highlight)
-    if hasattr(item, "items"):                 # UnificationDict from set_of()
+    if hasattr(item, "items"):  # UnificationDict from set_of()
         row = {}
-        for k, v in item.items():
-            if is_dataclass(v) and not isinstance(v, type) and _entity_name(v):
-                highlight.append(_entity_name(v))
-            row[str(k)] = _jsonable(v)
+        for key, value in item.items():
+            if (
+                is_dataclass(value)
+                and not isinstance(value, type)
+                and _entity_name(value)
+            ):
+                highlight.append(_entity_name(value))
+            row[str(key)] = _jsonable(value)
         return row
     return {"value": _jsonable(item)}
 
 
-# ------------------------------------------------------------ the UI graph --
-def graph_payload():
+# %% the UI graph -----------------------------------------------------------------
+def graph_payload() -> Dict[str, Any]:
+    """
+    The knowledge-graph overview: nodes, edges, details and presets.
+    """
     kb = get_kb()
     nodes, edges, details = [], [], {}
 
-    def add(nid, label, group, lines):
-        nodes.append({"id": nid, "label": label, "group": group,
-                      "title": "\n".join([label] + lines)})
-        details[nid] = {"label": label, "group": group, "lines": lines}
+    def add(node_id: str, label: str, group: str, lines: List[str]) -> None:
+        nodes.append(
+            {
+                "id": node_id,
+                "label": label,
+                "group": group,
+                "title": "\n".join([label] + lines),
+            }
+        )
+        details[node_id] = {"label": label, "group": group, "lines": lines}
 
     rob = kb.robot.name
-    add(rob, rob, "robot",
-        ["a Robot", "%d arm%s" % (kb.robot.arm_count, "" if kb.robot.arm_count == 1 else "s"),
-         "double-click: full URDF tree"])
-    for a in kb.arms:
-        add(a.name, a.name.replace("_", " "), "robot",
-            ["an Arm", "side: " + a.side, "gripper: " + a.gripper.name])
-        edges.append({"from": rob, "to": a.name, "kind": "prop", "label": "has part"})
-        add(a.gripper.name, a.gripper.name.replace("_", " "), "robot",
-            ["a Gripper", "side: " + a.gripper.side, "opening: %.3f m" % a.gripper.opening_m])
-        edges.append({"from": a.name, "to": a.gripper.name, "kind": "prop", "label": "has part"})
+    add(
+        rob,
+        rob,
+        "robot",
+        [
+            "a Robot",
+            "%d arm%s" % (kb.robot.arm_count, "" if kb.robot.arm_count == 1 else "s"),
+            "double-click: full URDF tree",
+        ],
+    )
+    for arm in kb.arms:
+        add(
+            arm.name,
+            arm.name.replace("_", " "),
+            "robot",
+            ["an Arm", "side: " + arm.side, "gripper: " + arm.gripper.name],
+        )
+        edges.append({"from": rob, "to": arm.name, "kind": "prop", "label": "has part"})
+        add(
+            arm.gripper.name,
+            arm.gripper.name.replace("_", " "),
+            "robot",
+            [
+                "a Gripper",
+                "side: " + arm.gripper.side,
+                "opening: %.3f m" % arm.gripper.opening_m,
+            ],
+        )
+        edges.append(
+            {
+                "from": arm.name,
+                "to": arm.gripper.name,
+                "kind": "prop",
+                "label": "has part",
+            }
+        )
 
-    for o in kb.objects:
-        add(o.name, o.label, "object",
-            ["a BenchObject", "kind: " + o.kind, "position: " + repr(o.position),
-             "height: %.2f m" % o.height_m])
+    for bench_object in kb.objects:
+        add(
+            bench_object.name,
+            bench_object.label,
+            "object",
+            [
+                "a BenchObject",
+                "kind: " + bench_object.kind,
+                "position: " + repr(bench_object.position),
+                "height: %.2f m" % bench_object.height_m,
+            ],
+        )
 
-    prev = None
-    for e in kb.episodes:
-        add(e.name, e.name, "event",
-            ["an ActionEpisode", "frames %d–%d" % (e.start_frame, e.end_frame),
-             "duration: %.1f s" % e.duration_s]
-            + (["picks: " + e.picks.name] if e.picks else [])
-            + (["places at: " + e.places_at.name] if e.places_at else []))
-        if prev:
-            edges.append({"from": prev, "to": e.name, "kind": "type", "label": "precedes"})
-        prev = e.name
-        # the ROBOT performs the episode (with its arm); don't wire the episode
+    previous = None
+    for episode in kb.episodes:
+        add(
+            episode.name,
+            episode.name,
+            "event",
+            [
+                "an ActionEpisode",
+                "frames %d–%d" % (episode.start_frame, episode.end_frame),
+                "duration: %.1f s" % episode.duration_s,
+            ]
+            + (["picks: " + episode.picks.name] if episode.picks else [])
+            + (["places at: " + episode.places_at.name] if episode.places_at else []),
+        )
+        if previous:
+            edges.append(
+                {
+                    "from": previous,
+                    "to": episode.name,
+                    "kind": "type",
+                    "label": "precedes",
+                }
+            )
+        previous = episode.name
+        # the robot performs the episode (with its arm); don't wire the episode
         # straight to the arm — the arm hangs off the robot, so the chain reads
         # transport_milk → pr2 → left_arm → left_gripper
-        if e.performed_by:
-            edges.append({"from": e.name, "to": e.performed_by.robot, "kind": "prop", "label": "performed by"})
-        if e.picks:
-            edges.append({"from": e.name, "to": e.picks.name, "kind": "prop", "label": "picks"})
-        if e.places_at:
-            edges.append({"from": e.name, "to": e.places_at.name, "kind": "prop", "label": "places at"})
+        if episode.performed_by:
+            edges.append(
+                {
+                    "from": episode.name,
+                    "to": episode.performed_by.robot,
+                    "kind": "prop",
+                    "label": "performed by",
+                }
+            )
+        if episode.picks:
+            edges.append(
+                {
+                    "from": episode.name,
+                    "to": episode.picks.name,
+                    "kind": "prop",
+                    "label": "picks",
+                }
+            )
+        if episode.places_at:
+            edges.append(
+                {
+                    "from": episode.name,
+                    "to": episode.places_at.name,
+                    "kind": "prop",
+                    "label": "places at",
+                }
+            )
 
     # the CRAM architecture cluster: repo root → packages, plus import edges
     if kb.packages:
-        add("cram", "CRAM architecture", "root",
-            ["~/cognitive_robot_abstract_machine",
-             "%d packages · %d Python classes" % (len(kb.packages), len(kb.classes))])
-        for p in kb.packages:
-            add(p.name, p.name, "concept",
-                ["a Package", p.description,
-                 "%d modules · %d classes" % (p.module_count, p.class_count),
-                 "double-click to open"])
-            edges.append({"from": "cram", "to": p.name, "kind": "prop", "label": "contains"})
-        for s in kb.subpackages:
-            add(s.name, s.name.split(".", 1)[1], "klass",
-                ["a SubPackage of " + s.package,
-                 "%d modules · %d classes" % (s.module_count, s.class_count),
-                 "double-click to open"])
-            edges.append({"from": s.package, "to": s.name, "kind": "prop", "label": "contains"})
-        for a, b in kb.package_deps:
-            edges.append({"from": a, "to": b, "kind": "type", "label": "imports"})
+        add(
+            "cram",
+            "CRAM architecture",
+            "root",
+            [
+                "~/cognitive_robot_abstract_machine",
+                "%d packages · %d Python classes" % (len(kb.packages), len(kb.classes)),
+            ],
+        )
+        for package in kb.packages:
+            add(
+                package.name,
+                package.name,
+                "concept",
+                [
+                    "a Package",
+                    package.description,
+                    "%d modules · %d classes"
+                    % (package.module_count, package.class_count),
+                    "double-click to open",
+                ],
+            )
+            edges.append(
+                {
+                    "from": "cram",
+                    "to": package.name,
+                    "kind": "prop",
+                    "label": "contains",
+                }
+            )
+        for subpackage in kb.subpackages:
+            add(
+                subpackage.name,
+                subpackage.name.split(".", 1)[1],
+                "klass",
+                [
+                    "a SubPackage of " + subpackage.package,
+                    "%d modules · %d classes"
+                    % (subpackage.module_count, subpackage.class_count),
+                    "double-click to open",
+                ],
+            )
+            edges.append(
+                {
+                    "from": subpackage.package,
+                    "to": subpackage.name,
+                    "kind": "prop",
+                    "label": "contains",
+                }
+            )
+        for source, target in kb.package_deps:
+            edges.append(
+                {"from": source, "to": target, "kind": "type", "label": "imports"}
+            )
 
         # ground the demo in the architecture at the SUBPACKAGE that actually
         # realises each part (only wire to a node that exists in this view)
@@ -647,59 +1304,93 @@ def graph_payload():
             if any(n["id"] == dst for n in nodes):
                 edges.append({"from": src, "to": dst, "kind": "type", "label": label})
 
-        # anchor one representative transport (they all share the same stack)
         # anchor one representative manipulation episode (they share the stack)
-        anchor = next((e.name for e in kb.episodes if e.picks), None)
+        anchor = next((episode.name for episode in kb.episodes if episode.picks), None)
         if anchor:
-            link(anchor, "coraplex.plans", "planned by")             # plan / designator layer
+            link(anchor, "coraplex.plans", "planned by")  # plan / designator layer
             link(anchor, "giskardpy.motion_statechart", "motion by")  # motion execution
         # every physical thing in the scene is modelled in the semantic digital twin
         link(rob, "semantic_digital_twin", "modelled in")
-        for o in kb.objects:
-            link(o.name, "semantic_digital_twin", "modelled in")
+        for bench_object in kb.objects:
+            link(bench_object.name, "semantic_digital_twin", "modelled in")
 
     # the executed plan tree (captured from the real PlanNode graph)
-    sc, _ = load_scene()
-    if sc.get("planTrees"):
-        n_nodes = sum(_count_plan(t) for t in sc["planTrees"])
-        add("plan", "executed plan", "goal",
-            ["the plan tree the demo actually executed",
-             "%d nodes" % n_nodes, "double-click to open"])
-        edges.append({"from": "plan", "to": rob, "kind": "prop", "label": "executed by"})
-        for e in kb.episodes:
-            edges.append({"from": "plan", "to": e.name, "kind": "type", "label": "spans"})
+    scene, _ = load_scene()
+    if scene.get("planTrees"):
+        node_count = sum(_count_plan_nodes(tree) for tree in scene["planTrees"])
+        add(
+            "plan",
+            "executed plan",
+            "goal",
+            [
+                "the plan tree the demo actually executed",
+                "%d nodes" % node_count,
+                "double-click to open",
+            ],
+        )
+        edges.append(
+            {"from": "plan", "to": rob, "kind": "prop", "label": "executed by"}
+        )
+        for episode in kb.episodes:
+            edges.append(
+                {"from": "plan", "to": episode.name, "kind": "type", "label": "spans"}
+            )
 
     status = "EQL ready · %d graph nodes · %d joints · %d CRAM classes" % (
-        len(nodes), len(kb.joints), len(kb.classes))
-    return {"ok": True, "status": status, "nodes": nodes, "edges": edges,
-            "details": details, "presets": get_presets()}
+        len(nodes),
+        len(kb.joints),
+        len(kb.classes),
+    )
+    return {
+        "ok": True,
+        "status": status,
+        "nodes": nodes,
+        "edges": edges,
+        "details": details,
+        "presets": get_presets(),
+    }
 
 
-# ---------------------------------------------------- drill-down subgraphs --
+# %% drill-down subgraphs -----------------------------------------------------
 # Double-clicking a node in the UI asks for its inside view: package → its
 # subpackages + top-level classes, subpackage → its classes (with inheritance
 # edges), class → its base classes and every subclass in the repo.
+
+#: at most this many classes are drawn in one drill-down view
 CLASS_CAP = 150
 
 
-def _view():
+def _view() -> tuple:
+    """
+    Fresh (nodes, edges, details, add) accumulators for one subgraph.
+    """
     nodes, edges, details = [], [], {}
 
-    def add(nid, label, group, lines, **extra):
-        node = {"id": nid, "label": label, "group": group,
-                "title": "\n".join([label] + lines)}
+    def add(
+        node_id: str, label: str, group: str, lines: List[str], **extra: Any
+    ) -> None:
+        node = {
+            "id": node_id,
+            "label": label,
+            "group": group,
+            "title": "\n".join([label] + lines),
+        }
         node.update(extra)
         nodes.append(node)
-        details[nid] = {"label": label, "group": group, "lines": lines}
+        details[node_id] = {"label": label, "group": group, "lines": lines}
+
     return nodes, edges, details, add
 
 
-# ------------------------------------------------------- the graph-panel tabs --
-# Each tab of the graph panel is one of these views. "knowledge" is the entity
-# graph (the default, with drill-down); the others are structural views of the
-# same demo that the UI can also overlay with LIVE status from the live_viz
-# bridge (see tools/live_viz.py: /plan and /chart).
-def view_payload(name):
+# %% the graph-panel tabs ---------------------------------------------------------
+def view_payload(name: str) -> Dict[str, Any]:
+    """
+    One tab of the graph panel.
+
+    ``knowledge`` is the entity graph (the default, with drill-down); the others are
+    structural views of the same demo that the UI can overlay with live status from the
+    bridge (see :mod:`cram_viz.live.http`, ``/plan`` and ``/chart``).
+    """
     kb = get_kb()
     if name == "knowledge":
         return graph_payload()
@@ -712,77 +1403,137 @@ def view_payload(name):
     return {"ok": False, "error": "unknown view: %s" % name}
 
 
-def _chart_view(kb):
-    """Motion statecharts only exist while giskardpy executes them: one is
-    compiled per merged motion group and thrown away afterwards, and nothing of
-    it is recorded into the bundle. So this view is live-only — the UI fills it
-    from the bridge's /chart while attached."""
-    return {"ok": True, "crumb": "motion statechart", "nodes": [], "edges": [],
-            "details": {}, "layout": "hier", "live": "chart",
-            "empty": "Motion statecharts are built and ticked at execution time. "
-                     "Start the demo with tools/live_viz.py and press ◉ Live — "
-                     "the statechart of the running motion group appears here, "
-                     "coloured by its node life cycle."}
+def _chart_view(kb: KB) -> Dict[str, Any]:
+    """
+    The (live-only) statechart tab.
+
+    Motion statecharts only exist while giskardpy executes them: one is
+    compiled per merged motion group and thrown away afterwards, and nothing
+    of it is recorded into the bundle — the UI fills this view from the
+    bridge's ``/chart`` while attached.
+    """
+    return {
+        "ok": True,
+        "crumb": "motion statechart",
+        "nodes": [],
+        "edges": [],
+        "details": {},
+        "layout": "hier",
+        "live": "chart",
+        "empty": "Motion statecharts are built and ticked at execution time. "
+        "Start the demo with cram-viz-live and press ◉ Live — "
+        "the statechart of the running motion group appears here, "
+        "coloured by its node life cycle.",
+    }
 
 
-def _class_id(c):
-    return c.module + "." + c.name
+def _class_id(python_class: PythonClass) -> str:
+    """
+    Graph node id of a scanned class (module-qualified).
+    """
+    return python_class.module + "." + python_class.name
 
 
-def _class_lines(c, drill_hint=True):
-    lines = ["a PythonClass", "package: " + c.package, "module: " + c.module,
-             "methods: %d" % c.methods]
-    if c.bases:
-        lines.append("bases: " + ", ".join(c.bases))
-    if c.doc:
-        lines.append(c.doc)
+def _class_lines(python_class: PythonClass, drill_hint: bool = True) -> List[str]:
+    """
+    Detail lines shown for a class node.
+    """
+    lines = [
+        "a PythonClass",
+        "package: " + python_class.package,
+        "module: " + python_class.module,
+        "methods: %d" % python_class.methods,
+    ]
+    if python_class.bases:
+        lines.append("bases: " + ", ".join(python_class.bases))
+    if python_class.doc:
+        lines.append(python_class.doc)
     if drill_hint:
         lines.append("double-click: inheritance view")
     return lines
 
 
-def _add_classes(add, edges, parent_id, shown, total):
-    name_to_id = {}
-    for c in shown:
-        cid = _class_id(c)
-        add(cid, c.name, "pyclass", _class_lines(c))
-        edges.append({"from": parent_id, "to": cid, "kind": "prop", "label": "defines"})
-        name_to_id.setdefault(c.name, cid)
-    # inheritance edges among the classes on screen
-    for c in shown:
-        for b in c.bases:
-            if b in name_to_id and name_to_id[b] != _class_id(c):
-                edges.append({"from": _class_id(c), "to": name_to_id[b], "kind": "type", "label": "inherits"})
+def _add_classes(
+    add: Any,
+    edges: List[Dict[str, Any]],
+    parent_id: str,
+    shown: List[PythonClass],
+    total: int,
+) -> List[str]:
+    """
+    Add class nodes plus their on-screen inheritance edges to a view.
+
+    :return: Extra detail lines for the parent (a truncation notice, if any).
+    """
+    name_to_id: Dict[str, str] = {}
+    for python_class in shown:
+        class_id = _class_id(python_class)
+        add(class_id, python_class.name, "pyclass", _class_lines(python_class))
+        edges.append(
+            {"from": parent_id, "to": class_id, "kind": "prop", "label": "defines"}
+        )
+        name_to_id.setdefault(python_class.name, class_id)
+    for python_class in shown:
+        for base in python_class.bases:
+            if base in name_to_id and name_to_id[base] != _class_id(python_class):
+                edges.append(
+                    {
+                        "from": _class_id(python_class),
+                        "to": name_to_id[base],
+                        "kind": "type",
+                        "label": "inherits",
+                    }
+                )
     if total > len(shown):
-        return ["showing the %d largest of %d classes (by method count)" % (len(shown), total)]
+        return [
+            "showing the %d largest of %d classes (by method count)"
+            % (len(shown), total)
+        ]
     return []
 
 
-def _count_plan(t):
-    return 1 + sum(_count_plan(c) for c in t.get("children", []))
+def _count_plan_nodes(tree: Dict[str, Any]) -> int:
+    """
+    Number of nodes in a serialized plan tree.
+    """
+    return 1 + sum(_count_plan_nodes(child) for child in tree.get("children", []))
 
 
-def expand_node(node_id):
+def expand_node(node_id: str) -> Optional[Dict[str, Any]]:
+    """
+    The inside view of a double-clicked node, or None if not drillable.
+    """
     kb = get_kb()
-    if node_id == kb.robot.name:                      # robot → full URDF kinematic tree
+    if node_id == kb.robot.name:  # robot → full URDF kinematic tree
         return _urdf_view(kb)
-    if node_id == "plan":                             # → the executed plan tree
+    if node_id == "plan":  # → the executed plan tree
         return _plan_view(kb)
-    pkg = next((p for p in kb.packages if p.name == node_id), None)
-    if pkg:
-        return _package_view(kb, pkg)
-    sub = next((s for s in kb.subpackages if s.name == node_id), None)
-    if sub:
-        return _subpackage_view(kb, sub)
-    cls = next((c for c in kb.classes if _class_id(c) == node_id), None)
-    if cls:
-        return _class_view(kb, cls)
+    package = next((entry for entry in kb.packages if entry.name == node_id), None)
+    if package:
+        return _package_view(kb, package)
+    subpackage = next(
+        (entry for entry in kb.subpackages if entry.name == node_id), None
+    )
+    if subpackage:
+        return _subpackage_view(kb, subpackage)
+    python_class = next(
+        (entry for entry in kb.classes if _class_id(entry) == node_id), None
+    )
+    if python_class:
+        return _class_view(kb, python_class)
     return None
 
 
-PLAN_GROUPS = {"ActionNode": "event", "MotionNode": "robot", "ConditionNode": "goal",
-               "AttachmentNode": "object", "DetachmentNode": "object"}
+#: plan-node kind → node colour group of the graph panel
+PLAN_GROUPS = {
+    "ActionNode": "event",
+    "MotionNode": "robot",
+    "ConditionNode": "goal",
+    "AttachmentNode": "object",
+    "DetachmentNode": "object",
+}
 
+#: legend rows of the plan view
 PLAN_LEGEND = [
     {"group": "event", "label": "Action"},
     {"group": "robot", "label": "Motion"},
@@ -792,95 +1543,131 @@ PLAN_LEGEND = [
 ]
 
 
-def _plan_view(kb):
-    """The executed plan as a tree: one node per PlanNode the demo ran, with
-    the designator class, status, arm and target object in the details.
+def _plan_view(kb: KB) -> Dict[str, Any]:
+    """
+    The executed plan as a tree, one node per plan node the demo ran.
 
-    The recorded statuses are thin on purpose: coraplex performs only the plan
-    ROOT (Plan.perform -> root.perform), while ActionNode.notify merely expands
-    its children into the merged motion statechart. So every inner node of a
-    recorded tree reads CREATED, and real per-step progress only shows up while
-    the live bridge is attached (it derives it from the statechart life cycle)."""
-    sc, _ = load_scene()
-    trees = sc.get("planTrees") or []
+    The recorded statuses are thin on purpose: coraplex performs only the
+    plan *root* (``Plan.perform`` → ``root.perform``), while
+    ``ActionNode.notify`` merely expands its children into the merged motion
+    statechart. So every inner node of a recorded tree reads ``CREATED``, and
+    real per-step progress only shows up while the live bridge is attached
+    (it derives it from the statechart life cycle).
+    """
+    scene, _ = load_scene()
+    trees = scene.get("planTrees") or []
     nodes, edges, details, add = _view()
     counter = [0]
 
-    def walk(t, parent):
-        nid = "pn%d" % counter[0]
+    def walk(tree: Dict[str, Any], parent: Optional[str]) -> None:
+        node_id = "pn%d" % counter[0]
         counter[0] += 1
-        status = t.get("status") or "CREATED"
-        lines = ["a " + t.get("kind", "PlanNode"), "status: " + status]
-        if t.get("arm"):
-            lines.append("arm: " + t["arm"])
-        if t.get("target"):
-            lines.append("target: " + t["target"])
-        label = t.get("label", "?").replace("Action", "")
-        add(nid, label, PLAN_GROUPS.get(t.get("kind"), "ind"), lines, status=status)
+        status = tree.get("status") or "CREATED"
+        lines = ["a " + tree.get("kind", "PlanNode"), "status: " + status]
+        if tree.get("arm"):
+            lines.append("arm: " + tree["arm"])
+        if tree.get("target"):
+            lines.append("target: " + tree["target"])
+        label = tree.get("label", "?").replace("Action", "")
+        add(
+            node_id,
+            label,
+            PLAN_GROUPS.get(tree.get("kind"), "ind"),
+            lines,
+            status=status,
+        )
         if parent:
-            edges.append({"from": parent, "to": nid, "kind": "prop", "label": "has step"})
-        for c in t.get("children", []):
-            walk(c, nid)
+            edges.append(
+                {"from": parent, "to": node_id, "kind": "prop", "label": "has step"}
+            )
+        for child in tree.get("children", []):
+            walk(child, node_id)
 
-    for t in trees:
-        walk(t, None)
-    return {"ok": True, "crumb": "executed plan", "nodes": nodes, "edges": edges,
-            "details": details, "legend": PLAN_LEGEND, "layout": "hier",
-            "live": "plan", "statusLegend": True,
-            "empty": "No plan tree in this bundle — re-run tools/onboard_demo.py."}
+    for tree in trees:
+        walk(tree, None)
+    return {
+        "ok": True,
+        "crumb": "executed plan",
+        "nodes": nodes,
+        "edges": edges,
+        "details": details,
+        "legend": PLAN_LEGEND,
+        "layout": "hier",
+        "live": "plan",
+        "statusLegend": True,
+        "empty": "No plan tree in this bundle — re-run cram-viz-onboard.",
+    }
 
 
-def _urdf_view(kb):
-    """The scene robot's URDF as a kinematic tree: every link a node, every
-    joint an edge (parent → child). Movable joints are solid edges, fixed ones
-    dashed; links are coloured by robot part (from the recorded annotation)."""
+def _urdf_view(kb: KB) -> Dict[str, Any]:
+    """
+    The scene robot's URDF as a kinematic tree.
+
+    Every link is a node, every joint an edge (parent → child); movable joints are solid
+    edges, fixed ones dashed. Links are coloured by robot part from the recorded
+    annotation.
+    """
     links, joints = load_urdf()
     nodes, edges, details, add = _view()
     if not links:
-        return {"ok": True, "crumb": kb.robot.name + " · URDF (not found)", "nodes": [], "edges": [], "details": {}}
+        return {
+            "ok": True,
+            "crumb": kb.robot.name + " · URDF (not found)",
+            "nodes": [],
+            "edges": [],
+            "details": {},
+        }
 
-    # link -> part from the scene's recorded robot annotation
-    sc, _ = load_scene()
-    parts = (sc.get("robot") or {}).get("parts") or {}
-    link_part = {}
-    for p, ls in parts.items():
-        for l in ls:
-            link_part[l] = p
+    scene, _ = load_scene()
+    parts = (scene.get("robot") or {}).get("parts") or {}
+    link_to_part = {
+        link: part for part, part_links in parts.items() for link in part_links
+    }
 
-    def chain_group(name):
-        p = link_part.get(name, "")
-        pl = p.lower()
-        if "gripper" in pl or "hand" in pl or "effector" in pl:
-            return "object"                            # grippers (teal)
-        if "left" in pl:
-            return "robot"                             # left arm (pink)
-        if "right" in pl:
-            return "event"                             # right arm (purple)
-        n = name.lower()
-        if "head" in n or "stereo" in n or "sensor" in n or "kinect" in n or "camera" in n or "laser" in n:
-            return "goal"                              # head / sensors (amber)
-        return "concept"                               # base, torso, casters (green)
+    def chain_group(link_name: str) -> str:
+        part = link_to_part.get(link_name, "").lower()
+        if "gripper" in part or "hand" in part or "effector" in part:
+            return "object"  # grippers (teal)
+        if "left" in part:
+            return "robot"  # left arm (pink)
+        if "right" in part:
+            return "event"  # right arm (purple)
+        lowered = link_name.lower()
+        if any(
+            keyword in lowered
+            for keyword in ("head", "stereo", "sensor", "kinect", "camera", "laser")
+        ):
+            return "goal"  # head / sensors (amber)
+        return "concept"  # base, torso, casters (green)
 
     # which joint drives each link (child link → its parent joint), for tooltips
-    parent_joint = {j["child"]: j for j in joints}
-    for ln in links:
-        pj = parent_joint.get(ln)
+    parent_joint = {joint["child"]: joint for joint in joints}
+    for link in links:
+        joint = parent_joint.get(link)
         lines = ["a URDF Link"]
-        if pj:
-            lines.append("joint: %s (%s)" % (pj["name"], pj["type"]))
-            lines.append("parent link: " + pj["parent"])
+        if joint:
+            lines.append("joint: %s (%s)" % (joint["name"], joint["type"]))
+            lines.append("parent link: " + joint["parent"])
         else:
             lines.append("root link")
-        add("urdf:" + ln, ln, chain_group(ln), lines)
-    for j in joints:
-        if ("urdf:" + j["parent"]) in details and ("urdf:" + j["child"]) in details:
-            movable = j["type"] not in ("fixed",)
-            edges.append({"from": "urdf:" + j["parent"], "to": "urdf:" + j["child"],
-                          "kind": "prop" if movable else "type",
-                          "label": "%s (%s)" % (j["name"], j["type"])})
-    revolute = sum(1 for j in joints if j["type"] == "revolute")
+        add("urdf:" + link, link, chain_group(link), lines)
+    for joint in joints:
+        if ("urdf:" + joint["parent"]) in details and (
+            "urdf:" + joint["child"]
+        ) in details:
+            movable = joint["type"] not in ("fixed",)
+            edges.append(
+                {
+                    "from": "urdf:" + joint["parent"],
+                    "to": "urdf:" + joint["child"],
+                    "kind": "prop" if movable else "type",
+                    "label": "%s (%s)" % (joint["name"], joint["type"]),
+                }
+            )
+    revolute_count = sum(1 for joint in joints if joint["type"] == "revolute")
     details["urdf:" + links[0]]["lines"].append(
-        "%d links · %d joints (%d movable)" % (len(links), len(joints), revolute))
+        "%d links · %d joints (%d movable)" % (len(links), len(joints), revolute_count)
+    )
     legend = [
         {"group": "concept", "label": "Base / torso"},
         {"group": "robot", "label": "Left arm"},
@@ -890,120 +1677,244 @@ def _urdf_view(kb):
     ]
     # force-directed, not hierarchical: the chains read better when the arms and
     # the sensor head spread out around the base than as one wide LR tree
-    return {"ok": True, "crumb": kb.robot.name + " · URDF", "nodes": nodes, "edges": edges,
-            "details": details, "legend": legend}
+    return {
+        "ok": True,
+        "crumb": kb.robot.name + " · URDF",
+        "nodes": nodes,
+        "edges": edges,
+        "details": details,
+        "legend": legend,
+    }
 
 
-def _package_view(kb, pkg):
+def _package_view(kb: KB, package: Package) -> Dict[str, Any]:
+    """
+    Inside view of a package: its subpackages and top-level classes.
+    """
     nodes, edges, details, add = _view()
-    subs = [s for s in kb.subpackages if s.package == pkg.name]
-    top = sorted((c for c in kb.classes if c.package == pkg.name and c.subpackage == pkg.name),
-                 key=lambda c: -c.methods)
-    shown = top[:CLASS_CAP]
-    note = []
-    add(pkg.name, pkg.name, "concept",
-        ["a Package", pkg.description,
-         "%d modules · %d classes" % (pkg.module_count, pkg.class_count)] + note)
-    for s in subs:
-        add(s.name, s.name.split(".", 1)[1], "klass",
-            ["a SubPackage of " + s.package,
-             "%d modules · %d classes" % (s.module_count, s.class_count),
-             "double-click to open"])
-        edges.append({"from": pkg.name, "to": s.name, "kind": "prop", "label": "contains"})
-    note = _add_classes(add, edges, pkg.name, shown, len(top))
+    subpackages = [entry for entry in kb.subpackages if entry.package == package.name]
+    top_level = sorted(
+        (
+            entry
+            for entry in kb.classes
+            if entry.package == package.name and entry.subpackage == package.name
+        ),
+        key=lambda entry: -entry.methods,
+    )
+    add(
+        package.name,
+        package.name,
+        "concept",
+        [
+            "a Package",
+            package.description,
+            "%d modules · %d classes" % (package.module_count, package.class_count),
+        ],
+    )
+    for subpackage in subpackages:
+        add(
+            subpackage.name,
+            subpackage.name.split(".", 1)[1],
+            "klass",
+            [
+                "a SubPackage of " + subpackage.package,
+                "%d modules · %d classes"
+                % (subpackage.module_count, subpackage.class_count),
+                "double-click to open",
+            ],
+        )
+        edges.append(
+            {
+                "from": package.name,
+                "to": subpackage.name,
+                "kind": "prop",
+                "label": "contains",
+            }
+        )
+    note = _add_classes(add, edges, package.name, top_level[:CLASS_CAP], len(top_level))
     if note:
-        details[pkg.name]["lines"] += note
-    return {"ok": True, "crumb": pkg.name, "nodes": nodes, "edges": edges, "details": details}
+        details[package.name]["lines"] += note
+    return {
+        "ok": True,
+        "crumb": package.name,
+        "nodes": nodes,
+        "edges": edges,
+        "details": details,
+    }
 
 
-def _subpackage_view(kb, sub):
+def _subpackage_view(kb: KB, subpackage: SubPackage) -> Dict[str, Any]:
+    """
+    Inside view of a subpackage: its classes with inheritance edges.
+    """
     nodes, edges, details, add = _view()
-    cls = sorted((c for c in kb.classes if c.subpackage == sub.name), key=lambda c: -c.methods)
-    shown = cls[:CLASS_CAP]
-    add(sub.name, sub.name.split(".", 1)[1], "klass",
-        ["a SubPackage of " + sub.package,
-         "%d modules · %d classes" % (sub.module_count, sub.class_count)])
-    note = _add_classes(add, edges, sub.name, shown, len(cls))
+    classes = sorted(
+        (entry for entry in kb.classes if entry.subpackage == subpackage.name),
+        key=lambda entry: -entry.methods,
+    )
+    add(
+        subpackage.name,
+        subpackage.name.split(".", 1)[1],
+        "klass",
+        [
+            "a SubPackage of " + subpackage.package,
+            "%d modules · %d classes"
+            % (subpackage.module_count, subpackage.class_count),
+        ],
+    )
+    note = _add_classes(add, edges, subpackage.name, classes[:CLASS_CAP], len(classes))
     if note:
-        details[sub.name]["lines"] += note
-    return {"ok": True, "crumb": sub.name.split(".", 1)[1], "nodes": nodes, "edges": edges, "details": details}
+        details[subpackage.name]["lines"] += note
+    return {
+        "ok": True,
+        "crumb": subpackage.name.split(".", 1)[1],
+        "nodes": nodes,
+        "edges": edges,
+        "details": details,
+    }
 
 
-def _class_view(kb, cls):
+#: at most this many subclasses are drawn in a class inheritance view
+SUBCLASS_CAP = 80
+
+
+def _class_view(kb: KB, python_class: PythonClass) -> Dict[str, Any]:
+    """
+    Inheritance view of one class: bases above, repo subclasses below.
+    """
     nodes, edges, details, add = _view()
-    cid = _class_id(cls)
-    add(cid, cls.name, "pyclass", _class_lines(cls, drill_hint=False))
+    class_id = _class_id(python_class)
+    add(
+        class_id,
+        python_class.name,
+        "pyclass",
+        _class_lines(python_class, drill_hint=False),
+    )
     # direct base classes: resolve inside the repo (same package preferred),
     # otherwise show them as external
-    for b in cls.bases:
-        cands = [c for c in kb.classes if c.name == b]
-        pick = next((c for c in cands if c.package == cls.package), cands[0] if cands else None)
+    for base in python_class.bases:
+        candidates = [entry for entry in kb.classes if entry.name == base]
+        pick = next(
+            (entry for entry in candidates if entry.package == python_class.package),
+            candidates[0] if candidates else None,
+        )
         if pick:
-            bid = _class_id(pick)
-            if bid not in details:
-                add(bid, pick.name, "pyclass", _class_lines(pick))
+            base_id = _class_id(pick)
+            if base_id not in details:
+                add(base_id, pick.name, "pyclass", _class_lines(pick))
         else:
-            bid = "ext:" + b
-            if bid not in details:
-                add(bid, b, "upper", ["external base class (outside the repo)"])
-        edges.append({"from": cid, "to": bid, "kind": "type", "label": "inherits"})
+            base_id = "ext:" + base
+            if base_id not in details:
+                add(base_id, base, "upper", ["external base class (outside the repo)"])
+        edges.append(
+            {"from": class_id, "to": base_id, "kind": "type", "label": "inherits"}
+        )
     # every subclass in the repo (matched by base name)
-    subs = [c for c in kb.classes if cls.name in c.bases and _class_id(c) != cid]
-    for c in subs[:80]:
-        scid = _class_id(c)
-        if scid not in details:
-            add(scid, c.name, "pyclass", _class_lines(c))
-        edges.append({"from": scid, "to": cid, "kind": "type", "label": "inherits"})
-    if len(subs) > 80:
-        details[cid]["lines"].append("showing 80 of %d subclasses" % len(subs))
-    return {"ok": True, "crumb": cls.name, "nodes": nodes, "edges": edges, "details": details}
+    subclasses = [
+        entry
+        for entry in kb.classes
+        if python_class.name in entry.bases and _class_id(entry) != class_id
+    ]
+    for subclass in subclasses[:SUBCLASS_CAP]:
+        subclass_id = _class_id(subclass)
+        if subclass_id not in details:
+            add(subclass_id, subclass.name, "pyclass", _class_lines(subclass))
+        edges.append(
+            {"from": subclass_id, "to": class_id, "kind": "type", "label": "inherits"}
+        )
+    if len(subclasses) > SUBCLASS_CAP:
+        details[class_id]["lines"].append(
+            "showing %d of %d subclasses" % (SUBCLASS_CAP, len(subclasses))
+        )
+    return {
+        "ok": True,
+        "crumb": python_class.name,
+        "nodes": nodes,
+        "edges": edges,
+        "details": details,
+    }
 
 
+#: static presets for the architecture side of the graph
 ARCH_PRESETS = [
-    {"text": "CRAM packages by size",
-     "code": "set_of(pkg.name, pkg.class_count).ordered_by(pkg.class_count, descending=True)"},
-    {"text": "all Designator classes",
-     "code": "an(entity(cls).where(cls.name.endswith('Designator')))"},
-    {"text": "where does EQL live?",
-     "code": "set_of(cls.name, cls.module).where(in_('entity_query_language', cls.module)).limit(15)"},
-    {"text": "subclasses of Symbol",
-     "code": "an(entity(cls).where(in_('Symbol', cls.bases)))"},
-    {"text": "inside coraplex",
-     "code": "an(entity(sub).where(sub.package == 'coraplex'))"},
+    {
+        "text": "CRAM packages by size",
+        "code": "set_of(pkg.name, pkg.class_count).ordered_by(pkg.class_count, descending=True)",
+    },
+    {
+        "text": "all Designator classes",
+        "code": "an(entity(cls).where(cls.name.endswith('Designator')))",
+    },
+    {
+        "text": "where does EQL live?",
+        "code": "set_of(cls.name, cls.module).where(in_('entity_query_language', cls.module)).limit(15)",
+    },
+    {
+        "text": "subclasses of Symbol",
+        "code": "an(entity(cls).where(in_('Symbol', cls.bases)))",
+    },
+    {
+        "text": "inside coraplex",
+        "code": "an(entity(sub).where(sub.package == 'coraplex'))",
+    },
 ]
 
 
-def get_presets():
-    """Scene presets are generated from the loaded scene, so they stay valid
-    for any onboarded robot/environment; the architecture presets are static."""
+def get_presets() -> List[Dict[str, str]]:
+    """
+    Ready-made queries for the EQL panel.
+
+    Scene presets are generated from the loaded scene, so they stay valid for any
+    onboarded robot/environment; the architecture presets are static.
+    """
     kb = get_kb()
-    p = [
+    presets = [
         {"text": "which robot is this?", "code": "the(entity(rob))"},
         {"text": "which arms does it have?", "code": "an(entity(arm))"},
         {"text": "each arm and its gripper", "code": "set_of(arm.side, arm.gripper)"},
         {"text": "what is in the scene?", "code": "an(entity(obj))"},
-        {"text": "what gets moved?", "code": "an(entity(ep.picks).where(ep.picks != None))"},
+        {
+            "text": "what gets moved?",
+            "code": "an(entity(ep.picks).where(ep.picks != None))",
+        },
     ]
-    first_obj = next((o for o in kb.objects if o.kind == "object"), None)
-    if first_obj:
-        p.append({"text": "the %s" % first_obj.label.lower(),
-                  "code": "the(entity(obj).where(obj.name == '%s'))" % first_obj.name})
-    manip = next((e for e in kb.episodes if e.picks), None)
-    if manip:
-        if manip.places_at:
-            p.append({"text": "where does it place them?",
-                      "code": "the(entity(ep.places_at).where(ep.name == '%s'))" % manip.name})
-        if manip.performed_by:
-            p.append({"text": "which arm does '%s'?" % manip.name,
-                      "code": "the(entity(ep.performed_by).where(ep.name == '%s'))" % manip.name})
-    return p + ARCH_PRESETS
+    first_object = next((entry for entry in kb.objects if entry.kind == "object"), None)
+    if first_object:
+        presets.append(
+            {
+                "text": "the %s" % first_object.label.lower(),
+                "code": "the(entity(obj).where(obj.name == '%s'))" % first_object.name,
+            }
+        )
+    manipulation = next((episode for episode in kb.episodes if episode.picks), None)
+    if manipulation:
+        if manipulation.places_at:
+            presets.append(
+                {
+                    "text": "where does it place them?",
+                    "code": "the(entity(ep.places_at).where(ep.name == '%s'))"
+                    % manipulation.name,
+                }
+            )
+        if manipulation.performed_by:
+            presets.append(
+                {
+                    "text": "which arm does '%s'?" % manipulation.name,
+                    "code": "the(entity(ep.performed_by).where(ep.name == '%s'))"
+                    % manipulation.name,
+                }
+            )
+    return presets + ARCH_PRESETS
 
 
 if __name__ == "__main__":
-    # smoke test: run every preset
-    for p in get_presets():
+    # smoke test: run every preset against the active scene
+    logging.basicConfig(level=logging.INFO)
+    for preset in get_presets():
         try:
-            r = run_query(p["code"])
-            print("OK   %-32s -> %d rows  %s" % (p["text"], r["count"], str(r["rows"][:2])[:150]))
-        except Exception as ex:
-            print("FAIL %-32s -> %s: %s" % (p["text"], type(ex).__name__, ex))
+            result = run_query(preset["code"])
+            logging.info("OK   %-32s -> %d rows", preset["text"], result["count"])
+        except Exception as error:
+            logging.error(
+                "FAIL %-32s -> %s: %s", preset["text"], type(error).__name__, error
+            )

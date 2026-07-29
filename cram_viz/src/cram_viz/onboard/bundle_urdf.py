@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""bundle_urdf.py — make a URDF (or xacro) self-contained for the web viewer.
+"""
+bundle_urdf.py — make a URDF (or xacro) self-contained for the web viewer.
 
 Resolves every mesh reference (package://, file://, absolute or relative),
 copies the meshes plus their side assets (textures for .dae, .mtl + textures
@@ -14,8 +15,10 @@ Standalone use:
 It is also imported by tools/onboard_demo.py, which feeds it the exact
 uri->path resolutions recorded while the demo ran.
 """
+
 import argparse
 import glob
+import logging
 import os
 import re
 import shutil
@@ -38,15 +41,20 @@ def _search_root_candidates():
 
 
 def resolve_uri(uri, hints=None, base_dir=None):
-    """Resolve a mesh/urdf reference to an absolute file path (or None)."""
+    """
+    Resolve a mesh/urdf reference to an absolute file path (or None).
+    """
     if hints and uri in hints:
         return hints[uri]
     if uri.startswith("package://"):
-        rest = uri[len("package://"):]
+        rest = uri[len("package://") :]
         pkg, _, rel = rest.partition("/")
         # 1. the CRAM stack's own resolver (ament index), if importable
         try:
-            from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
+            from semantic_digital_twin.adapters.package_resolver import (
+                PackageUriResolver,
+            )
+
             p = PackageUriResolver().resolve(uri)
             if os.path.isfile(p):
                 return p
@@ -55,6 +63,7 @@ def resolve_uri(uri, hints=None, base_dir=None):
         # 2. ament index directly
         try:
             from ament_index_python.packages import get_package_share_directory
+
             p = os.path.join(get_package_share_directory(pkg), rel)
             if os.path.isfile(p):
                 return p
@@ -62,14 +71,16 @@ def resolve_uri(uri, hints=None, base_dir=None):
             pass
         # 3. filesystem heuristics over common workspace layouts
         for root in _search_root_candidates():
-            for cand in (os.path.join(root, pkg, "share", pkg, rel),
-                         os.path.join(root, "share", pkg, rel),
-                         os.path.join(root, pkg, rel)):
+            for cand in (
+                os.path.join(root, pkg, "share", pkg, rel),
+                os.path.join(root, "share", pkg, rel),
+                os.path.join(root, pkg, rel),
+            ):
                 if os.path.isfile(cand):
                     return cand
         return None
     if uri.startswith("file://"):
-        p = uri[len("file://"):]
+        p = uri[len("file://") :]
         return p if os.path.isfile(p) else None
     if os.path.isabs(uri):
         return uri if os.path.isfile(uri) else None
@@ -80,12 +91,14 @@ def resolve_uri(uri, hints=None, base_dir=None):
 
 
 def _ref_to_relpath(uri):
-    """Where a reference lands inside <out>/meshes/."""
+    """
+    Where a reference lands inside <out>/meshes/.
+    """
     if uri.startswith("package://"):
-        rest = uri[len("package://"):]
+        rest = uri[len("package://") :]
         pkg, _, rel = rest.partition("/")
         return os.path.join(pkg, rel)
-    name = uri[len("file://"):] if uri.startswith("file://") else uri
+    name = uri[len("file://") :] if uri.startswith("file://") else uri
     return os.path.join("_local", os.path.basename(name))
 
 
@@ -103,7 +116,9 @@ def _copy_file(src, dst, copied, missing):
 
 
 def _copy_side_assets(src_mesh, dst_mesh, copied, missing):
-    """Textures referenced by a .dae, or .mtl + its textures for a .obj."""
+    """
+    Textures referenced by a .dae, or .mtl + its textures for a .obj.
+    """
     d_src, d_dst = os.path.dirname(src_mesh), os.path.dirname(dst_mesh)
     ext = src_mesh.lower().rsplit(".", 1)[-1]
     try:
@@ -132,7 +147,9 @@ def _copy_side_assets(src_mesh, dst_mesh, copied, missing):
 
 # ---------------------------------------------------------------- xacro -----
 def xacro_to_urdf_text(path):
-    """Run the xacro CLI (needs a sourced ROS environment on PATH)."""
+    """
+    Run the xacro CLI (needs a sourced ROS environment on PATH).
+    """
     out = subprocess.run(["xacro", path], capture_output=True, text=True)
     if out.returncode != 0:
         raise RuntimeError("xacro failed for %s:\n%s" % (path, out.stderr[-2000:]))
@@ -141,10 +158,16 @@ def xacro_to_urdf_text(path):
 
 # ------------------------------------------------------------------ main ----
 def bundle_urdf(source, name, out_dir, hints=None):
-    """Bundle one URDF/xacro. Returns a report dict."""
+    """
+    Bundle one URDF/xacro.
+
+    Returns a report dict.
+    """
     src_path = resolve_uri(source, hints=hints) or source
     if not os.path.isfile(src_path):
-        raise FileNotFoundError("URDF source not found: %s (from %s)" % (src_path, source))
+        raise FileNotFoundError(
+            "URDF source not found: %s (from %s)" % (src_path, source)
+        )
     if src_path.endswith(".xacro"):
         txt = xacro_to_urdf_text(src_path)
     else:
@@ -155,7 +178,7 @@ def bundle_urdf(source, name, out_dir, hints=None):
     copied, missing, rewritten = {}, [], 0
     for ref in sorted(set(re.findall(r'filename="([^"]+)"', txt))):
         if not ref.lower().endswith(MESH_EXTS):
-            continue                                    # plugins (.so) etc.
+            continue  # plugins (.so) etc.
         src = resolve_uri(ref, hints=hints, base_dir=base_dir)
         rel = _ref_to_relpath(ref)
         dst = os.path.join(out_dir, "meshes", rel)
@@ -170,28 +193,43 @@ def bundle_urdf(source, name, out_dir, hints=None):
     joints = re.findall(r'<joint\s+name="([^"]+)"\s+type="([^"]+)"', txt)
     exts = sorted({os.path.splitext(p)[1].lower() for p in copied})
     return {
-        "name": name, "urdf": urdf_out, "source": src_path,
-        "links": links, "joints": [j[0] for j in joints],
+        "name": name,
+        "urdf": urdf_out,
+        "source": src_path,
+        "links": links,
+        "joints": [j[0] for j in joints],
         "movable_joints": [j[0] for j in joints if j[1] not in ("fixed",)],
-        "meshes_copied": len(copied), "mesh_exts": exts,
-        "refs_rewritten": rewritten, "missing": missing,
+        "meshes_copied": len(copied),
+        "mesh_exts": exts,
+        "refs_rewritten": rewritten,
+        "missing": missing,
     }
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     ap.add_argument("source", help="URDF/xacro path or package:// URI")
     ap.add_argument("--name", help="output model name (default: source basename)")
     ap.add_argument("--out", default="static/sim", help="output directory")
     a = ap.parse_args()
     name = a.name or os.path.splitext(os.path.basename(a.source))[0]
     rep = bundle_urdf(a.source, name, a.out)
-    print("wrote %s  (%d links, %d joints, %d meshes %s)" %
-          (rep["urdf"], len(rep["links"]), len(rep["joints"]), rep["meshes_copied"], rep["mesh_exts"]))
+    logging.info(
+        "wrote %s  (%d links, %d joints, %d meshes %s)"
+        % (
+            rep["urdf"],
+            len(rep["links"]),
+            len(rep["joints"]),
+            rep["meshes_copied"],
+            rep["mesh_exts"],
+        )
+    )
     if rep["missing"]:
-        print("MISSING %d assets:" % len(rep["missing"]))
+        logging.warning("MISSING %d assets:" % len(rep["missing"]))
         for m in rep["missing"][:20]:
-            print("  ", m)
+            logging.warning("   %s", m)
         sys.exit(2)
 
 

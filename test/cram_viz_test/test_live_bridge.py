@@ -1,11 +1,12 @@
-"""Unit tests for the live bridge's plan/statechart serializers.
+"""
+Unit tests for the live bridge's plan/statechart serializers.
 
-The Bridge runs against stub plan nodes and stub statecharts — no coraplex or
-giskardpy needed — because the serializers only touch duck-typed attributes
-(children, status.name, designator, life_cycle_state, rx_graph, …). What IS
-covered is the interesting logic: bottom-up status aggregation in the plan
-tree, freeze semantics when a motion group finishes, and structure signatures
-that let the frontend distinguish "re-colour only" from "rebuild".
+The Bridge runs against stub plan nodes and stub statecharts — no coraplex or giskardpy
+needed — because the serializers only touch duck-typed attributes (children,
+status.name, designator, life_cycle_state, rx_graph, …). What IS covered is the
+interesting logic: bottom-up status aggregation in the plan tree, freeze semantics when
+a motion group finishes, and structure signatures that let the frontend distinguish "re-
+colour only" from "rebuild".
 """
 
 import types
@@ -21,11 +22,15 @@ class _Status:
 
 
 def make_node(kind, status="CREATED", designator=None, children=()):
+    """
+    A stub mimicking the plan-node interface the bridge serializes.
+    """
     cls = type(kind, (object,), {})
     node = cls()
     node.status = _Status(status)
     node.designator = designator
     node.children = list(children)
+    node.parent_action_node = None
     return node
 
 
@@ -44,12 +49,15 @@ class _Task:
 
 @pytest.fixture()
 def plan_bridge():
-    """A bridge bound to a small plan: root -> action -> [condition, motion]."""
+    """
+    A bridge bound to a small plan: root -> action -> [condition, motion].
+    """
     bridge = Bridge()
     motion = make_node("MotionNode", designator=_Designator(target="milk.stl"))
     condition = make_node("ConditionNode")
-    action = make_node("ActionNode", designator=_Designator(arm="LEFT"),
-                       children=[condition, motion])
+    action = make_node(
+        "ActionNode", designator=_Designator(arm="LEFT"), children=[condition, motion]
+    )
     root = make_node("SequentialNode", status="SUCCEEDED", children=[action])
     bridge._bodies = {"milk.stl": object(), "__base__": object()}
     bridge._plan = types.SimpleNamespace(root=root)
@@ -63,7 +71,7 @@ def by_kind(bridge):
 class TestPlanSnapshot:
     def test_running_task_bubbles_up(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
-        bridge._motion_tasks[id(motion)] = _Task(1)          # RUNNING
+        bridge._motion_tasks[id(motion)] = _Task(1)  # RUNNING
         bridge.snapshot_plan()
         nodes = by_kind(bridge)
         assert nodes["MotionNode"]["status"] == "RUNNING"
@@ -85,7 +93,7 @@ class TestPlanSnapshot:
 
     def test_partially_done_parent_is_running_not_succeeded(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
-        bridge._frozen[id(motion)] = "SUCCEEDED"             # condition still CREATED
+        bridge._frozen[id(motion)] = "SUCCEEDED"  # condition still CREATED
         bridge.snapshot_plan()
         assert by_kind(bridge)["ActionNode"]["status"] == "RUNNING"
 
@@ -119,7 +127,9 @@ class TestFreezeSemantics:
         bridge, root, action, condition, motion = plan_bridge
         executable = types.SimpleNamespace(
             motion_mappings={motion: _Task(1)},
-            pre_condition_node=condition, post_condition_node=None)
+            pre_condition_node=condition,
+            post_condition_node=None,
+        )
         bridge.bind_motion_group(executable)
         assert id(motion) in bridge._motion_tasks
         bridge.freeze_motion_group(executable, "SUCCEEDED")
@@ -157,10 +167,14 @@ class _RxGraph:
 
 def make_chart(life=(1, 1, 0), obs=(0.5, 0.5, 0.0)):
     chart = types.SimpleNamespace()
-    chart.nodes = [_SNode(0, "Goal"), _SNode(1, "MoveJoints", 0),
-                   _SNode(2, "JointGoalReached")]
-    chart.rx_graph = _RxGraph(chart.nodes, [(0, 1, _Transition("START")),
-                                            (1, 2, _Transition("END"))])
+    chart.nodes = [
+        _SNode(0, "Goal"),
+        _SNode(1, "MoveJoints", 0),
+        _SNode(2, "JointGoalReached"),
+    ]
+    chart.rx_graph = _RxGraph(
+        chart.nodes, [(0, 1, _Transition("START")), (1, 2, _Transition("END"))]
+    )
     chart.life_cycle_state = types.SimpleNamespace(data=list(life))
     chart.observation_state = types.SimpleNamespace(data=list(obs))
     return chart
@@ -173,11 +187,17 @@ class TestChartSnapshot:
         bridge.observe_chart(make_chart())
         chart = bridge.get_chart()
         assert chart["title"] == "TransportAction"
-        assert [n["life"] for n in chart["nodes"]] == ["RUNNING", "RUNNING", "NOT_STARTED"]
+        assert [n["life"] for n in chart["nodes"]] == [
+            "RUNNING",
+            "RUNNING",
+            "NOT_STARTED",
+        ]
         assert [n["obs"] for n in chart["nodes"]] == ["UNKNOWN", "UNKNOWN", "FALSE"]
         assert chart["nodes"][1]["parent"] == "s0"
-        assert chart["edges"] == [{"from": "s0", "to": "s1", "kind": "START"},
-                                  {"from": "s1", "to": "s2", "kind": "END"}]
+        assert chart["edges"] == [
+            {"from": "s0", "to": "s1", "kind": "START"},
+            {"from": "s1", "to": "s2", "kind": "END"},
+        ]
 
     def test_lifecycle_update_keeps_signature(self):
         bridge = Bridge()
@@ -197,7 +217,8 @@ class TestChartSnapshot:
             nodes=[_SNode(0, "OtherGoal")],
             rx_graph=_RxGraph([_SNode(0, "OtherGoal")], []),
             life_cycle_state=types.SimpleNamespace(data=[1]),
-            observation_state=types.SimpleNamespace(data=[1.0]))
+            observation_state=types.SimpleNamespace(data=[1.0]),
+        )
         bridge.observe_chart(other)
         chart = bridge.get_chart()
         assert chart["sig"] != sig
@@ -207,4 +228,8 @@ class TestChartSnapshot:
     def test_trinary_observation_thresholds(self):
         bridge = Bridge()
         bridge.observe_chart(make_chart(obs=(0.0, 0.5, 1.0)))
-        assert [n["obs"] for n in bridge.get_chart()["nodes"]] == ["FALSE", "UNKNOWN", "TRUE"]
+        assert [n["obs"] for n in bridge.get_chart()["nodes"]] == [
+            "FALSE",
+            "UNKNOWN",
+            "TRUE",
+        ]

@@ -1,8 +1,9 @@
-"""Consistency checks of the packaged frontend, plus the node-based JS tests.
+"""
+Consistency checks of the packaged frontend, plus the node-based JS tests.
 
-The asset checks keep the panel architecture honest: every script index.html
-includes must exist, every panel id in config.js must be defined by an included
-panel script, and panels must not reach into each other's DOM.
+The asset checks keep the panel architecture honest: every script index.html includes
+must exist, every panel id in config.js must be defined by an included panel script, and
+panels must not reach into each other's DOM.
 """
 
 import re
@@ -37,7 +38,9 @@ class TestAssetConsistency:
         configured = set(re.findall(r"'([\w-]+)'", config.split("layout", 1)[1]))
         defined = set()
         for panel_js in WEB_ROOT.glob("panels/*/panel.js"):
-            defined |= set(re.findall(r"Panels\.define\('([\w-]+)'", panel_js.read_text()))
+            defined |= set(
+                re.findall(r"Panels\.define\('([\w-]+)'", panel_js.read_text())
+            )
         assert configured <= defined, configured - defined
 
     def test_panels_do_not_reach_into_each_other(self):
@@ -57,7 +60,10 @@ class TestJsUnits:
     def run_node(self, name):
         result = subprocess.run(
             ["node", "--test", str(JS_DIR / name)],
-            capture_output=True, text=True, timeout=120)
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_bus_and_registry(self):

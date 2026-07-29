@@ -1,4 +1,7 @@
-"""HTTP endpoints of the live bridge (default port 8765).
+"""
+HTTP endpoints of the live bridge (default port 8765).
+
+::
 
     GET /info    {running, robot, objects, plan, chart, seq}
     GET /state   {seq, frames: {prefixed_joint: pos}, base: pose7,
@@ -10,21 +13,37 @@
     POST /move   queue an object move (applied on the simulation thread)
 
 Handlers only ever read finished snapshot dicts — never the world (see
-hooks.py).
+:mod:`cram_viz.live.hooks`).
 """
 
+from __future__ import annotations
+
 import json
+import logging
 import os
+import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+from typing_extensions import Any, Dict
 
 from cram_viz.live.bridge import BRIDGE
 
-PORT = int(os.environ.get("LIVE_VIZ_PORT", "8765"))
+logger = logging.getLogger(__name__)
+
+DEFAULT_PORT = int(os.environ.get("LIVE_VIZ_PORT", "8765"))
 
 
-class Handler(BaseHTTPRequestHandler):
-    def _json(self, payload):
+class BridgeRequestHandler(BaseHTTPRequestHandler):
+    """
+    Serves the bridge's snapshots and accepts viewer moves.
+    """
+
+    def _send_json(self, payload: Dict[str, Any]) -> None:
+        """
+        Send a JSON payload with the CORS headers the viewer needs.
+        """
         body = json.dumps(payload).encode()
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
@@ -34,40 +53,48 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def do_GET(self):
+    def do_GET(self) -> None:
+        """
+        Route the read-only snapshot endpoints.
+        """
         if self.path.startswith("/state"):
-            return self._json(BRIDGE.get_state())
+            return self._send_json(BRIDGE.get_state())
         if self.path.startswith("/plan"):
-            return self._json(BRIDGE.get_plan())
+            return self._send_json(BRIDGE.get_plan())
         if self.path.startswith("/chart"):
-            return self._json(BRIDGE.get_chart())
+            return self._send_json(BRIDGE.get_chart())
         if self.path.startswith("/objects"):
             with BRIDGE._lock:
-                return self._json({"objects": list(BRIDGE.object_meta)})
+                return self._send_json({"objects": list(BRIDGE.object_meta)})
         if self.path.startswith("/mesh"):
-            return self._mesh()
+            return self._send_mesh()
         if self.path.startswith("/info"):
-            return self._json({
-                "running": BRIDGE.world is not None,
-                "robot": type(BRIDGE.robot).__name__ if BRIDGE.robot else None,
-                "objects": [k for k in BRIDGE._bodies if k != "__base__"],
-                "movable": True,
-                "plan": bool(BRIDGE.plan_state.get("nodes")),
-                "chart": bool(BRIDGE.chart_state.get("nodes")),
-                "seq": BRIDGE.seq,
-            })
+            return self._send_json(
+                {
+                    "running": BRIDGE.world is not None,
+                    "robot": type(BRIDGE.robot).__name__ if BRIDGE.robot else None,
+                    "objects": [key for key in BRIDGE._bodies if key != "__base__"],
+                    "movable": True,
+                    "plan": bool(BRIDGE.plan_state.get("nodes")),
+                    "chart": bool(BRIDGE.chart_state.get("nodes")),
+                    "seq": BRIDGE.seq,
+                }
+            )
         self.send_response(404)
         self.end_headers()
 
-    def _mesh(self):
-        q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        key = (q.get("key") or [""])[0]
-        path = BRIDGE._mesh_serve.get(key)      # plain dict read; file IO only, no world access
-        if not path or not os.path.isfile(path):
+    def _send_mesh(self) -> None:
+        """
+        Serve one object's mesh file (plain file IO, no world access).
+        """
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        key = (query.get("key") or [""])[0]
+        path = BRIDGE._mesh_serve.get(key)
+        if not path or not Path(path).is_file():
             self.send_response(404)
             self.end_headers()
             return
-        data = open(path, "rb").read()
+        data = Path(path).read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", "application/octet-stream")
         self.send_header("Content-Length", str(len(data)))
@@ -76,33 +103,46 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def do_POST(self):
-        if self.path.startswith("/move"):
-            try:
-                length = int(self.headers.get("Content-Length") or 0)
-                req = json.loads(self.rfile.read(length) or b"{}")
-                BRIDGE.queue_move(req)
-                return self._json({"ok": True})
-            except Exception as ex:
-                return self._json({"ok": False, "error": str(ex)})
-        self.send_response(404)
-        self.end_headers()
+    def do_POST(self) -> None:
+        """
+        Queue an object move requested by the viewer.
+        """
+        if not self.path.startswith("/move"):
+            self.send_response(404)
+            self.end_headers()
+            return
+        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            request = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError as error:
+            return self._send_json({"ok": False, "error": str(error)})
+        BRIDGE.queue_move(request)
+        return self._send_json({"ok": True})
 
-    def do_OPTIONS(self):
+    def do_OPTIONS(self) -> None:
+        """
+        CORS preflight for the viewer's cross-origin POSTs.
+        """
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "content-type")
         self.end_headers()
 
-    def log_message(self, *a):
-        pass
+    def log_message(self, format: str, *args: Any) -> None:
+        """
+        Route the per-request access log to debug (15 Hz polling is noisy).
+        """
+        logger.debug(format, *args)
 
 
-def serve(port=PORT):
-    """Start the bridge's HTTP server on a daemon thread; returns the server."""
-    import threading
+def serve(port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
+    """
+    Start the bridge's HTTP server on a daemon thread.
 
-    server = ThreadingHTTPServer(("0.0.0.0", port), Handler)
+    :param port: Port to listen on (all interfaces).
+    :return: The running server.
+    """
+    server = ThreadingHTTPServer(("0.0.0.0", port), BridgeRequestHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server

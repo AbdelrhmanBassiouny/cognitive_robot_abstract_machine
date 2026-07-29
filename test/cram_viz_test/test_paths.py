@@ -1,4 +1,6 @@
-"""Tests for the scene-bundle search order (env → submodule → data dir)."""
+"""
+Tests for the scene-bundle search order (env → submodule → data dir).
+"""
 
 import json
 
@@ -14,7 +16,9 @@ class TestScenesDir:
         monkeypatch.delenv("CRAM_VIZ_SCENES", raising=False)
         submodule = tmp_path / "scenes"
         submodule.mkdir()
-        (submodule / "index.json").write_text(json.dumps({"default": None, "scenes": []}))
+        (submodule / "index.json").write_text(
+            json.dumps({"default": None, "scenes": []})
+        )
         monkeypatch.setattr(paths, "SCENES_SUBMODULE", submodule)
         assert paths.scenes_dir() == submodule
 

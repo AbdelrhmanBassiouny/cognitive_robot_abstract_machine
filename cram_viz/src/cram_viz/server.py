@@ -1,4 +1,5 @@
-"""The cram_viz HTTP server: static frontend + JSON API.
+"""
+The cram_viz HTTP server: static frontend + JSON API.
 
 Serves three things from one port (default 8711):
 
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import http.server
 import json
+import logging
 import mimetypes
 import os
 import socketserver
@@ -32,7 +34,9 @@ import traceback
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from cram_viz import logger, paths
+from cram_viz import paths
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_PORT = 8711
 
@@ -57,7 +61,9 @@ def _no_eql_error():
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
-    """Static files from the packaged web root, plus the JSON API routes."""
+    """
+    Static files from the packaged web root, plus the JSON API routes.
+    """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(paths.WEB_ROOT), **kwargs)
@@ -67,11 +73,17 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
-    def log_message(self, fmt, *args):  # keep the console quiet but useful
-        sys.stderr.write("  %s\n" % (fmt % args))
+    def log_message(self, format: str, *args) -> None:
+        """
+        Route the per-request access log through logging.
+        """
+        logger.info("  " + format, *args)
 
-    # ---- helpers -------------------------------------------------------------
-    def _json(self, payload, code=200):
+    # %% helpers -----------------------------------------------------------------
+    def _json(self, payload, code: int = 200) -> None:
+        """
+        Send a payload as JSON with the given status code.
+        """
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -79,21 +91,31 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _query(self):
+    def _query(self) -> dict:
+        """
+        The parsed query-string parameters of the current request.
+        """
         return parse_qs(urlparse(self.path).query)
 
-    def _guarded(self, fn):
-        """Run an API handler; report exceptions as a JSON error payload."""
+    def _guarded(self, fn) -> None:
+        """
+        Run an API handler; report exceptions as a JSON error payload.
+        """
         if kb_module is None:
             return self._json(_no_eql_error())
         try:
             return self._json(fn())
         except Exception as ex:
-            return self._json({"ok": False, "error": "%s: %s" % (type(ex).__name__, ex)})
+            return self._json(
+                {"ok": False, "error": "%s: %s" % (type(ex).__name__, ex)}
+            )
 
-    # ---- scene bundles (generated data, lives outside the package) ------------
-    def _serve_scene_file(self, url_path):
-        rel = url_path[len("/scenes/"):]
+    # %% scene bundles (generated data, lives outside the package) ----------------
+    def _serve_scene_file(self, url_path: str) -> None:
+        """
+        Serve one file of a scene bundle, with path-traversal protection.
+        """
+        rel = url_path[len("/scenes/") :]
         base = paths.scenes_dir().resolve()
         target = (base / rel).resolve()
         if not str(target).startswith(str(base) + os.sep) and target != base:
@@ -112,8 +134,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    # ---- routes ----------------------------------------------------------------
-    def do_GET(self):
+    # %% routes --------------------------------------------------------------------
+    def do_GET(self) -> None:
+        """
+        Route static files, scene bundles and the read-only API.
+        """
         route = self.path.split("?")[0]
         if route.startswith("/scenes/"):
             return self._serve_scene_file(route)
@@ -132,7 +157,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._guarded(expand)
         return super().do_GET()
 
-    def do_POST(self):
+    def do_POST(self) -> None:
+        """
+        Execute an EQL query (the only write-ish endpoint).
+        """
         if self.path.split("?")[0] != "/api/eql":
             return self._json({"ok": False, "error": "unknown endpoint"}, 404)
         if kb_module is None:
@@ -148,26 +176,39 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except SyntaxError as ex:
             return self._json({"ok": False, "error": "SyntaxError: %s" % ex})
         except Exception as ex:
-            return self._json({"ok": False, "error": "%s: %s" % (type(ex).__name__, ex)})
+            return self._json(
+                {"ok": False, "error": "%s: %s" % (type(ex).__name__, ex)}
+            )
 
 
-def make_server(port=0):
+def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
     """A ready-to-serve ThreadingTCPServer (port 0 = ephemeral, for tests)."""
     socketserver.TCPServer.allow_reuse_address = True
     return socketserver.ThreadingTCPServer(("", port), Handler)
 
 
-def main(argv=None):
+def main(argv=None) -> None:
+    """
+    ``cram-viz`` — serve the viewer, the scenes and the JSON API.
+    """
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
     argv = sys.argv[1:] if argv is None else argv
     port = int(argv[0]) if argv else DEFAULT_PORT
     if kb_module is not None:  # build the KB once, before the first query
         kb_module.get_kb()
     with make_server(port) as httpd:
-        eql = "EQL ready (krrood)" if kb_module is not None else "EQL UNAVAILABLE — static only"
+        eql = (
+            "EQL ready (krrood)"
+            if kb_module is not None
+            else "EQL unavailable — static only"
+        )
         scenes = paths.scenes_dir()
-        logger.warning("cram_viz running at http://localhost:%d/ (%s)", port, eql)
-        logger.warning("scene bundles: %s%s", scenes,
-                       "" if Path(scenes).is_dir() else "  (missing — run cram-viz-onboard)")
+        logger.info("cram_viz running at http://localhost:%d/ (%s)", port, eql)
+        logger.info(
+            "scene bundles: %s%s",
+            scenes,
+            "" if Path(scenes).is_dir() else "  (missing — run cram-viz-onboard)",
+        )
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

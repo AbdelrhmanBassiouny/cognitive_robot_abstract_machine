@@ -1,110 +1,110 @@
-"""Hooks that attach the bridge to a running coraplex/giskardpy demo.
+"""
+Hooks that attach the bridge to a running coraplex/giskardpy demo.
 
-IMPORTANT: every world access (FK for poses etc.) happens on the SIMULATION
-thread itself, inside the Executor.tick hook. Reading the world from a separate
-sampler thread corrupts the native solver's heap (malloc: unaligned fastbin
-chunk) — the HTTP handlers therefore only ever serve the last finished
-snapshot dict.
+.. warning:: Every world access (forward kinematics for poses etc.) happens on
+   the *simulation* thread itself, inside the ``Executor.tick`` hook. Reading
+   the world from a separate sampler thread corrupts the native solver's heap
+   — the HTTP handlers therefore only ever serve the last finished snapshot
+   dict.
 """
 
-import os
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from coraplex.plans.executables import GiskardExecutable
+from coraplex.plans.plan import Plan
+from giskardpy.executor import Executor
+from semantic_digital_twin.adapters.mesh import MeshParser
 
 from cram_viz.live.bridge import BRIDGE
 
+logger = logging.getLogger(__name__)
 
-def _install_tick_hook():
-    """Bind the bridge to the executing world and snapshot on every sim tick.
+#: snapshot the plan tree every this many executor ticks (it walks the tree)
+PLAN_SNAPSHOT_TICK_INTERVAL = 5
 
-    IMPORTANT: every world access (FK for poses etc.) happens HERE, on the
-    simulation thread itself. Reading the world from a separate sampler thread
-    corrupts the native solver's heap (malloc: unaligned fastbin chunk) — the
-    HTTP handlers therefore only ever serve the last finished snapshot dict.
+
+def install_tick_hook() -> None:
     """
-    from giskardpy.executor import Executor
-    orig_tick = Executor.tick
+    Bind the bridge to the executing world and snapshot on every sim tick.
+    """
+    original_tick = Executor.tick
 
-    def tick(self, *a, **kw):
-        r = orig_tick(self, *a, **kw)
+    def tick(self, *args, **kwargs):
+        result = original_tick(self, *args, **kwargs)
         if BRIDGE.world is None:
             BRIDGE.world = self.context.world
             BRIDGE._bind()
-            print("[live_viz] attached to world (robot=%s, %d joints)"
-                  % (type(BRIDGE.robot).__name__ if BRIDGE.robot else "?", len(BRIDGE._conns)),
-                  flush=True)
+            logger.info(
+                "attached to world (robot=%s, %d joints)",
+                type(BRIDGE.robot).__name__ if BRIDGE.robot else "?",
+                len(BRIDGE._connections),
+            )
         try:
-            BRIDGE.apply_moves()       # viewer drags land in the real world here
+            BRIDGE.apply_moves()  # viewer drags land in the real world here
             BRIDGE.snapshot()
-            # plan tree + statechart, same thread, same rule: only cached dicts
-            # ever leave for the HTTP handlers
-            BRIDGE.observe_chart(getattr(self, "motion_statechart", None))
+            BRIDGE.observe_chart(self.motion_statechart)
             BRIDGE._ticks += 1
-            if BRIDGE._ticks % 5 == 0:
+            if BRIDGE._ticks % PLAN_SNAPSHOT_TICK_INTERVAL == 0:
                 BRIDGE.snapshot_plan()
         except Exception:
-            pass
-        return r
+            # boundary guard: a visualization bug must never take the robot
+            # demo down — this is the single intentional broad except
+            logger.exception("bridge snapshot failed this tick")
+        return result
+
     Executor.tick = tick
 
 
-def _install_plan_hooks():
-    """Follow the coraplex plan: which Plan is executing, and which plan nodes
-    the currently running giskard executable belongs to.
+def install_plan_hooks() -> None:
+    """
+    Follow the coraplex plan: which plan executes, and which plan nodes the currently
+    running giskard executable belongs to.
 
     Both hooks fire on the thread that runs the plan (the same one that ticks the
-    executor), so they may touch plan objects directly."""
-    try:
-        from coraplex.plans.plan import Plan
-    except Exception:
-        return                      # not a coraplex demo — plan tab stays empty
+    executor), so they may touch plan objects directly.
+    """
+    original_perform = Plan.perform
 
-    orig_perform = Plan.perform
-
-    def perform(self, *a, **kw):
+    def perform(self, *args, **kwargs):
         BRIDGE._plan = self
-        try:
-            BRIDGE.snapshot_plan()
-        except Exception:
-            pass
-        return orig_perform(self, *a, **kw)
+        BRIDGE.snapshot_plan()
+        return original_perform(self, *args, **kwargs)
+
     Plan.perform = perform
 
-    try:
-        from coraplex.plans.executables import GiskardExecutable
-    except Exception:
-        return
+    original_execute = GiskardExecutable.execute
 
-    orig_execute = GiskardExecutable.execute
-
-    def execute(self, *a, **kw):
+    def execute(self, *args, **kwargs):
         BRIDGE.bind_motion_group(self)
         try:
-            r = orig_execute(self, *a, **kw)
+            result = original_execute(self, *args, **kwargs)
         except BaseException:
             BRIDGE.freeze_motion_group(self, "FAILED")
             BRIDGE.snapshot_plan()
             raise
         BRIDGE.freeze_motion_group(self, "SUCCEEDED")
         BRIDGE.snapshot_plan()
-        return r
+        return result
+
     GiskardExecutable.execute = execute
 
 
-def _install_mesh_hook():
-    """Remember every mesh an object is built from (STL/OBJ/DAE/… — all go
-    through MeshParser.parse), so the bridge can serve its geometry to the
-    viewer. The body name matches the mesh file's basename."""
-    try:
-        from semantic_digital_twin.adapters.mesh import MeshParser
-    except Exception:
-        return
-    orig = MeshParser.parse
+def install_mesh_hook() -> None:
+    """
+    Remember every mesh an object is built from, so the bridge can serve its geometry to
+    the viewer.
 
-    def parse(self, *a, **kw):
-        try:
-            fp = getattr(self, "file_path", None)
-            if fp:
-                BRIDGE._mesh_files[os.path.basename(fp).lower()] = fp
-        except Exception:
-            pass
-        return orig(self, *a, **kw)
+    All mesh formats go through ``MeshParser.parse``; the body name matches the mesh
+    file's basename.
+    """
+    original_parse = MeshParser.parse
+
+    def parse(self, *args, **kwargs):
+        if self.file_path:
+            BRIDGE._mesh_files[Path(self.file_path).name.lower()] = self.file_path
+        return original_parse(self, *args, **kwargs)
+
     MeshParser.parse = parse

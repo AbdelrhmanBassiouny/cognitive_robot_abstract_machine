@@ -1,4 +1,5 @@
-"""Filesystem locations for cram_viz, all overridable via environment.
+"""
+Filesystem locations for cram_viz, all overridable via environment.
 
 The frontend (``web/``) ships inside the package. Scene bundles are GENERATED
 artifacts (tens to hundreds of MB per scene, produced by ``cram-viz-onboard``)
@@ -25,7 +26,9 @@ WEB_ROOT = Path(__file__).resolve().parent / "web"
 
 
 def data_dir() -> Path:
-    """Writable per-user data directory (architecture scan cache, defaults)."""
+    """
+    Writable per-user data directory (architecture scan cache, defaults).
+    """
     env = os.environ.get("CRAM_VIZ_DATA")
     if env:
         return Path(env).expanduser()
@@ -37,7 +40,8 @@ SCENES_SUBMODULE = WEB_ROOT.parents[2] / "scenes"
 
 
 def scenes_dir() -> Path:
-    """Directory holding the onboarded scene bundles (``<name>/scene.json``).
+    """
+    Directory holding the onboarded scene bundles (``<name>/scene.json``).
 
     Search order: ``CRAM_VIZ_SCENES`` env var, then the initialized
     cram-scenes submodule, then ``~/.cram_viz/scenes``. An un-initialized
@@ -52,11 +56,11 @@ def scenes_dir() -> Path:
 
 
 def architecture_root() -> Path:
-    """The CRAM repository whose packages/classes the knowledge graph shows.
+    """
+    The CRAM repository whose packages/classes the knowledge graph shows.
 
-    Defaults to the repository this package is checked out in, which is the
-    common case inside the workspace; falls back to the conventional clone
-    location otherwise.
+    Defaults to the repository this package is checked out in, which is the common case
+    inside the workspace; falls back to the conventional clone location otherwise.
     """
     env = os.environ.get("CRAM_VIZ_ARCHITECTURE")
     if env:

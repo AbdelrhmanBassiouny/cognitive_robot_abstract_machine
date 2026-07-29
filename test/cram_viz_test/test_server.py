@@ -1,4 +1,6 @@
-"""End-to-end tests of the HTTP server: static frontend, scenes and JSON API."""
+"""
+End-to-end tests of the HTTP server: static frontend, scenes and JSON API.
+"""
 
 import importlib
 import json
@@ -10,9 +12,12 @@ import pytest
 
 @pytest.fixture()
 def server(fixture_scene):
-    """The real server on an ephemeral port, bound to the fixture scene."""
+    """
+    The real server on an ephemeral port, bound to the fixture scene.
+    """
     from cram_viz import server as server_module
-    importlib.reload(server_module)          # rebind kb_module under the fixture env
+
+    importlib.reload(server_module)  # rebind kb_module under the fixture env
     httpd = server_module.make_server(0)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -39,9 +44,15 @@ class TestStatic:
         assert b'data-slot="left"' in body
 
     def test_panel_scripts_are_served(self, server):
-        for path in ("/core/bus.js", "/core/registry.js", "/config.js",
-                     "/panels/robot_scene/panel.js", "/panels/eql/panel.js",
-                     "/panels/graph/panel.js", "/panels/graph/graph.js"):
+        for path in (
+            "/core/bus.js",
+            "/core/registry.js",
+            "/config.js",
+            "/panels/robot_scene/panel.js",
+            "/panels/eql/panel.js",
+            "/panels/graph/panel.js",
+            "/panels/graph/graph.js",
+        ):
             status, _ = get(server + path)
             assert status == 200, path
 
@@ -70,7 +81,11 @@ class TestApi:
 
     def test_kb_views(self, server):
         pytest.importorskip("krrood")
-        for name, expect_live in (("kinematics", None), ("plan", "plan"), ("chart", "chart")):
+        for name, expect_live in (
+            ("kinematics", None),
+            ("plan", "plan"),
+            ("chart", "chart"),
+        ):
             payload = get_json(server + "/api/kb/view?name=" + name)
             assert payload["ok"], name
             assert payload.get("live") == expect_live
@@ -79,8 +94,11 @@ class TestApi:
         pytest.importorskip("krrood")
         request = urllib.request.Request(
             server + "/api/eql",
-            data=json.dumps({"code": "the(entity(obj).where(obj.name == 'milk'))"}).encode(),
-            headers={"Content-Type": "application/json"})
+            data=json.dumps(
+                {"code": "the(entity(obj).where(obj.name == 'milk'))"}
+            ).encode(),
+            headers={"Content-Type": "application/json"},
+        )
         with urllib.request.urlopen(request, timeout=30) as response:
             payload = json.loads(response.read())
         assert payload["ok"] and payload["count"] == 1
@@ -90,7 +108,8 @@ class TestApi:
         request = urllib.request.Request(
             server + "/api/eql",
             data=json.dumps({"code": "definitely not python ((("}).encode(),
-            headers={"Content-Type": "application/json"})
+            headers={"Content-Type": "application/json"},
+        )
         with urllib.request.urlopen(request, timeout=30) as response:
             payload = json.loads(response.read())
         assert payload["ok"] is False and "error" in payload

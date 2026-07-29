@@ -1,4 +1,6 @@
-"""Tests for the scene-driven knowledge base and its graph-panel payloads."""
+"""
+Tests for the scene-driven knowledge base and its graph-panel payloads.
+"""
 
 import pytest
 
