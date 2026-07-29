@@ -1793,10 +1793,67 @@ class MujocoBuilder(MultiSimBuilder):
         key_element = ET.SubElement(keyframe_element, "key")
         key_element.set("name", "home")
         key_element.set("time", "0")
-        key_element.set(
-            "qpos", " ".join(map(str, self._compute_keyframe_qpos(compiled_model)))
-        )
+        qpos = self._compute_keyframe_qpos(compiled_model)
+        key_element.set("qpos", " ".join(map(str, qpos)))
+        ctrl = self._compute_keyframe_ctrl(compiled_model, qpos)
+        if ctrl:
+            key_element.set("ctrl", " ".join(map(str, ctrl)))
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
+
+    def _compute_keyframe_ctrl(
+        self, compiled_model: mujoco.MjModel, qpos: List[float]
+    ) -> List[float]:
+        """
+        Builds the ``home`` keyframe's ctrl vector: the control value that
+        holds every position-servo actuator at the pose ``qpos`` describes.
+
+        Without this the keyframe sets qpos but leaves ctrl at MuJoCo's
+        default of all zeros, so a position servo whose home pose is not
+        itself zero is commanded straight back to zero the moment the
+        simulation starts -- the robot visibly snaps out of its home pose and
+        then stiffly holds the wrong one, fighting whatever qpos said.
+
+        Each setpoint is solved from MuJoCo's affine actuator equation
+        ``force = gainprm[0]*ctrl + biasprm[0] + biasprm[1]*length +
+        biasprm[2]*velocity`` for zero force at zero velocity, i.e.
+        ``ctrl = -(biasprm[0] + biasprm[1]*length) / gainprm[0]`` -- the same
+        relation MujocoSynchronizer._ctrl_for_position uses to keep ctrl
+        aligned with a commanded position at runtime.
+
+        ``length`` is the actuator's transmission length at the home pose,
+        which MuJoCo is asked to compute rather than assumed to equal the
+        joint position: that keeps this correct for tendon transmissions
+        (e.g. a gripper remapping finger travel onto a different control
+        range) as well as for direct joint ones.
+
+        Actuators that are not affine position servos get 0, MuJoCo's
+        neutral "no command".
+        """
+        if compiled_model.nu == 0:
+            return []
+        data = mujoco.MjData(compiled_model)
+        data.qpos[:] = qpos
+        # Populates data.actuator_length for every transmission type.
+        mujoco.mj_forward(compiled_model, data)
+
+        ctrl = []
+        for actuator_id in range(compiled_model.nu):
+            gain0 = compiled_model.actuator_gainprm[actuator_id][0]
+            bias0, bias1 = compiled_model.actuator_biasprm[actuator_id][:2]
+            is_position_servo = (
+                compiled_model.actuator_biastype[actuator_id]
+                == mujoco.mjtBias.mjBIAS_AFFINE
+                and gain0 != 0.0
+            )
+            if not is_position_servo:
+                ctrl.append(0.0)
+                continue
+            value = -(bias0 + bias1 * data.actuator_length[actuator_id]) / gain0
+            if compiled_model.actuator_ctrllimited[actuator_id]:
+                lower, upper = compiled_model.actuator_ctrlrange[actuator_id]
+                value = min(max(value, lower), upper)
+            ctrl.append(float(value))
+        return ctrl
 
     def _compute_keyframe_qpos(self, compiled_model: mujoco.MjModel) -> List[float]:
         """
