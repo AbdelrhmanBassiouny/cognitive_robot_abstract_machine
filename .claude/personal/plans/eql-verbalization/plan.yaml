@@ -1,0 +1,78 @@
+schema_version: 1
+id: eql-verbalization
+title: "EQL verbalization follow-up (operand naming, disambiguation, sdt migration)"
+description: >
+  Programme following up PR #33's review: extract a reusable verbalization
+  surface-verification framework onto main, redesign operand naming and same-noun
+  disambiguation to live in the coreference/referring machinery, add
+  abstract-to-concrete-subclass expansion plus first-order (value-agnostic) rendering,
+  then apply all of it to migrate semantic_digital_twin's predicates off the framework
+  PR #33 currently carries a duplicate of.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 104
+
+waves:
+  - id: verbalization-framework
+    name: "Verbalization framework + sdt migration"
+
+tracks:
+  - id: framework-migration
+    name: "Framework extraction, operand naming, sdt migration"
+    wave: verbalization-framework
+
+items:
+  - id: p1-surface-verification
+    branch: claude/eql-verbalization-p1-surface-verification-eqltzc
+    pull_request_number: 86
+    track: framework-migration
+    depends_on: []
+    status: done
+    notes: >
+      Merged to main. Extracted the surface-verification framework
+      (VerbalizationSurface, OverriddenOperand, SymbolicSurfaceSnapshot) out of krrood's
+      own surface test into a reusable module so any package defining SymbolicCallable
+      subclasses can verify its surfaces. Later renamed/moved by unrelated main-branch
+      work to krrood.entity_query_language.testing.result_verification
+      (VerbalizationResultsOfPackage). Full review-round history:
+      pr-progress/claude/eql-verbalization-p1-surface-verification-eqltzc.md.
+
+  - id: p2-operand-naming
+    branch: claude/eql-verbalization-operand-naming-n0gb95
+    pull_request_number: 87
+    track: framework-migration
+    depends_on: []
+    status: done
+    notes: >
+      Merged to main. The keystone redesign: operand naming and same-noun
+      disambiguation moved entirely into ReferringExpressions/DistinguisherIndex
+      (coreference-driven, identity-keyed), replacing the original parallel
+      predicate-side operand_naming.py module. Gated P3 and P4. Full review-round
+      history: pr-progress/claude/eql-verbalization-operand-naming-n0gb95.md.
+
+  - id: p3-concrete-subclass-expansion
+    branch: claude/eql-verbalization-p3-albw76
+    pull_request_number: 88
+    track: framework-migration
+    depends_on: [p2-operand-naming]
+    status: done
+    notes: >
+      Merged to main. Abstract-to-concrete-subclass expansion ("a Body or a Region")
+      plus first-order (value-agnostic) rendering promoted to production. Also carries
+      P1's commits merged in directly (confirmed via AskUserQuestion) to reuse its
+      first-order-rendering mechanism rather than duplicate it. Full review-round
+      history: pr-progress/claude/eql-verbalization-p3-albw76.md.
+
+  - id: p4-sdt-migration
+    branch: eql-symbolic-function-sdt
+    pull_request_number: 33
+    track: framework-migration
+    depends_on: [p1-surface-verification, p2-operand-naming, p3-concrete-subclass-expansion]
+    status: blocked
+    blockers:
+      - "mergeable_state: dirty as of 2026-07-18 (last push) - predates P1/P2/P3 merging to main; needs a rebase before the sdt checklist work starts."
+    notes: >
+      Drop the upstreamed surface-verification framework this PR still carries a
+      duplicate of, then apply all decisions from P1-P3 to semantic_digital_twin's
+      reasoning/predicates.py, queries.py, robot_predicates.py and regenerate its
+      verbalization snapshot. See roadmap.md for the full checklist and standing
+      conventions.
