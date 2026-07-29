@@ -91,6 +91,9 @@ class Recorder:
         orig_resolve = PackageUriResolver.resolve
 
         def resolve(self, uri):
+            """
+            Resolve as usual, but remember the uri -> path mapping.
+            """
             p = orig_resolve(self, uri)
             rec.resolutions[uri] = p
             return p
@@ -100,6 +103,9 @@ class Recorder:
         orig_from_file = URDFParser.from_file.__func__
 
         def from_file(cls, file_path, **kw):
+            """
+            Parse as usual, but remember this URDF/xacro source file.
+            """
             if file_path not in rec.urdf_sources:
                 rec.urdf_sources.append(file_path)
             return orig_from_file(cls, file_path, **kw)
@@ -109,6 +115,9 @@ class Recorder:
         orig_stl = STLParser.__init__
 
         def stl_init(self, file_path, *a, **kw):
+            """
+            Init as usual, but remember this loose object's mesh file.
+            """
             if file_path not in rec.stl_sources:
                 rec.stl_sources.append(file_path)
             return orig_stl(self, file_path, *a, **kw)
@@ -117,12 +126,18 @@ class Recorder:
 
     # ---- trajectory hook -----------------------------------------------------
     def install_tick_hook(self):
+        """
+        Wrap Executor.tick so every simulation step is snapshotted.
+        """
         from giskardpy.executor import Executor
 
         rec = self
         orig_tick = Executor.tick
 
         def tick(self, *a, **kw):
+            """
+            Run the real tick, then record its resulting world state.
+            """
             r = orig_tick(self, *a, **kw)
             rec._snap(self)
             return r
@@ -130,6 +145,10 @@ class Recorder:
         Executor.tick = tick
 
     def _lazy_bind(self, executor):
+        """
+        Bind to the executor's world and locate the robot + recordable objects
+        the first time a tick fires (the world doesn't exist any earlier).
+        """
         self.world = executor.context.world
         try:
             self.control_dt = executor.context.qp_controller_config.control_dt
@@ -167,12 +186,19 @@ class Recorder:
 
     @staticmethod
     def _pose7(body):
+        """
+        A body's world pose as [x, y, z, qx, qy, qz, qw].
+        """
         p = body.global_pose
         t = p.to_position().to_np().flatten()
         q = p.to_quaternion().to_np().flatten()
         return [round(float(v), 5) for v in (t[0], t[1], t[2], q[0], q[1], q[2], q[3])]
 
     def _snap(self, executor):
+        """
+        Append one frame: every movable connection's position, the robot base
+        pose and every tracked object's pose.
+        """
         if self._conns is None:
             self._lazy_bind(executor)
         fr = {}
@@ -206,6 +232,10 @@ class Recorder:
     # its target object there, and later derive the segment TIMING from the
     # recorded data (object attach/detach + first base motion).
     def _target_of(self, desig):
+        """
+        The recorded object a designator refers to, by matching any of its
+        attributes' names against the demo's known mesh basenames.
+        """
         basenames = {os.path.basename(f) for f in self.stl_sources}
         for v in vars(desig).values():
             try:
@@ -218,12 +248,19 @@ class Recorder:
         return None
 
     def install_segment_hook(self):
+        """
+        Wrap ActionNode.parse to record each action's class, arm and target as
+        it is parsed (in plan order).
+        """
         from coraplex.plans.plan_node import ActionNode
 
         rec = self
         orig_parse = ActionNode.parse
 
         def parse(node, *a, **kw):
+            """
+            Record this action's designator before letting it parse normally.
+            """
             d = node.designator
             arm = getattr(d, "arm", None) or getattr(d, "arms", None)
             rec.actions.append(
@@ -246,6 +283,10 @@ class Recorder:
 
     # ---- the executed plan tree, serialized from the real PlanNode graph ------
     def serialize_plans(self, max_nodes=400):
+        """
+        The executed plan tree(s) (deduped by root), as nested dicts capped at
+        max_nodes total.
+        """
         roots, seen = [], set()
         for n in self.plan_nodes:
             r = n
@@ -257,6 +298,9 @@ class Recorder:
         count = [0]
 
         def ser(n):
+            """
+            One PlanNode and its children as a dict, or None past max_nodes.
+            """
             if count[0] >= max_nodes:
                 return None
             count[0] += 1
@@ -283,6 +327,9 @@ class Recorder:
 
 # ============================================================ post-process ===
 def moved(a, b, eps=0.02):
+    """
+    Whether pose b is more than eps away from pose a (planar distance + |dz|).
+    """
     return math.hypot(a[0] - b[0], a[1] - b[1]) + abs(a[2] - b[2]) > eps
 
 
@@ -405,6 +452,9 @@ PALETTE = ["#f3f0ea", "#cf5b3a", "#b8bcc4", "#e7c26a", "#7fb069", "#5b8cff"]
 
 
 def link_set(part):
+    """
+    A robot part's link names, stripped of their model-name prefix.
+    """
     out = []
     for b in getattr(part, "bodies", None) or []:
         n = str(getattr(b, "name", b))
@@ -413,6 +463,10 @@ def link_set(part):
 
 
 def build_scene(rec, name, out_dir, step):
+    """
+    Downsample the recording to every step-th frame (always keeping the last)
+    and assemble scene.json + trajectory.json from it.
+    """
     n = len(rec.frames)
     idx = list(range(0, n, step))
     if idx and idx[-1] != n - 1:
@@ -422,6 +476,9 @@ def build_scene(rec, name, out_dir, step):
         remap[orig] = k
 
     def nearest(i):
+        """
+        The downsampled index closest to raw frame i.
+        """
         return remap.get(i, remap[min(remap, key=lambda o: abs(o - i))])
 
     frames = [rec.frames[i] for i in idx]

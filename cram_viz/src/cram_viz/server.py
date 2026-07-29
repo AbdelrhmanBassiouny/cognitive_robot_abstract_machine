@@ -57,6 +57,9 @@ _EQL_LOCK = threading.Lock()
 
 
 def _no_eql_error():
+    """
+    The standard error payload for any API route when krrood isn't importable.
+    """
     return {"ok": False, "error": "krrood/EQL not available in this environment"}
 
 
@@ -69,7 +72,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(paths.WEB_ROOT), **kwargs)
 
     def end_headers(self):
-        # meshes / libs are static; let the browser cache within a session
+        """
+        Disable caching so a rebuilt scene/frontend is never served stale.
+        """
         self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
@@ -151,6 +156,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             node = (self._query().get("node") or [""])[0]
 
             def expand():
+                """
+                The node's subgraph, or a "not drillable" error if it has none.
+                """
                 payload = kb_module.expand_node(node)
                 return payload if payload else {"ok": False, "error": "not drillable"}
 

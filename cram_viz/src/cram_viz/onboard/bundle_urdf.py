@@ -30,6 +30,10 @@ MESH_EXTS = (".dae", ".stl", ".obj")
 
 # ------------------------------------------------------------ resolution ----
 def _search_root_candidates():
+    """
+    Likely ROS install prefixes to search for a package:// URI: env vars first,
+    then common workspace layouts under the home directory and /opt/ros.
+    """
     roots = []
     for env in ("AMENT_PREFIX_PATH", "ROS_PACKAGE_PATH", "CMAKE_PREFIX_PATH"):
         roots += [p for p in os.environ.get(env, "").split(":") if p]
@@ -104,6 +108,9 @@ def _ref_to_relpath(uri):
 
 # ------------------------------------------------------------ side assets ---
 def _copy_file(src, dst, copied, missing):
+    """
+    Copy src to dst once; record it in copied (memo) or missing on failure.
+    """
     if src in copied:
         return True
     if not src or not os.path.isfile(src):

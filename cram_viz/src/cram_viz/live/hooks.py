@@ -33,6 +33,9 @@ def install_tick_hook() -> None:
     original_tick = Executor.tick
 
     def tick(self, *args, **kwargs):
+        """
+        Run the real tick, then bind/snapshot the bridge off its result.
+        """
         result = original_tick(self, *args, **kwargs)
         if BRIDGE.world is None:
             BRIDGE.world = self.context.world
@@ -69,6 +72,9 @@ def install_plan_hooks() -> None:
     original_perform = Plan.perform
 
     def perform(self, *args, **kwargs):
+        """
+        Capture the plan the moment it starts performing.
+        """
         BRIDGE._plan = self
         BRIDGE.snapshot_plan()
         return original_perform(self, *args, **kwargs)
@@ -78,6 +84,9 @@ def install_plan_hooks() -> None:
     original_execute = GiskardExecutable.execute
 
     def execute(self, *args, **kwargs):
+        """
+        Track this executable's motion group and freeze its final status.
+        """
         BRIDGE.bind_motion_group(self)
         try:
             result = original_execute(self, *args, **kwargs)
@@ -103,6 +112,9 @@ def install_mesh_hook() -> None:
     original_parse = MeshParser.parse
 
     def parse(self, *args, **kwargs):
+        """
+        Remember this mesh's file path before parsing it.
+        """
         if self.file_path:
             BRIDGE._mesh_files[Path(self.file_path).name.lower()] = self.file_path
         return original_parse(self, *args, **kwargs)

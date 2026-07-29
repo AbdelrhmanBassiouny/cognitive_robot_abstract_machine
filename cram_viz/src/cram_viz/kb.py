@@ -682,6 +682,10 @@ class KB:
     """
 
     def __init__(self) -> None:
+        """
+        Build every entity list from the active scene bundle and a static
+        scan of the CRAM architecture.
+        """
         scene, trajectory = load_scene()
         frames_per_second = scene.get("fps", 30)
         parts = (scene.get("robot") or {}).get("parts") or {}
@@ -796,6 +800,10 @@ class KB:
         """
 
         def arm_for(segment: Dict[str, Any]) -> Optional[Arm]:
+            """
+            The arm matching the segment's recorded side hint, falling back to
+            the first arm if the segment picks something but names no side.
+            """
             hint = (segment.get("arm") or "").lower()
             for arm in self.arms:
                 if arm.side and arm.side in hint:
@@ -841,6 +849,10 @@ class KB:
         link_to_part = {link: part for part, links in parts.items() for link in links}
 
         def side_of(key: str) -> str:
+            """
+            Which arm side a prefixed joint key belongs to, or "environment"/
+            "body" when it isn't part of an arm.
+            """
             prefix, _, joint_name = key.partition("/")
             if "/" not in key:
                 prefix, joint_name = "", key
@@ -1125,6 +1137,9 @@ def graph_payload() -> Dict[str, Any]:
     nodes, edges, details = [], [], {}
 
     def add(node_id: str, label: str, group: str, lines: List[str]) -> None:
+        """
+        Append one graph node and its detail-panel entry.
+        """
         nodes.append(
             {
                 "id": node_id,
@@ -1301,6 +1316,9 @@ def graph_payload() -> Dict[str, Any]:
         # ground the demo in the architecture at the SUBPACKAGE that actually
         # realises each part (only wire to a node that exists in this view)
         def link(src, dst, label):
+            """
+            Add an edge, but only if dst is actually a node in this view.
+            """
             if any(n["id"] == dst for n in nodes):
                 edges.append({"from": src, "to": dst, "kind": "type", "label": label})
 
@@ -1369,6 +1387,9 @@ def _view() -> tuple:
     def add(
         node_id: str, label: str, group: str, lines: List[str], **extra: Any
     ) -> None:
+        """
+        Append one graph node (plus arbitrary extra fields) and its detail entry.
+        """
         node = {
             "id": node_id,
             "label": label,
@@ -1560,6 +1581,9 @@ def _plan_view(kb: KB) -> Dict[str, Any]:
     counter = [0]
 
     def walk(tree: Dict[str, Any], parent: Optional[str]) -> None:
+        """
+        Add this plan node (with a freshly assigned id) and recurse into its children.
+        """
         node_id = "pn%d" % counter[0]
         counter[0] += 1
         status = tree.get("status") or "CREATED"
@@ -1625,6 +1649,9 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
     }
 
     def chain_group(link_name: str) -> str:
+        """
+        The visual group (colour) a kinematic-chain link is bucketed into.
+        """
         part = link_to_part.get(link_name, "").lower()
         if "gripper" in part or "hand" in part or "effector" in part:
             return "object"  # grippers (teal)
