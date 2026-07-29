@@ -43,24 +43,32 @@ items:
     title: "Migrate the EQL living roadmap out of cram-notes.md into its own plan"
     track: personal-data
     depends_on: []
-    status: not_started
+    status: done
     notes: >
-      Run /plan-create eql-verbalization from the cram-notes living-roadmap section
-      (~10k tokens loaded every session today); fold P1-P3 review-round logs into the
-      existing pr-progress files; slim cram-notes.md to pure conventions; fix the stale
-      "hook lives on claude/session-hooks" reference; delete superseded rdr-roadmap.md.
-      No PR — personal-notes branch only.
-
+      Done. Ran /plan-create eql-verbalization from the cram-notes living-roadmap
+      section; folded the P1-P3 review-round logs into the three pr-progress files;
+      slimmed cram-notes.md to pure conventions; fixed the stale "hook lives on
+      claude/session-hooks" reference; deleted superseded rdr-roadmap.md. No PR —
+      personal-notes branch only.
   - id: session-hooks-retirement
     branch: null
     title: "Tag and delete the superseded claude/session-hooks branch"
     track: personal-data
     depends_on: []
-    status: not_started
+    status: done
     notes: >
-      main carries a strict superset (+1237/-6); nothing at runtime reads the branch
-      (settings.json and hooks load from the checked-out branch). Tag for history first.
-
+      Done. claude/session-hooks's tip (ece182c5) was a literal git merge-base
+      --is-ancestor of main (via PR #432), so nothing was lost by skipping the tag:
+      every commit on the branch already remains reachable from main. The
+      tag-push/branch-delete git operations turned out to be unavailable from a Claude
+      Code session (git proxy returns 403 on tag pushes and branch deletes; no GitHub
+      MCP tool substitutes) - documented as a standing platform constraint in
+      roadmap.md's 2026-07-29 addendum, and flagged on the sibling item
+      tooling-branch-retirement, which has the same shape. The user deleted
+      claude/session-hooks directly (outside the harness) once this was confirmed
+      safe. Remaining cleanup: origin/claude/push-scope-test-zsq7jc, a throwaway
+      branch pushed while diagnosing the tooling gap (identical content to main),
+      still needs deleting the same way.
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
     branch: claude/patch-pr-rheubx
@@ -192,4 +200,7 @@ items:
     status: not_started
     notes: >
       Only after one full routine cycle and one board-Action cycle run green on the new
-      paths. Tag for history first.
+      paths. Tag for history first. Platform constraint (see roadmap addendum
+      2026-07-29): tag pushes and branch deletes get a 403 through a session's git
+      proxy, so those two steps must run outside the harness (user's machine or gh
+      api); a session can still do all verification and prepare the exact commands.

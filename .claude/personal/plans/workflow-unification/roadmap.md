@@ -216,3 +216,27 @@ lift (decision 3). Boundaries and constraints:
   scripts, plan_manifest_tools.py) + all tests into it, last in the upstream wave: it requires
   #101 MERGED (it moves `.claude/hooks/tests/` files #101's diff adds) and PR 3 stable (it moves
   files PR 3 edits).
+
+## Addendum: tag-push and branch-delete are unavailable from a Claude Code session (2026-07-29)
+
+(Restored after a concurrent-save race briefly overwrote it; originally written by the
+session-hooks-retirement kickoff session.)
+
+`/plan-item-kickoff workflow-unification session-hooks-retirement` verified the item's premise
+(`claude/session-hooks`'s tip is a literal `git merge-base --is-ancestor` ancestor of `main`, safe
+to retire) and got a tag-then-delete plan approved and attempted in the same session. Both
+operations failed with a real, reproducible `403` through the session's git proxy — creating or
+updating a branch works, but `git push <tag>` and `git push origin --delete <branch>` are both
+rejected outright. No GitHub MCP tool substitutes either (`create_branch` only creates from a
+source branch; there is no delete-branch or create-tag tool). This reads as a deliberate platform
+safety boundary against destructive/irreversible ref operations from an agent session, not a
+misconfiguration or something to route around.
+
+Consequence for this plan: both `session-hooks-retirement` and `tooling-branch-retirement` (the
+same tag-then-delete shape, later in the `cutover` wave) need their tag-push and branch-delete
+steps run outside the harness — from the user's own machine, or via `gh api`/a broader-scoped
+token — even though everything upstream of that (verification, drafting the tag message, the
+plan-manifest update itself) can still run in a session. The retirement was completed by the user
+directly: `claude/session-hooks` is deleted (its tip was already an ancestor of `main`, so no tag
+was needed); `origin/claude/push-scope-test-zsq7jc` (a diagnostic throwaway, identical to `main`)
+still needs the same out-of-harness deletion.
