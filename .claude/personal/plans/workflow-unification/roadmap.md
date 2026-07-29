@@ -184,21 +184,35 @@ Claude." line in the body is fine. Open the PR as a draft, include a link to the
 that created it, and subscribe to its activity.
 ```
 
-## Addendum: tag-push and branch-delete are unavailable from a Claude Code session (2026-07-29)
+## Update 2026-07-29 (late): PR 1 done as draft #106; dev-tooling Python package decided
 
-`/plan-item-kickoff workflow-unification session-hooks-retirement` verified the item's premise
-(`claude/session-hooks`'s tip is a literal `git merge-base --is-ancestor` ancestor of `main`, safe
-to retire) and got a tag-then-delete plan approved and attempted in the same session. Both
-operations failed with a real, reproducible `403` through the session's git proxy — creating or
-updating a branch works, but `git push <tag>` and `git push origin --delete <branch>` are both
-rejected outright. No GitHub MCP tool substitutes either (`create_branch` only creates from a
-source branch; there is no delete-branch or create-tag tool). This reads as a deliberate platform
-safety boundary against destructive/irreversible ref operations from an agent session, not a
-misconfiguration or something to route around.
+**PR 1 status**: `stack-tooling-on-main` implemented as draft PR #106 (`claude/stack-tooling-on-main`
+on `claude/patch-pr-rheubx`), by session_01Y9egTHHu5RTXmkFL4SwXM9. As planned it ported stack.py
+minus the round-robin subsystem, added per-user config layering, made ROUTINE.md canonical, and did
+NOT port restack.js or board rendering (deferred to PR 3/4). It landed as plain scripts under
+`.claude/stack/` — no package.
 
-Consequence for this plan: both `session-hooks-retirement` and `tooling-branch-retirement` (the
-same tag-then-delete shape, later in the `cutover` wave) need their tag-push and branch-delete
-steps run outside the harness — from the user's own machine, or via `gh api`/a broader-scoped
-token — even though everything upstream of that (verification, drafting the tag message, the
-plan-manifest update itself) can still run in a session. `session-hooks-retirement`'s `blockers`
-carries the exact prepared commands.
+**Design decision 8 — a proper dev-tooling Python package** (user-confirmed): all *Python* under
+`.claude/` migrates into one proper package with its tests under the standard `test/` directory.
+Reasons: PR 3's shared `pr_state` module needs a real import home (same-directory imports between
+`.claude/stack/` and `.claude/skills/plan-dashboard/` are path hackery); standard pytest/CI
+treatment instead of the special-cased `test_claude_dev_tooling` directory pointer; declared
+dependencies instead of a loose requirements.txt; and it strengthens the future plugin/template-repo
+lift (decision 3). Boundaries and constraints:
+
+- **What stays in `.claude/`**: SKILL.md files, settings.json, and the bash hook entry points —
+  Claude Code discovers all of them by path. They become thin wrappers invoking `python -m` into
+  the package.
+- **Zero-install must survive**: cloud sessions run on fresh clones with no pip step, so the
+  package is a plain top-level directory importable from the repo root (`python -m ...`), with a
+  pyproject for *optional* installation (stack-board Action, future plugin lift). No src-layout.
+- **Dev-tooling optics for cram2**: own clearly-named directory, not published to PyPI, not part
+  of the default install — visibly separate from the robot-stack packages.
+
+**Revised sequencing** (PR 1 shipped without the package, so creation moves to PR 3):
+- PR 3 (`shared-pr-state-chips`) *creates* the package and puts `pr_state` in it as its first
+  module — the shared import need is what forces it into existence there.
+- New item `dev-tooling-python-package` migrates the existing Python (stack.py, the plan-dashboard
+  scripts, plan_manifest_tools.py) + all tests into it, last in the upstream wave: it requires
+  #101 MERGED (it moves `.claude/hooks/tests/` files #101's diff adds) and PR 3 stable (it moves
+  files PR 3 edits).

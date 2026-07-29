@@ -43,33 +43,23 @@ items:
     title: "Migrate the EQL living roadmap out of cram-notes.md into its own plan"
     track: personal-data
     depends_on: []
-    status: done
+    status: not_started
     notes: >
-      Done. Ran /plan-create eql-verbalization from the cram-notes living-roadmap section;
-      folded the P1-P3 review-round logs into the three pr-progress files; slimmed
-      cram-notes.md to pure conventions; fixed the stale "hook lives on
-      claude/session-hooks" reference; deleted superseded rdr-roadmap.md. No PR —
-      personal-notes branch only.
+      Run /plan-create eql-verbalization from the cram-notes living-roadmap section
+      (~10k tokens loaded every session today); fold P1-P3 review-round logs into the
+      existing pr-progress files; slim cram-notes.md to pure conventions; fix the stale
+      "hook lives on claude/session-hooks" reference; delete superseded rdr-roadmap.md.
+      No PR — personal-notes branch only.
 
   - id: session-hooks-retirement
     branch: null
     title: "Tag and delete the superseded claude/session-hooks branch"
     track: personal-data
     depends_on: []
-    status: done
+    status: not_started
     notes: >
-      Done. claude/session-hooks's tip (ece182c5) was a literal git merge-base
-      --is-ancestor of main (via PR #432), so nothing was lost by skipping the tag:
-      every commit on the branch already remains reachable from main. The
-      tag-push/branch-delete git operations turned out to be unavailable from a
-      Claude Code session (git proxy returns 403 on tag pushes and branch deletes;
-      no GitHub MCP tool substitutes) - documented as a standing platform
-      constraint in roadmap.md's 2026-07-29 addendum, and flagged on the sibling
-      item tooling-branch-retirement, which has the same shape. The user deleted
-      claude/session-hooks directly (outside the harness) once this was confirmed
-      safe. Remaining cleanup: origin/claude/push-scope-test-zsq7jc, a throwaway
-      branch pushed while diagnosing the tooling gap (identical content to main),
-      still needs deleting the same way.
+      main carries a strict superset (+1237/-6); nothing at runtime reads the branch
+      (settings.json and hooks load from the checked-out branch). Tag for history first.
 
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
@@ -86,33 +76,20 @@ items:
       Stacking does not wait for the merge.
 
   - id: stack-tooling-on-main
-    title: "PR 1: stack workflow tooling on main (.claude/stack/)"
     branch: claude/stack-tooling-on-main
+    title: "PR 1: stack workflow tooling on main (.claude/stack/)"
     pull_request_number: 106
     track: stack-tooling
     depends_on: [setup-personal-notes-pr101]
     status: in_progress
     session: https://claude.ai/code/session_01Y9egTHHu5RTXmkFL4SwXM9
     notes: >
-      Base claude/patch-pr-rheubx. Port stack.py minus the dead stack-turn/round-robin
-      subsystem (wip_cap=1000000 makes it decide nothing); per-user config overrides read
-      from the personal-notes branch (.claude/personal/stack.toml). Add generic ROUTINE.md
-      (canonical doctrine; kills the drifted duplicate in dev/README.md and its
-      subscribe_pr_activity contradiction) and a ~1-page full-picture README. No restack.js
-      (dead: forbidden by the routine, assumes local ROS). Tests via PR #101's
-      ScratchRepository machinery. Review risk: bringing 741-line stack.py to AGENTS.md
-      standards. Rule: no repo names outside stack.toml defaults + doc examples.
-
-      PR #106 opened as a draft. Scope narrowed by user decision during kickoff: this PR
-      ships only the core read-only commands (status/check/next/restack-plan) plus the new
-      config layering - board.json export and board.html rendering are deferred entirely to
-      PR 3 (shared-pr-state-chips) / PR 4 (stack-board-single-site), not ported here even
-      though the item's own notes read as "port everything minus round-robin". 237 tests
-      passing (.claude/hooks/tests + plan-dashboard/tests + the new stack/tests). Also
-      flagged on the PR: design decision 1's "(which /setup-personal-notes (PR #101) already
-      creates)" looks like a stale cross-reference - it's setup-stacked-prs-skill (PR 2) that
-      actually writes .claude/personal/stack.toml, per that item's own notes and PR #101's
-      description. Worth a one-line correction here when convenient; doesn't block anything.
+      Implemented as draft PR #106 (2026-07-29): stack.py ported to .claude/stack/ minus
+      the round-robin/WIP-cap subsystem, per-user config layering from the personal-notes
+      branch, canonical ROUTINE.md + 1-page README, tests via ScratchRepository; restack.js
+      and board rendering not ported (board deferred to PR 3/PR 4 as planned). Awaiting
+      self-review/un-draft. Landed as plain scripts — the dev-tooling Python package is
+      created in PR 3 instead (see dev-tooling-python-package).
 
   - id: setup-stacked-prs-skill
     branch: null
@@ -158,6 +135,29 @@ items:
       session-link parse) shared by stack.py and plan-dashboard's pr-data fetching; add
       board-semantics chips to build_dashboard.py items; add a headless static-HTML build
       entrypoint for the Pages Action (Artifact path keeps working during transition).
+      Since PR 1 (#106) landed as plain scripts, this PR also CREATES the dev-tooling
+      Python package (top-level directory importable from the repo root with no install,
+      plus a pyproject for optional installation) and puts pr_state in it as its first
+      module — the shared import home is what forces the package into existence here.
+
+  - id: dev-tooling-python-package
+    branch: null
+    title: "Migrate the .claude Python into the dev-tooling package, tests under test/"
+    track: dashboards
+    depends_on: [setup-personal-notes-pr101, stack-tooling-on-main, shared-pr-state-chips]
+    status: not_started
+    notes: >
+      Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
+      plan_manifest_tools.py) into the package PR 3 created, with all their tests moved
+      to the standard test/ directory and the test_claude_dev_tooling CI job repointed.
+      Boundary: SKILL.md files, settings.json, and the bash hook entry points stay in
+      .claude/ (Claude Code discovers them by path) as thin wrappers calling python -m
+      into the package. Constraints: zero-install must survive (importable from repo
+      root; installation optional), and the package stays visibly dev-tooling (own
+      directory, not published, not in the default install). Stronger dependency than
+      the open-ready rule: requires #101 MERGED (this moves files in
+      .claude/hooks/tests/ that #101's diff adds) and PR 3 merged or at least stable
+      (it moves files PR 3 edits) — sequence it last in the upstream wave.
 
   - id: stack-board-single-site
     branch: null
@@ -192,7 +192,4 @@ items:
     status: not_started
     notes: >
       Only after one full routine cycle and one board-Action cycle run green on the new
-      paths. Tag for history first. Same tag-push/branch-delete tooling gap as
-      session-hooks-retirement applies here too (see that item's blockers) — plan for
-      this to run outside the harness (user's machine or a broader-scoped gh token),
-      not from a Claude Code session.
+      paths. Tag for history first.
