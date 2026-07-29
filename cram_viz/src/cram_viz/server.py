@@ -32,6 +32,7 @@ import sys
 import threading
 import traceback
 from pathlib import Path
+from typing_extensions import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 from cram_viz import paths
@@ -56,7 +57,7 @@ except Exception:  # pragma: no cover - a broken KB should not kill the viewer
 _EQL_LOCK = threading.Lock()
 
 
-def _no_eql_error():
+def _no_eql_error() -> Dict[str, Any]:
     """
     The standard error payload for any API route when krrood isn't importable.
     """
@@ -71,7 +72,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(paths.WEB_ROOT), **kwargs)
 
-    def end_headers(self):
+    def end_headers(self) -> None:
         """
         Disable caching so a rebuilt scene/frontend is never served stale.
         """
@@ -85,7 +86,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         logger.info("  " + format, *args)
 
     # %% helpers -----------------------------------------------------------------
-    def _json(self, payload, code: int = 200) -> None:
+    def _json(self, payload: Any, code: int = 200) -> None:
         """
         Send a payload as JSON with the given status code.
         """
@@ -96,13 +97,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _query(self) -> dict:
+    def _query(self) -> Dict[str, List[str]]:
         """
         The parsed query-string parameters of the current request.
         """
         return parse_qs(urlparse(self.path).query)
 
-    def _guarded(self, fn) -> None:
+    def _guarded(self, fn: Callable[[], Any]) -> None:
         """
         Run an API handler; report exceptions as a JSON error payload.
         """
@@ -155,7 +156,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if route == "/api/kb/expand":
             node = (self._query().get("node") or [""])[0]
 
-            def expand():
+            def expand() -> Dict[str, Any]:
                 """
                 The node's subgraph, or a "not drillable" error if it has none.
                 """
@@ -195,7 +196,7 @@ def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
     return socketserver.ThreadingTCPServer(("127.0.0.1", port), Handler)
 
 
-def main(argv=None) -> None:
+def main(argv: Optional[List[str]] = None) -> None:
     """
     ``cram-viz`` — serve the viewer, the scenes and the JSON API.
     """

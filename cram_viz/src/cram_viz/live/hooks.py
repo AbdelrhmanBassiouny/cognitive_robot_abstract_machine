@@ -12,11 +12,13 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing_extensions import Any
 
 from coraplex.plans.executables import GiskardExecutable
 from coraplex.plans.plan import Plan
 from giskardpy.executor import Executor
 from semantic_digital_twin.adapters.mesh import MeshParser
+from semantic_digital_twin.world import World
 
 from cram_viz.live.bridge import BRIDGE
 
@@ -31,7 +33,7 @@ def install_tick_hook(plan_snapshot_tick_interval: int = 5) -> None:
     """
     original_tick = Executor.tick
 
-    def tick(self, *args, **kwargs):
+    def tick(self, *args: Any, **kwargs: Any) -> None:
         """
         Run the real tick, then bind/snapshot the bridge off its result.
         """
@@ -70,7 +72,7 @@ def install_plan_hooks() -> None:
     """
     original_perform = Plan.perform
 
-    def perform(self, *args, **kwargs):
+    def perform(self, *args: Any, **kwargs: Any) -> Any:
         """
         Capture the plan the moment it starts performing.
         """
@@ -82,7 +84,7 @@ def install_plan_hooks() -> None:
 
     original_execute = GiskardExecutable.execute
 
-    def execute(self, *args, **kwargs):
+    def execute(self, *args: Any, **kwargs: Any) -> None:
         """
         Track this executable's motion group and freeze its final status.
         """
@@ -110,7 +112,7 @@ def install_mesh_hook() -> None:
     """
     original_parse = MeshParser.parse
 
-    def parse(self, *args, **kwargs):
+    def parse(self, *args: Any, **kwargs: Any) -> World:
         """
         Remember this mesh's file path before parsing it.
         """

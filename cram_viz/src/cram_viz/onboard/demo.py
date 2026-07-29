@@ -26,6 +26,8 @@ By default `import rclpy` is blocked so demos skip their ROS visualization
 branch; pass --allow-ros to keep it.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -35,9 +37,17 @@ import runpy
 import shutil
 import sys
 import time
+from typing_extensions import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 
 from cram_viz import paths
 from cram_viz.onboard.bundle_urdf import bundle_urdf
+
+if TYPE_CHECKING:
+    from coraplex.plans.executables import Executable
+    from coraplex.plans.plan_node import ActionNode
+    from giskardpy.executor import Executor
+    from semantic_digital_twin.adapters.urdf import URDFParser
+    from semantic_digital_twin.world_description.world_entity import Body
 
 T0 = time.time()
 
@@ -80,7 +90,7 @@ class Recorder:
         self.control_dt = None
 
     # ---- asset hooks ---------------------------------------------------------
-    def install_asset_hooks(self):
+    def install_asset_hooks(self) -> None:
         """Record every asset resolution so the bundler can copy the files."""
         from semantic_digital_twin.adapters.mesh import STLParser
         from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
@@ -90,7 +100,7 @@ class Recorder:
 
         orig_resolve = PackageUriResolver.resolve
 
-        def resolve(self, uri):
+        def resolve(self, uri: str) -> str:
             """
             Resolve as usual, but remember the uri -> path mapping.
             """
@@ -102,7 +112,7 @@ class Recorder:
 
         orig_from_file = URDFParser.from_file.__func__
 
-        def from_file(cls, file_path, **kw):
+        def from_file(cls, file_path: str, **kw: Any) -> URDFParser:
             """
             Parse as usual, but remember this URDF/xacro source file.
             """
@@ -114,7 +124,7 @@ class Recorder:
 
         orig_stl = STLParser.__init__
 
-        def stl_init(self, file_path, *a, **kw):
+        def stl_init(self, file_path: str, *a: Any, **kw: Any) -> None:
             """
             Init as usual, but remember this loose object's mesh file.
             """
@@ -125,7 +135,7 @@ class Recorder:
         STLParser.__init__ = stl_init
 
     # ---- trajectory hook -----------------------------------------------------
-    def install_tick_hook(self):
+    def install_tick_hook(self) -> None:
         """
         Wrap Executor.tick so every simulation step is snapshotted.
         """
@@ -134,7 +144,7 @@ class Recorder:
         rec = self
         orig_tick = Executor.tick
 
-        def tick(self, *a, **kw):
+        def tick(self, *a: Any, **kw: Any) -> None:
             """
             Run the real tick, then record its resulting world state.
             """
@@ -144,7 +154,7 @@ class Recorder:
 
         Executor.tick = tick
 
-    def _lazy_bind(self, executor):
+    def _lazy_bind(self, executor: Executor) -> None:
         """
         Bind to the executor's world and locate the robot + recordable objects
         the first time a tick fires (the world doesn't exist any earlier).
@@ -185,7 +195,7 @@ class Recorder:
         )
 
     @staticmethod
-    def _pose7(body):
+    def _pose7(body: Body) -> List[float]:
         """
         A body's world pose as [x, y, z, qx, qy, qz, qw].
         """
@@ -194,7 +204,7 @@ class Recorder:
         q = p.to_quaternion().to_np().flatten()
         return [round(float(v), 5) for v in (t[0], t[1], t[2], q[0], q[1], q[2], q[3])]
 
-    def _snap(self, executor):
+    def _snap(self, executor: Executor) -> None:
         """
         Append one frame: every movable connection's position, the robot base
         pose and every tracked object's pose.
@@ -231,7 +241,7 @@ class Recorder:
     # once per action (in plan order) — we record the action class, its arm and
     # its target object there, and later derive the segment TIMING from the
     # recorded data (object attach/detach + first base motion).
-    def _target_of(self, desig):
+    def _target_of(self, desig: Any) -> Optional[str]:
         """
         The recorded object a designator refers to, by matching any of its
         attributes' names against the demo's known mesh basenames.
@@ -247,7 +257,7 @@ class Recorder:
                 return base
         return None
 
-    def install_segment_hook(self):
+    def install_segment_hook(self) -> None:
         """
         Wrap ActionNode.parse to record each action's class, arm and target as
         it is parsed (in plan order).
@@ -257,7 +267,7 @@ class Recorder:
         rec = self
         orig_parse = ActionNode.parse
 
-        def parse(node, *a, **kw):
+        def parse(node: ActionNode, *a: Any, **kw: Any) -> Executable:
             """
             Record this action's designator before letting it parse normally.
             """
@@ -282,7 +292,7 @@ class Recorder:
         ActionNode.parse = parse
 
     # ---- the executed plan tree, serialized from the real PlanNode graph ------
-    def serialize_plans(self, max_nodes=400):
+    def serialize_plans(self, max_nodes: int = 400) -> List[Dict[str, Any]]:
         """
         The executed plan tree(s) (deduped by root), as nested dicts capped at
         max_nodes total.
@@ -297,7 +307,7 @@ class Recorder:
                 roots.append(r)
         count = [0]
 
-        def ser(n):
+        def ser(n: Any) -> Optional[Dict[str, Any]]:
             """
             One PlanNode and its children as a dict, or None past max_nodes.
             """
@@ -326,14 +336,14 @@ class Recorder:
 
 
 # ============================================================ post-process ===
-def moved(a, b, eps=0.02):
+def moved(a: Sequence[float], b: Sequence[float], eps: float = 0.02) -> bool:
     """
     Whether pose b is more than eps away from pose a (planar distance + |dz|).
     """
     return math.hypot(a[0] - b[0], a[1] - b[1]) + abs(a[2] - b[2]) > eps
 
 
-def object_windows(rec):
+def object_windows(rec: Recorder) -> List[Dict[str, Any]]:
     """
     attach..detach window (raw frames) per object that travelled overall.
     """
@@ -366,7 +376,7 @@ def object_windows(rec):
     return wins
 
 
-def first_base_motion(rec, before):
+def first_base_motion(rec: Recorder, before: int) -> int:
     """
     First raw frame (< before) at which the robot base left its spawn.
     """
@@ -378,7 +388,7 @@ def first_base_motion(rec, before):
     return before
 
 
-def derive_segments(rec):
+def derive_segments(rec: Recorder) -> List[Dict[str, Any]]:
     """Segments = data-driven windows, labelled from the parsed action list."""
     n = len(rec.frames)
     wins = object_windows(rec)
@@ -451,7 +461,7 @@ def derive_segments(rec):
 PALETTE = ["#f3f0ea", "#cf5b3a", "#b8bcc4", "#e7c26a", "#7fb069", "#5b8cff"]
 
 
-def link_set(part):
+def link_set(part: Any) -> List[str]:
     """
     A robot part's link names, stripped of their model-name prefix.
     """
@@ -462,7 +472,7 @@ def link_set(part):
     return out
 
 
-def build_scene(rec, name, out_dir, step):
+def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, Any]:
     """
     Downsample the recording to every step-th frame (always keeping the last)
     and assemble scene.json + trajectory.json from it.
@@ -475,7 +485,7 @@ def build_scene(rec, name, out_dir, step):
     for k, orig in enumerate(idx):
         remap[orig] = k
 
-    def nearest(i):
+    def nearest(i: int) -> int:
         """
         The downsampled index closest to raw frame i.
         """

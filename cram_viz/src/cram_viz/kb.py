@@ -924,7 +924,7 @@ def get_kb() -> KB:
     return _kb
 
 
-def reset_kb():
+def reset_kb() -> None:
     """
     Drop the cached KB (tests point CRAM_VIZ_SCENES at fixtures).
     """
@@ -1315,7 +1315,7 @@ def graph_payload() -> Dict[str, Any]:
 
         # ground the demo in the architecture at the SUBPACKAGE that actually
         # realises each part (only wire to a node that exists in this view)
-        def link(src, dst, label):
+        def link(src: str, dst: str, label: str) -> None:
             """
             Add an edge, but only if dst is actually a node in this view.
             """

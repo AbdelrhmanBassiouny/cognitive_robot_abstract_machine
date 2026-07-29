@@ -24,12 +24,13 @@ import re
 import shutil
 import subprocess
 import sys
+from typing_extensions import Any, Dict, List, Optional
 
 MESH_EXTS = (".dae", ".stl", ".obj")
 
 
 # ------------------------------------------------------------ resolution ----
-def _search_root_candidates():
+def _search_root_candidates() -> List[str]:
     """
     Likely ROS install prefixes to search for a package:// URI: env vars first,
     then common workspace layouts under the home directory and /opt/ros.
@@ -44,7 +45,9 @@ def _search_root_candidates():
     return roots
 
 
-def resolve_uri(uri, hints=None, base_dir=None):
+def resolve_uri(
+    uri: str, hints: Optional[Dict[str, str]] = None, base_dir: Optional[str] = None
+) -> Optional[str]:
     """
     Resolve a mesh/urdf reference to an absolute file path (or None).
     """
@@ -94,7 +97,7 @@ def resolve_uri(uri, hints=None, base_dir=None):
     return None
 
 
-def _ref_to_relpath(uri):
+def _ref_to_relpath(uri: str) -> str:
     """
     Where a reference lands inside <out>/meshes/.
     """
@@ -107,7 +110,9 @@ def _ref_to_relpath(uri):
 
 
 # ------------------------------------------------------------ side assets ---
-def _copy_file(src, dst, copied, missing):
+def _copy_file(
+    src: Optional[str], dst: str, copied: Dict[str, str], missing: List[str]
+) -> bool:
     """
     Copy src to dst once; record it in copied (memo) or missing on failure.
     """
@@ -122,7 +127,9 @@ def _copy_file(src, dst, copied, missing):
     return True
 
 
-def _copy_side_assets(src_mesh, dst_mesh, copied, missing):
+def _copy_side_assets(
+    src_mesh: str, dst_mesh: str, copied: Dict[str, str], missing: List[str]
+) -> None:
     """
     Textures referenced by a .dae, or .mtl + its textures for a .obj.
     """
@@ -153,7 +160,7 @@ def _copy_side_assets(src_mesh, dst_mesh, copied, missing):
 
 
 # ---------------------------------------------------------------- xacro -----
-def xacro_to_urdf_text(path):
+def xacro_to_urdf_text(path: str) -> str:
     """
     Run the xacro CLI (needs a sourced ROS environment on PATH).
     """
@@ -164,7 +171,9 @@ def xacro_to_urdf_text(path):
 
 
 # ------------------------------------------------------------------ main ----
-def bundle_urdf(source, name, out_dir, hints=None):
+def bundle_urdf(
+    source: str, name: str, out_dir: str, hints: Optional[Dict[str, str]] = None
+) -> Dict[str, Any]:
     """
     Bundle one URDF/xacro.
 
@@ -213,7 +222,7 @@ def bundle_urdf(source, name, out_dir, hints=None):
     }
 
 
-def main():
+def main() -> None:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
