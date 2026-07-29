@@ -1,11 +1,14 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-29): pushed (25 commits total, fd4f91f7c latest). Back in **draft** (converted
-after 872ea244a's push, per personal convention — the developer had marked it ready for
-review after 88c95ed2's CI went green). Base `main`
+Status (2026-07-29): pushed (25 commits total, fd4f91f7c latest). Developer marked it **ready for
+review** themselves after this commit's CI went green; per personal convention that stands until
+my own next push (which would re-draft it). Base `main`
 (#86/#87 both merged there, auto-updated to `bcd322c20` after the round-20 rebase). Subscribed to
 activity. 22 review threads total, all now reply-and-resolved except round 6 (informational,
-nothing to resolve).
+nothing to resolve). CI for fd4f91f7c: all 20 checks completed — 19 passed (including `krrood`'s
+own job), 1 failure on `semantic_digital_twin`'s known pre-existing `test_world_sim_state_sync`
+physics-settling flake (871 passed, 1 failed — confirmed via `get_job_logs`, unrelated to this
+PR's files). No code changes needed.
 An unexpected `Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed
 directly on this branch mid-round-15, from outside this session — see the roadmap section above
 for the full investigation and how it was reconciled (rebase, not force-push). Description
