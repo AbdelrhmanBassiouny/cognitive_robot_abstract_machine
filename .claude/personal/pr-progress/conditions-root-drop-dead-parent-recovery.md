@@ -485,6 +485,39 @@ immediately after pushing. Fresh CI kicked off on the merge commit with nothing
 failed as of this note — `mergeable_state` cleared to `unstable` (CI-pending, not a
 conflict) right after the push, confirming the conflict itself is resolved.
 
+## 2026-07-29 — updated from fork + 2-comment review round
+
+Fetched and fast-forwarded to `origin/conditions-root-drop-dead-parent-recovery`
+(`caea2c3a`, which already merged current `main` — branch is now 0 behind `main`).
+Several intervening rounds had landed from other sessions and were already resolved
+(`_true_results_`/`_get_expression_names_by_their_ids_` extraction, the Set→List fix).
+
+Two new unresolved comments, both handled in `c5568406`:
+1. `evaluation.py` `on_conclusions_processed` — "slim this docstring down a lot, just
+   say what it does". Cut from ~15 lines to a one-line summary plus `:param:` entries;
+   the rest was rationale for why the `has_condition` check replaced recomputing
+   `_conditions_root_` (history, not behaviour) and duplicated the field's own docstring.
+2. `evaluation_context.py` — "remove this method and make the field not private".
+   `_has_condition` → public `has_condition: bool`; `has_condition()` accessor deleted;
+   the one production call site and 3 unit tests read the field directly. `_root_id`
+   deliberately left private — still only reachable via `is_active_root()`, which
+   compares rather than exposes.
+
+Verified: 1338 passed, 6 skipped across test_eql/test_ormatic/test_class_diagrams/
+test_ripple_down_rules/test_underspecified_knowledge; only failures are the 2
+`test_object_diagram` graphviz-`dot`-missing ones that also fail on a clean tree.
+
+New artifact trap (in addition to the two PDFs): running the suite also regenerates
+`test/krrood_test/test_eql/test_verbalization/verbalization_results.py` (the
+auto-generated snapshot module) with different import ordering and `tuple`→`Tuple`.
+`git checkout --` it before committing, same as the PDFs.
+
+PR state: the developer had marked it ready-for-review and added an `in-review` label.
+Per the personal convention ("convert back to draft after pushing any commit, even if
+previously marked ready"), converted back to draft after this push and said so in chat.
+Description refreshed — it still described `has_condition()` as a method and
+`_names_for_ids_` under its pre-rename name/Set return type.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
