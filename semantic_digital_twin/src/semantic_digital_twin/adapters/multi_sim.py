@@ -76,6 +76,7 @@ from semantic_digital_twin.world_description.world_modification import (
     AddKinematicStructureEntityModification,
     AddActuatorModification,
     AddConnectionModification,
+    RemoveConnectionModification,
 )
 
 logger = logging.getLogger(__name__)
@@ -2931,6 +2932,27 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     opposite extreme: sync on every call, with no throttling at all.
     """
 
+    mirror_attachments: bool = field(default=False, kw_only=True)
+    """
+    Whether AttachNode/DetachNode-style re-parents in the world model are
+    mirrored into MuJoCo's own kinematic tree (see :meth:`on_model_change`).
+
+    When True, grasping welds the object to the gripper and placing restores
+    it as a free body, so a carried object follows the arm regardless of
+    whether contact and friction would actually have held it. That is what
+    makes ``AttachNode`` mean the same thing here as it does in a
+    physics-free Coraplex world.
+
+    Leave False to keep the grasp genuinely physical -- the object is then
+    held only by real contact and friction, so a poor grasp visibly fails
+    instead of being silently rescued by the weld. Also note that attaching
+    and detaching recompile the MuJoCo model, which invalidates existing
+    ``mjModel``/``mjData`` pointers.
+
+    Defaults to False so that enabling it is a deliberate choice: without it
+    the simulator behaves exactly as it did before this was available.
+    """
+
     physically_simulated_dofs: Set[DegreeOfFreedom] = field(
         default_factory=set, kw_only=True
     )
@@ -2967,6 +2989,75 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     def __post_init__(self):
         super().__post_init__()
         self.simulator.read_data_from_simulator = self._sim_to_world
+
+    def on_model_change(self, **kwargs):
+        """
+        Like :meth:`MultiSimSynchronizer.on_model_change`, but -- when
+        :attr:`mirror_attachments` is set -- additionally detects an
+        AttachNode/DetachNode-style re-parent -- a
+        ``RemoveConnectionModification`` immediately followed, in the same
+        ``modify_world()`` block, by an ``AddConnectionModification`` for the
+        *same* child -- and mirrors it into MuJoCo's own kinematic tree via
+        :meth:`MujocoSimulator.attach`/:meth:`MujocoSimulator.detach`, instead
+        of the normal (no-op, for ``FixedConnection``) entity spawn.
+
+        Without that mirroring, re-parenting only updates the world model
+        (used by RViz/planning), so a body that MuJoCo is genuinely,
+        physically simulating (e.g. a grasped object held by real
+        contact/friction) keeps behaving as an independent free body in
+        MuJoCo, oblivious to being "attached" -- it gets left behind the
+        instant the (kinematically teleported) arm carrying it moves, since
+        friction can't react to an instantaneous position jump the way it
+        reacts to continuous motion.
+
+        With :attr:`mirror_attachments` left False this reduces exactly to the
+        base implementation: no child counts as re-parented, so every
+        modification takes the normal spawn path.
+        """
+        modifications = self._world._model_manager.model_modification_blocks[-1]
+        reparented_child_ids = (
+            {
+                modification.child_id
+                for modification in modifications
+                if isinstance(modification, RemoveConnectionModification)
+            }
+            if self.mirror_attachments
+            else set()
+        )
+        for modification in modifications:
+            if isinstance(modification, AddKinematicStructureEntityModification):
+                entity = modification.kinematic_structure_entity
+                self.entity_spawner.spawn(simulator=self.simulator, entity=entity)
+            elif isinstance(modification, AddConnectionModification):
+                connection = modification.connection
+                if connection.child.id in reparented_child_ids:
+                    self._reparent_in_simulator(connection)
+                else:
+                    self.entity_spawner.spawn(
+                        simulator=self.simulator, entity=connection
+                    )
+            elif isinstance(modification, AddActuatorModification):
+                entity = modification.actuator
+                self.entity_spawner.spawn(simulator=self.simulator, entity=entity)
+
+    def _reparent_in_simulator(self, connection: Connection) -> None:
+        """
+        Weld (or un-weld) ``connection``'s child body in MuJoCo to mirror an
+        AttachNode/DetachNode-style re-parent, using the body's *actual,
+        physically-settled* pose (both :meth:`MujocoSimulator.attach` and
+        :meth:`MujocoSimulator.detach` read live ``_mj_data`` poses when no
+        explicit transform is given), not an idealized/kinematic one.
+        """
+        child_name = connection.child.name.name
+        if connection.parent.id == self._world.root.id:
+            # DetachNode: placed back down -- restore free dynamics.
+            self.simulator.detach(body_name=child_name, add_freejoint=True)
+        else:
+            # AttachNode: weld to the new parent at the current real pose.
+            self.simulator.attach(
+                body_1_name=child_name,
+                body_2_name=connection.parent.name.name,
+            )
 
     def _resolve_qpos_adr(self, connection: Connection) -> Optional[int]:
         """
@@ -3438,6 +3529,7 @@ class MultiSim(ABC):
         real_time_factor: Optional[float] = 1.0,
         physically_simulated_dofs: Optional[Set[DegreeOfFreedom]] = None,
         sync_rate_hz: float = 30,
+        mirror_attachments: bool = False,
         **kwargs,
     ):
         """
@@ -3457,6 +3549,10 @@ class MultiSim(ABC):
         :param sync_rate_hz: Wall-clock rate at which the simulator's actual
             positions are read back into world.state (see
             MultiSimSynchronizer._sim_to_world).
+        :param mirror_attachments: Whether AttachNode/DetachNode re-parents are
+            mirrored into the simulator's own kinematic tree, so a grasped
+            object is welded to the gripper instead of being held purely by
+            contact and friction.
         """
         self.builder_class().build_world(world=world, file_path=self.default_file_path)
         self.simulator = self.simulator_class(
@@ -3471,6 +3567,7 @@ class MultiSim(ABC):
             simulator=self.simulator,
             physically_simulated_dofs=physically_simulated_dofs or set(),
             sync_rate_hz=sync_rate_hz,
+            mirror_attachments=mirror_attachments,
         )
 
     def start_simulation(self, constraints: Optional[SimulatorConstraints] = None):
