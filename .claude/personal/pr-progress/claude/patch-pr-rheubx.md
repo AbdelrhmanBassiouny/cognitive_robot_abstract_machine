@@ -34,7 +34,15 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
    branch would conflict with it. Offered to split it out if the user prefers.
    Also repointed `PullRequestLabel`'s docstring at the renamed section so the
    cross-reference doesn't go stale. PR description rewritten to cover both parts.
-9. [ ] Watch CI to green; handle review comments.
+9. [x] Third ask: surface the worked example at the top of the README, for people who'd
+   rather jump straight into using it. Added as a callout under the opening paragraph
+   (walkthrough link + "or just run /setup-personal-notes"); the plan-dashboard
+   section's own entry dropped to a bare link so the description isn't stated twice.
+   Also fixed the walkthrough's footer, which still called the README the setup guide
+   "this walkthrough assumes you've already followed" — its own intro (rewritten by the
+   original patch) no longer assumes that, and with the README now pointing readers
+   into the walkthrough, the stale line pointed them straight back out.
+10. [ ] Watch CI to green; handle review comments.
 
 ### What this PR contains
 `/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
