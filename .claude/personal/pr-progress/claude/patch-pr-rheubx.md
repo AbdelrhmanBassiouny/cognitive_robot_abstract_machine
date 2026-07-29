@@ -64,9 +64,12 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
       the other passed. Both tests sit near recent collision-handling work on `main`
       (lazy-init refactor, new self-collision tests). Flagged on the thread as a lead
       only; not investigated, out of scope for this PR.
-    - `rerun_failed_jobs` on run 30451859082 refused with 403 "This workflow is already
-      running" (sdt + coraplex jobs still in progress). Retry once the run completes —
-      the hourly check-in prompt now carries this as its priority action.
+    - **User instruction (2026-07-29): ignore these errors.** Stop investigating,
+      re-running or commenting on the robotics-job failures. The check-in prompt was
+      retuned to watch only for review comments, merge conflicts and merge/close;
+      `test_claude_dev_tooling` is the only job to act on. A `rerun_failed_jobs`
+      attempt was already refused with 403 (run still in progress) and is not being
+      retried.
     - Everything else on the current run is green, `test_claude_dev_tooling` included.
 
 ### What this PR contains
