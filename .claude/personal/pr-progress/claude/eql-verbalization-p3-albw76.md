@@ -3,8 +3,10 @@
 Status (2026-07-29): pushed (22 commits total, 872ea244a latest). Back in **draft** (converted
 after this round's own push, per personal convention — the developer had marked it ready for
 review after 88c95ed2's CI went green). Base `main`
-(#86/#87 both merged there). Subscribed to activity. 17 review threads total, all now
-reply-and-resolved except round 6 (reconciliation question, informational — nothing to resolve).
+(#86/#87 both merged there). Subscribed to activity. 18 review threads total, all now
+reply-and-resolved except round 6 (informational, nothing to resolve) and round 18 (a live
+design discussion — replied with a critique and two clarifying questions, awaiting the
+developer's answer before implementing anything).
 An unexpected `Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed
 directly on this branch mid-round-15, from outside this session — see the roadmap section above
 for the full investigation and how it was reconciled (rebase, not force-push). Description
