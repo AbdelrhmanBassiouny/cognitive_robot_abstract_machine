@@ -18,4 +18,13 @@ builds board + plan dashboards from main + personal-notes; then routine cutover 
 personal-notes slimming (/plan-create eql-verbalization) can start immediately; retire
 session-hooks now, stack-workflow-tooling after one green cycle.
 
+Portability follow-up (user question, 2026-07-29): system must stay runnable on repos other than
+cram2. Adjustments folded into the plan: PR 2's /setup-stacked-prs gets two install modes — native
+(tooling on the target repo's main) and fork-overlay (skill creates/updates a never-merged tooling
+branch on the user's fork from its own canonical files, for repos that won't take .claude tooling
+upstream; re-running the skill is the drift-fix/updater). PR 4 parameterizes board.yml's hardcoded
+fork repo/branch/upstream as repository variables. PR 1 rule: no repo names outside stack.toml
+defaults + doc examples. Long-term option kept open (not now): lift into a standalone plugin/template
+repo for per-user cross-repo install.
+
 Next: user approval -> /plan-create workflow-unification -> dispatch PR 1 on claude/patch-pr-rheubx.
