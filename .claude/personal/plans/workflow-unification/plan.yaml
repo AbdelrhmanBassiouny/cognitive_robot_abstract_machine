@@ -14,31 +14,39 @@ tracking_issue: 102
 
 waves:
   - id: immediate
+    branch: null
     name: "Immediate cleanups"
     description: "Independent of upstream review; can start now."
   - id: upstream
+    branch: null
     name: "Tooling to main via cram2"
     description: "The stacked PRs on top of PR #101; land through cram2 review."
   - id: cutover
+    branch: null
     name: "Cutover & retirement"
     description: "After the upstream wave reaches cram2/main and fork main fast-forwards."
 
 tracks:
   - id: personal-data
+    branch: null
     name: "Personal-notes slimming"
     wave: immediate
   - id: stack-tooling
+    branch: null
     name: "Stack tooling & setup skill"
     wave: upstream
   - id: dashboards
+    branch: null
     name: "Dashboard unification"
     wave: upstream
   - id: cutover
+    branch: null
     name: "Cutover & retirements"
     wave: cutover
 
 items:
   - id: eql-roadmap-migration
+    branch: null
     title: "Migrate the EQL living roadmap out of cram-notes.md into its own plan"
     track: personal-data
     depends_on: []
@@ -51,6 +59,7 @@ items:
       No PR — personal-notes branch only.
 
   - id: session-hooks-retirement
+    branch: null
     title: "Tag and delete the superseded claude/session-hooks branch"
     track: personal-data
     depends_on: []
@@ -74,6 +83,7 @@ items:
       Stacking does not wait for the merge.
 
   - id: stack-tooling-on-main
+    branch: null
     title: "PR 1: stack workflow tooling on main (.claude/stack/)"
     track: stack-tooling
     depends_on: [setup-personal-notes-pr101]
@@ -89,6 +99,7 @@ items:
       standards. Rule: no repo names outside stack.toml defaults + doc examples.
 
   - id: setup-stacked-prs-skill
+    branch: null
     title: "PR 2: /setup-stacked-prs guided one-command setup skill"
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
@@ -104,6 +115,7 @@ items:
       lives on the personal-notes branch, not a per-user dev branch.
 
   - id: shared-pr-state-chips
+    branch: null
     title: "PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards"
     track: dashboards
     depends_on: [stack-tooling-on-main]
@@ -115,6 +127,7 @@ items:
       entrypoint for the Pages Action (Artifact path keeps working during transition).
 
   - id: stack-board-single-site
+    branch: null
     title: "PR 4: stack-board Action builds board + all plan dashboards on one Pages site"
     repository: AbdelrhmanBassiouny/stack-board
     track: cutover
@@ -128,6 +141,7 @@ items:
       dashboard-urls.yaml / Artifact publishing become optional legacy.
 
   - id: routine-cutover
+    branch: null
     title: "Slim the live Routine to hard rules + a pointer at .claude/stack/ROUTINE.md"
     track: cutover
     depends_on: [stack-tooling-on-main]
@@ -138,6 +152,7 @@ items:
       inline in the Routine prompt; everything else moves to ROUTINE.md.
 
   - id: tooling-branch-retirement
+    branch: null
     title: "Tag and delete claude/stack-workflow-tooling after one green cycle"
     track: cutover
     depends_on: [routine-cutover, stack-board-single-site]
