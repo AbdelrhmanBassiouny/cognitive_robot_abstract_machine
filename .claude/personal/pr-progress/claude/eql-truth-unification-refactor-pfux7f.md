@@ -202,8 +202,33 @@ Also this round:
 All 4 threads reply-and-resolved. Full suite: 2015 passed / 2 pre-existing graphviz
 failures.
 
+## Review round 3 (c9724caf) — docstrings, and one rename rejected on evidence
+
+- **"Rename `_expressions_with_ids_` to `_descendent_expressions_with_ids_`, it only
+  looks at descendants"** — the premise was wrong: the walk is
+  `chain([self], self._descendants_)`, and `self` is load-bearing. Proved it by deleting
+  `self` from the chain: 5 satisfied-condition tests fail, because the caller passes
+  `_conditions_root_` and in `where(or_(...))` the `OR` *is* the root. Renamed to
+  `_subtree_expressions_with_ids_` instead and showed the failing list in the reply.
+  **Check a rename request's premise before applying it.**
+- **"What does it mean to bind the truth of every child, and why?"** — docstring stated
+  the what, not the why. Rewritten: a result it yields is its own, and truth is read from
+  `bindings[operand._id_]`, so not recording anything under its own id would make every
+  passed-on result silently false.
+- **"Why is Union a TruthValuedExpression?" (asked twice)** — answered, and stated it on
+  the class. Also raised, unprompted, that after the split `Union` is an *empty* class
+  (marker + `EvaluatesChildrenInSequence`), with `Next` as its only production subclass
+  and no direct instantiation outside one test — recommended deleting it and folding the
+  marker into `Next`. **Thread deliberately left open** awaiting their answer.
+
+Full suite: 2015 passed / 2 pre-existing graphviz failures.
+
 ## Next
 
+- **Awaiting a decision on whether `Union` should be deleted** (thread
+  `PRRT_kwDOQhJw3c6U1B63`). If yes: `Next(TruthValuedExpression,
+  EvaluatesChildrenInSequence, ConclusionSelector)`, and move the
+  `test_union_reports_the_truth_value_of_each_child_result` test onto whatever survives.
 - **ef7bb044: coraplex GREEN, 18/19 checks green.** Only red is
   `test_world_sim_state_sync` (sdt), the physics flake that also fails on plain main.
   CI on e85b6c03 queued at time of writing — watch it, though the round touched no logic.
