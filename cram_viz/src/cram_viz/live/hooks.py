@@ -22,13 +22,12 @@ from cram_viz.live.bridge import BRIDGE
 
 logger = logging.getLogger(__name__)
 
-#: snapshot the plan tree every this many executor ticks (it walks the tree)
-PLAN_SNAPSHOT_TICK_INTERVAL = 5
 
-
-def install_tick_hook() -> None:
+def install_tick_hook(plan_snapshot_tick_interval: int = 5) -> None:
     """
     Bind the bridge to the executing world and snapshot on every sim tick.
+
+    The plan tree is only re-walked every plan_snapshot_tick_interval ticks.
     """
     original_tick = Executor.tick
 
@@ -50,7 +49,7 @@ def install_tick_hook() -> None:
             BRIDGE.snapshot()
             BRIDGE.observe_chart(self.motion_statechart)
             BRIDGE._ticks += 1
-            if BRIDGE._ticks % PLAN_SNAPSHOT_TICK_INTERVAL == 0:
+            if BRIDGE._ticks % plan_snapshot_tick_interval == 0:
                 BRIDGE.snapshot_plan()
         except Exception:
             # boundary guard: a visualization bug must never take the robot
