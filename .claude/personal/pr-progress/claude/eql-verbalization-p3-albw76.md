@@ -1,8 +1,8 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-28): pushed (20 commits total, 88c95ed2 latest). Developer marked it **ready for
-review** themselves after CI went green; per personal convention that stands until my own next
-push (which would re-draft it). Base `main`
+Status (2026-07-29): pushed (22 commits total, 872ea244a latest). Back in **draft** (converted
+after this round's own push, per personal convention — the developer had marked it ready for
+review after 88c95ed2's CI went green). Base `main`
 (#86/#87 both merged there). Subscribed to activity. 17 review threads total, all now
 reply-and-resolved except round 6 (reconciliation question, informational — nothing to resolve).
 An unexpected `Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed
@@ -20,8 +20,52 @@ while several jobs (`coraplex`, `krrood`, `giskardpy`, `semantic_digital_twin`) 
 in_progress; polled `get_check_runs` until they all finished — every job passed, including
 `coraplex` (which just took ~28 minutes, longer than usual, and briefly looked like the source of
 the failure webhook before it went green). No code fix was needed; the failure notification
-appears to have reflected a transient/retried state, not an actual break. `mergeable_state` is back
-to `clean`. Hourly check-in loop active; PR still not merged/closed, so subscription continues.
+appears to have reflected a transient/retried state, not an actual break. `mergeable_state` was
+`clean` at that point. Hourly check-in loop active; PR still not merged/closed, so subscription
+continues.
+
+### Restacking conflict (2026-07-29): the stacking routine flagged a real merge conflict
+An automated stacking-routine comment reported `main` had moved and merging it into this branch
+conflicted in three files. Investigated by actually running `git merge origin/main` (not just
+reading the routine's summary): the conflicts came from an unrelated `main` PR that renamed the
+whole verbalization-testing snapshot mechanism — `SymbolicSurfaceSnapshot`→
+`VerbalizationResultsOfPackage`, `VerbalizationSurface`→`VerbalizationResult`,
+`surface_verification.py`→`result_verification.py`, plus a new `result_generation.py` that
+auto-generates the snapshot module from `conftest.py` (mirroring how `ormatic_interface.py` is
+regenerated). Two of the three conflicts were mechanical: `test_verbalization_surfaces.py`/
+`verbalization_surfaces.py` are modify/delete conflicts superseded by the new auto-generated
+`verbalization_results.py`/`test_result_generation.py`, so took the deletion and let the generator
+reproduce the file (it already picks up this PR's abstract-subclass-expansion sentences correctly
+once regenerated).
+
+The third — `result_verification.py` itself — was more than a rename: `main` also replaced the old
+per-instance `operand_overrides` mechanism (this PR's own reviewed design, from round 2/3: a
+`SymbolicSurfaceSnapshot(operand_overrides={...})` instance-scoped override) with a single global
+`PLACEHOLDER_EXAMPLE_VALUES` dict in production code, and dropped the free-standing
+`placeholder_operands`/`first_order_form` functions this PR's own first-order-form work built on
+("a caller wanting the first-order form of one class... can call it directly"). Confirmed via
+`main`'s own new `test_result_generation.py` that the global registry is only ever populated with
+real production classes (`HasType`/`HasTypes`) — there's no way for a test to supply its own
+locally-scoped override (as `test_first_order_form.py`'s `Kindled`/`catalyst`→`"ash"` test does)
+without either mutating that shared production dict from a test or losing the coverage. This is a
+genuine design regression, not a simple rename, so instead of silently picking a side, asked the
+developer directly via `AskUserQuestion` with the concrete tradeoff. Chosen: restore scoped
+overrides. Implemented by keeping `main`'s global `PLACEHOLDER_EXAMPLE_VALUES` registry and its
+`PlaceholderExampleField` key type, but adding an `operand_overrides` field back onto
+`VerbalizationResultsOfPackage` — keyed by the *same* `PlaceholderExampleField` type (so there's
+one key shape shared by both the global and instance-scoped registries, not two parallel ones) —
+consulted after the global lookup in `placeholder_operands`. Restored the free-standing
+`placeholder_operands`/`first_order_form` functions too, delegating to the global registry so they
+stay consistent with the instance method. Updated `test_first_order_form.py` to the renamed
+imports and the `PlaceholderExampleField`-keyed override dict, and fixed one stale
+`surface_verification`→`result_verification` string reference in `test_rule_doctests.py`'s own
+assertion. Full `test_verbalization/` suite green (761/3 skipped — one fewer than before since
+`test_verbalization_surfaces.py`'s hand-written coverage is now `test_result_generation.py`'s),
+full `test/krrood_test/` suite green (2013 passed, same 2 pre-existing unrelated `graphviz`
+failures). Merge commit + a follow-up black-formatting commit pushed as 872ea244a. Replied on the
+PR explaining the resolution and the reasoning behind the restored per-instance overrides;
+converted back to draft per personal convention. CI for 872ea244a just started — check next
+session/check-in.
 
 ### Round 16 (2026-07-28, 1 comment): `type_members` should accept any iterable
 `type_members` (`value_lexicon.py`) only accepted `tuple`/`list`; the developer asked for any
