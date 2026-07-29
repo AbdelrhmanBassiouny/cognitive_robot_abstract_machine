@@ -27,7 +27,14 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
    already runs `${HOOKS_TESTS_DIRECTORY}`, so no workflow change is needed. Tests
    use a local `git init --bare` fixture, so they need no network or credentials.
 7. [x] Push, open as draft (personal convention), subscribe to PR activity.
-8. [ ] Watch CI to green; handle review comments.
+8. [x] Second ask from the user, same session: `.claude/hooks/README.md` is too verbose —
+   rewrite it as a short, point-based, step-based guide. Done on this same branch
+   (378 → 139 lines), because the harness pins this session to
+   `claude/patch-pr-rheubx` and PR #101 already edits that exact file, so a separate
+   branch would conflict with it. Offered to split it out if the user prefers.
+   Also repointed `PullRequestLabel`'s docstring at the renamed section so the
+   cross-reference doesn't go stale. PR description rewritten to cover both parts.
+9. [ ] Watch CI to green; handle review comments.
 
 ### What this PR contains
 `/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
