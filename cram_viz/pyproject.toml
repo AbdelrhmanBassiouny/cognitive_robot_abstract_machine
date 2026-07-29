@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "cram_viz"
 authors = [
-    { name = "Sorin Arion", email = "hassouna@uni-bremen.de" },
+    { name = "Vanessa Hassouna", email = "hassouna@uni-bremen.de" },
 ]
 description = "Browser-based visualization for the CRAM architecture: 3D scene, EQL knowledge panel and execution graphs as swappable panels."
 readme = "README.md"
