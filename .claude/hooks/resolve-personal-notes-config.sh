@@ -47,8 +47,16 @@ NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/cram-no
 # HEAD, or a branch that was never pushed with -u/--set-upstream). Shared by
 # fetch_personal_notes_branch below and by create-personal-notes-branch.sh's
 # existence check, so both apply the exact same fallback remote.
+#
+# "No upstream" is an answer, not an error, so this always succeeds. Reading
+# git's output into a variable rather than piping it keeps that true under
+# `set -o pipefail`, where a pipeline reports the failing git rather than the
+# succeeding `cut` - which aborted every caller that assigns this at top level
+# under `set -e`.
 current_branch_upstream_remote() {
-  git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null | cut -d/ -f1
+  local upstream_branch
+  upstream_branch="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null || true)"
+  printf '%s\n' "${upstream_branch%%/*}"
 }
 
 # fetch_personal_notes_branch: fetches NOTES_BRANCH from NOTES_REMOTE. If that

@@ -177,6 +177,24 @@ class ScratchRepository:
         )
         return destination
 
+    def notes_branch_commit(self) -> str | None:
+        """
+        Read the commit the notes branch points at on the notes remote, for asserting
+        that a re-run pushed nothing rather than trusting it said so.
+
+        :return: The commit hash, or ``None`` if the branch isn't on the remote at all.
+        """
+        result = subprocess.run(
+            ["git", "ls-remote", str(self.notes_remote_path), NOTES_BRANCH],
+            cwd=self.project_root,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        if not result.stdout.strip():
+            return None
+        return result.stdout.split()[0]
+
     def resolve_notes_remote_to(self, remote: Path | None = None) -> None:
         """
         Point the personal-notes remote at *remote* through local git config.
