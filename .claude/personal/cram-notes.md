@@ -559,6 +559,22 @@ it changes. #32 (SymbolicFunction migration) is merged to `main`.
     types `cls` as) over the developer's stated `Verbalizable` (`SymbolicCallable` is currently
     `Verbalizable`'s only subclass, so moot in practice, but asked rather than assumed). Replied,
     not yet resolved — awaiting the developer's answer before implementing.
+  - **Review round 19** (2026-07-29, same day, 1 comment): developer clarified the override method
+    is "just for the testing and for the generation verbalization results... not for normal usage
+    at all" — confirming `_example_operands_` must be consulted only by
+    `VerbalizationResultsOfPackage`, never by the free-standing `placeholder_operands`/
+    `first_order_form`. Implemented: added `SymbolicCallable._example_operands_(cls, operands)`
+    (default identity), overridden on `HasType`/`HasTypes` for `types_`; deleted
+    `PLACEHOLDER_EXAMPLE_VALUES`/`PlaceholderExampleField` entirely; kept the per-instance
+    `operand_overrides` (now `Dict[Type[SymbolicCallable], Dict[str, Any]]`, no more shared key
+    type since the global registry is gone) for `test_first_order_form.py`'s test-scoped
+    `Kindled`/`catalyst`→`"ash"` case; went with `SymbolicCallable` as the host class per the
+    round-18 question (unanswered but unobjected-to). Added a new `Gauge` mimic (a real operand
+    field + one overridden via `_example_operands_`) with 3 tests proving the free functions
+    ignore the override while the snapshot applies it. Pushed as commit 9892e2ba4; full
+    `test_verbalization/` suite green (764/3 skipped, +3 new tests), full `test/krrood_test/`
+    suite green (2016 passed, same 2 pre-existing unrelated `graphviz` failures).
+    Reply-and-resolved.
 - P4 [ ] sdt = PR #33, rebased on `main` after P1–P3 — drop the upstreamed framework; apply
   all sdt wording + code-quality items (checklist below). Deps: P1, P2, P3.
 
