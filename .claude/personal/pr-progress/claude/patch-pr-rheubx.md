@@ -52,7 +52,22 @@ go up as a new PR. Scope is therefore exactly the patch — no additions, no cle
       appears not to be applied at all, intermittently. Worth its own investigation,
       out of scope here. Posted the evidence once on the PR thread; did not fix.
     - `test_claude_dev_tooling` (the job covering these changes) green on every push.
-    - CI re-running on head 8ad4d612 as of the last check.
+    - Second failure, head 8ad4d612: `test_each_lib (giskardpy)` on
+      `test_integration_pr2.py::TestSelfCollisionAvoidance::test_attached_self_collision_avoid_stick`
+      (1 failed, 319 passed). Also confirmed **not** this PR's, with stronger evidence
+      than the sdt one: that same giskardpy job **passed** on the previous head
+      53abfdc, and the whole diff between the two heads is the README rewrite, one
+      docstring line and one walkthrough footer line — nothing a PR2 self-collision
+      motion-planning test imports or executes. So the job flipped pass→fail across a
+      diff that cannot reach it.
+    - Note for later: the two runs each flaked on a *different* physics/motion job while
+      the other passed. Both tests sit near recent collision-handling work on `main`
+      (lazy-init refactor, new self-collision tests). Flagged on the thread as a lead
+      only; not investigated, out of scope for this PR.
+    - `rerun_failed_jobs` on run 30451859082 refused with 403 "This workflow is already
+      running" (sdt + coraplex jobs still in progress). Retry once the run completes —
+      the hourly check-in prompt now carries this as its priority action.
+    - Everything else on the current run is green, `test_claude_dev_tooling` included.
 
 ### What this PR contains
 `/setup-personal-notes` skill + `prerequisite-check.md` + `starter-notes.md`;
