@@ -1,12 +1,10 @@
 # PR #88 — P3: abstract→concrete-subclass expansion + first-order form
 
-Status (2026-07-29): pushed (22 commits total, 872ea244a latest). Back in **draft** (converted
-after this round's own push, per personal convention — the developer had marked it ready for
+Status (2026-07-29): pushed (23 commits total, 9892e2ba4 latest). Back in **draft** (converted
+after 872ea244a's push, per personal convention — the developer had marked it ready for
 review after 88c95ed2's CI went green). Base `main`
-(#86/#87 both merged there). Subscribed to activity. 18 review threads total, all now
-reply-and-resolved except round 6 (informational, nothing to resolve) and round 18 (a live
-design discussion — replied with a critique and two clarifying questions, awaiting the
-developer's answer before implementing anything).
+(#86/#87 both merged there). Subscribed to activity. 19 review threads total, all now
+reply-and-resolved except round 6 (informational, nothing to resolve).
 An unexpected `Claude <noreply@anthropic.com>`-authored merge-from-main commit (`6b51075e`) landed
 directly on this branch mid-round-15, from outside this session — see the roadmap section above
 for the full investigation and how it was reconciled (rebase, not force-push). Description
