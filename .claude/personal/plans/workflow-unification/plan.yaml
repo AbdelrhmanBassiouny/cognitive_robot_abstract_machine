@@ -56,29 +56,20 @@ items:
     title: "Tag and delete the superseded claude/session-hooks branch"
     track: personal-data
     depends_on: []
-    status: blocked
-    blockers:
-      - >
-        Confirmed via /plan-item-kickoff (2026-07-29): claude/session-hooks is a
-        literal ancestor of main (PR #432), safe to retire, and a kickoff plan for
-        tag-then-delete was approved and attempted same-session. Both git operations
-        are unavailable from a Claude Code session: the git proxy accepts normal
-        branch-content pushes but returns a real, reproducible 403 on `git push
-        <tag>` and on `git push origin --delete <branch>`; no GitHub MCP tool
-        creates a tag or deletes a branch either (checked create_branch, list_tags,
-        get_tag — none write/delete refs). Needs to run outside this harness: from
-        the user's own machine, or `gh api` with a broader-scoped token. Commands
-        prepared and verified safe (dry-run only, not executed for real):
-        `git tag -a retired/claude-session-hooks ece182c5bda44d419bd5d3b9795a6cd8275efe8e
-        -m "Retired: superseded by PR #432, fully merged into main."`,
-        `git push origin retired/claude-session-hooks`,
-        `git push origin --delete claude/session-hooks`.
+    status: done
     notes: >
-      main carries a strict superset (+1237/-6); nothing at runtime reads the branch
-      (settings.json and hooks load from the checked-out branch). Tag for history first.
-      Also clean up origin/claude/push-scope-test-zsq7jc (a throwaway branch pushed
-      while diagnosing the block above — identical content to main, safe to delete,
-      same tooling gap applies).
+      Done. claude/session-hooks's tip (ece182c5) was a literal git merge-base
+      --is-ancestor of main (via PR #432), so nothing was lost by skipping the tag:
+      every commit on the branch already remains reachable from main. The
+      tag-push/branch-delete git operations turned out to be unavailable from a
+      Claude Code session (git proxy returns 403 on tag pushes and branch deletes;
+      no GitHub MCP tool substitutes) - documented as a standing platform
+      constraint in roadmap.md's 2026-07-29 addendum, and flagged on the sibling
+      item tooling-branch-retirement, which has the same shape. The user deleted
+      claude/session-hooks directly (outside the harness) once this was confirmed
+      safe. Remaining cleanup: origin/claude/push-scope-test-zsq7jc, a throwaway
+      branch pushed while diagnosing the tooling gap (identical content to main),
+      still needs deleting the same way.
 
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
