@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from enum import auto, Enum
 
-from typing_extensions import List, Dict, Any, Type
-
-from krrood.ripple_down_rules.utils import SubclassJSONSerializer
+from typing_extensions import List
 
 
 class InferMode(Enum):
@@ -41,21 +39,6 @@ class ExitStatus(Enum):
     """
 
 
-class InteractionMode(Enum):
-    """
-    The interaction mode of the RDR.
-    """
-
-    IPythonOnly = auto()
-    """
-    IPythonOnly mode, the mode where the user uses only an Ipython shell to interact with the RDR.
-    """
-    GUI = auto()
-    """
-    GUI mode, the mode where the user uses a GUI to interact with the RDR.
-    """
-
-
 class Editor(str, Enum):
     """
     The editor that is used to edit the rules.
@@ -87,7 +70,7 @@ class Editor(str, Enum):
         return cls._value2member_map_[editor]
 
 
-class Category(str, SubclassJSONSerializer, Enum):
+class Category(str, Enum):
 
     @classmethod
     def from_str(cls, value: str) -> Category:
@@ -100,13 +83,6 @@ class Category(str, SubclassJSONSerializer, Enum):
     @property
     def as_dict(self):
         return {self.__class__.__name__.lower(): self.value}
-
-    def _to_json(self) -> Dict[str, Any]:
-        return self.as_dict
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any]) -> Category:
-        return cls.from_str(data[cls.__name__.lower()])
 
 
 class Stop(Category):

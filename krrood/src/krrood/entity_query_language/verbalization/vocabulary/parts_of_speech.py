@@ -3,7 +3,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 
-from typing_extensions import ClassVar, Iterable, List, Protocol, Union, runtime_checkable
+from typing_extensions import (
+    ClassVar,
+    Iterable,
+    List,
+    Protocol,
+    Union,
+    runtime_checkable,
+)
 
 from krrood.entity_query_language.predicate import VerbalizationField
 from krrood.entity_query_language.utils import camel_case_to_words
@@ -23,6 +30,7 @@ from krrood.entity_query_language.verbalization.fragments.features import (
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
+    disjunctive_phrase,
     MAX_SET_MEMBERS,
     one_of,
 )
@@ -30,6 +38,7 @@ from krrood.entity_query_language.verbalization.microplanning.possessive import 
     possessive_path,
 )
 from krrood.entity_query_language.verbalization.navigation_path import PathStep
+from krrood.entity_query_language.verbalization.value_lexicon import type_members
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Copulas,
@@ -162,13 +171,16 @@ class Adjective(ClauseElement):
 
 @dataclass(frozen=True)
 class All(ClauseElement):
-    """The universal quantifier *"all"* fronting a clause's subject.
+    """
+    The universal quantifier *"all"* fronting a clause's subject.
 
-    In a :func:`clause` it both reads as *"all"* and marks the quantified subject — the first noun
-    phrase after it — plural; the agreement realization pass then agrees the clause's verb / copula,
-    so ``clause(All(), Noun("element"), Copula(), Adjective("close"))`` reads *"all elements are
-    close"*. Only the subject's number is decided here; agreement and the morphology inflection
-    (*"element"* → *"elements"*, *"is"* → *"are"*) happen in the realization passes."""
+    In a :func:`clause` it both reads as *"all"* and marks the quantified subject — the
+    first noun phrase after it — plural; the agreement realization pass then agrees the
+    clause's verb / copula, so ``clause(All(), Noun("element"), Copula(),
+    Adjective("close"))`` reads *"all elements are close"*. Only the subject's number is
+    decided here; agreement and the morphology inflection (*"element"* → *"elements"*,
+    *"is"* → *"are"*) happen in the realization passes.
+    """
 
     def as_fragment(self) -> VerbalizationFragment:
         """:return: the *"all"* quantifier word leaf.
@@ -249,9 +261,7 @@ class OneOf(ClauseElement):
             return listed
         # Past the cap the members are summarised by count; the category noun still distinguishes a
         # set of types from a set of plain values.
-        are_types = bool(members) and all(
-            isinstance(member, type) for member in members
-        )
+        are_types = type_members(members) is not None
         return PhraseFragment(
             parts=[
                 SetMembership.ONE_OF.as_fragment(),
@@ -298,10 +308,7 @@ class DisjunctivePhrase(ClauseElement):
         )
         if not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
             return Noun(self.members).as_fragment()
-        return oxford_comma(
-            [RoleFragment.for_value(member) for member in value],
-            Conjunctions.OR.as_fragment(),
-        )
+        return disjunctive_phrase([RoleFragment.for_value(member) for member in value])
 
 
 @dataclass(frozen=True)
@@ -376,6 +383,13 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     field fragment can be dropped in directly. The result is a :class:`Clause`, so coreference
     treats the first constituent as the clause's subject (pronominalisation, verb agreement).
 
+    A subject built from :class:`ConjunctivePhrase` (*"A, B, and C"*) is a coordination of ≥ 2
+    distinct entities, so the clause is stamped with a plural
+    :attr:`~krrood.entity_query_language.verbalization.fragments.base.PhraseFragment.concord_number`
+    here, at build time — coordination is static knowledge, unlike a quantified population's
+    plurality, which the coreference pass decides once it knows the subject is in scope. The
+    agreement realization pass then agrees the predicate word (:class:`Copula` / :class:`Verb`).
+
     :param constituents: The clause's elements in surface order.
     :return: The clause fragment.
 
@@ -397,10 +411,31 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     >>> realize_subtree(clause(All(), Noun("element"), Copula(), Adjective("close")))
     'all elements are close'
     """
+    leading = constituents[0] if constituents else None
+    if isinstance(leading, ConjunctivePhrase):
+        return _coordinated_subject_clause(leading, constituents[1:])
     parts = [(constituent, constituent.as_fragment()) for constituent in constituents]
     if any(isinstance(constituent, All) for constituent, _ in parts):
         return Clause(parts=_pluralize_quantified_subject(parts))
     return Clause(parts=[fragment for _, fragment in parts])
+
+
+def _coordinated_subject_clause(
+    subject: ConjunctivePhrase, rest: Iterable[ClauseConstituent]
+) -> Clause:
+    """:return: the clause for a coordinated subject (*"A, B, and C are …"*). A coordination of ≥ 2
+    distinct entities is plural by construction — static knowledge, unlike a quantified population's
+    plurality, which the coreference pass decides — so the plural concord number is stamped on the
+    clause here, at build time; the agreement realization pass agrees the finite verb / copula with
+    it, and the morphology pass does the inflection.
+    """
+    items = list(subject.items)
+    parts = [
+        constituent.as_fragment() for constituent in (ConjunctivePhrase(items), *rest)
+    ]
+    if len(items) < 2:
+        return Clause(parts=parts)
+    return Clause(parts=parts, concord_number=GrammaticalNumber.PLURAL)
 
 
 def _pluralize_quantified_subject(

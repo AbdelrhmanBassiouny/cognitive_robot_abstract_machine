@@ -105,7 +105,7 @@ TKinematicStructureEntity = TypeVar(
 
 @dataclass(eq=False)
 class HasRootKinematicStructureEntity(
-    SemanticAnnotation, Generic[TKinematicStructureEntity], SubClassSafeGeneric, ABC
+    SemanticAnnotation, Generic[TKinematicStructureEntity], SubClassSafeGeneric
 ):
     """
     Base class for shared method for HasRootBody and HasRootRegion.
@@ -230,7 +230,7 @@ TBody = TypeVar("TBody", bound=Body)
 
 
 @dataclass(eq=False)
-class HasRootBody(HasRootKinematicStructureEntity[TBody], ABC):
+class HasRootBody(HasRootKinematicStructureEntity[TBody]):
     """
     Abstract base class for all household objects. Each semantic annotation refers to a single Body.
     Each subclass automatically derives a MatchRule from its own class name and
@@ -289,7 +289,7 @@ TRegion = TypeVar("TRegion", bound=Region)
 
 
 @dataclass(eq=False)
-class HasRootRegion(HasRootKinematicStructureEntity[TRegion], ABC):
+class HasRootRegion(HasRootKinematicStructureEntity[TRegion]):
     """
     A mixin class for semantic annotations that have a region.
     """
@@ -353,15 +353,17 @@ def _wrapped_part_whole_relationship_fields(
 
 @dataclass
 class IsPartWholeRelationship(FieldMetadata):
-    """Marks a field as holding a structural *part* of its owner (the part-whole relation).
+    """
+    Marks a field as holding a structural *part* of its owner (the part-whole relation).
 
-    The relation is signalled by the mere presence of an instance of this class in a field's
-    :attr:`~FieldMetadata.other_metadata`; it carries no further data.
+    The relation is signalled by the mere presence of an instance of this class in the
+    field's ``metadata`` mapping (attach it with :meth:`~FieldMetadata.as_dict`); it carries
+    no further data.
     """
 
 
 @dataclass(eq=False)
-class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
+class PartWholeRelationship(HasRootKinematicStructureEntity):
     """
     Base for annotations that have structural *parts* (the part-whole relation).
 
@@ -425,7 +427,7 @@ class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
 
 
 @dataclass(eq=False)
-class HasApertures(HasRootBody, PartWholeRelationship, ABC):
+class HasApertures(HasRootBody, PartWholeRelationship):
     """
     A mixin class for semantic annotations that have apertures.
     """
@@ -434,7 +436,7 @@ class HasApertures(HasRootBody, PartWholeRelationship, ABC):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The apertures of the semantic annotation.
@@ -442,14 +444,14 @@ class HasApertures(HasRootBody, PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasMechanicalJoint(HasRootBody, PartWholeRelationship, ABC):
+class HasMechanicalJoint(HasRootBody, PartWholeRelationship):
     """
     A mixin class for semantic annotations that have mechanical joints.
     """
 
     mechanical_joint: Optional[MechanicalJoint] = field(
         default=None,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The mechanical joint of the semantic annotation.
@@ -470,7 +472,7 @@ class HasMechanicalJoint(HasRootBody, PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasDrawers(PartWholeRelationship, ABC):
+class HasDrawers(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have drawers.
     """
@@ -479,7 +481,7 @@ class HasDrawers(PartWholeRelationship, ABC):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The drawers of the semantic annotation.
@@ -487,7 +489,7 @@ class HasDrawers(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasDoors(PartWholeRelationship, ABC):
+class HasDoors(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have doors.
     """
@@ -496,7 +498,7 @@ class HasDoors(PartWholeRelationship, ABC):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The doors of the semantic annotation.
@@ -504,14 +506,14 @@ class HasDoors(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasHandle(HasRootBody, PartWholeRelationship, ABC):
+class HasHandle(HasRootBody, PartWholeRelationship):
     """
     A mixin class for semantic annotations that have a handle.
     """
 
     handle: Optional[Handle] = field(
         default=None,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The handle of the semantic annotation.
@@ -525,7 +527,7 @@ A type variable for HasRootBody.
 
 
 @dataclass(eq=False)
-class HasLegs(PartWholeRelationship, ABC):
+class HasLegs(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have legs.
     """
@@ -534,7 +536,7 @@ class HasLegs(PartWholeRelationship, ABC):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The legs of the semantic annotation.
@@ -542,14 +544,14 @@ class HasLegs(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasSink(PartWholeRelationship, ABC):
+class HasSink(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have a sink.
     """
 
     sink: Optional[Sink] = field(
         default=None,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The sink of the semantic annotation.
@@ -557,7 +559,7 @@ class HasSink(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric, ABC):
+class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric):
     """
     A mixin class for semantic annotations that represent storage spaces. Used to afterthefact add object for example
     to a table, and have those objects move with the table when it is moved.
@@ -593,7 +595,7 @@ class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric, AB
 
 
 @dataclass(eq=False)
-class HasSupportingSurface(IsStorageSpace, ABC):
+class HasSupportingSurface(IsStorageSpace):
     """
     A semantic annotation that represents a supporting surface.
     """
@@ -916,7 +918,7 @@ class HasSupportingSurface(IsStorageSpace, ABC):
 
 
 @dataclass(eq=False)
-class HasCaseAsRootBody(HasSupportingSurface, ABC):
+class HasCaseAsRootBody(HasSupportingSurface):
     """
     A mixin class for semantic annotations that have a case as root body.
     """

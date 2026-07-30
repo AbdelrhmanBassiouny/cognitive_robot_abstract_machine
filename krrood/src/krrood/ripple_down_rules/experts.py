@@ -9,9 +9,9 @@ from abc import ABC, abstractmethod
 from dataclasses import is_dataclass
 from textwrap import dedent, indent
 from sqlalchemy.orm import DeclarativeBase as SQLTable
-from typing_extensions import Any, Tuple, Dict
 
-from typing_extensions import Optional, TYPE_CHECKING, List
+from typing_extensions import Any, Optional, TYPE_CHECKING, List
+from typing_extensions import Tuple, Dict
 
 from krrood.ripple_down_rules.datastructures.callable_expression import (
     CallableExpression,
@@ -31,19 +31,18 @@ from krrood.ripple_down_rules.exceptions import (
 from krrood.ripple_down_rules.user_interface.template_file_creator import (
     TemplateFileCreator,
 )
+from krrood.code_generation.source_extraction_utils import (
+    extract_class_source,
+    extract_function_source,
+)
 from krrood.ripple_down_rules.utils import (
     dataclass_to_dict,
-    extract_function_or_class_file,
     get_imports_from_scope,
     get_class_file_path,
     row_to_dict,
 )
 from krrood.utils import get_scope_from_imports
 
-try:
-    from krrood.ripple_down_rules.user_interface.gui import RDRCaseViewer
-except ImportError as e:
-    RDRCaseViewer = None
 from krrood.ripple_down_rules.user_interface.prompt import UserPrompt
 
 if TYPE_CHECKING:
@@ -84,11 +83,17 @@ class Expert(ABC):
         self.all_expert_answers = []
         self.use_loaded_answers = use_loaded_answers
         self.answers_save_path = answers_save_path
-        if answers_save_path is not None and os.path.exists(answers_save_path + ".py"):
+        if answers_save_path is not None and (
+            os.path.exists(answers_save_path + ".py")
+            or os.path.exists(answers_save_path + ".json")
+        ):
             if use_loaded_answers:
                 self.load_answers(answers_save_path)
             if not append:
-                os.remove(answers_save_path + ".py")
+                try:
+                    os.remove(answers_save_path + ".py")
+                except FileNotFoundError:
+                    pass
         self.append = True
 
     @abstractmethod
@@ -248,9 +253,12 @@ class Expert(ABC):
             for answer in content.split(self.answer_delimiter)
             if answer.strip()
         ]
-        all_function_sources = extract_function_or_class_file(
-            file_path, [], as_list=True
-        )
+        all_function_sources = [
+            definition.source
+            for definition in extract_function_source(
+                [], file_path=file_path
+            ).definitions
+        ]
         for i, answer in enumerate(all_answers):
             if "def " not in answer and "pass" in answer:
                 self.all_expert_answers.append(({}, None))
@@ -303,12 +311,9 @@ class AI(Expert):
 
         def get_class_source(cls):
             cls_source_file = get_class_file_path(cls)
-            found_class_source = extract_function_or_class_file(
-                cls_source_file,
-                function_names=[cls.__name__],
-                is_class=True,
-                as_list=True,
-            )[0]
+            found_class_source = extract_class_source(
+                [cls.__name__], file_path=cls_source_file
+            ).source_of(cls.__name__)
             class_signature = found_class_source.split("\n")[0]
             if "(" in class_signature:
                 parent_class_names = list(
@@ -373,9 +378,7 @@ class Human(Expert):
         self, case_query: CaseQuery, last_evaluated_rule: Optional[Rule] = None
     ) -> CallableExpression:
         data_to_show = None
-        if (
-            not self.use_loaded_answers or len(self.all_expert_answers) == 0
-        ) and self.user_prompt.viewer is None:
+        if not self.use_loaded_answers or len(self.all_expert_answers) == 0:
             data_to_show = show_current_and_corner_cases(
                 case_query.case,
                 {case_query.attribute_name: case_query.target_value},
@@ -486,9 +489,7 @@ class Human(Expert):
             except IndexError:
                 self.use_loaded_answers = False
         if not self.use_loaded_answers:
-            data_to_show = None
-            if self.user_prompt.viewer is None:
-                data_to_show = show_current_and_corner_cases(case_query.case)
+            data_to_show = show_current_and_corner_cases(case_query.case)
             expert_input, expression = self.user_prompt.prompt_user_for_expression(
                 case_query, PromptFor.Conclusion, prompt_str=data_to_show
             )

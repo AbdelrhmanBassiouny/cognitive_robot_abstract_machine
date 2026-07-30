@@ -92,14 +92,40 @@ fetch_personal_notes_branch() {
   return 1
 }
 
+# default_branch_name: prints the repo's actual default branch name, with no
+# network access - resolved from origin's local HEAD ref
+# (refs/remotes/origin/HEAD, set by a normal `git clone` or `git remote
+# set-head`) when available, otherwise whichever of main/master actually
+# exists as a local or origin-tracking branch, otherwise "main". Used by
+# pr_progress_path below so a repo whose default branch is neither main nor
+# master (e.g. "develop") is still recognized, instead of being silently
+# treated as an ordinary per-branch PR-progress branch.
+default_branch_name() {
+  local remote_head candidate
+  remote_head="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)"
+  if [ -n "${remote_head}" ]; then
+    printf '%s\n' "${remote_head#refs/remotes/origin/}"
+    return 0
+  fi
+  for candidate in main master; do
+    if git show-ref --verify --quiet "refs/heads/${candidate}" \
+        || git show-ref --verify --quiet "refs/remotes/origin/${candidate}"; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  printf 'main\n'
+}
+
 # pr_progress_path: prints the deterministic per-branch PR-progress file path
 # (.claude/personal/pr-progress/<branch>.md) for whichever branch is currently
 # checked out, and returns 0. Returns 1 (prints nothing) if there's no
 # sensible "current PR" to track progress for: detached HEAD, the repo's
-# default branch (main/master), or the personal-notes branch itself. The
-# directory is a fixed convention, independent of NOTES_PATH - PR progress is
-# inherently plural/keyed, unlike the single personal-notes file, so it isn't
-# tied to wherever NOTES_PATH happens to be overridden to.
+# default branch (see default_branch_name above), or the personal-notes
+# branch itself. The directory is a fixed convention, independent of
+# NOTES_PATH - PR progress is inherently plural/keyed, unlike the single
+# personal-notes file, so it isn't tied to wherever NOTES_PATH happens to be
+# overridden to.
 #
 # Shared by session-start.sh and save-pr-progress.sh so both agree on exactly
 # the same key for exactly the same branch - there is no other place this
@@ -108,7 +134,139 @@ pr_progress_path() {
   local branch
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
   case "${branch}" in
-    HEAD|main|master|"${NOTES_BRANCH}"|"") return 1 ;;
+    HEAD|"$(default_branch_name)"|"${NOTES_BRANCH}"|"") return 1 ;;
   esac
   printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
+}
+
+# PLANS_DIR / PLAN_MANIFEST_FILENAME / PLAN_ROADMAP_FILENAME: the one,
+# shared definition of where a plan's files live, so no caller re-derives
+# these path fragments itself (session-start.sh and save-plan.sh both used
+# to build ".claude/personal/plans/<id>/plan.yaml" inline - two independent
+# copies of the same literal that could silently drift apart). Fixed
+# convention, never overridden - plan storage is plural/generated data, not
+# a per-clone preference like NOTES_PATH.
+PLANS_DIR=".claude/personal/plans"
+PLAN_MANIFEST_FILENAME="plan.yaml"
+PLAN_ROADMAP_FILENAME="roadmap.md"
+
+# plan_directory_path / plan_manifest_path / plan_roadmap_path: the
+# deterministic per-plan paths for the given plan id. Shared by
+# session-start.sh and save-plan.sh so both agree on exactly the same
+# layout - see pr_progress_path above for the same reasoning applied to
+# PR-progress files.
+plan_directory_path() {
+  printf '%s/%s\n' "${PLANS_DIR}" "$1"
+}
+plan_manifest_path() {
+  printf '%s/%s/%s\n' "${PLANS_DIR}" "$1" "${PLAN_MANIFEST_FILENAME}"
+}
+plan_roadmap_path() {
+  printf '%s/%s/%s\n' "${PLANS_DIR}" "$1" "${PLAN_ROADMAP_FILENAME}"
+}
+
+# PLAN_BRANCH_INDEX_PATH: the generated reverse index mapping every plan
+# item's branch to the plan id that tracks it (see
+# .claude/personal/plans/README.md on the personal-notes branch for the
+# full plan-dashboard schema this feeds).
+PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
+
+# PLAN_DASHBOARD_DIRECTORY / *_SCRIPT / *_FILE / *_DOC: the canonical
+# location of every script, hook, requirements file, and reference doc the
+# plan-dashboard/plan-item-*/CI tooling invokes or reads - defined once,
+# here, so refresh_dashboard.sh, every plan-*/SKILL.md, and
+# .github/workflows/ci.yml source this file and use these variables instead
+# of each carrying its own separately-typed literal path (exactly the drift
+# risk a reviewer flagged after those paths had already been duplicated
+# across all of them). Relative to the project root, which sourcing this
+# file already `cd`s into (see PROJECT_ROOT above) - so every caller can
+# use these directly, with no further path arithmetic of its own.
+PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
+# build_dashboard.py: renders one plan's dashboard HTML from its manifest
+# and live GitHub data - see the script's own module docstring.
+BUILD_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_dashboard.py"
+# build_index.py: renders the master index page listing every plan.
+BUILD_INDEX_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_index.py"
+# sync_manifest_status.py: auto-corrects a plan.yaml's item statuses to
+# "done" wherever GitHub confirms the item's pull request is merged.
+SYNC_MANIFEST_STATUS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/sync_manifest_status.py"
+# check_dependency_readiness.py: classifies one item's dependencies as
+# ready or not-ready to build on - see dependency-readiness.md below.
+CHECK_DEPENDENCY_READINESS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/check_dependency_readiness.py"
+# refresh_dashboard.sh: orchestrates sync_manifest_status.py, the
+# conditional push of its correction, then build_dashboard.py - the whole
+# refresh sequence /plan-dashboard runs for one plan.
+REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
+# refresh_dashboard_support.py: the JSON-plumbing helpers
+# refresh_dashboard.sh calls between its two script calls.
+REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard_support.py"
+# requirements.txt: the PyYAML/Jinja2/markdown dependencies every script
+# above needs - installed by both CI and a session running them directly.
+PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIRECTORY}/requirements.txt"
+# tests/: the pytest suite covering every script above - the exact
+# directory CI and a session both run against.
+PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
+# hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
+# hook-directory script with non-trivial logic worth testing the same way).
+HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
+# dependency-readiness.md: the shared bulk-fetch-and-check procedure
+# plan-item-kickoff and plan-item-resolve both reference instead of each
+# restating it.
+DEPENDENCY_READINESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.md"
+# pr-data-fetching.md: the shared "how to bulk-fetch pull request state
+# into pr_data.json" procedure - referenced by dependency-readiness.md and
+# every plan-*/SKILL.md that assembles pr_data.json, instead of each
+# restating the GitHub API calls involved.
+PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
+# write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
+# personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
+# auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL
+# cache) alike.
+WRITE_PERSONAL_NOTES_FILE_SCRIPT=".claude/hooks/write-personal-notes-file.sh"
+
+# SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
+# save-plan.sh - unlike the other hook scripts in this directory (which are
+# always run directly by a human, once, per hooks/README.md's own setup
+# instructions), save-plan.sh is invoked from plan-create/SKILL.md's own
+# bootstrap step, i.e. a real caller this codebase controls - the same
+# duplication risk, just for a hook script instead of a plan-dashboard one.
+SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
+
+# GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
+# MCP tools every pr_data.json-gathering procedure in this system calls
+# (see pr-data-fetching.md), named once here so every doc references the
+# same constant instead of retyping the literal identifier. Documentation
+# aliases only, not live substitutions: Claude Code's tool-calling
+# mechanism has no notion of a shell-expanded tool name, so an actual call
+# always still has to type the literal name below - but a session that has
+# sourced this file can read `${GITHUB_LIST_PULL_REQUESTS_TOOL}` in a doc
+# and know exactly which tool that refers to, the same way it already does
+# for every script path above.
+GITHUB_LIST_PULL_REQUESTS_TOOL="mcp__github__list_pull_requests"
+GITHUB_PULL_REQUEST_READ_TOOL="mcp__github__pull_request_read"
+
+# plan_id_for_branch: prints the plan id that tracks the given branch, per
+# PLAN_BRANCH_INDEX_PATH on FETCH_HEAD, and returns 0. Returns 1 (prints
+# nothing) if the index doesn't exist yet, or the branch isn't in it. Caller
+# must have already fetched NOTES_BRANCH successfully (see
+# fetch_personal_notes_branch) - this reads FETCH_HEAD directly rather than
+# fetching again itself, so session-start.sh and save-plan.sh each fetch
+# exactly once per run.
+#
+# The index is tab-separated values (TSV): one "<branch><TAB><plan-id>" line
+# per branch, generated fresh in full by ./save-plan.sh on every run (never
+# hand-edited or incrementally patched). TSV rather than a hand-rolled
+# YAML-lookalike matched by fixed-string grep: it's an unambiguous, widely
+# understood interchange format - a tab can never appear inside a branch
+# name or plan id, so a field-based match can't misfire the way a
+# substring/prefix match on a YAML-shaped string could - while still
+# needing nothing beyond `awk`, which every session-start environment
+# already has (see the module docstring: session-start.sh must not gain a
+# hard dependency on python3/PyYAML just to check whether the current
+# branch belongs to a plan).
+plan_id_for_branch() {
+  local branch="$1"
+  git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
+  git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
+    | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
 }
