@@ -5,7 +5,7 @@ Cross-PR roadmap for the semantic_digital_twin verbalization review on PR #33. M
 had grown into the single largest recurring per-session token cost across every branch — see
 `plans/workflow-unification/roadmap.md`'s "Why this plan exists" for the review that identified
 it. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged to `main`. P4 (sdt
-= PR #33) is the only phase left.
+= PR #33) is the last of the original four; P5 was split out of P4's review on 2026-07-30.
 
 ## Finalized design decisions
 
@@ -29,6 +29,13 @@ it. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged 
    `SymbolicCallable._example_operand_values_` class hook, which the snapshot consults per
    class. An override belongs on the class, not in a test-side dict.
 10. Keep surfaces concise (omit root/tip from `BlockingBodies`); details are query-able.
+11. `Reachable` reads *"a Pose is reachable for the kinematic chain rooted at <root> and
+    ending at <tip>"* — the chain is what reaches, and root/tip stay named here (unlike
+    `BlockingBodies` under decision 10) because reachability is only meaningful relative
+    to them.
+12. Naming a referent by value *and* type on first mention (*"a gripper of type
+    HasTwoFingers"*) is out of P4's scope — it is coreference behaviour, not an sdt
+    wording, and is tracked as its own item (`p5-first-mention-type-annotation`).
 
 ## Standing conventions — every P1–P4 session must
 
@@ -55,7 +62,7 @@ All three merged to `main`; see `plan.yaml`'s item notes for a one-line summary 
 `.claude/personal/pr-progress/<branch>.md` for the full review-round history — that file, not
 this roadmap, is the source of truth for their per-PR detail (`plans/README.md`'s convention).
 
-## P4 — sdt migration (the only remaining phase)
+## P4 — sdt migration
 
 PR #33 (`eql-symbolic-function-sdt`, base `main`), open and draft. As of its last push
 (2026-07-18) `mergeable_state` was `dirty` — it predates P1/P2/P3 all merging to `main`, so it
@@ -64,7 +71,7 @@ duplicate of) before any checklist item below can start.
 
 ### P4 sdt checklist (reasoning/predicates.py, queries.py, robot_predicates.py; test snapshot)
 
-- Reachable: remove `fields["tip"].name`; reword ("a Pose is reachable …"); Pose hint (dec 6).
+- Reachable: remove `fields["tip"].name`; reword per decision 11; Pose hint (dec 6).
 - No abbreviations sweep (dec 7); `Noun`/`Noun.bare`/`Noun.the` not raw `WordFragment` (dec 4).
 - get_volume wrapper name kept (dec 8).
 - Wordings: GetVisibleBodies "the bodies visible to/through a camera"; EuclideanPlanarDistance
@@ -92,3 +99,13 @@ asserts — `assert_results_cover_every_callable` and
 `assert_declared_results_render_as_stated`. So P4's snapshot work is adding the
 regeneration call to `test/semantic_digital_twin_test/conftest.py` plus the two-assert
 test, not editing a committed tuple.
+
+## P5 — first-mention type annotation (split out of P4, 2026-07-30)
+
+From PR #33's `BodiesInGripper` thread: *"maybe one can mention both the name and the
+type … but that would maybe only make sense for the first introduction of the variable in
+the whole verbalized statement."* Confirmed out of P4's scope — it is coreference
+behaviour belonging to the `ReferringExpressions` machinery P2 built, so it applies to
+every package's surfaces at once rather than to sdt's wordings. P4 renders
+*"the bodies between the fingers of a gripper"* and this item takes the type annotation
+on separately.

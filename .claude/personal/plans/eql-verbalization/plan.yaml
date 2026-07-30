@@ -80,3 +80,18 @@ items:
       reasoning/predicates.py, queries.py, robot_predicates.py and regenerate its
       verbalization snapshot. See roadmap.md for the full checklist and standing
       conventions.
+
+  - id: p5-first-mention-type-annotation
+    title: "P5: name a referent by value and type on first mention"
+    branch: null
+    pull_request_number: null
+    track: framework-migration
+    depends_on: [p2-operand-naming]
+    status: not_started
+    notes: >
+      Split out of P4's BodiesInGripper review thread (confirmed via AskUserQuestion,
+      2026-07-30): render a referent's first mention as both its name and its type
+      ("a gripper of type HasTwoFingers"), reverting to the plain noun on later
+      mentions. Belongs in the ReferringExpressions/coreference machinery P2 built,
+      not in any one package's predicate wordings, so it is its own item rather than
+      part of P4's sdt surface work.
