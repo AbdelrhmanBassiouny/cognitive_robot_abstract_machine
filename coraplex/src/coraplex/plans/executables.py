@@ -19,7 +19,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 from giskardpy.motion_statechart.goals.templates import Sequence
 from giskardpy.motion_statechart.graph_node import EndMotion, Task
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from giskardpy.executor import SimulationPacer
+from giskardpy.executor import Pacer, SimulationPacer, SimulationTimePacer
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.entity_query_language.factories import evaluate_condition
@@ -340,6 +340,25 @@ class GiskardExecutable(Executable):
             case _:
                 raise UnknownExecutionType(GiskardExecutable.execution_type)
 
+    def _build_pacer(self) -> Pacer:
+        """
+        The pacer for the control loop: simulated time when the context knows
+        how to read a simulation clock, wall-clock time otherwise.
+
+        Pacing against a simulation that cannot hold real time keeps one
+        control cycle of simulation between commands, rather than letting the
+        controller outrun the plant by however far the simulation happens to
+        be lagging.
+        """
+        if self.context.simulation_clock is not None:
+            return SimulationTimePacer(
+                target_frequency=50,
+                simulation_clock=self.context.simulation_clock,
+            )
+        return SimulationPacer(
+            real_time_factor=1.0 if GiskardExecutable.real_time_pacing else None
+        )
+
     def _execute_simulation(self) -> None:
         """
         Compiles the motion state chart and ticks it in the world of the context until
@@ -353,9 +372,7 @@ class GiskardExecutable(Executable):
                 ),
             ),
             ros_node=self.context.ros_node,
-            pacer=SimulationPacer(
-                real_time_factor=1.0 if GiskardExecutable.real_time_pacing else None
-            ),
+            pacer=self._build_pacer(),
         )
         motion_state_chart = self.motion_state_chart
         executor.compile(motion_state_chart)

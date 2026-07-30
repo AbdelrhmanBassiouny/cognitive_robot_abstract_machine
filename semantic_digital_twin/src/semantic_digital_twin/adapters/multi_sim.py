@@ -2901,6 +2901,36 @@ class MultiSimSynchronizer(ModelChangeCallback, ABC):
         raise NotImplementedError
 
 
+MAXIMUM_CONTROL_SETPOINT_RAMP_INTERVAL: float = 0.5
+"""
+Longest interval, in simulated seconds, over which a control setpoint step is
+ramped.
+
+Guards against stretching a ramp across a pause or the first command of a run,
+where the gap since the previous command says nothing about when the next one
+will arrive.
+"""
+
+
+@dataclass
+class ControlSetpointRamp:
+    """
+    A control setpoint in transit from its previous value to a newly commanded
+    one.
+    """
+
+    target: float
+    """
+    The commanded setpoint, in actuator control units.
+    """
+
+    slew_rate: float
+    """
+    How fast the setpoint approaches :attr:`target`, in control units per
+    simulated second.
+    """
+
+
 @dataclass(eq=False)
 class MujocoSynchronizer(MultiSimSynchronizer):
     simulator: MujocoSimulator
@@ -2986,9 +3016,30 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     (e.g. a gripper actually squeezing a grasped object).
     """
 
+    _control_setpoint_ramps: Dict[int, ControlSetpointRamp] = field(
+        init=False, default_factory=dict, repr=False
+    )
+    """
+    In-progress control setpoint ramps for physically simulated DOFs, keyed by
+    actuator control address.
+    """
+
+    _last_command_simulation_time: float = field(init=False, default=0.0, repr=False)
+    """
+    Simulation time at which the previous batch of commands arrived, used to
+    measure how long the current one has before its successor.
+    """
+
+    _command_interval: float = field(init=False, default=0.0, repr=False)
+    """
+    Simulated seconds between the last two batches of commands, over which the
+    setpoint steps of the current batch are ramped.
+    """
+
     def __post_init__(self):
         super().__post_init__()
         self.simulator.read_data_from_simulator = self._sim_to_world
+        self.simulator.write_data_to_simulator = self._advance_control_setpoints
 
     def on_model_change(self, **kwargs):
         """
@@ -3382,7 +3433,10 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         idx = state_index[connection.raw_dof.id]
         if positions[idx] == previous_positions[idx]:
             return
-        if connection.raw_dof not in self.physically_simulated_dofs:
+        actuator = self._resolve_actuator(connection)
+        ctrl_adr = None if actuator is None else self._resolve_ctrl_adr(connection)
+        physically_simulated = connection.raw_dof in self.physically_simulated_dofs
+        if not physically_simulated:
             self.simulator._mj_data.qpos[qpos_adr] = positions[idx]
             setpoint = positions[idx]
         else:
@@ -3390,20 +3444,117 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                 connection.raw_dof,
                 commanded_increment=positions[idx] - previous_positions[idx],
                 fallback_position=previous_positions[idx],
+                measured_position=float(self.simulator._mj_data.qpos[qpos_adr]),
+                maximum_lead=(
+                    None
+                    if ctrl_adr is None
+                    else self._maximum_setpoint_lead(
+                        ctrl_adr,
+                        self._commanded_velocity(
+                            positions[idx] - previous_positions[idx]
+                        ),
+                    )
+                ),
             )
-        actuator = self._resolve_actuator(connection)
-        if actuator is not None:
-            ctrl_adr = self._resolve_ctrl_adr(connection)
-            if ctrl_adr is not None:
-                self.simulator._mj_data.ctrl[ctrl_adr] = self._ctrl_for_position(
-                    actuator, setpoint
-                )
+        if ctrl_adr is None:
+            return
+        target = self._ctrl_for_position(actuator, setpoint)
+        if physically_simulated:
+            self._schedule_control_setpoint(ctrl_adr, target)
+            return
+        self.simulator._mj_data.ctrl[ctrl_adr] = target
+
+    def _schedule_control_setpoint(self, ctrl_adr: int, target: float) -> None:
+        """
+        Spread the step from the actuator's current setpoint to ``target``
+        across the interval the next command is expected in, rather than
+        applying it all at once.
+
+        A position servo turns an instantaneous setpoint step into an
+        instantaneous force step of gain times that step, which for a stiff
+        actuator exceeds its force limit and saturates it -- the joint is
+        slammed and rebounds instead of tracking. Ramping keeps the setpoint
+        continuous at the physics rate, so commanded force stays proportional
+        to the tracking error the joint actually has.
+        """
+        if not 0.0 < self._command_interval <= MAXIMUM_CONTROL_SETPOINT_RAMP_INTERVAL:
+            self._control_setpoint_ramps.pop(ctrl_adr, None)
+            self.simulator._mj_data.ctrl[ctrl_adr] = target
+            return
+        current = float(self.simulator._mj_data.ctrl[ctrl_adr])
+        self._control_setpoint_ramps[ctrl_adr] = ControlSetpointRamp(
+            target=target,
+            slew_rate=(target - current) / self._command_interval,
+        )
+
+    def _advance_control_setpoints(self) -> None:
+        """
+        Move every ramping control setpoint one physics step toward its target.
+
+        Bound to the simulator's per-step write hook, so actuators see a
+        setpoint that changes at the physics rate instead of jumping at the far
+        slower control rate.
+        """
+        control = self.simulator._mj_data.ctrl
+        step_size = self.simulator.step_size
+        for ctrl_adr, ramp in list(self._control_setpoint_ramps.items()):
+            remaining = ramp.target - float(control[ctrl_adr])
+            increment = ramp.slew_rate * step_size
+            if remaining == 0.0 or abs(increment) >= abs(remaining):
+                control[ctrl_adr] = ramp.target
+                del self._control_setpoint_ramps[ctrl_adr]
+                continue
+            control[ctrl_adr] = float(control[ctrl_adr]) + increment
+
+    def _commanded_velocity(self, commanded_increment: float) -> float:
+        """
+        The velocity the controller is asking for, from its position increment
+        over the interval that increment covers.
+
+        Deliberately derived from the command rather than from the measured
+        velocity: the result bounds the setpoint, so feeding a measurement back
+        into it would close a loop of measurement onto command and let the two
+        chase each other.
+        """
+        if self._command_interval <= 0.0:
+            return 0.0
+        return commanded_increment / self._command_interval
+
+    def _maximum_setpoint_lead(
+        self, ctrl_adr: int, velocity: float
+    ) -> Optional[float]:
+        """
+        How far an affine position servo's setpoint can usefully lead its
+        measured position before the actuator saturates, or ``None`` if the
+        actuator has no force limit to saturate against.
+
+        Solved from MuJoCo's affine actuator law ``force = stiffness * lead -
+        damping * velocity`` for the lead at which ``force`` reaches the
+        actuator's force limit. The damping term is what makes this depend on
+        velocity: sustaining motion already spends part of the force budget on
+        damping, so a moving joint needs a proportionally larger lead to reach
+        the same net force.
+        """
+        model = self.simulator._mj_model
+        if not model.actuator_forcelimited[ctrl_adr]:
+            return None
+        stiffness = abs(float(model.actuator_biasprm[ctrl_adr][1]))
+        if stiffness == 0.0:
+            return None
+        damping = abs(float(model.actuator_biasprm[ctrl_adr][2]))
+        force_range = model.actuator_forcerange[ctrl_adr]
+        force_limit = max(abs(float(force_range[0])), abs(float(force_range[1])))
+        if force_limit == 0.0:
+            return None
+        return (force_limit + damping * abs(velocity)) / stiffness
 
     def _integrate_desired_position(
         self,
         dof: DegreeOfFreedom,
         commanded_increment: float,
         fallback_position: float,
+        measured_position: float,
+        maximum_lead: Optional[float],
     ) -> float:
         """
         Advance and return ``dof``'s accumulated position setpoint (see
@@ -3411,15 +3562,26 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         DOF's position limits so the setpoint cannot wind up arbitrarily far
         past what the joint could ever reach.
 
+        Also clamped to within ``maximum_lead`` of the measured position: past
+        the point where the actuator already saturates, further accumulation
+        buys no additional force and only has to be unwound later, driving the
+        joint past its target once it finally catches up.
+
         :param dof: The physically simulated DOF being commanded.
         :param commanded_increment: The controller's pure position increment
             since the last state notification.
         :param fallback_position: Starting point for a DOF commanded for the
             first time.
+        :param measured_position: The DOF's current simulated position.
+        :param maximum_lead: Largest useful distance ahead of
+            ``measured_position``, or ``None`` to leave the lead unbounded.
         :return: The new setpoint.
         """
         desired = self._desired_positions.get(dof.id, fallback_position)
         desired += commanded_increment
+        if maximum_lead is not None:
+            desired = min(desired, measured_position + maximum_lead)
+            desired = max(desired, measured_position - maximum_lead)
         lower = dof.limits.lower.position
         upper = dof.limits.upper.position
         if lower is not None:
@@ -3444,6 +3606,10 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             # for the new entities; just rebase the diff and return.
             self._state_callback.update_previous_world_state()
             return
+
+        simulation_time = float(self.simulator._mj_data.time)
+        self._command_interval = simulation_time - self._last_command_simulation_time
+        self._last_command_simulation_time = simulation_time
 
         state_index = self._world.state._index
 
@@ -3483,6 +3649,8 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     def stop(self):
         if "read_data_from_simulator" in self.simulator.__dict__:
             del self.simulator.read_data_from_simulator
+        if "write_data_to_simulator" in self.simulator.__dict__:
+            del self.simulator.write_data_to_simulator
         super().stop()
 
 

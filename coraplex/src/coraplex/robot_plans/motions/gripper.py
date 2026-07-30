@@ -175,10 +175,24 @@ class MoveGripperMotion(BaseMotion):
     def _motion_chart(self):
         arm = ViewManager().get_end_effector_view(self.gripper, self.robot)
 
+        closing_on_object = (
+            self.grasped_object is not None and self.motion == GripperState.CLOSE
+        )
         return JointPositionList(
             goal_state=self._goal_state(arm),
             name=(
                 "OpenGripper" if self.motion == GripperState.OPEN else "CloseGripper"
+            ),
+            # The default threshold (1cm) is coarser than squeeze_margin, so the
+            # task would report "done" before the fingers actually reach the
+            # object. Since the goal itself commands squeeze_margin of
+            # penetration into a rigid object, the steady-state error can never
+            # drop below squeeze_margin -- doubling it keeps the threshold
+            # reachable while still requiring the fingers to be at the object.
+            **(
+                {"threshold": self.squeeze_margin * 2}
+                if closing_on_object
+                else {}
             ),
         )
 
