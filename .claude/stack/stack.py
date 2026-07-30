@@ -20,18 +20,34 @@ Commands (run from the repo root)::
     python .claude/stack/stack.py next          # which branches to submit to cram2 next
     python .claude/stack/stack.py next --porcelain   # machine-readable: one 'name<TAB>pr' line per branch
     python .claude/stack/stack.py restack-plan  # bottom-up restack plan as JSON, for the `restack` workflow
+    python .claude/stack/stack.py export        # (re)write board.json from the fork's live open PRs
 """
 
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
+
+# The shared PR-state layer lives in the repository-root development_tooling package;
+# this entry script is planned to become a thin wrapper inside it, at which point this
+# path insertion goes away.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from development_tooling.personal_notes import (
+    resolve_personal_notes_branch,
+    resolve_personal_notes_remote,
+)
+from development_tooling.pr_state import (
+    GitHubApi,
+    board_document,
+    fetch_pull_request_states,
+    resolve_github_api,
+)
 
 # %% configuration
 
@@ -88,27 +104,6 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
     )
 
 
-def _resolve_personal_notes_remote() -> str:
-    """:return: the personal-notes remote, by the same precedence as
-    ``resolve-personal-notes-config.sh``: git config, then an environment variable, then a default.
-    """
-    return (
-        _git("config", "--get", "claude.personalNotesRemote")
-        or os.environ.get("CLAUDE_PERSONAL_NOTES_REMOTE")
-        or "origin"
-    )
-
-
-def _resolve_personal_notes_branch() -> str:
-    """:return: the personal-notes branch name, by the same precedence as
-    :func:`_resolve_personal_notes_remote`."""
-    return (
-        _git("config", "--get", "claude.personalNotesBranch")
-        or os.environ.get("CLAUDE_PERSONAL_NOTES_BRANCH")
-        or "claude/personal-notes"
-    )
-
-
 def _personal_config_overrides() -> dict[str, object]:
     """Fetch the personal-notes branch and parse its config override file, if any.
 
@@ -116,8 +111,8 @@ def _personal_config_overrides() -> dict[str, object]:
         an empty mapping if the branch or the file doesn't exist (e.g. before it has ever been
         written).
     """
-    remote = _resolve_personal_notes_remote()
-    branch = _resolve_personal_notes_branch()
+    remote = resolve_personal_notes_remote()
+    branch = resolve_personal_notes_branch()
     if not _git_succeeds("fetch", remote, branch, "--quiet"):
         return {}
     if not _git_succeeds("cat-file", "-e", f"FETCH_HEAD:{PERSONAL_STACK_CONFIG_PATH}"):
@@ -363,6 +358,36 @@ def _count(rev_range: str) -> int | None:
     :return: The number of commits in it, or ``None`` if a ref is missing."""
     out = _git("rev-list", "--count", rev_range)
     return int(out) if out.isdigit() else None
+
+
+# %% board export
+
+
+def github_repository_of_fork_remote(config: Config) -> str:
+    """Resolve the fork's ``owner/repository`` from its git remote URL.
+
+    Reads the trailing two path segments rather than matching a ``github.com`` host,
+    because a Claude Code cloud session's clone has no such host at all - its remote
+    is rewritten through a local git proxy.
+
+    :param config: The static configuration naming the fork remote.
+    :return: The fork's ``owner/repository``.
+    """
+    url = _git("remote", "get-url", config.fork_remote)
+    return "/".join(url.removesuffix(".git").rstrip("/").split("/")[-2:])
+
+
+def export_board(repository: str, api: GitHubApi, path: Path = BOARD_PATH) -> int:
+    """Write ``board.json`` from the fork's live open pull requests.
+
+    :param repository: The fork's ``owner/repository``.
+    :param api: The GitHub transport to fetch through.
+    :param path: Where to write the board export.
+    :return: The number of pull requests exported.
+    """
+    states = fetch_pull_request_states(repository, api, state="open")
+    path.write_text(json.dumps(board_document(states), indent=2) + "\n")
+    return len(states)
 
 
 # %% stack assembly
@@ -617,9 +642,18 @@ def main() -> int:
     porcelain = "--porcelain" in arguments
     arguments = [argument for argument in arguments if argument != "--porcelain"]
 
+    if arguments == ["export"]:
+        config = load_config()
+        count = export_board(
+            github_repository_of_fork_remote(config), resolve_github_api()
+        )
+        print(f"Wrote {BOARD_PATH.name} ({count} open fork PRs).")
+        return 0
+
     if len(arguments) != 1 or arguments[0] not in COMMANDS:
         print(
-            f"usage: python stack.py [{' | '.join(COMMANDS)}] [--porcelain]\n"
+            f"usage: python stack.py [{' | '.join(COMMANDS)} | export] [--porcelain]\n"
+            "  export: (re)write board.json from the fork's live open PRs.\n"
             "  --porcelain (with `next`): print only 'name<TAB>pr' per branch to promote.",
             file=sys.stderr,
         )
