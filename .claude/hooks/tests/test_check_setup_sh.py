@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import os
 import subprocess
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 import pytest
 
+from setup_report import CheckStatus, SetupReport
 from scratch_repository import (
     NOTES_BRANCH,
     ScratchRepository,
@@ -57,69 +57,6 @@ class SetupCheck(StrEnum):
     NOTES_FILE = "notes_file"
     DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
     CLAUDE_LOCAL_MD = "claude_local_md"
-
-
-class CheckStatus(StrEnum):
-    """
-    The status check-setup.sh reports for a single check.
-    """
-
-    OK = "ok"
-    NEEDS_SETUP = "needs-setup"
-    INFORMATIONAL = "info"
-
-
-@dataclass
-class CheckResult:
-    """
-    What check-setup.sh reported for one check.
-    """
-
-    status: CheckStatus
-    """
-    Whether the check passed, needs setup, or is context rather than a verdict.
-    """
-
-    detail: str
-    """
-    The human-readable explanation printed alongside the status.
-    """
-
-
-@dataclass
-class SetupReport:
-    """
-    One parsed run of check-setup.sh: what it reported, and how it exited.
-    """
-
-    exit_code: int
-    """
-    The script's exit code: 0 when nothing needs setup, 1 otherwise.
-    """
-
-    results: dict[SetupCheck, CheckResult]
-    """
-    Every reported check, keyed by the check it reports on.
-    """
-
-    @classmethod
-    def from_completed_process(
-        cls, process: subprocess.CompletedProcess[str]
-    ) -> SetupReport:
-        """
-        Parse a finished check-setup.sh run.
-
-        Raises if a row names a check this test module doesn't know about, so a new
-        check has to be declared here rather than silently going unasserted.
-
-        :param process: The finished check-setup.sh subprocess.
-        :return: The parsed report.
-        """
-        results = {}
-        for line in process.stdout.splitlines():
-            check, status, detail = line.split("\t")
-            results[SetupCheck(check)] = CheckResult(CheckStatus(status), detail)
-        return cls(process.returncode, results)
 
 
 # %% the scratch layout
@@ -194,7 +131,8 @@ def run_check_setup(
             capture_output=True,
             text=True,
             env=environment,
-        )
+        ),
+        SetupCheck,
     )
 
 

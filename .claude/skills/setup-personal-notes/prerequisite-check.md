@@ -1,7 +1,8 @@
 # Prerequisite check: offering setup instead of failing
 
 Every skill that reads or writes the personal-notes branch — `plan-create`,
-`plan-dashboard`, `plan-item-kickoff`, `plan-item-resolve` — depends on a
+`plan-dashboard`, `plan-item-kickoff`, `plan-item-resolve`, and
+`setup-stacked-prs`, whose per-user config lives there — depends on a
 one-time setup the user may simply not have done yet. Without this check, that
 shows up as a confusing mid-task failure (a fetch of a branch that doesn't
 exist, a missing `plan.yaml`, an `ImportError` from a missing dependency)

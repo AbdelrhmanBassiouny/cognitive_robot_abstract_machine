@@ -29,7 +29,7 @@ import os
 import subprocess
 import sys
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
@@ -55,6 +55,9 @@ class Config:
 
     needs_resolution_label: str
     """Fork-PR label marking a branch withheld from promotion pending conflict resolution."""
+
+    cram2_link_sent_label: str
+    """Fork-PR label marking that the upstream create-link has been emailed but not yet acted on."""
 
     fork_remote: str
     """Git remote for the fork that holds the full stack."""
@@ -82,6 +85,7 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
         in_review_label=values.get("in_review_label", "in-review"),
         rebase_label=values.get("rebase_label", "rebase"),
         needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
+        cram2_link_sent_label=values.get("cram2_link_sent_label", "cram2-link-sent"),
         fork_remote=values.get("fork_remote", "origin"),
         upstream_remote=values.get("upstream_remote", "cram2"),
         upstream_base=values.get("upstream_base", "main"),
@@ -597,12 +601,34 @@ def print_restack_plan(stack: Stack) -> None:
     print(json.dumps(restack_plan(stack), indent=2))
 
 
+def print_config(config: Config) -> None:
+    """Print the resolved configuration as one ``name<TAB>value`` row per setting.
+
+    The layering in :func:`load_config` is the only place that knows a personal override
+    beats a committed default, so the shell tooling asks for the answer here instead of
+    parsing ``stack.toml`` itself and silently missing the override.
+
+    :param config: The configuration to report.
+    """
+    for name, value in asdict(config).items():
+        print(f"{name}\t{value}")
+
+
 COMMANDS = {
     "status": print_status,
     "check": print_check,
     "next": print_next,
     "restack-plan": print_restack_plan,
 }
+
+BOARD_FREE_COMMANDS = {
+    "config": print_config,
+}
+"""Commands answered from configuration alone, before any ``board.json`` has to exist.
+
+A clone being set up has no board yet, so requiring one would make the setup checker
+unable to ask what the setup should look like.
+"""
 
 
 # %% entry point
@@ -617,13 +643,18 @@ def main() -> int:
     porcelain = "--porcelain" in arguments
     arguments = [argument for argument in arguments if argument != "--porcelain"]
 
-    if len(arguments) != 1 or arguments[0] not in COMMANDS:
+    if len(arguments) != 1 or arguments[0] not in {*COMMANDS, *BOARD_FREE_COMMANDS}:
         print(
-            f"usage: python stack.py [{' | '.join(COMMANDS)}] [--porcelain]\n"
+            "usage: python stack.py "
+            f"[{' | '.join((*COMMANDS, *BOARD_FREE_COMMANDS))}] [--porcelain]\n"
             "  --porcelain (with `next`): print only 'name<TAB>pr' per branch to promote.",
             file=sys.stderr,
         )
         return 2
+
+    if arguments[0] in BOARD_FREE_COMMANDS:
+        BOARD_FREE_COMMANDS[arguments[0]](load_config())
+        return 0
 
     try:
         stack = load_stack()

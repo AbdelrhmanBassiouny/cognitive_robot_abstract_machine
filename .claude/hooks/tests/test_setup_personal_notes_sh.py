@@ -23,6 +23,7 @@ SCRIPTS_UNDER_TEST = (
     "resolve-personal-notes-config.sh",
     "check-setup.sh",
     "create-personal-notes-branch.sh",
+    "write-branch-files.sh",
     "write-personal-notes-file.sh",
     "session-start.sh",
     "github-api.sh",

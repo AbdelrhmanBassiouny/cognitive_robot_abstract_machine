@@ -10,8 +10,10 @@ remote, so those tests run against a :class:`ScratchRepository` instead.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
+import stack
 from scratch_repository import ScratchRepository
 
 from stack import (
@@ -22,8 +24,10 @@ from stack import (
     build_stack,
     derive_status,
     load_config,
+    main,
     next_to_promote,
     order,
+    print_config,
     promotion_order,
     restack_plan,
 )
@@ -34,6 +38,7 @@ def make_config() -> Config:
         in_review_label="in-review",
         rebase_label="rebase",
         needs_resolution_label="needs-resolution",
+        cram2_link_sent_label="cram2-link-sent",
         fork_remote="origin",
         upstream_remote="cram2",
         upstream_base="main",
@@ -284,3 +289,85 @@ def test_load_config_ignores_personal_notes_branch_without_a_stack_file(
     config = load_config(config_path)
 
     assert config.upstream_remote == "cram2"
+
+
+# %% the resolved configuration, as the shell scripts read it
+
+
+def read_printed_config(capsys) -> dict[str, str]:
+    """
+    Parse what :func:`print_config` just printed back into a mapping.
+
+    :param capsys: pytest's captured-output fixture.
+    :return: One entry per printed setting.
+    """
+    return dict(
+        line.split("\t") for line in capsys.readouterr().out.splitlines() if line
+    )
+
+
+def test_prints_every_configured_value(
+    scratch_repository: ScratchRepository, monkeypatch, capsys
+):
+    config_path = _committed_config_path(scratch_repository)
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    print_config(load_config(config_path))
+
+    assert read_printed_config(capsys) == {
+        "in_review_label": "in-review",
+        "rebase_label": "rebase",
+        "needs_resolution_label": "needs-resolution",
+        "cram2_link_sent_label": "cram2-link-sent",
+        "fork_remote": "origin",
+        "upstream_remote": "cram2",
+        "upstream_base": "main",
+    }
+
+
+def test_prints_a_personal_notes_override_rather_than_the_committed_default(
+    scratch_repository: ScratchRepository, monkeypatch, capsys
+):
+    config_path = _committed_config_path(scratch_repository)
+    scratch_repository.publish_notes_branch(
+        {".claude/personal/stack.toml": 'fork_remote = "my-fork"\n'}
+    )
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    print_config(load_config(config_path))
+
+    printed = read_printed_config(capsys)
+    assert printed["fork_remote"] == "my-fork"
+    assert printed["upstream_remote"] == "cram2"
+
+
+def test_config_is_reported_without_a_board(
+    scratch_repository: ScratchRepository, monkeypatch, capsys
+):
+    """
+    The setup checker runs on clones that have never had a board.json written.
+    """
+    _committed_config_path(scratch_repository)
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+    monkeypatch.setattr(sys, "argv", ["stack.py", "config"])
+    monkeypatch.setattr(stack, "CONFIG_PATH", Path(".claude/stack/stack.toml"))
+    monkeypatch.setattr(stack, "BOARD_PATH", Path(".claude/stack/board.json"))
+
+    assert main() == 0
+    assert read_printed_config(capsys)["upstream_remote"] == "cram2"
+
+
+# %% the label the routine sets but stack.toml never named
+
+
+def test_cram2_link_sent_label_defaults_when_the_committed_file_omits_it(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    config_path = _committed_config_path(scratch_repository)
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    assert load_config(config_path).cram2_link_sent_label == "cram2-link-sent"

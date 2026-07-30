@@ -52,6 +52,23 @@ The individual steps, if you'd rather drive them yourself:
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
+## Setting up the stacked-PR workflow
+
+Separate setup, same shape: `/setup-stacked-prs`, or without a session,
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/setup-stacked-prs.sh" --fork <name-or-url> \
+  --upstream <name-or-url> [--mode fork-overlay] [--personal-config <key>=<value>]... \
+  [--create-labels]
+```
+
+`--fork` and `--upstream` are required, for the same reason `--remote` is above. It names the
+remotes, records only the overrides that differ from `.claude/stack/stack.toml`'s defaults,
+checks the workflow's labels, and prints the Routine prompt to paste — the one part no command
+can finish. `--mode fork-overlay` installs the tooling onto a never-merged branch of your fork
+instead, for a repository that won't carry it on its own default branch; re-running is the
+update. `check-stack-setup.sh` is its read-only counterpart to `check-setup.sh`.
+
 ## Editing your notes
 
 - **Ask Claude** — *"add \<X\> to my personal notes"*, *"edit my personal notes"*. Nothing else to

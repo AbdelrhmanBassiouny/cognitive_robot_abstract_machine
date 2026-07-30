@@ -159,33 +159,41 @@ class ScratchRepository:
             (self.project_root / relative_path).unlink()
         self.commit_everything("drop the notes from the work branch")
 
-    def clone_notes_branch(self, destination: Path) -> Path:
+    def clone_branch(self, remote: Path, branch: str, destination: Path) -> Path:
         """
-        Check the notes branch out of the notes remote, for asserting against what a
-        hook actually pushed rather than what it reported.
+        Check a branch out of a remote, for asserting against what a hook actually
+        pushed rather than what it reported.
 
+        :param remote: The remote holding the branch.
+        :param branch: The branch to check out.
         :param destination: Where to put the checkout.
         :return: The checkout's path.
         """
         self.run_git(
-            "clone",
-            "--quiet",
-            "--branch",
-            NOTES_BRANCH,
-            str(self.notes_remote_path),
-            str(destination),
+            "clone", "--quiet", "--branch", branch, str(remote), str(destination)
         )
         return destination
 
-    def notes_branch_commit(self) -> str | None:
+    def clone_notes_branch(self, destination: Path) -> Path:
         """
-        Read the commit the notes branch points at on the notes remote, for asserting
-        that a re-run pushed nothing rather than trusting it said so.
+        Check the notes branch out of the notes remote.
 
+        :param destination: Where to put the checkout.
+        :return: The checkout's path.
+        """
+        return self.clone_branch(self.notes_remote_path, NOTES_BRANCH, destination)
+
+    def remote_branch_commit(self, remote: Path, branch: str) -> str | None:
+        """
+        Read the commit a branch points at on a remote, for asserting that a re-run
+        pushed nothing rather than trusting it said so.
+
+        :param remote: The remote to look the branch up on.
+        :param branch: The branch to resolve.
         :return: The commit hash, or ``None`` if the branch isn't on the remote at all.
         """
         result = subprocess.run(
-            ["git", "ls-remote", str(self.notes_remote_path), NOTES_BRANCH],
+            ["git", "ls-remote", str(remote), branch],
             cwd=self.project_root,
             capture_output=True,
             text=True,
@@ -194,6 +202,14 @@ class ScratchRepository:
         if not result.stdout.strip():
             return None
         return result.stdout.split()[0]
+
+    def notes_branch_commit(self) -> str | None:
+        """
+        Read the commit the notes branch points at on the notes remote.
+
+        :return: The commit hash, or ``None`` if the branch isn't on the remote at all.
+        """
+        return self.remote_branch_commit(self.notes_remote_path, NOTES_BRANCH)
 
     def resolve_notes_remote_to(self, remote: Path | None = None) -> None:
         """

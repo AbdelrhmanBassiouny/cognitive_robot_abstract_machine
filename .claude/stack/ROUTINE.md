@@ -61,10 +61,13 @@ auto-mark the child PR as merged - a false merge. STOP and do not push. (This ex
 `rdr-engine`'s HEAD onto `eql-core-prep` and falsely merged the child PR #29.)
 
 SETUP
-0. Ensure remotes match the config: `origin` must be the fork
-   (AbdelrhmanBassiouny/cognitive_robot_abstract_machine) and `cram2` the upstream. A fresh cloud
-   clone may have them named differently - check `git remote -v` and rename/add so `origin`=fork,
-   `cram2`=upstream before continuing. `.claude/stack/stack.py` and `stack.toml` are already on this
+0. Confirm the workflow is set up here before doing anything else: run
+   `bash .claude/hooks/check-stack-setup.sh`. It reports the remotes the config names, whether they
+   resolve in this clone, and whether the upstream base is reachable - all the things a fresh cloud
+   clone may be missing. If any row says `needs-setup`, REPORT those rows in your summary and STOP:
+   per `.claude/skills/setup-stacked-prs/prerequisite-check.md` you report rather than offer, since
+   you cannot ask anyone or enter plan mode. Half a restack on a half-set-up clone is worse than a
+   run that says what is missing. `.claude/stack/stack.py` and `stack.toml` are already on this
    checkout - they live on `main`, so there is nothing to pull from another branch first.
 1. UPDATE FORK MAIN FIRST - before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main

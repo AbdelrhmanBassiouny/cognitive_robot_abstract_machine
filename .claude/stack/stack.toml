@@ -20,6 +20,7 @@
 in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
 needs_resolution_label = "needs-resolution"  # set by the routine on a delegated restack conflict
+cram2_link_sent_label = "cram2-link-sent"    # set by the routine when it emails a create-link, cleared at promotion
 fork_remote = "origin"
 upstream_remote = "cram2"
 upstream_base = "main"

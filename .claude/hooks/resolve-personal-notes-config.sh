@@ -233,6 +233,30 @@ STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
 # tests/: the pytest suite covering stack.py, including its personal-notes
 # config-layering behaviour (via the hooks tests' ScratchRepository).
 STACK_TESTS_DIRECTORY="${STACK_DIRECTORY}/tests"
+# README.md: the one-page doctrine and file map for the workflow.
+STACK_README_FILE="${STACK_DIRECTORY}/README.md"
+# ROUTINE.md: the canonical cloud-Routine doctrine, holding the phases the
+# Routine executes.
+STACK_ROUTINE_DOCUMENT="${STACK_DIRECTORY}/ROUTINE.md"
+# routine-prompt.md: the short prompt actually pasted into
+# claude.ai/code/routines - the hard rules inline plus a pointer at
+# ROUTINE.md. Separate from ROUTINE.md because it is substituted into and
+# copied verbatim, not read.
+STACK_ROUTINE_PROMPT_FILE="${STACK_DIRECTORY}/routine-prompt.md"
+# board.json: the fork-PR snapshot stack.py reads, written by the Routine as
+# scratch and never committed. Named here so the setup checker can verify it
+# is gitignored rather than restating the path.
+STACK_BOARD_FILE="${STACK_DIRECTORY}/board.json"
+# .claude/personal/stack.toml: the per-user override file on the
+# personal-notes branch. Relative to that branch's root, not this clone's -
+# it is read with `git show`, never checked out.
+PERSONAL_STACK_CONFIG_PATH=".claude/personal/stack.toml"
+# SETUP_STACKED_PRS_DIRECTORY / STACK_PREREQUISITE_DOCUMENT: the guided
+# setup skill and the shared "check first, offer the setup" procedure its
+# consumers reference - the stack-side counterparts of
+# SETUP_PERSONAL_NOTES_DIRECTORY and its prerequisite-check.md below.
+SETUP_STACKED_PRS_DIRECTORY=".claude/skills/setup-stacked-prs"
+STACK_PREREQUISITE_DOCUMENT="${SETUP_STACKED_PRS_DIRECTORY}/prerequisite-check.md"
 
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
@@ -273,6 +297,18 @@ SETUP_PERSONAL_NOTES_SCRIPT=".claude/hooks/setup-personal-notes.sh"
 # authenticated as, which repository a remote points at, and whether a label
 # exists. Sourced, not executed.
 GITHUB_API_SCRIPT=".claude/hooks/github-api.sh"
+# write-branch-files.sh: the generic "commit these files to this branch on
+# this remote" primitive. Named here because both write-personal-notes-file.sh
+# and setup-stacked-prs.sh's fork-overlay install delegate to it, rather than
+# each carrying its own copy of the scratch-worktree dance.
+WRITE_BRANCH_FILES_SCRIPT=".claude/hooks/write-branch-files.sh"
+# check-stack-setup.sh: the read-only "is the stacked-PR workflow set up in
+# this clone?" report, the stack-side counterpart of ./check-setup.sh and the
+# single source of truth setup-stacked-prs.sh gates each of its steps on.
+CHECK_STACK_SETUP_SCRIPT=".claude/hooks/check-stack-setup.sh"
+# setup-stacked-prs.sh: performs the whole stacked-PR setup non-interactively -
+# remotes, labels, the personal config override, and either install mode.
+SETUP_STACKED_PRS_SCRIPT=".claude/hooks/setup-stacked-prs.sh"
 # create-personal-notes-branch.sh: creates the notes branch on the resolved
 # remote with an empty notes file, refusing if it already exists anywhere.
 CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"

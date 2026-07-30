@@ -26,6 +26,18 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 | cram2 create-link emailed | the **`cram2-link-sent`** marker | nothing - the routine sets it when it emails you a create-link, and clears it once you promote (add `in-review`) |
 | conflict/CI-red delegated | the **`needs-resolution`** label | nothing - the routine sets it when it delegates a restack conflict to the branch's owning session, and clears it once the restack goes clean again |
 
+## Setup
+
+`/setup-stacked-prs` takes a fork from nothing to a working stack: the remotes this config
+names, the labels the state machine reads, your own `.claude/personal/stack.toml` overrides,
+and the Routine prompt to paste. `bash .claude/hooks/check-stack-setup.sh` is the read-only
+"is this clone set up?" answer it works from, and is safe to run at any time.
+
+Two install modes. **Native** is this repository: the tooling is tracked on `main`, so a clone
+already has it. **Fork-overlay** is for a repository whose maintainers won't take `.claude/`
+tooling upstream — the same canonical files are installed onto a never-merged branch of your
+own fork instead, and re-running the setup is how you update them.
+
 ## Files
 
 - **`stack.toml`** - the committed defaults: label names and remotes. A
@@ -46,8 +58,10 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`). Feed straight into the `restack`
     workflow's `args`.
-- **`ROUTINE.md`** - the canonical cloud-Routine prompt; paste it (or its successor) into
-  claude.ai/code/routines rather than re-embedding a copy here.
+- **`ROUTINE.md`** - the canonical doctrine the cloud Routine executes, phase by phase.
+- **`routine-prompt.md`** - the short prompt you actually paste into claude.ai/code/routines:
+  the hard rules inline (they must be in force before the Routine reads anything) plus a
+  pointer at `ROUTINE.md`. `/setup-stacked-prs` prints it with your remotes filled in.
 
 ## The state machine (your approval gate)
 
