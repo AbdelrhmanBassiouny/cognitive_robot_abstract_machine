@@ -36,6 +36,11 @@ Two asks, one branch:
   PR's base commit 52f4f74, so it is pre-existing, not ours - said so in a PR comment
   and did not bundle a fix.
 
+- Tracked in the workflow-unification plan as item `personal-settings-sync`
+  (personal-data track, immediate wave, depends_on []). plan.yaml + roadmap addendum
+  saved, dashboard republished at the existing URL, structural change commented on
+  tracking issue #102.
+
 # Next
 
 - React to PR #109 events as they arrive (no scheduled polling, per notes). Keep it a
