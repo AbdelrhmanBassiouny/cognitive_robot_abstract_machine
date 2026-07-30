@@ -34,10 +34,16 @@ decision from the #33 review, and regenerate the sdt verbalization snapshot.
 - **Branch**: continue on `eql-symbolic-function-sdt` / PR #33, *not* this
   session's designated `claude/eql-verbalization-p4-sdt-nbmu16` — the 36
   unresolved review threads have to be replied to and resolved in place.
-- **Roadmap corrections**: this session acts as the plan's steward and edited
-  `roadmap.md` directly (done — decision 9's `OPERAND_OVERRIDES` line superseded by
-  `_example_operand_values_`; new "How the snapshot works now" section replacing the
-  hand-written-tuple assumption), then `save-plan.sh` + dashboard refresh.
+- **Roadmap corrections**: edited `roadmap.md` directly (done — decision 9's
+  `OPERAND_OVERRIDES` line superseded by `_example_operand_values_`; new "How the
+  snapshot works now" section replacing the hand-written-tuple assumption), then
+  `save-plan.sh` + dashboard refresh.
+- **`Reachable` wording**: decision 11 — *"a Pose is reachable for the kinematic chain
+  rooted at <root> and ending at <tip>"*. Root/tip stay named (decision 10's concision
+  rule does not apply here).
+- **First-mention type annotation** (*"a gripper of type HasTwoFingers"*): out of P4's
+  scope, split into new item `p5-first-mention-type-annotation` (decision 12, added to
+  `plan.yaml`, announced on #104 per the structural-change convention).
 
 ### Plan (approved, not yet implemented)
 
