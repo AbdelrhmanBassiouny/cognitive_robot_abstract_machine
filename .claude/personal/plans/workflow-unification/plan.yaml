@@ -116,21 +116,37 @@ items:
       lives on the personal-notes branch, not a per-user dev branch.
 
   - id: setup-personal-notes-script
-    branch: null
+    branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"
+    pull_request_number: 107
     track: stack-tooling
     depends_on: [setup-personal-notes-pr101]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01MyxyUN3bsvPsJnb5QuNzxd
     notes: >
-      PR #101 review follow-up: move the skill's mechanical steps (4-7, 9) into a
-      non-interactive .claude/hooks/setup-personal-notes.sh --remote <name-or-url>
-      [--starter-notes], and shrink SKILL.md to the genuinely session-only parts
-      (get_me remote-ownership check, label check — creation shells out to gh).
-      Stronger dependency than the dashboard's usual open-ready rule: requires #101
-      MERGED — branch off main after the merge, never off the PR head; stop and say so
-      if it hasn't merged. Full dispatch prompt verbatim in roadmap.md under
-      "Dispatch prompt: setup-personal-notes-script". If this lands before PR 2
-      (/setup-stacked-prs), PR 2 should mirror the same script/skill split.
+      Implemented as draft PR #107 (2026-07-29), based on claude/patch-pr-rheubx rather
+      than main: the user overrode this item's "requires #101 MERGED" rule. That rule was
+      never really about ordering — all six files this item builds on arrive with #101, so
+      basing on it is what made the work possible at all. Joins #106 as a second sibling
+      on that stack; GitHub retargets #107 to main when #101 merges.
+      The item's original premise is disproved and no longer applies: the two steps
+      recorded as session-only are both scriptable (GET /user for the login,
+      GET /repos/{owner}/{repo}/labels/{name} for the labels, POST .../labels to create
+      one — the "no create-label tool" limit is true of MCP, not of the API). So the whole
+      setup runs with no session, and SKILL.md became a thin question-asking wrapper
+      (238 → 153 lines) rather than the "script plus two API steps" split the dispatch
+      prompt described. Delivered: .claude/hooks/setup-personal-notes.sh
+      (--remote required, --starter-notes, --create-labels), .claude/hooks/github-api.sh,
+      4 new path constants, 254 tests passing (was 236), all network- and
+      credential-free. Carries two incidental fixes as their own commits, both hard
+      prerequisites: current_branch_upstream_remote returning git's 128 instead of "no
+      upstream" (which aborted create-personal-notes-branch.sh on any branch never pushed
+      with -u), and a test helper that hid an executable by dropping its whole PATH entry.
+      Still unverified: label creation against a real token (this environment's is a
+      fine-grained installation token, so POST .../labels is exercised only via a stub).
+      Cross-note stands but shifts: PR 2 (/setup-stacked-prs) should mirror this
+      script/skill split, where the skill keeps only the questions and the un-scriptable
+      environment-variable step — not a split reserving the GitHub calls for a session.
 
   - id: shared-pr-state-chips
     branch: null

@@ -102,6 +102,13 @@ Item `setup-personal-notes-script` (stack-tooling track). The user supplied this
 prompt verbatim; hand it to the implementing session unchanged. Precondition it enforces itself:
 PR #101 must be MERGED first — branch off `main`, never off the PR head.
 
+> **Superseded on implementation — read the 2026-07-29 (night) addendum below before using this
+> prompt as a reference.** Two of its statements no longer hold: the "requires #101 MERGED" rule
+> was overridden by the user (#107 is based on `claude/patch-pr-rheubx`), and its central
+> accounting — that the `get_me` remote-ownership check and the label check genuinely require a
+> session — was tested and disproved. The prompt is kept verbatim as the historical record of what
+> was dispatched, not as a description of what was built.
+
 ```
 Extract a deterministic setup script from the /setup-personal-notes skill, in the
 AbdelrhmanBassiouny/cognitive_robot_abstract_machine fork.
@@ -240,3 +247,65 @@ plan-manifest update itself) can still run in a session. The retirement was comp
 directly: `claude/session-hooks` is deleted (its tip was already an ancestor of `main`, so no tag
 was needed); `origin/claude/push-scope-test-zsq7jc` (a diagnostic throwaway, identical to `main`)
 still needs the same out-of-harness deletion.
+
+## Addendum 2026-07-29 (night): setup-personal-notes-script implemented as #107; its premise disproved
+
+Written by the implementing session (session_01MyxyUN3bsvPsJnb5QuNzxd), which also edited
+`plan.yaml` directly rather than only comment-proposing on issue #102. Under the older
+propose-don't-edit convention a non-steward session would have left the manifest stale; the user
+has since made keeping plan state current the stronger rule, so state that is already fact gets
+written straight into the manifest, with the issue comment kept as the record of *why*.
+
+**Design decision 9 — the GitHub steps in this system do not need a session.** The dispatch prompt
+above rested on an accounting that turned out to be wrong, and it is worth correcting explicitly
+because the same reasoning was about to be copied into PR 2:
+
+| Believed session-only | Actually |
+| --- | --- |
+| the authenticated login (`get_me`) | `GET /user` from a plain shell |
+| label existence (`get_label`) | `GET /repos/{owner}/{repo}/labels/{name}` → 200/404 |
+| creation needs `gh`, since MCP has no create-label tool | true of MCP only; `POST /repos/{owner}/{repo}/labels` has always existed |
+
+`.claude/hooks/github-api.sh` owns these, preferring `gh` when installed and otherwise
+`GH_TOKEN`/`GITHUB_TOKEN` with `curl`, failing with both routes named rather than silently doing
+nothing. What is genuinely un-scriptable is also out of reach for a session, so neither justifies
+one: persisting `CLAUDE_PERSONAL_NOTES_*` for the next fresh clone, and judging whether a divergent
+`.claude/settings.json`/`.gitignore` is deliberate. The one real residue is a shell with neither
+`gh` nor a token, where the skill's MCP path still works — kept as the documented fallback.
+
+Consequence for PR 2 (`setup-stacked-prs-skill`): mirror this script/skill split, where the skill
+keeps only the questions plus the environment-variable step. Do not reserve the GitHub calls for a
+session.
+
+**A portability trap worth knowing about, found here.** A Claude Code cloud session's clone has no
+`github.com` in its remote URL at all — it is rewritten through a local git proxy
+(`http://local_proxy@127.0.0.1:<port>/git/<owner>/<repo>`), and `git config remote.origin.url`
+shows the proxy form too. Any code deriving `owner/repo` by matching the real host fails in exactly
+the environment this tooling is most used in. `github_repository_of_remote` reads the trailing two
+path segments instead, and rejects a local filesystem path outright (a path also ends in something
+shaped like `<owner>/<repo>`, and attributing a directory name to a GitHub account would make an
+ownership check refuse a valid setup).
+
+**#101's stacking rule, in practice.** Basing on the PR head rather than waiting for the merge was
+not a shortcut: `check-setup.sh`, the three `setup-personal-notes/` documents,
+`scratch_repository.py` and the `CHECK_SETUP_SCRIPT`/`STARTER_NOTES_FILE` constants all arrive with
+#101, so there was nothing to write against `main`. The same is true of `dev-tooling-python-package`
+later in the plan, which moves `.claude/hooks/tests/` files — including the four test modules #107
+adds.
+
+**Two latent bugs surfaced by having tests at all**, each fixed as its own commit on #107 since the
+feature could not work without them:
+
+1. `current_branch_upstream_remote` piped git into `cut`, so under `set -o pipefail` it returned
+   git's 128 rather than an empty answer when the branch has no upstream. That aborted
+   `create-personal-notes-branch.sh` outright on any branch never pushed with `-u`.
+   `fetch_personal_notes_branch` escaped it only by always being called from a condition.
+2. The new test helper hid an executable by dropping its whole `PATH` entry — normally `/usr/bin`,
+   which also provides `bash`. Invisible on a machine without `gh`, fatal on CI which has one.
+
+**Open, for the developer, not fixed here.** `test_each_lib (coraplex)` fails intermittently for a
+reason unrelated to this plan: `test/coraplex_test/conftest.py`'s `pytest_configure` regenerates
+`coraplex/src/coraplex/orm/ormatic_interface.py` with no xdist guard, so with `2/2 workers` two
+processes rewrite the same ~33.5k-line file concurrently and `ruff format` then fails to parse it.
+Analysis posted on #107. Untouched deliberately: different root cause, different package, and
+AGENTS.md routes ORM-interface problems via `scripts/regenerate_all_orm.py` or the developer.
