@@ -29,8 +29,31 @@ decision from the #33 review, and regenerate the sdt verbalization snapshot.
 - 36 of 37 review threads unresolved.
 - CI green on head `dc6948ec`, but that run predates 605 commits of `main`.
 
+### Decisions settled with the user (2026-07-30)
+
+- **Branch**: continue on `eql-symbolic-function-sdt` / PR #33, *not* this
+  session's designated `claude/eql-verbalization-p4-sdt-nbmu16` — the 36
+  unresolved review threads have to be replied to and resolved in place.
+- **Roadmap corrections**: this session acts as the plan's steward and edited
+  `roadmap.md` directly (done — decision 9's `OPERAND_OVERRIDES` line superseded by
+  `_example_operand_values_`; new "How the snapshot works now" section replacing the
+  hand-written-tuple assumption), then `save-plan.sh` + dashboard refresh.
+
+### Plan (approved, not yet implemented)
+
+1. Merge `main` into the branch: `main` wins everywhere except sdt reasoning +
+   `ormatic.py`'s `SymbolicCallable` exclusion. Delete `surface_verification.py`
+   and the two krrood test surface files.
+2. Rebuild the sdt snapshot on `VerbalizationResultsOfPackage` + wire
+   `regenerate_verbalization_results` into `test/semantic_digital_twin_test/conftest.py`.
+3. Apply the roadmap's P4 wording checklist, no-abbreviation sweep, `Noun` over raw
+   `WordFragment`, and the `Pose`-hint investigation.
+4. `regenerate_all_orm.py`, `format_docstrings.py`, run sdt + krrood suites.
+5. Reply-and-resolve all 36 threads; refresh #33's description; update `plan.yaml`
+   status/blockers.
+
+Full plan file: `/root/.claude/plans/compiled-squishing-bachman.md`.
+
 ### Next
 
-Present the resolve plan via ExitPlanMode; settle the branch question
-(continue on `eql-symbolic-function-sdt`/#33 vs the session's designated
-`claude/eql-verbalization-p4-sdt-nbmu16`) before any push.
+Start step 1 (the `main` merge) on `eql-symbolic-function-sdt`.
