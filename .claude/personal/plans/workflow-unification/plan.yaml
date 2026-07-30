@@ -164,11 +164,12 @@ items:
       environment-variable step — not a split reserving the GitHub calls for a session.
 
   - id: shared-pr-state-chips
-    branch: null
+    branch: claude/shared-pr-state-chips
     title: "PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards"
     track: dashboards
     depends_on: [stack-tooling-on-main]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr
     notes: >
       Extract one PR-state fetch/compute module (CI rollup, LOC vs base, mergeable probe,
       session-link parse) shared by stack.py and plan-dashboard's pr-data fetching; add
@@ -178,6 +179,11 @@ items:
       Python package (top-level directory importable from the repo root with no install,
       plus a pyproject for optional installation) and puts pr_state in it as its first
       module — the shared import home is what forces the package into existence here.
+      Kicked off 2026-07-30 (branch based on claude/stack-tooling-on-main, a sibling of
+      #107 on #106 — needs only #106's files, so decision 10's linearization doesn't
+      apply). Two calls settled at kickoff: the package is named development_tooling
+      (abbreviation-free per AGENTS.md), and the headless site build also pushes
+      merged-to-done manifest auto-corrections, same as the live refresh path.
 
   - id: dev-tooling-python-package
     branch: null

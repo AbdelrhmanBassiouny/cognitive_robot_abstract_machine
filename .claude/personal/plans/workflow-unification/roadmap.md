@@ -345,3 +345,29 @@ actually carries the files the item builds on. Both are now steps in `plan-item-
 raising an open question, and ending every proposed plan with the plan-state bookkeeping. The
 second plan also caught that `.claude/stack/board.json` is documented as never-committed scratch
 while nothing gitignores it — fixed in PR 2, with a `board_ignored` check to keep it true.
+
+## Update 2026-07-30: PR 3 (shared-pr-state-chips) kicked off; package named
+
+Kickoff session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr, via
+`/plan-item-kickoff`. Branch `claude/shared-pr-state-chips`, based on
+`claude/stack-tooling-on-main` (#106's head) as a **sibling of #107 on #106** — decision 10's
+linearization was forced by PR 2 needing files from two parents, which doesn't apply here: PR 3
+needs only #106's files (`.claude/stack/stack.py`, the `STACK_*` constants; `github-api.sh` is
+bash, and `pr_state` fetches in Python with the same dual-backend rule as decision 9).
+
+Two decisions settled with the user at kickoff:
+
+- **The dev-tooling package (decision 8) is named `development_tooling`** — abbreviation-free per
+  AGENTS.md ("dev" is an abbreviation), over `dev_tooling`/`claude_tooling`. Flat top-level
+  directory, `pyproject.toml` inside the package directory (the repo root already carries the
+  workspace meta-pyproject), zero-install import from the repo root preserved.
+- **The headless static-site build pushes manifest auto-corrections.** The `build_site.py`
+  entrypoint the Pages Action will invoke reuses `refresh_dashboard.sh` per plan, including its
+  push of merged→done corrections to the personal-notes branch — the user chose keeping the
+  manifest current with no session over a read-only Action.
+
+Interim states this PR deliberately leaves for `dev-tooling-python-package` to clean up:
+`stack.py` gets a repo-root `sys.path` insert to import the package, and `build_site.py` lives in
+`.claude/skills/plan-dashboard/` next to the render scripts it imports until the migration moves
+them into the package together. PR 3's own new tests go straight to
+`test/development_tooling_test/` so the migration has nothing to move for them.
