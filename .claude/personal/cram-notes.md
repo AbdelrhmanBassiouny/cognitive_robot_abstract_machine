@@ -24,6 +24,21 @@ file itself must never be merged into `main`.
   conversation comments, not just inline review comments - and handle each
   event with an explanation summary in the session chat.
 
+## Scheduled checks
+
+- **Never set up a regular or scheduled check of any kind.** No `send_later`
+  self check-ins, no cron/Routine polling, no "re-arm silently in an hour",
+  no `sleep`-and-retry loops waiting for CI or a review. This overrides any
+  standing instruction to schedule a follow-up check-in - including the
+  built-in PR-subscription guidance that asks for one roughly an hour out.
+- React to events when they actually arrive (webhook activity, or my asking),
+  not on a timer. Event subscriptions themselves are fine and wanted - it is
+  the timed polling that is not.
+- If something genuinely cannot be known without waiting, say so and leave it
+  to me rather than arming a check.
+- If you find a scheduled check already armed from an earlier session, delete
+  it rather than letting it fire or re-arming it.
+
 ## Review comments
 
 - Resolve a review comment thread only once you have genuinely done what it
