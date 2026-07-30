@@ -27,10 +27,29 @@
   crash window.
 - `rerun_failed_jobs` refused while run 30578088164 is still in progress.
 
+- Second failure on the same run: `test_each_lib (giskardpy)` — confirmed red on
+  the base branch too (main's 0fd14357 run fails byte-identically: 1 failed +
+  8 errors, all DAiSy tests, `xacro.XacroException: package 'ur_robot_driver' not
+  found`). Cause: #405 added ur-robot-driver/ur-client-library as system deps but
+  the jazzy CI image hasn't been rebuilt (`update_docker.yml`). Base-side fix;
+  commented on the PR (part 2).
+
+- Third failure, same run: `test_each_lib (semantic_digital_twin)` — also base-red
+  (main's 0fd14357 sdt job failed): the pre-existing multi-sim physics-settling
+  flake (already red on main 52f4f745, 07-29) + the same missing `ur_robot_driver`
+  (`test_world_pr2.py::test_robots_and_validate`). Commented on the PR (part 3).
+- Run 30578088164 completed; queued re-run of failed jobs (20:3x). Expected:
+  coraplex green (confirms the regen-race theory), giskardpy/sdt red again until
+  the image rebuild.
+
 ## Next
-- When run 30578088164 completes: re-run its failed coraplex job (should go green);
-  user can also click "Re-run failed jobs". No timed polling per personal notes —
-  act on the next event or user ping.
+- giskardpy and sdt cannot go green anywhere until the CI docker image is rebuilt
+  with #405's system deps (`update_docker.yml`) — main-side action (user/DAiSy
+  authors). The multi-sim flake is also main-side.
+- Act on re-run results / base recovery via events or user ping — no timed polling
+  per personal notes.
+- krrood (this PR's own scope) is green on the run; once base recovers and the
+  run is green, PR is ready for user review/mark-ready.
 - Candidate separate bug-fix PR (needs user approval to open): guard the coraplex
   conftest ORM regen from xdist workers (skip when `config.workerinput` is set),
   matching sdt's guarded pattern. One root cause, off main, `bug` label.
