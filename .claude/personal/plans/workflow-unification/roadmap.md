@@ -441,3 +441,43 @@ Also restored in this same save: PR 3's kickoff state (manifest + the roadmap se
 which a concurrent stale-scaffold save (bdd0beaa, 14:49) had silently reverted five minutes after
 it was recorded (973ff31a, 14:44) — the second occurrence of this race; the first is noted in the
 2026-07-29 tag-push addendum.
+
+## Update 2026-07-30: personal settings sync joins the personal-data track (PR #109)
+
+New item `personal-settings-sync` (`claude/local-settings-dashboard-sync-8sx0tf`, PR #109,
+session_0167iZiWUnXizpKSqa7xf5rC), added at the user's request after the work was already built
+and open.
+
+**What it adds.** The personal-notes branch can now also carry `.claude/personal/settings.local.json`,
+which `session-start.sh` copies to the project root's `.claude/settings.local.json` — the file
+Claude Code itself reads as local settings. Seeded with a rule allowing the `Artifact` tool
+without prompting, so plan dashboards publish without a permission prompt each session.
+`save-personal-settings.sh` is the write half, delegating its commit/push to the existing
+`write-personal-notes-file.sh`. The same session also added a personal-notes rule that any session
+changing a plan's data republishes that plan's dashboard in the same turn — notes-branch only, no
+PR, and the direct reason this item exists as a tracked one rather than a loose change.
+
+**Why `personal-data` and not `stack-tooling`** (user's call, offered three options): the target
+architecture already names `claude/personal-notes` the home for *all* personal state, and this is
+that — config rather than data, but the same home and the same mechanism. It is also genuinely
+independent of the #101 stack: branched off fork `main`, not on the chain, so putting it in the
+upstream track would have broken that track's one-linear-chain property (decision 10) for no gain.
+The consequence is that the `personal-data` track is no longer only about *slimming* the notes
+branch; it is personal-notes data and config generally. The track keeps its name, and the item
+records the widening.
+
+**Not a dependency, but a merge to expect.** Three open PRs touch the same two files:
+`#107` adds path constants to `resolve-personal-notes-config.sh`, `#110` makes
+`write-personal-notes-file.sh` delegate to a new `write-branch-files.sh`, and `#109` adds its own
+constants to the first and calls the second. None of them needs the others to work, so no
+`depends_on` was added — whichever lands second resolves a textual overlap in files both already
+edit. Worth knowing before restacking anything, not worth serializing the work over.
+
+**Deliberate deviation from a plain copy.** Claude Code writes permission grants into
+`.claude/settings.local.json` itself whenever the user picks "don't ask again", so an
+unconditional copy every session start would silently drop them. The hook writes only when the
+file is absent or unchanged since it last synced, tracked by a hash stamp in the gitignored
+`.claude/.personal-settings-sync-hash`; otherwise it keeps the local file and says so in its
+session-start summary, and `save-personal-settings.sh` re-stamps so syncing resumes. This is the
+one place the settings round trip is not symmetric with the notes round trip, and it is the reason
+why.

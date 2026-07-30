@@ -69,6 +69,34 @@ items:
       safe. Remaining cleanup: origin/claude/push-scope-test-zsq7jc, a throwaway
       branch pushed while diagnosing the tooling gap (identical content to main),
       still needs deleting the same way.
+  - id: personal-settings-sync
+    branch: claude/local-settings-dashboard-sync-8sx0tf
+    title: "Sync personal .claude/settings.local.json off the personal-notes branch"
+    pull_request_number: 109
+    track: personal-data
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_0167iZiWUnXizpKSqa7xf5rC
+    notes: >
+      Extends the session-start hook so the notes branch also carries this project's
+      local Claude Code settings (.claude/personal/settings.local.json ->
+      .claude/settings.local.json, gitignored), plus save-personal-settings.sh for the
+      write half; seeded with a rule allowing the Artifact tool without prompting. A
+      copy that is skipped whenever the local file changed since the last sync, since
+      Claude Code writes its own "don't ask again" grants into that same file - the
+      baseline is a hash stamp in .claude/.personal-settings-sync-hash. This widens the
+      track beyond its "slimming" name: personal-data is now personal-notes data and
+      config generally, which is what the plan's target architecture already says that
+      branch holds. Independent of the #101 stack - branched off fork main, PR #109 open
+      and ready. Same session also added the personal-notes rule that any session
+      changing a plan's data republishes that plan's dashboard in the same turn
+      (notes-branch only, no PR). File overlap to expect, not a dependency: #107 adds
+      path constants to resolve-personal-notes-config.sh and #110 makes
+      write-personal-notes-file.sh delegate to write-branch-files.sh - this item touches
+      both, so whichever lands second merges the two. CI is green on
+      test_claude_dev_tooling; the one red job (semantic_digital_twin's
+      test_world_sim_state_sync) fails identically on main at this PR's base commit.
+
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
     branch: claude/patch-pr-rheubx

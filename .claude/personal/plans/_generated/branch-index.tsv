@@ -48,6 +48,7 @@ claude/eql-truth-unification-refactor-pfux7f	rdr-refactor
 rdr/concept-trees	rdr-refactor
 rdr/oo-definitions	rdr-refactor
 rdr/justifications	rdr-refactor
+claude/local-settings-dashboard-sync-8sx0tf	workflow-unification
 claude/patch-pr-rheubx	workflow-unification
 claude/stack-tooling-on-main	workflow-unification
 claude/setup-stacked-prs-skill	workflow-unification
