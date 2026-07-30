@@ -88,8 +88,16 @@ real blockers; dashboard republished.
 ## Next
 
 - Wait on the two review decisions. Nothing else in P4 is actionable without them.
-- CI: 16/20 green at the time of writing, 4 still running (`semantic_digital_twin`,
-  `coraplex`, `giskardpy`, coraplex notebooks), no failures. Reacting to webhook
-  events; per these notes, no timed check-in is armed.
+- **CI is red on `semantic_digital_twin` + `giskardpy`, and it is not ours.** The user
+  merged `main` into the branch (`2ea44271`, parent `0fd14357`). Both jobs fail on
+  `PackageNotFoundError: package 'ur_robot_driver'` — the DAiSy work on `main` dropped
+  `daisy.urdf` (`157cd1bf`) in favour of `package://ur_robot_driver/...`, and that ROS
+  package is not in the CI image. Verified byte-identical on `main`'s own run
+  (30577674356): same job, same test `test_world_pr2.py::test_robots_and_validate`,
+  same exception; main 872 passed vs our 873 (the extra pass is our new test). Every
+  other job is green on both. Fix belongs with the DAiSy change (rebuild the image),
+  not this PR. Said so once on #33 (comment 5135970013).
+- Reacting to webhook events; per these notes, no timed check-in is armed. When a
+  base-branch-recovered notice arrives, merge `main` again and let CI re-run.
 - When the type-noun decision lands: if it is "type-level display noun", that is a
   new krrood item (`value_lexicon.type_noun`), not more work on this branch.
