@@ -28,7 +28,8 @@ Two asks, one branch:
   and the "always republish the dashboard when plan data changes" rule under
   "Keeping plan state current".
 
-- Draft PR #109 opened on the fork, subscribed to its activity.
+- PR #109 opened on the fork as a draft, subscribed to its activity. Abdelrhman marked
+  it ready for review himself - leave it ready; only re-draft it if I push a commit.
 - CI: `test_claude_dev_tooling` green (the job covering this PR's changes); everything
   else green except `test_each_lib (semantic_digital_twin)`, which fails on
   `test_multi_sim.py::test_world_sim_state_sync`. Identical failure on `main` at this
