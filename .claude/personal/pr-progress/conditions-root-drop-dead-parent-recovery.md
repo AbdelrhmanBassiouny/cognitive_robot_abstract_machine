@@ -561,6 +561,47 @@ Artifact reverts needed after the run (now 3 files, check all by habit):
 PR was ready-for-review with `in-review` label again; converted back to draft after the
 push per convention. Description updated for both changes.
 
+## 2026-07-30 (later) — 5-comment round: the `__eq__` trap in expression assertions
+
+The previous round's exact-set-of-expressions assertions drew 5 comments (one per test):
+"expressions overwrite `__eq__` to return a comparator expression which will result in
+always being true, you can check for their ids instead."
+
+**Measured it before changing anything** rather than accepting or dismissing:
+- `CanBehaveLikeAVariable.__eq__` (inherited by `Variable`) returns a `Comparator`, and
+  `bool(...)` is `True` → **`variable_a in [variable_b]` is genuinely `True`**. Real trap.
+- BUT `Comparator.__eq__` / `AND.__eq__` return `NotImplemented` → Python falls back to
+  identity. And `{variable_a} == {variable_b}` is `False` because set equality consults
+  identity-based hashes before ever calling `__eq__`.
+- So the pushed assertions were NOT producing false positives (verified with decoy sets:
+  swapping one operand for an unrelated same-shaped expression correctly fails). They were
+  correct *by accident* — dependent on which dunder each node class happens to override.
+  The nearest miss: `test_satisfied_conditions_nested_and_or_satisfied`'s short-circuited
+  operand is `val == -1`, a node built by the overridden `__eq__` itself.
+
+Fix (commit `a4e0e39f`): assert `set(result.satisfied_condition_ids) == {x._id_, ...}`.
+`satisfied_condition_ids` already IS a set of ids, so no resolution step is needed at all;
+UUIDs have ordinary equality so the assertion means what it reads as for any node type,
+and exact-set semantics are kept (short-circuited operands proven absent).
+
+Consequence: `_get_expressions_by_their_ids_` (created 2 rounds earlier at the reviewer's
+own request, renamed once since) ended up with **zero callers**. Per AGENTS.md's
+consult-before-removing rule, asked via AskUserQuestion instead of deciding; user chose
+delete. It was a one-line loop over the public `_get_expression_by_id_`, so nothing lost.
+
+Also closed the loop on the still-open "assert on types" thread from the previous round —
+my open question there ("do you still want types?") was answered by these comments: the
+outcome is neither names, nor types, nor expression objects, but ids. Replied and resolved
+it too. All 6 threads replied-to and resolved.
+
+Verified: 1367 passed, 6 skipped across the five suites; only the 2 graphviz-`dot`
+failures that also fail on a clean tree. PR converted back to draft after the push per
+convention; description updated.
+
+**Lesson worth keeping**: in this codebase, never use `==`/`in` on `SymbolicExpression`
+objects in tests or production. The DSL owns those dunders. Compare `_id_` values, or use
+`is`/`any(x is y for ...)` when identity is genuinely what's meant.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
