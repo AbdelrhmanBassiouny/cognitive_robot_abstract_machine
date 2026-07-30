@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -204,6 +205,34 @@ class Color:
 
 
 @dataclass
+class Texture:
+    """
+    A 2D image texture applied to a geometric primitive's surface (for example a MuJoCo
+    box/cylinder/sphere geom's ``material``). Mesh shapes carry their own texture as part of
+    their own trimesh visual instead, and do not use this.
+    """
+
+    file_path: str
+    """The texture image's file path."""
+
+    repeat: Tuple[float, float] = (1.0, 1.0)
+    """How many times the texture tiles across the surface, along each of its two axes."""
+
+    uniform: bool = False
+    """
+    Whether the texture is scaled uniformly across the surface, independent of the surface's
+    own size, rather than scaled to fit it.
+    """
+
+    def __post_init__(self):
+        """
+        Normalize :attr:`repeat` to a tuple of floats so a texture stays equal to itself
+        across a serialization round-trip, which restores the pair as a list.
+        """
+        self.repeat = tuple(float(value) for value in self.repeat)
+
+
+@dataclass
 class Scale:
     """
     Dataclass for storing the scale of geometric objects.
@@ -313,6 +342,24 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
 
     color: Color = field(default_factory=Color)
 
+    texture: Optional[Texture] = None
+    """
+    A texture applied to this shape's surface, or ``None`` for a flat ``color``. Only
+    meaningful for primitive shapes (:class:`Box`, :class:`Cylinder`, :class:`Sphere`);
+    :class:`Mesh` shapes carry their own texture as part of their trimesh visual instead.
+    """
+
+    @property
+    @abstractmethod
+    def volume(self) -> float:
+        """
+        :return: The volume this shape encloses.
+
+        ..note:: A primitive states the volume of the shape itself rather than of the
+            mesh standing in for it, since a mesh only approximates a curved surface
+            with a polygonal one and would report less than the shape holds.
+        """
+
     @property
     @abstractmethod
     def local_frame_bounding_box(self) -> BoundingBox:
@@ -334,6 +381,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
             **super().to_json(),
             "origin": to_json(self.origin),
             "color": to_json(self.color),
+            "texture": to_json(self.texture) if self.texture is not None else None,
         }
 
     def __eq__(self, other: Shape) -> bool:
@@ -394,6 +442,14 @@ class Mesh(Shape):
     """
     Filename of the mesh.
     """
+
+    @property
+    def volume(self) -> float:
+        """
+        :return: The volume the mesh's surface encloses, which is meaningful only for a
+            watertight mesh.
+        """
+        return self.mesh.volume
 
     @property
     def local_frame_bounding_box(self) -> BoundingBox:
@@ -794,6 +850,10 @@ class Sphere(Shape):
     """
 
     @property
+    def volume(self) -> float:
+        return 4.0 / 3.0 * math.pi * self.radius**3
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the sphere.
@@ -822,10 +882,12 @@ class Sphere(Shape):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        texture = data.get("texture")
         return cls(
             radius=data["radius"],
             origin=from_json(data["origin"], **kwargs),
             color=from_json(data["color"], **kwargs),
+            texture=from_json(texture, **kwargs) if texture is not None else None,
         )
 
 
@@ -839,12 +901,23 @@ class Cylinder(Shape):
     height: float = 0.5
 
     @property
+    def radius(self) -> float:
+        """
+        :return: Radius of the circle the cylinder's width spans.
+        """
+        return self.width / 2.0
+
+    @property
+    def volume(self) -> float:
+        return math.pi * self.radius**2 * self.height
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the cylinder.
         """
         mesh = trimesh.creation.cylinder(
-            radius=self.width / 2, height=self.height, sections=16
+            radius=self.radius, height=self.height, sections=16
         )
         mesh.visual.vertex_colors = trimesh.visual.color.to_rgba(self.color.to_rgba())
         return mesh
@@ -873,11 +946,13 @@ class Cylinder(Shape):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        texture = data.get("texture")
         return cls(
             width=data["width"],
             height=data["height"],
             origin=from_json(data["origin"], **kwargs),
             color=from_json(data["color"], **kwargs),
+            texture=from_json(texture, **kwargs) if texture is not None else None,
         )
 
 
@@ -890,6 +965,10 @@ class Box(Shape):
     """
 
     scale: Scale = field(default_factory=Scale)
+
+    @property
+    def volume(self) -> float:
+        return self.scale.x * self.scale.y * self.scale.z
 
     @property
     def mesh(self) -> trimesh.Trimesh:
@@ -927,10 +1006,12 @@ class Box(Shape):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        texture = data.get("texture")
         return cls(
             scale=from_json(data["scale"], **kwargs),
             origin=from_json(data["origin"], **kwargs),
             color=from_json(data["color"], **kwargs),
+            texture=from_json(texture, **kwargs) if texture is not None else None,
         )
 
 

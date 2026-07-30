@@ -15,7 +15,7 @@ import krrood.ormatic.data_access_objects.alternative_mappings  # type: ignore
 from krrood.ormatic.helper import get_classes_of_ormatic_interface
 from sortedcontainers import SortedSet
 from sqlalchemy import JSON
-from typing_extensions import List, Type, Dict
+from typing_extensions import AbstractSet, List, Type, Dict
 from typing_extensions import Optional, TextIO
 
 from krrood.ormatic.custom_types import (
@@ -287,6 +287,7 @@ class ORMatic:
         ignored_classes: Set[Type],
         type_mappings: Dict[Type, Type],
         ignore_krrood_test_classes: bool = True,
+        ignored_base_classes: AbstractSet[Type] = frozenset(),
     ):
         """
         Create an instance from a list of packages, dependencies, and ignored classes.
@@ -297,6 +298,8 @@ class ORMatic:
         :param type_mappings: The type mappings that should be used.
         :param ignore_krrood_test_classes: Rather to ignore classes from the krrood test
             package.
+        :param ignored_base_classes: Base classes whose subclasses should all be ignored,
+            for hierarchies that describe behaviour rather than persisted state.
         :return: The ORMatic instance.
         """
         all_classes, all_alternative_mappings, all_type_mappings = set(), set(), {}
@@ -324,20 +327,17 @@ class ORMatic:
             or "krrood_test" not in am.original_class().__module__
         )
 
-        # SymbolicCallable subclasses (Predicate / SymbolicFunction) are query behaviour, not
-        # persisted entities -- one may carry an unmappable field (e.g. a bare ``type``). Imported
-        # locally to keep the ORM layer free of an import-time dependency on the query language.
-        from krrood.entity_query_language.predicate import SymbolicCallable
-
-        # keep only dataclasses that are not AlternativeMapping, DataAccessObject, or SymbolicCallable
-        # subclasses
+        # keep only dataclasses that are not AlternativeMapping, DataAccessObject or a
+        # subclass of a caller-supplied ignored base class
+        excluded_base_classes = (
+            DataAccessObject,
+            AlternativeMapping,
+            *ignored_base_classes,
+        )
         all_classes = {
             c
             for c in all_classes
-            if is_dataclass(c)
-            and not issubclass(
-                c, (DataAccessObject, AlternativeMapping, SymbolicCallable)
-            )
+            if is_dataclass(c) and not issubclass(c, excluded_base_classes)
         }
 
         all_classes |= {am.original_class() for am in all_alternative_mappings}

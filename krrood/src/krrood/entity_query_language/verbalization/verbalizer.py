@@ -32,8 +32,7 @@ from krrood.entity_query_language.verbalization.rendering.realization import (
 @dataclass
 class EQLVerbalizer:
     """
-    Builds the natural-language fragment tree that represents an EQL
-    expression.
+    Builds the natural-language fragment tree that represents an EQL expression.
     """
 
     def build(
@@ -85,7 +84,7 @@ class EQLVerbalizer:
             fragment,
             previously_introduced_referents=previously_introduced_referents,
             discourse=discourse,
-            numbered_labels=services.referring.numbered_labels,
+            distinguisher_index=services.referring.distinguishers,
         )
 
     @staticmethod

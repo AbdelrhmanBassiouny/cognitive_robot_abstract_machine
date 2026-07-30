@@ -1,16 +1,8 @@
 import ast
 import logging
-import sys
 from _ast import AST
 
 from krrood.ripple_down_rules import logger
-
-try:
-    from PyQt6.QtWidgets import QApplication
-    from .gui import RDRCaseViewer, style
-except ImportError:
-    QApplication = None
-    RDRCaseViewer = None
 
 from colorama import Fore, Style
 from pygments import highlight
@@ -23,7 +15,7 @@ from krrood.ripple_down_rules.datastructures.callable_expression import (
     parse_string_to_expression,
 )
 from krrood.ripple_down_rules.datastructures.dataclasses import CaseQuery
-from krrood.ripple_down_rules.datastructures.enums import PromptFor, ExitStatus
+from krrood.ripple_down_rules.datastructures.enums import PromptFor
 from krrood.ripple_down_rules.user_interface.ipython_custom_shell import IPythonShell
 from krrood.ripple_down_rules.utils import make_list
 from threading import Lock
@@ -42,12 +34,7 @@ class UserPrompt:
         """
         Initialize the UserPrompt class.
         """
-        self.viewer = (
-            RDRCaseViewer.instances[0]
-            if RDRCaseViewer and any(RDRCaseViewer.instances)
-            else None
-        )
-        self.print_func = self.viewer.print if self.viewer else print
+        self.print_func = print
 
     def prompt_user_for_expression(
         self,
@@ -144,31 +131,18 @@ class UserPrompt:
         else:
             prompt_for_str = f"Give conditions for:"
         case_query.scope.update({"case": case_query.case})
-        shell = None
 
-        if self.viewer is None:
-            prompt_for_str = prompt_for_str.replace(":", f" {case_query.name}:")
-            prompt_str = (
-                f"{Fore.WHITE}{initial_prompt_str}{Fore.MAGENTA}{prompt_for_str}"
-            )
-            prompt_str = self.construct_prompt_str_for_shell(
-                case_query, prompt_for, prompt_str
-            )
-            shell = IPythonShell(
-                header=prompt_str,
-                prompt_for=prompt_for,
-                case_query=case_query,
-                code_to_modify=code_to_modify,
-            )
-        else:
-            prompt_str = case_query.current_value_str
-            self.viewer.update_for_case_query(
-                case_query,
-                prompt_for=prompt_for,
-                code_to_modify=code_to_modify,
-                title=prompt_for_str,
-                prompt_str=prompt_str,
-            )
+        prompt_for_str = prompt_for_str.replace(":", f" {case_query.name}:")
+        prompt_str = f"{Fore.WHITE}{initial_prompt_str}{Fore.MAGENTA}{prompt_for_str}"
+        prompt_str = self.construct_prompt_str_for_shell(
+            case_query, prompt_for, prompt_str
+        )
+        shell = IPythonShell(
+            header=prompt_str,
+            prompt_for=prompt_for,
+            case_query=case_query,
+            code_to_modify=code_to_modify,
+        )
         user_input, expression_tree = self.prompt_user_input_and_parse_to_expression(
             shell=shell
         )
@@ -260,21 +234,9 @@ class UserPrompt:
         :param shell: The Ipython shell to use for prompting the user.
         :return: The user input.
         """
-        if self.viewer is None:
-            shell = IPythonShell() if shell is None else shell
-            if not hasattr(shell.shell, "auto_match"):
-                shell.shell.auto_match = True  # or True, depending on your preference
-            shell.run()
-            user_input = shell.user_input
-        else:
-            app = QApplication.instance()
-            if app is None:
-                raise RuntimeError(
-                    "QApplication instance is None. Please run the application first."
-                )
-            self.viewer.show()
-            app.exec()
-            if self.viewer.exit_status == ExitStatus.CLOSE:
-                sys.exit()
-            user_input = self.viewer.user_input
+        shell = IPythonShell() if shell is None else shell
+        if not hasattr(shell.shell, "auto_match"):
+            shell.shell.auto_match = True  # or True, depending on your preference
+        shell.run()
+        user_input = shell.user_input
         return user_input

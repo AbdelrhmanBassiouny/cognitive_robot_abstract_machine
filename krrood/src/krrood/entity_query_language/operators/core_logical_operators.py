@@ -17,7 +17,9 @@ from krrood.entity_query_language.core.base_expressions import (
     OperationResult,
     BinaryExpression,
     SymbolicExpression,
+    BinaryExpression, SymbolicExpression,
 )
+from krrood.entity_query_language.core.variable import Literal
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
@@ -53,9 +55,12 @@ class Not(LogicalOperator, UnaryExpression):
         sources: OperationResult,
     ) -> Iterable[OperationResult]:
 
-        for v in self._evaluate_child_as_condition_(self._child_, sources):
-            is_false = v.is_true
-            yield OperationResult(v.bindings, is_false, self)
+        for child_result in self._evaluate_child_as_condition_(self._child_, sources):
+            is_false = child_result.is_true
+            # Include child_result as previous so the satisfaction-tracking chain extends
+            # through the negated child's evaluation, keeping ancestor conditions
+            # reachable in the result chain.
+            yield OperationResult(child_result.bindings, is_false, self, child_result)
 
 
 @dataclass(eq=False, repr=False)
@@ -135,7 +140,7 @@ class OR(LogicalBinaryOperator):
 
 def chained_logic(
     operator: Type[LogicalBinaryOperator], *conditions: ConditionType
-) -> LogicalOperator:
+) -> SymbolicExpression:
     """
     A chain of logic operation over multiple conditions, e.g. cond1 | cond2 | cond3.
 
@@ -148,6 +153,8 @@ def chained_logic(
             prev_operation = condition
             continue
         prev_operation = operator(prev_operation, condition)
+    if not isinstance(prev_operation, SymbolicExpression):
+        prev_operation = Literal(_value_=True)
     return prev_operation
 
 

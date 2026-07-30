@@ -1,6 +1,7 @@
 import logging
 import os
 import tempfile
+import traceback
 from dataclasses import is_dataclass
 
 import pytest
@@ -12,6 +13,9 @@ from krrood.class_diagrams.class_diagram import ClassDiagram
 from krrood.entity_query_language.predicate import (
     HasTypes,
     HasType,
+)
+from krrood.entity_query_language.testing.result_generation import (
+    regenerate_verbalization_results,
 )
 from krrood.ormatic.data_access_objects.alternative_mappings import *  # type: ignore
 from krrood.ormatic.ormatic import ORMatic
@@ -139,6 +143,18 @@ try:
     from .dataset.ormatic_interface import *
 except ImportError:
     pass
+
+# Generate verbalization_results.py the same way: always fresh, so a wording change
+# shows up as an ordinary diff to review before committing, instead of a failing test.
+regenerate_verbalization_results(
+    krrood,
+    os.path.join(
+        os.path.dirname(__file__),
+        "test_eql",
+        "test_verbalization",
+        "verbalization_results.py",
+    ),
+)
 
 
 @pytest.fixture

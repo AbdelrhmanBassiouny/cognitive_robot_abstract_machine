@@ -17,8 +17,8 @@ import semantic_digital_twin.orm.model
 
 import semantic_digital_twin.adapters.procthor.procthor_resolver
 from krrood.adapters.json_serializer import SubclassJSONSerializer
+from krrood.entity_query_language.predicate import SymbolicCallable
 from krrood.ormatic.ormatic import ORMatic
-from semantic_digital_twin.reasoning.predicates import ContainsType
 from semantic_digital_twin.semantic_annotations.position_descriptions import (
     SemanticDirection,
 )
@@ -36,10 +36,13 @@ ignore_classes = {
     WorldModelUpdateContextManager,
     ForwardKinematicsManager,
     semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,
-    ContainsType,
     SemanticDirection,
     SubclassJSONSerializer,
 }
+
+# Predicates and symbolic functions describe query behaviour, not persisted state, and may
+# carry fields no column can hold (ClassNameLowercased.semantic_class is a bare ``type``).
+ignore_base_classes = {SymbolicCallable}
 
 
 def generate_orm():
@@ -53,6 +56,7 @@ def generate_orm():
         [semantic_digital_twin],
         ormatic_interface_dependencies=[],
         ignored_classes=ignore_classes,
+        ignored_base_classes=ignore_base_classes,
         type_mappings={
             trimesh.Trimesh: semantic_digital_twin.orm.model.TrimeshType,
         },
