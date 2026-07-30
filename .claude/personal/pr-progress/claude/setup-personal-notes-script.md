@@ -28,11 +28,30 @@ needs no session, and shrink SKILL.md to what a script cannot supply.
   outright), and the PATH-hiding helper removing `/usr/bin` wholesale.
 - Structural changes comment-proposed on issue #102 (not the steward).
 
+## CI on 3073c4e8
+
+19/20 green, including `test_claude_dev_tooling` and both known flakes
+(`semantic_digital_twin`, `giskardpy`). The `test_claude_dev_tooling`
+failure on the first push (2cd9a8e8) was the PATH-hiding bug — fixed, and
+verified locally under *both* conditions (gh present and absent) first.
+
+Sole red: `test_each_lib (coraplex)`. **Not mine** — diff is `.claude/`-only.
+`test/coraplex_test/conftest.py:35-40` regenerates
+`coraplex/src/coraplex/orm/ormatic_interface.py` in `pytest_configure` with
+no xdist guard; with `2/2 workers` two processes rewrite the same ~33.5k-line
+file concurrently, and `ruff format` then fails to parse it (line 23528 of
+33508), killing the worker. Committed file parses fine; sibling `.claude`-only
+PR #106 had coraplex green an hour earlier — so, intermittent. Analysis posted
+on the PR; `rerun_failed_jobs` queued on run 30498024255 to test it.
+
 ## Next
 
-- Watch CI on 3073c4e8. The `test_claude_dev_tooling` failure on the first
-  push (2cd9a8e8) was the PATH-hiding bug — fixed and verified locally under
-  *both* conditions (gh present and absent) before pushing.
+- Check-in armed (`trig_01L17zAuoW5TNXde1t6kHvuc`): did the coraplex re-run
+  pass? Same error at a *different* line supports the race; a fixed line
+  would mean a real generator bug instead.
+- Do not fix coraplex here — separate root cause, another package, and
+  AGENTS.md routes ORM issues via `scripts/regenerate_all_orm.py`/the
+  developer. Offered a separate PR in the comment.
 - Still unverified: label **creation** against a real token. This
   environment's is a fine-grained installation token, so `POST .../labels`
   is exercised only through the stub. Flagged in the PR body.
