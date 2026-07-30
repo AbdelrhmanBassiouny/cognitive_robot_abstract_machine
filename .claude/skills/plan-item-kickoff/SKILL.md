@@ -1,6 +1,6 @@
 ---
 name: plan-item-kickoff
-description: Gather everything available about one tracked plan item (its plan.yaml entry, roadmap.md history/design context, its dependency chain's live GitHub state, and patterns from already-landed sibling items in the same track) and propose a concrete implementation plan via plan mode, without writing any code. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
+description: Gather everything available about one tracked plan item (its plan.yaml entry, roadmap.md history/design context, its dependency chain's live GitHub state, and patterns from sibling items in the same track - landed or still in flight) and propose a concrete implementation plan via plan mode, without writing any code. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
 allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -58,6 +58,19 @@ structural changes, not a precondition for planning this item.
   yet: flag any dependency the script reports not ready for explicitly in
   the proposed plan's assumptions, instead of quietly proceeding as if it
   were ready.
+- Whether the dependency branch actually **carries the files this item
+  builds on**. Readiness answers "is it safe to stack on this?", not "is
+  what I need here?" — and in a repository where several siblings are in
+  flight at once, the helper, fixture or config file the item's `notes`
+  assume can easily live on a *different* sibling than the one
+  `depends_on` names. Enumerate what the item needs (from its own `notes`,
+  and from any cross-note a sibling's PR description or the roadmap
+  addressed to it), then confirm on which branch each one exists — a
+  `git fetch` plus `git ls-tree`/`git show` answers this directly. If they
+  turn out to be split across branches, that is a base/stacking decision,
+  not an implementation detail: surface it as an explicit choice in step 5
+  rather than silently picking one branch and working around what's
+  missing from it.
 - Read `roadmap.md` **in full** — do not stop at grepping for this item's
   id/branch/title. A roadmap routinely records decisions, conventions, and
   design rationale in sections that don't name every item individually
@@ -74,14 +87,21 @@ structural changes, not a precondition for planning this item.
 
 ## 3. Gather sibling context from the codebase
 
-For other items in the **same track** that are already `done` (merged),
-read what they actually changed — `mcp__github__pull_request_read` for the
-diff/description, or `mcp__github__get_file_contents` for the merged
-result — to learn the real pattern this item should follow, rather than
-inventing a shape from roadmap prose alone. Note file layout, testing
-conventions, and any review-driven design decisions recorded in those PRs'
-descriptions that this item should also honor (a later sibling in a stack
-often encodes a correction the reviewer made on an earlier one).
+Read what other items in the **same track** actually changed —
+`mcp__github__pull_request_read` for the diff/description, or
+`mcp__github__get_file_contents` for the result — to learn the real
+pattern this item should follow, rather than inventing a shape from
+roadmap prose alone. Note file layout, testing conventions, and any
+review-driven design decisions recorded in those PRs' descriptions that
+this item should also honor (a later sibling in a stack often encodes a
+correction the reviewer made on an earlier one).
+
+Siblings that are `done` are the obvious sources, but do not stop there:
+read every sibling this item stacks on or sits beside, whether or not its
+pull request has landed. In a stacked-PR repository the pattern to copy
+routinely hasn't merged yet — a whole wave can be in flight at once, in
+which case a `done`-only reading gathers nothing at all and the plan gets
+invented from prose.
 
 If the item's own branch already exists (partial work, e.g. from a false
 start), read what's actually there via `mcp__github__get_file_contents` or
@@ -108,6 +128,13 @@ user something the roadmap already answered means the read wasn't thorough
 enough. If you do ask, say what you checked and why it still looks open, so
 the user can correct you quickly with a pointer if you missed it.
 
+Search the **consumer** side too, not only the planning documents. "Should
+this item produce X?" is usually settled by whether something would read
+X: grep the dependency branches for a document, script or prompt that
+already points at the artifact in question, or that plainly needs one. A
+file that nothing consumes is the YAGNI the plan should drop; a file two
+callers already assume is not an open question at all.
+
 Enter plan mode and present, via `ExitPlanMode`, a concrete implementation
 plan: what changes, in which files, in what order, and how each part will
 be verified (tests first, per TDD). Cite where each part of the plan came
@@ -120,6 +147,14 @@ it. Flag explicitly, never silently paper over:
   `roadmap.md` actually says.
 - Anything the gathered context left genuinely unresolved after the check
   above — say so rather than filling the gap with an assumption.
+
+End the plan with the bookkeeping that keeps the plan itself true: setting
+the item's `status`, `branch`, `pull_request_number` and `session` in
+`plan.yaml`, running `${SAVE_PLAN_SCRIPT}`, republishing the dashboard via
+`/plan-dashboard <plan-id>`, and recording the PR-progress note. The
+session that implements this plan may be a fresh one that never read the
+user's own conventions, and a plan whose manifest lags behind reality is
+read as truth by every dashboard and kickoff downstream.
 
 Do not touch git, create a branch, or write any code in this skill — its
 only output is the plan itself.
