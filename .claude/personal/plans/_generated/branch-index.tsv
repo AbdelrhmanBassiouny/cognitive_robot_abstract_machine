@@ -1,6 +1,10 @@
 claude/entity-query-parent-props-w789od	dag-facade-hardening
 conditions-root-drop-dead-parent-recovery	dag-facade-hardening
 claude/dag-parent-root-and-querygraph-followups	dag-facade-hardening
+claude/split-performatives-prs-xbluus-agreement	eql-performatives
+claude/split-performatives-prs-xbluus	eql-performatives
+claude/performatives-clean	eql-performatives
+claude/eql-performatives-unify	eql-performatives
 claude/eql-verbalization-p1-surface-verification-eqltzc	eql-verbalization
 claude/eql-verbalization-operand-naming-n0gb95	eql-verbalization
 claude/eql-verbalization-p3-albw76	eql-verbalization

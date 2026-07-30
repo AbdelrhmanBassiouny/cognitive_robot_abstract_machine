@@ -1,0 +1,142 @@
+schema_version: 1
+id: eql-performatives
+title: "EQL performatives: a speech-act layer over EQL descriptions"
+description: >
+  Add a performative (speech-act) layer over EQL descriptions - query acts
+  (Find/Generate/Report), assertion acts (Inform/Explain/Warn), and composition
+  combinators (Sequential/Parallel/TryInOrder/TryAll) - carried by a register layer
+  that chooses a description's opening verb and field-binding keyword, then unify
+  those combinators with coraplex's executable plan nodes so one tree both executes
+  and verbalizes. Two English-grammar features (subject/verb agreement, scalar vs.
+  collection cardinality) were split out from underneath it and land first.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 108
+
+waves:
+  - id: grammar-prerequisites
+    name: "Grammar prerequisites"
+    description: >
+      Independent English-grammar features split out of the original performatives PR.
+      They sit under the stack but carry no performative concepts of their own.
+  - id: performative-layer
+    name: "Performative layer"
+    description: >
+      The speech-act layer itself, its register plumbing, and its unification with
+      coraplex plan execution.
+
+tracks:
+  - id: grammar-features
+    name: "Sentence-level grammar features"
+    wave: grammar-prerequisites
+  - id: performatives
+    name: "Performatives, register, and plan-node unification"
+    wave: performative-layer
+
+items:
+  - id: agreement
+    title: "Agree a clause's finite verb/copula with its subject's number"
+    branch: claude/split-performatives-prs-xbluus-agreement
+    pull_request_number: 55
+    track: grammar-features
+    depends_on: []
+    status: blocked
+    blockers:
+      - "mergeable_state: dirty since 2026-07-24 - main advanced when the eql-verbalization plan's #86/#87 merges landed, conflicting in coreference_processor.py, realization.py and parts_of_speech.py. Carries the needs-resolution label."
+    notes: >
+      Adds AgreementProcessor as its own lowering pass ahead of
+      DeterminerProcessor/MorphologyProcessor, plus PhraseFragment.concord_number and
+      the All universal quantifier; removes coreference_processor's inline agreement
+      logic. Re-authored fresh onto main on 2026-07-19 after three parts_of_speech.py
+      conflicts against the #36 symbolic-function stack it originally sat on. The
+      conflicts now are against main's P2 coreference/referring redesign - the same
+      files, a different cause, and the whole stack above is waiting on this restack.
+      The PR body still describes the post-2026-07-19 clean state and predates the
+      conflict.
+
+  - id: cardinality
+    title: "Distinguish scalar vs. collection cardinality in grouped columns"
+    branch: claude/split-performatives-prs-xbluus
+    pull_request_number: 54
+    track: grammar-features
+    depends_on: [agreement]
+    status: in_progress
+    notes: >
+      Adds verbalization/cardinality.py (Cardinality enum + column_cardinality) and
+      routes a grouped report's non-key columns through it, so a scalar attribute reads
+      distributively singular ("the battery") while a collection keeps the quantified
+      plural ("all the tasks"). Itself clean; cannot merge before its base lands.
+
+  - id: performatives-core
+    title: "Performatives + register core"
+    branch: claude/performatives-clean
+    pull_request_number: 14
+    track: performatives
+    depends_on: [cardinality]
+    status: in_progress
+    notes: >
+      The Performable interface, the unified QuerySpeechAct family (Find/Generate/Report),
+      the assertion acts (Inform/Explain/Warn), the Composition combinators, and the
+      Register layer that picks a description's opener and binding keyword. Composes with
+      main's existing performative_override/backend opener selection rather than replacing
+      it. Arithmetic was split out to #11 (merged); cardinality and agreement to #54/#55.
+
+  - id: plannode-performable
+    title: "PlanNode is-a Performable: unify krrood combinators with coraplex plan nodes"
+    branch: claude/eql-performatives-unify
+    pull_request_number: 15
+    track: performatives
+    depends_on: [performatives-core]
+    status: in_progress
+    notes: >
+      Approach M - one class both executes and verbalizes, rather than an external
+      visitor. Performable becomes a plain field-less ABC mixin; the verbalization shapes
+      (interleave/coordinate/concurrent) move to free functions in
+      verbalization/composition.py so krrood's combinators and coraplex's plan nodes share
+      them. PlanNode stays instantiable (notify kept concrete). Coraplex's own plan suites
+      need the ROS container, so CI is the authoritative check for this item.
+
+  - id: action-verbalization
+    title: "Action verbalization: a Verbalizable action's own fragment + operand aliasing"
+    branch: null
+    pull_request_number: null
+    track: performatives
+    depends_on: [performatives-core]
+    status: not_started
+    notes: >
+      Deferred out of #14 to keep it scoped to the framework-agnostic layer. Gives a
+      concrete action (e.g. NavigateAction) its own fragment instead of relying on the
+      generic "given that"/"such that" rendering, including operand field-name aliasing.
+
+  - id: giskardpy-acts
+    title: "Giskardpy performative acts (Achieve / Monitor)"
+    branch: null
+    pull_request_number: null
+    track: performatives
+    depends_on: [performatives-core]
+    status: not_started
+    notes: >
+      Deferred out of #14. Follows the same distributed placement as coraplex's Perform -
+      each act lives in the layer that owns the behaviour it names, not in a central
+      registry.
+
+  - id: language-nodes-and-bridge
+    title: "LanguageNodes verbalize through the shared shapes + the PerformativeNode bridge"
+    branch: null
+    pull_request_number: null
+    track: performatives
+    depends_on: [plannode-performable]
+    status: not_started
+    notes: >
+      Phases C and D of the unification. Requires the shared shape functions and the
+      Performable mixin from #15 to exist first.
+
+  - id: demo-migration
+    title: "Migrate the demo onto coraplex's combinators"
+    branch: null
+    pull_request_number: null
+    track: performatives
+    depends_on: [language-nodes-and-bridge]
+    status: not_started
+    notes: >
+      Phase E - the end-to-end proof that one tree executes and verbalizes, once the
+      bridge exists.
