@@ -28,10 +28,17 @@ Two asks, one branch:
   and the "always republish the dashboard when plan data changes" rule under
   "Keeping plan state current".
 
-- Draft PR #109 opened on the fork, subscribed to its activity. CI running at open;
-  nothing failed and no review comments yet.
+- Draft PR #109 opened on the fork, subscribed to its activity.
+- CI: `test_claude_dev_tooling` green (the job covering this PR's changes); everything
+  else green except `test_each_lib (semantic_digital_twin)`, which fails on
+  `test_multi_sim.py::test_world_sim_state_sync`. Identical failure on `main` at this
+  PR's base commit 52f4f74, so it is pre-existing, not ours - said so in a PR comment
+  and did not bundle a fix.
 
 # Next
 
 - React to PR #109 events as they arrive (no scheduled polling, per notes). Keep it a
   draft after any push; mark ready only when told to.
+- If the sim failure is worth chasing, it wants its own `bug`-labelled PR off `main`:
+  the box settles in z but never moves in x/y, so the sim never picks up the
+  connection-origin update.
