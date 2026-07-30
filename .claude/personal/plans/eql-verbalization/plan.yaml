@@ -71,15 +71,18 @@ items:
     pull_request_number: 33
     track: framework-migration
     depends_on: [p1-surface-verification, p2-operand-naming, p3-concrete-subclass-expansion]
-    status: blocked
+    status: in_progress
     blockers:
-      - "mergeable_state: dirty as of 2026-07-18 (last push) - predates P1/P2/P3 merging to main; needs a rebase before the sdt checklist work starts."
+      - "Awaiting two review decisions, both replied to and left open on #33: type-level display noun for 'a Point3' -> 'a point' (P2 shipped the opposite precedence to roadmap decision 1), and whether to widen the IK chain so Reachable/BlockingBodies can take Pose."
+      - "sdt ormatic_interface.py needs regenerating where ROS is installed - ignored_base_classes drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI regenerates before tests, so the suite is unaffected."
     notes: >
-      Drop the upstreamed surface-verification framework this PR still carries a
-      duplicate of, then apply all decisions from P1-P3 to semantic_digital_twin's
-      reasoning/predicates.py, queries.py, robot_predicates.py and regenerate its
-      verbalization snapshot. See roadmap.md for the full checklist and standing
-      conventions.
+      2026-07-30: merged main (605 commits), dropping the duplicated
+      surface-verification framework; rebuilt the snapshot on the generated-results
+      pattern; applied every wording from the review plus the no-abbreviation sweep;
+      replied to all 36 review threads and resolved 34. Two krrood additions were
+      needed: phrase() as the value counterpart of clause(), and
+      ORMatic ignored_base_classes replacing a mid-method SymbolicCallable import.
+      Full detail: pr-progress/eql-symbolic-function-sdt.md.
 
   - id: p5-first-mention-type-annotation
     title: "P5: name a referent by value and type on first mention"

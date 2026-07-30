@@ -109,3 +109,25 @@ behaviour belonging to the `ReferringExpressions` machinery P2 built, so it appl
 every package's surfaces at once rather than to sdt's wordings. P4 renders
 *"the bodies between the fingers of a gripper"* and this item takes the type annotation
 on separately.
+
+## P4 progress (2026-07-30)
+
+Merged `main` into #33 and did the whole checklist; see
+`pr-progress/eql-symbolic-function-sdt.md` for the per-step account. Two findings that
+change the roadmap rather than just the PR:
+
+- **Decision 1 is inverted from what P2 shipped.** It records "grammatical metadata on the
+  field → field/attribute name → type name (last resort)". `operand_head_noun`
+  (`verbalization/microplanning/referring.py:193`) does the opposite: a concrete type's noun
+  always wins, and `display_name`/field name are consulted *only* when the type is the
+  uninformative `object`. The docstring argues for it deliberately, citing the Incremental
+  Algorithm. So *"a Point3"* → *"a point"* is not reachable from a field-side override at
+  all; it needs a type-level display noun (the natural home is `value_lexicon.type_noun`,
+  which today special-cases only primitives). Left as an open thread on #33 with three
+  options for the user; do not "fix" decision 1 either way without that answer.
+- **Value wordings needed a new vocabulary builder.** Several reviewed sentences name the
+  value with a phrase of its own (*"the bodies visible to a camera"*) rather than a reading
+  of the class name, which is all `FunctionVerbalizationTemplates` can express. Added
+  `phrase()` as the value counterpart of `clause()`. Decision 4 (`Noun` over raw
+  `WordFragment`) is what rules out the alternative, so treat `phrase()` as the sanctioned
+  way to satisfy both from here on.
