@@ -2,7 +2,11 @@ import os
 
 import pytest
 
+import semantic_digital_twin
 from krrood.class_diagrams.class_diagram import ClassDiagram
+from krrood.entity_query_language.testing.result_generation import (
+    regenerate_verbalization_results,
+)
 from krrood.symbol_graph.symbol_graph import SymbolGraph, Symbol
 from krrood.ontomatic.property_descriptor.attribute_introspector import (
     DescriptorAwareIntrospector,
@@ -13,6 +17,15 @@ from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.world import World
 import runpy
 from pathlib import Path
+
+# Generate verbalization_results.py on every run, so an intentional wording change shows
+# up as an ordinary diff to review instead of a failing test.
+regenerate_verbalization_results(
+    semantic_digital_twin,
+    os.path.join(
+        os.path.dirname(__file__), "test_worlds", "verbalization_results.py"
+    ),
+)
 
 
 def pytest_configure(config):
