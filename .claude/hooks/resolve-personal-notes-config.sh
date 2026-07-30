@@ -217,6 +217,23 @@ PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
 # hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
 # hook-directory script with non-trivial logic worth testing the same way).
 HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
+
+# STACK_DIRECTORY / *_SCRIPT / *_CONFIG_FILE / *_TESTS_DIRECTORY: the
+# stacked-PR fork-staging/cram2-review tooling's canonical location, same
+# defined-once reasoning as the PLAN_DASHBOARD_* block above - so the
+# setup-stacked-prs skill and the shared pr_state module reference these
+# instead of retyping the literal paths.
+STACK_DIRECTORY=".claude/stack"
+# stack.py: read-only stacked-PR status tool (status/check/next/restack-plan)
+# - see its own module docstring and STACK_DIRECTORY/README.md.
+STACK_SCRIPT="${STACK_DIRECTORY}/stack.py"
+# stack.toml: the committed defaults stack.py's load_config layers a
+# personal-notes .claude/personal/stack.toml override on top of.
+STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
+# tests/: the pytest suite covering stack.py, including its personal-notes
+# config-layering behaviour (via the hooks tests' ScratchRepository).
+STACK_TESTS_DIRECTORY="${STACK_DIRECTORY}/tests"
+
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
 # tooling that enforces it, so every clone has it with no setup - unlike the
