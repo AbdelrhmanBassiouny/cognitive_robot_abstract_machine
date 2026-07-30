@@ -518,6 +518,49 @@ previously marked ready"), converted back to draft after this push and said so i
 Description refreshed — it still described `has_condition()` as a method and
 `_names_for_ids_` under its pre-rename name/Set return type.
 
+## 2026-07-30 — 2-comment round: expression assertions + `claim` rename
+
+Fetched first this time (lesson from 2026-07-27 applied): branch was 27 behind `main`,
+remote head `b9a5e407` had already merged it. Fast-forwarded, then handled the two new
+unresolved threads in `8115e537`.
+
+1. `test_explanation.py` — "replace the assertions on names to instead get the
+   expressions directly instead of their names and assert on types."
+   `_get_expression_names_by_their_ids_` → `_get_expressions_by_their_ids_` (returns the
+   expressions). **Deviated on the "assert on types" half, deliberately and flagged in
+   the reply**: `>`, `<`, `==` are ALL `krrood...comparator.Comparator` — one class,
+   distinguished only by `operation` (`operator.gt`/`operator.lt`). Only AND/OR/Not have
+   distinct classes. So type assertions would destroy exactly what most of these tests
+   prove (satisfied vs short-circuited operand). Probed and confirmed the ids resolve to
+   the *very objects* the test constructs (`_conditions_root_ is condition` → True, each
+   operand matches by identity, and `set()` works since `@dataclass(eq=False)` keeps
+   identity hashing), so switched all 5 tests to exact set equality against named local
+   sub-conditions. Strictly stronger: replaces every `in`/`not in` AND the
+   `assert ids is not None` line, and proves absence of short-circuited operands.
+   Verified each expected set empirically before writing it (probe3.py). **Left this
+   thread UNRESOLVED** per the personal convention, since the reply asks whether they
+   still want types.
+2. `evaluation_context.py` — "this method name does not exactly specify what it is
+   actually doing... Discuss with me the options." Used AskUserQuestion with 4 options
+   (`set_active_root_once`, `claim_if_unclaimed`, `record_first_active_root`, keep-`claim`-
+   but-return-bool). User answered with a custom 5th: **`set_active_root_if_not_set`**.
+   Applied, plus the surrounding metaphor cleanup (class docstring "first node to *set*
+   this", `_root_id`/`has_condition` field docstrings "the active root", 5 test names and
+   one assert message in `test_evaluation_context.py`). Left the neighbouring
+   `OutermostQueryClaim.is_nested()` alone (it genuinely claims *and* reports, so the
+   name isn't dishonest there) — offered to revisit for vocabulary consistency.
+
+Verified: 1367 passed, 6 skipped across test_eql/test_ormatic/test_class_diagrams/
+test_ripple_down_rules/test_underspecified_knowledge; only the 2 graphviz-`dot` failures
+that also fail on a clean tree.
+
+Artifact reverts needed after the run (now 3 files, check all by habit):
+`drawer_explanation.pdf`, `query_graph.pdf`, and
+`test_eql/test_verbalization/verbalization_results.py`.
+
+PR was ready-for-review with `in-review` label again; converted back to draft after the
+push per convention. Description updated for both changes.
+
 ## Next
 - Keep watching #89 until merged — re-arm check-ins, act on any CI failure or
   comment.
