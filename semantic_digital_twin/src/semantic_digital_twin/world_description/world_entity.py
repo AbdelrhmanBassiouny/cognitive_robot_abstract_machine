@@ -309,7 +309,7 @@ class WorldEntityWithSimulatorProperties(WorldEntityWithID, HasSimulatorProperti
 
 
 @dataclass(eq=False)
-class KinematicStructureEntity(WorldEntityWithSimulatorProperties, ABC):
+class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
     """
     An entity that is part of the kinematic structure of the world.
     """

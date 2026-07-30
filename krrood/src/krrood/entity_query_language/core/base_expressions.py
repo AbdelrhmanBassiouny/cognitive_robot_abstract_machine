@@ -220,10 +220,15 @@ class SymbolicExpression(ABC):
             argument.
         """
         SymbolGraph().remove_dead_instances()
-        results = (
-            self._process_result_(res) for res in self._evaluate_() if res.is_true
-        )
+        results = (self._process_result_(res) for res in self._true_results_())
         yield from itertools.islice(results, self._limit_)
+
+    def _true_results_(self) -> Iterator[OperationResult]:
+        """
+        :return: The raw ``OperationResult`` instances from ``_evaluate_()`` whose truth
+            value is true, before :meth:`_process_result_` maps them to output values.
+        """
+        return (result for result in self._evaluate_() if result.is_true)
 
     def _replace_child_(
         self, old_child: SymbolicExpression, new_child: SymbolicExpression
@@ -271,29 +276,6 @@ class SymbolicExpression(ABC):
             parent._children_.remove(self)
         if parent is self._parent__:
             self._parent__ = self._parents_[-1] if self._parents_ else None
-
-    def _last_parent_of_type_(
-        self, *types: Type[SymbolicExpression]
-    ) -> Optional[SymbolicExpression]:
-        """
-        :return: The most recently attached direct parent that is an instance of any of *types*,
-            or ``None``.
-
-        A node reused in more than one query/subquery keeps a direct parent per position, but only
-        one of them is ``_parent_`` (the first one attached — see the ``_parent_`` setter). Walking
-        the ``_parent_`` chain from such a node therefore reaches whichever context it was first
-        embedded in, not necessarily the one currently asking. This checks *this node's own*
-        `_parents_` directly (no multi-hop walk) for one matching *types*, so callers that need "the
-        Filter/ConclusionSelector directly owning me" find it regardless of which parent is primary.
-        """
-        return next(
-            (
-                parent
-                for parent in reversed(self._parents_)
-                if isinstance(parent, types)
-            ),
-            None,
-        )
 
     def _update_children_(
         self, *children: SymbolicExpression
@@ -380,7 +362,9 @@ class SymbolicExpression(ABC):
 
             evaluation_context = create_default_evaluation_context()
             context_token = set_evaluation_context(evaluation_context)
-            evaluation_context.active_conditions_root.claim(self._conditions_root_)
+            evaluation_context.active_conditions_root.set_active_root_if_not_set(
+                self._conditions_root_, has_condition=self._has_condition_
+            )
         try:
             evaluation_context.on_evaluate_enter(expression=self, sources=sources)
             # Normalize sources: always work with an OperationResult
@@ -507,31 +491,39 @@ class SymbolicExpression(ABC):
             self._parent__ = value
 
     @property
-    def _conditions_root_(self) -> Optional[SymbolicExpression]:
+    def _filter_condition_(self) -> Optional[SymbolicExpression]:
         """
-        :return: The root of the symbolic expression graph that contains conditions, or None if no conditions found.
-
-        ..note:: A node reused across separate queries or subqueries (for example a shared
-            sub-expression wrapped in a second ``Filter`` by a derived/introspection query) has a
-            direct ``Filter`` parent that may not be reachable by walking up from ``self._root_``,
-            since that walk follows only the primary ``_parent_`` — whichever context first attached
-            it. :meth:`_last_parent_of_type_` recovers the owning ``Filter`` directly from this
-            node's own parents when the graph walk misses it.
+        :return: The condition of the first ``Filter`` in this expression's graph, or
+            ``None`` when no ``Filter`` gates it.
         """
-        root_via_graph = next(
+        return next(
             (
-                expr.condition
-                for expr in self._all_expressions_
-                if isinstance(expr, Filter)
+                expression.condition
+                for expression in self._all_expressions_
+                if isinstance(expression, Filter)
             ),
             None,
         )
-        if root_via_graph is not None:
-            return root_via_graph
-        filter_parent = self._last_parent_of_type_(Filter)
-        if filter_parent is not None:
-            return filter_parent.condition
-        return self._root_
+
+    @property
+    def _conditions_root_(self) -> SymbolicExpression:
+        """
+        :return: The condition gating this expression, or the root of its graph when no
+            ``Filter`` gates it.
+        """
+        filter_condition = self._filter_condition_
+        if filter_condition is None:
+            return self._root_
+        return filter_condition
+
+    @property
+    def _has_condition_(self) -> bool:
+        """
+        :return: Whether a ``Filter`` gates this expression, i.e. whether
+            :attr:`_conditions_root_` came from one rather than falling back to
+            :attr:`_root_`.
+        """
+        return self._filter_condition_ is not None
 
     @property
     def _root_(self) -> SymbolicExpression:
