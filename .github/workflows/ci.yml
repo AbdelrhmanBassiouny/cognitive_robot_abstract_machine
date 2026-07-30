@@ -61,3 +61,10 @@ jobs:
       - run: |
           source .claude/hooks/resolve-personal-notes-config.sh
           python -m pytest "${PLAN_DASHBOARD_TESTS_DIRECTORY}" "${HOOKS_TESTS_DIRECTORY}" "${STACK_TESTS_DIRECTORY}"
+      - run: |
+          # Separate invocation: the development_tooling suite lives under the
+          # standard test/ directory, whose shared conftest imports the robotics
+          # stack this lightweight job doesn't install - --confcutdir keeps that
+          # conftest out of the run.
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python -m pytest "${DEVELOPMENT_TOOLING_TESTS_DIRECTORY}" --confcutdir="${DEVELOPMENT_TOOLING_TESTS_DIRECTORY}"
