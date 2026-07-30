@@ -96,8 +96,13 @@ file itself must never be merged into `main`.
   as each is known, plus `notes` when a conclusion changes the item's substance. Record the
   narrative and the reasoning in the sibling `roadmap.md` - especially a premise that turned
   out to be wrong, a decision I overrode, or a dependency rule that no longer applies.
-- Then run `save-plan.sh <plan-id>` so it lands on the personal-notes branch, and say that
-  `/plan-dashboard <plan-id>` is needed to re-render (a script cannot publish the Artifact).
+- Then run `save-plan.sh <plan-id>` so it lands on the personal-notes branch, and immediately
+  run `/plan-dashboard <plan-id>` yourself to republish the dashboard. A script cannot call
+  the Artifact tool, so only a live session can - do not stop at telling me it needs doing.
+- **Always republish the dashboard whenever a plan's data changes, whatever changed it and
+  whichever session did it**: `save-plan.sh`, `/plan-create`, a refresh's manifest
+  auto-correction, or a hand edit on the personal-notes branch. Republish in the same turn
+  as the change, so a published dashboard is never older than the manifest behind it.
 - Do this even when the session is not the plan's steward. Prefer editing `plan.yaml`
   directly and saying so over leaving the manifest stale; a comment on the `tracking_issue`
   is a useful record of *why*, but it is not a substitute for the state itself being right.
