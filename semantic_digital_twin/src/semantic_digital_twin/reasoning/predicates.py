@@ -20,7 +20,6 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     Prepositions,
 )
-from krrood.entity_query_language.verbalization.fragments.base import WordFragment
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
     clause,
@@ -960,16 +959,13 @@ class AllClose(Predicate):
         # is used rather than "all elements ... are" because the realizer does not agree the copula with
         # a plural subject for this construction.
         return clause(
-            WordFragment(text="each"),
-            WordFragment(text="element"),
+            Noun.bare("each element"),
             Prepositions.OF,
             Noun(fields["array1"]),
             Copula(),
             Adjective("close"),
             Prepositions.TO,
-            WordFragment(text="the"),
-            WordFragment(text="matching"),
-            WordFragment(text="element"),
+            Noun.the("matching element"),
             Prepositions.OF,
             Noun(fields["array2"]),
         )
