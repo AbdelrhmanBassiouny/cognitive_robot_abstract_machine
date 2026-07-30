@@ -13,10 +13,7 @@ import unittest
 
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.rdr.conclusion_domain import resolve_conclusion_domain
-from krrood.entity_query_language.rdr.exceptions import (
-    NoConclusionProvided,
-    NoConditionsProvided,
-)
+from krrood.entity_query_language.rdr.exceptions import NoAnswerProvided
 from krrood.entity_query_language.rdr.expert import AnswerName, Expert, RuleAnswer
 from krrood.entity_query_language.rdr.interface import (
     EXIT_NAME,
@@ -57,7 +54,9 @@ class TestAskForConditions(unittest.TestCase):
         case_variable = variable(Animal, domain=[])
         expression = case_variable.hair == True
         interface = FunctionInterface(
-            answer_fn=lambda context, requests: {AnswerName.CONDITIONS: expression}
+            answer_function=lambda context, requests: {
+                AnswerName.CONDITIONS: expression
+            }
         )
         expert = Expert(interface=interface)
 
@@ -65,13 +64,14 @@ class TestAskForConditions(unittest.TestCase):
 
         self.assertIs(result, expression)
 
-    def test_raises_no_conditions_provided_on_abort(self):
+    def test_raises_no_answer_provided_for_conditions_on_abort(self):
         case = make_animal("stingray")
         expert = Expert(interface=AbortingInterface())
 
-        with self.assertRaises(NoConditionsProvided) as raised:
+        with self.assertRaises(NoAnswerProvided) as raised:
             expert.ask_for_conditions(_context(case))
         self.assertIs(raised.exception.case, case)
+        self.assertEqual(raised.exception.answer_name, AnswerName.CONDITIONS)
 
 
 class TestAskForRule(unittest.TestCase):
@@ -89,7 +89,7 @@ class TestAskForRule(unittest.TestCase):
                 return {AnswerName.CONCLUSION: Species.mammal}
             return {AnswerName.CONDITIONS: expression}
 
-        expert = Expert(interface=FunctionInterface(answer_fn=answer))
+        expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
             case, case_variable, current_conclusion=UNSET, conclusion_domain=self.domain
         )
@@ -108,7 +108,7 @@ class TestAskForRule(unittest.TestCase):
             calls.append([r.name for r in requests])
             return {AnswerName.CONCLUSION: Species.mammal}
 
-        expert = Expert(interface=FunctionInterface(answer_fn=answer))
+        expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
             case, current_conclusion=Species.mammal, conclusion_domain=self.domain
         )
@@ -128,7 +128,7 @@ class TestAskForRule(unittest.TestCase):
             calls.append([r.name for r in requests])
             return {AnswerName.CONCLUSION: UNSET}
 
-        expert = Expert(interface=FunctionInterface(answer_fn=answer))
+        expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
             case, current_conclusion=Species.mammal, conclusion_domain=self.domain
         )
@@ -142,16 +142,17 @@ class TestAskForRule(unittest.TestCase):
             "conditions must not be asked when the conclusion is left unset",
         )
 
-    def test_raises_no_conclusion_provided_on_abort(self):
+    def test_raises_no_answer_provided_for_conclusion_on_abort(self):
         case = make_animal("orca")
         expert = Expert(interface=AbortingInterface())
         context = _context(
             case, current_conclusion=UNSET, conclusion_domain=self.domain
         )
 
-        with self.assertRaises(NoConclusionProvided) as raised:
+        with self.assertRaises(NoAnswerProvided) as raised:
             expert.ask_for_rule(context)
         self.assertIs(raised.exception.case, case)
+        self.assertEqual(raised.exception.answer_name, AnswerName.CONCLUSION)
 
 
 class TestSuggestedConclusion(unittest.TestCase):
@@ -165,7 +166,8 @@ class TestSuggestedConclusion(unittest.TestCase):
                 return Species.bird
 
         expert = Expert(
-            interface=FunctionInterface(answer_fn=lambda c, r: {}), aids=[Suggests()]
+            interface=FunctionInterface(answer_function=lambda c, r: {}),
+            aids=[Suggests()],
         )
         context = _context(make_animal("eagle"), conclusion_domain=self.domain)
 
@@ -183,7 +185,7 @@ class TestSuggestedConclusion(unittest.TestCase):
                 return Species.fish
 
         expert = Expert(
-            interface=FunctionInterface(answer_fn=lambda c, r: {}),
+            interface=FunctionInterface(answer_function=lambda c, r: {}),
             aids=[SuggestsInvalid(), SuggestsValid()],
         )
         context = _context(make_animal("tuna"), conclusion_domain=self.domain)
@@ -193,7 +195,7 @@ class TestSuggestedConclusion(unittest.TestCase):
         )
 
     def test_returns_unset_when_no_aid_suggests(self):
-        expert = Expert(interface=FunctionInterface(answer_fn=lambda c, r: {}))
+        expert = Expert(interface=FunctionInterface(answer_function=lambda c, r: {}))
         context = _context(make_animal("gecko"), conclusion_domain=self.domain)
 
         self.assertIs(expert._suggested_conclusion(context, self.validator), UNSET)

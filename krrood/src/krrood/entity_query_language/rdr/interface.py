@@ -27,7 +27,12 @@ from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.rdr.exceptions import ExpertAbort
-from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.entity_query_language.rdr.utils import (
+    CASE_INSTANCE_NAME,
+    CASE_VARIABLE_NAME,
+    UNSET,
+    AnswerName,
+)
 from krrood.entity_query_language.scope import get_definition_scope
 from krrood.exceptions import DataclassException
 
@@ -38,12 +43,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.condition_resolver import ResolvedCondition
     from krrood.entity_query_language.rdr.observer import ClassificationTrace
     from krrood.entity_query_language.rdr.progress import ProgressReporter
-
-#: Shell name bound to the concrete case (inspect/experiment: ``case_instance.milk``).
-CASE_INSTANCE_NAME = "case_instance"
-
-#: Shell name bound to the shared EQL variable (author: ``case_variable.milk == True``).
-CASE_VARIABLE_NAME = "case_variable"
 
 #: Shell name of the zero-arg callable the expert calls to leave without answering.
 EXIT_NAME = "exit"
@@ -130,9 +129,9 @@ class AnswerRequest:
     One named answer the expert must place in the namespace, with validation.
     """
 
-    name: str
+    name: AnswerName
     """
-    The namespace variable the expert assigns (e.g. ``"conditions"``).
+    The namespace variable the expert assigns.
     """
 
     validate: Callable[[Any], Optional[DataclassException]]
@@ -185,8 +184,8 @@ class ExpertInterface(ABC):
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, DataclassException]] = None,
-    ) -> Dict[str, Any]:
+        initial_errors: Optional[Dict[AnswerName, DataclassException]] = None,
+    ) -> Dict[AnswerName, Any]:
         """
         Drive the request loop until every required answer validates.
 
@@ -202,10 +201,10 @@ class ExpertInterface(ABC):
         """
         namespace = self._build_namespace(context, requests)
 
-        def validate() -> Dict[str, DataclassException]:
+        def validate() -> Dict[AnswerName, DataclassException]:
             return self._validate(namespace, requests)
 
-        errors: Dict[str, DataclassException] = initial_errors or {}
+        errors: Dict[AnswerName, DataclassException] = initial_errors or {}
         while True:
             header = self._render_header(context, requests, errors)
             self._run(namespace, header, validate)
@@ -230,7 +229,7 @@ class ExpertInterface(ABC):
     @staticmethod
     def _validate(
         namespace: Dict[str, Any], requests: List[AnswerRequest]
-    ) -> Dict[str, DataclassException]:
+    ) -> Dict[AnswerName, DataclassException]:
         """
         Run every request's validator against its current namespace value.
 
@@ -239,7 +238,7 @@ class ExpertInterface(ABC):
         :return:``{request.name: exception}`` for every request whose value failed
             validation.
         """
-        errors: Dict[str, DataclassException] = {}
+        errors: Dict[AnswerName, DataclassException] = {}
         for request in requests:
             error = request.validate(namespace.get(request.name))
             if error is not None:
@@ -249,7 +248,7 @@ class ExpertInterface(ABC):
     @classmethod
     def _missing_required(
         cls, namespace: Dict[str, Any], requests: List[AnswerRequest]
-    ) -> List[str]:
+    ) -> List[AnswerName]:
         """
         :param namespace: The interaction namespace, keyed by answer name.
         :param requests: The answers to check.
@@ -263,7 +262,7 @@ class ExpertInterface(ABC):
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        errors: Dict[str, DataclassException],
+        errors: Dict[AnswerName, DataclassException],
     ) -> str:
         """
         Plain-text header.
@@ -303,7 +302,7 @@ class ExpertInterface(ABC):
         self,
         namespace: Dict[str, Any],
         header: str,
-        validate: Callable[[], Dict[str, str]],
+        validate: Callable[[], Dict[AnswerName, DataclassException]],
     ) -> None:
         """
         Present ``header`` and let the expert populate the answer names in
@@ -333,7 +332,7 @@ class FunctionInterface(ExpertInterface):
     answers, which are written into the namespace and then validated by the normal loop.
     """
 
-    answer_fn: Callable[[CaseContext, List[AnswerRequest]], Dict[str, Any]]
+    answer_function: Callable[[CaseContext, List[AnswerRequest]], Dict[AnswerName, Any]]
     """
     Returns ``{name: value}`` for the requested answers.
 
@@ -355,8 +354,8 @@ class FunctionInterface(ExpertInterface):
         self,
         context: CaseContext,
         requests: List[AnswerRequest],
-        initial_errors: Optional[Dict[str, DataclassException]] = None,
-    ) -> Dict[str, Any]:
+        initial_errors: Optional[Dict[AnswerName, DataclassException]] = None,
+    ) -> Dict[AnswerName, Any]:
         self._context = context
         self._requests = requests
         return super().interact(context, requests, initial_errors=initial_errors)
@@ -365,9 +364,9 @@ class FunctionInterface(ExpertInterface):
         self,
         namespace: Dict[str, Any],
         header: str,
-        validate: Callable[[], Dict[str, str]],
+        validate: Callable[[], Dict[AnswerName, DataclassException]],
     ) -> None:
-        answers = self.answer_fn(self._context, self._requests)
+        answers = self.answer_function(self._context, self._requests)
         namespace.update(answers)
 
 

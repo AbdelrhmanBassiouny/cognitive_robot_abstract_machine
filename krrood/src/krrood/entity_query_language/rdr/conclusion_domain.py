@@ -1,17 +1,5 @@
 """
 Resolve the set of values an RDR conclusion attribute may take, from its declared type.
-
-When the expert labels a case with no ground truth (the ``ask_for_rule`` path), the RDR
-can derive *what the conclusion is allowed to be* directly from the conclusion
-attribute's type hint — without asking. For an :class:`enum.Enum` (or ``bool``) the
-allowable values are a finite, enumerable set; for an open type (``str`` / an arbitrary
-class) the domain is not enumerable and we fall back to a type check.
-
-:class:`ConclusionDomain` is that resolved description;
-:func:`resolve_conclusion_domain` builds one for ``owner_type.attribute_name``. Both are
-consumed by the conclusion validator (reject out-of-domain answers) and by the
-interactive shell (show the allowable values, inject enum members for tab-completion,
-source the example).
 """
 
 from __future__ import annotations
@@ -20,7 +8,7 @@ import enum
 import inspect
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict, Optional, Tuple, get_args
+from typing_extensions import Any, Callable, Dict, Optional, Tuple, get_args
 
 from krrood.class_diagrams.exceptions import CouldNotResolveType
 from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annotation
@@ -61,6 +49,7 @@ class ConclusionDomain:
     """
     Whether the domain is a finite, enumerable set (an Enum or ``bool``).
     """
+
     allows_none: bool
     """
     Whether the declared type admits ``None`` (an ``Optional`` / ``... | None`` annotation).
@@ -111,23 +100,45 @@ class ConclusionDomain:
         membership; otherwise the value must be an instance of the expected type(s). An
         unresolved domain (no expected types) accepts any non-``None`` value.
 
+        An enumerable domain's members are always one of the resolved ``expected_types``
+        (an :class:`enum.Enum` subclass or ``bool``), so membership reduces to a type check
+        — no need for :meth:`contains`'s exact-type-then-equality walk here, and
+        ``isinstance`` already excludes an ``int`` from a ``bool`` domain correctly
+        (unlike a naive ``value in members`` / ``==`` check would, given ``1 == True``).
+
         :param value: The conclusion answer to validate.
         :param allow_unset: Whether leaving the conclusion unset is acceptable.
         :return: The exception describing why ``value`` is unacceptable, or ``None``.
         """
         if value is UNSET:
-            return None if allow_unset else ConclusionRequired(self)
+            return None if allow_unset else ConclusionRequired(domain=self)
         if value is None:
-            return None if self.allows_none else ConclusionMayNotBeNone(self)
+            return None if self.allows_none else ConclusionMayNotBeNone(domain=self)
         if self.is_enumerable:
-            return None if self.contains(value) else ConclusionNotInDomain(value, self)
+            return (
+                None
+                if isinstance(value, self.expected_types)
+                else ConclusionNotInDomain(domain=self, value=value)
+            )
         if self.expected_types:
             return (
                 None
                 if isinstance(value, self.expected_types)
-                else ConclusionWrongType(value, self)
+                else ConclusionWrongType(domain=self, value=value)
             )
         return None
+
+    def validator(
+        self, allow_unset: bool
+    ) -> Callable[[Any], Optional[DataclassException]]:
+        """
+        Build a single-argument validator for a conclusion answer, bound to
+        ``allow_unset``.
+
+        :param allow_unset: Whether leaving the conclusion unset is acceptable.
+        :return: A validator suitable for :attr:`~...interface.AnswerRequest.validate`.
+        """
+        return lambda value: self.validate(value, allow_unset)
 
     def namespace_bindings(self) -> Dict[str, Any]:
         """

@@ -15,59 +15,42 @@ strings or lists.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from enum import StrEnum
 
 from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.rdr.conclusion_domain import ConclusionDomain
 from krrood.entity_query_language.rdr.exceptions import (
     ConditionsNotAnExpression,
-    ConditionsNotProvided,
-    NoConclusionProvided,
-    NoConditionsProvided,
+    ConditionsRequired,
+    NoAnswerProvided,
 )
 from krrood.entity_query_language.rdr.interface import (
-    CASE_INSTANCE_NAME,
-    CASE_VARIABLE_NAME,
     AnswerRequest,
     CaseContext,
     ExpertAbort,
     ExpertInterface,
 )
-from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.entity_query_language.rdr.utils import (
+    CASE_INSTANCE_NAME,
+    CASE_VARIABLE_NAME,
+    UNSET,
+    AnswerName,
+)
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.aid import ConclusionAid
 
 
-class AnswerName(StrEnum):
-    """
-    The namespace-variable names an :class:`Expert` asks the expert to assign.
-    """
-
-    CONDITIONS = "conditions"
-    """
-    Assigned an EQL condition expression, built over ``case_variable``.
-    """
-
-    CONCLUSION = "conclusion"
-    """
-    Assigned the conclusion value the expert labels the case with.
-    """
-
-    @property
-    def example_assignment(self) -> str:
-        """:return: A copy-pasteable example ``conditions = ...`` assignment."""
-        return f"{self} = {CASE_VARIABLE_NAME}.some_attr == True"
-
-
 def _validate_conditions(value: Any) -> Optional[DataclassException]:
+    """
+    :param value: The candidate ``conditions`` answer.
+    :return: The exception describing why ``value`` is unacceptable, or ``None``.
+    """
     if isinstance(value, SymbolicExpression):
         return None
     if value is None:
-        return ConditionsNotProvided(
+        return ConditionsRequired(
             answer_name=AnswerName.CONDITIONS, case_variable_name=CASE_VARIABLE_NAME
         )
     return ConditionsNotAnExpression(
@@ -76,19 +59,6 @@ def _validate_conditions(value: Any) -> Optional[DataclassException]:
         case_variable_name=CASE_VARIABLE_NAME,
         case_instance_name=CASE_INSTANCE_NAME,
     )
-
-
-def make_conclusion_validator(
-    domain: ConclusionDomain, allow_unset: bool
-) -> Callable[[Any], Optional[DataclassException]]:
-    """
-    Build a validator for a conclusion answer from its resolved domain.
-
-    :param domain: The resolved allowable-value domain of the conclusion attribute.
-    :param allow_unset: Whether leaving the conclusion unset is acceptable.
-    :return: A validator returning the violated exception, or ``None`` when acceptable.
-    """
-    return lambda value: domain.validate(value, allow_unset)
 
 
 @dataclass
@@ -116,7 +86,7 @@ class Expert:
 
     Holds an :class:`ExpertInterface` that performs the actual expert interaction; this
     class only builds the request specs and translates an :class:`ExpertAbort` into the
-    policy-level :class:`NoConditionsProvided` / :class:`NoConclusionProvided`.
+    policy-level :class:`NoAnswerProvided`.
     """
 
     interface: ExpertInterface
@@ -133,7 +103,7 @@ class Expert:
     def ask_for_conditions(
         self,
         context: CaseContext,
-        prior_errors: Optional[Dict[str, DataclassException]] = None,
+        prior_errors: Optional[Dict[AnswerName, DataclassException]] = None,
     ) -> SymbolicExpression:
         """
         :param context: Everything known about the case, built by the caller — the concrete
@@ -156,7 +126,9 @@ class Expert:
                 context, [request], initial_errors=prior_errors
             )[AnswerName.CONDITIONS]
         except ExpertAbort:
-            raise NoConditionsProvided(case=context.case_instance)
+            raise NoAnswerProvided(
+                case=context.case_instance, answer_name=AnswerName.CONDITIONS
+            )
 
     def ask_for_rule(self, context: CaseContext) -> RuleAnswer:
         """
@@ -191,9 +163,7 @@ class Expert:
         :return: The chosen conclusion, or ``UNSET`` meaning "keep the current one".
         """
         domain = context.conclusion_domain
-        validator = make_conclusion_validator(
-            domain, allow_unset=context.has_current_conclusion
-        )
+        validator = domain.validator(allow_unset=context.has_current_conclusion)
         request = AnswerRequest(
             name=AnswerName.CONCLUSION,
             validate=validator,
@@ -203,7 +173,9 @@ class Expert:
         try:
             return self.interface.interact(context, [request])[AnswerName.CONCLUSION]
         except ExpertAbort:
-            raise NoConclusionProvided(case=context.case_instance)
+            raise NoAnswerProvided(
+                case=context.case_instance, answer_name=AnswerName.CONCLUSION
+            )
 
     def _suggested_conclusion(
         self,
