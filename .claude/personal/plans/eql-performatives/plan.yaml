@@ -39,19 +39,22 @@ items:
     pull_request_number: 55
     track: grammar-features
     depends_on: []
-    status: blocked
-    blockers:
-      - "mergeable_state: dirty since 2026-07-24 - main advanced when the eql-verbalization plan's #86/#87 merges landed, conflicting in coreference_processor.py, realization.py and parts_of_speech.py. Carries the needs-resolution label."
+    status: in_progress
+    session: https://claude.ai/code/session_014rJsLXhoAAV5Xbc2w5dyHR
     notes: >
       Adds AgreementProcessor as its own lowering pass ahead of
       DeterminerProcessor/MorphologyProcessor, plus PhraseFragment.concord_number and
       the All universal quantifier; removes coreference_processor's inline agreement
       logic. Re-authored fresh onto main on 2026-07-19 after three parts_of_speech.py
       conflicts against the #36 symbolic-function stack it originally sat on. The
-      conflicts now are against main's P2 coreference/referring redesign - the same
-      files, a different cause, and the whole stack above is waiting on this restack.
-      The PR body still describes the post-2026-07-19 clean state and predates the
-      conflict.
+      2026-07-24 conflict against main's P2 coreference/referring redesign was resolved
+      on 2026-07-30 (merge c6ab6db8): P2 had grown its own eager
+      apply_subject_verb_agreement; the resolution unified onto this branch's pass
+      design (concord_number stamps upstream, AgreementProcessor derives), keeping
+      main's coordinated-subject feature as a build-time stamp in clause() and deleting
+      the caller-less duplicate helper. Full test_eql suite green (1139 passed,
+      3 pre-existing skips); needs-resolution label removed; PR body updated. Draft,
+      awaiting CI on the merge push and then review/merge.
 
   - id: cardinality
     title: "Distinguish scalar vs. collection cardinality in grouped columns"

@@ -66,32 +66,41 @@ anything unique to that stack, and the shared files were byte-identical to `main
 it was first ported, so #55 was re-authored fresh onto `main` rather than carrying the
 restacking merge commits forward. #54, #14 and #15 followed it off #36.
 
-## Current blocker (as of 2026-07-30)
+## The 2026-07-24 conflict and its 2026-07-30 resolution
 
-**#55 is conflicted against `main` and the entire stack is behind it.** When the
-`eql-verbalization` plan's #86/#87 landed and the fork's `main` was fast-forwarded on
-2026-07-24, three files conflicted:
+**Resolved on 2026-07-30 (merge `c6ab6db8` on #55).** When the `eql-verbalization`
+plan's #86/#87 landed and the fork's `main` was fast-forwarded on 2026-07-24, three
+files conflicted (P3's #475 landed on top before the resolution; the conflict set was
+unchanged):
 
 - `verbalization/rendering/coreference_processor.py`
 - `verbalization/rendering/realization.py`
 - `verbalization/vocabulary/parts_of_speech.py`
 
-These are real conflicts between this branch's agreement pass and `main`'s P2
-coreference/referring redesign — not the throwaway ORM interface file — so the
-restacking routine correctly left them alone. `coreference_processor.py` is the
-substantive one: #55 *removes* that file's inline agreement logic
-(`_agree_finite`/`_FINITE_ROLES`) in favour of the standalone `AgreementProcessor`
-pass, while P2 rewrote the same region for coreference-driven operand naming. The
-resolution has to preserve both intents, which is a judgment call, not a take-a-side.
+The root cause turned out to be sharper than "P2 rewrote the same region": **`main`'s
+P2 redesign had independently grown its own subject/verb agreement mechanism** —
+`apply_subject_verb_agreement` in `fragments/base.py`, logically identical to #55's
+`agree_finite` but applied *eagerly* at build/coreference time, the exact architecture
+#55 replaces with the `AgreementProcessor` pass. Two parallel agreement designs, not
+just overlapping edits.
 
-Note the interaction with the `eql-verbalization` plan: its P1/P2/P3 are what moved
-`main` out from under this stack. The two plans are otherwise independent, but this
-stack will keep re-conflicting in the verbalization rendering pipeline for as long as
-that plan is landing work there.
+The resolution unified onto the pass design, preserving both plans' intents:
+coreference and `clause()` keep making the number *decision* (as `concord_number`
+stamps — including main's coordinated-subject feature, which became a build-time stamp
+because the pass only infers number from a plain `NounPhrase` subject), and the pass
+alone derives the agreement. Main's now caller-less eager helper and its
+`_with_agreed_copula` were deleted; `agree_finite` in `agreement_processor.py` is the
+single implementation. Full `test_eql` suite green after the merge (1139 passed, the 3
+pre-existing skips).
 
-Nothing above #55 can merge until it restacks clean; #54, #14 and #15 all report
-`mergeable_state: clean` against their own bases today, which says nothing about
-whether they will survive the rebase cascade once #55 moves.
+Standing risk, unchanged: this stack keeps re-conflicting in the verbalization
+rendering pipeline for as long as the `eql-verbalization` plan lands work there — and
+any future `main`-side agreement logic should be checked against the pass design
+before merging, now that the two have collided once.
+
+Nothing above #55 can merge until the restack cascade runs; #54, #14 and #15's
+`mergeable_state: clean` against their own bases says nothing about whether they
+survive it now that #55 has moved.
 
 ## Deferred follow-ups
 
