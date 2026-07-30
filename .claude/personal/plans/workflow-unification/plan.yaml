@@ -205,6 +205,7 @@ items:
   - id: shared-pr-state-chips
     branch: claude/shared-pr-state-chips
     title: "PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards"
+    pull_request_number: 111
     track: dashboards
     depends_on: [stack-tooling-on-main]
     status: in_progress
@@ -225,6 +226,15 @@ items:
       merged-to-done manifest auto-corrections, same as the live refresh path.
       (This kickoff state was accidentally reverted by a concurrent stale-scaffold save
       on 2026-07-30 14:49 and restored by the routine-cutover kickoff session.)
+      Implemented as draft PR #111 (2026-07-30): development_tooling package (pr_state +
+      personal_notes modules, pyproject for optional install), stack.py export restored
+      through it, optional chip fields in pr_data.json rendered as CI/size/conflict
+      chips (old pr_data still renders chipless), and build_site.py writing _site/ for
+      PR 4's Action. 302 tests passing across both CI invocations (was 254); the new
+      test/development_tooling_test suite runs with --confcutdir since the shared
+      test/conftest.py imports the robotics stack. One old bug fixed in the port:
+      merge-tree exits 1 for both a conflict and a missing reference, so the old probe
+      reported a typo as a conflict - the port verifies references first.
 
   - id: dev-tooling-python-package
     branch: null
