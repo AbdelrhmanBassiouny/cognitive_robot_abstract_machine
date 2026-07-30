@@ -24,14 +24,19 @@ Find every open/draft PR in the fork related to performatives, create a
   https://claude.ai/code/artifact/81c0f6c6-9f54-4c0d-afe2-01178ab57322
   and recorded its URL in `_generated/dashboard-urls.yaml`.
 
+- Refreshed the master index (`/plan-dashboard`, no argument): all five
+  plans re-synced against live GitHub, 0 drift anywhere, nothing
+  auto-corrected. Index republished in place at
+  https://claude.ai/code/artifact/094b785f-fe16-45d6-9ecf-5555d1aae487
+  (card order preserved, `eql-performatives` appended; it had been showing a
+  stale 3/4 for `eql-verbalization`, now 3/5).
+
 ## Next
 
 - Nothing pending in this session. The plan's own first actionable item is
   #55's three-file conflict against `main` (`coreference_processor.py`,
   `realization.py`, `parts_of_speech.py`), which blocks the whole stack —
   `/plan-item-resolve eql-performatives agreement`.
-- The master index was not refreshed; `/plan-dashboard` with no argument
-  would add `eql-performatives` to it.
 
 ## Noticed, not fixed
 
