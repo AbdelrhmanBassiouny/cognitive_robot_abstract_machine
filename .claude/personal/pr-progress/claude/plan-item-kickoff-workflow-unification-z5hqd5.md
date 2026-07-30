@@ -17,5 +17,5 @@ Next:
   .claude/stack/ROUTINE.md present on origin/main). #101 still open in-review, so not yet.
 - At the gate: run the execution checklist in the roadmap addendum (any session can),
   then one green routine cycle -> item done, unblocking tooling-branch-retirement.
-- Relay to #106 before it merges: ROUTINE.md/README "paste this file" wording should
-  describe the pointer design; "Not live yet" paragraph goes stale at cutover.
+- Done (user-approved): relayed the two wording nits to #106 as a conversation comment
+  (https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/106#issuecomment-5132585483).
