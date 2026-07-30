@@ -51,6 +51,17 @@ from render_common import (
     sanitize_http_url,
 )
 
+# The shared PR-state layer lives in the repository-root development_tooling package;
+# this script is planned to move inside it, at which point this path insertion goes
+# away.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+
+from development_tooling.pr_state import (
+    DEFAULT_SHORT_CHANGE_THRESHOLD,
+    CheckConclusion,
+    is_short_change,
+)
+
 MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
 """Same-track dependency chains deeper than this wrap back to indent level 0."""
 
@@ -445,6 +456,23 @@ class PullRequestRecord:
     closer manually adds the :attr:`PullRequestLabel.MERGED` label to record
     what actually happened - see :meth:`was_merged`."""
 
+    ci: CheckConclusion | None = None
+    """The reduced check conclusion on the pull request's head commit - ``None`` when
+    no check ran, or when the pull request data predates the chip fields."""
+
+    additions: int | None = None
+    """Lines added versus the base, or ``None`` when not fetched."""
+
+    deletions: int | None = None
+    """Lines deleted versus the base, or ``None`` when not fetched."""
+
+    mergeable: bool | None = None
+    """Whether GitHub reports the pull request as cleanly mergeable onto its base -
+    ``None`` while GitHub is still computing it or when not fetched."""
+
+    session_url: str | None = None
+    """The Claude session URL parsed from the pull request body, if any."""
+
     @property
     def identified_labels(self) -> frozenset[PullRequestLabel]:
         """The subset of :attr:`labels` that match a known
@@ -459,13 +487,22 @@ class PullRequestRecord:
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> PullRequestRecord:
-        """Build a record from one entry of ``pr_data.json``."""
+        """Build a record from one entry of ``pr_data.json``.
+
+        Every chip field is optional, so pull request data gathered before those
+        fields existed still parses - it just renders without chips."""
         merged_at = data.get("merged_at")
+        ci = data.get("ci")
         return cls(
             state=PullRequestState(data["state"]),
             draft=data.get("draft", False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get("labels") or []),
+            ci=CheckConclusion(ci) if ci else None,
+            additions=data.get("additions"),
+            deletions=data.get("deletions"),
+            mergeable=data.get("mergeable"),
+            session_url=sanitize_http_url(data.get("session_url")),
         )
 
     @property
@@ -592,6 +629,36 @@ class DependencyChip:
     tooltip: str
     """The chip's hover title: the dependency's title, or its identifier
     again if it doesn't resolve to a known item."""
+
+
+class ChipTone(StrEnum):
+    """The visual tone of one board chip - doubles as its CSS class suffix."""
+
+    POSITIVE = "positive"
+    """The fact is healthy (checks passing, short change, cleanly mergeable)."""
+
+    NEGATIVE = "negative"
+    """The fact needs attention (checks failing, oversized change, conflicts)."""
+
+    PENDING = "pending"
+    """The fact is still being determined (checks running)."""
+
+
+@dataclass(frozen=True)
+class BoardChip:
+    """One ready-to-render board-semantics chip on an item's card - the CI,
+    change-size, and conflict facts the stack board also shows, derived from the
+    extended pull request data. A fact the data doesn't carry renders as no chip at
+    all rather than an unknown-state one."""
+
+    label: str
+    """The chip's display text."""
+
+    tone: ChipTone
+    """The chip's visual tone."""
+
+    tooltip: str
+    """The chip's hover title, spelling the fact out."""
 
 
 @dataclass(frozen=True)
@@ -721,6 +788,11 @@ class Item:
     dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
     """Ready-to-render chips for :attr:`depends_on`, filled in by
     :meth:`DashboardRenderer.render`."""
+
+    board_chips: list[BoardChip] = field(default_factory=list, init=False)
+    """Ready-to-render board-semantics chips (CI, change size, conflicts), filled in
+    by :meth:`DashboardRenderer.render` - empty when the pull request data doesn't
+    carry the chip fields."""
 
     action: ItemAction | None = field(default=None, init=False)
     """This item's dashboard action button, filled in by
@@ -1037,6 +1109,10 @@ class DashboardRenderer:
                 item.live_state is LiveState.OPEN_DRAFT
                 and item.status is not ItemStatus.DEFERRED
             )
+            record = self._pull_request_record_of(item)
+            item.board_chips = self._board_chips_of(record)
+            if item.session is None and record is not None:
+                item.session = record.session_url
         for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
@@ -1122,6 +1198,81 @@ class DashboardRenderer:
             item.repository or self.plan.default_repository,
             self.pull_requests_by_repository,
         )
+
+    def _pull_request_record_of(self, item: Item) -> PullRequestRecord | None:
+        """Look one item's pull request record up, or ``None`` if it has no pull
+        request or the live data doesn't cover it."""
+        if item.pull_request_number is None:
+            return None
+        repository = item.repository or self.plan.default_repository
+        return self.pull_requests_by_repository.get(repository, {}).get(
+            str(item.pull_request_number)
+        )
+
+    @staticmethod
+    def _board_chips_of(record: PullRequestRecord | None) -> list[BoardChip]:
+        """Derive one item's board-semantics chips from its pull request record -
+        one chip per fact the record actually carries."""
+        if record is None:
+            return []
+        chips = []
+        if record.ci is not None:
+            tone_by_conclusion = {
+                CheckConclusion.SUCCESS: ChipTone.POSITIVE,
+                CheckConclusion.FAILURE: ChipTone.NEGATIVE,
+                CheckConclusion.PENDING: ChipTone.PENDING,
+            }
+            display_by_conclusion = {
+                CheckConclusion.SUCCESS: "passing",
+                CheckConclusion.FAILURE: "failing",
+                CheckConclusion.PENDING: "pending",
+            }
+            display = display_by_conclusion[record.ci]
+            chips.append(
+                BoardChip(
+                    label=f"ci {display}",
+                    tone=tone_by_conclusion[record.ci],
+                    tooltip=f"Latest checks on the head commit: {display}",
+                )
+            )
+        if record.additions is not None and record.deletions is not None:
+            lines_changed = record.additions + record.deletions
+            short = is_short_change(lines_changed)
+            threshold_clause = (
+                f"within the short-change threshold of {DEFAULT_SHORT_CHANGE_THRESHOLD}"
+                if short
+                else (
+                    f"over the short-change threshold of "
+                    f"{DEFAULT_SHORT_CHANGE_THRESHOLD}, consider splitting or "
+                    "restacking"
+                )
+            )
+            chips.append(
+                BoardChip(
+                    label=f"+{record.additions} −{record.deletions}",
+                    tone=ChipTone.POSITIVE if short else ChipTone.NEGATIVE,
+                    tooltip=(
+                        f"{lines_changed} lines changed versus the base - "
+                        f"{threshold_clause}"
+                    ),
+                )
+            )
+        if record.mergeable is not None:
+            chips.append(
+                BoardChip(
+                    label="mergeable" if record.mergeable else "conflicts",
+                    tone=ChipTone.POSITIVE if record.mergeable else ChipTone.NEGATIVE,
+                    tooltip=(
+                        "GitHub reports this pull request merges cleanly onto its base"
+                        if record.mergeable
+                        else (
+                            "GitHub reports this pull request does not merge cleanly "
+                            "onto its base"
+                        )
+                    ),
+                )
+            )
+        return chips
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:
