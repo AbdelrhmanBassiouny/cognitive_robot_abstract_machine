@@ -88,15 +88,19 @@ real blockers; dashboard republished.
 ## Next
 
 - Wait on the two review decisions. Nothing else in P4 is actionable without them.
-- **CI is red on `semantic_digital_twin` + `giskardpy`, and it is not ours.** The user
-  merged `main` into the branch (`2ea44271`, parent `0fd14357`). Both jobs fail on
-  `PackageNotFoundError: package 'ur_robot_driver'` — the DAiSy work on `main` dropped
-  `daisy.urdf` (`157cd1bf`) in favour of `package://ur_robot_driver/...`, and that ROS
-  package is not in the CI image. Verified byte-identical on `main`'s own run
-  (30577674356): same job, same test `test_world_pr2.py::test_robots_and_validate`,
-  same exception; main 872 passed vs our 873 (the extra pass is our new test). Every
-  other job is green on both. Fix belongs with the DAiSy change (rebuild the image),
-  not this PR. Said so once on #33 (comment 5135970013).
+- **CI is red on `semantic_digital_twin` + `giskardpy` + `coraplex`, and none of it is
+  ours.** The user merged `main` into the branch (`2ea44271`, parent `0fd14357`). All
+  three fail on `PackageNotFoundError: package 'ur_robot_driver'` — the DAiSy work on
+  `main` dropped `daisy.urdf` (`157cd1bf`) in favour of `package://ur_robot_driver/...`,
+  and that ROS package is not in the CI image. Verified against `main`'s own run of the
+  merge parent (30577674356), which fails the *same three jobs*:
+  sdt same test `test_world_pr2.py::test_robots_and_validate`, main 872 passed vs our
+  873 (the extra pass is our new test); coraplex byte-identical at 326 passed / 5
+  skipped / 7 errors on both, all seven `[DAiSy]` params. Zero real test failures
+  anywhere — the DAiSy fixtures just cannot build a world. Fix belongs with the DAiSy
+  change (rebuild the CI image with `ur_robot_driver` + `ur_client_library`), not this
+  PR. Said so on #33: comments 5135970013 and 5136043683 (the latter correcting the
+  first, which had listed only two jobs).
 - Reacting to webhook events; per these notes, no timed check-in is armed. When a
   base-branch-recovered notice arrives, merge `main` again and let CI re-run.
 - When the type-noun decision lands: if it is "type-level display noun", that is a
