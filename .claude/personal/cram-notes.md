@@ -85,6 +85,26 @@ file itself must never be merged into `main`.
 - This is the moment that decides whether the plan gets captured durably or evaporates once the
   session ends - do not let it pass by default.
 
+## Keeping plan state current
+
+- **Whenever anything happens that changes a tracked plan's state, update that plan's
+  `plan.yaml` and its data - immediately, in the same turn.** Starting an item, finishing
+  it, opening or merging its PR, blocking on something, abandoning an approach, or reaching
+  a conclusion that changes what an item means: all of it goes into the manifest, not only
+  into the chat.
+- What to write: the item's `status`, `branch`, `pull_request_number` and `session` as soon
+  as each is known, plus `notes` when a conclusion changes the item's substance. Record the
+  narrative and the reasoning in the sibling `roadmap.md` - especially a premise that turned
+  out to be wrong, a decision I overrode, or a dependency rule that no longer applies.
+- Then run `save-plan.sh <plan-id>` so it lands on the personal-notes branch, and say that
+  `/plan-dashboard <plan-id>` is needed to re-render (a script cannot publish the Artifact).
+- Do this even when the session is not the plan's steward. Prefer editing `plan.yaml`
+  directly and saying so over leaving the manifest stale; a comment on the `tracking_issue`
+  is a useful record of *why*, but it is not a substitute for the state itself being right.
+  This overrides the propose-don't-edit guidance above for state that is already fact.
+- A plan whose manifest lags behind reality is worse than no plan: every dashboard, kickoff
+  and resolve run downstream reads it as truth.
+
 <!--
 Add new personal-only rules below this line. Keep each rule short and
 imperative, same style as above.
