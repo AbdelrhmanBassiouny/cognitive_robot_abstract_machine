@@ -44,6 +44,9 @@ headless site build also pushes merged→done manifest corrections).
 
 ## Next
 
-- Await CI on #111 (pending at open) and review events; drive to green. Keep the PR
-  draft until told otherwise.
-- Self-review pass before undrafting, when asked.
+- CI on #111: test_claude_dev_tooling green (258 + 44 across its two invocations); the
+  only red is the pre-existing test_world_sim_state_sync physics flake that fails on
+  main too (noted once on the PR thread; re-check when the base recovers). coraplex job
+  was still running at last check - react if it reds (known xdist ORM-regeneration
+  flakiness documented on #107).
+- Keep the PR draft until told otherwise; self-review pass before undrafting, when asked.
