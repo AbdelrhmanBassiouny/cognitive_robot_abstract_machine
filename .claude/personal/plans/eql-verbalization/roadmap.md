@@ -37,7 +37,7 @@ it. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged 
     HasTwoFingers"*) is out of P4's scope — it is coreference behaviour, not an sdt
     wording, and is tracked as its own item (`p5-first-mention-type-annotation`).
 
-## Standing conventions — every P1–P4 session must
+## Standing conventions — every session on this plan must
 
 - Critically evaluate first: don't blindly implement; assess vs this codebase's
   verbalization/EQL architecture, the literature (NLG surface realization, grammar
