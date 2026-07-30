@@ -41,6 +41,10 @@
 - Run 30578088164 completed; queued re-run of failed jobs (20:3x). Expected:
   coraplex green (confirms the regen-race theory), giskardpy/sdt red again until
   the image rebuild.
+- Re-run sdt result (20:48): failed again but only on the multi-sim physics flake
+  (`test_world_sim_state_sync`, same assertion); the `ur_robot_driver` test passed
+  this attempt (ordering/environment-dependent). Predicted duplicate — no new PR
+  comment. coraplex + giskardpy re-runs still in progress.
 
 ## Next
 - giskardpy and sdt cannot go green anywhere until the CI docker image is rebuilt
