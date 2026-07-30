@@ -50,4 +50,5 @@ rdr/oo-definitions	rdr-refactor
 rdr/justifications	rdr-refactor
 claude/patch-pr-rheubx	workflow-unification
 claude/stack-tooling-on-main	workflow-unification
+claude/setup-stacked-prs-skill	workflow-unification
 claude/setup-personal-notes-script	workflow-unification

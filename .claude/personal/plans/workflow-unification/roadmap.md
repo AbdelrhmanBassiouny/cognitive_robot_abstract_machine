@@ -309,3 +309,39 @@ reason unrelated to this plan: `test/coraplex_test/conftest.py`'s `pytest_config
 processes rewrite the same ~33.5k-line file concurrently and `ruff format` then fails to parse it.
 Analysis posted on #107. Untouched deliberately: different root cause, different package, and
 AGENTS.md routes ORM-interface problems via `scripts/regenerate_all_orm.py` or the developer.
+
+## Update 2026-07-30: the upstream wave linearized; PR 2 kicked off
+
+**Decision 10 — the upstream wave is a linear chain, not siblings on #101.** #106 and #107 were
+both based on `claude/patch-pr-rheubx`, so neither branch carried both `.claude/stack/*` and
+`github-api.sh`. PR 2 (`setup-stacked-prs-skill`) needs both: the stack tooling it sets up, and the
+label check/create helpers its setup script calls. Three options were weighed and the diamond was
+rejected on mechanical grounds, not aesthetics: `stack.py restack-plan` emits exactly one
+`{branch, parent, strategy}` per branch, derived from the pull request's base, so a branch with two
+real parents is invisible to the second parent — when that parent moves, nothing restacks the child
+onto it. A branch the stack tooling cannot maintain is a poor advertisement for the stack tooling.
+So #107 was retargeted onto `claude/stack-tooling-on-main` and #106 merged into it (clean, one
+auto-merged file), making the chain `#101 → #106 → #107 → PR 2`. #106 is the parent because it is
+un-drafted and promotes first.
+
+**Two scope calls settled at PR 2's kickoff**, both from the item notes conflicting with the
+roadmap:
+
+- *stack-board bootstrap*: the item notes say PR 2 "offers stack-board repo bootstrap", but the
+  parameterized `board.yml` belongs to PR 4. PR 2 prints the bootstrap steps and the repository
+  variables the Action will need, and installs no workflow file — shipping the pre-parameterization
+  Action would pull cutover work into the upstream wave and hand PR 4 a file to immediately rewrite.
+- *`prerequisite-check.md`*: read as "PR 2 gets its own", not "reuse #101's". What settles it is the
+  consumer side rather than the planning prose — `ROUTINE.md`'s SETUP step 0 needs exactly this
+  document, with one variation: the Routine must *report* a missing setup rather than offer to fix
+  it, since its own HARD RULES forbid asking or entering plan mode.
+
+**Two kickoff plans were produced independently for this item** — one via `/plan-item-kickoff`, one
+from a plain prompt — and merged. The comparison is worth recording because the gaps were in the
+skill, not in either session: a `done`-only reading of sibling items gathers nothing in a wave where
+every item is still in flight, and dependency *readiness* never asks whether the dependency branch
+actually carries the files the item builds on. Both are now steps in `plan-item-kickoff`'s SKILL.md
+(branch `claude/plan-item-kickoff-workflow-ylk9wu`), along with checking the consumer side before
+raising an open question, and ending every proposed plan with the plan-state bookkeeping. The
+second plan also caught that `.claude/stack/board.json` is documented as never-committed scratch
+while nothing gitignores it — fixed in PR 2, with a `board_ignored` check to keep it true.

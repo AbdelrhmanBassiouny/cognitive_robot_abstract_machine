@@ -95,40 +95,55 @@ items:
       Implemented as draft PR #106 (2026-07-29): stack.py ported to .claude/stack/ minus
       the round-robin/WIP-cap subsystem, per-user config layering from the personal-notes
       branch, canonical ROUTINE.md + 1-page README, tests via ScratchRepository; restack.js
-      and board rendering not ported (board deferred to PR 3/PR 4 as planned). Awaiting
-      self-review/un-draft. Landed as plain scripts — the dev-tooling Python package is
-      created in PR 3 instead (see dev-tooling-python-package).
+      and board rendering not ported (board deferred to PR 3/PR 4 as planned). Landed as
+      plain scripts — the dev-tooling Python package is created in PR 3 instead (see
+      dev-tooling-python-package). Self-reviewed and un-drafted since: open and ready,
+      so it unblocks its dependents by the plan's normal open-and-ready rule. Now also
+      the parent of #107, which was restacked onto it (2026-07-30) so the upstream wave
+      is a linear chain rather than two siblings on #101.
 
   - id: setup-stacked-prs-skill
-    branch: null
+    branch: claude/setup-stacked-prs-skill
     title: "PR 2: /setup-stacked-prs guided one-command setup skill"
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01KGBAbjVAmX7LJMnSTJprtM
     notes: >
       Mirrors PR #101's pattern (read-only check-stack-setup.sh + guided skill +
-      prerequisite-check.md on /setup-personal-notes). Two install modes: native (tooling
-      on the target repo's main) and fork-overlay (creates/updates a never-merged tooling
-      branch on the user's fork from the skill's canonical files; re-running is the
-      updater). Creates missing labels (in-review, rebase, needs-resolution), writes
-      personal stack.toml, emits the ~10-line Routine prompt, offers stack-board repo
-      bootstrap. Recorded decision (user can override): for cram2 itself, personal config
-      lives on the personal-notes branch, not a per-user dev branch.
+      prerequisite-check.md) and #107's script/skill split. Two install modes: native
+      (tooling on the target repo's main) and fork-overlay (creates/updates a
+      never-merged tooling branch on the user's fork from the skill's canonical files;
+      re-running is the updater). Creates missing labels, writes personal stack.toml,
+      emits the Routine prompt. Recorded decision (user can override): for cram2 itself,
+      personal config lives on the personal-notes branch, not a per-user dev branch.
+      Kicked off 2026-07-30; branched off claude/setup-personal-notes-script (#107)
+      rather than #106 directly, because the item needs .claude/stack/* from #106 and
+      github-api.sh plus the gh/curl test stubs from #107 — which is what forced the
+      restack of #107 onto #106 first. Two scope calls settled at kickoff: the
+      stack-board step is guidance only (the parameterized board.yml stays PR 4's, per
+      the roadmap), and "prerequisite-check.md" in these notes means this skill gets its
+      own, consumed by ROUTINE.md's SETUP step 0, not a second copy of #101's.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"
     pull_request_number: 107
     track: stack-tooling
-    depends_on: [setup-personal-notes-pr101]
+    depends_on: [setup-personal-notes-pr101, stack-tooling-on-main]
     status: in_progress
     session: https://claude.ai/code/session_01MyxyUN3bsvPsJnb5QuNzxd
     notes: >
       Implemented as draft PR #107 (2026-07-29), based on claude/patch-pr-rheubx rather
       than main: the user overrode this item's "requires #101 MERGED" rule. That rule was
       never really about ordering — all six files this item builds on arrive with #101, so
-      basing on it is what made the work possible at all. Joins #106 as a second sibling
-      on that stack; GitHub retargets #107 to main when #101 merges.
+      basing on it is what made the work possible at all.
+      Restacked onto #106 on 2026-07-30 (base retargeted, #106 merged into the branch) so
+      the upstream wave is one linear chain instead of two siblings on #101: PR 2 needs
+      .claude/stack/* and github-api.sh together, and the diamond alternative would have
+      been invisible to stack.py restack-plan, which derives exactly one parent per branch
+      from the PR base. depends_on gained stack-tooling-on-main to match. GitHub retargets
+      the chain upward as each parent merges.
       The item's original premise is disproved and no longer applies: the two steps
       recorded as session-only are both scriptable (GET /user for the login,
       GET /repos/{owner}/{repo}/labels/{name} for the labels, POST .../labels to create
