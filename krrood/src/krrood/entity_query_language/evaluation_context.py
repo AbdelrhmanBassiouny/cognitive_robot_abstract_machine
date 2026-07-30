@@ -97,26 +97,37 @@ class ActiveConditionsRoot:
 
     A node reused as the condition of more than one ``Filter`` has no single correct
     "root" — the right answer depends on which evaluation is currently running, not on
-    the node's construction history. The first node to claim this during a pass wins;
+    the node's construction history. The first node to set this during a pass wins;
     nested evaluations within the same pass never reassign it.
     """
 
     _root_id: Optional[uuid.UUID] = field(default=None, init=False)
     """
-    Identifier of the claimed root, or ``None`` before any node has claimed one this
-    pass.
+    Identifier of the active root, or ``None`` before one has been set this pass.
     """
 
-    def claim(self, root: SymbolicExpression) -> None:
-        """
-        Claim *root* as the active conditions root for this pass, if none is claimed
-        yet.
+    has_condition: bool = field(default=False, init=False)
+    """
+    Whether the active root came from a genuine ``Filter``, rather than the Filter-less
+    fallback to the evaluation's own starting expression.
+    """
 
-        :param root: The node to claim, normally ``self._conditions_root_`` of whichever
-            expression is starting a fresh (context-less) evaluation.
+    def set_active_root_if_not_set(
+        self, root: SymbolicExpression, has_condition: bool
+    ) -> None:
+        """
+        Set *root* as the active conditions root for this pass, unless one is already
+        set.
+
+        :param root: The node to set, normally
+            ``originating_expression._conditions_root_``.
+        :param has_condition: Whether *root* came from a genuine ``Filter``, recorded so
+            that it need not be recomputed later in the pass from a node that may itself
+            be shared and structurally ambiguous.
         """
         if self._root_id is None:
             self._root_id = root._id_
+            self.has_condition = has_condition
 
     def is_active_root(self, node: SymbolicExpression) -> bool:
         """:return: ``True`` if *node* is the active conditions root for this pass."""
@@ -242,25 +253,29 @@ class EvaluationContext:
     """
     List of observers to notify of evaluation events.
     """
+
     subtree_containment_cache: Dict[
         Tuple[uuid.UUID, Type[SymbolicExpression]], bool
     ] = field(default_factory=dict)
     """
-    Memoizes, per ``(node id, expression type)``, whether a node's subtree contains a descendant of
-    that type — a structural fact constant for the duration of an evaluation, so the hot path answers
-    it once instead of re-walking the subtree on every step.
+    Memoizes, per ``(node id, expression type)``, whether a node's subtree contains a
+    descendant of that type — a structural fact constant for the duration of an
+    evaluation, so the hot path answers it once instead of re-walking the subtree on
+    every step.
     """
+
     expression_index_cache: Dict[
         uuid.UUID, weakref.WeakValueDictionary[uuid.UUID, SymbolicExpression]
     ] = field(default_factory=dict)
     """
-    Memoizes, per tree-root id, an ``id -> node`` index built once per evaluation and reused for
-    every lookup instead of re-scanning the tree.
+    Memoizes, per tree-root id, an ``id -> node`` index built once per evaluation and
+    reused for every lookup instead of re-scanning the tree.
 
     ..warning:: The index holds nodes only through weak references. A context can be captured past
         its evaluation (for example by an inference explanation); strong references here would pin
         the whole query tree and its variables' domains.
     """
+
     active_conditions_root: ActiveConditionsRoot = field(
         default_factory=ActiveConditionsRoot
     )
