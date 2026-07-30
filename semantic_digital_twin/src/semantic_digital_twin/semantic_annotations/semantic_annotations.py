@@ -8,10 +8,10 @@ import numpy as np
 from typing_extensions import List, Type
 
 from krrood.ormatic.utils import classproperty
-from semantic_digital_twin.datastructures.alignment import AlignmentPair
 from krrood.symbolic_math import symbolic_math
 from random_events.interval import closed
 from random_events.product_algebra import SimpleEvent
+from semantic_digital_twin.datastructures.alignment import AlignmentPair
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.exceptions import (
@@ -269,6 +269,14 @@ class MechanicalJoint(HasRootBody):
             main_has_root_body_annotation.root, self.root
         )
 
+    @property
+    def position(self):
+        return self.root.parent_connection.position
+
+    @position.setter
+    def position(self, value):
+        self.root.parent_connection.position = value
+
 
 @dataclass(eq=False)
 class Hinge(MechanicalJoint):
@@ -446,6 +454,43 @@ class Drawer(Furniture, HasCaseAsRootBody, HasHandle, HasMechanicalJoint):
         return Vector3.Z()
 
 
+@dataclass(eq=False)
+class Elevator(HasCaseAsRootBody, HasDoors, HasMechanicalJoint):
+    """
+    An elevator in the world, consists of three walls a floor, double doors for entering and a prismatic drive that moves
+    the elevator to other floors.
+    """
+
+    @classproperty
+    def hole_direction(self) -> Vector3:
+        return Vector3.NEGATIVE_X()
+
+    def open(self):
+        """
+        Opens the elevator doors
+        """
+        for door in self.doors:
+            door.mechanical_joint.position = (
+                door.mechanical_joint.root.parent_connection.dof.limits.upper.position
+            )
+
+    def close(self):
+        """
+        Closes the elevator doors
+        """
+        for door in self.doors:
+            door.mechanical_joint.position = door.mechanical_joint.position = (
+                door.mechanical_joint.root.parent_connection.dof.limits.lower.position
+            )
+
+    def drive_to_floor(self, floor: Level):
+        """
+        Drives the elevator to the floor given
+        """
+        drive_height = floor.floor_plane[0].z + (self.scale.z / 2)
+        self.mechanical_joint.position = drive_height
+
+
 ############################### subclasses to Furniture
 
 
@@ -573,6 +618,46 @@ class Bathroom(Room): ...
 
 @dataclass(eq=False)
 class LivingRoom(Room): ...
+
+
+@dataclass(eq=False)
+class Level(HasRootRegion):
+    """
+    A level of a building
+    """
+
+    @property
+    def floor_plane(self) -> Tuple[Point3, Point3]:
+        """
+        The floor plane of a level, expressed as two points
+
+        :return: The floor plane of the level
+        """
+        min_point_global = self._world.transform(
+            self.root.area.min_point, self._world.root
+        )
+        max_point_global = self._world.transform(
+            self.root.area.max_point, self._world.root
+        )
+        min_z = min_point_global.z
+        return min_point_global, Point3(
+            max_point_global.x,
+            max_point_global.y,
+            min_z,
+            reference_frame=self._world.root,
+        )
+
+
+@dataclass(eq=False)
+class GroundFloor(Level): ...
+
+
+@dataclass(eq=False)
+class FirstFloor(Level): ...
+
+
+@dataclass(eq=False)
+class SecondFloor(Level): ...
 
 
 @dataclass(eq=False)

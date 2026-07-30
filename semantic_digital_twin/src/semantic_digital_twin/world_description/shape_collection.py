@@ -205,11 +205,13 @@ class ShapeCollection(SubclassJSONSerializer):
 
     @property
     def min_point(self) -> Point3:
-        return Point3.from_iterable(self.combined_mesh.bounds[0])
+        return Point3.from_iterable(
+            self.combined_mesh.bounds[0], reference_frame=self.reference_frame
+        )
 
     @property
     def max_point(self) -> Point3:
-        return Point3.from_iterable(self.combined_mesh.bounds[1])
+        return Point3.from_iterable(self.combined_mesh.bounds[1], self.reference_frame)
 
 
 @dataclass
