@@ -25,9 +25,25 @@ headless site build also pushes merged→done manifest corrections).
 
 ## Done so far
 
-- Kickoff research + approved plan; branch created; plan.yaml set to in_progress and saved;
-  dashboard republished.
+- Kickoff research + approved plan; branch created; plan.yaml kept current throughout;
+  dashboard republished (now itself showing the new CI/LOC/conflict chips, fetched live
+  through the new pr_state module).
+- All six steps implemented TDD, 5 commits, pushed; **draft PR #111 opened** (base
+  claude/stack-tooling-on-main), subscribed to its activity. 302 tests green across the
+  two CI invocations (was 254): plan-dashboard+hooks+stack (258) and
+  test/development_tooling_test (44, separate invocation with --confcutdir because
+  test/conftest.py imports the robotics stack).
+- Notable findings while porting: merge-tree exits 1 for both a conflict and a missing
+  reference (old probe reported a typo as a conflict - fixed with explicit rev-parse
+  verification); a test fetched the real personal-notes remote via the session's
+  CLAUDE_PERSONAL_NOTES_REMOTE env leak - both personal_notes and build_site test
+  modules now strip those vars via an autouse fixture.
+- Verified contracts: zero-install import from repo root, stack.py CLI (export listed),
+  `pip install ./development_tooling` (package-dir mapping works), and a live pr_state
+  fetch of PRs 101/106/107/109/110/111 (chips data correct).
 
 ## Next
 
-- Step 1: failing tests for pr_state compute layer, then the package skeleton + module.
+- Await CI on #111 (pending at open) and review events; drive to green. Keep the PR
+  draft until told otherwise.
+- Self-review pass before undrafting, when asked.
