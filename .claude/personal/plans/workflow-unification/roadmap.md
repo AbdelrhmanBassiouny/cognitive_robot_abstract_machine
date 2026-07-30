@@ -345,3 +345,99 @@ actually carries the files the item builds on. Both are now steps in `plan-item-
 raising an open question, and ending every proposed plan with the plan-state bookkeeping. The
 second plan also caught that `.claude/stack/board.json` is documented as never-committed scratch
 while nothing gitignores it — fixed in PR 2, with a `board_ignored` check to keep it true.
+
+## Update 2026-07-30: PR 3 (shared-pr-state-chips) kicked off; package named
+
+Kickoff session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr, via
+`/plan-item-kickoff`. Branch `claude/shared-pr-state-chips`, based on
+`claude/stack-tooling-on-main` (#106's head) as a **sibling of #107 on #106** — decision 10's
+linearization was forced by PR 2 needing files from two parents, which doesn't apply here: PR 3
+needs only #106's files (`.claude/stack/stack.py`, the `STACK_*` constants; `github-api.sh` is
+bash, and `pr_state` fetches in Python with the same dual-backend rule as decision 9).
+
+Two decisions settled with the user at kickoff:
+
+- **The dev-tooling package (decision 8) is named `development_tooling`** — abbreviation-free per
+  AGENTS.md ("dev" is an abbreviation), over `dev_tooling`/`claude_tooling`. Flat top-level
+  directory, `pyproject.toml` inside the package directory (the repo root already carries the
+  workspace meta-pyproject), zero-install import from the repo root preserved.
+- **The headless static-site build pushes manifest auto-corrections.** The `build_site.py`
+  entrypoint the Pages Action will invoke reuses `refresh_dashboard.sh` per plan, including its
+  push of merged→done corrections to the personal-notes branch — the user chose keeping the
+  manifest current with no session over a read-only Action.
+
+Interim states this PR deliberately leaves for `dev-tooling-python-package` to clean up:
+`stack.py` gets a repo-root `sys.path` insert to import the package, and `build_site.py` lives in
+`.claude/skills/plan-dashboard/` next to the render scripts it imports until the migration moves
+them into the package together. PR 3's own new tests go straight to
+`test/development_tooling_test/` so the migration has nothing to move for them.
+
+## Update 2026-07-30: routine-cutover kicked off — prepared, gated on PR 1 reaching main
+
+Kickoff session: https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75, via
+`/plan-item-kickoff`. The item's own gate ("only after PR 1 is on cram2/main and fork main
+fast-forwards") is **not met yet** — #101 is open (`in-review`, awaiting the cram2 merge) and #106
+stacks on its head — so this kickoff prepared everything and execution waits. No timer is armed
+(no-scheduled-checks rule); execution happens when the user says go or a session verifies the gate
+on request/event.
+
+Findings that shaped the preparation:
+
+- **The live Routine is trigger `trig_01N79jHmLo3bSbg8pLM6MNTB`** ("PR Stack Monitor and Update"),
+  found via `list_triggers`. Its 17,392-character prompt still carries the dead round-robin
+  subsystem, `dev/` paths, and the tooling-branch pull step. Diffing it against #106's
+  `.claude/stack/ROUTINE.md` embedded prompt confirmed the only substantive differences are exactly
+  what PR 1 changed (round-robin deleted, promote-all Phase 3 via `next --porcelain`, `dev/` →
+  `.claude/stack/`, step 0b deleted) — so ROUTINE.md is a faithful successor and nothing in the
+  live prompt needs rescuing beyond what it already contains.
+- **The cutover is executable from a session**: `update_trigger` replaces a Routine's prompt in
+  place, keeping name/schedule/connectors/email config. The item note "No PR —
+  claude.ai/code/routines change" predates knowing this; manual paste stays as the fallback.
+- Design calls settled at kickoff (user-approved plan): inline HARD RULES = never-subscribe,
+  end-turn-on-webhook-events, and never-plan-mode (all three must bind before ROUTINE.md is read);
+  the LABELS-ARE-REPLACE rule stays file-only since label writes can only happen post-read. The
+  pointer prompt stops-and-reports if ROUTINE.md is missing from main, never falling back to the
+  old tooling branch.
+
+### The approved replacement prompt (paste or update_trigger verbatim at execution time)
+
+```text
+You maintain the stacked-PR fork-staging workflow for AbdelrhmanBassiouny/cognitive_robot_abstract_machine.
+The full doctrine lives in the repo: read `.claude/stack/ROUTINE.md` on your `main` checkout and execute
+the prompt embedded in it, exactly as written there. If that file is missing from `main`, STOP and report
+that instead - never fall back to another branch or to a remembered older copy of the doctrine.
+
+HARD RULES, in force from this line onward - before any file is read or any tool is called - and
+overriding ROUTINE.md if the two ever disagree:
+- NEVER call `subscribe_pr_activity`, and never stay subscribed - you learn CI by POLLING.
+- If a review, review-comment, issue-comment, or any `<github-webhook-activity>` event is ever delivered
+  to you, your ONLY valid action is to END THE TURN immediately. The one exception is a CI/check *status*
+  you were polling for your own restack.
+- NEVER enter plan mode or post a "here's my plan" comment. You either perform a mechanical step from
+  ROUTINE.md or you stop; you never open a discussion.
+```
+
+### Execution checklist (any session can run this once the gate is met)
+
+1. Verify the gate — the cram2 remote is outside a session's repo scope, but the routine
+   fast-forwards fork main from cram2/main, so `origin/main` is the observable:
+   `git fetch origin main claude/stack-tooling-on-main && git merge-base --is-ancestor
+   origin/claude/stack-tooling-on-main origin/main`, plus
+   `.claude/stack/{ROUTINE.md,stack.py,stack.toml,README.md}` all present on `origin/main`.
+2. Re-read `origin/main`'s ROUTINE.md once — later PRs may have evolved it (the pointer design
+   absorbs that), but its embedded HARD RULES should still match the inline ones above.
+3. `update_trigger` with `trigger_id: trig_01N79jHmLo3bSbg8pLM6MNTB` and `prompt:` the text above
+   (touch nothing else on the trigger).
+4. After the next natural routine run, confirm from its email/summary that it read ROUTINE.md and
+   ran the phases normally, then set the item `done` (unblocking tooling-branch-retirement),
+   `save-plan.sh`, republish the dashboard.
+
+Two wording nits flagged to fix on #106 before it merges (relayed to the user, not acted on from
+this item): ROUTINE.md's header says "This file becomes the one to **paste into**
+claude.ai/code/routines" and README.md echoes "paste it (or its successor)" — both should describe
+the pointer design instead; and ROUTINE.md's "Not live yet" paragraph goes stale at cutover.
+
+Also restored in this same save: PR 3's kickoff state (manifest + the roadmap section above),
+which a concurrent stale-scaffold save (bdd0beaa, 14:49) had silently reverted five minutes after
+it was recorded (973ff31a, 14:44) — the second occurrence of this race; the first is noted in the
+2026-07-29 tag-push addendum.
