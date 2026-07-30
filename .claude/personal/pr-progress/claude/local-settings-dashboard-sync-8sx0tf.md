@@ -28,6 +28,10 @@ Two asks, one branch:
   and the "always republish the dashboard when plan data changes" rule under
   "Keeping plan state current".
 
+- Draft PR #109 opened on the fork, subscribed to its activity. CI running at open;
+  nothing failed and no review comments yet.
+
 # Next
 
-- No PR opened - waiting on Abdelrhman to ask for one (draft, per convention).
+- React to PR #109 events as they arrive (no scheduled polling, per notes). Keep it a
+  draft after any push; mark ready only when told to.
