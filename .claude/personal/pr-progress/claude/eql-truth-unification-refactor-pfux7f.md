@@ -252,8 +252,38 @@ constant graphviz pair). Count rose from 2015 because main brought 29 new verbal
 tests. No semantic conflict with the `Union` split or the `_subtree_expressions_with_ids_`
 rename. mergeable_state now `clean`. Description refreshed to name this head and result.
 
+## Review round 5 (2026-07-30) — four design questions, no code change
+
+All four asked "is this needed / does this belong here", two explicitly "check and discuss
+with me". Answered each by *experiment*, not argument, and left all four threads **open**
+since none produced a change and two are the developer's call.
+
+- **"Real benefit to excluding TruthValuedExpressions from `_unification_of_`?"** Removed
+  it and measured: only my 2 tests fail (1157 pass), but `evaluate_condition` on a
+  satisfied `exists` flips False→True, diverging from main. Told them plainly the benefit
+  is *parity, not correctness* — main's False is the pre-existing bug — and that dropping
+  the exclusion means fixing `exists` semantics here and taking the coraplex risk in this
+  PR. Their call.
+- **"Shouldn't `_result_is_false_` be only on TruthValuedExpression?"** No. Instrumented
+  it: the operands actually asked include `Comparator` and `Variable`, neither of which is
+  truth-valued. Moving it would make `is_false` raise on the commonest condition shape.
+- **"If truth-valued expressions may appear in the unified result, is the
+  `_process_result_` override unneeded?"** Independent question. Without the override the
+  default returns `result[self._id_]` — the bool — so `and_(...).evaluate()` yields
+  `[True]` instead of bindings, and pre-existing `test_generate_drawers_from_direct_condition`
+  fails. Needed either way.
+- **"How does `_build_operation_result_` differ from `_as_fresh_observation_`?"** Different
+  receivers and jobs; the latter cannot delegate to the former because the operands it
+  re-emits (`Comparator`, `AND`) are not `Selectable`, so the method does not exist on them.
+
+Working tree left clean — every experiment reverted, EQL suite 1159 passed after restore.
+
 ## Next
 
+- **Four review threads open awaiting the developer**, all design questions, none blocking:
+  the unification exclusion (theirs to decide), and three I argued should stay as-is.
+- **The user asked to stop the regular check-ins** (2026-07-29). Do not re-arm any timed
+  check for this PR; react to webhook events only.
 - **ef7bb044: coraplex GREEN, 18/19 checks green.** Only red is
   `test_world_sim_state_sync` (sdt), the physics flake that also fails on plain main.
   CI on e85b6c03 queued at time of writing — watch it, though the round touched no logic.
