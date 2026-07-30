@@ -23,8 +23,11 @@ it. #32 (SymbolicFunction migration) and P1–P3 (#86, #87, #88) are all merged 
    HomogeneousTransformationMatrix): investigate and switch to `Pose` if correct/clearer.
 7. No abbreviations (`cm`→`collision_manager`); sweep all touched code.
 8. Keep the functional wrapper name `get_volume` (the class stays `AnnotationVolume`).
-9. ormatic `type`-mappability PR: DROPPED (maintainer). `OPERAND_OVERRIDES` stays; its
-   only cleanup is the `SymbolicCallableOverride` dataclass in P1.
+9. ormatic `type`-mappability PR: DROPPED (maintainer), so excluding `SymbolicCallable`
+   subclasses from ORM generation is the surviving path for P4's `ClassNameLowercased`.
+   Superseded 2026-07-30: `OPERAND_OVERRIDES` no longer exists — P3 replaced it with the
+   `SymbolicCallable._example_operand_values_` class hook, which the snapshot consults per
+   class. An override belongs on the class, not in a test-side dict.
 10. Keep surfaces concise (omit root/tip from `BlockingBodies`); details are query-able.
 
 ## Standing conventions — every P1–P4 session must
@@ -75,4 +78,17 @@ duplicate of) before any checklist item below can start.
   "the bodies between the fingers of a gripper"; RobotCollisions "the collision points between a
   robot and the bodies of the world"; ClassNameLowercased "the lower case form of a class name";
   AnnotationVolume "the volume of a <concrete annotation type>".
-- Regenerate the sdt snapshot; reply-and-resolve each review thread.
+- Wire the sdt snapshot to the generator; reply-and-resolve each review thread.
+
+### How the snapshot works now (corrected 2026-07-30)
+
+The snapshot module is *generated*, not hand-written — the hand-written `SURFACES` tuple
+PR #33 still carries is the wrong shape. `krrood/.../testing/result_generation.py`'s
+`regenerate_verbalization_results` is called from a package's own `conftest.py`
+(`test/krrood_test/conftest.py` is the reference) so the module is rebuilt every test run
+and an intentional wording change lands as an ordinary diff to review. Verification is
+`VerbalizationResultsOfPackage` in `krrood/.../testing/result_verification.py`, with two
+asserts — `assert_results_cover_every_callable` and
+`assert_declared_results_render_as_stated`. So P4's snapshot work is adding the
+regeneration call to `test/semantic_digital_twin_test/conftest.py` plus the two-assert
+test, not editing a committed tuple.
