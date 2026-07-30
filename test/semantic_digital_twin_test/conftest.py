@@ -22,9 +22,7 @@ from pathlib import Path
 # up as an ordinary diff to review instead of a failing test.
 regenerate_verbalization_results(
     semantic_digital_twin,
-    os.path.join(
-        os.path.dirname(__file__), "test_worlds", "verbalization_results.py"
-    ),
+    os.path.join(os.path.dirname(__file__), "test_worlds", "verbalization_results.py"),
 )
 
 

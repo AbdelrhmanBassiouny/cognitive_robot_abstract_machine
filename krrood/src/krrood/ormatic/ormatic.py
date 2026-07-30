@@ -298,8 +298,9 @@ class ORMatic:
         :param type_mappings: The type mappings that should be used.
         :param ignore_krrood_test_classes: Rather to ignore classes from the krrood test
             package.
-        :param ignored_base_classes: Base classes whose subclasses should all be ignored,
-            for hierarchies that describe behaviour rather than persisted state.
+        :param ignored_base_classes: Base classes whose subclasses should all be
+            ignored, for hierarchies that describe behaviour rather than persisted
+            state.
         :return: The ORMatic instance.
         """
         all_classes, all_alternative_mappings, all_type_mappings = set(), set(), {}

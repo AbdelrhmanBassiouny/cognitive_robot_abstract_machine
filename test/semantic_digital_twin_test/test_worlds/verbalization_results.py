@@ -56,59 +56,60 @@ results: Tuple[VerbalizationResult, ...] = (
     VerbalizationResult(Behind, "a Point3 is behind another Point3"),
     VerbalizationResult(Below, "a Point3 is below another Point3"),
     VerbalizationResult(
-        BodyInRegionFraction, "the body in region fraction of a Body and a Region"
+        BodyInRegionFraction, "the part of a Body that is inside a Region"
     ),
     VerbalizationResult(Contact, "a Body is in contact with another Body"),
     VerbalizationResult(
-        ContainsType, "an iterable contains an instance of an obj type"
+        ContainsType, "an iterable contains an instance of an object type"
     ),
     VerbalizationResult(
         EuclideanPlanarDistance,
-        "the euclidean planar distance of a Body, another Body, and a Vector3",
+        "the euclidean planar distance between a Body and another Body",
     ),
-    VerbalizationResult(GetVisibleBodies, "the visible bodies of a Camera"),
+    VerbalizationResult(GetVisibleBodies, "the bodies visible to a Camera"),
     VerbalizationResult(InFrontOf, "a Point3 is in front of another Point3"),
     VerbalizationResult(
         InsideOf, "a Body or a Region is inside of another Body or another Region"
     ),
     VerbalizationResult(
         IsPlaceOccupied,
-        "place occupied holds given a BoundingBox, a Pose, a World, and a Body",
+        "a place represented by a BoundingBox at a Pose is occupied by other bodies in a World",
     ),
-    VerbalizationResult(
-        IsSupportedBy, "a Body is supported by another Body a floating-point number"
-    ),
-    VerbalizationResult(
-        IsSupporting, "supporting holds given a Body and a floating-point number"
-    ),
+    VerbalizationResult(IsSupportedBy, "a Body is supported by another Body"),
+    VerbalizationResult(IsSupporting, "a Body is supporting a body"),
     VerbalizationResult(LeftOf, "a Point3 is left of another Point3"),
-    VerbalizationResult(OccludingBodies, "the occluding bodies of a Camera and a Body"),
     VerbalizationResult(
-        Reachable, "a HomogeneousTransformationMatrix is reachable by a Body"
+        OccludingBodies, "the bodies occluding a Body from the view of a Camera"
+    ),
+    VerbalizationResult(
+        Reachable,
+        "a HomogeneousTransformationMatrix is reachable for the kinematic chain rooted at a Body and ending at another Body",
     ),
     VerbalizationResult(RightOf, "a Point3 is right of another Point3"),
     VerbalizationResult(Stable, "a Body is stable"),
     VerbalizationResult(Visible, "a Body or a Region is visible from a Camera"),
+    VerbalizationResult(AnnotationVolume, "the volume of a SemanticAnnotation"),
     VerbalizationResult(
-        AnnotationVolume, "the annotation volume of a SemanticAnnotation"
+        ClassNameLowercased, "the lower case form of the name of a type"
     ),
-    VerbalizationResult(ClassNameLowercased, "the class name lowercased of a type"),
     VerbalizationResult(
         BlockingBodies,
-        "the blocking bodies of a HomogeneousTransformationMatrix, a Body, and another Body",
+        "the bodies blocking the path to reach a HomogeneousTransformationMatrix",
     ),
     VerbalizationResult(
-        BodiesInGripper, "the bodies in gripper of a HasTwoFingers and an Integer"
+        BodiesInGripper, "the bodies between the fingers of a HasTwoFingers"
     ),
     VerbalizationResult(
         BodyInGripperFraction,
-        "the body in gripper fraction of a Body, an EndEffector, and an Integer",
+        "the part of a Body that is between the fingers of an EndEffector",
     ),
-    VerbalizationResult(IsGripperHoldingSomething, "an EndEffector holds something"),
+    VerbalizationResult(
+        IsGripperHoldingSomething, "an EndEffector is holding something"
+    ),
     VerbalizationResult(IsPoseFreeForRobot, "a Pose is free for an AbstractRobot"),
     VerbalizationResult(
         RobotCollisions,
-        "the robot collisions of an AbstractRobot, an ignore collision with, and a floating-point number",
+        "the collision points between an AbstractRobot and the bodies of the world",
     ),
-    VerbalizationResult(RobotHoldsBody, "an AbstractRobot holds a Body"),
+    VerbalizationResult(RobotHoldsBody, "an AbstractRobot is holding a Body"),
 )

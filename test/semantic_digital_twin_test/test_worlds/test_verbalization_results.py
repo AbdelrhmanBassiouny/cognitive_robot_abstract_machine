@@ -24,9 +24,7 @@ def test_every_symbolic_callable_declares_its_own_verbalization_fragment():
     A callable relying on the inherited fragment is excluded from the generated results
     rather than rendered, so it must be reported here instead of passing unnoticed.
     """
-    snapshot = VerbalizationResultsOfPackage(
-        package=semantic_digital_twin, results=()
-    )
+    snapshot = VerbalizationResultsOfPackage(package=semantic_digital_twin, results=())
 
     without_own_fragment = sorted(
         module_and_class_name(symbolic_callable)

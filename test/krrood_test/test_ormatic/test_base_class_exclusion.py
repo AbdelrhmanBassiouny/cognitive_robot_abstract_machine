@@ -9,7 +9,6 @@ from krrood.ormatic.ormatic import ORMatic
 from ..dataset import semantic_world_like_classes
 from ..dataset.semantic_world_like_classes import ContainsType
 
-
 # %% subclass hierarchy exclusion
 
 

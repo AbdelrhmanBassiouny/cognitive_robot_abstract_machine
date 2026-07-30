@@ -17,15 +17,16 @@ from krrood.entity_query_language.predicate import (
     SymbolicFunction,
     symbolic_callable_to_function,
 )
-from krrood.entity_query_language.verbalization.fragments.base import WordFragment
-from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Conjunctions,
+    Prepositions,
+)
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
     clause,
     Copula,
     Noun,
-    Verb,
-    FunctionVerbalizationTemplates,
+    phrase,
 )
 from semantic_digital_twin.collision_checking.collision_detector import (
     ClosestPoints,
@@ -99,7 +100,17 @@ class RobotCollisions(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # "the collision points between <robot> and the bodies of the world" -- the ignored
+        # bodies and the buffer distance are inputs to the check, not part of the value.
+        return phrase(
+            Noun.the("collision points"),
+            Prepositions.BETWEEN,
+            Noun(fields["robot"]),
+            Conjunctions.AND,
+            Noun.the("bodies"),
+            Prepositions.OF,
+            Noun.the("world"),
+        )
 
 
 robot_in_collision = symbolic_callable_to_function(RobotCollisions)
@@ -122,10 +133,10 @@ class RobotHoldsBody(Predicate):
     """
 
     def __call__(self) -> bool:
-        g = variable(EndEffector, self.robot._world.semantic_annotations)
+        gripper = variable(EndEffector, self.robot._world.semantic_annotations)
         grippers = an(
-            entity(g).where(
-                g._robot == self.robot,
+            entity(gripper).where(
+                gripper._robot == self.robot,
             )
         )
 
@@ -138,9 +149,14 @@ class RobotHoldsBody(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        # "<robot> holds <body>" -- the name starts with the subject noun, so the name-based default
-        # would read it as a verb ("a robot robots holds body").
-        return clause(Noun(fields["robot"]), Verb("hold"), Noun(fields["body"]))
+        # "<robot> is holding <body>" -- the name starts with the subject noun, so the
+        # name-based default would read it as a verb ("a robot robots holds body").
+        return clause(
+            Noun(fields["robot"]),
+            Copula(),
+            Adjective("holding"),
+            Noun(fields["body"]),
+        )
 
 
 robot_holds_body = symbolic_callable_to_function(RobotHoldsBody)
@@ -178,17 +194,26 @@ class BlockingBodies(SymbolicFunction):
             for dof, state in result.items():
                 self.root._world.state[dof.id].position = state
 
-        r = variable(AbstractRobot, self.root._world.semantic_annotations)
+        robot_variable = variable(AbstractRobot, self.root._world.semantic_annotations)
         robot = the(
-            entity(r).where(
-                contains(r.bodies, self.tip),
+            entity(robot_variable).where(
+                contains(robot_variable.bodies, self.tip),
             )
         )
         return robot_in_collision(robot.first(), [])
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # "the bodies blocking the path to reach <pose>" -- the chain's root and tip are
+        # deliberately unspoken; they are query-able when they matter.
+        return phrase(
+            Noun.the("bodies"),
+            Adjective("blocking"),
+            Noun.the("path"),
+            Prepositions.TO,
+            Adjective("reach"),
+            Noun(fields["pose"]),
+        )
 
 
 blocking = symbolic_callable_to_function(BlockingBodies)
@@ -226,17 +251,25 @@ class BodiesInGripper(SymbolicFunction):
         finger_points = trimesh.sample.sample_surface(finger_mesh, self.sample_size)[0]
         thumb_points = trimesh.sample.sample_surface(thumb_mesh, self.sample_size)[0]
 
-        rt = gripper._world.ray_tracer
-        rt.update_scene()
+        ray_tracer = gripper._world.ray_tracer
+        ray_tracer.update_scene()
 
-        points, index_ray, bodies = rt.ray_test(finger_points, thumb_points)
+        points, index_ray, bodies = ray_tracer.ray_test(finger_points, thumb_points)
         return list(
             set(bodies) - set(gripper.finger.bodies) - set(gripper.thumb.bodies)
         )
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # "the bodies between the fingers of <gripper>" -- the ray sample size is an
+        # accuracy knob of the computation, not part of the value.
+        return phrase(
+            Noun.the("bodies"),
+            Prepositions.BETWEEN,
+            Noun.the("fingers"),
+            Prepositions.OF,
+            Noun(fields["gripper"]),
+        )
 
 
 bodies_in_gripper = symbolic_callable_to_function(BodiesInGripper)
@@ -268,11 +301,21 @@ class BodyInGripperFraction(SymbolicFunction):
 
     def __call__(self) -> float:
         bodies = bodies_in_gripper(self.gripper, self.sample_size)
-        return len([b for b in bodies if b == self.body]) / self.sample_size
+        return len([body for body in bodies if body == self.body]) / self.sample_size
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # "the part of <body> that is between the fingers of <gripper>".
+        return phrase(
+            Noun.the("part"),
+            Prepositions.OF,
+            Noun(fields["body"]),
+            Noun.bare("that is"),
+            Prepositions.BETWEEN,
+            Noun.the("fingers"),
+            Prepositions.OF,
+            Noun(fields["gripper"]),
+        )
 
 
 is_body_in_gripper = symbolic_callable_to_function(BodyInGripperFraction)
@@ -302,10 +345,13 @@ class IsGripperHoldingSomething(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        # "<gripper> holds something" -- the name does not read as a clause on its own. "something"
-        # is a bare word (no article).
+        # "<gripper> is holding something" -- the name does not read as a clause on its
+        # own, and "something" is a bare noun (no article).
         return clause(
-            Noun(fields["gripper"]), Verb("hold"), WordFragment(text="something")
+            Noun(fields["gripper"]),
+            Copula(),
+            Adjective("holding"),
+            Noun.bare("something"),
         )
 
 

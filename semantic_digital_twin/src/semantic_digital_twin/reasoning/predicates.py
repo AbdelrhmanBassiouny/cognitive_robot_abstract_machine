@@ -16,7 +16,10 @@ from krrood.entity_query_language.predicate import (
     symbolic_callable_to_function,
 )
 from krrood.entity_query_language.utils import camel_case_to_words
-from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Conjunctions,
+    Prepositions,
+)
 from krrood.entity_query_language.verbalization.fragments.base import WordFragment
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     Adjective,
@@ -25,6 +28,7 @@ from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech impor
     Noun,
     Verb,
     FunctionVerbalizationTemplates,
+    phrase,
     predicate_clause,
 )
 from krrood.inheritance_path_length import inheritance_path_length
@@ -46,7 +50,8 @@ from semantic_digital_twin.world_description.geometry import BoundingBox
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
-    KinematicStructureEntity, SemanticAnnotation,
+    KinematicStructureEntity,
+    SemanticAnnotation,
 )
 
 if TYPE_CHECKING:
@@ -104,8 +109,10 @@ class Contact(Predicate):
     """
 
     def __call__(self) -> bool:
-        tcd = self.body1._world.collision_manager.collision_detector
-        result = tcd.check_collision_between_bodies(self.body1, self.body2)
+        collision_detector = self.body1._world.collision_manager.collision_detector
+        result = collision_detector.check_collision_between_bodies(
+            self.body1, self.body2
+        )
 
         if result is None:
             return False
@@ -118,9 +125,7 @@ class Contact(Predicate):
             Noun(fields["body1"]),
             Copula(),
             Prepositions.IN,
-            WordFragment(
-                text="contact"
-            ),  # bare noun -- "in contact", not "in a contact"
+            Noun.bare("contact"),
             Prepositions.WITH,
             Noun(fields["body2"]),
         )
@@ -142,21 +147,21 @@ class GetVisibleBodies(SymbolicFunction):
 
     def __call__(self) -> List[KinematicStructureEntity]:
         camera = self.camera
-        rt = RayTracer(camera._world)
-        rt.update_scene()
+        ray_tracer = RayTracer(camera._world)
+        ray_tracer.update_scene()
 
         # This ignores the camera orientation and sets it to identity
-        cam_pose = np.eye(4, dtype=float)
-        cam_pose[:3, 3] = camera.root.global_transform.to_np()[:3, 3]
+        camera_pose = np.eye(4, dtype=float)
+        camera_pose[:3, 3] = camera.root.global_transform.to_np()[:3, 3]
 
-        seg = rt.create_segmentation_mask(
+        segmentation_mask = ray_tracer.create_segmentation_mask(
             HomogeneousTransformationMatrix(
-                cam_pose, reference_frame=camera._world.root
+                camera_pose, reference_frame=camera._world.root
             ),
             resolution=256,
             min_distance=0.2,
         )
-        indices = np.unique(seg)
+        indices = np.unique(segmentation_mask)
         indices = indices[indices > -1]
         bodies = [camera._world.kinematic_structure[i] for i in indices]
 
@@ -164,7 +169,14 @@ class GetVisibleBodies(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # "the bodies visible to <camera>" -- the value's noun is the bodies themselves,
+        # not the class name's "visible bodies".
+        return phrase(
+            Noun.the("bodies"),
+            Adjective("visible"),
+            Prepositions.TO,
+            Noun(fields["camera"]),
+        )
 
 
 get_visible_bodies = symbolic_callable_to_function(GetVisibleBodies)
@@ -279,7 +291,17 @@ class OccludingBodies(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # "the bodies occluding <body> from the view of <camera>" -- naming what is
+        # occluded and from where, which the possessive "of a Camera and a Body" left open.
+        return phrase(
+            Noun.the("bodies"),
+            Adjective("occluding"),
+            Noun(fields["body"]),
+            Prepositions.FROM,
+            Noun.the("view"),
+            Prepositions.OF,
+            Noun(fields["camera"]),
+        )
 
 
 occluding_bodies = symbolic_callable_to_function(OccludingBodies)
@@ -319,12 +341,20 @@ class Reachable(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        # "<pose> is reachable by <tip>" -- an adjective relation with the tip as the reacher.
+        # "<pose> is reachable for the kinematic chain rooted at <root> and ending at
+        # <tip>" -- the chain is what reaches, so both of its ends are named.
         return clause(
             Noun(fields["pose"]),
             Copula(),
             Adjective("reachable"),
-            Prepositions.BY,
+            Prepositions.FOR,
+            Noun.the("kinematic chain"),
+            Adjective("rooted"),
+            Prepositions.AT,
+            Noun(fields["root"]),
+            Conjunctions.AND,
+            Adjective("ending"),
+            Prepositions.AT,
             Noun(fields["tip"]),
         )
 
@@ -374,7 +404,14 @@ class EuclideanPlanarDistance(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # A distance holds "between" its endpoints, not "of" them; the ignored dimension
+        # qualifies the plane it is measured in rather than being a third endpoint.
+        return FunctionVerbalizationTemplates.custom_relation(
+            cls,
+            Prepositions.BETWEEN,
+            fields["body1"],
+            fields["body2"],
+        )
 
 
 compute_euclidean_planar_distance = symbolic_callable_to_function(
@@ -435,8 +472,11 @@ class IsSupportedBy(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        subject, *objects = fields.values()
-        return predicate_clause(cls, subject, *objects)
+        # max_intersection_height is an internal tolerance of the check, not part of the
+        # claim, so it is left unspoken.
+        return predicate_clause(
+            cls, fields["supported_body"], fields["supporting_body"]
+        )
 
 
 is_supported_by = symbolic_callable_to_function(IsSupportedBy)
@@ -474,8 +514,14 @@ class IsSupporting(Predicate):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        subject, *objects = fields.values()
-        return predicate_clause(cls, subject, *objects)
+        # "<supporting_body> is supporting another body" -- names what is supported, which
+        # the class name leaves implicit; the tolerance stays unspoken as in IsSupportedBy.
+        return clause(
+            Noun(fields["supporting_body"]),
+            Copula(),
+            Adjective("supporting"),
+            Noun("body"),
+        )
 
 
 is_supporting = symbolic_callable_to_function(IsSupporting)
@@ -524,7 +570,16 @@ class BodyInRegionFraction(SymbolicFunction):
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        return FunctionVerbalizationTemplates.possessive(cls, *fields.values())
+        # "the part of <body> that is inside <region>" -- read like the gripper fraction it
+        # mirrors, rather than as a possessive over the class name.
+        return phrase(
+            Noun.the("part"),
+            Prepositions.OF,
+            Noun(fields["body"]),
+            Noun.bare("that is"),
+            Prepositions.INSIDE,
+            Noun(fields["region"]),
+        )
 
 
 is_body_in_region = symbolic_callable_to_function(BodyInRegionFraction)
@@ -768,13 +823,13 @@ class ContainsType(Predicate):
     Iterable to check for objects of the given type.
     """
 
-    obj_type: Type
+    object_type: Type
     """
     Object type to check for.
     """
 
     def __call__(self) -> bool:
-        return any(isinstance(obj, self.obj_type) for obj in self.iterable)
+        return any(isinstance(item, self.object_type) for item in self.iterable)
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
@@ -783,7 +838,7 @@ class ContainsType(Predicate):
             Verb("contain"),
             Noun("instance"),
             Prepositions.OF,
-            Noun(fields["obj_type"]),
+            Noun(fields["object_type"]),
         )
 
 
@@ -828,8 +883,8 @@ class IsPlaceOccupied(Predicate):
         )
 
         # Prepare collision manager with the region mesh
-        cm = CollisionManager()
-        cm.add_object("region", region_mesh)
+        collision_manager = CollisionManager()
+        collision_manager.add_object("region", region_mesh)
 
         # Iterate over collidable bodies and test collision
         for body in self.world.bodies_with_collision:
@@ -845,15 +900,29 @@ class IsPlaceOccupied(Predicate):
             body_mesh.apply_transform(body.global_pose.to_np())
 
             # Early exit on first collision
-            if cm.in_collision_single(body_mesh):
+            if collision_manager.in_collision_single(body_mesh):
                 return True
 
         return False
 
     @classmethod
     def _verbalization_fragment_(cls, fields):
-        subject, *objects = fields.values()
-        return predicate_clause(cls, subject, *objects)
+        # "a place represented by <box> at <pose> is occupied by other bodies in <world>"
+        # -- the name-based clause named all four operands without saying how they relate.
+        return clause(
+            Noun("place"),
+            Adjective("represented"),
+            Prepositions.BY,
+            Noun(fields["box"]),
+            Prepositions.AT,
+            Noun(fields["pose"]),
+            Copula(),
+            Adjective("occupied"),
+            Prepositions.BY,
+            Noun.bare("other bodies"),
+            Prepositions.IN,
+            Noun(fields["world"]),
+        )
 
 
 is_place_occupied = symbolic_callable_to_function(IsPlaceOccupied)

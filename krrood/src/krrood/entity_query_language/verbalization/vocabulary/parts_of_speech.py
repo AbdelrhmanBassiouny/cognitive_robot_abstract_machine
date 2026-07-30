@@ -383,6 +383,39 @@ def clause(*constituents: ClauseConstituent) -> Clause:
     return Clause(parts=parts)
 
 
+def phrase(*constituents: ClauseConstituent) -> PhraseFragment:
+    """
+    Build a value noun phrase from typed part-of-speech constituents — the value
+    counterpart of :func:`clause`.
+
+    A value whose noun is a phrase of its own, rather than a reading of its class name,
+    states that phrase here: ``phrase(Noun.the("bodies"), Adjective("visible"),
+    Prepositions.TO, Noun(camera))``. The result is a plain :class:`PhraseFragment`, not a
+    :class:`Clause`, so nothing in it is read as a grammatical subject.
+
+    ..note:: Reach for :class:`FunctionVerbalizationTemplates` first — a value whose noun
+        *is* its class name has a template there, and naming the same reading twice is how
+        wordings drift apart.
+
+    :param constituents: The phrase's elements in surface order.
+    :return: The value noun phrase.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text,
+    ... )
+    >>> from krrood.entity_query_language.verbalization.rendering.realization import (
+    ...     realize_tree,
+    ... )
+    >>> flatten_fragment_to_plain_text(realize_tree(
+    ...     phrase(Noun.the("volume"), Prepositions.OF, Noun.the("body"))
+    ... ))
+    'the volume of the body'
+    """
+    return PhraseFragment(
+        parts=[constituent.as_fragment() for constituent in constituents]
+    )
+
+
 def function_as_noun(name: str, getter_prefix: str = "get") -> str:
     """:return: a value (non-boolean) symbolic function class's name as noun words, dropping a leading
     imperative *getter_prefix* so ``GetQuarter`` reads as *"quarter"*; a plain-noun name is unchanged.
