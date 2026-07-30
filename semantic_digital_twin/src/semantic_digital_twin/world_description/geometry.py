@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -350,6 +351,17 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
 
     @property
     @abstractmethod
+    def volume(self) -> float:
+        """
+        :return: The volume this shape encloses.
+
+        ..note:: A primitive states the volume of the shape itself rather than of the
+            mesh standing in for it, since a mesh only approximates a curved surface
+            with a polygonal one and would report less than the shape holds.
+        """
+
+    @property
+    @abstractmethod
     def local_frame_bounding_box(self) -> BoundingBox:
         """
         Returns the bounding box of the shape.
@@ -430,6 +442,14 @@ class Mesh(Shape):
     """
     Filename of the mesh.
     """
+
+    @property
+    def volume(self) -> float:
+        """
+        :return: The volume the mesh's surface encloses, which is meaningful only for a
+            watertight mesh.
+        """
+        return self.mesh.volume
 
     @property
     def local_frame_bounding_box(self) -> BoundingBox:
@@ -830,6 +850,10 @@ class Sphere(Shape):
     """
 
     @property
+    def volume(self) -> float:
+        return 4.0 / 3.0 * math.pi * self.radius**3
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the sphere.
@@ -877,12 +901,23 @@ class Cylinder(Shape):
     height: float = 0.5
 
     @property
+    def radius(self) -> float:
+        """
+        :return: Radius of the circle the cylinder's width spans.
+        """
+        return self.width / 2.0
+
+    @property
+    def volume(self) -> float:
+        return math.pi * self.radius**2 * self.height
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the cylinder.
         """
         mesh = trimesh.creation.cylinder(
-            radius=self.width / 2, height=self.height, sections=16
+            radius=self.radius, height=self.height, sections=16
         )
         mesh.visual.vertex_colors = trimesh.visual.color.to_rgba(self.color.to_rgba())
         return mesh
@@ -930,6 +965,10 @@ class Box(Shape):
     """
 
     scale: Scale = field(default_factory=Scale)
+
+    @property
+    def volume(self) -> float:
+        return self.scale.x * self.scale.y * self.scale.z
 
     @property
     def mesh(self) -> trimesh.Trimesh:

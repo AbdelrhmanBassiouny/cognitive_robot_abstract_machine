@@ -1,13 +1,22 @@
+import math
 import os
 from importlib.resources import files
 from pathlib import Path
 
 import numpy as np
+import pytest
 import trimesh
 
 from krrood.adapters.json_serializer import from_json, to_json
 
-from semantic_digital_twin.world_description.geometry import Box, Mesh, Scale, Texture
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Cylinder,
+    Mesh,
+    Scale,
+    Sphere,
+    Texture,
+)
 
 
 def test_shape():
@@ -93,3 +102,33 @@ def test_textured_primitive_survives_serialization():
 
     assert restored.texture == box.texture
     assert restored == box
+
+
+# %% the volume a shape encloses
+
+
+def test_box_volume():
+    assert Box(scale=Scale(0.5, 2.0, 3.0)).volume == pytest.approx(3.0)
+
+
+def test_sphere_volume():
+    assert Sphere(radius=2.0).volume == pytest.approx(4.0 / 3.0 * math.pi * 8.0)
+
+
+def test_cylinder_volume():
+    """
+    A cylinder's volume follows from the circle its width spans, not from the polygon
+    its mesh approximates that circle with.
+    """
+    cylinder = Cylinder(width=2.0, height=3.0)
+
+    assert cylinder.volume == pytest.approx(math.pi * 3.0)
+    assert cylinder.volume > cylinder.mesh.volume
+
+
+def test_mesh_volume(tmp_path):
+    source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
+
+    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
+
+    assert mesh.volume == pytest.approx(8.0)

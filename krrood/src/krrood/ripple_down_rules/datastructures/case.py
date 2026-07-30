@@ -25,12 +25,8 @@ from krrood.ripple_down_rules.utils import (
     row_to_dict,
     table_rows_as_str,
     get_value_type_from_type_hint,
-    SubclassJSONSerializer,
-    get_full_class_name,
-    get_type_from_string,
     make_list,
     is_iterable,
-    serialize_dataclass,
     dataclass_to_dict,
     copy_case,
 )
@@ -40,13 +36,11 @@ if TYPE_CHECKING:
     from .callable_expression import CallableExpression
 
 
-class Case(UserDict, SubclassJSONSerializer):
+class Case(UserDict):
     """
-    A collection of attributes that represents a set of attributes of a case.
-
-    This is a dictionary where the keys are the names of the attributes and the values
-    are the attributes. All are stored in lower case, and can be accessed using the dot
-    notation as well as the dictionary access notation.
+    A collection of attributes that represents a set of attributes of a case. This is a dictionary where the keys are
+    the names of the attributes and the values are the attributes. All are stored in lower case, and can be accessed
+    using the dot notation as well as the dictionary access notation.
     """
 
     def __init__(
@@ -79,8 +73,7 @@ class Case(UserDict, SubclassJSONSerializer):
         Create a case from an object.
 
         :param obj: The object to create a case from.
-        :param max_recursion_idx: The maximum recursion index to prevent infinite
-            recursion.
+        :param max_recursion_idx: The maximum recursion index to prevent infinite recursion.
         :param obj_name: The name of the object.
         :return: The case that represents the object.
         """
@@ -115,45 +108,11 @@ class Case(UserDict, SubclassJSONSerializer):
     def __hash__(self):
         return self._id
 
-    def _to_json(self) -> Dict[str, Any]:
-        serializable = {k: v for k, v in self.items() if not k.startswith("_")}
-        serializable["_id"] = self._id
-        serializable["_obj_type"] = (
-            get_full_class_name(self._obj_type) if self._obj_type is not None else None
-        )
-        serializable["_name"] = self._name
-        for k, v in serializable.items():
-            if isinstance(v, set):
-                serializable[k] = {
-                    "_type": get_full_class_name(set),
-                    "value": serialize_dataclass(list(v)),
-                }
-            else:
-                serializable[k] = serialize_dataclass(v)
-        return {
-            k: v.to_json() if isinstance(v, SubclassJSONSerializer) else v
-            for k, v in serializable.items()
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any]) -> Case:
-        id_ = data.pop("_id")
-        obj_type = (
-            get_type_from_string(data.pop("_obj_type"))
-            if data["_obj_type"] is not None
-            else None
-        )
-        name = data.pop("_name")
-        for k, v in data.items():
-            data[k] = SubclassJSONSerializer.from_json(v)
-        return cls(_obj_type=obj_type, _id=id_, _name=name, **data)
-
     def __deepcopy__(self, memo: Dict[Hashable, Any]) -> Case:
         """
         Create a deep copy of the case.
 
-        :param memo: A dictionary to keep track of objects that have already been
-            copied.
+        :param memo: A dictionary to keep track of objects that have already been copied.
         :return: A deep copy of the case.
         """
         new_case = Case(
@@ -184,7 +143,7 @@ class Case(UserDict, SubclassJSONSerializer):
 
 
 @dataclass
-class CaseAttributeValue(SubclassJSONSerializer):
+class CaseAttributeValue:
     """
     Encapsulates a single value of a case attribute, it adds an id to the value.
     """
@@ -193,7 +152,6 @@ class CaseAttributeValue(SubclassJSONSerializer):
     """
     The row id of the column value.
     """
-
     value: Any
     """
     The value of the column.
@@ -207,25 +165,15 @@ class CaseAttributeValue(SubclassJSONSerializer):
     def __hash__(self):
         return self.id
 
-    def _to_json(self) -> Dict[str, Any]:
-        return {"id": self.id, "value": self.value}
 
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any]) -> CaseAttributeValue:
-        return cls(id=data["id"], value=data["value"])
-
-
-class CaseAttribute(list, SubclassJSONSerializer):
+class CaseAttribute(list):
     nullable: bool = True
     """
     A boolean indicating whether the case attribute can be None or not.
     """
-
     mutually_exclusive: bool = False
     """
-    A boolean indicating whether the case attribute is mutually exclusive or not.
-
-    (i.e. can only have one value)
+    A boolean indicating whether the case attribute is mutually exclusive or not. (i.e. can only have one value)
     """
 
     @classmethod
@@ -263,16 +211,6 @@ class CaseAttribute(list, SubclassJSONSerializer):
             return "None"
         return str([v for v in self]) if len(self) > 1 else str(next(iter(self)))
 
-    def _to_json(self) -> Dict[str, Any]:
-        return {
-            str(i): v.to_json() if isinstance(v, SubclassJSONSerializer) else v
-            for i, v in enumerate(self)
-        }
-
-    @classmethod
-    def _from_json(cls, data: Dict[str, Any]) -> CaseAttribute:
-        return cls([SubclassJSONSerializer.from_json(v) for _, v in data.items()])
-
 
 def create_cases_from_dataframe(
     df: DataFrame, name: Optional[str] = None
@@ -306,8 +244,7 @@ def create_case(
     :param recursion_idx: The current recursion index.
     :param max_recursion_idx: The maximum recursion index to prevent infinite recursion.
     :param obj_name: The name of the object.
-    :param parent_is_iterable: Boolean indicating whether the parent object is iterable
-        or not.
+    :param parent_is_iterable: Boolean indicating whether the parent object is iterable or not.
     :return: The case that represents the object.
     """
     obj_name = obj_name or obj.__class__.__name__
@@ -382,8 +319,7 @@ def create_or_update_case_from_attribute(
     :param obj_name: The parent object name.
     :param recursion_idx: The recursion index to prevent infinite recursion.
     :param max_recursion_idx: The maximum recursion index.
-    :param parent_is_iterable: Boolean indicating whether the parent object is iterable
-        or not.
+    :param parent_is_iterable: Boolean indicating whether the parent object is iterable or not.
     :param case: The case to update.
     :return: The updated/created case.
     """
@@ -464,8 +400,7 @@ def show_current_and_corner_cases(
     last_evaluated_rule: Optional[Rule] = None,
 ) -> str:
     """
-    Get the the data to show of the new case and if last evaluated rule exists also show
-    that of the corner case.
+    Get the the data to show of the new case and if last evaluated rule exists also show that of the corner case.
 
     :param case: The new case.
     :param targets: The target attribute of the case.
