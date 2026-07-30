@@ -105,6 +105,7 @@ items:
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
     title: "PR 2: /setup-stacked-prs guided one-command setup skill"
+    pull_request_number: 110
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
     status: in_progress
@@ -124,6 +125,16 @@ items:
       stack-board step is guidance only (the parameterized board.yml stays PR 4's, per
       the roadmap), and "prerequisite-check.md" in these notes means this skill gets its
       own, consumed by ROUTINE.md's SETUP step 0, not a second copy of #101's.
+      Implemented as draft PR #110 (2026-07-30) on claude/setup-personal-notes-script:
+      check-stack-setup.sh, setup-stacked-prs.sh, write-branch-files.sh (which
+      write-personal-notes-file.sh now delegates to), the skill and its
+      prerequisite-check.md, a board-free `stack.py config` command, and 334 tests
+      passing (was 320), all network- and credential-free. Two gaps found and fixed on
+      the way: cram2-link-sent was set and cleared by ROUTINE.md but had no key in
+      stack.toml, so setup could not create it; and board.json was documented as
+      never-committed scratch with nothing gitignoring it. Live label creation stays
+      unverified for the same reason as #107 - a fine-grained installation token, so the
+      label POST is exercised only through a stub.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
@@ -164,12 +175,11 @@ items:
       environment-variable step — not a split reserving the GitHub calls for a session.
 
   - id: shared-pr-state-chips
-    branch: claude/shared-pr-state-chips
+    branch: null
     title: "PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards"
     track: dashboards
     depends_on: [stack-tooling-on-main]
-    status: in_progress
-    session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr
+    status: not_started
     notes: >
       Extract one PR-state fetch/compute module (CI rollup, LOC vs base, mergeable probe,
       session-link parse) shared by stack.py and plan-dashboard's pr-data fetching; add
@@ -179,11 +189,6 @@ items:
       Python package (top-level directory importable from the repo root with no install,
       plus a pyproject for optional installation) and puts pr_state in it as its first
       module — the shared import home is what forces the package into existence here.
-      Kicked off 2026-07-30 (branch based on claude/stack-tooling-on-main, a sibling of
-      #107 on #106 — needs only #106's files, so decision 10's linearization doesn't
-      apply). Two calls settled at kickoff: the package is named development_tooling
-      (abbreviation-free per AGENTS.md), and the headless site build also pushes
-      merged-to-done manifest auto-corrections, same as the live refresh path.
 
   - id: dev-tooling-python-package
     branch: null
