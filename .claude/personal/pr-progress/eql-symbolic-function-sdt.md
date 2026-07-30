@@ -10,7 +10,7 @@ P1/P2/P3 (#86/#87/#88) all merged to `main`.
 2. Rebuild the sdt snapshot on the generated-results pattern. **done**
 3. Apply the review's wording decisions. **done**
 4. Regenerate, format, run the suites. **done** (with one caveat, below)
-5. Reply to and resolve the 36 review threads; refresh the PR description. **in progress**
+5. Reply to and resolve the 36 review threads; refresh the PR description. **done**
 
 ## Done (3 commits, pushed)
 
@@ -66,8 +66,30 @@ needing ROS packages absent locally — same before and after.
 - `VerbalizationResultsOfPackage`'s class docstring still says "the three
   ``assert_*`` methods"; there are two.
 
+## Review close-out (done)
+
+All 36 threads replied to; **34 resolved**, 2 left open on purpose — the
+type-name-vs-field-name thread (`r3608352891`, with three options put to the user)
+and the `Pose` type-hint thread (`r3608385653`, asking whether to widen the IK
+chain). A third reply asks a smaller question without blocking:
+`ClassNameLowercased` renders *"the lower case form of the name of a type"* rather
+than the reviewer's literal *"…of a class name"*, to keep the operand in the
+sentence — left unresolved so they can pick.
+
+Also fixed while replying: `AllClose` still had five raw `WordFragment`s, which is
+exactly what three of the threads flagged. Now `Noun.bare("each element")` +
+`Noun.the("matching element")`, same rendering (commit `3e5e6621`).
+
+#33 description rewritten (before/after table for every wording, the two framework
+additions, the two open decisions, the un-regenerated ORM interface). Still draft.
+Subscribed to PR activity. `plan.yaml` moved `blocked` → `in_progress` with the two
+real blockers; dashboard republished.
+
 ## Next
 
-- Reply to and resolve the review threads (resolve only where genuinely done;
-  reply-without-resolving on the two open questions above).
-- Refresh #33's description, keep it draft, set `plan.yaml` status.
+- Wait on the two review decisions. Nothing else in P4 is actionable without them.
+- CI: 16/20 green at the time of writing, 4 still running (`semantic_digital_twin`,
+  `coraplex`, `giskardpy`, coraplex notebooks), no failures. Reacting to webhook
+  events; per these notes, no timed check-in is armed.
+- When the type-noun decision lands: if it is "type-level display noun", that is a
+  new krrood item (`value_lexicon.type_noun`), not more work on this branch.
