@@ -110,6 +110,27 @@ items:
       concrete action (e.g. NavigateAction) its own fragment instead of relying on the
       generic "given that"/"such that" rendering, including operand field-name aliasing.
 
+  - id: rdr-validation-verbalization
+    title: "Verbalize RDR answer-validation feedback via performative assertion acts"
+    branch: null
+    pull_request_number: null
+    track: performatives
+    depends_on: [performatives-core]
+    status: not_started
+    notes: >
+      Surfaced during the rdr-refactor plan's d-core-expert item (PR #98) review: the
+      Expert policy's conclusion/conditions validators (ConclusionDomain.hint(),
+      AnswerName.CONDITIONS.example_assignment, and the DataclassException hierarchy in
+      rdr/exceptions.py) currently build their hints/error text from hardcoded string
+      templates. An EQL variable already carries its declared type, so the same
+      information (and the "must be one of X" / "cannot be Y" / suggest-a-value shapes)
+      could instead be produced by this plan's Inform/Warn assertion acts once
+      performatives-core lands, rather than duplicated as ad hoc f-strings on the RDR
+      side. Scope still open: whether this becomes a new act, an extension of
+      Inform/Warn, and how it composes with rdr's own suggest_correction() convention -
+      revisit at kickoff. See PR #98's review threads (conclusion_domain.py L136,
+      exceptions.py, expert.py) for the originating discussion.
+
   - id: giskardpy-acts
     title: "Giskardpy performative acts (Achieve / Monitor)"
     branch: null

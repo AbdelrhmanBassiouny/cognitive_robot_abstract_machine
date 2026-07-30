@@ -117,6 +117,18 @@ rather than left in PR descriptions where they would be rediscovered by accident
   the `PerformativeNode` bridge.
 - **Phase E** — migrating the demo onto coraplex's combinators, the end-to-end proof
   that one tree both executes and verbalizes.
+- **RDR answer-validation verbalization** — surfaced 2026-07-30 on `rdr-refactor`'s
+  `d-core-expert` item (PR #98) review, not deferred out of this plan's own PRs. The
+  RDR Expert policy's conclusion/conditions validators currently build their
+  hints/error text (`ConclusionDomain.hint()`, `AnswerName.CONDITIONS.example_assignment`,
+  the `rdr/exceptions.py` `DataclassException` hierarchy) from hardcoded string
+  templates, even though an EQL variable already carries its declared type. The
+  reviewer's idea: once `performatives-core` lands the Inform/Warn assertion acts,
+  the same "must be one of X" / "cannot be Y" / suggest-a-value shapes could be
+  produced by this plan's verbalization instead of duplicated ad hoc on the RDR side.
+  Not designed yet — whether it's a new act, an Inform/Warn extension, and how it
+  composes with `suggest_correction()`'s existing convention is open, to be resolved
+  when this item (`rdr-validation-verbalization`) is kicked off.
 
 ## Testing conventions for this stack
 
