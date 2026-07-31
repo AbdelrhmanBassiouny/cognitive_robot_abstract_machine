@@ -625,3 +625,17 @@ push-merge/reparent path for real — the "Rebase stack" button or gh stack sync
 until #106's trim commit lands. Also noted: fork-side stack writes from a session worked this
 round (create/unstack on the fork repo); the earlier same-call denials were permission-layer
 variance, so treat session-side stack surgery as possible but not guaranteed.
+
+## Update 2026-07-31 (routine patch): update_trigger is unavailable for this Routine — manual paste only
+
+The approved interim amendment (Phase 1 native-stack special case) was drafted and its application
+attempted via `update_trigger`, which the platform refused: the live Routine was created via the
+web UI ("http_api"), and agents may only update Routines they created themselves (an agent-created
+trigger would be updatable; this one is not). This corrects the 2026-07-30 kickoff finding that
+"the cutover is executable from a session" — for this trigger it is not; **manual paste at
+claude.ai/code/routines is the mechanism for both the interim amendment and any future prompt
+cutover**. The amendment text (appended to the otherwise-unchanged 17.5k-char live prompt) was
+handed to the user as a file; its content is: detect stack membership via the `stack` object under
+API version 2026-03-10; never classic-merge/MCP-merge a stack member; Phase 1 reparent for stacked
+children = record stack composition → dissolve (`unstack`, no body) → PATCH bases → normal local
+restack → re-create stack; stop-and-report on any unexpected API behavior.
