@@ -23,6 +23,10 @@ file itself must never be merged into `main`.
 - Always subscribe to all events on every PR you open - including plain
   conversation comments, not just inline review comments - and handle each
   event with an explanation summary in the session chat.
+- Unsubscribe once the only remaining CI failures are already-diagnosed,
+  known-flaky tests entirely outside the files this session's changes touch.
+  Don't stay subscribed just to keep re-diagnosing the same unrelated flake
+  every time CI reruns and it fails again.
 
 ## Scheduled checks
 
