@@ -95,27 +95,14 @@ class ConclusionDomain:
         """
         Validate a conclusion answer against this domain.
 
-        Checks layer in order: an *unset* answer (the ``UNSET`` sentinel) is acceptable only
-        when ``allow_unset`` (a current conclusion already stands and is not known to be
-        wrong); ``None`` only when this domain admits it; an enumerable domain requires
-        membership; otherwise the value must be an instance of the expected type(s). An
-        unresolved domain (no expected types) accepts any non-``None`` value.
+        A convenience entry point for checking a value without building a
+        :class:`ConclusionValidator`; the actual policy lives there.
 
         :param value: The conclusion answer to validate.
         :param allow_unset: Whether leaving the conclusion unset is acceptable.
         :return: The exception describing why ``value`` is unacceptable, or ``None``.
         """
-        if value is UNSET:
-            return None if allow_unset else ConclusionRequired(domain=self)
-        if value is None:
-            return None if self.allows_none else ConclusionMayNotBeNone(domain=self)
-        if not self.expected_types:
-            return None
-        if isinstance(value, self.expected_types):
-            return None
-        if self.is_enumerable:
-            return ConclusionNotInDomain(domain=self, value=value)
-        return ConclusionWrongType(domain=self, value=value)
+        return self.validator(allow_unset).validate(value)
 
     def validator(self, allow_unset: bool) -> ConclusionValidator:
         """
@@ -157,8 +144,30 @@ class ConclusionValidator(AnswerValidator):
     Whether leaving the conclusion unset is acceptable.
     """
 
-    def __call__(self, value: Any) -> Optional[DataclassException]:
-        return self.domain.validate(value, self.allow_unset)
+    def validate(self, value: Any) -> Optional[DataclassException]:
+        """
+        Checks layer in order: an *unset* answer (the ``UNSET`` sentinel) is acceptable
+        only when :attr:`allow_unset` (a current conclusion already stands and is not
+        known to be wrong); ``None`` only when the domain admits it; an enumerable
+        domain requires membership; otherwise the value must be an instance of the
+        expected type(s). An unresolved domain (no expected types) accepts any
+        non-``None`` value.
+
+        :param value: The conclusion answer to validate.
+        :return: The exception describing why ``value`` is unacceptable, or ``None``.
+        """
+        domain = self.domain
+        if value is UNSET:
+            return None if self.allow_unset else ConclusionRequired(domain=domain)
+        if value is None:
+            return None if domain.allows_none else ConclusionMayNotBeNone(domain=domain)
+        if not domain.expected_types:
+            return None
+        if isinstance(value, domain.expected_types):
+            return None
+        if domain.is_enumerable:
+            return ConclusionNotInDomain(domain=domain, value=value)
+        return ConclusionWrongType(domain=domain, value=value)
 
 
 def resolve_conclusion_domain(

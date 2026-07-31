@@ -32,7 +32,7 @@ class _AlwaysValid(AnswerValidator):
     validation itself.
     """
 
-    def __call__(self, value):
+    def validate(self, value):
         return None
 
 

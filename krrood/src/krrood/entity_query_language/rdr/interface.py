@@ -120,10 +120,19 @@ class AnswerValidator(ABC):
 
     A first-class replacement for a bare ``Callable[[Any], Optional[DataclassException]]``
     so an :attr:`AnswerRequest.validate` is a checkable concept, not any function.
+    Concrete subclasses implement :meth:`validate`; :meth:`__call__` forwards to it so a
+    validator is still usable as a plain callable.
     """
 
-    @abstractmethod
     def __call__(self, value: Any) -> Optional[DataclassException]:
+        """
+        :param value: The candidate answer value.
+        :return: The exception describing why ``value`` is unacceptable, or ``None``.
+        """
+        return self.validate(value)
+
+    @abstractmethod
+    def validate(self, value: Any) -> Optional[DataclassException]:
         """
         :param value: The candidate answer value.
         :return: The exception describing why ``value`` is unacceptable, or ``None``.

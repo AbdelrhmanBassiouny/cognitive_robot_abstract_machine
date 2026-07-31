@@ -46,7 +46,7 @@ class ConditionsValidator(AnswerValidator):
     variable.
     """
 
-    def __call__(self, value: Any) -> Optional[DataclassException]:
+    def validate(self, value: Any) -> Optional[DataclassException]:
         if isinstance(value, SymbolicExpression):
             return None
         if value is None:
