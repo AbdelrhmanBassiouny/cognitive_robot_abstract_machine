@@ -10,8 +10,8 @@ const path = require('path');
 
 const WEB = path.join(__dirname, '..', '..', '..', 'cram_viz', 'src', 'cram_viz', 'web');
 
-// ---- stubs -----------------------------------------------------------------
-class DataSet {
+// %% stubs of the vis-network interfaces the renderer drives
+class ItemStore {
   constructor(items) {
     this.items = {};
     this.auto = 0;
@@ -30,13 +30,14 @@ class DataSet {
 
 let lastOptions = null;
 let lastData = null;
-let lastNetwork = null;
+let lastRenderer = null;
 
-class Network {
+class RecordingRenderer {
   constructor(container, data, options) {
     lastData = data;
     lastOptions = options;
-    lastNetwork = this;
+    lastRenderer = this;
+    this.container = container;
     this.handlers = {};
   }
   once(event, cb) { (this.handlers[event] = this.handlers[event] || []).push(cb); }
@@ -54,16 +55,21 @@ class Network {
   redraw() {}
 }
 
-function loadGraphJs() {
-  const el = { appendChild() {}, innerHTML: '' };
+function evaluateGraphJs() {
   global.document = {
-    getElementById() { return el; },
     createElement() { return { className: '', innerHTML: '' }; },
   };
   global.window = {};
-  global.vis = { DataSet, Network };
+  global.vis = { DataSet: ItemStore, Network: RecordingRenderer };
   new Function(fs.readFileSync(path.join(WEB, 'panels/graph/graph.js'), 'utf8'))();
   return global.window.Graph;
+}
+
+// the renderer must receive its elements from the panel, never look them up itself
+function loadGraphJs() {
+  const graph = evaluateGraphJs();
+  graph.attach({ appendChild() {}, innerHTML: '' }, { appendChild() {}, innerHTML: '' });
+  return graph;
 }
 
 function planFixture(Graph) {
@@ -89,7 +95,15 @@ function planFixture(Graph) {
 
 const node = (id) => lastData.nodes.get(id);
 
-// ---- status rings ------------------------------------------------------------
+// %% the panel owns the DOM
+test('building before attach is refused', function () {
+  const Graph = evaluateGraphJs();
+  assert.throws(function () {
+    Graph.build({ nodes: [], edges: [] });
+  }, /attach/);
+});
+
+// %% status rings
 test('status renders as a coloured ring + status word', function () {
   const Graph = loadGraphJs();
   planFixture(Graph);
@@ -109,7 +123,7 @@ test('group fill survives the status ring patch', function () {
   assert.strictEqual(node('p1').color.background, '#b98cff');        // event group fill
 });
 
-// ---- live patching -------------------------------------------------------------
+// %% live patching
 test('setStatuses re-colours in place and rebuilds labels from the base', function () {
   const Graph = loadGraphJs();
   planFixture(Graph);
@@ -124,7 +138,7 @@ test('setStatuses reports unknown ids so the caller rebuilds', function () {
   assert.strictEqual(Graph.setStatuses({ ghost: 'RUNNING' }), false);
 });
 
-// ---- layouts --------------------------------------------------------------------
+// %% layouts
 test('trees are hierarchical with physics off; entity graphs keep the force layout', function () {
   const Graph = loadGraphJs();
   planFixture(Graph);
@@ -148,23 +162,23 @@ test('status views scale nodes, labels and spacing up so rings stay readable', f
   assert.ok(statusFont > lastOptions.groups.event.font.size);
 });
 
-// ---- zoom floor -------------------------------------------------------------------
+// %% zoom floor
 test('a big status graph is never fitted below the zoom floor', function () {
   const Graph = loadGraphJs();
   planFixture(Graph);                       // stub getScale() reports 0.3 after fit
-  lastNetwork.fire('afterDrawing');
-  assert.ok(lastNetwork.fitted > 0);
-  assert.ok(lastNetwork.moved && lastNetwork.moved.scale >= 0.7);
+  lastRenderer.fire('afterDrawing');
+  assert.ok(lastRenderer.fitted > 0);
+  assert.strictEqual(lastRenderer.moved.scale, 0.75);
 });
 
 test('plain entity graphs fit freely (no zoom floor)', function () {
   const Graph = loadGraphJs();
   Graph.build({ key: 'knowledge', nodes: [{ id: 'k', label: 'k', group: 'robot' }], edges: [] });
-  lastNetwork.fire('stabilizationIterationsDone');
-  assert.strictEqual(lastNetwork.moved, undefined);
+  lastRenderer.fire('stabilizationIterationsDone');
+  assert.strictEqual(lastRenderer.moved, undefined);
 });
 
-// ---- statechart transitions ---------------------------------------------------------
+// %% statechart transitions
 test('statechart transition kinds get distinct edge styles', function () {
   const Graph = loadGraphJs();
   Graph.build({

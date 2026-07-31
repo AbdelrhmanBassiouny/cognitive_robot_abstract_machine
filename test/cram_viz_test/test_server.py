@@ -40,7 +40,7 @@ class TestStatic:
     def test_index_is_served(self, server):
         status, body = get(server + "/")
         assert status == 200
-        assert b"CRAM Vizulation" in body
+        assert b"CRAM Visualization" in body
         assert b'data-slot="left"' in body
 
     def test_panel_scripts_are_served(self, server):

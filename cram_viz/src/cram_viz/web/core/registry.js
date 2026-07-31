@@ -57,6 +57,18 @@
         layout[slotName].forEach(function (id) { mountInto(slotEl, id); });
       });
     },
+    // tear every mounted panel down, so its timers and observers stop
+    unmountAll: function () {
+      mounted.forEach(function (entry) {
+        if (typeof entry.instance.destroy !== 'function') return;
+        try {
+          entry.instance.destroy();
+        } catch (err) {
+          console.error('[panels] destroying "' + entry.id + '" failed:', err);
+        }
+      });
+      mounted.length = 0;
+    },
     // introspection (used by tests and the console)
     defined: function () { return Object.keys(factories); },
     mounted: function () { return mounted.map(function (m) { return m.id; }); },

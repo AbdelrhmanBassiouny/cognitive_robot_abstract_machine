@@ -10,6 +10,7 @@ const path = require('path');
 
 const WEB = path.join(__dirname, '..', '..', '..', 'cram_viz', 'src', 'cram_viz', 'web');
 
+// %% a minimal DOM the registry can mount panels into
 function freshDom() {
   const slots = {};
   function makeEl(tag) {
@@ -101,6 +102,41 @@ test('an unknown configured panel is reported, not fatal', function () {
   console.error = err;
   assert.deepStrictEqual(window.Panels.mounted(), ['real']);
   assert.ok(errors.some(function (m) { return m.indexOf('ghost') >= 0; }));
+});
+
+test('unmounting tears every panel down so its timers stop', function () {
+  freshDom();
+  load('core/bus.js');
+  load('core/registry.js');
+  const destroyed = [];
+  window.Panels.define('a', function () {
+    return { destroy: function () { destroyed.push('a'); } };
+  });
+  window.Panels.define('b', function () { /* no cleanup needed */ });
+  window.CRAM_VIZ_CONFIG = { layout: { left: ['a', 'b'] } };
+  window.Panels.boot();
+  window.Panels.unmountAll();
+  assert.deepStrictEqual(destroyed, ['a']);
+  assert.deepStrictEqual(window.Panels.mounted(), []);
+});
+
+test('a panel whose destroy throws does not block the others', function () {
+  freshDom();
+  load('core/bus.js');
+  load('core/registry.js');
+  const destroyed = [];
+  window.Panels.define('broken', function () {
+    return { destroy: function () { throw new Error('nope'); } };
+  });
+  window.Panels.define('fine', function () {
+    return { destroy: function () { destroyed.push('fine'); } };
+  });
+  window.CRAM_VIZ_CONFIG = { layout: { left: ['broken', 'fine'] } };
+  window.Panels.boot();
+  const err = console.error; console.error = function () {};
+  window.Panels.unmountAll();
+  console.error = err;
+  assert.deepStrictEqual(destroyed, ['fine']);
 });
 
 test('a panel that throws while mounting shows an error, others still mount', function () {

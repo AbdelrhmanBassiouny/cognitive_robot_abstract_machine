@@ -28,7 +28,7 @@ from pathlib import Path
 
 from typing_extensions import Any, Dict
 
-from cram_viz.live.bridge import BRIDGE
+from cram_viz.live.bridge import BRIDGE, MalformedMoveRequest, MoveRequest
 
 logger = logging.getLogger(__name__)
 
@@ -40,12 +40,12 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     Serves the bridge's snapshots and accepts viewer moves.
     """
 
-    def _send_json(self, payload: Dict[str, Any]) -> None:
+    def _send_json(self, payload: Dict[str, Any], code: int = 200) -> None:
         """
         Send a JSON payload with the CORS headers the viewer needs.
         """
         body = json.dumps(payload).encode()
-        self.send_response(200)
+        self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -64,22 +64,11 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/chart"):
             return self._send_json(BRIDGE.get_chart())
         if self.path.startswith("/objects"):
-            with BRIDGE._lock:
-                return self._send_json({"objects": list(BRIDGE.object_meta)})
+            return self._send_json({"objects": BRIDGE.object_catalog()})
         if self.path.startswith("/mesh"):
             return self._send_mesh()
         if self.path.startswith("/info"):
-            return self._send_json(
-                {
-                    "running": BRIDGE.world is not None,
-                    "robot": type(BRIDGE.robot).__name__ if BRIDGE.robot else None,
-                    "objects": [key for key in BRIDGE._bodies if key != "__base__"],
-                    "movable": True,
-                    "plan": bool(BRIDGE.plan_state.get("nodes")),
-                    "chart": bool(BRIDGE.chart_state.get("nodes")),
-                    "seq": BRIDGE.seq,
-                }
-            )
+            return self._send_json(BRIDGE.status())
         self.send_response(404)
         self.end_headers()
 
@@ -89,7 +78,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         """
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         key = (query.get("key") or [""])[0]
-        path = BRIDGE._mesh_serve.get(key)
+        path = BRIDGE.mesh_path(key)
         if not path or not Path(path).is_file():
             self.send_response(404)
             self.end_headers()
@@ -106,6 +95,9 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         """
         Queue an object move requested by the viewer.
+
+        The payload is validated here so that malformed input is rejected on the HTTP
+        thread, rather than raising later inside the simulation tick.
         """
         if not self.path.startswith("/move"):
             self.send_response(404)
@@ -113,10 +105,18 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return
         length = int(self.headers.get("Content-Length") or 0)
         try:
-            request = json.loads(self.rfile.read(length) or b"{}")
+            payload = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError as error:
-            return self._send_json({"ok": False, "error": str(error)})
-        BRIDGE.queue_move(request)
+            return self._send_json({"ok": False, "error": str(error)}, code=400)
+        if not isinstance(payload, dict):
+            return self._send_json(
+                {"ok": False, "error": "body must be a JSON object"}, code=400
+            )
+        try:
+            move = MoveRequest.from_payload(payload)
+        except MalformedMoveRequest as error:
+            return self._send_json({"ok": False, "error": str(error)}, code=400)
+        BRIDGE.queue_move(move)
         return self._send_json({"ok": True})
 
     def do_OPTIONS(self) -> None:

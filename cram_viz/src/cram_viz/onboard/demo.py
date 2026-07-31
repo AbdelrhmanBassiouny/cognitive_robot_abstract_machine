@@ -1,10 +1,10 @@
-#!/usr/bin/env python3
 """
-onboard_demo.py — turn a coraplex demo into a self-contained web-viewer scene.
+Turn a coraplex demo into a self-contained web-viewer scene.
 
-Runs the demo file UNMODIFIED under instrumentation and emits a scene bundle:
+Runs the demo file *unmodified* under instrumentation and emits a scene bundle
+into :func:`cram_viz.paths.scenes_dir`::
 
-    static/scenes/<name>/
+    <scenes dir>/<name>/
         scene.json         models, robot parts, objects, segments, targets
         trajectory.json    per-tick joints + robot base + object world poses
         <model>.urdf       package:// resolved & rewritten
@@ -17,18 +17,15 @@ What the hooks capture while the demo runs:
   - one segment per executed plan ActionNode, with nesting depth
   - the robot's semantic annotation: base body, arms, end-effector link sets
 
-Usage (interpreter needs the CRAM stack, e.g. the action-cram venv):
-    ~/.virtualenvs/action-cram/bin/python tools/onboard_demo.py \
-        ~/actions_cram/cognitive_robot_abstract_machine/coraplex/demos/coraplex_bullet_world_demo/demo.py \
-        --name pr2_kitchen
+Usage (the interpreter needs the CRAM stack on it)::
 
-By default `import rclpy` is blocked so demos skip their ROS visualization
-branch; pass --allow-ros to keep it.
+    cram-viz-onboard path/to/demo.py --name pr2_kitchen
 """
 
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import logging
 import math
@@ -37,10 +34,25 @@ import runpy
 import shutil
 import sys
 import time
-from typing_extensions import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
+from pathlib import Path
+
+from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from typing_extensions import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    runtime_checkable,
+    Sequence,
+    TYPE_CHECKING,
+)
 
 from cram_viz import paths
+from cram_viz.body_geometry import BodyExtent
+from cram_viz.live.bridge import ROBOT_BASE_KEY
 from cram_viz.onboard.bundle_urdf import bundle_urdf
+from cram_viz.palette import ObjectPalette
 
 if TYPE_CHECKING:
     from coraplex.plans.executables import Executable
@@ -49,213 +61,373 @@ if TYPE_CHECKING:
     from semantic_digital_twin.adapters.urdf import URDFParser
     from semantic_digital_twin.world_description.world_entity import Body
 
-T0 = time.time()
-
-
 logger = logging.getLogger(__name__)
+
+#: when this process started, so progress lines can show elapsed recording time
+_STARTED_AT = time.time()
+
+#: decimal places poses and joint positions are rounded to in the bundle
+POSE_PRECISION = 5
+
+#: how many recorded frames pass between progress lines
+FRAME_LOG_INTERVAL = 2000
+
+#: upper bound on the plan nodes written into a bundle
+MAX_SERIALIZED_PLAN_NODES = 400
+
+#: frame rate assumed when the controller does not report its timestep
+FALLBACK_FRAMES_PER_SECOND = 50.0
+
+#: the slowest playback the viewer is given, however hard the recording is downsampled
+MINIMUM_FRAMES_PER_SECOND = 10
+
+#: how far below the lowest recorded place pose the place marker is drawn, in metres
+PLACE_TARGET_DROP = 0.02
+
+#: half-extent of the draggable place area around the recorded place poses, in metres
+PLACE_BOUNDS_MARGIN = 0.55
+
+#: extra room in front of the place area, so a target can be dragged towards the robot
+PLACE_BOUNDS_FRONT_MARGIN = 0.65
+
+#: how far beyond the objects' spawn poses they may be dragged, in metres
+DRAG_BOUNDS_MARGIN_X = 0.35
+DRAG_BOUNDS_MARGIN_Y = 0.6
+
+#: how many of a model's links are probed to find its prefix in the composed world
+PREFIX_PROBE_LINKS = 12
+
+#: frame count a bundle is downsampled towards when no explicit step is given
+TARGET_BUNDLE_FRAMES = 1500
+
+#: how many unresolved assets the summary lists before truncating
+MISSING_ASSETS_LOGGED = 10
+
+
+@runtime_checkable
+class NamesAWorldEntity(Protocol):
+    """
+    Anything carrying a world-entity name, such as a body a designator refers to.
+    """
+
+    name: Any
+
+
+@runtime_checkable
+class DescribesAnAction(Protocol):
+    """
+    A plan node carrying the designator that describes what it does.
+    """
+
+    designator: Any
+
+
+@runtime_checkable
+class ReportsAStatus(Protocol):
+    """
+    A plan node carrying its own execution status.
+    """
+
+    status: Any
+
+
+@runtime_checkable
+class HasChildren(Protocol):
+    """
+    A plan node with a child list to descend into.
+    """
+
+    children: Any
+
+
+@runtime_checkable
+class HasAParent(Protocol):
+    """
+    A plan node that can be walked upwards to its tree's root.
+    """
+
+    parent: Any
+
+
+@runtime_checkable
+class HasBodies(Protocol):
+    """
+    A robot part exposing the bodies it is made of.
+    """
+
+    bodies: Any
+
+
+@runtime_checkable
+class HasAnEndEffector(Protocol):
+    """
+    A manipulator carrying an end effector, which not every arm annotation does.
+    """
+
+    end_effector: Any
 
 
 def log(*parts: object) -> None:
     """
-    Progress line with the elapsed recording time.
+    Emit a progress line prefixed with the elapsed recording time.
     """
-    logger.info("[%6.1fs] %s", time.time() - T0, " ".join(str(part) for part in parts))
+    logger.info(
+        "[%6.1fs] %s",
+        time.time() - _STARTED_AT,
+        " ".join(str(part) for part in parts),
+    )
 
 
-# %% recorder --------------------------------------------------------------------
+# %% recorder
 class Recorder:
-    """Records one demo run: assets, per-tick motion and the executed plan.
+    """
+    Records one demo run: assets, per-tick motion and the executed plan.
 
     .. note:: The CRAM-stack imports inside the ``install_*`` hook methods are
-       intentionally local: the onboarder stubs out ``rclpy`` *before* the demo
-       (and therefore giskardpy) is imported, so importing them at module level
-       would defeat the ROS block. This is one of the documented exceptions to
-       the imports-at-top rule.
+       intentionally local. A hook must patch the class *before* the demo
+       imports it, and this module is imported by the ``cram-viz-onboard``
+       console script, which has to stay importable without the CRAM stack
+       installed. This is one of the documented exceptions to the
+       imports-at-top rule.
     """
 
-    def __init__(self):
-        self.resolutions = {}  # uri -> resolved path
-        self.urdf_sources = []  # URDF/xacro files the world was built from
-        self.stl_sources = []  # loose object mesh files
-        self.frames = []  # [{conn_name: position}]
-        self.base_frames = []  # [[x,y,z,qx,qy,qz,qw]]
-        self.obj_frames = []  # [{obj_name: pose7}]
-        self.actions = []  # {action, depth, start, end}
-        self.plan_nodes = []  # the actual ActionNode objects (plan tree)
-        self._stack = []
-        self.world = None
-        self.robot = None
-        self._conns = None
-        self._bodies = None  # {obj_name: body}, incl. '__base__'
-        self.control_dt = None
+    def __init__(self) -> None:
+        self.resolutions: Dict[str, str] = {}
+        """
+        ``package://`` URI to the path it resolved to while the demo ran.
+        """
 
-    # ---- asset hooks ---------------------------------------------------------
+        self.urdf_sources: List[str] = []
+        """
+        URDF/xacro files the world was built from, in load order.
+        """
+
+        self.mesh_sources: List[str] = []
+        """
+        Mesh files of the loose objects, in load order.
+        """
+
+        self.frames: List[Dict[str, float]] = []
+        """
+        Per-tick joint positions, keyed by prefixed connection name.
+        """
+
+        self.base_frames: List[Optional[List[float]]] = []
+        """
+        Per-tick robot base pose as ``[x, y, z, qx, qy, qz, qw]``.
+        """
+
+        self.object_frames: List[Dict[str, List[float]]] = []
+        """
+        Per-tick world pose of every tracked object, keyed by mesh basename.
+        """
+
+        self.actions: List[Dict[str, Any]] = []
+        """
+        One entry per parsed action: its class, arm and target object.
+        """
+
+        self.plan_nodes: List[Any] = []
+        """
+        The plan nodes the demo parsed, used to serialize the executed plan tree.
+        """
+
+        self.world: Optional[Any] = None
+        """
+        The executing world, captured on the first tick.
+        """
+
+        self.robot: Optional[Any] = None
+        """
+        The robot annotation of :attr:`world`.
+        """
+
+        self.control_dt: Optional[float] = None
+        """
+        The controller's timestep, from which the recording's frame rate follows.
+        """
+
+        self._connections: Optional[List[Any]] = None
+        """
+        Connections whose position is recorded; None until the first tick binds.
+        """
+
+        self._bodies: Optional[Dict[str, Any]] = None
+        """
+        Recorded bodies by mesh basename, plus :data:`ROBOT_BASE_KEY`.
+        """
+
+    # %% asset hooks
     def install_asset_hooks(self) -> None:
-        """Record every asset resolution so the bundler can copy the files."""
+        """
+        Record every asset resolution so the bundler can copy the files.
+        """
         from semantic_digital_twin.adapters.mesh import STLParser
         from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
         from semantic_digital_twin.adapters.urdf import URDFParser
 
-        rec = self
+        recorder = self
 
-        orig_resolve = PackageUriResolver.resolve
+        original_resolve = PackageUriResolver.resolve
 
-        def resolve(self, uri: str) -> str:
+        def resolve(self: PackageUriResolver, uri: str) -> str:
             """
             Resolve as usual, but remember the uri -> path mapping.
             """
-            p = orig_resolve(self, uri)
-            rec.resolutions[uri] = p
-            return p
+            resolved = original_resolve(self, uri)
+            recorder.resolutions[uri] = resolved
+            return resolved
 
         PackageUriResolver.resolve = resolve
 
-        orig_from_file = URDFParser.from_file.__func__
+        original_from_file = URDFParser.from_file.__func__
 
-        def from_file(cls, file_path: str, **kw: Any) -> URDFParser:
+        def from_file(cls: Any, file_path: str, **kwargs: Any) -> URDFParser:
             """
             Parse as usual, but remember this URDF/xacro source file.
             """
-            if file_path not in rec.urdf_sources:
-                rec.urdf_sources.append(file_path)
-            return orig_from_file(cls, file_path, **kw)
+            if file_path not in recorder.urdf_sources:
+                recorder.urdf_sources.append(file_path)
+            return original_from_file(cls, file_path, **kwargs)
 
         URDFParser.from_file = classmethod(from_file)
 
-        orig_stl = STLParser.__init__
+        original_init = STLParser.__init__
 
-        def stl_init(self, file_path: str, *a: Any, **kw: Any) -> None:
+        def initialize(
+            self: STLParser, file_path: str, *args: Any, **kwargs: Any
+        ) -> None:
             """
-            Init as usual, but remember this loose object's mesh file.
+            Initialize as usual, but remember this loose object's mesh file.
             """
-            if file_path not in rec.stl_sources:
-                rec.stl_sources.append(file_path)
-            return orig_stl(self, file_path, *a, **kw)
+            if file_path not in recorder.mesh_sources:
+                recorder.mesh_sources.append(file_path)
+            return original_init(self, file_path, *args, **kwargs)
 
-        STLParser.__init__ = stl_init
+        STLParser.__init__ = initialize
 
-    # ---- trajectory hook -----------------------------------------------------
+    # %% trajectory hook
     def install_tick_hook(self) -> None:
         """
         Wrap Executor.tick so every simulation step is snapshotted.
         """
         from giskardpy.executor import Executor
 
-        rec = self
-        orig_tick = Executor.tick
+        recorder = self
+        original_tick = Executor.tick
 
-        def tick(self, *a: Any, **kw: Any) -> None:
+        def tick(self: Executor, *args: Any, **kwargs: Any) -> None:
             """
             Run the real tick, then record its resulting world state.
             """
-            r = orig_tick(self, *a, **kw)
-            rec._snap(self)
-            return r
+            result = original_tick(self, *args, **kwargs)
+            recorder.record_frame(self)
+            return result
 
         Executor.tick = tick
 
-    def _lazy_bind(self, executor: Executor) -> None:
+    def bind_to_executor(self, executor: Executor) -> None:
         """
-        Bind to the executor's world and locate the robot + recordable objects
-        the first time a tick fires (the world doesn't exist any earlier).
+        Locate the world, robot and recordable objects of a running executor.
+
+        Deferred until the first tick, because the world does not exist any earlier.
         """
-        self.world = executor.context.world
-        try:
-            self.control_dt = executor.context.qp_controller_config.control_dt
-        except Exception:
-            pass
         from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
+        self.world = executor.context.world
+        self.control_dt = executor.context.qp_controller_config.control_dt
         robots = self.world.get_semantic_annotations_by_type(AbstractRobot)
         self.robot = robots[0] if robots else None
         self._bodies = {}
         if self.robot is not None:
-            self._bodies["__base__"] = self.robot.root
-        for f in self.stl_sources:
-            name = os.path.basename(f)
-            try:
-                self._bodies[name] = self.world.get_body_by_name(name)
-            except Exception:
-                pass
-        self._conns = []
-        for c in getattr(self.world, "connections", None) or []:
-            if hasattr(c, "position"):
-                try:
-                    float(c.position)
-                    self._conns.append(c)
-                except Exception:
-                    pass
+            self._bodies[ROBOT_BASE_KEY] = self.robot.root
+        for mesh_source in self.mesh_sources:
+            name = os.path.basename(mesh_source)
+            body = self.world.get_body_by_name(name)
+            if body is not None:
+                self._bodies[name] = body
+        self._connections = [
+            connection
+            for connection in self.world.connections or []
+            if isinstance(connection, ActiveConnection1DOF)
+        ]
         log(
             "bound: robot=%s, %d movable connections, objects=%s"
             % (
                 type(self.robot).__name__ if self.robot else None,
-                len(self._conns),
-                [k for k in self._bodies if k != "__base__"],
+                len(self._connections),
+                [key for key in self._bodies if key != ROBOT_BASE_KEY],
             )
         )
 
     @staticmethod
-    def _pose7(body: Body) -> List[float]:
+    def _pose_as_position_quaternion(body: Body) -> List[float]:
         """
-        A body's world pose as [x, y, z, qx, qy, qz, qw].
+        A body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
         """
-        p = body.global_pose
-        t = p.to_position().to_np().flatten()
-        q = p.to_quaternion().to_np().flatten()
-        return [round(float(v), 5) for v in (t[0], t[1], t[2], q[0], q[1], q[2], q[3])]
+        pose = body.global_pose
+        translation = pose.to_position().to_np().flatten()
+        quaternion = pose.to_quaternion().to_np().flatten()
+        return [
+            round(float(value), POSE_PRECISION)
+            for value in (*translation[:3], *quaternion[:4])
+        ]
 
-    def _snap(self, executor: Executor) -> None:
+    def record_frame(self, executor: Executor) -> None:
         """
-        Append one frame: every movable connection's position, the robot base
-        pose and every tracked object's pose.
+        Append one frame: every movable connection's position, the robot base pose
+        and every tracked object's pose.
         """
-        if self._conns is None:
-            self._lazy_bind(executor)
-        fr = {}
-        for c in self._conns:
-            try:
-                fr[str(getattr(c, "name", ""))] = round(float(c.position), 5)
-            except Exception:
-                pass
-        self.frames.append(fr)
+        if self._connections is None:
+            self.bind_to_executor(executor)
+        self.frames.append(
+            {
+                str(connection.name): round(float(connection.position), POSE_PRECISION)
+                for connection in self._connections
+            }
+        )
         self.base_frames.append(
-            self._pose7(self._bodies["__base__"])
-            if "__base__" in self._bodies
+            self._pose_as_position_quaternion(self._bodies[ROBOT_BASE_KEY])
+            if ROBOT_BASE_KEY in self._bodies
             else None
         )
-        of = {}
-        for n, b in self._bodies.items():
-            if n == "__base__":
-                continue
-            try:
-                of[n] = self._pose7(b)
-            except Exception:
-                pass
-        self.obj_frames.append(of)
-        if len(self.frames) % 2000 == 0:
+        self.object_frames.append(
+            {
+                name: self._pose_as_position_quaternion(body)
+                for name, body in self._bodies.items()
+                if name != ROBOT_BASE_KEY
+            }
+        )
+        if len(self.frames) % FRAME_LOG_INTERVAL == 0:
             log("... %d frames" % len(self.frames))
 
-    # ---- action metadata hook ----------------------------------------------------
+    # %% action metadata hook
     # Plans compile all actions into merged motion statecharts, so there is no
-    # per-action call boundary at execution time. ActionNode.parse DOES fire
-    # once per action (in plan order) — we record the action class, its arm and
-    # its target object there, and later derive the segment TIMING from the
-    # recorded data (object attach/detach + first base motion).
-    def _target_of(self, desig: Any) -> Optional[str]:
+    # per-action call boundary at execution time. ``ActionNode.parse`` does fire
+    # once per action (in plan order) — the action class, its arm and its target
+    # object are recorded there, and the segment *timing* is derived afterwards
+    # from the recorded data (object attach/detach + first base motion).
+    def _target_of(self, designator: Any) -> Optional[str]:
         """
-        The recorded object a designator refers to, by matching any of its
-        attributes' names against the demo's known mesh basenames.
+        The recorded object a designator refers to, matched by mesh basename.
         """
-        basenames = {os.path.basename(f) for f in self.stl_sources}
-        for v in vars(desig).values():
-            try:
-                nm = str(getattr(v, "name"))
-            except Exception:
+        basenames = {os.path.basename(path) for path in self.mesh_sources}
+        for value in vars(designator).values():
+            if not isinstance(value, NamesAWorldEntity):
                 continue
-            base = nm.split("/")[-1]
-            if base in basenames:
-                return base
+            basename = str(value.name).split("/")[-1]
+            if basename in basenames:
+                return basename
         return None
+
+    @staticmethod
+    def _arm_of(designator: Any) -> Optional[str]:
+        """
+        The arm a designator names, whether it calls the field ``arm`` or ``arms``.
+        """
+        fields = vars(designator)
+        arm = fields.get("arm") or fields.get("arms")
+        return str(arm) if arm is not None else None
 
     def install_segment_hook(self) -> None:
         """
@@ -264,127 +436,181 @@ class Recorder:
         """
         from coraplex.plans.plan_node import ActionNode
 
-        rec = self
-        orig_parse = ActionNode.parse
+        recorder = self
+        original_parse = ActionNode.parse
 
-        def parse(node: ActionNode, *a: Any, **kw: Any) -> Executable:
+        def parse(node: ActionNode, *args: Any, **kwargs: Any) -> Executable:
             """
             Record this action's designator before letting it parse normally.
             """
-            d = node.designator
-            arm = getattr(d, "arm", None) or getattr(d, "arms", None)
-            rec.actions.append(
+            designator = node.designator
+            recorder.actions.append(
                 {
-                    "action": type(d).__name__,
-                    "arm": str(arm) if arm is not None else None,
-                    "target": rec._target_of(d),
+                    "action": type(designator).__name__,
+                    "arm": recorder._arm_of(designator),
+                    "target": recorder._target_of(designator),
                 }
             )
-            rec.plan_nodes.append(node)
+            recorder.plan_nodes.append(node)
             log(
                 "action parsed:",
-                rec.actions[-1]["action"],
+                recorder.actions[-1]["action"],
                 "->",
-                rec.actions[-1]["target"] or "-",
+                recorder.actions[-1]["target"] or "-",
             )
-            return orig_parse(node, *a, **kw)
+            return original_parse(node, *args, **kwargs)
 
         ActionNode.parse = parse
 
-    # ---- the executed plan tree, serialized from the real PlanNode graph ------
-    def serialize_plans(self, max_nodes: int = 400) -> List[Dict[str, Any]]:
+    # %% the executed plan tree, serialized from the real PlanNode graph
+    def serialize_plans(
+        self, max_nodes: int = MAX_SERIALIZED_PLAN_NODES
+    ) -> List[Dict[str, Any]]:
         """
-        The executed plan tree(s) (deduped by root), as nested dicts capped at
-        max_nodes total.
-        """
-        roots, seen = [], set()
-        for n in self.plan_nodes:
-            r = n
-            while getattr(r, "parent", None) is not None:
-                r = r.parent
-            if id(r) not in seen:
-                seen.add(id(r))
-                roots.append(r)
-        count = [0]
+        The executed plan trees, deduplicated by root, as nested dicts.
 
-        def ser(n: Any) -> Optional[Dict[str, Any]]:
+        :param max_nodes: Upper bound on the total node count across all trees; the
+            recording stops descending once it is reached.
+        """
+        roots: List[Any] = []
+        seen_roots = set()
+        for node in self.plan_nodes:
+            root = node
+            while isinstance(root, HasAParent) and root.parent is not None:
+                root = root.parent
+            if id(root) not in seen_roots:
+                seen_roots.add(id(root))
+                roots.append(root)
+        serialized_count = itertools.count()
+
+        def serialize(node: Any) -> Optional[Dict[str, Any]]:
             """
-            One PlanNode and its children as a dict, or None past max_nodes.
+            One plan node and its children as a dict, or None past ``max_nodes``.
             """
-            if count[0] >= max_nodes:
+            if next(serialized_count) >= max_nodes:
                 return None
-            count[0] += 1
-            d = getattr(n, "designator", None)
-            status = getattr(n, "status", None)
+            designator = (
+                node.designator if isinstance(node, DescribesAnAction) else None
+            )
+            status = node.status if isinstance(node, ReportsAStatus) else None
             entry = {
-                "kind": type(n).__name__,
-                "label": type(d).__name__ if d is not None else type(n).__name__,
-                "status": getattr(status, "name", str(status) if status else ""),
+                "kind": type(node).__name__,
+                "label": (
+                    type(designator).__name__
+                    if designator is not None
+                    else type(node).__name__
+                ),
+                "status": status.name if status is not None else "",
             }
-            if d is not None:
-                tgt = self._target_of(d)
-                if tgt:
-                    entry["target"] = tgt
-                arm = getattr(d, "arm", None) or getattr(d, "arms", None)
+            if designator is not None:
+                target = self._target_of(designator)
+                if target:
+                    entry["target"] = target
+                arm = self._arm_of(designator)
                 if arm is not None:
-                    entry["arm"] = str(arm)
-            kids = [ser(c) for c in getattr(n, "children", ()) or ()]
-            entry["children"] = [k for k in kids if k]
+                    entry["arm"] = arm
+            children = node.children if isinstance(node, HasChildren) else ()
+            entry["children"] = [
+                child
+                for child in (serialize(child) for child in children or ())
+                if child
+            ]
             return entry
 
-        return [t for t in (ser(r) for r in roots) if t]
+        return [tree for tree in (serialize(root) for root in roots) if tree]
 
 
-# ============================================================ post-process ===
-def moved(a: Sequence[float], b: Sequence[float], eps: float = 0.02) -> bool:
+# %% post-processing the recording
+#: how far a pose must travel to count as moved at all, in metres
+MOVEMENT_TOLERANCE = 0.02
+
+#: how far an object must travel over the whole run to count as transported, in metres
+TRANSPORT_TOLERANCE = 0.03
+
+#: how far the robot base must travel to count as having driven off, in metres
+BASE_MOTION_TOLERANCE = 0.05
+
+
+def moved(
+    first: Sequence[float],
+    second: Sequence[float],
+    eps: float = MOVEMENT_TOLERANCE,
+) -> bool:
     """
-    Whether pose b is more than eps away from pose a (planar distance + |dz|).
+    Whether two poses are more than ``eps`` apart (planar distance plus height).
+
+    :param eps: Tolerance in metres, so sensor jitter does not read as movement.
     """
-    return math.hypot(a[0] - b[0], a[1] - b[1]) + abs(a[2] - b[2]) > eps
+    return (
+        math.hypot(first[0] - second[0], first[1] - second[1])
+        + abs(first[2] - second[2])
+        > eps
+    )
 
 
 def object_windows(rec: Recorder) -> List[Dict[str, Any]]:
     """
-    attach..detach window (raw frames) per object that travelled overall.
+    The attach..detach frame window of every object that travelled overall.
+
+    An object whose first and last pose differ was transported; the window spans from
+    the first frame that differs from where it started to just past the last frame
+    that differs from where it ended up.
     """
-    O = rec.obj_frames
-    n = len(O)
-    wins = []
-    for name in O[0]:
-        p0, pe = O[0].get(name), O[n - 1].get(name)
-        if not p0 or not pe or not moved(p0, pe, 0.03):
+    object_frames = rec.object_frames
+    frame_count = len(object_frames)
+    windows = []
+    for name in object_frames[0]:
+        spawn = object_frames[0].get(name)
+        final = object_frames[frame_count - 1].get(name)
+        if not spawn or not final or not moved(spawn, final, TRANSPORT_TOLERANCE):
             continue
         attach = next(
-            (i for i in range(n) if name in O[i] and moved(O[i][name], p0)), n - 1
+            (
+                index
+                for index in range(frame_count)
+                if name in object_frames[index]
+                and moved(object_frames[index][name], spawn)
+            ),
+            frame_count - 1,
         )
         detach = (
             next(
                 (
-                    i
-                    for i in range(n - 1, -1, -1)
-                    if name in O[i] and moved(O[i][name], pe)
+                    index
+                    for index in range(frame_count - 1, -1, -1)
+                    if name in object_frames[index]
+                    and moved(object_frames[index][name], final)
                 ),
                 0,
             )
             + 1
         )
         if attach < detach:
-            wins.append(
-                {"object": name, "attach": attach, "detach": detach, "place": pe[:3]}
+            windows.append(
+                {
+                    "object": name,
+                    "attach": attach,
+                    "detach": detach,
+                    "place": final[:3],
+                }
             )
-    wins.sort(key=lambda w: w["attach"])
-    return wins
+    windows.sort(key=lambda window: window["attach"])
+    return windows
 
 
 def first_base_motion(rec: Recorder, before: int) -> int:
     """
-    First raw frame (< before) at which the robot base left its spawn.
+    The first frame before ``before`` at which the robot base left its spawn.
+
+    :return: That frame's index, or ``before`` if the base never moved.
     """
-    b0 = rec.base_frames[0]
-    for i in range(min(before, len(rec.base_frames))):
-        b = rec.base_frames[i]
-        if b and b0 and math.hypot(b[0] - b0[0], b[1] - b0[1]) > 0.05:
-            return i
+    spawn = rec.base_frames[0]
+    for index in range(min(before, len(rec.base_frames))):
+        pose = rec.base_frames[index]
+        if not pose or not spawn:
+            continue
+        if math.hypot(pose[0] - spawn[0], pose[1] - spawn[1]) > BASE_MOTION_TOLERANCE:
+            return index
     return before
 
 
@@ -458,18 +684,17 @@ def derive_segments(rec: Recorder) -> List[Dict[str, Any]]:
     return segments
 
 
-PALETTE = ["#f3f0ea", "#cf5b3a", "#b8bcc4", "#e7c26a", "#7fb069", "#5b8cff"]
-
-
 def link_set(part: Any) -> List[str]:
     """
     A robot part's link names, stripped of their model-name prefix.
     """
-    out = []
-    for b in getattr(part, "bodies", None) or []:
-        n = str(getattr(b, "name", b))
-        out.append(n.split("/", 1)[1] if "/" in n else n)
-    return out
+    if not isinstance(part, HasBodies):
+        return []
+    link_names = []
+    for body in part.bodies or []:
+        name = str(body.name) if isinstance(body, NamesAWorldEntity) else str(body)
+        link_names.append(name.split("/", 1)[1] if "/" in name else name)
+    return link_names
 
 
 def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, Any]:
@@ -477,141 +702,166 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
     Downsample the recording to every step-th frame (always keeping the last)
     and assemble scene.json + trajectory.json from it.
     """
-    n = len(rec.frames)
-    idx = list(range(0, n, step))
-    if idx and idx[-1] != n - 1:
-        idx.append(n - 1)
-    remap = {}
-    for k, orig in enumerate(idx):
-        remap[orig] = k
+    frame_count = len(rec.frames)
+    kept_indices = list(range(0, frame_count, step))
+    if kept_indices and kept_indices[-1] != frame_count - 1:
+        kept_indices.append(frame_count - 1)
+    downsampled_index = {raw_index: kept for kept, raw_index in enumerate(kept_indices)}
 
-    def nearest(i: int) -> int:
+    def nearest(raw_index: int) -> int:
         """
-        The downsampled index closest to raw frame i.
+        The downsampled index closest to a raw frame index.
         """
-        return remap.get(i, remap[min(remap, key=lambda o: abs(o - i))])
+        return downsampled_index.get(
+            raw_index,
+            downsampled_index[
+                min(downsampled_index, key=lambda kept: abs(kept - raw_index))
+            ],
+        )
 
-    frames = [rec.frames[i] for i in idx]
-    base = [rec.base_frames[i] for i in idx]
-    objs = [rec.obj_frames[i] for i in idx]
+    n = frame_count
+    idx = kept_indices
+    frames = [rec.frames[index] for index in kept_indices]
+    base = [rec.base_frames[index] for index in kept_indices]
+    objs = [rec.object_frames[index] for index in kept_indices]
 
-    raw_fps = 1.0 / rec.control_dt if rec.control_dt else 50.0
-    fps = max(10, round(raw_fps / step))
+    raw_frames_per_second = (
+        1.0 / rec.control_dt if rec.control_dt else FALLBACK_FRAMES_PER_SECOND
+    )
+    fps = max(MINIMUM_FRAMES_PER_SECOND, round(raw_frames_per_second / step))
 
-    # ---- robot description ----------------------------------------------------
+    # %% robot description
     robot = rec.robot
     root_name = str(robot.root.name)
     prefix = root_name.split("/", 1)[0] if "/" in root_name else ""
     base_body = root_name.split("/", 1)[1] if "/" in root_name else root_name
     parts = {}
-    try:
-        for arm in robot.get_arms():
-            arm_links = link_set(arm)
-            ee = getattr(arm, "end_effector", None)
-            ee_links = link_set(ee) if ee is not None else []
-            key = type(arm).__name__
-            parts[key] = sorted(set(arm_links) - set(ee_links))
-            if ee is not None:
-                parts[type(ee).__name__] = sorted(set(ee_links))
-    except Exception as ex:
-        log("arm introspection failed:", ex)
+    for arm in robot.get_arms():
+        arm_links = link_set(arm)
+        end_effector = arm.end_effector if isinstance(arm, HasAnEndEffector) else None
+        end_effector_links = link_set(end_effector) if end_effector is not None else []
+        parts[type(arm).__name__] = sorted(set(arm_links) - set(end_effector_links))
+        if end_effector is not None:
+            parts[type(end_effector).__name__] = sorted(set(end_effector_links))
 
-    # ---- segments: data-derived windows, labelled from the parsed actions -----
+    # %% segments: data-derived windows, labelled from the parsed actions
     segments = []
-    for s in derive_segments(rec):
-        e = dict(s)
-        e["start"] = nearest(s["start"])
-        e["end"] = nearest(s["end"])
-        if "attach" in e:
-            e["attach"] = nearest(s["attach"])
-            e["detach"] = nearest(s["detach"])
-        segments.append(e)
-    seen = {}
-    for s in segments:
-        seen[s["step"]] = seen.get(s["step"], 0) + 1
-        if seen[s["step"]] > 1:
-            s["step"] = "%s_%d" % (s["step"], seen[s["step"]])
+    for raw_segment in derive_segments(rec):
+        segment = dict(raw_segment)
+        segment["start"] = nearest(raw_segment["start"])
+        segment["end"] = nearest(raw_segment["end"])
+        if "attach" in segment:
+            segment["attach"] = nearest(raw_segment["attach"])
+            segment["detach"] = nearest(raw_segment["detach"])
+        segments.append(segment)
+    # a scene with two transports of the same object would otherwise name both steps
+    # identically, and the viewer keys its playback captions on the step name
+    step_counts: Dict[str, int] = {}
+    for segment in segments:
+        step_counts[segment["step"]] = step_counts.get(segment["step"], 0) + 1
+        if step_counts[segment["step"]] > 1:
+            segment["step"] = "%s_%d" % (
+                segment["step"],
+                step_counts[segment["step"]],
+            )
 
-    # ---- objects ---------------------------------------------------------------
+    # %% objects
     objects = []
-    for i, src in enumerate(rec.stl_sources):
-        mesh = os.path.basename(src)
-        if mesh not in rec.obj_frames[0]:
+    palette = ObjectPalette()
+    for i, source in enumerate(rec.mesh_sources):
+        mesh = os.path.basename(source)
+        if mesh not in rec.object_frames[0]:
             continue
-        dst = os.path.join(out_dir, "meshes", "objects", mesh)
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        shutil.copy2(src, dst)
-        objects.append(
-            {
-                "id": os.path.splitext(mesh)[0],
-                "key": mesh,
-                "mesh": "meshes/objects/" + mesh,
-                "spawn": rec.obj_frames[0][mesh],
-                "color": PALETTE[i % len(PALETTE)],
-            }
-        )
+        destination = os.path.join(out_dir, "meshes", "objects", mesh)
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copy2(source, destination)
+        entry = {
+            "id": os.path.splitext(mesh)[0],
+            "key": mesh,
+            "mesh": "meshes/objects/" + mesh,
+            "spawn": rec.object_frames[0][mesh],
+            "color": palette.color_for(i),
+        }
+        # recorded from the world, so the knowledge base does not have to guess it;
+        # omitted when the object's shapes report no measurable size
+        body = (rec._bodies or {}).get(mesh)
+        extent = BodyExtent.of(body) if body is not None else None
+        if extent is not None:
+            entry["height"] = round(extent.z, POSE_PRECISION)
+        objects.append(entry)
 
-    # ---- place target + drag bounds -------------------------------------------
-    places = [s["place"] for s in segments if s.get("place")]
+    # %% place target + drag bounds
+    places = [segment["place"] for segment in segments if segment.get("place")]
     place_target = None
     if places:
-        cx = sum(p[0] for p in places) / len(places)
-        cy = sum(p[1] for p in places) / len(places)
-        cz = min(p[2] for p in places)
+        center_x = sum(place[0] for place in places) / len(places)
+        center_y = sum(place[1] for place in places) / len(places)
+        lowest_z = min(place[2] for place in places)
         place_target = {
-            "pos": [round(cx, 3), round(cy, 3)],
-            "z": round(cz - 0.02, 3),
+            "pos": [round(center_x, 3), round(center_y, 3)],
+            "z": round(lowest_z - PLACE_TARGET_DROP, 3),
             "bounds": {
-                "minX": round(cx - 0.55, 2),
-                "maxX": round(cx + 0.55, 2),
-                "minY": round(cy - 0.55, 2),
-                "maxY": round(cy + 0.65, 2),
+                "minX": round(center_x - PLACE_BOUNDS_MARGIN, 2),
+                "maxX": round(center_x + PLACE_BOUNDS_MARGIN, 2),
+                "minY": round(center_y - PLACE_BOUNDS_MARGIN, 2),
+                "maxY": round(center_y + PLACE_BOUNDS_FRONT_MARGIN, 2),
             },
         }
     drag_bounds = None
     if objects:
-        xs = [o["spawn"][0] for o in objects]
-        ys = [o["spawn"][1] for o in objects]
+        spawn_x = [entry["spawn"][0] for entry in objects]
+        spawn_y = [entry["spawn"][1] for entry in objects]
         drag_bounds = {
-            "minX": round(min(xs) - 0.35, 2),
-            "maxX": round(max(xs) + 0.35, 2),
-            "minY": round(min(ys) - 0.6, 2),
-            "maxY": round(max(ys) + 0.6, 2),
+            "minX": round(min(spawn_x) - DRAG_BOUNDS_MARGIN_X, 2),
+            "maxX": round(max(spawn_x) + DRAG_BOUNDS_MARGIN_X, 2),
+            "minY": round(min(spawn_y) - DRAG_BOUNDS_MARGIN_Y, 2),
+            "maxY": round(max(spawn_y) + DRAG_BOUNDS_MARGIN_Y, 2),
         }
 
-    # ---- bundle the URDF models -------------------------------------------------
-    world_body_names = [str(getattr(b, "name", "")) for b in rec.world.bodies]
-    models, missing = [], []
-    for i, src in enumerate(rec.urdf_sources):
-        base_name = os.path.splitext(os.path.basename(src))[0]
-        rep = bundle_urdf(src, base_name, out_dir, hints=rec.resolutions)
-        missing += rep["missing"]
+    # %% bundle the URDF models
+    world_body_names = [
+        str(body.name) if isinstance(body, NamesAWorldEntity) else ""
+        for body in rec.world.bodies
+    ]
+    models = []
+    missing: List[str] = []
+    for source in rec.urdf_sources:
+        base_name = os.path.splitext(os.path.basename(source))[0]
+        report = bundle_urdf(source, base_name, out_dir, hints=rec.resolutions)
+        missing += report["missing"]
         # find this model's prefix in the composed world via one of its links
-        mprefix = ""
-        for ln in rep["links"][:12]:
-            hit = next((w for w in world_body_names if w.endswith("/" + ln)), None)
-            if hit:
-                mprefix = hit.split("/", 1)[0]
+        model_prefix = ""
+        for link in report["links"][:PREFIX_PROBE_LINKS]:
+            prefixed = next(
+                (
+                    body_name
+                    for body_name in world_body_names
+                    if body_name.endswith("/" + link)
+                ),
+                None,
+            )
+            if prefixed:
+                model_prefix = prefixed.split("/", 1)[0]
                 break
-        is_robot = base_body in rep["links"]
+        is_robot = base_body in report["links"]
         models.append(
             {
                 "name": base_name,
                 "urdf": "%s.urdf" % base_name,
-                "prefix": mprefix,
+                "prefix": model_prefix,
                 "robot": is_robot,
-                "links": len(rep["links"]),
-                "movableJoints": rep["movable_joints"],
+                "links": len(report["links"]),
+                "movableJoints": report["movable_joints"],
             }
         )
         log(
             "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d"
             % (
                 base_name,
-                mprefix or "-",
+                model_prefix or "-",
                 is_robot,
-                rep["meshes_copied"],
-                len(rep["missing"]),
+                report["meshes_copied"],
+                len(report["missing"]),
             )
         )
 
@@ -634,20 +884,52 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
         "dragBounds": drag_bounds,
         "missingAssets": sorted(set(missing)),
     }
-    json.dump(scene, open(os.path.join(out_dir, "scene.json"), "w"), indent=1)
-    json.dump(
+    _write_json(Path(out_dir) / "scene.json", scene, indent=1)
+    _write_json(
+        Path(out_dir) / "trajectory.json",
         {"fps": fps, "frames": frames, "base": base, "objects": objs},
-        open(os.path.join(out_dir, "trajectory.json"), "w"),
     )
     return scene
 
 
-# ==================================================================== main ===
+def _update_scene_index(path: Path, name: str) -> None:
+    """
+    Register a freshly written scene in the index the viewer reads.
+
+    A missing or unreadable index is rebuilt from scratch; an index that exists but
+    lacks the keys is filled in rather than crashing on them.
+    """
+    index: Dict[str, Any] = {}
+    if path.is_file():
+        index = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(index, dict):
+        index = {}
+    index.setdefault("scenes", [])
+    index.setdefault("default", name)
+    if name not in index["scenes"]:
+        index["scenes"].append(name)
+    _write_json(path, index, indent=1)
+
+
+def _write_json(path: Path, payload: Any, indent: Optional[int] = None) -> None:
+    """
+    Write a bundle file, replacing it only once it is complete.
+
+    A bundle is the artifact of a long recording, so a failure part-way through a
+    write must not leave a truncated file behind.
+    """
+    temporary = path.with_suffix(path.suffix + ".part")
+    temporary.write_text(json.dumps(payload, indent=indent), encoding="utf-8")
+    temporary.replace(path)
+
+
+# %% the cram-viz-onboard entry point
 def main() -> None:
     """
     ``cram-viz-onboard`` — record one demo run into a scene bundle.
     """
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # force: the demo's own imports configure the root logger before we get here
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -679,15 +961,15 @@ def main() -> None:
     sys.path.insert(0, os.path.dirname(demo))
     # make repo-level helper packages (e.g. test.conftest) importable — the
     # demos rely on pytest's rootdir behaviour for that
-    d = os.path.dirname(demo)
-    while d != os.path.dirname(d):
-        if os.path.isdir(os.path.join(d, "coraplex")) and os.path.isdir(
-            os.path.join(d, "test")
+    candidate = os.path.dirname(demo)
+    while candidate != os.path.dirname(candidate):
+        if os.path.isdir(os.path.join(candidate, "coraplex")) and os.path.isdir(
+            os.path.join(candidate, "test")
         ):
-            sys.path.insert(0, d)
-            log("repo root on sys.path:", d)
+            sys.path.insert(0, candidate)
+            log("repo root on sys.path:", candidate)
             break
-        d = os.path.dirname(d)
+        candidate = os.path.dirname(candidate)
     runpy.run_path(demo, run_name="__main__")
     log(
         "demo finished: %d raw frames, %d actions" % (len(rec.frames), len(rec.actions))
@@ -698,36 +980,26 @@ def main() -> None:
     if rec.robot is None:
         sys.exit("No AbstractRobot semantic annotation found in the world.")
 
-    step = args.step or max(1, len(rec.frames) // 1500)
+    step = args.step or max(1, len(rec.frames) // TARGET_BUNDLE_FRAMES)
     out_dir = os.path.join(args.out, args.name)
     os.makedirs(out_dir, exist_ok=True)
     scene = build_scene(rec, args.name, out_dir, step)
-
-    # maintain the scene index the viewer reads
-    idx_path = os.path.join(args.out, "index.json")
-    try:
-        index = json.load(open(idx_path))
-    except Exception:
-        index = {"default": args.name, "scenes": []}
-    if args.name not in index["scenes"]:
-        index["scenes"].append(args.name)
-    index.setdefault("default", args.name)
-    json.dump(index, open(idx_path, "w"), indent=1)
+    _update_scene_index(Path(args.out) / "index.json", args.name)
 
     log("scene '%s' written to %s" % (args.name, out_dir))
     log(
         "  models:  %s"
         % ", ".join(
-            "%s%s" % (m["name"], " (robot)" if m["robot"] else "")
-            for m in scene["models"]
+            "%s%s" % (model["name"], " (robot)" if model["robot"] else "")
+            for model in scene["models"]
         )
     )
-    log("  objects: %s" % ", ".join(o["id"] for o in scene["objects"]))
-    log("  segments: %s" % " → ".join(s["step"] for s in scene["segments"]))
+    log("  objects: %s" % ", ".join(entry["id"] for entry in scene["objects"]))
+    log("  segments: %s" % " → ".join(entry["step"] for entry in scene["segments"]))
     if scene["missingAssets"]:
-        log("  WARNING — %d missing assets:" % len(scene["missingAssets"]))
-        for m in scene["missingAssets"][:10]:
-            log("   ", m)
+        log("  warning — %d missing assets:" % len(scene["missingAssets"]))
+        for asset in scene["missingAssets"][:MISSING_ASSETS_LOGGED]:
+            log("   ", asset)
     sys.stdout.flush()
     os._exit(0)  # don't hang on non-daemon ROS/viz threads the demo started
 

@@ -1,4 +1,4 @@
-# cram_viz — CRAM Vizulation
+# cram_viz — CRAM Visualization
 
 Browser-based visualization for the CRAM architecture — one tool for two modes:
 
@@ -114,7 +114,7 @@ src/cram_viz/
     bundle_urdf.py standalone URDF/xacro asset bundler
   web/
     index.html     shell: topbar + slots + script includes
-    config.js      WHICH panels are shown WHERE  ← edit this to swap panels
+    config.js      which panels are shown where  ← edit this to swap panels
     core/          bus, panel registry, split/resize helper
     panels/        robot_scene/, eql/, graph/
     vendor/        three.js, vis-network, … (all local, no CDN)

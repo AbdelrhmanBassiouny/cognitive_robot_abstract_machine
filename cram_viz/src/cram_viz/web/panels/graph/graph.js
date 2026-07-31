@@ -7,20 +7,23 @@
  * live updates never re-run the layout. Exposed as window.Graph.
  * ==========================================================================*/
 (function () {
-  // resolved lazily: the graph panel's DOM only exists once the panel mounts
+  'use strict';
+
+  // the panel hands its own elements over on mount: a panel owns its DOM subtree,
+  // so this renderer must never look them up on the document itself
   let el = null, legendEl = null;
-  function resolveDom() {
-    el = el || document.getElementById('graph');
-    legendEl = legendEl || document.getElementById('legend');
+  function attach(canvasEl, legendContainer) {
+    el = canvasEl;
+    legendEl = legendContainer;
   }
 
   const GROUP_STYLE = {
-    // ---- TBox ----
+    // %% TBox
     root:    { color: '#e8eefb', ring: '#ffffff', size: 24, label: 'Root concept' },
     klass:   { color: '#5b8cff', ring: '#a9c2ff', size: 15, label: 'Subpackage' },
     pyclass: { color: '#ffb648', ring: '#ffd89a', size: 13, label: 'Python class' },
     upper:   { color: '#8c9bbd', ring: '#c3ccdf', size: 14, label: 'Upper ontology (DUL)' },
-    // ---- ABox individuals, bucketed by their asserted type ----
+    // %% ABox individuals, bucketed by their asserted type
     robot:   { color: '#ff7a9c', ring: '#ffb3c6', size: 20, label: 'Robot / body' },
     object:  { color: '#39d5c8', ring: '#8ff0e7', size: 15, label: 'Object / substance' },
     event:   { color: '#b98cff', ring: '#d9c2ff', size: 16, label: 'Event / episode' },
@@ -29,7 +32,7 @@
     ind:     { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Individual' },
   };
 
-  // ---- execution status → node ring -------------------------------------------
+  // %% execution status → node ring
   // One palette for both status vocabularies: coraplex TaskStatus on plan nodes
   // (CREATED/RUNNING/SUCCEEDED/FAILED/INTERRUPTED/PAUSE) and giskardpy
   // LifeCycleValues on statechart nodes (NOT_STARTED/RUNNING/PAUSED/DONE/FAILED).
@@ -109,7 +112,7 @@
   }
 
   function build(data) {
-    resolveDom();
+    if (!el) throw new Error('Graph.attach(container, legend) must run before build()');
     const hier = data.layout === 'hier' || data.layout === 'hier-lr';
     viewKey = data.key || null;
     const cached = viewKey && !hier ? POS[viewKey] : null;
@@ -179,7 +182,7 @@
         arrows: { to: { enabled: !!data.arrows, scaleFactor: 0.6 } },
       },
       physics: (hier || cached) ? false : {
-        // fewer settle iterations; physics is switched OFF once stable (below)
+        // fewer settle iterations; physics is switched off once stable (below)
         stabilization: { iterations: bigGraph ? 120 : 200, updateInterval: 25 },
         barnesHut: { gravitationalConstant: -7000, springLength: 120, springConstant: 0.03, damping: 0.5, avoidOverlap: 0 },
       },
@@ -273,7 +276,7 @@
     if (data.statusLegend) statusLegend();
   }
 
-  // Re-colour node rings in place — used by the live status poll, which must NOT
+  // Re-colour node rings in place — used by the live status poll, which must not
   // rebuild the graph (that would re-run the layout every second).
   // `map`: {nodeId: status}. Returns false if an id is unknown, i.e. the caller
   // has a structurally different graph and needs a real rebuild.
@@ -322,6 +325,7 @@
   }
 
   window.Graph = {
+    attach: attach,
     build: build,
     setStatuses: setStatuses,
     highlight: highlight,

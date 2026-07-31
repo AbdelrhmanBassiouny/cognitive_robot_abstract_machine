@@ -1,5 +1,6 @@
 /* Draggable splitter + maximize toggle for the knowledge-graph panel.
-   Include after the DOM (end of body). Works on every page with .split > .panel-left + .panel-right. */
+   Include after the DOM (end of body). Needs main.split with the two
+   [data-slot] elements index.html declares. */
 (function () {
   'use strict';
 
@@ -10,10 +11,10 @@
 
   const storeKey = 'splitRight:' + location.pathname.split('/').pop();
 
-  // ---- divider ------------------------------------------------------------
+  // %% divider
   const divider = document.createElement('div');
   divider.className = 'split-divider';
-  divider.title = 'Ziehen zum Vergrößern · Doppelklick = 50/50';
+  divider.title = 'Drag to resize · double-click for 50/50';
   split.insertBefore(divider, right);
   split.style.columnGap = '4px'; /* 4 + 8px divider + 4 = former 16px gap */
 
@@ -50,19 +51,19 @@
     localStorage.setItem(storeKey, '50');
   });
 
-  // ---- maximize button on the knowledge panel ------------------------------
+  // %% maximize button on the knowledge panel
   const head = right.querySelector('.panel-head');
   if (head) {
     const btn = document.createElement('button');
     btn.className = 'kg-max-btn';
-    btn.title = 'Knowledge graph maximieren';
+    btn.title = 'Maximize the knowledge graph';
     btn.textContent = '⛶';
     head.appendChild(btn);
 
     btn.addEventListener('click', () => {
       const max = split.classList.toggle('kg-maximized');
       btn.textContent = max ? '⊟' : '⛶';
-      btn.title = max ? 'Zurück zur geteilten Ansicht' : 'Knowledge graph maximieren';
+      btn.title = max ? 'Back to the split view' : 'Maximize the knowledge graph';
       if (max) split.style.gridTemplateColumns = '';
       else applyRight(rightPct);
     });
@@ -72,7 +73,7 @@
     });
   }
 
-  // ---- true fullscreen for the graph itself --------------------------------
+  // %% true fullscreen for the graph itself
   // The panel-maximize above only widens the right column; the query box and
   // answer panel still eat space. This makes just the graph cover the whole
   // window so it gets every pixel.
@@ -80,7 +81,7 @@
   if (graphWrap) {
     const gbtn = document.createElement('button');
     gbtn.className = 'graph-max-btn';
-    gbtn.title = 'Graph auf Vollbild';
+    gbtn.title = 'Graph to fullscreen';
     gbtn.textContent = '⛶';
     graphWrap.appendChild(gbtn);
 
@@ -93,7 +94,7 @@
     function toggleGraphFull() {
       const full = graphWrap.classList.toggle('graph-fullscreen');
       gbtn.textContent = full ? '⊟' : '⛶';
-      gbtn.title = full ? 'Vollbild verlassen (Esc)' : 'Graph auf Vollbild';
+      gbtn.title = full ? 'Leave fullscreen (Esc)' : 'Graph to fullscreen';
       document.body.classList.toggle('graph-full-open', full);
       setTimeout(reflow, 60);
     }

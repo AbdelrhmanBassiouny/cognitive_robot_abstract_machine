@@ -7,8 +7,9 @@ environment variables, so the KB and the server tests run against deterministic 
 instead of a real (huge, generated) bundle.
 """
 
+import importlib.util
 import json
-import os
+from pathlib import Path
 
 import pytest
 
@@ -102,34 +103,28 @@ TRAJECTORY = {
     "objects": [{"milk.stl": [2.37, 2.0, 1.05, 0, 0, 0, 1]}] * 3,
 }
 
-ROBOT_URDF = """<robot name="pr2">
-  <link name="base_link"/>
-  <link name="torso_link"/>
-  <link name="l_shoulder_link"/>
-  <link name="l_wrist_link"/>
-  <link name="l_gripper_link"/>
-  <joint name="torso_lift_joint" type="prismatic">
-    <parent link="base_link"/><child link="torso_link"/>
-  </joint>
-  <joint name="l_shoulder_joint" type="revolute">
-    <parent link="torso_link"/><child link="l_shoulder_link"/>
-  </joint>
-  <joint name="l_wrist_flex_joint" type="revolute">
-    <parent link="l_shoulder_link"/><child link="l_wrist_link"/>
-  </joint>
-  <joint name="l_gripper_joint" type="fixed">
-    <parent link="l_wrist_link"/><child link="l_gripper_link"/>
-  </joint>
-</robot>
-"""
+#: real files instead of embedded strings, so they stay valid URDF and Python
+DATASET_DIR = Path(__file__).parent / "dataset"
 
-# a miniature "architecture" so the KB's repo scan is fast and deterministic
-ARCH_FILES = {
-    "coraplex/src/coraplex/plans/plan.py": 'import krrood\n\n\nclass Plan:\n    """A plan."""\n\n    def perform(self):\n        pass\n',
-    "coraplex/README.md": "# coraplex\nthe plan executive\n",
-    "krrood/src/krrood/eql.py": 'class Entity:\n    """An entity."""\n',
-    "krrood/README.md": "# krrood\nknowledge representation\n",
-}
+#: the scene's robot description
+ROBOT_URDF_PATH = DATASET_DIR / "fixture_robot.urdf"
+
+#: a miniature CRAM repository, so the knowledge base's scan is fast and deterministic
+ARCHITECTURE_DIR = DATASET_DIR / "architecture"
+
+
+def reset_knowledge_base_cache() -> None:
+    """
+    Drop the cached knowledge base so the next build picks up the current environment.
+
+    Does nothing without krrood: :mod:`cram_viz.kb` is then not importable, and the
+    tests that need it skip themselves.
+    """
+    if importlib.util.find_spec("krrood") is None:
+        return
+    from cram_viz import kb
+
+    kb.reset_kb()
 
 
 @pytest.fixture()
@@ -141,34 +136,18 @@ def fixture_scene(tmp_path, monkeypatch):
     scenes.mkdir(parents=True)
     (scenes / "scene.json").write_text(json.dumps(SCENE))
     (scenes / "trajectory.json").write_text(json.dumps(TRAJECTORY))
-    (scenes / "robot.urdf").write_text(ROBOT_URDF)
+    (scenes / "robot.urdf").write_text(ROBOT_URDF_PATH.read_text())
     (scenes / "milk.stl").write_bytes(b"solid milk\nendsolid milk\n")
     (tmp_path / "scenes" / "index.json").write_text(
         json.dumps({"default": "fixture", "scenes": ["fixture"]})
     )
 
-    arch = tmp_path / "arch"
-    for rel, content in ARCH_FILES.items():
-        p = arch / rel
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content)
-
     monkeypatch.setenv("CRAM_VIZ_DATA", str(tmp_path))
     monkeypatch.setenv("CRAM_VIZ_SCENES", str(tmp_path / "scenes"))
     monkeypatch.setenv("CRAM_VIZ_SCENE", "fixture")
-    monkeypatch.setenv("CRAM_VIZ_ARCHITECTURE", str(arch))
+    monkeypatch.setenv("CRAM_VIZ_ARCHITECTURE", str(ARCHITECTURE_DIR))
 
-    # a fresh KB per test: the module caches it, and the env just changed
-    try:
-        from cram_viz import kb
-
-        kb.reset_kb()
-    except ImportError:
-        pass
+    # a fresh knowledge base per test: it is cached, and the environment just changed
+    reset_knowledge_base_cache()
     yield tmp_path
-    try:
-        from cram_viz import kb
-
-        kb.reset_kb()
-    except ImportError:
-        pass
+    reset_knowledge_base_cache()
