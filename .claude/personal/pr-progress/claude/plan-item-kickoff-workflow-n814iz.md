@@ -33,6 +33,12 @@ Item `plan-updates-since-helper` in the `workflow-unification` plan.
   `test_world_sim_state_sync` assertion. Unrelated to this PR's `.claude/hooks/*`-only
   diff; `test_claude_dev_tooling` is green. Commented on the PR, no fix pushed. Watching
   for the base branch to recover.
+- 2026-07-31 (after merging main): same test red again post-merge (head 01d112c0, run
+  30626569507) - this time NOT a base-branch issue, since main's own CI at the current
+  tip (82501888, run 30624144609) passed it cleanly. Genuine physics-timing flake in
+  Mujoco's box-settling assertion, unrelated to this PR. Tried `rerun_failed_jobs`;
+  blocked with "workflow already running" since `coraplex` was still mid-run. Commented
+  on the PR; will retry the rerun once the run fully completes.
 
 ## Review round 1 (2026-07-31)
 
