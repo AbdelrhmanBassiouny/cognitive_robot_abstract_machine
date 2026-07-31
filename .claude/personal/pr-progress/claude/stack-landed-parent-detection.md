@@ -61,8 +61,21 @@ on main. "Revise this and all related parts."
   `parent_landed` read the same `None` as "root" and cleared it to promote.
 - Fix: `Stack` carries the merged predicate and answers `has_landed_upstream()` from git
   ancestry - the test the doctrine already calls the definition of merged. Both call
-  sites derive from it. `ROUTINE.md` Phase 1 gets the matching rule + report-and-continue
-  handling for the stack-member 422 (explicitly NOT unstacking).
+  sites derive from it. `ROUTINE.md` Phase 1 gets the matching rule + the full
+  dissolve -> PATCH -> restack -> re-create sequence for the stack-member 422.
+- **Reversed mid-review (f3080891).** The first revision made the 422 report-and-continue
+  and forbade unstacking. User rejected it: "we want to merge the problematic branch to
+  main, fast forwarding it's base doesn't retarget it to main." Correct - the reparent
+  exists so the child stops depending on a branch about to be deleted; the inflated diff
+  is a symptom. Deferring it leaves the PR unable to land and due to be closed when
+  Phase 1 deletes its base, and "retarget by hand" is the same dissolve done by a human.
+  Also near-missed: the live Routine's `AMENDMENT 2026-07-31` already prescribed the
+  dissolve sequence, pasted the same morning; I wrote the contradicting rule without
+  reading it. Read the live prompt before touching `ROUTINE.md` until cutover.
+- Fast-forwarding a landed base branch to `main` is now explicitly rejected in the
+  doctrine (I had offered it for #41): fixes merge-base only, and desynchronises a
+  stack's recorded `base.sha` when that base is the trunk - which
+  `ripple-down-rules-refactor` is, for Stack #112.
 - PR #117 `claude/stack-landed-parent-detection`, stacked on #106, draft + `bug` label,
   subscribed. 3 TDD tests; 247 dev-tooling tests green.
 - Same fix pushed to `claude/stack-workflow-tooling`'s `dev/` copy (78a093e4, 37/37) so
