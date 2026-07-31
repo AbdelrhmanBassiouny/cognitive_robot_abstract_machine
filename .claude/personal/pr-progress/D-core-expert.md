@@ -25,6 +25,21 @@ Status: round-2 review comments addressed and pushed (commit ad75cf4e).
   that this round's implementation settled).
 
 Next: PR stays in draft (per personal notes, always draft after a push).
-Nothing else pending here - wait for the next round of review activity via
-the PR subscription, or for the user to ask for `d-core-single-class` /
+
+Open discussion (unresolved, thread PRRT_kwDOQhJw3c6VZE0H, conclusion_domain.py
+L161, ConclusionValidator.__call__): dev asked whether to (1) rename
+AnswerValidator's __call__ contract to a `validate` method (keep __call__ as
+a concrete forwarding method on the ABC) and (2) move ConclusionDomain.validate()'s
+implementation onto ConclusionValidator itself. Replied with analysis:
+recommend (1) yes - rename at the ABC level, __call__ becomes concrete
+forwarder to abstract `validate`, ConclusionValidator/ConditionsValidator
+implement `validate` instead of `__call__`; recommend (2) no - keep the
+implementation on ConclusionDomain (it's exercised directly by
+test_conclusion_domain.py's TestConclusionDomainValidate and is useful
+standalone without a validator object), ConclusionValidator.validate() stays
+a one-line delegation. Waiting on dev's confirmation before implementing -
+do NOT resolve this thread until they answer and the change (if any) lands.
+
+Nothing else pending - wait for the next round of review activity via the PR
+subscription, or for the user to ask for `d-core-single-class` /
 `d-core-backend` work.
