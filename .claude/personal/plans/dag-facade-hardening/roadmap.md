@@ -176,6 +176,16 @@ structural one only when no enclosing context anchors on the anchor — which ke
 explicit-anchor API working outside any `with` block. No `_parents_` heuristic is
 involved, so Phase A's rename and Phase D's guard test stay compatible with it.
 
-#78 was left untouched rather than closed: the "re-point its regression test" option the
-section above offers is not actually available, since that test lives in
-`test/krrood_test/test_eql_rdr/`, a directory that does not exist on `main`.
+#78 was **closed as superseded** the same day. Of the two options the section above
+offers, only one was actually available: "re-point its regression test at the fixed API"
+is not, since `TestAttributeReusedInEarlierSiblingBranch` lives in
+`test/krrood_test/test_eql_rdr/` — a directory that does not exist on `main` — and
+asserts through `walk_rules`/`classify_case` from the RDR layer. #118 covers the same
+defect DSL-only at the accessor's own contract level instead, so no coverage is lost on
+`main`; the RDR-level test can be re-added against the fixed API once `test_eql_rdr/`
+lands, with no production change needed for it to pass.
+
+One consequence for the other plan: `rdr-refactor`'s #79 (`D-ui-rendering`) is based on
+the `D-ui-splice-fix` branch. Closing the PR does not delete that branch, so #79 is not
+broken, but it can no longer land through #78 and needs re-targeting onto
+`D-core-engine`. Left to #79's own session; recorded in `rdr-refactor`'s manifest.

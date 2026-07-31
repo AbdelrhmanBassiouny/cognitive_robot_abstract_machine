@@ -109,8 +109,9 @@ items:
       bug label; open draft. Fixed by carrying the owning parent edge on the
       `with`-context stack (RuleTreeContext in core/base_expressions.py) rather
       than by any `_parents_` heuristic, so Phase A's rename and Phase D's guard
-      test stay compatible. #78 left untouched; its disposition is a call for its
-      own branch. ConclusionSelector.insert_at (rules/conclusion_selector.py:67)
+      test stay compatible. #78 closed as superseded 2026-07-31; its regression
+      test was not carried over (it lives in test_eql_rdr/, absent on main).
+      ConclusionSelector.insert_at (rules/conclusion_selector.py:67)
       splices above `anchor._parent_`, the first-attached primary parent, so a
       shared-identity MappedVariable used inside a Comparator in one branch and
       bare in a sibling branch splices above the incidental Comparator and drags
