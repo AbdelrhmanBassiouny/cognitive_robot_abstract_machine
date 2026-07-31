@@ -164,6 +164,82 @@ checked out (never configured directly, so one PR's progress can't accidentally 
 another PR's key), extracts only what's between its own markers, and pushes just that. A good anchor
 for *when* to save: whenever the plan changes, and before ending any turn that changed it.
 
+## Tracking a multi-PR/multi-session plan (plan dashboards)
+
+A single PR's progress note (above) doesn't scale to an initiative spanning many PRs across several
+branches — a stacked refactor, a multi-wave programme, anything you'd otherwise write up as a
+one-off master-roadmap doc. For that, a **plan** is a structured
+`.claude/personal/plans/<plan-id>/plan.yaml` (waves, tracks, and items — branch, PR number, status,
+dependencies) plus a sibling `roadmap.md` for the narrative ("why", history, design decisions) that
+doesn't belong in structured data. Both live only on the personal-notes branch, exactly like
+everything else in this document. See
+[`.claude/personal/plans/README.md`](../personal/plans/README.md) (on the personal-notes branch) for
+the full schema, and [`.claude/skills/plan-dashboard/SKILL.md`](../skills/plan-dashboard/SKILL.md)
+for how a plan gets turned into a live Artifact dashboard. New to this - want to see it end to end
+before diving into the schema reference? See
+[`plan-dashboard/example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md): a short,
+worked example with screenshots, from a plan-mode idea to a published dashboard.
+
+**Auto-discovery.** If the branch you're on appears as an item in some plan, `CLAUDE.local.md` also
+gets that plan's `plan.yaml` and `roadmap.md` pulled in — the same idea as PR progress above, but for
+the wider initiative your branch belongs to, so you don't have to go find and read a roadmap doc by
+hand. This is looked up via a generated branch→plan-id reverse index
+(`.claude/personal/plans/_generated/branch-index.tsv`), never hand-maintained, so it can't drift out
+of sync with the plans it's derived from. Unlike PR progress, there's no scaffold for a branch with
+no plan — most branches don't belong to one, and `CLAUDE.local.md` simply gets no plan section that
+session.
+
+**Editing.** Change the manifest/roadmap between the `BEGIN-PLAN-MANIFEST`/`END-PLAN-MANIFEST` and
+`BEGIN-PLAN-ROADMAP`/`END-PLAN-ROADMAP` markers, then run
+[`save-plan.sh`](./save-plan.sh) `[<plan-id>]` — it pushes both files back and regenerates the
+reverse index in the same commit (scanning every plan, so the index can't drift). The plan id is
+optional if the current branch already resolves to one; pass it explicitly to save a plan from a
+branch that isn't itself one of its tracked items, or to bootstrap a brand-new plan (see
+`save-plan.sh`'s own header comment for that flow — there is still no separate create-plan.sh, but
+see "Creating a new plan" below for the automated version of doing it by hand).
+
+**Publishing the dashboard.** `save-plan.sh` only pushes data — it can't call the `Artifact` tool
+itself (only a live Claude session can), so it prints a reminder to run `/plan-dashboard <plan-id>`
+afterward. That skill re-reads the manifest, cross-checks every item against live GitHub PR/CI/review
+state (so a manifest can never silently go stale the way a hand-maintained roadmap doc could), and
+publishes/updates the dashboard Artifact. Run `/plan-dashboard` with no argument to publish the
+master index listing every plan.
+
+**Pull request labels this tooling relies on.** These are the only labels
+[`build_dashboard.py`'s `PullRequestLabel`](../skills/plan-dashboard/build_dashboard.py) recognizes —
+every one of them is a label this repo's own convention applies by hand, never one GitHub sets
+itself:
+
+- `merged` — applied when a pull request's changes actually landed but GitHub's own merge API never
+  recorded it (its branch was pushed directly, then the pull request closed by hand rather than
+  through GitHub's merge button). `build_dashboard.py`'s drift/status logic treats this exactly like
+  `merged_at` being set — see `PullRequestRecord.was_merged`.
+- `in-review` and `bug` — established conventions (a pull request under active review; a bug-fix
+  pull request, per this file's personal PR-conventions precedent) that no script currently reads,
+  documented here so they're recognized (via `PullRequestRecord.identified_labels`) rather than
+  silently falling through as an arbitrary, unrecognized label.
+
+Any other label a real pull request carries is preserved in `PullRequestRecord.labels` (GitHub's own
+label vocabulary is open-ended, and other automation on this repo may add labels this dashboard has
+no reason to know about) but isn't specially interpreted.
+
+**Creating a new plan.** [`.claude/skills/plan-create/SKILL.md`](../skills/plan-create/SKILL.md)
+(`/plan-create <plan-id>`) automates the bootstrap flow above end to end: it gathers the plan's
+scope (from an existing freeform roadmap doc to migrate, from named branches/PRs to cross-check
+live, or from conversation), drafts a schema-conformant `plan.yaml`/`roadmap.md`, validates it the
+same way `plan-dashboard` does, surfaces any structural judgment calls to you via a question rather
+than guessing, then runs `save-plan.sh` and `/plan-dashboard` itself. Doing it by hand (the marker +
+`save-plan.sh` flow above) still works — the skill is a convenience over that same path, not a
+different one. It also creates a **tracking issue** as a coordination mailbox: any session can make
+a structural change (new phase, deferring a track, etc.) directly to `plan.yaml`, but should ask the
+user in the session first (e.g. via `AskUserQuestion`) rather than deciding unilaterally, and always
+also comments on the tracking issue describing it once confirmed — that's the shared record other
+sessions working the plan can check, and the user reviews structural changes there. (Falls back to an empty-commit,
+permanently-draft PR instead if a repo has Issues disabled.) See `.claude/personal/plans/README.md`'s
+"Proposing structural changes" section for the full convention. `session-start.sh`'s written header
+reminds a session actively working an item to subscribe to the tracking issue too, so a change
+another session makes reaches it in real time.
+
 ## Setup: overriding the default remote/branch/path
 
 Skip this section if the zero-config default above is all you need. The three settings are

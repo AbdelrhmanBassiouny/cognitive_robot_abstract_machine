@@ -847,6 +847,33 @@ def _between_operator(
 MAX_SET_MEMBERS = 6
 
 
+def disjunctive_phrase(
+    members: List[VerbalizationFragment],
+) -> VerbalizationFragment:
+    """
+    Join already-rendered *members* as a bare disjunction (*"A, B, or C"*), or return the lone
+    member unchanged for a singleton.
+
+    The low-level coordination primitive behind a bare *"or"*-joined disjunctive head — kept here,
+    at the base of the vocabulary/microplanning layering, so a caller on either side of that
+    boundary can depend on it without depending on the other side.
+
+    :param members: The already-rendered fragments to join (a caller lexicalises each member
+        itself, e.g. via :meth:`RoleFragment.for_value`).
+    :return: The joined disjunction, or the lone member for a singleton.
+
+    >>> from krrood.entity_query_language.verbalization.fragments.base import (
+    ...     flatten_fragment_to_plain_text, RoleFragment,
+    ... )
+    >>> members = [RoleFragment.for_literal(value) for value in ("a", "b", "c")]
+    >>> flatten_fragment_to_plain_text(disjunctive_phrase(members))
+    "'a', 'b', or 'c'"
+    """
+    if len(members) == 1:
+        return members[0]
+    return oxford_comma(members, Conjunctions.OR.as_fragment())
+
+
 def one_of(candidates: List[VerbalizationFragment]) -> Optional[VerbalizationFragment]:
     """
     Render a small, bounded candidate set as a membership phrase — the shared *"one of A, B, or C"*

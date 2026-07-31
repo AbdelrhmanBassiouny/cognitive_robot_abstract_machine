@@ -43,9 +43,8 @@ def test_generated_results_pass_their_own_snapshot_verification():
 
 def test_placeholder_example_value_names_itself_instead_of_a_placeholder():
     """
-    ``HasType``/``HasTypes.types_`` are registered in ``PLACEHOLDER_EXAMPLE_VALUES``
-    because they are never bound to a symbolic operand in real usage -- only ever a
-    literal.
+    ``HasType``/``HasTypes`` override ``_example_operand_values_`` because ``types_`` is
+    never bound to a symbolic operand in real usage -- only ever a literal.
 
     Their placeholder rendering names the literal's own value, the same way it would for
     a real query, instead of falling back to a generic *"a Type"* placeholder.

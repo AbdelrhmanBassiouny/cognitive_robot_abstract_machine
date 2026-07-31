@@ -32,6 +32,7 @@ from semantic_digital_twin.semantic_annotations.mixins import (
 )
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     DoubleDoor,
+    Elevator,
     Floor,
     Cup,
     Cabinet,

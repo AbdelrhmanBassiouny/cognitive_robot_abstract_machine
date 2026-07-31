@@ -1,21 +1,11 @@
 """
-Exhaustive verbalization-result verification for any package.
-
-Point a :class:`VerbalizationResultsOfPackage` at a package and a committed list of
-:class:`VerbalizationResult` entries. Its three ``assert_*`` methods, used as the bodies of three
-tests, check that every concrete symbolic callable the package defines (1) implements its own
-verbalization fragment, (2) has a declared result, and (3) renders exactly its declared sentence —
-so a new predicate or function, or a changed shared result builder, cannot slip through unreviewed.
-
-The same three-line test works for any package that defines
-:class:`~krrood.entity_query_language.predicate.SymbolicCallable` subclasses (krrood itself,
-``semantic_digital_twin``, ``coraplex``, …): the discovery, placeholder operands, and rendering all
-live here.
+Exhaustive verbalization-result verification for any package, and the first-order
+(value-agnostic) rendering it builds on.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses import fields as dataclass_fields
 from types import ModuleType
 
@@ -25,51 +15,51 @@ from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.class_diagrams.utils import class_implements_own_method
 from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.factories import variable
-from krrood.entity_query_language.predicate import (
-    HasType,
-    HasTypes,
-    SymbolicCallable,
-    Verbalizable,
-)
+from krrood.entity_query_language.predicate import SymbolicCallable, Verbalizable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.ormatic.utils import classes_of_package
 from krrood.utils import module_and_class_name
 
 
-@dataclass(frozen=True)
-class PlaceholderExampleField:
+def placeholder_operands(cls: Type[SymbolicCallable]) -> Dict[str, Any]:
     """
-    One dataclass field of a symbolic callable, identified for
-    :data:`PLACEHOLDER_EXAMPLE_VALUES` lookup.
-    """
+    One placeholder operand per init dataclass field, from the field's declared type
+    endpoint alone — a fresh variable of that type (``object`` when the endpoint is not
+    a plain class), so the result reads the operand as *"a <TypeName>"*.
 
-    callable_class: Type[SymbolicCallable]
-    """
-    The symbolic callable the field belongs to.
-    """
+    :param cls: The symbolic callable to build operands for.
+    :return: The operand to pass for each init field, keyed by field name.
 
-    field_name: str
+    >>> operands = placeholder_operands(IsReachable)
+    >>> operands["location"]._type_, operands["body"]._type_
+    (<class 'object'>, <class 'object'>)
     """
-    The dataclass field's name.
+    wrapped_class = WrappedClass(clazz=cls)
+    operands: Dict[str, Any] = {}
+    for field_ in dataclass_fields(cls):
+        if not field_.init:
+            continue
+        endpoint = WrappedField(wrapped_class, field_).type_endpoint
+        placeholder_type = (
+            endpoint if isinstance(endpoint, type) and endpoint is not Any else object
+        )
+        operands[field_.name] = variable(placeholder_type, [])
+    return operands
+
+
+def first_order_form(cls: Type[SymbolicCallable]) -> str:
     """
+    Verbalize *cls* value-agnostically — the *first-order form*: every operand named
+    from its declared field type alone (:func:`placeholder_operands`), with no
+    constructed instance or bound literal in hand.
 
+    :param cls: The symbolic callable to render.
+    :return: The sentence *cls* renders with placeholder operands.
 
-PLACEHOLDER_EXAMPLE_VALUES: Dict[PlaceholderExampleField, Any] = {
-    PlaceholderExampleField(HasType, "types_"): int,
-    PlaceholderExampleField(HasTypes, "types_"): (int, str),
-}
-"""
-A literal example value to bind instead of a placeholder variable, keyed by the field it
-replaces.
-
-Some fields (``HasType.types_``, for instance) are never bound to a symbolic operand in
-real usage -- only ever a literal, since e.g. ``isinstance`` needs a concrete type at
-evaluation time. A field's fragment already renders a literal by its own value (a
-:class:`~krrood.entity_query_language.predicate.RenderedFields` entry unwraps a
-``Literal`` child to its concrete value); a placeholder variable has no such value to
-show. This registry is the only place that says which fields need a literal example
-instead of a placeholder, and what the example is.
-"""
+    >>> first_order_form(IsReachable)
+    'a location is reachable for a body'
+    """
+    return verbalize_expression(cls(**placeholder_operands(cls)))
 
 
 @dataclass(frozen=True)
@@ -110,6 +100,16 @@ class VerbalizationResultsOfPackage:
     The committed expected results, one per covered class.
     """
 
+    operand_overrides: Dict[Type[SymbolicCallable], Dict[str, Any]] = field(
+        default_factory=dict
+    )
+    """
+    Example values scoped to this snapshot alone, keyed by the class and then the field
+    name, consulted after each class's own ``_example_operand_values_`` -- for an
+    example specific to this snapshot (a test-only mimic class, say) rather than a
+    class-level truth.
+    """
+
     def discovered_callables(self) -> Tuple[Type[SymbolicCallable], ...]:
         """:return: every concrete symbolic callable the package defines (abstract only in its
         verbalization fragment, if at all), sorted by qualified name."""
@@ -134,38 +134,21 @@ class VerbalizationResultsOfPackage:
 
     def placeholder_operands(self, cls: Type[SymbolicCallable]) -> Dict[str, Any]:
         """
-        One placeholder operand per init dataclass field.
-
-        A field named in :data:`PLACEHOLDER_EXAMPLE_VALUES` gets that literal example
-        value; every other field gets a fresh variable of the field's type endpoint as
-        the class diagram resolves it (``object`` when the endpoint is not a plain
-        class), so the result reads the operand as *"a <TypeName>"*.
-
         :param cls: The symbolic callable to build operands for.
-        :return: The operand to pass for each init field, keyed by field name.
+        :return: :func:`placeholder_operands` for *cls*, with *cls*'s own
+            :meth:`~krrood.entity_query_language.predicate.SymbolicCallable._example_operand_values_`
+            overwriting the fields they name, then this snapshot's registered
+            :attr:`operand_overrides` overwriting them again.
         """
-        wrapped_class = WrappedClass(clazz=cls)
-        operands: Dict[str, Any] = {}
-        for field_ in dataclass_fields(cls):
-            if not field_.init:
-                continue
-            example_value_key = PlaceholderExampleField(cls, field_.name)
-            if example_value_key in PLACEHOLDER_EXAMPLE_VALUES:
-                operands[field_.name] = PLACEHOLDER_EXAMPLE_VALUES[example_value_key]
-                continue
-            endpoint = WrappedField(wrapped_class, field_).type_endpoint
-            placeholder_type = (
-                endpoint
-                if isinstance(endpoint, type) and endpoint is not Any
-                else object
-            )
-            operands[field_.name] = variable(placeholder_type, [])
+        operands = placeholder_operands(cls)
+        operands.update(cls._example_operand_values_())
+        operands.update(self.operand_overrides.get(cls, {}))
         return operands
 
     def rendered_result(self, cls: Type[SymbolicCallable]) -> str:
         """
         :param cls: The symbolic callable to render.
-        :return: the sentence *cls* renders with placeholder operands.
+        :return: the sentence *cls* renders with this snapshot's (possibly overridden) operands.
         """
         return verbalize_expression(cls(**self.placeholder_operands(cls)))
 
