@@ -392,3 +392,28 @@ Applied directly (authorized by the plan owner in-session, same convention as th
 - Flagged on the tracking issue (#94) per the structural-change convention,
   since this session isn't the plan's designated steward session even though
   the owner authorized the edit directly.
+
+## 8. Addendum (2026-07-31) — `rdr-backward-inference` (#41) unblock verified
+
+A `/plan-item-resolve` session picked up `rdr-backward-inference`, recorded as
+`blocked` on the §5 conflict. Closed the verification loop §5 explicitly asked
+for ("Verify that actually happens"):
+
+- PR #89 merged to `main` on 2026-07-30. Confirmed live that the cascade worked:
+  GitHub reports #41's `mergeable_state` as `clean` (previously conflicting), and
+  an independent local `git merge-tree $(git merge-base origin/main
+  origin/rdr-backward-inference) origin/main origin/rdr-backward-inference` — a
+  real content-level dry run, not just trusting the cached GitHub field —
+  produced zero `<<<<<<<` conflict markers across 1338 lines of diff.
+- CI on #41 is green (18/18 checks).
+- #41 had 4 unresolved review threads, all marked `is_outdated` by GitHub. Read
+  the current head of the affected files directly (not just the PR's own claim)
+  and confirmed all four were already fixed by commit `7faa806`:
+  `what_do_we_know_about()` resolves the conditions root internally now (proven
+  by a dedicated test), `ResolutionMode.SILENT` is `ResolutionMode.AUTOMATIC`,
+  and `test_materialize_wraps_a_negated_guard_in_not` asserts `isinstance(...,
+  Not)` plus evaluates both true/false cases. Replied to each thread citing the
+  specific evidence and resolved all four.
+- `plan.yaml`: `status` → `in_progress`, stale `blockers` entry removed. No code
+  changes were needed on #41 itself — it's ready for the steward to merge
+  bottom-up whenever picked up next.

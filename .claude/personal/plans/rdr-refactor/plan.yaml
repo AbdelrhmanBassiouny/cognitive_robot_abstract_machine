@@ -127,10 +127,15 @@ items:
   track: S0-steward
   depends_on:
   - ripple-down-rules-refactor
-  status: blocked
-  blockers:
-  - 'Real merge conflict in base_expressions.py over whether _last_parent_of_type_ should exist (automated
-    restacking bot flagged needs-resolution); resolution lands via PR #89 (conditions-root-drop-dead-parent-recovery).'
+  status: in_progress
+  notes: 'Recorded blocker (base_expressions.py conflict over _last_parent_of_type_) cleared:
+    PR #89 merged to main 2026-07-30 and cascaded the fix down the stack as predicted. Verified
+    live, not just via the notes: GitHub reports #41''s mergeable_state as clean, and an independent
+    local `git merge-tree` dry run of main against rdr-backward-inference produced zero conflict
+    markers. CI is green (18/18 checks). The 4 previously-unresolved review threads were stale
+    GitHub bookkeeping only -- their content was already addressed by commit 7faa806, confirmed
+    against the current file heads -- replied to with the specific evidence and resolved 2026-07-31.
+    No code changes needed on #41 itself; ready for the steward to merge.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
