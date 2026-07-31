@@ -29,10 +29,13 @@ rule-tree context instead of `anchor._parent_`. Tracking issue: #96.
 
 - CI was still queued/in-progress at hand-off — watch #118's checks and drive
   to green.
-- #78 left untouched deliberately. Its "re-point the regression test" option
-  is unavailable (that test lives in `test/krrood_test/test_eql_rdr/`, absent
-  on `main`), so the real choice is close-as-superseded or leave to its own
-  session.
+- #78 **closed as superseded** (its "re-point the regression test" option was
+  unavailable — that test lives in `test/krrood_test/test_eql_rdr/`, absent on
+  `main`). `rdr-refactor`'s manifest + roadmap updated, its dashboard
+  republished, structural record on #94.
+- `rdr-refactor`'s #79 is still based on the closed `D-ui-splice-fix` branch and
+  needs re-targeting onto `D-core-engine`. Flagged on #79 and #94; left to that
+  stack's own session — not this branch's work.
 
 ## Environment notes
 
