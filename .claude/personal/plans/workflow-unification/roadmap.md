@@ -729,3 +729,29 @@ state at") only strictly requires the latter, but the broader reading matches "s
 have the baseline for free" better (this very kickoff session read plan state manually on
 a branch with no plan of its own) and costs nothing extra, since `fetch_personal_notes_branch`
 already always fetches the whole branch regardless.
+
+Implemented as draft PR #115 same session: `PLAN_STATE_SYNC_STAMP` +
+`record_plan_state_sync_stamp`/`last_recorded_plan_state_sha` in
+`resolve-personal-notes-config.sh`; an unconditional stamp call added to
+`session-start.sh` (with a `plan state SHA:` summary line); the new
+`plan-updates-since.sh <plan-id> [--since <sha>]`; `.gitignore`/`README.md`
+updates; and `test_plan_updates_since_sh.py` (13 tests) with its own minimal
+scratch-repo fixture and stubbed `gh`/`curl` executables, matching the shape
+`test_save_plan_sh.py` already has on `main` rather than either sibling's
+not-yet-landed shared fixture. All 29 tests under `.claude/hooks/tests` pass.
+Verified live: ran `plan-updates-since.sh workflow-unification --since
+1faf0f52` against the real personal-notes branch and tracking issue #102, and
+its printed diff matched a manual `git diff` exactly.
+
+Two real bugs the tests caught before they shipped: (1) the comment-printing
+Python snippet used an f-string with a backslash-escaped quote inside the
+expression part - invalid syntax before Python 3.12, and the `pytest` install
+actually available in this session's environment is 3.11, so this was worth
+fixing outright rather than working around; (2) the `default_repository` grep
+had no `|| true` guard (unlike the `tracking_issue` one right above it), so a
+plan with `tracking_issue` set but no `default_repository` field made `grep`
+exit 1 with no match, which `set -e`/`pipefail` turned into the whole script
+dying silently - no stderr message, no explanation - instead of reaching the
+explicit guard-clause error a few lines later. Caught by
+`test_tracking_issue_without_default_repository_fails_clearly`, which without
+the fix saw an empty stderr instead of the intended message.

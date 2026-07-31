@@ -389,6 +389,7 @@ items:
   - id: plan-updates-since-helper
     branch: claude/plan-item-kickoff-workflow-n814iz
     title: "plan-updates-since.sh: delta recheck of plan state and tracking-issue comments"
+    pull_request_number: 115
     track: personal-data
     depends_on: []
     status: in_progress
@@ -415,6 +416,18 @@ items:
       implemented inline, matching github-api.sh's gh-then-curl+token style, rather than
       depending on that file - a later cleanup once #107 lands can dedupe the shared
       credential/repo-resolution helpers.
+      Implemented as draft PR #115 (2026-07-31), same session, based directly on fork
+      main (claude/plan-item-kickoff-workflow-n814iz): PLAN_STATE_SYNC_STAMP +
+      record/read helpers in resolve-personal-notes-config.sh, an unconditional stamp
+      call in session-start.sh, the new plan-updates-since.sh script, .gitignore/README
+      updates, and test_plan_updates_since_sh.py (13 new tests, self-contained scratch-
+      repo + stubbed gh/curl fixtures since neither sibling's shared fixture has landed
+      on main yet). All 29 tests under .claude/hooks/tests pass. Verified live against
+      the real personal-notes branch and tracking issue #102. Two real bugs caught by
+      the tests before they shipped: an f-string with escaped quotes inside the
+      expression (invalid before Python 3.12, and this repo's own test tooling runs
+      3.11), and a missing `|| true` on the default_repository grep that let `set -e`
+      silently kill the script on a plan with tracking_issue but no default_repository.
 
   - id: ready-to-start-dependency-free-fix
     branch: claude/funny-feynman-wexezs
