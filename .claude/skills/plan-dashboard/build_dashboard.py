@@ -630,6 +630,13 @@ class DependencyChip:
     """The chip's hover title: the dependency's title, or its identifier
     again if it doesn't resolve to a known item."""
 
+    is_ready: bool
+    """Whether the dependency is actually safe to build on right now
+    (:meth:`Item.is_ready_to_unblock_dependents`) - ``False`` for an
+    unresolved identifier, since an item this plan doesn't know about can
+    never be considered ready. Drives the chip's ``chip-unmet`` styling, the
+    dashboard's one visual cue that an item is blocked on this dependency."""
+
 
 class ChipTone(StrEnum):
     """The visual tone of one board chip - doubles as its CSS class suffix."""
@@ -1180,13 +1187,17 @@ class DashboardRenderer:
             if dependency is None:
                 chips.append(
                     DependencyChip(
-                        identifier=dependency_identifier, tooltip=dependency_identifier
+                        identifier=dependency_identifier,
+                        tooltip=dependency_identifier,
+                        is_ready=False,
                     )
                 )
             else:
                 chips.append(
                     DependencyChip(
-                        identifier=dependency.identifier, tooltip=dependency.title
+                        identifier=dependency.identifier,
+                        tooltip=dependency.title,
+                        is_ready=dependency.is_ready_to_unblock_dependents(),
                     )
                 )
         return chips
@@ -1316,7 +1327,7 @@ class DashboardRenderer:
                 for identifier in item.depends_on
                 if identifier in self.items_by_identifier
             ]
-            if not dependencies or item.status not in (
+            if item.status not in (
                 ItemStatus.NOT_STARTED,
                 ItemStatus.BLOCKED,
             ):
