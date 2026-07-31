@@ -1,5 +1,6 @@
 import threading
 import time
+from pathlib import Path
 
 import rclpy
 from rclpy.executors import MultiThreadedExecutor
@@ -45,9 +46,7 @@ executor = MultiThreadedExecutor()
 executor.add_node(node)
 threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor").start()
 
-world = MJCFParser(
-    "/home/sorin/cram2/cognitive_robot_abstract_machine/coraplex/demos/coraplex_panda_demo/stacking_scene.xml"
-).parse()
+world = MJCFParser(str(Path(__file__).parent / "stacking_scene.xml")).parse()
 Panda.from_world(world)
 VizMarkerPublisher(_world=world, node=node).with_tf_publisher()
 
@@ -129,13 +128,10 @@ full_plan = sequential(
         ),
         PlaceAction(
             cube2,
-            # cube1's own pose is still its pre-pick one here, since the whole
-            # plan is built before any of it runs; cube0 plus two cube heights
-            # is where cube1 will be standing by the time this runs.
             Pose.from_xyz_rpy(
                 x=cube3.global_pose.x,
                 y=cube3.global_pose.y,
-                z=cube3.global_pose.z + 2 * STACK_HEIGHT_OFFSET,
+                z=cube3.global_pose.z + STACK_HEIGHT_OFFSET,
                 reference_frame=world.root,
             ),
             Arms.RIGHT,

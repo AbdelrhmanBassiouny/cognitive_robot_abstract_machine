@@ -1,5 +1,5 @@
 <mujoco model="panda scene">
-  <compiler angle="radian" meshdir="/home/sorin/cram2/cognitive_robot_abstract_machine/coraplex/demos/coraplex_panda_demo/franka/assets" />
+  <compiler angle="radian" meshdir="franka/assets" />
 
   <option integrator="implicitfast" />
 
