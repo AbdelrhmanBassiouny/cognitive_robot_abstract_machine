@@ -92,6 +92,31 @@ items:
       enumerate remaining semantic _root_/_root_query_/_parent_ reads and
       per-node caches, TDD a shared-node regression test for each unsafe one,
       fix via the context accessor. TDD throughout; krrood-internal mimics only.
+      Phase D's audit scope explicitly includes rules/conclusion_selector.py (on
+      main) and, once rdr-refactor's Wave-0 stack lands, rdr/rule_tree.py and
+      rdr/rule_tree_view.py - the RDR rule-tree consumers are not on main yet, so
+      an audit run before then silently under-covers them.
+
+  - id: insert-at-ownership-parentage
+    title: "Resolve insert_at splice parentage from the owning rule-tree context"
+    branch: null
+    pull_request_number: null
+    track: bugs-and-audit
+    depends_on: []
+    status: not_started
+    notes: >
+      bug label. ConclusionSelector.insert_at (rules/conclusion_selector.py:67)
+      splices above `anchor._parent_`, the first-attached primary parent, so a
+      shared-identity MappedVariable used inside a Comparator in one branch and
+      bare in a sibling branch splices above the incidental Comparator and drags
+      the new refinement out of the rule tree. This plan's own defect class, at
+      construction time rather than evaluation time: resolve the parent relative
+      to the asking rule-tree context (the `with`-context stack
+      create_and_update_rule_tree already uses via _get_current_context_condition)
+      instead of reading the structural pointer. Deliberately depends_on nothing -
+      it needs none of Wave 0's evaluation-scoped machinery and is reproducible on
+      main with core EQL plus rules/ alone, so it lands early rather than behind
+      the rename. Supersedes rdr-refactor's D-ui-splice-fix (#78).
 
   - id: facade-rename-and-guard
     title: "Rename structural accessors + reusable ownership accessor + guard test"

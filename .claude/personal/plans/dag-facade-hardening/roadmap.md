@@ -85,3 +85,70 @@ first raised the "isn't it weird for a DAG to ask for a root / a node to ask for
 question, then cross-checked against the live #89/#90/#92 stack. Per-branch working notes, when
 branches exist, live in `.claude/personal/pr-progress/<branch>.md` as usual and are not
 duplicated here.
+
+## Addendum (2026-07-31) — the `insert_at` splice is this defect, on `main`, today
+
+A `/plan-item-resolve` session working `rdr-refactor`'s `D-core-support` (#67) hit a
+review thread calling `enforce_parent_consistency` in `rdr/rule_tree_view.py` a code
+smell — *"why isn't it consistent in the first place?"* Tracing that question led
+here, and turned up a concrete instance of this plan's defect class sitting on `main`.
+
+`ConclusionSelector.insert_at` (`rules/conclusion_selector.py:67`) splices a new branch
+above `anchor._parent_`:
+
+```python
+# Splice above the anchor's structural parent — a ConclusionSelector for a node already
+# in a rule tree, or a Filter for a direct WHERE condition.
+previous_parent = anchor._parent_
+```
+
+That is first-attached-wins on a node that is routinely shared. When a rule tree first
+uses an attribute inside a `Comparator` in one branch (`refinement(eggs == False)`) and
+later refines on it bare (`refinement(eggs)`) in a sibling branch, `anchor._parent_`
+points at the incidental `Comparator`; the splice rewires that comparator's operand and
+drags the new refinement chain out of the tree. Measured consequence, from #78: loading
+a human-fitted zoo model dropped 12 of its 21 rules (accuracy 101/101 → 71/101).
+
+Three things make this worth its own item rather than folding into Phase D:
+
+- **It is construction-time, not evaluation-time.** Wave 0's machinery
+  (`ActiveConditionsRoot`, `OutermostQueryClaim`, `TruthValueOperatorChildren`) is all
+  evaluation-scoped, and nothing is evaluating when a rule tree is spliced. The fix uses
+  the *other* context that already exists: the `with`-context stack
+  `create_and_update_rule_tree` resolves its anchor from via
+  `_get_current_context_condition`. Same principle — parent relative to who is asking —
+  applied at the other end of the lifecycle. So it needs none of Wave 0 and is
+  `depends_on: []`.
+- **It is reproducible on `main` with core EQL plus `rules/` alone.** No RDR layer, no
+  mimic of another package: build a node attached under two parents, splice, assert the
+  splice took the asking branch's edge rather than the first-attached one. A genuine
+  failing-first test at the accessor's own contract level.
+- **Leaving it to Phase D would land it after the rename, which is backwards.** The
+  rename is sequenced last precisely because it is the largest diff; this fix is small,
+  wanted now, and removes work from another plan.
+
+### Why this supersedes `rdr-refactor`'s #78
+
+PR #78 (`D-ui-splice-fix`, `bug`) fixes the same bug the other way: it reintroduces
+`SymbolicExpression._last_parent_of_type_` and has `insert_at` walk up to the anchor's
+most recent `ConclusionSelector`/`Filter` parent. That is a heuristic over `_parents_` —
+a semantic module reading structural parentage, which is exactly what Phase D's guard
+test is meant to forbid and what Phase A's rename would break. It also re-adds the
+symbol **#89 deleted from `main`** (verified absent there), so the programme would delete
+it, re-add it, and delete it again.
+
+#78's scope note says it is based on `D-core-engine` rather than `main` "because
+`insert_at` does not exist on `main` yet". That was true when written on 2026-07-16 and
+is now stale: `rules/` has since landed on `main`, `insert_at` with it. Nothing about
+this fix needs the RDR stack.
+
+So #78 reduces to its regression test, re-pointed at the fixed API, or closes as
+superseded — a call for whoever picks up either item first.
+
+### Effect on the programme's sequencing
+
+`rdr-refactor`'s Wave-0 stack still goes first overall: `facade-rename-and-guard` is a
+repo-wide rename in `base_expressions.py`, the file that 12-PR stack contests most, and
+every merge to `main` while it is open costs a full cascade restack. This item is the
+exception that jumps the queue — it is small, lands off `main`, and *removes* a future
+cascade instead of adding one.
