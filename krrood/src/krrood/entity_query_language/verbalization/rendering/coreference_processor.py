@@ -27,7 +27,9 @@ from krrood.entity_query_language.verbalization.microplanning.possessive import 
     pronominal_path,
 )
 from krrood.entity_query_language.verbalization.microplanning.referring import (
-    DistinguisherIndex, AlternativeDistinguisher, OrdinalDistinguisher,
+    DistinguisherIndex,
+    AlternativeDistinguisher,
+    OrdinalDistinguisher,
 )
 from krrood.entity_query_language.verbalization.rendering.discourse import (
     DiscourseView,
@@ -573,7 +575,11 @@ class CoreferenceProcessor(RealizationPass):
         return replace(
             noun_phrase,
             alternative=isinstance(distinguisher, AlternativeDistinguisher),
-            ordinal=distinguisher.ordinal if isinstance(distinguisher, OrdinalDistinguisher) else None,
+            ordinal=(
+                distinguisher.ordinal
+                if isinstance(distinguisher, OrdinalDistinguisher)
+                else None
+            ),
             modifiers=modifiers,
         )
 
@@ -591,7 +597,9 @@ class CoreferenceProcessor(RealizationPass):
         """:return: A repeat mention reduced to its head — the first-mention modifiers dropped — as
         a definite reference (*"the Robot"*), preserving any distinguishing feature already
         stamped by :meth:`_distinguished` (*"the other Robot"*, *"the second Robot"*) so a
-        distinguished referent stays told apart on every later mention.
+        distinguished referent stays told apart on every later mention. A disjunctive head's
+        :attr:`~…fragments.base.NounPhrase.additional_heads` carry over too (*"the Circle or the
+        Square"*).
 
         Verbalizing one expression twice against a shared context reduces the repeat to *"the Robot"*:
 
@@ -606,6 +614,9 @@ class CoreferenceProcessor(RealizationPass):
         """
         return NounPhrase(
             head=self._walk(noun_phrase.head),
+            additional_heads=[
+                self._walk(additional) for additional in noun_phrase.additional_heads
+            ],
             number=noun_phrase.number,
             definiteness=Definiteness.DEFINITE,
             referent_id=noun_phrase.referent_id,
@@ -646,6 +657,9 @@ class CoreferenceProcessor(RealizationPass):
         'Find an Employee such that its salary is greater than its starting_salary'
         """
         head = self._walk(noun_phrase.head)
+        additional_heads = [
+            self._walk(additional) for additional in noun_phrase.additional_heads
+        ]
         if noun_phrase.referent_id is None or not noun_phrase.subject_of_modifiers:
             modifiers = [self._walk(modifier) for modifier in noun_phrase.modifiers]
         else:
@@ -656,4 +670,9 @@ class CoreferenceProcessor(RealizationPass):
                 modifiers = [self._walk(modifier) for modifier in noun_phrase.modifiers]
             finally:
                 self._subject_stack.pop()
-        return replace(noun_phrase, head=head, modifiers=modifiers)
+        return replace(
+            noun_phrase,
+            head=head,
+            additional_heads=additional_heads,
+            modifiers=modifiers,
+        )

@@ -31,12 +31,13 @@ jobs:
       - name: Check version against PyPI
         id: check
         run: |
-          LOCAL_VERSION=$(cat VERSION)
+          LOCAL_VERSION=$(grep -oP '(?<=__version__ = ")[^"]+' src/krrood/_version.py)
           echo "Local version: $LOCAL_VERSION"
 
           PYPI_VERSION=$(pip index versions krrood 2>/dev/null \
             | grep -oP '(?<=Available versions: )[^,]+' \
-            | tr -d ' ' || echo "0.0.0")
+            | tr -d ' ')
+          PYPI_VERSION=${PYPI_VERSION:-0.0.0}
           echo "PyPI version: $PYPI_VERSION"
 
           python -c "

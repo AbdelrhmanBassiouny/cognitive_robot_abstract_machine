@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from typing_extensions import Optional
+from typing_extensions import List, Optional
 
 from krrood.entity_query_language.verbalization import morphology
 from krrood.entity_query_language.verbalization.fragments.base import (
     flatten_fragment_to_plain_text,
     NounPhrase,
+    oxford_comma,
     PhraseFragment,
     RoleFragment,
     VerbalizationFragment,
@@ -18,7 +19,10 @@ from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
 )
 from krrood.entity_query_language.verbalization.rendering.passes import RewritePass
-from krrood.entity_query_language.verbalization.vocabulary.english import Articles
+from krrood.entity_query_language.verbalization.vocabulary.english import (
+    Articles,
+    Conjunctions,
+)
 
 
 class DeterminerProcessor(RewritePass):
@@ -54,20 +58,25 @@ class DeterminerProcessor(RewritePass):
         return self._lower_noun_phrase(leaf) if isinstance(leaf, NounPhrase) else leaf
 
     def _lower_noun_phrase(self, noun_phrase: NounPhrase) -> VerbalizationFragment:
-        """:return: *noun_phrase* lowered to a determiner-bearing phrase — the chosen determiner,
-        an optional ordinal-distinguisher and pre-head qualifier, the number-tagged head, and the
-        recursed modifiers.
+        """Lower *noun_phrase* to a determiner-bearing phrase: the chosen determiner, an optional
+        ordinal-distinguisher and pre-head qualifier, the number-tagged head, and the recursed
+        modifiers. When :attr:`~…fragments.base.NounPhrase.additional_heads` is non-empty, each
+        alternative becomes its own determiner-and-head group (the ordinal/pre-head qualifier
+        applies only to the first), joined with *"or"*.
+
+        :param noun_phrase: The noun-phrase specification to lower.
+        :return: The lowered fragment.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
         >>> phrase = NounPhrase(head=RoleFragment.for_type(Robot), definiteness=Definiteness.INDEFINITE)
         >>> flatten_fragment_to_plain_text(DeterminerProcessor()._lower_noun_phrase(phrase))
         'a Robot'
         """
-        head = self._tag_number(self.process(noun_phrase.head), noun_phrase.number)
         # An ordinal distinguisher ("a [second] Robot") sits ahead of any pre-head qualifier ("the
         # [first two] Robots" / "a [specific] Body"), both between the determiner and the head. The
         # indefinite article agrees with the first surface word, so the anchor is the ordinal when
-        # present, else the pre-head, else the head ("a specific Body", not "an …").
+        # present, else the pre-head, else the head ("a specific Body", not "an …"). These qualify
+        # only the leading head — each additional disjunctive alternative is a bare head of its own.
         ordinal_fragment = (
             WordFragment(text=morphology.ordinal(noun_phrase.ordinal - 1))
             if noun_phrase.ordinal is not None
@@ -81,33 +90,65 @@ class DeterminerProcessor(RewritePass):
         leading_fragment = (
             ordinal_fragment if ordinal_fragment is not None else pre_head_fragment
         )
-        determiner = self._determiner(
-            noun_phrase.definiteness,
-            noun_phrase.number,
-            leading_fragment if leading_fragment is not None else head,
-            alternative=noun_phrase.alternative,
-        )
         pre_head = [
             fragment
             for fragment in (ordinal_fragment, pre_head_fragment)
             if fragment is not None
         ]
-        head_group_parts = [
-            *([determiner] if determiner is not None else []),
-            *pre_head,
-            head,
-        ]
-        head_group = (
-            head_group_parts[0]
-            if len(head_group_parts) == 1
-            else PhraseFragment(parts=head_group_parts)
+        head_group = self._head_group(
+            noun_phrase, noun_phrase.head, pre_head, leading_fragment
         )
+        if noun_phrase.additional_heads:
+            additional_groups = [
+                self._head_group(noun_phrase, additional, [], None)
+                for additional in noun_phrase.additional_heads
+            ]
+            head_group = oxford_comma(
+                [head_group, *additional_groups], Conjunctions.OR.as_fragment()
+            )
         if not noun_phrase.modifiers:
             return head_group
         modifiers = [self.process(modifier) for modifier in noun_phrase.modifiers]
         return PhraseFragment(
             parts=[head_group, *modifiers], separator=noun_phrase.modifier_separator
         )
+
+    def _head_group(
+        self,
+        noun_phrase: NounPhrase,
+        head: VerbalizationFragment,
+        pre_head: List[VerbalizationFragment],
+        leading_fragment: Optional[VerbalizationFragment],
+    ) -> VerbalizationFragment:
+        """
+        Build one determiner-and-head group: *head*, number-tagged and processed,
+        preceded by its own determiner (chosen from *leading_fragment*, or *head* itself
+        when there is none) and any *pre_head* qualifier. *noun_phrase* supplies the
+        shared definiteness, number, and alternative/pair-distinguisher features every
+        group agrees on; only the article is decided per group.
+
+        :param noun_phrase: The enclosing phrase, for its shared definiteness/number/alternative.
+        :param head: The head fragment for this group (the phrase's own head, or one of its
+            :attr:`~…fragments.base.NounPhrase.additional_heads`).
+        :param pre_head: Any pre-head qualifier fragments (ordinal, ranking phrase) for this
+            group; empty for a non-leading additional head.
+        :param leading_fragment: The article's phonological anchor when it differs from *head*
+            (the ordinal or pre-head qualifier); ``None`` to anchor on *head* itself.
+        :return: The determiner-and-head group fragment.
+        """
+        processed_head = self._tag_number(self.process(head), noun_phrase.number)
+        determiner = self._determiner(
+            noun_phrase.definiteness,
+            noun_phrase.number,
+            leading_fragment if leading_fragment is not None else processed_head,
+            alternative=noun_phrase.alternative,
+        )
+        parts = [
+            *([determiner] if determiner is not None else []),
+            *pre_head,
+            processed_head,
+        ]
+        return parts[0] if len(parts) == 1 else PhraseFragment(parts=parts)
 
     @staticmethod
     def _tag_number(
