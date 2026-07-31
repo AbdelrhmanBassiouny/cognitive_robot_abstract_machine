@@ -145,6 +145,16 @@ items:
       reparent via unstack → PATCH base → re-stack, or leave it to gh stack sync /
       the UI Rebase-stack button. (c) is load-bearing before the next cram2 landing
       of any stacked branch: stack #112 already exists on the fork.
+      Upgraded to a cut the same day (user decision, "decision 11" in the roadmap):
+      the restack subsystem (restack-plan, next, status/structure derivation) is
+      removed from the PR entirely rather than trimmed — native stacks own
+      structure, gh stack / the Rebase-stack button own cascading, and the
+      preview-less-repo fallback is YAGNI (the preview is account-wide; the old
+      tooling branch remains as a tagged archive). The PR keeps: ROUTINE.md
+      rewritten around native mechanics (incl. the Phase-1 reparent special case
+      and merge-async doctrine), stack.toml + per-user config layering, the
+      label/cram2-link helpers, a small reparent-recovery script, and tests.
+      Re-scope instruction posted on the PR itself.
 
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
@@ -183,7 +193,9 @@ items:
       labels + personal stack.toml + optionally creating the stack itself via
       POST /repos/{owner}/{repo}/stacks; the fork-overlay install mode demotes to a
       documented fallback for repos without the stacks preview. Amend while still a
-      draft.
+      draft. #106's same-day cut narrows this further: there is no restack engine to
+      install — setup is doctrine files + labels + personal stack.toml + the optional
+      stack creation.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
@@ -259,7 +271,8 @@ items:
       Added 2026-07-31 (native-stacks pivot, user-approved): pr_state also reads the
       PR's native stack object via REST (X-GitHub-Api-Version 2026-03-10; GraphQL is
       unusable from sessions) and renders a stack chip ("layer p/n · stack #N") when
-      the PR is a stack member.
+      the PR is a stack member. #106's cut may simplify or remove the "stack.py
+      export restored through the package" interplay; pr_state itself is unaffected.
 
   - id: dev-tooling-python-package
     branch: null

@@ -639,3 +639,24 @@ handed to the user as a file; its content is: detect stack membership via the `s
 API version 2026-03-10; never classic-merge/MCP-merge a stack member; Phase 1 reparent for stacked
 children = record stack composition → dissolve (`unstack`, no body) → PATCH bases → normal local
 restack → re-create stack; stop-and-report on any unexpected API behavior.
+
+## Update 2026-07-31 (cut): decision 11 — #106 cuts the restack subsystem instead of trimming it
+
+User decision, prompted by an explicit reassessment ask ("fastest and simplest while reliable,
+clean, and minimal cram2 review effort"). The trim commit approved earlier the same day kept the
+restack engine with a stack-API-primary/PR-base-fallback split; the reassessment concluded the
+fallback's only remaining justification (repos without the stacks preview) is YAGNI — the preview
+is account-wide for the user, cram2-the-org is never stacked on directly, and the old tooling
+branch survives as a tagged archive if a preview-less repo ever materializes. Since the plan's own
+named slowest-review risk was stack.py's 741 lines, cutting the engine is simultaneously the
+fastest path through the actual bottleneck (cram2 reviewer time) and the most reliable one (GitHub
+maintains the mechanics; we maintain policy).
+
+What #106 keeps: ROUTINE.md rewritten around native mechanics — stack object as structure source,
+merge-async + poll as the only merge path, base.sha-lag staleness, the Phase-1 reparent special
+case (record → dissolve → PATCH bases → restack → re-create) — plus stack.toml and per-user config
+layering, the label/cram2-link helpers, a small reparent-recovery script, and tests. What it drops:
+restack-plan, next, status/structure derivation. Knock-ons recorded on setup-stacked-prs-skill
+(nothing to install beyond doctrine + labels + config + optional stack creation) and
+shared-pr-state-chips (the stack.py export interplay may vanish). Instructions were posted as
+comments on #101, #106, #107, #110, and #111 so each owning session receives them as events.
