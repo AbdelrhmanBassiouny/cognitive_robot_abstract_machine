@@ -44,8 +44,11 @@ Branch re-pointed at #118's fixed API (the DSL repro + 12/21 measurement are the
 valuable part; #118 already covers the core-level defect with two DSL tests in
 test_eql/test_core/test_rules.py). The earlier test_rule_tree_growth restack
 conflict is now MOOT — that commit gets dropped, not carried.
-NEXT CHECK-INS: watch #118 for merge; watch #79/#76 stay green. Only re-base
-once #118 lands. #78 is closed + auto-unsubscribed — done.
+MONITORING = EVENT-DRIVEN ONLY (per personal-notes "no scheduled checks"):
+subscribed to #118 (the merge is the re-base trigger) + #79 + #76. Stopped the
+hourly send_later polling — do NOT re-arm it. Act when #118's merge event
+arrives (then re-base #79 -> #76 onto the updated base, dropping the splice-fix
+commit). #78 closed + auto-unsubscribed — done.
 
 KNOWN krrood-job FLAKE (don't mistake for a real regression): a collection-time
 TOCTOU race under pytest-xdist — `test/krrood_test/conftest.py`'s ORM-interface
