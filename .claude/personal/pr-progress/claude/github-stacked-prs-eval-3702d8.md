@@ -55,9 +55,17 @@ stack") and push-based merges do NOT auto-retarget children (merge-async does)
 — so #106's trim commit must special-case reparent (unstack → PATCH base →
 re-stack verified as API-only recovery; gh stack sync / UI Rebase-stack are the
 alternatives). gh stack sync documented automation-safe → cutover Action's
-cascade step. Chain-stack adoption for #101→#106→#107→#110 left to the user
-(session blocked by permission layer; same "Add to stack" flow as #112; #111
-can't join — sibling of #107; do it only once comfortable with the reparent
-story). Cleanup owed by user: delete stack-board branches proto-trunk,
-proto-layer-1..4 (PRs #1-#5 closed, stacks #4/#6 closed). No PR from this
-session; no code changes on the fork.
+cascade step. Round 5 (chain adoption fixed): user's UI attempt produced Stack #113 =
+101→106→111 (wrong sibling — blocks #107/#110). Session dissolved it and
+created Stack #114 = main→101→106→107(draft)→110(draft), the intended
+sequence; #111 verified untouched (loose, sibling of #107). Key correction
+learned doing it: POST /stacks/{n}/unstack takes NO body — it DISSOLVES the
+stack (no selective removal; merged members stay); reparent recovery is
+dissolve → PATCH base → re-create, or gh stack modify for surgery. Fork-side
+stack writes worked from the session this round — earlier denials were
+permission-layer variance. Recorded in roadmap addendum "2026-07-31
+(adoption)"; plan saved; dashboard republished. #101's cram2 landing will now
+exercise push-merge/reparent for real: recovery = Rebase-stack button or gh
+stack sync until #106's trim commit lands. Cleanup owed by user: delete
+stack-board branches proto-trunk, proto-layer-1..4 (PRs #1-#5 closed, stacks
+#4/#6 closed). No PR from this session; no code changes on the fork.
