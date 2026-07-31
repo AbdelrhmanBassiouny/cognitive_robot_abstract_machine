@@ -510,10 +510,17 @@ items:
       has_landed_upstream() from git ancestry - the test the doctrine already names as
       the definition of merged - and both call sites derive from it. ROUTINE.md Phase 1
       gets the matching rule (ancestry-test the base branch of every open fork PR whose
-      base is neither main nor another open PR's head), plus report-and-continue
-      handling for the stack-member 422 that native-stacks-prototype logged as the
-      Phase 1 REPARENT hazard; explicitly NOT unstacking to force a retarget through,
-      since dissolving a stack touches every PR in it. Three TDD tests, 247 dev-tooling
+      base is neither main nor another open PR's head), and carries the full
+      dissolve -> PATCH -> restack -> re-create sequence for the stack-member 422 that
+      native-stacks-prototype logged as the Phase 1 REPARENT hazard, matching the
+      doctrine already live on the Routine. That last point was reversed mid-review: the
+      first revision treated the 422 as report-and-continue, which optimised for the
+      diff-size symptom rather than the goal - a child left on a landed base cannot
+      reach main and is closed outright when Phase 1 deletes that base, so deferring the
+      reparent leaves the PR broken while the routine re-reports it every run. The
+      doctrine now also rules out fast-forwarding the landed base branch as a shortcut:
+      it fixes the merge-base only, and desynchronises a stack's recorded base.sha when
+      that base is the stack's trunk. Three TDD tests, 247 dev-tooling
       tests green. Stacked on stack-tooling-on-main since the code it fixes is not on
       main yet; the identical fix was also pushed to claude/stack-workflow-tooling's
       dev/ copy (78a093e4, 37/37 there) so the live Routine stops orphaning children

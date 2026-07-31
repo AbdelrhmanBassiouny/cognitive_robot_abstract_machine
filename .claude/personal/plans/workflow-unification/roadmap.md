@@ -874,3 +874,36 @@ stack tip: #63 → #64 → #65 → #66 hang off it, so GitHub's documented recov
 treats the 422 as report-and-continue and explicitly forbids unstacking as a mechanical step;
 the FINISH summary lists the stuck PRs so they can be retargeted by hand. #41 itself is left as
 found, awaiting that decision — its review round is resolved and its code is correct either way.
+
+### Reversal within the same item: the stack-member 422 is worked around, not reported
+
+The first revision of `landed-parent-detection` told the routine to treat the reparent 422 as
+report-and-continue and explicitly forbade unstacking, reasoning that dissolving a stack is too
+destructive for a mechanical step. The user rejected it with one sentence — *we want to merge the
+problematic branch to main; fast-forwarding its base doesn't retarget it to main* — and that is
+decisive. The reparent's purpose, in the doctrine's own words, is that the child stacks on main
+"not on a branch about to disappear"; the inflated diff is a symptom. Deferring the reparent does
+not make it optional, it leaves the child unable to land and due to be closed when Phase 1 deletes
+its base, while the now-working orphan detection re-reports the same PR every run. And "retarget it
+by hand" resolves to a human performing the identical dissolve-and-recreate through the UI, so the
+rule never avoided the destructive operation — it only moved who performs it.
+
+Two things this settles for the future:
+
+- **The live Routine's `AMENDMENT 2026-07-31` was right, and `ROUTINE.md` now matches it** rather
+  than contradicting it. Worth noting the near-miss: the amendment was pasted into the live prompt
+  the same morning, and the first revision of this item was written without reading it, so the two
+  canonical copies of the doctrine briefly disagreed on a destructive operation. Read the live
+  prompt before changing `ROUTINE.md` until `routine-cutover` collapses them into one copy.
+- **Fast-forwarding a landed base branch to `main` is rejected as a general technique**, not just
+  here. It moves the merge-base so the diff renders correctly while the child still targets a
+  disappearing branch, and when that base is a stack's trunk — as `ripple-down-rules-refactor` is
+  for Stack #112 — it desynchronises the stack's recorded `base.sha` from its real head, which the
+  prototype recorded as GitHub's own staleness signal. It was offered for PR #41 before the stack
+  trunk relationship was noticed.
+
+The reparent duty also survives `routine-cutover`: the fork→cram2 hop is not a stack, fork branches
+land by push/fast-forward, and round-2 probing established that push-based merges are detected as
+merged but do **not** auto-retarget children — only `merge-async` does. `gh stack modify` is the
+surgical alternative to dissolving, but the docs describe it as interactive, so it is unavailable
+to an unattended Action or Routine.
