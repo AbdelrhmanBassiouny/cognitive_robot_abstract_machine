@@ -24,9 +24,31 @@ mechanics → GitHub native; residue needing a session = cascade conflicts + red
 CI after restack — endgame may be no scheduled LLM routine at all, on-demand
 sessions instead.
 
-Next: user endorsed prototyping direction; proposed scratch-repo prototype
-(7 probes: REST/GraphQL stack reads incl. from session token, stack
-create/extend/dissolve, cascade auto-vs-triggered, mid-stack merge via new merge
-API, conflict surface, webhook stack payload via dump Action, drafts-in-stack).
-Awaiting go-ahead to add a native-stacks-prototype item to workflow-unification
-and run the prototype. No PR from this session; no code changes.
+Round 3 (go-ahead given): prototype RUN and CONCLUDED. Host: throwaway proto-*
+branches on stack-board (repo creation 403s for the installation token; stack-board
+main untouched, trunk was throwaway proto-trunk). All probes conclusive — full
+findings + per-item consequences in workflow-unification roadmap.md addendum
+2026-07-31; item native-stacks-prototype added (status done); plan saved
+(save-plan.sh); dashboard republished same URL. Headlines: all stacks REST
+endpoints work from session token under X-GitHub-Api-Version 2026-03-10
+(list/get/create/add/unstack; drafts accepted; preview account-wide); GraphQL
+blocked session-side (pinned queries) → pr_state must use REST; NO REST cascade
+trigger exists (UI-only; update-branch hard-403s "Merging stacked PRs via this
+API is not supported") → automation cascades via local rebase+force-push
+(verified, preserves stack membership); merges MUST use new async API
+PUT /pulls/{n}/merge-async + poll GET .../merge-async/{uuid} (classic merge +
+MCP merge tool hard-403 on stacked PRs); mid-stack merge merges everything below
+in one op + auto-retargets PRs above (incl. draft) in seconds; stale stack
+refused with "not a linear descendant" error; draft merge refused "Pull request
+is in draft"; conflicts = plain mergeable:false/dirty; stack base.sha lagging
+trunk head = staleness signal; Actions payloads carry .pull_request.stack,
+retarget arrives as "edited" action; stack auto-closes when only merged PRs
+remain.
+
+Next (user decisions, not made): pivot-now vs land-then-migrate for #106;
+re-scope #110 (setup shrinks) and stack-board-single-site (plans-only site per
+one-dashboard decision); routine-cutover endgame candidate = deterministic
+Action + on-demand sessions, no scheduled LLM. Cleanup owed by user (session
+branch-delete 403): delete stack-board branches proto-trunk, proto-layer-1..4
+(PRs #1-#5 there closed/merged, throwaway; stack #4 closed). No PR from this
+session; no code changes on the fork.
