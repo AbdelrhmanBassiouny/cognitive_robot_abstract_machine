@@ -417,3 +417,44 @@ for ("Verify that actually happens"):
 - `plan.yaml`: `status` → `in_progress`, stale `blockers` entry removed. No code
   changes were needed on #41 itself — it's ready for the steward to merge
   bottom-up whenever picked up next.
+
+## 9. Addendum (2026-07-31) — `D-core-serialization` (#66) restack conflict resolved
+
+The same `/plan-item-resolve` session that unblocked §8 then picked up
+`D-core-serialization`, recorded as `blocked` on a real restack conflict against
+its base, `D-core-corner-case` (#65). Root-caused and resolved it:
+
+- Confirmed live via `pull_request_read` and independently reproduced with
+  `git merge-tree --write-tree origin/D-core-serialization origin/D-core-corner-case`
+  (git's rename-aware three-way merge) that there were exactly two content
+  conflicts — `krrood/code_generation/function_case.py` and
+  `krrood/code_generation/object_to_source.py` — matching the restacking bot's
+  own report exactly.
+- Root cause: #66 itself renamed `krrood/code_generation/type_hints.py` →
+  `object_to_source.py` (a review-driven change, confirmed in #66's resolved
+  review-thread history) and repointed its importers. Independently, after #66's
+  last restack (2026-07-19), further work landed on `main` via the
+  `code-generation-extract` cascade that kept evolving `type_hints.py` **under
+  its old name**: dropped the `_ORIGIN_TYPE_TO_HINT` special-case, dropped the
+  `stringify_hint` backward-compat alias, and changed
+  `get_types_to_import_from_type_hints`/`get_types_to_import_from_function_type_hints`
+  to return an order-preserving `List[Type]` instead of `Set[Type]` (also
+  de-abbreviating `tp` → `type_`, per AGENTS.md). Git's rename detection matched
+  the two files as one across branches and auto-merged everything except two
+  small overlapping hunks.
+- Resolution: `function_case.py` — took `D-core-corner-case`'s full file (#66
+  never touched anything else in it) and redirected its one `type_hints` import
+  to `object_to_source` (same two names, unchanged). `object_to_source.py` —
+  kept #66's own `render_dict_literal` addition alongside
+  `D-core-corner-case`'s `List[Type]`-returning `get_types_to_import_from_type_hints`.
+  Everything else (`ripple_down_rules/utils.py`'s import-block trim, `AGENTS.md`'s
+  dual additions) auto-merged cleanly on its own.
+- Verified before pushing: `test_code_generation` (98/98) and `test_eql_rdr`
+  (57/59) pass; the 2 `test_eql_rdr` failures are `test_underspecified_match.py`
+  hitting a missing `probabilistic_model.probabilistic_circuit.relational.rspn`
+  submodule (the public PyPI release of `probabilistic_model` lacks it) — a
+  pre-existing environment/dependency-version gap in files #66 never touches, not
+  a regression from this merge.
+- Pushed as commit `5f897c27` on `D-core-serialization`. `plan.yaml`: `status`
+  `blocked` → `in_progress`. CI re-triggered on the new head; still stale-green
+  from before the conflict, so its outcome needs re-checking once it finishes.
