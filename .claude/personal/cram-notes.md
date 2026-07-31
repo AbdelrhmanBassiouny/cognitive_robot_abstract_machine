@@ -23,10 +23,6 @@ file itself must never be merged into `main`.
 - Always subscribe to all events on every PR you open - including plain
   conversation comments, not just inline review comments - and handle each
   event with an explanation summary in the session chat.
-- Unsubscribe once the only remaining CI failures are already-diagnosed,
-  known-flaky tests entirely outside the files this session's changes touch.
-  Don't stay subscribed just to keep re-diagnosing the same unrelated flake
-  every time CI reruns and it fails again.
 
 ## Scheduled checks
 
@@ -118,4 +114,37 @@ file itself must never be merged into `main`.
 Add new personal-only rules below this line. Keep each rule short and
 imperative, same style as above.
 -->
+
+## Plan updates: recheck deltas, don't reread
+
+- Note the personal-notes commit SHA whenever you read plan state (the fetch you read it
+  from); it is your staleness stamp.
+- Recheck for plan/tracking-issue updates at these moments: (a) when I prompt you after
+  you have been idle or stale for a while, (b) when starting a new task or plan item, and
+  (c) **always immediately before any `save-plan.sh` write** - fetch first and re-apply
+  your edits onto the latest manifest, never write back a copy loaded earlier (two silent
+  stale-save reverts are already on record in workflow-unification's roadmap).
+- Recheck means reading the *delta only*: fetch the notes branch, then
+  `git diff <last-seen-sha>..FETCH_HEAD -- .claude/personal/plans/<plan-id>/`; for the
+  plan's tracking issue, read only comments newer than your stamp. Do not reread whole
+  files that a diff can summarize.
+- Keep tracking-issue subscriptions where they exist: events are the push channel for
+  structural changes; this recheck is the pull channel for everything else (most manifest
+  edits produce no event at all). Neither replaces the other.
+
+## Comment routing for plan changes
+
+- The plan's tracking issue always gets the structural record.
+- Comment on a PR only when that PR's owner must act or its review context materially
+  changes (scope change, landing hazard). Pure FYIs go in the manifest/roadmap only - PR
+  comments wake subscribed sessions, so keep them action-only.
+
+## When your branch merges or closes
+
+- The moment a PR your session owns is merged or closed: unsubscribe from its activity
+  (`unsubscribe_pr_activity`), delete any armed triggers or check-ins that reference it
+  (`list_triggers` → `delete_trigger`), and stop any polling or monitoring tied to it.
+  Nothing may stay armed or subscribed for a finished branch.
+- This includes subscriptions taken out only for that branch's sake (e.g. a tracking-issue
+  subscription held solely to steward that one item).
 
