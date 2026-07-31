@@ -37,6 +37,16 @@ now a concrete forwarder to a newly-abstract `validate()`;
 ConclusionValidator/ConditionsValidator implement `validate()` instead of
 `__call__`. All 144 tests still pass.
 
+Open discussion (unresolved, thread PRRT_kwDOQhJw3c6VZoGj, interface.py L127,
+AnswerValidator.__call__): dev asked "why keep the __call__ methods?" after
+round 3's rename. Replied explaining it's kept so `request.validate(value)`
+still works as a plain callable in `ExpertInterface._validate()` (the field
+is literally named `validate`, so without `__call__` that call site becomes
+the stutter `request.validate.validate(value)`). Offered to drop `__call__`
+entirely and call `.validate()` explicitly everywhere if they'd rather.
+Waiting on their answer - do NOT remove `__call__` until they confirm which
+way they want it.
+
 Nothing else pending - wait for the next round of review activity via the PR
 subscription, or for the user to ask for `d-core-single-class` /
 `d-core-backend` work.
