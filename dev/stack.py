@@ -27,6 +27,7 @@ import json
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -148,6 +149,17 @@ class Stack:
     branches: list[Branch]
     """The derived stack nodes."""
 
+    is_merged: Callable[[str], bool]
+    """Maps any branch name - tracked by this stack or not - to whether it has landed upstream."""
+
+    def has_landed_upstream(self, branch_name: str) -> bool:
+        """Whether a branch's commits are already in the upstream base.
+
+        Answered from git ancestry, so it holds for any branch name - including one no open PR
+        describes, which the board therefore never mentions.
+        """
+        return branch_name == self.config.upstream_base or self.is_merged(branch_name)
+
     def counts_against_wip(self, branch: Branch) -> bool:
         """Whether a branch occupies a review slot (labelled-exempt PRs, e.g. bugs, do not)."""
         return not any(label in self.config.wip_exempt_labels for label in branch.labels)
@@ -216,7 +228,7 @@ def derive_status(draft: bool, merged: bool, in_review: bool) -> str:
     return READY if not draft else DRAFT
 
 
-def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
+def build_stack(config: Config, prs: list[PullRequest], is_merged: Callable[[str], bool]) -> Stack:
     """Assemble the :class:`Stack` from the PR export and a merged-branch predicate.
 
     ``is_merged`` maps a branch name to whether it has landed upstream; it is injected so the pure
@@ -236,7 +248,7 @@ def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
         )
         for pr in prs
     ]
-    return Stack(config=config, branches=branches)
+    return Stack(config=config, branches=branches, is_merged=is_merged)
 
 
 def _merged_predicate(config: Config):
@@ -303,10 +315,13 @@ def order(stack: Stack) -> list[Branch]:
 def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> bool:
     """Whether a branch's parent has reached the upstream (merged or in-review), so it can promote.
 
-    A root branch (base is the upstream base, so it has no tracked parent PR) is always unblocked.
+    A parent no open PR describes cannot carry an in-review label, so git ancestry is the only
+    evidence available for it - and absence from the board is not itself evidence of a root branch.
     """
     parent = by_name.get(branch.parent)
-    return parent is None or parent.status in {IN_REVIEW, MERGED}
+    if parent is None:
+        return stack.has_landed_upstream(branch.parent)
+    return parent.status in {IN_REVIEW, MERGED}
 
 
 def stack_root(branch: Branch, by_name: dict[str, Branch]) -> str:
@@ -409,17 +424,16 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     When a branch's parent has **merged** into the upstream, its commits are already in the base, so the
     child is reparented onto the upstream base: the restack rebases it there and it stops depending on a
     landed (and about-to-be-closed) branch. The routine mirrors this by retargeting the child PR's base
-    to the upstream base on GitHub.
+    to the upstream base on GitHub. This holds however the parent landed - including when its own PR
+    was closed rather than merged, leaving the board with no entry for it at all.
     """
-    by_name = {b.name: b for b in stack.branches}
     plan: list[dict[str, str]] = []
     for branch in order(stack):
         if branch.status == MERGED:
             continue
-        parent = by_name.get(branch.parent)
         effective_parent = (
             stack.config.upstream_base
-            if parent is not None and parent.status == MERGED
+            if stack.has_landed_upstream(branch.parent)
             else branch.parent
         )
         plan.append(

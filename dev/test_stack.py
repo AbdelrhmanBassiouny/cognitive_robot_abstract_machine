@@ -349,3 +349,27 @@ def test_restack_plan_reparents_child_of_merged_parent_onto_base():
     ]
     plan = restack_plan(build(prs, merged={"parent"}))
     assert plan == [{"branch": "child", "parent": "main", "strategy": "merge"}]
+
+
+# %% landed parents that no open pull request describes
+
+
+def test_restack_plan_reparents_child_of_a_landed_parent_with_no_open_pull_request():
+    # the board only carries OPEN PRs, so a parent whose own PR was closed is absent from it
+    # entirely - yet its commits are in the upstream base, so its child must still be reparented
+    # onto that base rather than left on the landed branch.
+    prs = [PullRequest(2, "child", "landed-elsewhere", draft=False)]
+    plan = restack_plan(build(prs, merged={"landed-elsewhere"}))
+    assert plan == [{"branch": "child", "parent": "main", "strategy": "merge"}]
+
+
+def test_ready_child_blocked_when_its_only_parent_is_an_unlanded_off_board_branch():
+    # an off-board parent is not evidence of a root branch: this one has not landed, so the child
+    # is not promotable even though no PR describes the parent.
+    prs = [PullRequest(2, "child", "unlanded-elsewhere", draft=False)]
+    assert next_to_promote(build(prs)) is None
+
+
+def test_ready_child_promotable_when_its_off_board_parent_has_landed():
+    prs = [PullRequest(2, "child", "landed-elsewhere", draft=False)]
+    assert next_to_promote(build(prs, merged={"landed-elsewhere"})).name == "child"
