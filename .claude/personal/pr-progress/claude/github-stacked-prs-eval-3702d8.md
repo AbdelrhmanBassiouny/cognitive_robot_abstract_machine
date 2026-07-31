@@ -45,10 +45,19 @@ trunk head = staleness signal; Actions payloads carry .pull_request.stack,
 retarget arrives as "edited" action; stack auto-closes when only merged PRs
 remain.
 
-Next (user decisions, not made): pivot-now vs land-then-migrate for #106;
-re-scope #110 (setup shrinks) and stack-board-single-site (plans-only site per
-one-dashboard decision); routine-cutover endgame candidate = deterministic
-Action + on-demand sessions, no scheduled LLM. Cleanup owed by user (session
-branch-delete 403): delete stack-board branches proto-trunk, proto-layer-1..4
-(PRs #1-#5 there closed/merged, throwaway; stack #4 closed). No PR from this
+Round 4 (recommendations approved, executed): all re-scopes recorded in
+plan.yaml + roadmap addendum "2026-07-31 (later)"; #102 comment posted
+(issuecomment-5139936707); dashboard republished. Routine audit ran with round-2
+probes on rebuilt throwaway stack #6 (reopened PRs #3/#5 on stack-board):
+doctrines never API-merge (clean), BUT Phase 1 REPARENT hits 422 on stack
+members ("Cannot change the base branch because the pull request is part of a
+stack") and push-based merges do NOT auto-retarget children (merge-async does)
+— so #106's trim commit must special-case reparent (unstack → PATCH base →
+re-stack verified as API-only recovery; gh stack sync / UI Rebase-stack are the
+alternatives). gh stack sync documented automation-safe → cutover Action's
+cascade step. Chain-stack adoption for #101→#106→#107→#110 left to the user
+(session blocked by permission layer; same "Add to stack" flow as #112; #111
+can't join — sibling of #107; do it only once comfortable with the reparent
+story). Cleanup owed by user: delete stack-board branches proto-trunk,
+proto-layer-1..4 (PRs #1-#5 closed, stacks #4/#6 closed). No PR from this
 session; no code changes on the fork.
