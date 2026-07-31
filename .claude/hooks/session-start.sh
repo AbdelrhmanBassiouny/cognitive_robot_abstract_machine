@@ -77,9 +77,9 @@ set -euo pipefail
 # initialize and maintain it from the start. See ./save-pr-progress.sh.
 #
 # Plan auto-discovery: if the current branch appears as an item in some
-# multi-PR/multi-session plan (see .claude/personal/plans/README.md and
-# .claude/skills/plan-dashboard/SKILL.md, on the personal-notes branch and
-# main respectively), CLAUDE.local.md also gets that plan's manifest
+# multi-PR/multi-session plan (see .claude/skills/plan-dashboard/plan-schema.md
+# and .claude/skills/plan-dashboard/SKILL.md), CLAUDE.local.md also gets
+# that plan's manifest
 # (plan.yaml) and narrative (roadmap.md) pulled in - so a session picks up
 # the wider initiative its branch belongs to without anyone having to ask it
 # to go read a roadmap doc by hand. Looked up via the generated
@@ -96,7 +96,7 @@ set -euo pipefail
 # directly - any session may make structural changes, there is no
 # designated steward - and to subscribe to the tracking issue itself while
 # actively working an item, so another session's structural change reaches
-# it in real time - see plans/README.md's "Proposing structural changes"
+# it in real time - see plan-schema.md's "Proposing structural changes"
 # section for the full convention.
 #
 # How this script gets invoked (see ../settings.json): Claude Code registers it
@@ -204,7 +204,7 @@ if [ -n "${PLAN_ID}" ]; then
     # same dependency-free reasoning as plan_id_for_branch above. Empty if
     # the plan has no tracking_issue set (nothing to extract, not an error).
     # Named for the mailbox's role, not necessarily a literal GitHub Issue -
-    # see plans/README.md's PR-fallback note for repos with Issues disabled.
+    # see plan-schema.md's PR-fallback note for repos with Issues disabled.
     TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
       | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 | grep -oE '[0-9]+$')"
     if [ -n "${TRACKING_ISSUE}" ]; then
@@ -217,7 +217,7 @@ infer and apply silently just because editing the manifest directly is
 technically allowed. Once they confirm, make the edit and always also leave
 a comment on the tracking issue (#${TRACKING_ISSUE}) describing it, since
 the user reviews structural changes there and it is the shared record other
-sessions working this plan can check - see plans/README.md's 'Proposing
+sessions working this plan can check - see plan-schema.md's 'Proposing
 structural changes' section. If this session is actively working an item in
 this plan, also subscribe to the tracking issue itself (in addition to your
 own item's PR) so a structural change another session makes reaches you
@@ -231,7 +231,7 @@ mailbox for structural changes yet - edit the manifest directly as usual."
 Plan manifest for '${PLAN_ID}', synced from '${NOTES_BRANCH}'
 (${PLAN_MANIFEST_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
 session-start.sh. This branch is tracked as an item in this plan - see
-.claude/personal/plans/README.md for the schema and
+.claude/skills/plan-dashboard/plan-schema.md for the schema and
 .claude/skills/plan-dashboard/SKILL.md for how it's used and refreshed.
 To edit: change the manifest between the markers below, then run
   "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh"
