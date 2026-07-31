@@ -283,17 +283,21 @@ items:
   track: S1-d-ui
   depends_on:
   - d-core-backend
-  status: in_progress
+  status: deferred
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
-  notes: 'bug label. Reintroduces _last_parent_of_type_ for insert_at''s anchor-parent recovery — a real,
+  notes: 'bug label. CLOSED 2026-07-31 as superseded by #118, which landed the same fix at the façade
+    level on main. Its regression test was not carried over: it lives in test/krrood_test/test_eql_rdr/
+    (absent on main) and asserts through walk_rules/classify_case, so #118 covers the same defect
+    DSL-only at the accessor''s own contract level instead. The RDR-level test can be re-added against
+    the fixed API once test_eql_rdr/ lands — no production change needed for it to pass. Reintroduced
+    _last_parent_of_type_ for insert_at''s anchor-parent recovery — a real,
     proven bug distinct from PR #89''s target. SUPERSEDED 2026-07-31 by dag-facade-hardening''s
     insert-at-ownership-parentage item: the same bug is fixed there at the façade level, from the
     owning rule-tree context rather than by reintroducing _last_parent_of_type_ (a symbol #89 deleted
     from main, and a structural-accessor read that dag-facade-hardening''s Wave-1 guard test forbids
     and its rename would break). This PR''s own scope note — "insert_at does not exist on main yet" —
     is stale: rules/conclusion_selector.py landed on main, so the fix needs none of the Wave-0 stack.
-    Reduce this to its regression test re-pointed at the fixed API, or close as superseded. See
-    roadmap.md §10.'
+    See roadmap.md §10.'
 - id: D-ui-rendering
   title: 'RDR engine: case-table rendering + serialization test coverage'
   branch: D-ui-rendering
@@ -303,6 +307,11 @@ items:
   - D-ui-splice-fix
   status: in_progress
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
+  notes: 'Still based on the D-ui-splice-fix branch, whose PR (#78) was closed as superseded on
+    2026-07-31. The branch still exists so nothing is broken today, but #79 can no longer land through
+    #78 and must be re-targeted onto D-core-engine before it can merge. Not re-targeted here — that is
+    this PR''s own session''s call. Its depends_on is kept pointing at the closed item so the stack''s
+    real shape stays visible until the re-target happens.'
 - id: D-ui
   title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
   branch: D-ui

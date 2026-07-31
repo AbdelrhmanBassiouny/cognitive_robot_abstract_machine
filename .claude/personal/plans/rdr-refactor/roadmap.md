@@ -140,13 +140,15 @@ sequential.
   propagate restacks forward after each merge (this is the standing
   session's job today).
 - **S1 (D-ui) — SPLIT INTO 3 STACKED PRs** (see `pr-progress/D-ui.md`, owned
-  by the D-ui session): #78 `D-ui-splice-fix` (insert_at splice engine fix,
-  may fold into #68 — steward decision pending), #79 `D-ui-rendering`
-  (case_table + shell-free tests), #76 `D-ui` (interactive layer + conftest
-  fixture + docs). Merge order #78 → #79 → #76.
-  **Steward: the propagation chain is now D-core-engine → D-ui-splice-fix →
-  D-ui-rendering → D-ui → D-deco — register the two intermediate branches in
-  any restack loop.**
+  by the D-ui session): ~~#78 `D-ui-splice-fix`~~ (closed 2026-07-31,
+  superseded by #118 — see §10), #79 `D-ui-rendering` (case_table +
+  shell-free tests), #76 `D-ui` (interactive layer + conftest fixture +
+  docs). Merge order #79 → #76.
+  **Steward: the propagation chain is now D-core-engine → D-ui-rendering →
+  D-ui → D-deco. #79 is still *based* on the closed `D-ui-splice-fix` branch
+  and must be re-targeted onto `D-core-engine` before it can land — the
+  branch still exists, so nothing is broken today, but it can no longer
+  merge through #78.**
 - **S2 (D-deco) — SPLIT INTO 2 STACKED PRs** (see `pr-progress/D-store.md`
   + `pr-progress/D-deco.md`): #80 `D-store` (RDRFileStore) then #77 `D-deco`
   (decorator + docs), on the new `D-ui` tip. The sweep that made #38's diff
@@ -541,6 +543,14 @@ Two consequences here:
   break. Its scope note ("`insert_at` does not exist on `main` yet") was true on
   2026-07-16 and is now stale: `rules/` has landed. It reduces to its regression test
   re-pointed at the fixed API, or closes.
+  **Resolved 2026-07-31: closed as superseded** by #118, which landed the façade-level
+  fix. The "re-point its regression test" half of that choice turned out not to be
+  available — `TestAttributeReusedInEarlierSiblingBranch` lives in
+  `test/krrood_test/test_eql_rdr/`, a directory that does not exist on `main`, and
+  asserts through `walk_rules`/`classify_case` from the RDR layer. #118 covers the same
+  defect DSL-only at the accessor's own contract level instead. The RDR-level test can
+  be re-added against the fixed API once `test_eql_rdr/` lands; it needs no production
+  change to pass.
 - **#67 changes nothing.** `enforce_parent_consistency` makes no `_parent_`/`_root_`
   reads at all — it is a display-order heuristic over the flattened rule list — so it is
   neither the defect nor caught by the guard test. Keep it, reply pointing at #96 and the
