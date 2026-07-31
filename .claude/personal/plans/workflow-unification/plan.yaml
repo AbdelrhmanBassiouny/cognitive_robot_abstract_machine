@@ -491,3 +491,34 @@ items:
       neutral ones on the dashboards. Based on fork main, independent of the #101
       chain; bug + in-review labels - already promoted to cram2. Same
       build_dashboard.py overlap note as its sibling fix (#103) and #111.
+
+  - id: landed-parent-detection
+    branch: claude/stack-landed-parent-detection
+    title: "Decide a parent has landed from git ancestry, not board membership"
+    pull_request_number: 117
+    track: stack-tooling
+    depends_on: [stack-tooling-on-main]
+    status: in_progress
+    session: https://claude.ai/code/session_01URVDhViP2TijuQAHAysUKL
+    notes: >
+      Bug fix, found while handling a review round on PR #41. board.json carries only
+      OPEN fork PRs, so a parent branch whose own PR was closed is absent from it, and
+      both consumers of the parent lookup read that absence as "no parent":
+      restack_plan left the child on the stale parent instead of reparenting it onto
+      the upstream base, and parent_landed treated the missing parent as a root and
+      reported the child promotable. Stack now carries the merged predicate and answers
+      has_landed_upstream() from git ancestry - the test the doctrine already names as
+      the definition of merged - and both call sites derive from it. ROUTINE.md Phase 1
+      gets the matching rule (ancestry-test the base branch of every open fork PR whose
+      base is neither main nor another open PR's head), plus report-and-continue
+      handling for the stack-member 422 that native-stacks-prototype logged as the
+      Phase 1 REPARENT hazard; explicitly NOT unstacking to force a retarget through,
+      since dissolving a stack touches every PR in it. Three TDD tests, 247 dev-tooling
+      tests green. Stacked on stack-tooling-on-main since the code it fixes is not on
+      main yet; the identical fix was also pushed to claude/stack-workflow-tooling's
+      dev/ copy (78a093e4, 37/37 there) so the live Routine stops orphaning children
+      before routine-cutover - that copy dies with tooling-branch-retirement. The live
+      Routine's own Phase 1 prompt text (trig_01N79jHmLo3bSbg8pLM6MNTB) is NOT updated:
+      the user asked for the patch text to review and paste rather than a direct
+      update_trigger call, so until they do, restack-plan emits the right parent but
+      Phase 1 still will not retarget on GitHub.

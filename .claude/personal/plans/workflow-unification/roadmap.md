@@ -829,3 +829,48 @@ this `.claude/`-only PR — `test_world_sim_state_sync` and
 `test_attached_self_collision_avoid_stick`, each proven unrelated (the latter by the giskardpy
 job flipping pass→fail across a diff of three documentation files) — and the user instructed
 these be ignored rather than investigated on this PR.
+
+## Addendum 2026-07-31 — the orphaned-child bug, found from the PR #41 side
+
+`landed-parent-detection` was not planned work. It surfaced while a session handled a review
+round on PR #41 (`rdr-backward-inference`), which had been sitting on a base branch,
+`ripple-down-rules-refactor`, whose content had long since landed on `main`. Merging `main`
+into #41 to satisfy the review blew its Files-changed view up from 7 files to 268
+files / +27,825 — none of it real, all of it an artifact of a merge-base measured against a
+stale base branch.
+
+**Why the routine never caught it.** Phase 1 reparents children of "each OPEN fork PR that is
+merged by ancestry". PR #40, the one whose head is `ripple-down-rules-refactor`, is *closed,
+not merged* — its content reached `main` by another route. So Phase 1 never looked at it, and
+#41 was left parented to a landed branch. The same blind spot sits in `stack.py`: `board.json`
+holds only open PRs, so `by_name.get(branch.parent)` returns `None` for that parent, and both
+`restack_plan` and `parent_landed` interpret the `None` as "there is no parent" — the first
+leaving the child on its stale base, the second treating the child as an unblocked root and
+clearing it to promote ahead of a parent that may not have landed at all.
+
+The fix is to stop inferring landedness from board membership. The doctrine already defines
+`merged` as `git merge-base --is-ancestor origin/B cram2/main`, which answers for *any* branch
+name; the code simply never used it outside the board. `Stack` now carries that predicate and
+exposes `has_landed_upstream()`, and both call sites ask it instead.
+
+**What this says about the board as a data source.** `board.json` is a projection of open PRs,
+not of the branch graph, and every question of the form "what is true about this branch" that
+gets answered from it inherits the same hole. `stack_root()` in the `dev/` copy has the same
+`by_name.get(...) is None` shape; it was left alone because it feeds only the round-robin/WIP-cap
+subsystem, which `stack-tooling-on-main` deletes outright. Worth remembering if any future
+question gets answered from board membership rather than from git.
+
+**A premise that turned out to be wrong.** PR #89's description predicted the restacking bot
+would "cascade it down through code-extraction → code-generation-extract →
+ripple-down-rules-refactor → rdr-backward-inference without a manual conflict resolution on
+#41". It could not have: the cascade stops at the first parent whose PR is closed rather than
+merged, which is exactly where this chain breaks.
+
+**The 422 has teeth now.** Retargeting #41 to `main` — the correct repair, and the one Phase 1
+prescribes — is refused with `422 - Cannot change the base branch because the pull request is
+part of a stack`, the hazard `native-stacks-prototype`'s round-2 probes recorded. #41 is not the
+stack tip: #63 → #64 → #65 → #66 hang off it, so GitHub's documented recovery (Unstack, retarget,
+`gh stack submit`) would dissolve and rebuild a six-PR stack to fix one PR's diff. Phase 1 now
+treats the 422 as report-and-continue and explicitly forbids unstacking as a mechanical step;
+the FINISH summary lists the stuck PRs so they can be retargeted by hand. #41 itself is left as
+found, awaiting that decision — its review round is resolved and its code is correct either way.
