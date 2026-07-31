@@ -435,16 +435,27 @@ items:
     pull_request_number: 103
     track: dashboards
     depends_on: []
-    status: in_progress
+    status: done
+    session: https://claude.ai/code/session_016mfBqcBibxA7Wa5eNfWtoL
     notes: >
       Pre-existing bug-fix PR (open before the plan tracked it; adopted 2026-07-31 under
-      the every-fork-PR-belongs-to-a-plan rule). Fixes exactly the
-      build_dashboard.py:_compute_next_steps guard that skips items with no
+      the every-fork-PR-belongs-to-a-plan rule). Fixed exactly the
+      build_dashboard.py:_compute_next_steps guard that skipped items with no
       dependencies, which resurfaced when plan-updates-since-helper (depends_on: [])
       failed to appear in the sidebar. Based on fork main, independent of the #101
-      chain; carries bug + in-review labels - already promoted to cram2. Textual
-      overlap to expect with #111 and #105, which also edit build_dashboard.py;
-      whichever lands later resolves it.
+      chain. TDD per AGENTS.md: added test_dependency_free_not_started_item_is_ready_to_start
+      (proved the bug, failed before the fix) and a companion
+      test_dependency_free_blocked_item_is_neither_list pinning that a dependency-free
+      blocked item stays out of both lists. Two pre-existing tests
+      (test_blocked_item_with_partial_dependencies_done_is_recheck_candidate,
+      test_not_started_item_with_partial_dependencies_is_neither_list) had an incidental
+      dependency-free NOT_STARTED fixture item that legitimately became ready-to-start
+      under the corrected semantics; changed that item's status to BLOCKED so each test
+      keeps isolating only the behavior it names, without touching any assertion. 189
+      plan-dashboard tests + 16 hook tests green. Merged 2026-07-29 - the one recurring
+      CI red (semantic_digital_twin's test_world_sim_state_sync physics-settling flake)
+      was noted on the PR as pre-existing/unrelated and cleared on the automatic re-run.
+      Textual overlap resolved with #111 and #105, which also edit build_dashboard.py.
 
   - id: dependency-chips-blocked-fix
     branch: claude/plan-dashboard-dependencies-1am49n

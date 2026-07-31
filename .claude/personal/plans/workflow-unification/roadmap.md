@@ -755,3 +755,28 @@ dying silently - no stderr message, no explanation - instead of reaching the
 explicit guard-clause error a few lines later. Caught by
 `test_tracking_issue_without_default_repository_fails_clearly`, which without
 the fix saw an empty stderr instead of the intended message.
+
+## Update 2026-07-29 (merge): ready-to-start-dependency-free-fix landed
+
+PR #103 merged 2026-07-29. Session
+https://claude.ai/code/session_016mfBqcBibxA7Wa5eNfWtoL drove it from adoption through
+merge: TDD-added `test_dependency_free_not_started_item_is_ready_to_start` (proved the
+bug live, `assert [] == ['a']`, before the one-line fix removing the `not dependencies`
+short-circuit in `_compute_next_steps`) and a companion pinning that a dependency-free
+`BLOCKED` item still lands in neither list. Two pre-existing tests turned out to have an
+incidental dependency-free `NOT_STARTED` fixture item that legitimately became
+ready-to-start under the corrected semantics once the guard was fixed; rather than touch
+either test's assertions, that fixture item's status was changed to `BLOCKED` so each
+test keeps isolating only the behavior its name describes (the item it was actually about
+- "b" was only ever there as an unready dependency for a different item under test). Full
+`.claude/skills/plan-dashboard/tests/` (189) and `.claude/hooks/tests/` (16) suites green.
+Opened as draft, `bug`-labeled, subscribed to PR activity per the personal-notes
+conventions; the developer marked it ready for review shortly after. One CI red
+surfaced along the way - `test_each_lib (semantic_digital_twin)` failing on
+`test_world_sim_state_sync`, a Mujoco box-drop physics-settling assertion wholly
+unrelated to this diff - noted once on the PR as pre-existing/unrelated per convention,
+and it cleared on the next automatic re-run (an out-of-session `origin/main` merge commit
+landed on the branch mid-review, authored `Claude <noreply@anthropic.com>`, not something
+this session pushed). No review comments arrived before merge. This is the plan's first
+completed exercise of the every-fork-PR-belongs-to-a-plan adoption rule from item to
+merge.
