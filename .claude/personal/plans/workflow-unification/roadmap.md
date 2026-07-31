@@ -603,3 +603,25 @@ unstacking from the website removes open/draft/closed PRs but merged/queued ones
 it should follow — not precede — comfort with the reparent story. It's the same "Add to stack" flow
 used for #112, or `gh stack` locally. #111 cannot join that stack (it's a sibling of #107 on #106;
 stacks are strictly linear) and stays loose; #109 is independent by design.
+
+## Update 2026-07-31 (adoption): the upstream chain is Stack #114; unstack means dissolve
+
+The user adopted the chain via the UI, but the "Add to stack" flow picked #111 (a valid linear
+continuation from GitHub's perspective, since it also targets #106's head) instead of #107 —
+producing Stack #113 = #101 → #106 → #111, which blocks #107/#110 from ever joining. Fixing it
+from the session surfaced a correction to round-2 finding 4: **`POST /stacks/{n}/unstack` takes no
+body and has no selective mode — it dissolves the stack** (removes every open/draft/closed member;
+merged members stay, per the docs' website-unstack description). The `pull_requests` body it was
+called with was silently ignored. This retroactively reinterprets the stack-board probes (stacks
+#4/#6 "auto-closing" after selective unstack were in fact full dissolutions), and it narrows the
+reparent recovery: the API-only sequence is dissolve → PATCH base(s) → re-create the stack, not a
+surgical removal. `gh stack modify` is the only surgical restructuring tool.
+
+Outcome: Stack #113 dissolved, **Stack #114 created with the intended sequence
+main → #101 → #106 → #107 (draft) → #110 (draft)**; #111 verified untouched (open draft on
+#106's head, stack: null — it cannot join, as a sibling of #107; its restack remains stack.py's/
+gh's job). The upstream wave is now natively stacked, so #101's cram2 landing will exercise the
+push-merge/reparent path for real — the "Rebase stack" button or gh stack sync is the recovery
+until #106's trim commit lands. Also noted: fork-side stack writes from a session worked this
+round (create/unstack on the fork repo); the earlier same-call denials were permission-layer
+variance, so treat session-side stack surgery as possible but not guaranteed.
