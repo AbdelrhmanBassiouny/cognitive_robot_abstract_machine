@@ -19,6 +19,7 @@ from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 
+from panda_assets import PandaMeshAssets
 from semantic_digital_twin.adapters.mjcf import MJCFParser
 from semantic_digital_twin.adapters.multi_sim import MujocoSim, MujocoBody
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
@@ -46,7 +47,13 @@ executor = MultiThreadedExecutor()
 executor.add_node(node)
 threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor").start()
 
-world = MJCFParser(str(Path(__file__).parent / "stacking_scene.xml")).parse()
+SCENE = Path(__file__).parent / "stacking_scene.xml"
+
+# The Panda meshes are tens of megabytes, so they are fetched from
+# mujoco_menagerie on first run instead of being kept in the repository.
+PandaMeshAssets(scene=SCENE).download_if_missing()
+
+world = MJCFParser(str(SCENE)).parse()
 Panda.from_world(world)
 VizMarkerPublisher(_world=world, node=node).with_tf_publisher()
 

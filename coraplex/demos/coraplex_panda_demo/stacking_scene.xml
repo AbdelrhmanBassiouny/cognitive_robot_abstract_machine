@@ -315,8 +315,8 @@
   <actuator>
     <!-- gainprm/biasprm below override the big_joint/small_joint class defaults
          (kp=2000/kv=200, kp=500/kv=50) with the official mujoco_menagerie Franka
-         Panda per-joint values -- the class defaults only had two tiers, but the
-         official model uses three (shoulder/elbow/wrist), so each joint sets its
+         Panda per-joint values. The class defaults only had two tiers, but the
+         official model uses three (shoulder, elbow, wrist), so each joint sets its
          own gains explicitly instead. -->
     <general name="joint1" class="big_joint" joint="joint1" ctrlrange="-2.8973 2.8973" forcerange="-87 87" gainprm="4500" biasprm="0 -4500 -450" />
     <general name="joint2" class="big_joint" joint="joint2" ctrlrange="-1.7628 1.7628" forcerange="-87 87" gainprm="4500" biasprm="0 -4500 -450" />
@@ -331,7 +331,7 @@
 
          For a position servo held open by a grasped object, the squeeze force is
          stiffness * commanded penetration. At 100 N/m, holding a 0.064 kg cube
-         (0.63 N, mu=1) with any margin needs ~9 mm of commanded penetration --
+         (0.63 N, mu=1) with any margin needs ~9 mm of commanded penetration,
          nearly half the cube's 20 mm half-width, which wedges it out sideways
          instead of gripping it. At 1000 N/m the same force needs <1 mm, so grip
          strength and gentle closing stop being mutually exclusive.
