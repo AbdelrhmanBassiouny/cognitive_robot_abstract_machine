@@ -25,3 +25,11 @@ Item `plan-updates-since-helper` in the `workflow-unification` plan.
 - Wait for CI (test_claude_dev_tooling) and any review comments on #115.
 - Once approved, mark ready for review only when explicitly told to (personal-notes
   convention keeps PRs in draft otherwise).
+
+## CI triage log
+
+- 2026-07-31: `test_each_lib (semantic_digital_twin) / test` red on #115 - confirmed it
+  fails identically on `main` at this PR's base commit (0fd14357, run 30577674356), same
+  `test_world_sim_state_sync` assertion. Unrelated to this PR's `.claude/hooks/*`-only
+  diff; `test_claude_dev_tooling` is green. Commented on the PR, no fix pushed. Watching
+  for the base branch to recover.
