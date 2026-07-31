@@ -100,6 +100,17 @@ action-only PR comment routing (tracking issue always gets the structural
 record), and merged/closed-branch cleanup (unsubscribe + delete armed
 triggers + stop polling). Added plan item plan-updates-since-helper
 (personal-data, not_started, small PR off fork main); roadmap addendum
-"2026-07-31 (conventions)"; dashboard republished. Next session of
+"2026-07-31 (conventions)"; dashboard republished.
+
+Round 9 (bug-fix PR adoptions): the missing ready-to-start sidebar entry
+turned out to be known bug PR #103 (ready-to-start drops dependency-free
+items — the exact _compute_next_steps guard I diagnosed at
+build_dashboard.py:1168); adopted it and sibling dashboard fix #105 (unmet
+dependency chips as blocked) as items ready-to-start-dependency-free-fix and
+dependency-chips-blocked-fix (dashboards track, in_progress, both bug +
+in-review at cram2, both edit build_dashboard.py — overlap note vs #111).
+First exercise of every-PR-in-a-plan. Roadmap addendum "2026-07-31
+(adoptions)"; dashboard republished (14→16 items; sidebar gap itself stays
+visible until #103 lands on fork main, since builds run main's copy). Next session of
 substance: execute #106's cut per its re-scope comment. No PR from this
 session; no code changes on the fork.
