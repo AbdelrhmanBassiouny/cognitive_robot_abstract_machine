@@ -28,7 +28,10 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.connections import (
+    FixedConnection,
+    ScrewConnection,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import Box
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -258,6 +261,40 @@ def test_connection_json_serialization_with_world():
         c.parent_T_connection_expression.child_frame
         == c2.parent_T_connection_expression.child_frame
     )
+
+
+def test_screw_connection_json_serialization_with_world():
+    world = World()
+    body = Body(name=PrefixedName("body"))
+    body2 = Body(name=PrefixedName("body2"))
+    screw_pitch = 0.005
+    with world.modify_world():
+        world.add_kinematic_structure_entity(body)
+        world.add_kinematic_structure_entity(body2)
+        connection = ScrewConnection.create_with_dofs(
+            world,
+            body,
+            body2,
+            axis=Vector3.Z(),
+            screw_pitch=screw_pitch,
+            multiplier=2.0,
+            offset=0.1,
+            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                x=1, reference_frame=body, child_frame=body2
+            ),
+        )
+        world.add_connection(connection)
+    json_data = connection.to_json()
+    tracker = WorldEntityWithIDKwargsTracker.from_world(world)
+    restored_connection = ScrewConnection.from_json(
+        json_data, **tracker.create_kwargs()
+    )
+    assert connection == restored_connection
+    assert restored_connection.screw_pitch == screw_pitch
+    assert restored_connection.multiplier == connection.multiplier
+    assert restored_connection.offset == connection.offset
+    assert np.allclose(restored_connection.axis.to_np(), connection.axis.to_np())
+    assert restored_connection.raw_dof.id == connection.raw_dof.id
 
 
 def test_transformation_matrix_json_serialization_with_world_in_kwargs():

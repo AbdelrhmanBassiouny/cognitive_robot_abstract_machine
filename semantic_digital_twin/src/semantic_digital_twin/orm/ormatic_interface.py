@@ -11438,6 +11438,29 @@ class RevoluteConnectionDAO(
     }
 
 
+class ScrewConnectionDAO(
+    ActiveConnection1DOFDAO,
+    DataAccessObject[
+        semantic_digital_twin.world_description.connections.ScrewConnection
+    ],
+):
+    __tablename__ = "ScrewConnectionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ActiveConnection1DOFDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    screw_pitch: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ScrewConnectionDAO",
+        "inherit_condition": database_id == ActiveConnection1DOFDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
 class WheeledDriveDAO(
     ActiveConnectionDAO,
     DataAccessObject[semantic_digital_twin.world_description.connections.WheeledDrive],
@@ -19669,6 +19692,27 @@ class BottleDAO(
     }
 
 
+class BottleCapDAO(
+    HasMechanicalJointDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.semantic_annotations.BottleCap
+    ],
+):
+    __tablename__ = "BottleCapDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(HasMechanicalJointDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "BottleCapDAO",
+        "inherit_condition": database_id == HasMechanicalJointDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
 class BowlDAO(
     HasSupportingSurfaceDAO,
     DataAccessObject[
@@ -20740,7 +20784,7 @@ class LegDAO(
 
 
 class LevelDAO(
-    SemanticAnnotationDAO,
+    HasRootRegionDAO,
     DataAccessObject[
         semantic_digital_twin.semantic_annotations.semantic_annotations.Level
     ],
@@ -20748,24 +20792,14 @@ class LevelDAO(
     __tablename__ = "LevelDAO"
 
     database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(SemanticAnnotationDAO.database_id),
+        ForeignKey(HasRootRegionDAO.database_id),
         primary_key=True,
         use_existing_column=True,
     )
 
-    root_id: Mapped[int] = mapped_column(
-        ForeignKey("RegionDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    root: Mapped[RegionDAO] = relationship(
-        "RegionDAO", uselist=False, foreign_keys=[root_id], post_update=True
-    )
-
     __mapper_args__ = {
         "polymorphic_identity": "LevelDAO",
-        "inherit_condition": database_id == SemanticAnnotationDAO.database_id,
+        "inherit_condition": database_id == HasRootRegionDAO.database_id,
         "polymorphic_load": "selectin",
     }
 
@@ -20824,27 +20858,6 @@ class LidDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "LidDAO",
-        "inherit_condition": database_id == HasRootBodyDAO.database_id,
-        "polymorphic_load": "selectin",
-    }
-
-
-class LiquidCapDAO(
-    HasRootBodyDAO,
-    DataAccessObject[
-        semantic_digital_twin.semantic_annotations.semantic_annotations.LiquidCap
-    ],
-):
-    __tablename__ = "LiquidCapDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(HasRootBodyDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "LiquidCapDAO",
         "inherit_condition": database_id == HasRootBodyDAO.database_id,
         "polymorphic_load": "selectin",
     }
@@ -21543,6 +21556,29 @@ class SaltPepperShakerDAO(
     __mapper_args__ = {
         "polymorphic_identity": "SaltPepperShakerDAO",
         "inherit_condition": database_id == HasRootBodyDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class ScrewMechanismDAO(
+    MechanicalJointDAO,
+    DataAccessObject[
+        semantic_digital_twin.semantic_annotations.semantic_annotations.ScrewMechanism
+    ],
+):
+    __tablename__ = "ScrewMechanismDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MechanicalJointDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    screw_pitch: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ScrewMechanismDAO",
+        "inherit_condition": database_id == MechanicalJointDAO.database_id,
         "polymorphic_load": "selectin",
     }
 

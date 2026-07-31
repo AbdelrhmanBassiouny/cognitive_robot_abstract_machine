@@ -167,7 +167,7 @@ plan_roadmap_path() {
 
 # PLAN_BRANCH_INDEX_PATH: the generated reverse index mapping every plan
 # item's branch to the plan id that tracks it (see
-# .claude/personal/plans/README.md on the personal-notes branch for the
+# .claude/skills/plan-dashboard/plan-schema.md for the
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
@@ -209,6 +209,11 @@ PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
 # hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
 # hook-directory script with non-trivial logic worth testing the same way).
 HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
+# plan-schema.md: the full plan.yaml field reference every plan-* skill
+# reads before drafting or interpreting a manifest. On main, next to the
+# tooling that enforces it, so every clone has it with no setup - unlike the
+# plan *data* it describes, which lives only on the personal-notes branch.
+PLAN_SCHEMA_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-schema.md"
 # dependency-readiness.md: the shared bulk-fetch-and-check procedure
 # plan-item-kickoff and plan-item-resolve both reference instead of each
 # restating it.
@@ -223,6 +228,27 @@ PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetchin
 # auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL
 # cache) alike.
 WRITE_PERSONAL_NOTES_FILE_SCRIPT=".claude/hooks/write-personal-notes-file.sh"
+
+# SETUP_PERSONAL_NOTES_DIRECTORY / *_DOCUMENT / STARTER_NOTES_FILE /
+# CHECK_SETUP_SCRIPT: the one-time-setup half of this system - the skill a
+# person runs first (/setup-personal-notes), the starter notes it offers, the
+# shared "is this clone set up yet?" procedure every other skill defers to
+# instead of restating it, and the read-only inspection script all of them
+# call. Same defined-once reasoning as every path above.
+SETUP_PERSONAL_NOTES_DIRECTORY=".claude/skills/setup-personal-notes"
+# check-setup.sh: reports, as TSV, which parts of the setup are already done -
+# the single source of truth for that question, so no caller re-implements
+# "is the notes branch there?" with its own git plumbing.
+CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
+# prerequisite-check.md: the shared "run check-setup.sh, offer
+# /setup-personal-notes if it fails" procedure that plan-create,
+# plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
+# one line rather than each spelling it out.
+SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-check.md"
+# starter-notes.md: the default content /setup-personal-notes offers to seed a
+# brand-new notes file with, so a first session starts from working
+# conventions instead of an empty file.
+STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are
