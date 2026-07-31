@@ -756,27 +756,51 @@ explicit guard-clause error a few lines later. Caught by
 `test_tracking_issue_without_default_repository_fails_clearly`, which without
 the fix saw an empty stderr instead of the intended message.
 
-## Update 2026-07-29 (merge): ready-to-start-dependency-free-fix landed
+## Update 2026-07-31 (landed): PR #101 merged — the upstream wave's base is on fork main
 
-PR #103 merged 2026-07-29. Session
-https://claude.ai/code/session_016mfBqcBibxA7Wa5eNfWtoL drove it from adoption through
-merge: TDD-added `test_dependency_free_not_started_item_is_ready_to_start` (proved the
-bug live, `assert [] == ['a']`, before the one-line fix removing the `not dependencies`
-short-circuit in `_compute_next_steps`) and a companion pinning that a dependency-free
-`BLOCKED` item still lands in neither list. Two pre-existing tests turned out to have an
-incidental dependency-free `NOT_STARTED` fixture item that legitimately became
-ready-to-start under the corrected semantics once the guard was fixed; rather than touch
-either test's assertions, that fixture item's status was changed to `BLOCKED` so each
-test keeps isolating only the behavior its name describes (the item it was actually about
-- "b" was only ever there as an unready dependency for a different item under test). Full
-`.claude/skills/plan-dashboard/tests/` (189) and `.claude/hooks/tests/` (16) suites green.
-Opened as draft, `bug`-labeled, subscribed to PR activity per the personal-notes
-conventions; the developer marked it ready for review shortly after. One CI red
-surfaced along the way - `test_each_lib (semantic_digital_twin)` failing on
-`test_world_sim_state_sync`, a Mujoco box-drop physics-settling assertion wholly
-unrelated to this diff - noted once on the PR as pre-existing/unrelated per convention,
-and it cleared on the next automatic re-run (an out-of-session `origin/main` merge commit
-landed on the branch mid-review, authored `Claude <noreply@anthropic.com>`, not something
-this session pushed). No review comments arrived before merge. This is the plan's first
-completed exercise of the every-fork-PR-belongs-to-a-plan adoption rule from item to
-merge.
+`setup-personal-notes-pr101` is **done**: merged into fork `main` at 10:36:43Z (head
+`90f69f56`). Verified by presence on `main` rather than from the merge notification alone —
+`.claude/skills/setup-personal-notes/SKILL.md` and `.claude/hooks/check-setup.sh` both
+`git cat-file -e` clean on `origin/main`.
+
+**Consequences for the plan.** This was the base of the whole upstream chain
+(#101 → #106 → #107 → #110, natively Stack #114), so GitHub retargets the chain upward and
+`setup-personal-notes-script` (#107) — the item whose dispatch prompt originally required
+"#101 MERGED first", a rule the user overrode to let it be based on the PR head — now has
+that precondition satisfied retroactively. `dev-tooling-python-package`, whose dependency was
+recorded as *stronger* than the open-and-ready rule because it moves `.claude/hooks/tests/`
+files this PR's diff adds, is likewise unblocked on that count. And the deferred follow-up
+below is now runnable.
+
+**The agreed follow-up, now unblocked.** Review asked whether `/setup-personal-notes` needs to
+be a skill at all. The accounting: every mechanical step is already a script call, and only two
+things need a session — deciding whether the resolved notes remote is the user's own fork
+(needs the authenticated identity; a git remote URL doesn't say who owns it) and checking the
+labels exist. The user settled it as a **follow-up, not part of #101**: extract
+`.claude/hooks/setup-personal-notes.sh --remote <name-or-url> [--starter-notes]` covering skill
+steps 4-7 and 9, shrinking the skill to those two session-only parts. A full kickoff prompt was
+handed over in-session. Note this is the same conclusion decision 9 reached independently on
+#107 (2026-07-29 night addendum) — that the GitHub steps in this system do not need a session —
+so whoever picks it up should read that addendum first: the remote-ownership check is scriptable
+via `GET /user`, which narrows the skill's residue further than the review discussion assumed.
+
+**What #101 ended up containing beyond the original patch**, since the plan tracked it as
+"the patch, unchanged": the hooks README rewritten as a step-based guide (378 → ~140 lines,
+with the worked example surfaced in a callout at the top), a skill step checking the
+`merged`/`bug`/`in-review` labels exist in the fork and offering to create them (no create-label
+tool exists in the GitHub MCP server — only `get_label` — so creation shells out to `gh`), and a
+review round that moved the verbatim-duplicated hook-test scratch repository onto a shared
+`ScratchRepository` dataclass plus a `conftest.py` fixture, and replaced the stringly-typed
+check-setup report with `SetupCheck`/`CheckStatus` StrEnums and `CheckResult`/`SetupReport`
+dataclasses.
+
+**Two standing hazards this item re-confirmed.** Three merge commits authored *and* committed as
+`Claude <noreply@anthropic.com>` landed on this branch from outside any session — the same
+pattern as `6b51075e`/`f5d1c883` on the P3 branch, and against AGENTS.md's Version Control rule.
+Each was verified content-neutral for the PR (`git diff <old>..<new> -- .claude/` empty, branch
+diff unchanged at 21 files/+1598/−434) and left unrewritten, since fixing authorship means
+force-pushing shared history unilaterally. Separately, the robotics CI jobs flaked repeatedly on
+this `.claude/`-only PR — `test_world_sim_state_sync` and
+`test_attached_self_collision_avoid_stick`, each proven unrelated (the latter by the giskardpy
+job flipping pass→fail across a diff of three documentation files) — and the user instructed
+these be ignored rather than investigated on this PR.
