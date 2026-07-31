@@ -69,8 +69,12 @@ def get_full_class_name(cls):
     return cls.__module__ + "." + cls.__name__
 
 
-def module_and_class_name(t: Union[Type, _SpecialForm]) -> str:
-    return f"{t.__module__}.{t.__name__}"
+def module_and_class_name(type_: Union[Type, _SpecialForm]) -> str:
+    """
+    :param type_: A class or special form.
+    :return: Its fully qualified ``"{module}.{name}"`` identifier.
+    """
+    return f"{type_.__module__}.{type_.__name__}"
 
 
 def get_default_value(dataclass_type, field_name):

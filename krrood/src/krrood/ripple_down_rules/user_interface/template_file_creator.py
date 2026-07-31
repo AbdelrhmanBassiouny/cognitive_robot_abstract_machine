@@ -17,11 +17,11 @@ from krrood.ripple_down_rules.utils import (
     str_to_snake_case,
     get_imports_from_scope,
     make_list,
-    stringify_hint,
     get_types_to_import_from_type_hints,
 )
 from krrood.code_generation.imports import get_imports_from_types
 from krrood.code_generation.source_extraction_utils import extract_function_source
+from krrood.code_generation.type_hints import stringify_type_hint
 from krrood.utils import get_scope_from_imports
 
 
@@ -216,14 +216,14 @@ class TemplateFileCreator:
                     self.case_query.function_args_type_hints is not None
                     and k in self.case_query.function_args_type_hints
                 ):
-                    func_args[k] = stringify_hint(
+                    func_args[k] = stringify_type_hint(
                         self.case_query.function_args_type_hints[k]
                     )
                 else:
                     func_args[k] = (
-                        stringify_hint(type(v))
+                        stringify_type_hint(type(v))
                         if not isinstance(v, type)
-                        else f"Type[{stringify_hint(v)}]"
+                        else f"Type[{stringify_type_hint(v)}]"
                     )
             func_args = ", ".join(
                 [
@@ -378,9 +378,12 @@ class TemplateFileCreator:
                 )
                 break
         if updates:
-            all_code_lines = extract_function_source(
-                [func_name], source=source, join_lines=False
-            ).source_of(func_name)
+            extracted_function = extract_function_source([func_name], source=source)
+            all_code_lines = next(
+                definition.lines
+                for definition in extracted_function.definitions
+                if definition.name == func_name
+            )
             return all_code_lines, updates
         else:
             print_func(
