@@ -456,5 +456,29 @@ its base, `D-core-corner-case` (#65). Root-caused and resolved it:
   pre-existing environment/dependency-version gap in files #66 never touches, not
   a regression from this merge.
 - Pushed as commit `5f897c27` on `D-core-serialization`. `plan.yaml`: `status`
-  `blocked` → `in_progress`. CI re-triggered on the new head; still stale-green
-  from before the conflict, so its outcome needs re-checking once it finishes.
+  `blocked` → `in_progress`.
+- CI on `5f897c27` failed across every job (`test_each_lib (krrood)` and
+  everything downstream of it) with
+  `ModuleNotFoundError: No module named 'krrood.code_generation.type_hints'`
+  from `krrood/ripple_down_rules/user_interface/template_file_creator.py:24`.
+  Root cause: that file imports `stringify_type_hint` straight from
+  `krrood.code_generation.type_hints` and was never touched by either side's
+  diff during the merge (not part of #66's rename commit, and
+  `D-core-corner-case` never edited that particular import line either) — so
+  git's rename-aware merge had nothing to match it against and silently kept
+  it pointing at the now-deleted module. This is exactly the "atomically
+  updates every importer" claim from #66's own review-thread history proving
+  narrower than stated: it listed `function_case.py`,
+  `entity_query_language/rdr/{serialization,corner_case}.py`, and
+  `ripple_down_rules/{rdr,rules,utils}.py` — never `template_file_creator.py`.
+  `git grep` for `code_generation\.type_hints` on the merged tree confirmed
+  this was the only remaining stale reference (and `stringify_hint`, the
+  retired alias, had zero references left, confirming that part of the
+  auto-merge was correct). Fixed by redirecting that one import to
+  `object_to_source` and pushed as commit `2577a2e3`. Verified locally:
+  `test_code_generation` (98/98), `test_eql_rdr` (57/59), and
+  `test_ripple_down_rules` (229/233) all pass through the previously-broken
+  import chain; the remaining 4 failures split into the same pre-existing
+  `probabilistic_model` gap (2) and a missing `dot` (graphviz) binary in the
+  local sandbox (2, `test_object_diagram.py`) — neither in files this PR
+  touches, neither present in the PR's own documented CI environment.

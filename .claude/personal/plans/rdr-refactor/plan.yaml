@@ -174,10 +174,16 @@ items:
     (function_case.py, object_to_source.py) - both were the same rename-vs-independent-edit
     conflict (this PR renamed type_hints.py -> object_to_source.py; the
     code-generation-extract cascade kept evolving type_hints.py under its old name).
-    Pushed as commit 5f897c27. Verified locally before pushing: test_code_generation
-    (98/98) and test_eql_rdr (57/59, the 2 failures are a pre-existing, unrelated
-    probabilistic_model.probabilistic_circuit.relational.rspn PyPI/dev-version gap in
-    files this PR never touches) both pass. Full account in roadmap.md''s 2026-07-31
+    Pushed as commit 5f897c27. CI then caught a third file the merge missed:
+    template_file_creator.py imports stringify_type_hint from the now-deleted
+    type_hints module directly and was never touched by either side''s diff, so
+    git''s merge never flagged it - broke every CI job via the ripple_down_rules
+    import chain. Fixed and pushed as commit 2577a2e3. Verified locally before
+    each push: test_code_generation (98/98), test_eql_rdr (57/59), and
+    test_ripple_down_rules (all but 2, both pre-existing) - failures are the
+    same pre-existing, unrelated probabilistic_model.probabilistic_circuit.relational.rspn
+    PyPI/dev-version gap and a missing `dot` (graphviz) binary in this sandbox,
+    neither in files this PR touches. Full account in roadmap.md''s 2026-07-31
     addendum (§9).'
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
