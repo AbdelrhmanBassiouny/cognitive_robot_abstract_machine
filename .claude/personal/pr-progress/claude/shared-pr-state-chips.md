@@ -44,9 +44,10 @@ headless site build also pushes merged→done manifest corrections).
 
 ## Next
 
-- CI on #111: test_claude_dev_tooling green (258 + 44 across its two invocations); the
-  only red is the pre-existing test_world_sim_state_sync physics flake that fails on
-  main too (noted once on the PR thread; re-check when the base recovers). coraplex job
-  was still running at last check - react if it reds (known xdist ORM-regeneration
-  flakiness documented on #107).
+- CI on #111 (head 8cb9fef1, after the stack Routine restacked the chain main -> #101 ->
+  #106 -> this branch with merge commits; local branch fast-forwarded to match): every
+  job green - test_claude_dev_tooling and coraplex included - except the one known
+  pre-existing test_world_sim_state_sync failure, identical assertion on both runs and
+  on main (noted once on the PR thread; no re-noting per event). Re-check when the base
+  recovers.
 - Keep the PR draft until told otherwise; self-review pass before undrafting, when asked.
