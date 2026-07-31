@@ -387,11 +387,12 @@ items:
       out-of-harness deletion (session branch-delete 403).
 
   - id: plan-updates-since-helper
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-n814iz
     title: "plan-updates-since.sh: delta recheck of plan state and tracking-issue comments"
     track: personal-data
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01UrxbEr6ZHMThA2p4Vcnrqv
     notes: >
       Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a
       small hook script next to save-plan.sh that, given a plan id and the last-seen
@@ -402,6 +403,18 @@ items:
       state at (gitignored file) so sessions have the baseline for free; the script
       updates the stamp. Sized as a small independent PR off fork main, like #109 - not
       part of the #101 chain. Tests via ScratchRepository, network-free.
+      Kicked off 2026-07-31 via /plan-item-kickoff: confirmed with the user this is based
+      off fork main directly, independent of #109 (not stacked on it) - "off fork main,
+      like #109" in this item's own notes means the same *kind* of independent, main-based
+      PR, not a stack on #109's branch. Expect a textual overlap in the same two files
+      #109 already edits (resolve-personal-notes-config.sh, session-start.sh) - same
+      no-depends_on, whichever-lands-second precedent already established for #107/#109/
+      #110 sharing files with no dependency between them. github-api.sh is confirmed not
+      yet on fork main (only on #107's branch, which this item doesn't depend on), so the
+      dual-backend GitHub call this item needs (fetching tracking-issue comments) is
+      implemented inline, matching github-api.sh's gh-then-curl+token style, rather than
+      depending on that file - a later cleanup once #107 lands can dedupe the shared
+      credential/repo-resolution helpers.
 
   - id: ready-to-start-dependency-free-fix
     branch: claude/funny-feynman-wexezs

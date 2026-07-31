@@ -695,3 +695,37 @@ the first exercise of the "every fork PR belongs to a plan" rule, which the PR-4
 later enforce mechanically. Practical note: the sidebar gap remains visible on published
 dashboards until #103 lands on fork main, since the build runs main's copy of
 build_dashboard.py.
+
+## Update 2026-07-31 (kickoff): plan-updates-since-helper kicked off
+
+`/plan-item-kickoff workflow-unification plan-updates-since-helper`, this same session
+(https://claude.ai/code/session_01UrxbEr6ZHMThA2p4Vcnrqv). Confirmed live: `origin/main`
+(`0fd14357`) has no `.claude/hooks/github-api.sh` - it exists only on PR #107's branch,
+which this item does not depend on - and `.claude/hooks/tests/` on `main` still has only
+the original minimal `conftest.py` (bare `sys.path` insert), not either sibling's shared
+scratch-project/stub-executable scaffolding (#109's `ScratchProject`, #107's
+`ScratchRepository` + `stub_executables.py`). Consequences for the design:
+
+- The tracking-issue-comments GitHub call this item needs is implemented inline, in the
+  same gh-preferred/curl+token style `github-api.sh` already uses on #107's branch, rather
+  than sourcing that file (it isn't reachable from fork main yet). A follow-up once #107
+  lands can dedupe the shared credential/repo-resolution helpers; out of scope here.
+- Tests build their own minimal scratch-repo + stubbed-`gh`/`curl` fixtures locally in the
+  new test module, matching the shape `test_save_plan_sh.py` already has on `main` today,
+  rather than depending on either sibling's shared fixture module landing first.
+
+**Basing decision, asked and confirmed by the user**: based directly off fork `main` (not
+stacked on #109), matching this item's own note "small independent PR off fork main, like
+#109" - read as "the same *kind* of independent PR #109 is", not "on top of #109's
+branch." A textual overlap with #109 is expected in the same two files this item also
+touches (`resolve-personal-notes-config.sh`, `session-start.sh`) - same shape, and same
+no-`depends_on` treatment, as the #107/#109/#110 shared-file overlap already on record
+above: whichever lands second resolves it, nothing serializes over it.
+
+**Design point flagged, not settled fact**: `session-start.sh` stamps the notes-branch SHA
+unconditionally on every successful fetch, not only when the current branch resolves to a
+plan via `plan_id_for_branch` - cram-notes.md's wording ("stamps the SHA it loaded plan
+state at") only strictly requires the latter, but the broader reading matches "so sessions
+have the baseline for free" better (this very kickoff session read plan state manually on
+a branch with no plan of its own) and costs nothing extra, since `fetch_personal_notes_branch`
+already always fetches the whole branch regardless.
