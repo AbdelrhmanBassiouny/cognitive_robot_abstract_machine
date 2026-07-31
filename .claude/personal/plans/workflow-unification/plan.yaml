@@ -111,10 +111,31 @@ items:
     status: done
     session: https://claude.ai/code/session_01GR1i6dZb8goJpCZBMCnVLM
     notes: >
-      Pre-existing PR, not authored by this plan; tracked because everything in the
-      upstream wave stacks on its branch. Live state at plan creation: open, ready,
-      mergeable clean, label cram2-link-sent (awaiting the one-click cram2 create).
-      Stacking does not wait for the merge.
+      Done - merged into fork main 2026-07-31T10:36:43Z (head 90f69f56, by
+      AbdelrhmanBassiouny); .claude/skills/setup-personal-notes/ and
+      .claude/hooks/check-setup.sh are both on main, verified by git cat-file rather
+      than from the merge notification alone. Pre-existing PR, not authored by this
+      plan; tracked because everything in the upstream wave stacks on its branch,
+      and stacking never waited for the merge. Final content beyond the original
+      patch: the hooks README rewritten as a step-based guide (378 -> ~140 lines)
+      with the worked example surfaced at the top, a skill step checking the
+      merged/bug/in-review labels exist in the fork, and a review round that moved
+      the duplicated hook-test scratch repository onto a shared ScratchRepository
+      dataclass + conftest fixture and made the check-setup report typed
+      (SetupCheck/CheckStatus StrEnums, CheckResult/SetupReport dataclasses).
+      Follow-up agreed and deliberately NOT in this PR: extract
+      .claude/hooks/setup-personal-notes.sh --remote <name-or-url> [--starter-notes]
+      taking over skill steps 4-7 and 9 so the mechanical setup runs with no session
+      at all, leaving the skill only the remote-ownership decision and the label
+      check. Kickoff prompt was handed to the user in the session; it is now
+      unblocked, since it required this PR merged first.
+      Two things worth carrying forward: three merge commits authored as
+      "Claude <noreply@anthropic.com>" landed on this branch from outside any
+      session (against AGENTS.md's Version Control rule) and were left unrewritten
+      rather than force-pushing shared history; and the robotics CI jobs flaked
+      repeatedly here on tests this .claude/-only PR cannot reach
+      (test_world_sim_state_sync, test_attached_self_collision_avoid_stick), which
+      the user instructed be ignored rather than chased.
 
   - id: stack-tooling-on-main
     branch: claude/stack-tooling-on-main
@@ -463,7 +484,7 @@ items:
     pull_request_number: 105
     track: dashboards
     depends_on: []
-    status: done
+    status: in_progress
     notes: >
       Pre-existing bug-fix PR, adopted 2026-07-31 under the every-fork-PR-belongs-to-a-
       plan rule. Renders an item's unmet dependencies as blocked chips instead of
