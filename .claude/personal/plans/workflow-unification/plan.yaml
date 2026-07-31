@@ -492,6 +492,27 @@ items:
       chain; bug + in-review labels - already promoted to cram2. Same
       build_dashboard.py overlap note as its sibling fix (#103) and #111.
 
+  - id: merge-timestamp-required-fix
+    branch: claude/cram2-main-drift-4owm9a
+    title: "Reject closed pull request data that omits merged_at"
+    pull_request_number: 119
+    track: dashboards
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01BsUHGwZaRpxo97jVDUmaau
+    notes: >
+      Opened 2026-07-31 from the false drift flags this plan's own dashboard raised
+      against #103 and #105 ("closed without merging" for two pull requests GitHub
+      records as merged at 2026-07-31T10:36:43Z). Root cause is the hand-assembled
+      pr_data.json: merged_at is the only signal separating merged from closed-unmerged
+      (state is "closed" for both), list_pull_requests lets a caller drop it via fields,
+      and pr-data-fetching.md only ever required labels. #101 escaped the same fetch
+      because it carries the hand-applied merged label. from_mapping now raises
+      MissingMergeTimestampError for a closed entry missing the key, keeping
+      key-present-and-null as the genuine closed-unmerged case, and the fetch doc names
+      the minimum field set. Draft PR #119, bug label, based on fork main and
+      independent of the #101 chain; build_dashboard.py overlap with #103/#105/#111.
+
   - id: landed-parent-detection
     branch: claude/stack-landed-parent-detection
     title: "Decide a parent has landed from git ancestry, not board membership"

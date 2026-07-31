@@ -907,3 +907,36 @@ land by push/fast-forward, and round-2 probing established that push-based merge
 merged but do **not** auto-retarget children — only `merge-async` does. `gh stack modify` is the
 surgical alternative to dissolving, but the docs describe it as interactive, so it is unavailable
 to an unattended Action or Routine.
+
+##### Update 2026-07-31 (night): the dashboard's own drift flags were the bug (#119)
+
+The dashboard raised two drift flags against this plan — `#103` and `#105` "marked done, but pull
+request #N was closed without merging" — for two pull requests GitHub records as **merged** at
+`2026-07-31T10:36:43Z`, the moment fork `main` fast-forwarded from cram2 and GitHub auto-detected
+both branches. The timeline shows them open until that instant, so a merely stale fetch could only
+ever have said *"still open"*; "closed without merging" had to come from the data.
+
+It did. `classify_live_state` has exactly two merge signals: GitHub's `merged_at`, or the
+hand-applied `merged` label. The published page rendered `#101` — merged in the same second — as
+`Merged` purely because it carries that label, while `#103`/`#105` (labels `bug`, `in-review`) fell
+through to closed-unmerged. So the `pr_data.json` behind that build had `state: "closed"` and no
+`merged_at` for all three.
+
+`pr_data.json` is assembled by a session from `list_pull_requests`, whose `fields` parameter lets
+the caller drop fields, and `pr-data-fetching.md` only ever insisted on `labels`. That is per-run
+variance, not a state change: the same morning's `sync_manifest_status.py` run read both as merged
+and auto-corrected them to `done` (`Auto-sync workflow-unification: 2 item(s) to done`). A doc line
+alone would not have prevented it, so `#119` makes the contract enforceable — a closed entry
+without the `merged_at` key is now a `MissingMergeTimestampError`, while key-present-and-`null`
+stays the genuine closed-unmerged case.
+
+Two things this settles:
+
+- **The `merged` label is a fallback for a merge GitHub never recorded, not a redundancy for
+  `merged_at`.** It masked this bug on exactly one pull request and hid it on the other two; a
+  fetch that drops the timestamp is not partially correct, it is wrong for every unlabelled pull
+  request.
+- **Every hand-assembled input to the dashboard is a place this can recur.** The remaining
+  gatherer-side steps are prose in `pr-data-fetching.md`; where a wrong value is
+  indistinguishable from a legitimate one, the parser has to reject it rather than the doc ask
+  nicely.
