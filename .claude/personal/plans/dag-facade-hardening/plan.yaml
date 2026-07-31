@@ -56,7 +56,7 @@ items:
     pull_request_number: 89
     track: leak-fixes
     depends_on: []
-    status: in_progress
+    status: done
     notes: >
       Open draft (mergeable_state unstable at last check). Removes
       _last_parent_of_type_; extends ActiveConditionsRoot.has_condition().
