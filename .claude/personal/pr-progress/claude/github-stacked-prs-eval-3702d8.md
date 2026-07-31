@@ -88,7 +88,18 @@ Round 7 (CUT approved + PRs notified): decision 11 recorded in plan.yaml
 chip + interplay), #101 (5140230288, landing/reparent warning), #102
 (5140231567, structural record). Cleanup owed by user: delete stack-board
 branches proto-trunk, proto-layer-1..4 (PRs #1-#5 closed, stacks #4/#6
-closed); PASTE THE AMENDED ROUTINE PROMPT (file already delivered —
-update_trigger impossible for web-UI-created triggers). Next session of
+closed). Routine prompt: user pasted the amendment — the live Routine now
+handles stacked reparents.
+
+Round 8 (conventions): user retracted the "execute #106's cut" instruction
+(it stays with its owning session per the re-scope comment; my worktree
+removed, nothing changed). Recorded three new conventions in cram-notes.md
+(saved): delta recheck of plan/tracking-issue state (idle-prompt, new-task,
+and always-before-save-plan triggers; SHA-stamp + git diff mechanics),
+action-only PR comment routing (tracking issue always gets the structural
+record), and merged/closed-branch cleanup (unsubscribe + delete armed
+triggers + stop polling). Added plan item plan-updates-since-helper
+(personal-data, not_started, small PR off fork main); roadmap addendum
+"2026-07-31 (conventions)"; dashboard republished. Next session of
 substance: execute #106's cut per its re-scope comment. No PR from this
 session; no code changes on the fork.
