@@ -134,7 +134,9 @@ class HasRootKinematicStructureEntity(
     @classproperty
     def _parent_connection_type(self) -> Type[Connection]:
         """
-        The type of connection used to connect the root kinematic structure entity to the world.
+        The type of connection used to connect the root kinematic structure entity to
+        the world.
+
         .. note:: Currently its always, except with sliders and hinges, but in the future this may change. So override if needed.
         """
         return FixedConnection
@@ -154,56 +156,124 @@ class HasRootKinematicStructureEntity(
         """
         Create a new instance and connect its root entity to the world's root.
 
+        Annotation classes with additional required fields (for example
+        :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.ScrewJoint`)
+        cannot be created this way; construct them directly and use
+        :meth:`_connect_and_add_to_world`.
+
         :param name: The name of the semantic annotation.
         :param world: The world to add the annotation and entity to.
         :param kinematic_structure_entity: The root entity of the semantic annotation.
-        :param world_root_T_self: The initial pose of the entity in the world root frame.
+        :param world_root_T_self: The initial pose of the entity in the world root
+            frame.
         :param connection_limits: The limits for the connection's degrees of freedom.
         :param active_axis: The active axis for the connection.
         :param connection_multiplier: The multiplier for the connection.
         :param connection_offset: The offset for the connection.
         :return: The created semantic annotation instance.
         """
+        return cls(
+            name=name, root=kinematic_structure_entity
+        )._connect_and_add_to_world(
+            world=world,
+            world_root_T_self=world_root_T_self,
+            connection_limits=connection_limits,
+            active_axis=active_axis,
+            connection_multiplier=connection_multiplier,
+            connection_offset=connection_offset,
+        )
 
-        self_instance = cls(name=name, root=kinematic_structure_entity)
+    def _connect_and_add_to_world(
+        self,
+        world: World,
+        world_root_T_self: Optional[HomogeneousTransformationMatrix] = None,
+        connection_limits: Optional[DegreeOfFreedomLimits] = None,
+        active_axis: Optional[Vector3] = None,
+        connection_multiplier: float = 1.0,
+        connection_offset: float = 0.0,
+    ) -> Self:
+        """
+        Connect this annotation's root entity to the world's root and add the annotation
+        to the world.
+
+        :param world: The world to add the annotation and entity to.
+        :param world_root_T_self: The initial pose of the entity in the world root
+            frame.
+        :param connection_limits: The limits for the connection's degrees of freedom.
+        :param active_axis: The active axis for the connection.
+        :param connection_multiplier: The multiplier for the connection.
+        :param connection_offset: The offset for the connection.
+        :return: This annotation instance.
+        """
         world_root_T_self = world_root_T_self or HomogeneousTransformationMatrix()
+        world_root_T_self.reference_frame = world.root
+        world_root_T_self.child_frame = self.root
 
-        root = world.root
-        world_root_T_self.reference_frame = root
-        world_root_T_self.child_frame = kinematic_structure_entity
-
-        if cls._parent_connection_type == FixedConnection:
-            world_root_C_self = FixedConnection(
-                parent=root,
-                child=kinematic_structure_entity,
-                parent_T_connection_expression=world_root_T_self,
-            )
-        else:
-            world_root_C_self = cls._parent_connection_type.create_with_dofs(
-                world=world,
-                parent=root,
-                child=kinematic_structure_entity,
-                parent_T_connection_expression=world_root_T_self,
-                multiplier=connection_multiplier,
-                offset=connection_offset,
-                axis=active_axis,
-                dof_limits=connection_limits,
-            )
+        world_root_C_self = self._create_parent_connection(
+            world=world,
+            world_root_T_self=world_root_T_self,
+            connection_limits=connection_limits,
+            active_axis=active_axis,
+            connection_multiplier=connection_multiplier,
+            connection_offset=connection_offset,
+        )
 
         world.add_connection(world_root_C_self)
-        world.add_semantic_annotation(self_instance)
+        world.add_semantic_annotation(self)
 
-        return self_instance
+        return self
+
+    def _create_parent_connection(
+        self,
+        world: World,
+        world_root_T_self: HomogeneousTransformationMatrix,
+        connection_limits: Optional[DegreeOfFreedomLimits],
+        active_axis: Optional[Vector3],
+        connection_multiplier: float,
+        connection_offset: float,
+    ) -> Connection:
+        """
+        Create the connection from the world's root to this annotation's root entity.
+
+        Override for connection types whose construction needs parameters beyond the
+        shared ones, using the annotation's own fields (see
+        :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.ScrewJoint`).
+
+        :param world: The world the connection is created in.
+        :param world_root_T_self: The pose of the root entity in the world root frame.
+        :param connection_limits: The limits for the connection's degrees of freedom.
+        :param active_axis: The active axis for the connection.
+        :param connection_multiplier: The multiplier for the connection.
+        :param connection_offset: The offset for the connection.
+        :return: The created connection.
+        """
+        if self._parent_connection_type == FixedConnection:
+            return FixedConnection(
+                parent=world.root,
+                child=self.root,
+                parent_T_connection_expression=world_root_T_self,
+            )
+        return self._parent_connection_type.create_with_dofs(
+            world=world,
+            parent=world.root,
+            child=self.root,
+            parent_T_connection_expression=world_root_T_self,
+            multiplier=connection_multiplier,
+            offset=connection_offset,
+            axis=active_axis,
+            dof_limits=connection_limits,
+        )
 
     def _mount_strategy(self, main_has_root_body_annotation: HasRootBody) -> None:
         """
         Realize the relationship between this annotation (as a part) and the
-        ``main_has_root_body_annotation`` (the whole) in the kinematic structure. The default is to
-        become a kinematic child of the whole; parts with a different strategy (e.g. mechanical
-        joints that re-parent the whole, apertures that cut it) override this.
+        ``main_has_root_body_annotation`` (the whole) in the kinematic structure. The
+        default is to become a kinematic child of the whole; parts with a different
+        strategy (e.g. mechanical joints that re-parent the whole, apertures that cut
+        it) override this.
 
-        :param main_has_root_body_annotation: The annotation (the whole) this one is being added to
-            as a part.
+        :param main_has_root_body_annotation: The annotation (the whole) this one is
+            being added to as a part.
         """
         main_has_root_body_annotation._world.move_branch(
             self.root, main_has_root_body_annotation.root, True
@@ -232,10 +302,12 @@ TBody = TypeVar("TBody", bound=Body)
 @dataclass(eq=False)
 class HasRootBody(HasRootKinematicStructureEntity[TBody]):
     """
-    Abstract base class for all household objects. Each semantic annotation refers to a single Body.
-    Each subclass automatically derives a MatchRule from its own class name and
-    the names of its HouseholdObject ancestors. This makes specialized subclasses
-    naturally more specific than their bases.
+    Abstract base class for all household objects.
+
+    Each semantic annotation refers to a single Body. Each subclass automatically
+    derives a MatchRule from its own class name and the names of its HouseholdObject
+    ancestors. This makes specialized subclasses naturally more specific than their
+    bases.
     """
 
     @classmethod
@@ -264,6 +336,27 @@ class HasRootBody(HasRootKinematicStructureEntity[TBody]):
         :param scale: The scale used to generate the geometry of the body.
         :return: The created semantic annotation instance.
         """
+        return cls._create_with_connection_in_world(
+            name=name,
+            world=world,
+            kinematic_structure_entity=cls._create_body(name, scale),
+            world_root_T_self=world_root_T_self,
+            connection_multiplier=connection_multiplier,
+            connection_offset=connection_offset,
+            active_axis=active_axis,
+            connection_limits=connection_limits,
+        )
+
+    @classmethod
+    def _create_body(cls, name: PrefixedName, scale: Optional[Scale] = None) -> Body:
+        """
+        Create the root body for a new annotation, with box geometry when a scale is
+        given.
+
+        :param name: The name of the body.
+        :param scale: The scale used to generate the geometry of the body.
+        :return: The created body.
+        """
         body = Body(name=name)
 
         if scale is not None:
@@ -273,16 +366,7 @@ class HasRootBody(HasRootKinematicStructureEntity[TBody]):
             body.collision = collision_shapes
             body.visual = collision_shapes
 
-        return cls._create_with_connection_in_world(
-            name=name,
-            world=world,
-            kinematic_structure_entity=body,
-            world_root_T_self=world_root_T_self,
-            connection_multiplier=connection_multiplier,
-            connection_offset=connection_offset,
-            active_axis=active_axis,
-            connection_limits=connection_limits,
-        )
+        return body
 
 
 TRegion = TypeVar("TRegion", bound=Region)
@@ -311,19 +395,18 @@ class HasRootRegion(HasRootKinematicStructureEntity[TRegion]):
 
         :param name: The name of the semantic annotation.
         :param world: The world to add the annotation and region to.
-        :param world_root_T_self: The initial pose of the region in the world root frame.
+        :param world_root_T_self: The initial pose of the region in the world root
+            frame.
         :param connection_limits: The limits for the connection's degrees of freedom.
         :param active_axis: The active axis for the connection.
         :param connection_multiplier: The multiplier for the connection.
         :param connection_offset: The offset for the connection.
         :return: The created semantic annotation instance.
         """
-        region = Region(name=name)
-
         return cls._create_with_connection_in_world(
             name=name,
             world=world,
-            kinematic_structure_entity=region,
+            kinematic_structure_entity=Region(name=name),
             world_root_T_self=world_root_T_self,
             connection_multiplier=connection_multiplier,
             connection_offset=connection_offset,
@@ -337,8 +420,9 @@ def _wrapped_part_whole_relationship_fields(
     cls: Type[PartWholeRelationship],
 ) -> list[WrappedField]:
     """
-    Filters the fields of cls for all fields marked as a part-whole relationship (by carrying an
-    :class:`IsPartWholeRelationship` in their metadata), and returns them as a Wrapped Class.
+    Filters the fields of cls for all fields marked as a part-whole relationship (by
+    carrying an :class:`IsPartWholeRelationship` in their metadata), and returns them as
+    a Wrapped Class.
     """
     return [
         wrapped_part_whole_relationship_field
@@ -357,8 +441,8 @@ class IsPartWholeRelationship(FieldMetadata):
     Marks a field as holding a structural *part* of its owner (the part-whole relation).
 
     The relation is signalled by the mere presence of an instance of this class in the
-    field's ``metadata`` mapping (attach it with :meth:`~FieldMetadata.as_dict`); it carries
-    no further data.
+    field's ``metadata`` mapping (attach it with :meth:`~FieldMetadata.as_dict`); it
+    carries no further data.
     """
 
 
@@ -377,19 +461,20 @@ class PartWholeRelationship(HasRootKinematicStructureEntity):
         self, part: HasRootKinematicStructureEntity, *, field_name: str = ""
     ) -> None:
         """
-        Add ``part`` as a structural part, routing it to the matching part-whole relationship field
-        by type.
+        Add ``part`` as a structural part, routing it to the matching part-whole
+        relationship field by type.
 
         :param part: The part to add.
-        :param field_name: Optional name of the target part-whole relationship field. When given,
-            only that field is considered (and ``part`` must still match its element type), which
-            resolves the ambiguity when ``type(part)`` matches several fields. When empty (default),
-            the field is resolved by type alone.
-        :raises UnknownPartWholeRelationshipField: If ``field_name`` is given but is not a
-            part-whole relationship field of this annotation.
-        :raises CannotBeAPartOf: If no part-whole relationship field of this annotation accepts
-            ``type(part)``.
-        :raises AmbiguousPart: If ``type(part)`` matches more than one part-whole relationship field.
+        :param field_name: Optional name of the target part-whole relationship field.
+            When given, only that field is considered (and ``part`` must still match its
+            element type), which resolves the ambiguity when ``type(part)`` matches
+            several fields. When empty (default), the field is resolved by type alone.
+        :raises UnknownPartWholeRelationshipField: If ``field_name`` is given but is not
+            a part-whole relationship field of this annotation.
+        :raises CannotBeAPartOf: If no part-whole relationship field of this annotation
+            accepts ``type(part)``.
+        :raises AmbiguousPart: If ``type(part)`` matches more than one part-whole
+            relationship field.
         """
         candidate_fields = _wrapped_part_whole_relationship_fields(type(self))
         if field_name:
@@ -561,8 +646,10 @@ class HasSink(PartWholeRelationship):
 @dataclass(eq=False)
 class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric):
     """
-    A mixin class for semantic annotations that represent storage spaces. Used to afterthefact add object for example
-    to a table, and have those objects move with the table when it is moved.
+    A mixin class for semantic annotations that represent storage spaces.
+
+    Used to afterthefact add object for example to a table, and have those objects move
+    with the table when it is moved.
     """
 
     objects: List[THasRootBody] = field(default_factory=list, hash=False, kw_only=True)
@@ -612,14 +699,17 @@ class HasSupportingSurface(IsStorageSpace):
         min_surface_area: float = 0.0225,  # 15cm x 15cm
     ) -> Optional[Region]:
         """
-        Calculate the supporting surface region for the semantic annotation, add it to the world, and set
-        it as the supporting surface of self
+        Calculate the supporting surface region for the semantic annotation, add it to
+        the world, and set it as the supporting surface of self.
 
-        :param upward_threshold: The threshold for the face normal to be considered upward-facing.
-        :param clearance_threshold: The threshold for the vertical clearance above the surface.
-        :param min_surface_area: The minimum area for a surface to be considered a supporting surface.
-
-        :return: The supporting surface region, or None if no suitable region could be found.
+        :param upward_threshold: The threshold for the face normal to be considered
+            upward-facing.
+        :param clearance_threshold: The threshold for the vertical clearance above the
+            surface.
+        :param min_surface_area: The minimum area for a surface to be considered a
+            supporting surface.
+        :return: The supporting surface region, or None if no suitable region could be
+            found.
         """
         mesh = self.root.combined_mesh
         if mesh is None:
@@ -703,9 +793,9 @@ class HasSupportingSurface(IsStorageSpace):
         """
         Infer and add objects that are supported by this surface to the storage space.
 
-        This method queries the world for bodies that are supported by this annotation's root body,
-        finds their corresponding semantic annotations, and adds them to the objects list if they
-        are not already present.
+        This method queries the world for bodies that are supported by this annotation's
+        root body, finds their corresponding semantic annotations, and adds them to the
+        objects list if they are not already present.
         """
         bodies = variable_from(self._world.bodies_with_collision)
         body = entity(bodies).where(
@@ -740,8 +830,9 @@ class HasSupportingSurface(IsStorageSpace):
         amount: int = 100,
     ) -> List[Point3]:
         """
-        Samples points from a surface around the semantic annotation. The surface is determined by the supporting
-        surface of the semantic annotation and is truncated by the objects on the surface. The points are sampled
+        Samples points from a surface around the semantic annotation.
+
+        The surface is determined by the supporting surface of the semantic annotation and is truncated by the objects on the surface. The points are sampled
         using a Gaussian mixture model.
 
         ..warning:: Calling this method when the self.supporting_surface is None will cause the method to calculate the
@@ -797,8 +888,9 @@ class HasSupportingSurface(IsStorageSpace):
         object_bloat: float = 0.1,
     ):
         """
-        Build a probabilistic circuit representing the supporting surface, truncated by the objects on the surface,
-        and with Gaussian mixtures around the objects of interest.
+        Build a probabilistic circuit representing the supporting surface, truncated by
+        the objects on the surface, and with Gaussian mixtures around the objects of
+        interest.
 
         :param category_of_interest: The type of object sample points around.
         :param object_bloat: The amount of bloat to apply to the object event.
@@ -824,7 +916,8 @@ class HasSupportingSurface(IsStorageSpace):
 
     def _2d_surface_sample_space_excluding_objects(self, object_bloat: float) -> Event:
         """
-        Compute a 2D event representing the supporting surface, truncated by the objects on the surface.
+        Compute a 2D event representing the supporting surface, truncated by the objects
+        on the surface.
 
         :param object_bloat: The amount of bloat to apply to the object events.
         """
@@ -852,14 +945,14 @@ class HasSupportingSurface(IsStorageSpace):
         """
         Create a Gaussian mixture model from a list of points, truncated by an event.
 
-        :param objects_of_interest: Objects of interest to sample around. The Gaussian mixtures will be centered around
-           the positions of these objects on the surface.
+        :param objects_of_interest: Objects of interest to sample around. The Gaussian
+            mixtures will be centered around the positions of these objects on the
+            surface.
         :param variance: The standard deviation to use for the Gaussian mixtures.
         :param sample_space: The event to truncate the Gaussian mixture model with.
-
-        :return: A probabilistic circuit representing the Gaussian mixture model truncated by the event, or None if the event has zero measure.
+        :return: A probabilistic circuit representing the Gaussian mixture model
+            truncated by the event, or None if the event has zero measure.
         """
-
         surface_circuit = self._untruncated_2d_gaussian_sampler(
             objects_of_interest=objects_of_interest,
             variance=variance,
@@ -876,8 +969,10 @@ class HasSupportingSurface(IsStorageSpace):
     ) -> ProbabilisticCircuit:
         """
         Create a Gaussian mixture model from a list of points, without truncation.
-        This method is extracted from the `_2d_gaussian_sampler_from_2d_sample_space` method so that the generated
-        distribution can be tested properly, which cannot be done after truncation.
+
+        This method is extracted from the `_2d_gaussian_sampler_from_2d_sample_space`
+        method so that the generated distribution can be tested properly, which cannot
+        be done after truncation.
         """
         surface_circuit = ProbabilisticCircuit()
         surface_circuit_root = SumUnit(probabilistic_circuit=surface_circuit)
@@ -927,10 +1022,11 @@ class HasCaseAsRootBody(HasSupportingSurface):
     @abstractmethod
     def hole_direction(self) -> Vector3:
         """
-        The direction of the physical hole of the geometry. For a drawer for example, this would always be Z.
+        The direction of the physical hole of the geometry.
 
-        ..warning:: This does not describe the axis along, for example, a drawer opens. Its the physical opening where
-        you can put something into the drawer.
+        For a drawer for example, this would always be Z.
+                ..warning:: This does not describe the axis along, for example, a drawer opens. Its the physical opening where
+                you can put something into the drawer.
         """
         ...
 

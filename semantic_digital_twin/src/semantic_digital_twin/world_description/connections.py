@@ -387,6 +387,172 @@ class RevoluteConnection(ActiveConnection1DOF):
 
 
 @dataclass(eq=False)
+class ScrewConnection(ActiveConnection1DOF):
+    """
+    A screw pair: couples rotation about ``axis`` with translation along it into a
+    single degree of freedom.
+
+    Increasing the degree of freedom's position rotates the child counterclockwise about
+    ``axis`` (right-hand rule) and translates it along ``axis`` by ``screw_pitch *
+    position / (2 * pi)``, i.e. one full revolution advances the child by one
+    ``screw_pitch``. A right-handed thread whose ``axis`` points from the parent toward
+    the child therefore has a positive ``screw_pitch``: driving the degree of freedom
+    toward its upper limit unscrews the child.
+    """
+
+    screw_pitch: float = field(kw_only=True)
+    """
+    The distance between adjacent threads, measured parallel to ``axis`` in meters.
+
+    Assumes a single-start thread, where the child advances one ``screw_pitch`` along
+    ``axis`` per full revolution. See
+    https://wellfastener.com/blog/what-is-screw-pitch%EF%BC%9Fscrew-pitch-vs-lead/
+    for
+    the distinction between screw pitch and lead. Negative values model left-handed
+    threads.
+    """
+
+    def add_to_world(self, world: World):
+        super().add_to_world(world)
+
+        angle = self.dof.variables.position
+        translation_axis = self.axis * (self.screw_pitch * angle / (2 * np.pi))
+        self._kinematics = HomogeneousTransformationMatrix.from_xyz_axis_angle(
+            x=translation_axis[0],
+            y=translation_axis[1],
+            z=translation_axis[2],
+            axis=self.axis,
+            angle=angle,
+            child_frame=self.child,
+        )
+
+    def rotation_angle_for_travel_distance(self, travel_distance: float) -> float:
+        """
+        The rotation of the degree of freedom that translates the child by
+        ``travel_distance`` along ``axis``.
+
+        Allows expressing joint goals as travel distances, e.g. how far a cap should
+        move along its thread.
+
+        :param travel_distance: Signed translation along ``axis`` in meters.
+        :return: The signed rotation angle in radians.
+        """
+        return travel_distance * 2 * np.pi / self.screw_pitch
+
+    @classmethod
+    def create_with_dofs(
+        cls,
+        world: World,
+        parent: KinematicStructureEntity,
+        child: KinematicStructureEntity,
+        *,
+        name: Optional[PrefixedName] = None,
+        parent_T_connection_expression: Optional[
+            HomogeneousTransformationMatrix
+        ] = None,
+        connection_T_child_expression: Optional[HomogeneousTransformationMatrix] = None,
+        multiplier: float = 1.0,
+        offset: float = 0.0,
+        dof_limits: Optional[DegreeOfFreedomLimits] = None,
+        axis: Vector3 | None = None,
+        screw_pitch: float,
+    ) -> Self:
+        """
+        Creates and returns a screw connection with its single degree of freedom.
+
+        See :meth:`ActiveConnection1DOF.create_with_dofs`; additionally requires the
+        screw's ``screw_pitch``.
+
+        :param screw_pitch: The distance between adjacent threads along ``axis`` in
+            meters.
+        """
+        name = name or cls._generate_default_name(parent=parent, child=child)
+        dof = DegreeOfFreedom(name=PrefixedName("dof", str(name)), limits=dof_limits)
+        world.add_degree_of_freedom(dof)
+        connection = cls(
+            name=name,
+            parent=parent,
+            child=child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=connection_T_child_expression,
+            axis=axis,
+            multiplier=multiplier,
+            offset=offset,
+            raw_dof=dof,
+            screw_pitch=screw_pitch,
+        )
+        return connection
+
+    def to_json(self) -> Dict[str, Any]:
+        result = super().to_json()
+        result["screw_pitch"] = self.screw_pitch
+        return result
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
+        parent = tracker.get_world_entity_with_id(id=from_json(data["parent_id"]))
+        child = tracker.get_world_entity_with_id(id=from_json(data["child_id"]))
+        raw_dof = tracker.get_world_entity_with_id(id=from_json(data["dof_id"]))
+        return cls(
+            name=from_json(data["name"]),
+            parent=parent,
+            child=child,
+            parent_T_connection_expression=from_json(
+                data["parent_T_connection_expression"], **kwargs
+            ),
+            connection_T_child_expression=from_json(
+                data["connection_T_child_expression"], **kwargs
+            ),
+            axis=Vector3.from_iterable(data["axis"]),
+            multiplier=data["multiplier"],
+            offset=data["offset"],
+            raw_dof=raw_dof,
+            screw_pitch=data["screw_pitch"],
+        )
+
+    def copy_for_world(self, world: World):
+        (
+            other_parent,
+            other_child,
+            parent_T_connection_expression,
+            connection_T_child_expression,
+        ) = self._find_references_in_world(world)
+
+        return self.__class__(
+            name=PrefixedName(self.name.name, self.name.prefix),
+            parent=other_parent,
+            child=other_child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=connection_T_child_expression,
+            axis=self.axis,
+            multiplier=self.multiplier,
+            offset=self.offset,
+            raw_dof=world.get_degree_of_freedom_by_id(self.raw_dof.id),
+            screw_pitch=self.screw_pitch,
+        )
+
+    def copy_with_new_parent(
+        self,
+        new_parent: KinematicStructureEntity,
+        parent_T_connection_expression: HomogeneousTransformationMatrix,
+    ) -> Self:
+        # Reuse the same degree of freedom so the joint state is kept.
+        return self.__class__(
+            parent=new_parent,
+            child=self.child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=self.connection_T_child_expression,
+            axis=self.axis,
+            multiplier=self.multiplier,
+            offset=self.offset,
+            raw_dof=self.raw_dof,
+            dynamics=self.dynamics,
+            screw_pitch=self.screw_pitch,
+        )
+
+
+@dataclass(eq=False)
 class Connection6DoF(Connection):
     """
     Has full 6 degrees of freedom, that cannot be actively controlled.
