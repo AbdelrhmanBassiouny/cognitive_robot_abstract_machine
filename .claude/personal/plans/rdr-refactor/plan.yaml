@@ -193,6 +193,20 @@ items:
   depends_on:
   - D-core-serialization
   status: in_progress
+  notes: 'Investigated by a /plan-item-resolve session 2026-07-31; not yet actioned. Three findings.
+    (1) The branch (8eb7518, 2026-07-19) is 2 commits behind its base D-core-serialization (2577a2e3)
+    — exactly §9''s two fixes — so its green 18/18 CI predates the current base and nothing has built
+    #67 on it. A local `git merge-tree --write-tree` of the two is conflict-free and the merged tree
+    has zero stale code_generation.type_hints references (#67 touches no code_generation file), so the
+    restack is mechanically safe; it just has to happen and be re-verified. (2) 2 of 86 review threads
+    are unresolved and both wait on the developer, not on code — rule_tree_view.py:255
+    (enforce_parent_consistency "code smell"; resolved as keep-and-point-at the façade fix, see §10)
+    and test_conclusion_domain.py (the AGENTS.md half; resolved as covered by main''s existing
+    "narrate the review or implementation history" rule). (3) #67 adds a new
+    `current_result.is_condition_false` call site at base_expressions.py:410, and eql-truth-unification
+    (#99) deletes that accessor — #99''s coordination note lists #89/#90/#92 but not #67. Also: #67''s
+    description is stale (claims a conftest.py and an __init__.py export block absent from the current
+    16-file diff).'
 - id: D-core-engine
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-engine
@@ -272,7 +286,14 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
   notes: 'bug label. Reintroduces _last_parent_of_type_ for insert_at''s anchor-parent recovery — a real,
-    proven bug distinct from PR #89''s target.'
+    proven bug distinct from PR #89''s target. SUPERSEDED 2026-07-31 by dag-facade-hardening''s
+    insert-at-ownership-parentage item: the same bug is fixed there at the façade level, from the
+    owning rule-tree context rather than by reintroducing _last_parent_of_type_ (a symbol #89 deleted
+    from main, and a structural-accessor read that dag-facade-hardening''s Wave-1 guard test forbids
+    and its rename would break). This PR''s own scope note — "insert_at does not exist on main yet" —
+    is stale: rules/conclusion_selector.py landed on main, so the fix needs none of the Wave-0 stack.
+    Reduce this to its regression test re-pointed at the fixed API, or close as superseded. See
+    roadmap.md §10.'
 - id: D-ui-rendering
   title: 'RDR engine: case-table rendering + serialization test coverage'
   branch: D-ui-rendering

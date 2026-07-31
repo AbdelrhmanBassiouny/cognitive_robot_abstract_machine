@@ -482,3 +482,79 @@ its base, `D-core-corner-case` (#65). Root-caused and resolved it:
   `probabilistic_model` gap (2) and a missing `dot` (graphviz) binary in the
   local sandbox (2, `test_object_diagram.py`) — neither in files this PR
   touches, neither present in the PR's own documented CI environment.
+
+## 10. Addendum (2026-07-31) — `D-core-support` (#67) investigated; the splice fix moves to `dag-facade-hardening`
+
+A `/plan-item-resolve` session picked up `D-core-support`, which carried no recorded
+blocker at all. What it found, and one cross-plan consequence.
+
+### #67's actual state
+
+Not a conflict, and not a bad dependency: `check_dependency_readiness.py` reports
+`D-core-serialization` as `open_ready`, GitHub reports #67 `mergeable_state: clean`, and
+a local `git merge-tree --write-tree` of the two branches is conflict-free with zero
+stale `code_generation.type_hints` references in the merged tree (#67 touches no
+`code_generation` file, and its `function_case.py` is the RDR one, not the file that
+conflicted in §9). What is wrong:
+
+1. **Stale relative to its own base.** `D-core-support` is at `8eb7518` (2026-07-19) and
+   `D-core-serialization` is at `2577a2e3` — the branch is two commits behind, and those
+   two commits are precisely §9's restack merge and stale-import fix. #67's green 18/18
+   CI ran against the old base; nothing has ever built it on the current one.
+2. **Two unresolved review threads, both waiting on the developer.** 84 of 86 are
+   resolved; these two are why the PR has not moved since 2026-07-19. Both were put to
+   the owner and answered in-session: `test_conclusion_domain.py`'s AGENTS.md ask is
+   covered by the rule `main` has since gained (docstrings must not "narrate the review
+   or implementation history"), so reply and resolve with no AGENTS.md edit; and
+   `rule_tree_view.py:255` is handled below.
+3. **An unrecorded collision with Track T.** #67 changes `base_expressions.py:410` from
+   `current_result.is_false` to `current_result.is_condition_false`. That accessor exists
+   on `main` (`base_expressions.py:971`) and is **deleted** on #99's branch (`f8a8fe56`).
+   #99's #94 comment coordinates with #89/#90/#92 but not #67, whose call site postdates
+   that analysis. Whichever lands second reconciles it.
+
+Also noted: #67's description is stale (claims a `conftest.py` and an `__init__.py`
+export block, neither in the current 16-file diff — `rdr/__init__.py` on the branch is a
+bare docstring); #66 carries a stale `needs-resolution` label and one unrelated
+giskardpy CI failure (`test_attached_self_collision_avoid_stick`, `test_each_lib
+(krrood)` green); and current `main` is no longer an ancestor of the serialization tip,
+so the whole stack is due another cascade.
+
+### The `enforce_parent_consistency` thread, and where its answer lives
+
+The review asked why the rule tree isn't consistent in the first place. It is the right
+question, and the answer is not in this plan: `SymbolicExpression` is a DAG behind a
+tree-shaped `_parent_` that returns whichever parent attached *first*. That is
+`dag-facade-hardening`'s entire subject (tracking issue #96).
+
+Chasing it turned up the concrete instance — `ConclusionSelector.insert_at`
+(`rules/conclusion_selector.py:67`) splicing above `anchor._parent_` — **on `main`**, and
+a new item `insert-at-ownership-parentage` was added to that plan to fix it at the façade
+level, from the owning rule-tree context. Full rationale in that plan's own 2026-07-31
+addendum.
+
+Two consequences here:
+
+- **#78 (`D-ui-splice-fix`) is superseded.** It fixes the same bug by reintroducing
+  `_last_parent_of_type_` — a symbol #89 deleted from `main`, and a structural-accessor
+  read that `dag-facade-hardening`'s Wave-1 guard test forbids and its rename would
+  break. Its scope note ("`insert_at` does not exist on `main` yet") was true on
+  2026-07-16 and is now stale: `rules/` has landed. It reduces to its regression test
+  re-pointed at the fixed API, or closes.
+- **#67 changes nothing.** `enforce_parent_consistency` makes no `_parent_`/`_root_`
+  reads at all — it is a display-order heuristic over the flattened rule list — so it is
+  neither the defect nor caught by the guard test. Keep it, reply pointing at #96 and the
+  new item, resolve. Whether it becomes redundant once the façade is hardened is a
+  question for then, not a promise now.
+
+### Sequencing across the two plans
+
+`rdr-refactor`'s Wave 0 still goes first. `dag-facade-hardening`'s
+`facade-rename-and-guard` is a repo-wide rename of `_parent_`/`_root_` in
+`base_expressions.py` — the file this 12-PR stack contests most — and every merge to
+`main` while the stack is open costs a full cascade restack, as #89 already demonstrated.
+Landing the stack first means doing that rename once against a stable `main`; it also
+lets Phase D's audit see `rdr/rule_tree*.py`, which is not on `main` yet.
+
+`insert-at-ownership-parentage` is the deliberate exception: small, off `main`, gated on
+nothing, and it *removes* a future cascade rather than adding one.
