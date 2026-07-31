@@ -88,19 +88,26 @@ real blockers; dashboard republished.
 ## Next
 
 - Wait on the two review decisions. Nothing else in P4 is actionable without them.
-- **CI is red on `semantic_digital_twin` + `giskardpy` + `coraplex`, and none of it is
-  ours.** The user merged `main` into the branch (`2ea44271`, parent `0fd14357`). All
-  three fail on `PackageNotFoundError: package 'ur_robot_driver'` — the DAiSy work on
-  `main` dropped `daisy.urdf` (`157cd1bf`) in favour of `package://ur_robot_driver/...`,
-  and that ROS package is not in the CI image. Verified against `main`'s own run of the
-  merge parent (30577674356), which fails the *same three jobs*:
-  sdt same test `test_world_pr2.py::test_robots_and_validate`, main 872 passed vs our
-  873 (the extra pass is our new test); coraplex byte-identical at 326 passed / 5
-  skipped / 7 errors on both, all seven `[DAiSy]` params. Zero real test failures
-  anywhere — the DAiSy fixtures just cannot build a world. Fix belongs with the DAiSy
-  change (rebuild the CI image with `ur_robot_driver` + `ur_client_library`), not this
-  PR. Said so on #33: comments 5135970013 and 5136043683 (the latter correcting the
-  first, which had listed only two jobs).
+- **CI history, two distinct rounds — neither ours.**
+  - *Round 1 (`2ea44271`, user merged `main`)*: red on sdt + giskardpy + coraplex, all
+    `PackageNotFoundError: package 'ur_robot_driver'`. The DAiSy work on `main` dropped
+    `daisy.urdf` (`157cd1bf`) for `package://ur_robot_driver/...`, absent from the CI
+    image. Verified against `main`'s own run of the merge parent (30577674356): same
+    three jobs, coraplex byte-identical at 326/5/7. Reported on #33 (5135970013, plus
+    5136043683 correcting "two jobs" to three). **Now resolved upstream** — the image
+    was rebuilt.
+  - *Round 2 (`eda2399a`, another `main` merge)*: 18/20 green, giskardpy included, sdt
+    up to 886 passed. One new failure,
+    `test_ros/test_world_synchronizer.py::test_semantic_annotation_modifications_merge_world`
+    — flaky, not ours: it passed on `2ea44271` with all our changes already in; the
+    assertion shows the receiver world got `[]` (message never arrived) rather than
+    wrong content; the test syncs by `time.sleep(1)` over real ROS pub/sub (87 sleeps
+    in that file); and that file's recent `main` history is literally "Fix
+    subscriber-count race … causing flaky collision checks". Analysis on #33
+    (5142155247).
+  - **Open loop**: wanted to confirm by `rerun_failed_jobs`, but GitHub returns 403
+    "workflow is already running" while `coraplex` finishes. Retry when a later event
+    arrives or the user asks — no timed check-in, per these notes.
 - Reacting to webhook events; per these notes, no timed check-in is armed. When a
   base-branch-recovered notice arrives, merge `main` again and let CI re-run.
 - When the type-noun decision lands: if it is "type-level display noun", that is a
