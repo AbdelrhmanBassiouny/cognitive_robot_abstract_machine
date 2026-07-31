@@ -99,13 +99,18 @@ items:
 
   - id: insert-at-ownership-parentage
     title: "Resolve insert_at splice parentage from the owning rule-tree context"
-    branch: null
-    pull_request_number: null
+    branch: claude/dag-facade-hardening-emrhza
+    pull_request_number: 118
     track: bugs-and-audit
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01ScQBrWpJoYmhB9T8uBuxWp
     notes: >
-      bug label. ConclusionSelector.insert_at (rules/conclusion_selector.py:67)
+      bug label; open draft. Fixed by carrying the owning parent edge on the
+      `with`-context stack (RuleTreeContext in core/base_expressions.py) rather
+      than by any `_parents_` heuristic, so Phase A's rename and Phase D's guard
+      test stay compatible. #78 left untouched; its disposition is a call for its
+      own branch. ConclusionSelector.insert_at (rules/conclusion_selector.py:67)
       splices above `anchor._parent_`, the first-attached primary parent, so a
       shared-identity MappedVariable used inside a Comparator in one branch and
       bare in a sibling branch splices above the incidental Comparator and drags

@@ -152,3 +152,30 @@ repo-wide rename in `base_expressions.py`, the file that 12-PR stack contests mo
 every merge to `main` while it is open costs a full cascade restack. This item is the
 exception that jumps the queue — it is small, lands off `main`, and *removes* a future
 cascade instead of adding one.
+
+### How it was fixed (#118, 2026-07-31)
+
+The addendum's premise held: a kickoff session reproduced the bug on `main` with core
+EQL plus `rules/` alone, no RDR layer and no serializer — the earlier sibling's
+`Comparator` ends up with a `Refinement` as its left operand.
+
+Two findings shaped the design, both of which rule out the obvious shapes:
+
+- **The owning edge cannot be read off the node when the block is entered.** At
+  `with refinement(shared_node)`, the node's `_parent_` is *already* the unrelated
+  comparator — that is the bug itself. The edge has to be inherited from the enclosing
+  context, whose own owning parent is the selector `insert_at` just created and is a
+  parent of the new branch too.
+- **It cannot be captured once, either.** Repeated edits inside one block re-splice the
+  same anchor, replacing that edge each time, so a write-once record goes stale after the
+  first nested statement. `insert_at` refreshes it after splicing.
+
+So the context stack now holds `RuleTreeContext(condition, owning_parent)` instead of
+bare expressions, and `insert_at` splices above the recorded parent, falling back to the
+structural one only when no enclosing context anchors on the anchor — which keeps the
+explicit-anchor API working outside any `with` block. No `_parents_` heuristic is
+involved, so Phase A's rename and Phase D's guard test stay compatible with it.
+
+#78 was left untouched rather than closed: the "re-point its regression test" option the
+section above offers is not actually available, since that test lives in
+`test/krrood_test/test_eql_rdr/`, a directory that does not exist on `main`.
