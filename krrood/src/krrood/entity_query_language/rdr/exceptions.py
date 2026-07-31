@@ -4,12 +4,16 @@ Exceptions raised by the EQL-native RDR engine.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from typing_extensions import Any, Tuple, Type
+from typing_extensions import TYPE_CHECKING, Any, Tuple, Type
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.rdr.utils import AnswerName
 from krrood.exceptions import DataclassException
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.rdr.conclusion_domain import ConclusionDomain
 
 
 @dataclass
@@ -168,3 +172,203 @@ class EmptyRuleTreeError(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Fit at least one rule before saving."
+
+
+@dataclass
+class NoAnswerProvided(DataclassException):
+    """
+    Raised when the expert session ended (via :class:`ExpertAbort`) without supplying a
+    required answer. Concrete subclasses (:class:`NoConditionsProvided`,
+    :class:`NoConclusionProvided`) fix which answer.
+    """
+
+    case: Any
+    """
+    The case for which the answer was never supplied.
+    """
+
+    answer_name: AnswerName
+    """
+    Which answer (conditions or conclusion) was never supplied.
+    """
+
+    def error_message(self) -> str:
+        return f"The expert cancelled without supplying `{self.answer_name}` for {self.case!r}."
+
+    def suggest_correction(self) -> str:
+        return f"Retry with an interface that can supply `{self.answer_name}`."
+
+
+@dataclass
+class NoConditionsProvided(NoAnswerProvided):
+    """
+    Raised when the expert session ended without supplying the conditions answer.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONDITIONS, init=False)
+
+
+@dataclass
+class NoConclusionProvided(NoAnswerProvided):
+    """
+    Raised when the expert session ended without supplying the conclusion answer.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONCLUSION, init=False)
+
+
+@dataclass
+class ConditionsRequired(DataclassException):
+    """
+    Raised when a conditions answer is validated while still unset.
+    """
+
+    answer_name: AnswerName
+    """
+    The namespace variable the expert must assign a conditions expression to.
+    """
+
+    case_variable_name: str
+    """
+    The shared EQL variable the conditions expression must be built over.
+    """
+
+    def error_message(self) -> str:
+        return f"Assign an EQL condition to `{self.answer_name}`, built over `{self.case_variable_name}`."
+
+    def suggest_correction(self) -> str:
+        return (
+            f"e.g. `{self.answer_name} = {self.case_variable_name}.some_attr == True`."
+        )
+
+
+@dataclass
+class ConditionsNotAnExpression(DataclassException):
+    """
+    Raised when a conditions answer is not an EQL expression.
+    """
+
+    value: Any
+    """
+    The offending value the expert assigned.
+    """
+
+    answer_name: AnswerName
+    """
+    The namespace variable the expert must assign a conditions expression to.
+    """
+
+    case_variable_name: str
+    """
+    The shared EQL variable the conditions expression must be built over.
+    """
+
+    case_instance_name: str
+    """
+    The namespace variable bound to the concrete case (a common source of confusion).
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"`{self.answer_name}` must be an EQL expression built over `{self.case_variable_name}` "
+            f"(got {type(self.value).__name__})."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Did you build it over `{self.case_instance_name}` (the concrete case) instead of "
+            f"`{self.case_variable_name}`?"
+        )
+
+
+@dataclass
+class ConclusionRequired(DataclassException):
+    """
+    Raised when no rule fired and the expert left the conclusion answer unset.
+    """
+
+    domain: ConclusionDomain
+    """
+    The resolved allowable-value domain of the conclusion attribute.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONCLUSION, init=False)
+    """
+    Always the conclusion answer.
+    """
+
+    def error_message(self) -> str:
+        return "No rule fired for this case."
+
+    def suggest_correction(self) -> str:
+        return f"Assign a conclusion ({self.domain.hint()})."
+
+
+@dataclass
+class WrongConclusionProvided(DataclassException):
+    """
+    Raised when a conclusion answer was supplied but violates the resolved
+    :class:`ConclusionDomain` in some way. Concrete subclasses each cover one violation.
+    """
+
+    domain: ConclusionDomain
+    """
+    The resolved allowable-value domain of the conclusion attribute.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONCLUSION, init=False)
+    """
+    Always the conclusion answer.
+    """
+
+
+@dataclass
+class ConclusionMayNotBeNone(WrongConclusionProvided):
+    """
+    Raised when a conclusion answer is ``None`` but the declared type does not admit it.
+    """
+
+    def error_message(self) -> str:
+        return "The conclusion may not be None."
+
+    def suggest_correction(self) -> str:
+        return f"Set {self.domain.hint()}."
+
+
+@dataclass
+class ConclusionNotInDomain(WrongConclusionProvided):
+    """
+    Raised when a conclusion answer is not one of the domain's enumerable members.
+    """
+
+    value: Any
+    """
+    The offending value the expert assigned.
+    """
+
+    def error_message(self) -> str:
+        return f"The conclusion must be one of: {self.domain.display()} (got {self.value!r})."
+
+    def suggest_correction(self) -> str:
+        return f"Choose a value from the conclusion domain: {self.domain.display()}."
+
+
+@dataclass
+class ConclusionWrongType(WrongConclusionProvided):
+    """
+    Raised when a conclusion answer is not an instance of the domain's expected type(s).
+    """
+
+    value: Any
+    """
+    The offending value the expert assigned.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The conclusion must be a {self.domain.type_display} "
+            f"(got {type(self.value).__name__})."
+        )
+
+    def suggest_correction(self) -> str:
+        return f"Provide a {self.domain.type_display}."
