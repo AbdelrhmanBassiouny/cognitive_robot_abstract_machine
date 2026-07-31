@@ -42,7 +42,17 @@ on main. "Revise this and all related parts."
 - Workaround offered, awaiting decision: fast-forward `ripple-down-rules-refactor`
   to `main` (34f160df is an ancestor, so non-destructive). PR #40 - the only PR with
   that branch as head - is closed, and #41 is the only open PR based on it.
-- Alternative: retarget in the GitHub UI, which may offer to leave the stack.
+- Alternative: GitHub's UI has an **Unstack** control (stacked PRs went to public preview
+  2026-07-30, which is why this only just started blocking). Unstack dissolves the whole
+  stack - #41 + #63 + #64 + #65 + #66 - then retarget #41, then `gh stack submit` to
+  recreate. Allowed only while no PR in the stack has merged or is queued for merge.
+- Why #41 went stale: `.claude/stack/ROUTINE.md` Phase 1 reparents children only of an
+  **open** fork PR that is merged by ancestry. #40 is *closed, not merged*, so Phase 1
+  never fired and #41 was left on a base branch whose content had already landed.
+- Running the stack Routine now would not help: Phase 1 skips #41 (parent PR closed), and
+  Phase 2's `restack-plan` merge of `main` is exactly the merge already in 7459a5b0. The
+  new `.claude/stack/` tooling is itself still unmerged (PR #106); the live Routine runs
+  off `claude/stack-workflow-tooling`'s `dev/` copy.
 
 **Next**
 - Resolve the base-branch situation, then refresh #41's description (its "Stack"
