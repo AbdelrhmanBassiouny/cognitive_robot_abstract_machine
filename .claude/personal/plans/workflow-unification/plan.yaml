@@ -484,7 +484,7 @@ items:
     pull_request_number: 105
     track: dashboards
     depends_on: []
-    status: in_progress
+    status: done
     notes: >
       Pre-existing bug-fix PR, adopted 2026-07-31 under the every-fork-PR-belongs-to-a-
       plan rule. Renders an item's unmet dependencies as blocked chips instead of
