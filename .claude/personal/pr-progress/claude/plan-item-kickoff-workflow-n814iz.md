@@ -33,3 +33,18 @@ Item `plan-updates-since-helper` in the `workflow-unification` plan.
   `test_world_sim_state_sync` assertion. Unrelated to this PR's `.claude/hooks/*`-only
   diff; `test_claude_dev_tooling` is green. Commented on the PR, no fix pushed. Watching
   for the base branch to recover.
+
+## Review round 1 (2026-07-31)
+
+5 review comments from the repo owner, all pointing the same direction: eliminate
+hardcoded strings duplicated between production and tests, move the inline `python3 -c`
+snippet to a real file, use structured types (StrEnum/dataclass). Addressed in one
+commit: new `.claude/hooks/plan_updates_since_support.py` (mirrors
+`plan_manifest_tools.py`'s precedent for `save-plan.sh`) now owns every user-facing
+message string, the `--since` option name (`PlanUpdatesSinceOption(StrEnum)`), and the
+tracking-issue-comment JSON shape (`IssueComment` dataclass + `IssueCommentField`
+enum, with `to_api_response()` as the inverse of `from_api_response()` so tests build
+stub JSON from the same field names instead of hand-typing them). `plan-updates-since.sh`
+now calls into that module for everything it used to print inline; the test file
+imports the same constants/dataclass instead of retyping copies. All 29 tests still
+pass; replied to and resolved all 4 review threads.
