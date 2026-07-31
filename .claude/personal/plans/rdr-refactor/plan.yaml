@@ -167,7 +167,19 @@ items:
   track: S0-steward
   depends_on:
   - D-core-corner-case
-  status: in_progress
+  status: blocked
+  notes: 'Corrected 2026-07-31: verified live via pull_request_read that GitHub reports
+    mergeable_state "dirty" (a real merge conflict against its base, D-core-corner-case
+    #65) and carries the needs-resolution label - manifest was stale at in_progress.
+    Found while investigating why the plan dashboard was not surfacing this: as of now
+    build_dashboard.py fetches only state/draft/merged_at/labels for a pull request and
+    has no mergeable-state signal at all, and PullRequestLabel does not recognize
+    needs-resolution (that label belongs to the separate stack.py restacking-delegation
+    system, not the plan dashboard). The workflow-unification plan''s shared-pr-state-chips
+    item (PR #111, still an open draft) already adds a live "conflicts" chip driven off
+    GitHub''s mergeable field, which will surface exactly this once merged - no separate
+    bug-fix item was needed there. Next step here: resolve the conflict against
+    D-core-corner-case and push.'
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
