@@ -682,3 +682,16 @@ that gets commented:
 
 New item `plan-updates-since-helper` (personal-data track) implements convention 1 as a hook
 script with a session-start SHA stamp; small independent PR off fork main, like #109.
+
+## Update 2026-07-31 (adoptions): the two open dashboard bug-fix PRs join the plan
+
+Asked why `plan-updates-since-helper` was missing from the "Ready to start" sidebar, the answer
+turned out to be a known bug with a fix already in review: **#103** (ready-to-start drops
+dependency-free items - the exact `_compute_next_steps` guard diagnosed live in the session) and
+its sibling dashboard fix **#105** (unmet dependency chips shown as blocked). Both predate the
+one-dashboard decision, are based on fork main, and carry `bug` + `in-review`. Adopted as
+`ready-to-start-dependency-free-fix` and `dependency-chips-blocked-fix` in the dashboards track -
+the first exercise of the "every fork PR belongs to a plan" rule, which the PR-4 site build will
+later enforce mechanically. Practical note: the sidebar gap remains visible on published
+dashboards until #103 lands on fork main, since the build runs main's copy of
+build_dashboard.py.

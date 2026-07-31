@@ -402,3 +402,34 @@ items:
       state at (gitignored file) so sessions have the baseline for free; the script
       updates the stamp. Sized as a small independent PR off fork main, like #109 - not
       part of the #101 chain. Tests via ScratchRepository, network-free.
+
+  - id: ready-to-start-dependency-free-fix
+    branch: claude/funny-feynman-wexezs
+    title: "Fix ready-to-start dashboard list dropping dependency-free items"
+    pull_request_number: 103
+    track: dashboards
+    depends_on: []
+    status: in_progress
+    notes: >
+      Pre-existing bug-fix PR (open before the plan tracked it; adopted 2026-07-31 under
+      the every-fork-PR-belongs-to-a-plan rule). Fixes exactly the
+      build_dashboard.py:_compute_next_steps guard that skips items with no
+      dependencies, which resurfaced when plan-updates-since-helper (depends_on: [])
+      failed to appear in the sidebar. Based on fork main, independent of the #101
+      chain; carries bug + in-review labels - already promoted to cram2. Textual
+      overlap to expect with #111 and #105, which also edit build_dashboard.py;
+      whichever lands later resolves it.
+
+  - id: dependency-chips-blocked-fix
+    branch: claude/plan-dashboard-dependencies-1am49n
+    title: "Show unmet dependency chips as blocked on plan dashboards"
+    pull_request_number: 105
+    track: dashboards
+    depends_on: []
+    status: in_progress
+    notes: >
+      Pre-existing bug-fix PR, adopted 2026-07-31 under the every-fork-PR-belongs-to-a-
+      plan rule. Renders an item's unmet dependencies as blocked chips instead of
+      neutral ones on the dashboards. Based on fork main, independent of the #101
+      chain; bug + in-review labels - already promoted to cram2. Same
+      build_dashboard.py overlap note as its sibling fix (#103) and #111.
