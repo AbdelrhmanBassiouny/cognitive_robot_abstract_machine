@@ -660,3 +660,25 @@ restack-plan, next, status/structure derivation. Knock-ons recorded on setup-sta
 (nothing to install beyond doctrine + labels + config + optional stack creation) and
 shared-pr-state-chips (the stack.py export interplay may vanish). Instructions were posted as
 comments on #101, #106, #107, #110, and #111 so each owning session receives them as events.
+
+## Update 2026-07-31 (conventions): delta recheck, comment routing, merged-branch cleanup
+
+Three conventions recorded in cram-notes.md at the user's request, after the question "is the
+tracking-issue subscription enough?" was answered no — the manifest is the primary state channel
+and pushes to the notes branch emit no events, so subscription covers only the structural subset
+that gets commented:
+
+1. **Recheck deltas, don't reread**: sessions recheck plan/tracking-issue updates when prompted
+   after idling, when starting a new task, and always immediately before a `save-plan.sh` write
+   (the anti-stale-save rule; two silent reverts on record). Mechanics: stamp the last-seen
+   notes-branch SHA, then read `git diff <sha>..FETCH_HEAD -- plans/<id>/` and only
+   newer-than-stamp issue comments.
+2. **Comment routing**: the tracking issue always carries the structural record; a PR gets a
+   comment only when its owner must act or its review context materially changes. (Assessment of
+   the 2026-07-31 five-PR broadcast: #106/#110/#111 warranted, #101 borderline, #107 noise.)
+3. **Merged/closed branch cleanup**: the owning session unsubscribes, deletes armed
+   triggers/check-ins referencing the branch, and stops all related polling the moment its PR
+   merges or closes.
+
+New item `plan-updates-since-helper` (personal-data track) implements convention 1 as a hook
+script with a session-start SHA stamp; small independent PR off fork main, like #109.

@@ -385,3 +385,20 @@ items:
       auto-retarget children (unlike merge-async), and unstack → PATCH base works as
       the API-only recovery. Leftover cleanup: proto-* branches on stack-board need
       out-of-harness deletion (session branch-delete 403).
+
+  - id: plan-updates-since-helper
+    branch: null
+    title: "plan-updates-since.sh: delta recheck of plan state and tracking-issue comments"
+    track: personal-data
+    depends_on: []
+    status: not_started
+    notes: >
+      Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a
+      small hook script next to save-plan.sh that, given a plan id and the last-seen
+      personal-notes commit SHA, fetches the notes branch and prints only the delta -
+      `git diff <sha>..FETCH_HEAD -- .claude/personal/plans/<id>/` - plus the plan's
+      tracking-issue comments newer than that commit's timestamp (github-api.sh dual
+      backend once #107 lands, else curl). session-start.sh stamps the SHA it loaded plan
+      state at (gitignored file) so sessions have the baseline for free; the script
+      updates the stamp. Sized as a small independent PR off fork main, like #109 - not
+      part of the #101 chain. Tests via ScratchRepository, network-free.
