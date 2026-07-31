@@ -233,7 +233,7 @@ items:
   pull_request_number: 89
   track: S0-steward
   depends_on: []
-  status: in_progress
+  status: done
   notes: 'Side-quest off main, not part of the original wave plan: removes _conditions_root_''s dead fallback
     (distinct from insert_at''s own live use of the same method name, independently reintroduced by #78
     for a real bug — the two were verified fully compatible). Unblocks rdr-backward-inference''s (#41)
