@@ -24,20 +24,28 @@ reloads 101/101.
 `test_each_lib (krrood)` is GREEN on all three current live heads — that's
 the only job that exercises my code.
 
-PENDING RESTACK — base advanced d98d9566 -> e650d968 (PR #67 review changes;
-rewrote test_rule_tree_growth.py + test_observer/zoo_loader; did NOT touch my
-splice-fix source base_expressions.py/conclusion_selector.py). My 3 branches
-NOT yet re-parented (still on d98d9566). When the automation restacks #78 onto
-e650d968 it WILL hit a trivial conflict in test_rule_tree_growth.py: #67 rewrote
-that file (top-level imports, renamed helpers) while my #78 appended
-TestAttributeReusedInEarlierSiblingBranch at the end. Resolution (verified in a
-throwaway local trial, NOT pushed): keep the new-base file + append my class
-unchanged; my class + full growth suite pass 11/11 on the new base. #79/#76 add
-only new files so their restacks stay conflict-free. Did NOT force-push (respect
-the automation). NEXT CHECK-IN: verify the automation restacked #78 and
-test_each_lib(krrood)/test_rule_tree_growth is green; if the automation botched
-the merge or left #78 on the old base, apply the known resolution (force-push
-would be needed then — flag to the user before doing it).
+#78 CLOSED (2026-07-31) by the developer as SUPERSEDED by #118
+(`dag-facade-hardening` / insert-at-ownership-parentage). My DIAGNOSIS was
+accepted (the anchor._parent_ / shared-MappedVariable bug is real) but the FIX
+APPROACH was rejected: reintroducing `_last_parent_of_type_` re-adds a symbol
+#89 deleted from main and has a semantic module read structural parentage,
+which conflicts with dag-facade-hardening's `_parent_`->`_structural_parent_`
+rename + Wave-1 guard test. #118 fixes the SAME bug at the façade level (resolve
+splice parent from the asking rule-tree context via a RuleTreeContext on the
+with-context stack). #118 is OPEN, based on main, NOT yet merged; its fix is NOT
+in the base yet (D-core-engine still has `previous_parent = anchor._parent_`).
+
+USER DECISION (wait-for-#118): leave #79/#76 AS-IS for now — they are open +
+green on the D-ui-splice-fix base (developer confirmed "not broken right now",
+nothing urgent). Do NOT re-base or force-push yet. WHEN #118 MERGES into the
+base: re-base #79 (then #76) onto D-core-engine, DROP the splice-fix commit
+(#118 supersedes it), and optionally re-add TestAttributeReusedInEarlierSibling-
+Branch re-pointed at #118's fixed API (the DSL repro + 12/21 measurement are the
+valuable part; #118 already covers the core-level defect with two DSL tests in
+test_eql/test_core/test_rules.py). The earlier test_rule_tree_growth restack
+conflict is now MOOT — that commit gets dropped, not carried.
+NEXT CHECK-INS: watch #118 for merge; watch #79/#76 stay green. Only re-base
+once #118 lands. #78 is closed + auto-unsubscribed — done.
 
 KNOWN krrood-job FLAKE (don't mistake for a real regression): a collection-time
 TOCTOU race under pytest-xdist — `test/krrood_test/conftest.py`'s ORM-interface
