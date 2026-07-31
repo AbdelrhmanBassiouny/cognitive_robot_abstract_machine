@@ -5,10 +5,15 @@ description: >
   Unify the distributed workflow tooling into four clean homes: reviewed machinery on
   main via cram2 (stack tooling, ROUTINE.md doctrine, setup skill — stacked on PR #101),
   personal data/config on claude/personal-notes only, one auto-publishing Pages site for
-  the stack board and all plan dashboards (with LOC/CI chips everywhere), and a slim
-  pointer Routine. Then retire the superseded session-hooks and stack-workflow-tooling
-  branches. Portability rule throughout: runnable on repos other than cram2 (native or
-  fork-overlay install, no hardcoded repo names outside config defaults).
+  all plan dashboards (plans are the single surface; the stack board is retired in favor
+  of GitHub's native stack map, per the one-dashboard decision of 2026-07-31), and no
+  scheduled LLM Routine: stack mechanics come from GitHub's native stacked-PRs preview,
+  deterministic duties move to a plain scheduled Action, and judgment work (cascade
+  conflicts, red CI after restacks) runs in on-demand sessions. Then retire the
+  superseded session-hooks and stack-workflow-tooling branches. Portability rule
+  throughout: runnable on repos other than cram2 (native or fork-overlay install, no
+  hardcoded repo names outside config defaults; hand-rolled restack derivation survives
+  as the fallback for repos without the stacks preview).
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 102
 
@@ -129,6 +134,17 @@ items:
       so it unblocks its dependents by the plan's normal open-and-ready rule. Now also
       the parent of #107, which was restacked onto it (2026-07-30) so the upstream wave
       is a linear chain rather than two siblings on #101.
+      Re-scoped 2026-07-31 (native-stacks pivot, user-approved): before review goes
+      deep, add one trim commit — (a) read stack structure from the stacks REST API
+      when the PR is a stack member, keeping PR-base derivation as the fallback for
+      preview-less repos; (b) ROUTINE.md merge doctrine becomes merge-async + poll
+      only, never the classic merge API or the MCP merge tool on a stack member, with
+      stack base.sha lagging the trunk head as the needs-cascade signal; (c) Phase 1
+      REPARENT must special-case stack members — PATCH base 422s on them ("Cannot
+      change the base branch because the pull request is part of a stack"), so
+      reparent via unstack → PATCH base → re-stack, or leave it to gh stack sync /
+      the UI Rebase-stack button. (c) is load-bearing before the next cram2 landing
+      of any stacked branch: stack #112 already exists on the fork.
 
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
@@ -163,6 +179,11 @@ items:
       never-committed scratch with nothing gitignoring it. Live label creation stays
       unverified for the same reason as #107 - a fine-grained installation token, so the
       label POST is exercised only through a stub.
+      Re-scoped 2026-07-31 (native-stacks pivot, user-approved): setup shrinks to
+      labels + personal stack.toml + optionally creating the stack itself via
+      POST /repos/{owner}/{repo}/stacks; the fork-overlay install mode demotes to a
+      documented fallback for repos without the stacks preview. Amend while still a
+      draft.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
@@ -235,6 +256,10 @@ items:
       test/conftest.py imports the robotics stack. One old bug fixed in the port:
       merge-tree exits 1 for both a conflict and a missing reference, so the old probe
       reported a typo as a conflict - the port verifies references first.
+      Added 2026-07-31 (native-stacks pivot, user-approved): pr_state also reads the
+      PR's native stack object via REST (X-GitHub-Api-Version 2026-03-10; GraphQL is
+      unusable from sessions) and renders a stack chip ("layer p/n · stack #N") when
+      the PR is a stack member.
 
   - id: dev-tooling-python-package
     branch: null
@@ -257,34 +282,47 @@ items:
 
   - id: stack-board-single-site
     branch: null
-    title: "PR 4: stack-board Action builds board + all plan dashboards on one Pages site"
+    title: "PR 4: plans-only Pages site (stack board retired for the native stack map)"
     repository: AbdelrhmanBassiouny/stack-board
     track: cutover
     depends_on: [stack-tooling-on-main, shared-pr-state-chips]
     status: not_started
     notes: >
-      board.yml checks out fork main (not the tooling branch) + fetches personal-notes for
-      plans and config; publishes _site/ = board index + plans/<id>/ per plan, refreshed
-      every poll with no live session. Parameterize repo/branch/upstream as repository
-      variables (portability). Fix the three inconsistent poll-interval statements.
-      dashboard-urls.yaml / Artifact publishing become optional legacy.
+      Re-scoped 2026-07-31 per the user's one-dashboard decision: the board index is
+      not built at all — GitHub's native stack map covers derived stack mechanics, and
+      the plans dashboards are the single surface. board.yml checks out fork main (not
+      the tooling branch) + fetches personal-notes for plans and config; publishes
+      _site/ = plans/<id>/ per plan, refreshed every poll with no live session, via
+      PR 3's build_site.py. Adds the every-fork-PR-belongs-to-a-plan invariant: the
+      build lists open fork PRs and flags any that no plan.yaml claims. Parameterize
+      repo/branch/upstream as repository variables (portability). Fix the three
+      inconsistent poll-interval statements. dashboard-urls.yaml / Artifact publishing
+      become optional legacy.
 
   - id: routine-cutover
     branch: null
-    title: "Slim the live Routine to hard rules + a pointer at .claude/stack/ROUTINE.md"
+    title: "Retire the scheduled LLM Routine: deterministic Action + on-demand sessions"
     track: cutover
     depends_on: [stack-tooling-on-main]
     status: in_progress
     session: https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75
     notes: >
-      No PR — claude.ai/code/routines change. Only after PR 1 is on cram2/main and fork
-      main fast-forwards. HARD RULES (never subscribe; end turn on webhook events) stay
-      inline in the Routine prompt; everything else moves to ROUTINE.md.
-      Prepared at kickoff (2026-07-30): the live Routine is trigger
-      trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"); the approved
-      replacement prompt text, execution mechanism (update_trigger from a session), and
-      gate-verification checklist are in the roadmap addendum of the same date. Executes
-      once the gate verifies; one green routine cycle after that flips this to done.
+      Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no
+      scheduled LLM run at all, finally aligning the Routine with the
+      no-scheduled-checks rule. A plain scheduled Action takes the deterministic
+      duties — fork-main fast-forward from cram2/main, label hygiene, cram2-link
+      comment, plans-site build, and the happy-path cascade (gh stack sync is
+      documented as safe in automation: fetches, fast-forwards the trunk, rebases the
+      remaining branches, force-pushes, syncs PR status, aborts cleanly on divergence
+      in non-interactive terminals; Actions runners ship gh). The judgment residue —
+      cascade conflicts and red CI after a restack — runs in on-demand sessions,
+      surfaced by the plans dashboard rather than a timer. The 2026-07-30 pointer-
+      prompt design (roadmap addendum of that date: replacement prompt, update_trigger
+      mechanism, gate checklist) is superseded as the endgame but survives as an
+      optional interim step if the Action lags the tooling wave; the live Routine is
+      trigger trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the
+      final cutover deletes or disables it. Gate unchanged: only after PR 1 is on
+      cram2/main and fork main fast-forwards; one green Action cycle flips this done.
 
   - id: tooling-branch-retirement
     branch: null
@@ -326,8 +364,11 @@ items:
       machine-readable staleness signal. User decisions recorded: one dashboard
       only (the plans dashboard; the stack-board surface dies; every fork PR must
       belong to a plan, enforceable at dashboard build), and Stack #112 already
-      wraps the seven D-core PRs on the fork. Unblocked, not yet decided: pivot
-      re-scope of stack-tooling-on-main (#106), setup-stacked-prs-skill (#110),
-      stack-board-single-site, and routine-cutover per the addendum's consequences
-      table. Leftover cleanup: proto-* branches on stack-board need out-of-harness
-      deletion (session branch-delete 403).
+      wraps the seven D-core PRs on the fork. The pivot re-scopes were approved
+      2026-07-31 and are recorded on the affected items (stack-tooling-on-main,
+      setup-stacked-prs-skill, stack-board-single-site, routine-cutover). Round-2
+      probes (same date, second addendum): PATCH base 422s on stack members (the
+      Phase 1 REPARENT hazard), push-based merges are detected as merged but do not
+      auto-retarget children (unlike merge-async), and unstack → PATCH base works as
+      the API-only recovery. Leftover cleanup: proto-* branches on stack-board need
+      out-of-harness deletion (session branch-delete 403).

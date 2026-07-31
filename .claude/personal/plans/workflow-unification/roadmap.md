@@ -558,3 +558,48 @@ works, and a non-default trunk works.
 `proto-trunk`, which is itself throwaway) and the branches `proto-trunk`, `proto-layer-1..4` -
 branch deletion needs the user (session branch-deletes 403, the standing platform constraint).
 Stack #4 there is closed. Nothing on the fork was touched beyond reads.
+
+## Update 2026-07-31 (later): pivot approved and recorded; round-2 probes; the reparent hazard
+
+The user approved the recommendation set from the evaluation session
+(https://claude.ai/code/session_015db4P7UfiFTTfrbxYjU5yW): #106 lands with one trim commit rather
+than a re-scope or a pure land-then-migrate; #110 and #111 amend while still drafts; PR 4 becomes
+plans-only; routine-cutover's endgame becomes a deterministic Action + on-demand sessions with no
+scheduled LLM. Item notes updated accordingly; the plan description now reflects the one-dashboard
+decision and the Action endgame.
+
+**Round-2 probes (same throwaway proto-* branches on stack-board), run for the Routine audit:**
+
+1. **The audit itself came back clean on merges**: neither the live Routine's doctrine (embedded in
+   `dev/README.md` on the tooling branch) nor #106's ROUTINE.md ever calls the classic merge API or
+   `update-branch` on fork PRs — fork-side "merged" is the git-ancestry test + `merged` label +
+   close, and restacks are plain git. No latent 403 there.
+2. **But Phase 1's REPARENT is broken for stack members**: `PATCH /pulls/{n}` with a new `base`
+   fails 422 — "Cannot change the base branch because the pull request is part of a stack." Both
+   doctrines do exactly this when a parent lands. With Stack #112 already wrapping the D-core
+   chain, the first cram2 landing of a D-core branch hits this. The trim commit on #106 must
+   special-case it; until then the recovery is manual (UI Rebase-stack button) or the API-only
+   sequence below.
+3. **Push-based merges do not auto-retarget children.** Merging the bottom branch into the trunk by
+   push (the fork's fast-forward-from-cram2 pattern) marks the bottom PR merged immediately, but
+   the PR above keeps its old base — unlike merge-async, where retargeting is automatic within
+   seconds. So the reparent duty survives in our flow even with native stacks.
+4. **The API-only recovery works**: unstack the affected PR (`POST /stacks/{n}/unstack`), then
+   `PATCH` its base, then re-stack. Verified live. Note unstacking down to only-merged members
+   auto-closes the stack, so re-stacking may mean creating a fresh stack.
+5. **Reopened + previously-closed PRs stack fine** (stack #6 was built from two reopened PRs).
+
+**From the "Managing stacked pull requests" doc (user-supplied):** the server-side cascade is the
+"Rebase stack" button in the merge box (UI-only, confirming the API gap; its commits are
+*unsigned*); `gh stack rebase`/`push` is the local cascade; and `gh stack sync --prune` is
+documented as **safe to run in automation** — it fetches, fast-forwards the trunk, rebases the
+remaining branches onto it, force-pushes, and syncs PR status, aborting cleanly on divergence in
+non-interactive terminals. Actions runners ship `gh`, so the cutover Action's cascade step can be
+`gh stack sync` rather than a hand-rolled rebase loop. `gh stack modify` handles restructuring;
+unstacking from the website removes open/draft/closed PRs but merged/queued ones stay.
+
+**Chain adoption (recommendation 3) is left to the user**: creating the stack for
+#101 → #106 → #107 → #110 from a session was blocked by the permission layer, and given finding 2
+it should follow — not precede — comfort with the reparent story. It's the same "Add to stack" flow
+used for #112, or `gh stack` locally. #111 cannot join that stack (it's a sibling of #107 on #106;
+stacks are strictly linear) and stays loose; #109 is independent by design.
