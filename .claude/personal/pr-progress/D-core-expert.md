@@ -47,6 +47,10 @@ entirely and call `.validate()` explicitly everywhere if they'd rather.
 Waiting on their answer - do NOT remove `__call__` until they confirm which
 way they want it.
 
+PR marked ready for review by the dev themselves (not a draft-after-push
+situation, so left as-is - the always-draft-after-my-own-push rule doesn't
+apply to their own explicit action). mergeable_state clean as of this check.
+
 Nothing else pending - wait for the next round of review activity via the PR
 subscription, or for the user to ask for `d-core-single-class` /
 `d-core-backend` work.
