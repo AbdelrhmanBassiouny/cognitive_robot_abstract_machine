@@ -66,6 +66,19 @@ stack writes worked from the session this round — earlier denials were
 permission-layer variance. Recorded in roadmap addendum "2026-07-31
 (adoption)"; plan saved; dashboard republished. #101's cram2 landing will now
 exercise push-merge/reparent for real: recovery = Rebase-stack button or gh
-stack sync until #106's trim commit lands. Cleanup owed by user: delete
-stack-board branches proto-trunk, proto-layer-1..4 (PRs #1-#5 closed, stacks
-#4/#6 closed). No PR from this session; no code changes on the fork.
+stack sync until #106's trim commit lands. Round 6 (routine patch + reassessment): drafted the Phase-1 native-stack
+amendment for the live Routine; update_trigger REFUSED — the Routine was
+created via http_api (web UI) and agents can only update agent-created
+triggers. Correction recorded in roadmap ("2026-07-31 (routine patch)"):
+manual paste at claude.ai/code/routines is the mechanism for both the interim
+amendment and any prompt cutover. Full amended prompt (17.5k original +
+amendment appended) delivered to user as a file; user must paste it. Plan
+saved; dashboard republished. Reassessment delivered in chat: architecture
+confirmed; recommended upgrading #106's trim commit to a full CUT of the
+restack subsystem (restack-plan/next/status derivation) — native stacks + gh
+stack + Rebase-stack button + the small reparent-recovery script cover it,
+preview-less-repo fallback is YAGNI (preview is account-wide; old tooling
+branch stays as tagged archive) — pending user decision. Cleanup owed by
+user: delete stack-board branches proto-trunk, proto-layer-1..4 (PRs #1-#5
+closed, stacks #4/#6 closed); paste the amended Routine prompt. No PR from
+this session; no code changes on the fork.
