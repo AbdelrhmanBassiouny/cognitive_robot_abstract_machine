@@ -481,3 +481,80 @@ file is absent or unchanged since it last synced, tracked by a hash stamp in the
 session-start summary, and `save-personal-settings.sh` re-stamps so syncing resumes. This is the
 one place the settings round trip is not symmetric with the notes round trip, and it is the reason
 why.
+
+## Update 2026-07-31: GitHub native stacked-PRs preview - evaluation, live prototype, findings
+
+GitHub shipped stacked pull requests as a public preview (server-side cascading rebase, `gh stack`
+CLI, stack webhooks/REST/GraphQL, stack map UI). Evaluated against this plan's stack tooling in
+session https://claude.ai/code/session_015db4P7UfiFTTfrbxYjU5yW, then verified by a live prototype
+on throwaway `proto-*` branches in the stack-board repo (its `main` untouched; a throwaway branch
+served as trunk). The user had already created **Stack #112** on the fork - the seven D-core PRs
+(#41→#63→#64→#65→#66→#67→#98) adopted post-hoc into a native stack trunked on
+`ripple-down-rules-refactor` - which by itself proved the preview is enabled, post-hoc adoption
+works, and a non-default trunk works.
+
+**User decisions recorded before the prototype:**
+
+- **One dashboard only.** The plans dashboard (with its buttons and suggested next actions) is the
+  single surface; the stack-board visualization dies - GitHub's stack map covers derived
+  mechanics. Every fork PR must belong to a plan, which the dashboard build can enforce by
+  flagging unclaimed open PRs.
+- The gain sought from GitHub is the stacking *mechanics* via API, and slimming the Routine -
+  possibly down to a plain GitHub Action.
+
+**Prototype findings (all verified live, not from docs):**
+
+1. **Reads work from a session.** The PR resource carries a `stack` object
+   (`id`/`number`/`size`/`position`/`base{ref,sha}`) and `GET/POST /repos/{o}/{r}/stacks`,
+   `GET /stacks/{n}`, `POST /stacks/{n}/add`, `POST /stacks/{n}/unstack` all work with the
+   session's fine-grained installation token under `X-GitHub-Api-Version: 2026-03-10`. GraphQL is
+   unusable from a session (the git-proxy token serves only a pinned set of PR-review queries), so
+   `pr_state` must use REST.
+2. **Create/extend/dissolve verified.** Bottom-to-top `pull_requests` list; a draft PR is accepted
+   as a stack member; creating a stack on stack-board proves the preview is account-wide, not
+   per-repo. A stack whose open PRs are all removed (only merged members remain) auto-closes.
+3. **The cascade is the one gap.** Pushing new commits to a lower branch does *not* auto-rebase
+   the branches above (verified over ~5 min), and no REST endpoint triggers the server-side
+   cascade (`rebase`/`sync`/`restack`/`update`/`cascade`/`rebase-async` variants all 404;
+   `PUT /pulls/{n}/update-branch` is explicitly 403 "Merging stacked PRs via this API is not
+   supported. Use the web interface instead."). Server-side cascade = UI button only; automation
+   does a *local* cascading rebase + `--force-with-lease` push, which preserves stack membership
+   (verified) - i.e. exactly what stack.py restack already does, minus deriving the order, which
+   now comes free from the stack object.
+4. **Merging is a new async API and it is good.** Classic `PUT /pulls/{n}/merge` hard-403s for
+   stacked PRs - including through the GitHub MCP server's merge tool, so the Routine/tooling
+   *must* adopt `PUT /pulls/{n}/merge-async` → poll `GET /pulls/{n}/merge-async/{uuid}`
+   (result retained 24h). Verified: merging mid-stack PR #2 merged #1+#2 into the trunk in one
+   operation and auto-retargeted the draft above to the trunk within seconds. A stale stack is
+   refused with a precise reason ("PR #2's branch is not a linear descendant of PR #1's branch"),
+   and a draft refuses with "Pull request is in draft".
+5. **Conflicts surface conventionally.** A trunk commit conflicting with an upper layer shows as
+   plain `mergeable: false` / `mergeable_state: dirty` on that PR - no special stack state. The
+   stack's `base.sha` lagging the real trunk head is a machine-readable "needs cascade" signal.
+6. **Events carry the stack.** `pull_request` webhook/Actions payloads include
+   `.pull_request.stack`; the post-merge retarget arrives as an `"edited"` action. An Action can
+   key on stack membership without deriving anything.
+
+**Consequences per open item** (decisions for the user, not yet made):
+
+- `stack-tooling-on-main` (#106): restack-order derivation and promote mechanics shrink - the
+  stack object is authoritative for structure, merge-async replaces any merge path, and the MCP
+  merge tool must not be used on stacked PRs. The local rebase+push loop survives as the cascade
+  executor. Pivot-now vs land-then-migrate is the open call.
+- `setup-stacked-prs-skill` (#110): setup shrinks to labels + stack.toml + (optionally) creating
+  the stack via API; fork-overlay mode demotes to a fallback for repos without the preview.
+- `stack-board-single-site`: re-scoped by the user's one-dashboard decision - plans-only Pages
+  site, no board index; add the every-PR-in-a-plan invariant check to the build.
+- `routine-cutover`: the endgame candidate is stronger than "slim the Routine" - deterministic
+  duties (fork-main fast-forward, labels, cram2-link comment, site build, happy-path cascade via
+  local rebase) fit a plain scheduled Action; the LLM residue is cascade *conflicts* and red CI
+  after a restack, which could become on-demand sessions instead of any scheduled LLM run. This
+  would finally align the Routine with the no-scheduled-checks rule.
+- Unchanged: the fork→cram2 hop was never a stack (cross-fork stacks unsupported) - promotion
+  doctrine, label hygiene and fast-forward stay ours; the plan system and dashboards are
+  untouched by the preview.
+
+**Leftovers from the prototype:** stack-board carries closed throwaway PRs #1-#5 (two merged into
+`proto-trunk`, which is itself throwaway) and the branches `proto-trunk`, `proto-layer-1..4` -
+branch deletion needs the user (session branch-deletes 403, the standing platform constraint).
+Stack #4 there is closed. Nothing on the fork was touched beyond reads.

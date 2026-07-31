@@ -298,3 +298,36 @@ items:
       2026-07-29): tag pushes and branch deletes get a 403 through a session's git
       proxy, so those two steps must run outside the harness (user's machine or gh
       api); a session can still do all verification and prepare the exact commands.
+
+  - id: native-stacks-prototype
+    branch: null
+    title: "Prototype GitHub's native stacked-PRs preview against our stack tooling"
+    track: stack-tooling
+    depends_on: []
+    status: done
+    session: https://claude.ai/code/session_015db4P7UfiFTTfrbxYjU5yW
+    notes: >
+      Evaluation + live prototype of GitHub's stacked-PRs public preview, run on
+      throwaway proto-* branches in the stack-board repo (trunk = its own throwaway
+      branch; main untouched). All probes conclusive - full findings and their
+      per-item consequences in the roadmap addendum of 2026-07-31. Headlines: every
+      stacks REST endpoint works from a session's installation token (API version
+      2026-03-10) - read, create (drafts accepted, non-main trunk, works beyond the
+      fork so the preview is account-wide), extend, dissolve; merge is a new async
+      endpoint (merge-async + poll) that merges everything below in one operation
+      and auto-retargets the PRs above within seconds, refusing stale stacks with a
+      precise not-a-linear-descendant error and refusing drafts; the classic merge
+      and update-branch APIs are hard-403'd for stacked PRs (including via the
+      GitHub MCP server). The one gap: no REST endpoint triggers the server-side
+      cascading rebase - cascade is UI-only or a local git rebase+force-push, which
+      preserves stack membership (verified). pull_request webhook/Actions payloads
+      carry a stack object (id/number/position/size/base), retargets arrive as
+      "edited" events, and the stack base.sha lagging the real trunk head is a
+      machine-readable staleness signal. User decisions recorded: one dashboard
+      only (the plans dashboard; the stack-board surface dies; every fork PR must
+      belong to a plan, enforceable at dashboard build), and Stack #112 already
+      wraps the seven D-core PRs on the fork. Unblocked, not yet decided: pivot
+      re-scope of stack-tooling-on-main (#106), setup-stacked-prs-skill (#110),
+      stack-board-single-site, and routine-cutover per the addendum's consequences
+      table. Leftover cleanup: proto-* branches on stack-board need out-of-harness
+      deletion (session branch-delete 403).
