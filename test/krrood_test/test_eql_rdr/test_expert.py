@@ -13,15 +13,17 @@ import unittest
 
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.rdr.conclusion_domain import resolve_conclusion_domain
-from krrood.entity_query_language.rdr.exceptions import NoAnswerProvided
+from krrood.entity_query_language.rdr.exceptions import (
+    NoConclusionProvided,
+    NoConditionsProvided,
+)
 from krrood.entity_query_language.rdr.expert import AnswerName, Expert, RuleAnswer
 from krrood.entity_query_language.rdr.interface import (
-    EXIT_NAME,
     CaseContext,
     ExpertInterface,
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.utils import UNSET
+from krrood.entity_query_language.rdr.utils import UNSET, NamespaceName
 
 from .animal import Animal, Species, make_animal
 
@@ -32,7 +34,7 @@ class AbortingInterface(ExpertInterface):
     """
 
     def _run(self, namespace, header, validate):
-        namespace[EXIT_NAME]()
+        namespace[NamespaceName.EXIT]()
 
 
 def _context(case, case_variable=None, **overrides) -> CaseContext:
@@ -64,11 +66,11 @@ class TestAskForConditions(unittest.TestCase):
 
         self.assertIs(result, expression)
 
-    def test_raises_no_answer_provided_for_conditions_on_abort(self):
+    def test_raises_no_conditions_provided_for_conditions_on_abort(self):
         case = make_animal("stingray")
         expert = Expert(interface=AbortingInterface())
 
-        with self.assertRaises(NoAnswerProvided) as raised:
+        with self.assertRaises(NoConditionsProvided) as raised:
             expert.ask_for_conditions(_context(case))
         self.assertIs(raised.exception.case, case)
         self.assertEqual(raised.exception.answer_name, AnswerName.CONDITIONS)
@@ -142,14 +144,14 @@ class TestAskForRule(unittest.TestCase):
             "conditions must not be asked when the conclusion is left unset",
         )
 
-    def test_raises_no_answer_provided_for_conclusion_on_abort(self):
+    def test_raises_no_conclusion_provided_for_conclusion_on_abort(self):
         case = make_animal("orca")
         expert = Expert(interface=AbortingInterface())
         context = _context(
             case, current_conclusion=UNSET, conclusion_domain=self.domain
         )
 
-        with self.assertRaises(NoAnswerProvided) as raised:
+        with self.assertRaises(NoConclusionProvided) as raised:
             expert.ask_for_rule(context)
         self.assertIs(raised.exception.case, case)
         self.assertEqual(raised.exception.answer_name, AnswerName.CONCLUSION)
@@ -158,7 +160,7 @@ class TestAskForRule(unittest.TestCase):
 class TestSuggestedConclusion(unittest.TestCase):
     def setUp(self):
         self.domain = resolve_conclusion_domain(Animal, "species")
-        self.validator = lambda value: self.domain.validate(value, allow_unset=False)
+        self.validator = self.domain.validator(allow_unset=False)
 
     def test_returns_first_validating_suggestion(self):
         class Suggests:

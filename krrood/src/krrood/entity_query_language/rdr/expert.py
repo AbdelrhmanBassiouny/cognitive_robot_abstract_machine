@@ -16,49 +16,50 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing_extensions import TYPE_CHECKING, Any, List, Optional
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.exceptions import (
     ConditionsNotAnExpression,
     ConditionsRequired,
-    NoAnswerProvided,
+    NoConclusionProvided,
+    NoConditionsProvided,
 )
 from krrood.entity_query_language.rdr.interface import (
     AnswerRequest,
+    AnswerValidator,
     CaseContext,
     ExpertAbort,
     ExpertInterface,
 )
-from krrood.entity_query_language.rdr.utils import (
-    CASE_INSTANCE_NAME,
-    CASE_VARIABLE_NAME,
-    UNSET,
-    AnswerName,
-)
+from krrood.entity_query_language.rdr.utils import UNSET, AnswerName, NamespaceName
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.aid import ConclusionAid
 
 
-def _validate_conditions(value: Any) -> Optional[DataclassException]:
+@dataclass
+class ConditionsValidator(AnswerValidator):
     """
-    :param value: The candidate ``conditions`` answer.
-    :return: The exception describing why ``value`` is unacceptable, or ``None``.
+    Validates that a conditions answer is an EQL expression built over the case
+    variable.
     """
-    if isinstance(value, SymbolicExpression):
-        return None
-    if value is None:
-        return ConditionsRequired(
-            answer_name=AnswerName.CONDITIONS, case_variable_name=CASE_VARIABLE_NAME
+
+    def __call__(self, value: Any) -> Optional[DataclassException]:
+        if isinstance(value, SymbolicExpression):
+            return None
+        if value is None:
+            return ConditionsRequired(
+                answer_name=AnswerName.CONDITIONS,
+                case_variable_name=NamespaceName.CASE_VARIABLE,
+            )
+        return ConditionsNotAnExpression(
+            value=value,
+            answer_name=AnswerName.CONDITIONS,
+            case_variable_name=NamespaceName.CASE_VARIABLE,
+            case_instance_name=NamespaceName.CASE_INSTANCE,
         )
-    return ConditionsNotAnExpression(
-        value=value,
-        answer_name=AnswerName.CONDITIONS,
-        case_variable_name=CASE_VARIABLE_NAME,
-        case_instance_name=CASE_INSTANCE_NAME,
-    )
 
 
 @dataclass
@@ -86,7 +87,7 @@ class Expert:
 
     Holds an :class:`ExpertInterface` that performs the actual expert interaction; this
     class only builds the request specs and translates an :class:`ExpertAbort` into the
-    policy-level :class:`NoAnswerProvided`.
+    policy-level :class:`~krrood.entity_query_language.rdr.exceptions.NoAnswerProvided`.
     """
 
     interface: ExpertInterface
@@ -103,7 +104,7 @@ class Expert:
     def ask_for_conditions(
         self,
         context: CaseContext,
-        prior_errors: Optional[Dict[AnswerName, DataclassException]] = None,
+        prior_errors: Optional[List[DataclassException]] = None,
     ) -> SymbolicExpression:
         """
         :param context: Everything known about the case, built by the caller — the concrete
@@ -117,7 +118,7 @@ class Expert:
         suggestion = context.suggested_condition
         request = AnswerRequest(
             name=AnswerName.CONDITIONS,
-            validate=_validate_conditions,
+            validate=ConditionsValidator(),
             example=AnswerName.CONDITIONS.example_assignment,
             default=suggestion.expression if suggestion is not None else None,
         )
@@ -126,9 +127,7 @@ class Expert:
                 context, [request], initial_errors=prior_errors
             )[AnswerName.CONDITIONS]
         except ExpertAbort:
-            raise NoAnswerProvided(
-                case=context.case_instance, answer_name=AnswerName.CONDITIONS
-            )
+            raise NoConditionsProvided(case=context.case_instance)
 
     def ask_for_rule(self, context: CaseContext) -> RuleAnswer:
         """
@@ -173,14 +172,12 @@ class Expert:
         try:
             return self.interface.interact(context, [request])[AnswerName.CONCLUSION]
         except ExpertAbort:
-            raise NoAnswerProvided(
-                case=context.case_instance, answer_name=AnswerName.CONCLUSION
-            )
+            raise NoConclusionProvided(case=context.case_instance)
 
     def _suggested_conclusion(
         self,
         context: CaseContext,
-        validator: Callable[[Any], Optional[DataclassException]],
+        validator: AnswerValidator,
     ) -> Any:
         """
         :param context: The case being labelled, carrying the aids to consult.

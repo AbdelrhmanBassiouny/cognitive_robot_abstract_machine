@@ -8,7 +8,7 @@ import enum
 import inspect
 from dataclasses import dataclass
 
-from typing_extensions import Any, Callable, Dict, Optional, Tuple, get_args
+from typing_extensions import Any, Dict, Optional, Tuple, get_args
 
 from krrood.class_diagrams.exceptions import CouldNotResolveType
 from krrood.class_diagrams.utils import get_type_hints_of_object, is_union_annotation
@@ -18,6 +18,7 @@ from krrood.entity_query_language.rdr.exceptions import (
     ConclusionRequired,
     ConclusionWrongType,
 )
+from krrood.entity_query_language.rdr.interface import AnswerValidator
 from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.exceptions import DataclassException
 
@@ -100,12 +101,6 @@ class ConclusionDomain:
         membership; otherwise the value must be an instance of the expected type(s). An
         unresolved domain (no expected types) accepts any non-``None`` value.
 
-        An enumerable domain's members are always one of the resolved ``expected_types``
-        (an :class:`enum.Enum` subclass or ``bool``), so membership reduces to a type check
-        — no need for :meth:`contains`'s exact-type-then-equality walk here, and
-        ``isinstance`` already excludes an ``int`` from a ``bool`` domain correctly
-        (unlike a naive ``value in members`` / ``==`` check would, given ``1 == True``).
-
         :param value: The conclusion answer to validate.
         :param allow_unset: Whether leaving the conclusion unset is acceptable.
         :return: The exception describing why ``value`` is unacceptable, or ``None``.
@@ -114,31 +109,22 @@ class ConclusionDomain:
             return None if allow_unset else ConclusionRequired(domain=self)
         if value is None:
             return None if self.allows_none else ConclusionMayNotBeNone(domain=self)
+        if not self.expected_types:
+            return None
+        if isinstance(value, self.expected_types):
+            return None
         if self.is_enumerable:
-            return (
-                None
-                if isinstance(value, self.expected_types)
-                else ConclusionNotInDomain(domain=self, value=value)
-            )
-        if self.expected_types:
-            return (
-                None
-                if isinstance(value, self.expected_types)
-                else ConclusionWrongType(domain=self, value=value)
-            )
-        return None
+            return ConclusionNotInDomain(domain=self, value=value)
+        return ConclusionWrongType(domain=self, value=value)
 
-    def validator(
-        self, allow_unset: bool
-    ) -> Callable[[Any], Optional[DataclassException]]:
+    def validator(self, allow_unset: bool) -> ConclusionValidator:
         """
-        Build a single-argument validator for a conclusion answer, bound to
-        ``allow_unset``.
+        Build a validator for a conclusion answer, bound to ``allow_unset``.
 
         :param allow_unset: Whether leaving the conclusion unset is acceptable.
         :return: A validator suitable for :attr:`~...interface.AnswerRequest.validate`.
         """
-        return lambda value: self.validate(value, allow_unset)
+        return ConclusionValidator(domain=self, allow_unset=allow_unset)
 
     def namespace_bindings(self) -> Dict[str, Any]:
         """
@@ -153,6 +139,26 @@ class ConclusionDomain:
             if inspect.isclass(expected) and issubclass(expected, enum.Enum):
                 bindings[expected.__name__] = expected
         return bindings
+
+
+@dataclass
+class ConclusionValidator(AnswerValidator):
+    """
+    Validates a conclusion answer against a resolved :class:`ConclusionDomain`.
+    """
+
+    domain: ConclusionDomain
+    """
+    The domain the conclusion answer must satisfy.
+    """
+
+    allow_unset: bool
+    """
+    Whether leaving the conclusion unset is acceptable.
+    """
+
+    def __call__(self, value: Any) -> Optional[DataclassException]:
+        return self.domain.validate(value, self.allow_unset)
 
 
 def resolve_conclusion_domain(

@@ -9,18 +9,31 @@ conclusion can be seeded with ``UNSET``, distinct from a deliberate ``None``).
 from __future__ import annotations
 
 import unittest
+from dataclasses import dataclass
 
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.rdr.conclusion_domain import resolve_conclusion_domain
 from krrood.entity_query_language.rdr.interface import (
     AnswerRequest,
+    AnswerValidator,
     CaseContext,
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.utils import CASE_INSTANCE_NAME, UNSET, AnswerName
+from krrood.entity_query_language.rdr.utils import UNSET, AnswerName, NamespaceName
 
 from .animal import Animal, Species
 from .test_conclusion_domain import Colour, Doc, Light, RequiredColour, Tag
+
+
+@dataclass
+class _AlwaysValid(AnswerValidator):
+    """
+    A no-op :class:`AnswerValidator` test double for plumbing tests that never exercise
+    validation itself.
+    """
+
+    def __call__(self, value):
+        return None
 
 
 class TestConclusionValidatorEnumerable(unittest.TestCase):
@@ -109,7 +122,7 @@ class TestConclusionValidatorBool(unittest.TestCase):
 class TestAnswerDefaultPlumbing(unittest.TestCase):
     def test_answer_request_default_is_none_by_default(self):
         request = AnswerRequest(
-            name=AnswerName.CONDITIONS, validate=lambda v: None, example="x = 1"
+            name=AnswerName.CONDITIONS, validate=_AlwaysValid(), example="x = 1"
         )
         self.assertIsNone(request.default)
 
@@ -120,13 +133,13 @@ class TestAnswerDefaultPlumbing(unittest.TestCase):
         interface = FunctionInterface(answer_function=lambda c, r: {})
         request = AnswerRequest(
             name=AnswerName.CONCLUSION,
-            validate=lambda v: None,
+            validate=_AlwaysValid(),
             example="x",
             default=UNSET,
         )
         namespace = interface._build_namespace(context, [request])
         self.assertIs(namespace[AnswerName.CONCLUSION], UNSET)
-        self.assertIn(CASE_INSTANCE_NAME, namespace)
+        self.assertIn(NamespaceName.CASE_INSTANCE, namespace)
 
     def test_case_context_defaults(self):
         context = CaseContext(

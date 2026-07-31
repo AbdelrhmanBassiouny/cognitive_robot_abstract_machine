@@ -4,7 +4,7 @@ Exceptions raised by the EQL-native RDR engine.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from typing_extensions import TYPE_CHECKING, Any, Tuple, Type
 
@@ -178,7 +178,8 @@ class EmptyRuleTreeError(DataclassException):
 class NoAnswerProvided(DataclassException):
     """
     Raised when the expert session ended (via :class:`ExpertAbort`) without supplying a
-    required answer.
+    required answer. Concrete subclasses (:class:`NoConditionsProvided`,
+    :class:`NoConclusionProvided`) fix which answer.
     """
 
     case: Any
@@ -196,6 +197,24 @@ class NoAnswerProvided(DataclassException):
 
     def suggest_correction(self) -> str:
         return f"Retry with an interface that can supply `{self.answer_name}`."
+
+
+@dataclass
+class NoConditionsProvided(NoAnswerProvided):
+    """
+    Raised when the expert session ended without supplying the conditions answer.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONDITIONS, init=False)
+
+
+@dataclass
+class NoConclusionProvided(NoAnswerProvided):
+    """
+    Raised when the expert session ended without supplying the conclusion answer.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONCLUSION, init=False)
 
 
 @dataclass
@@ -273,6 +292,11 @@ class ConclusionRequired(DataclassException):
     The resolved allowable-value domain of the conclusion attribute.
     """
 
+    answer_name: AnswerName = field(default=AnswerName.CONCLUSION, init=False)
+    """
+    Always the conclusion answer.
+    """
+
     def error_message(self) -> str:
         return "No rule fired for this case."
 
@@ -290,6 +314,11 @@ class WrongConclusionProvided(DataclassException):
     domain: ConclusionDomain
     """
     The resolved allowable-value domain of the conclusion attribute.
+    """
+
+    answer_name: AnswerName = field(default=AnswerName.CONCLUSION, init=False)
+    """
+    Always the conclusion answer.
     """
 
 

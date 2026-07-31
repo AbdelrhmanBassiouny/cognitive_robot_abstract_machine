@@ -17,6 +17,8 @@ from krrood.entity_query_language.rdr.exceptions import (
     ConditionsNotAnExpression,
     ConditionsRequired,
     NoAnswerProvided,
+    NoConclusionProvided,
+    NoConditionsProvided,
     WrongConclusionProvided,
 )
 from krrood.entity_query_language.rdr.utils import AnswerName
@@ -36,6 +38,20 @@ class TestNoAnswerProvidedException(unittest.TestCase):
         for answer_name in AnswerName:
             error = NoAnswerProvided(case=case, answer_name=answer_name)
             self.assertIn(answer_name, str(error))
+
+
+class TestNoAnswerProvidedSubclasses(unittest.TestCase):
+    def test_no_conditions_provided_presets_the_answer_name(self):
+        case = make_animal("otter")
+        error = NoConditionsProvided(case=case)
+        self.assertIsInstance(error, NoAnswerProvided)
+        self.assertEqual(error.answer_name, AnswerName.CONDITIONS)
+
+    def test_no_conclusion_provided_presets_the_answer_name(self):
+        case = make_animal("otter")
+        error = NoConclusionProvided(case=case)
+        self.assertIsInstance(error, NoAnswerProvided)
+        self.assertEqual(error.answer_name, AnswerName.CONCLUSION)
 
 
 class TestConditionsExceptions(unittest.TestCase):
@@ -88,6 +104,23 @@ class TestConclusionExceptions(unittest.TestCase):
         self.assertIsInstance(error, WrongConclusionProvided)
         self.assertIn("int", str(error))
         self.assertIn(self.domain.type_display, str(error))
+
+    def test_conclusion_exceptions_preset_the_answer_name(self):
+        self.assertEqual(
+            ConclusionRequired(domain=self.domain).answer_name, AnswerName.CONCLUSION
+        )
+        self.assertEqual(
+            ConclusionMayNotBeNone(domain=self.domain).answer_name,
+            AnswerName.CONCLUSION,
+        )
+        self.assertEqual(
+            ConclusionNotInDomain(value="mammal", domain=self.domain).answer_name,
+            AnswerName.CONCLUSION,
+        )
+        self.assertEqual(
+            ConclusionWrongType(value=5, domain=self.domain).answer_name,
+            AnswerName.CONCLUSION,
+        )
 
 
 if __name__ == "__main__":
