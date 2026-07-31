@@ -78,7 +78,17 @@ confirmed; recommended upgrading #106's trim commit to a full CUT of the
 restack subsystem (restack-plan/next/status derivation) — native stacks + gh
 stack + Rebase-stack button + the small reparent-recovery script cover it,
 preview-less-repo fallback is YAGNI (preview is account-wide; old tooling
-branch stays as tagged archive) — pending user decision. Cleanup owed by
-user: delete stack-board branches proto-trunk, proto-layer-1..4 (PRs #1-#5
-closed, stacks #4/#6 closed); paste the amended Routine prompt. No PR from
-this session; no code changes on the fork.
+branch stays as tagged archive).
+
+Round 7 (CUT approved + PRs notified): decision 11 recorded in plan.yaml
+(#106 cut, #110 narrowed, #111 interplay note) + roadmap addendum
+"2026-07-31 (cut)"; dashboard republished. Comments posted: #106
+(issuecomment-5140224723, the actionable re-scope instruction), #110
+(5140225883), #107 (5140226879, heads-up only), #111 (5140229070, stack
+chip + interplay), #101 (5140230288, landing/reparent warning), #102
+(5140231567, structural record). Cleanup owed by user: delete stack-board
+branches proto-trunk, proto-layer-1..4 (PRs #1-#5 closed, stacks #4/#6
+closed); PASTE THE AMENDED ROUTINE PROMPT (file already delivered —
+update_trigger impossible for web-UI-created triggers). Next session of
+substance: execute #106's cut per its re-scope comment. No PR from this
+session; no code changes on the fork.
