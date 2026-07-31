@@ -1,4 +1,6 @@
-"""Exceptions raised by the EQL-native RDR engine."""
+"""
+Exceptions raised by the EQL-native RDR engine.
+"""
 
 from __future__ import annotations
 
@@ -6,12 +8,51 @@ from dataclasses import dataclass
 
 from typing_extensions import Any, Tuple, Type
 
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.exceptions import DataclassException
 
 
 @dataclass
+class ExpertAbort(DataclassException):
+    """
+    Raised by
+    :meth:`~krrood.entity_query_language.rdr.interface.ExpertInterface.interact` when
+    the expert cancels the session.
+    """
+
+    missing: list[str]
+    """The names of the still-missing required answers, so the calling
+    :class:`~krrood.entity_query_language.rdr.expert.Expert` can raise its own specific
+    exception."""
+
+    def error_message(self) -> str:
+        return f"Expert cancelled without supplying: {', '.join(self.missing) or '(nothing)'}"
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
+class ConclusionSelectorAsConditionError(DataclassException):
+    """Raised when a
+    :class:`~krrood.entity_query_language.rules.conclusion_selector.ConclusionSelector` is
+    used as a rule condition."""
+
+    condition: SymbolicExpression
+    """The offending node that was passed as a condition."""
+
+    def error_message(self) -> str:
+        return f"A ConclusionSelector cannot be used as a rule condition: {self.condition!r}"
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
 class NoInferenceTarget(DataclassException):
-    """Raised when an underspecified ``Match`` has no ``...`` attribute to infer."""
+    """
+    Raised when an underspecified ``Match`` has no ``...`` attribute to infer.
+    """
 
     case_type: type
     """The type whose instances were queried."""
@@ -25,7 +66,9 @@ class NoInferenceTarget(DataclassException):
 
 @dataclass
 class MultipleInferenceTargets(DataclassException):
-    """Raised when a single-class RDR is handed more than one ``...`` attribute."""
+    """
+    Raised when a single-class RDR is handed more than one ``...`` attribute.
+    """
 
     attribute_names: list[str]
     """The names of the attributes that were all marked with ``...``."""
@@ -54,7 +97,9 @@ class UnsupportedInferenceTarget(DataclassException):
     """The type whose instances were queried."""
 
     attribute_name: str
-    """The name of the unbounded-iterable attribute that was marked with ``...``."""
+    """
+    The name of the unbounded-iterable attribute that was marked with ``...``.
+    """
 
     def error_message(self) -> str:
         return (
@@ -68,15 +113,19 @@ class UnsupportedInferenceTarget(DataclassException):
 
 @dataclass
 class CaseNotSerializableError(DataclassException):
-    """Raised when a :class:`~krrood.entity_query_language.rdr.corner_case.CaseSerializer`
-    cannot emit constructor source for a value."""
+    """
+    Raised when a :class:`~krrood.entity_query_language.rdr.corner_case.CaseSerializer`
+    cannot emit constructor source for a value.
+    """
 
     value: Any
     """The field value that could not be serialized."""
 
     supported_types: Tuple[Type, ...]
-    """The scalar types the serializer does support (``None`` and nested dataclasses are
-    always supported in addition to these, so are not part of this list)."""
+    """
+    The scalar types the serializer does support (``None`` and nested dataclasses are
+    always supported in addition to these, so are not part of this list).
+    """
 
     def error_message(self) -> str:
         type_names = ", ".join(t.__name__ for t in self.supported_types)
@@ -92,10 +141,14 @@ class CaseNotSerializableError(DataclassException):
 
 @dataclass
 class UnsupportedNodeForSerialization(DataclassException):
-    """Raised when the rule-tree DAG contains a node the serializer cannot emit."""
+    """
+    Raised when the rule-tree DAG contains a node the serializer cannot emit.
+    """
 
     node: Any
-    """The node (or leaf value) the serializer does not know how to emit as Python source."""
+    """
+    The node (or leaf value) the serializer does not know how to emit as Python source.
+    """
 
     def error_message(self) -> str:
         return f"Cannot serialize node of type {type(self.node).__name__!r} to Python source."
@@ -106,7 +159,9 @@ class UnsupportedNodeForSerialization(DataclassException):
 
 @dataclass
 class EmptyRuleTreeError(DataclassException):
-    """Raised when serializing an RDR that has no rules yet."""
+    """
+    Raised when serializing an RDR that has no rules yet.
+    """
 
     def error_message(self) -> str:
         return "Cannot serialize an empty RDR (no rules have been added)."
