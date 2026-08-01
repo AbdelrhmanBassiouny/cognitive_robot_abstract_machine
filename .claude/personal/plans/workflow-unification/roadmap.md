@@ -940,3 +940,85 @@ Two things this settles:
   gatherer-side steps are prose in `pr-data-fetching.md`; where a wrong value is
   indistinguishable from a legitimate one, the parser has to reject it rather than the doc ask
   nicely.
+
+## Update 2026-08-01: ready-to-promote sidebar + one-click upstream create-links (new item)
+
+Added `ready-to-promote-upstream-links` to the `dashboards` track (wave: upstream), depending on
+`shared-pr-state-chips` (#111). The ask: a fifth sidebar group listing the pull requests that are
+actually ready to go upstream, each with a link that opens cram2's compare-and-create page with the
+description already written, so promoting is one click.
+
+### Why it belongs to this plan rather than being its own thing
+
+Phase 3 of `ROUTINE.md` already builds exactly this link, in exactly this format, and its only
+delivery channel is the emailed FINISH summary of a scheduled LLM run. `routine-cutover`'s revised
+target is that no scheduled LLM run exists at all — deterministic duties move to a plain Action,
+judgment work moves to on-demand sessions "surfaced by the plans dashboard rather than a timer".
+Building the link is pure computation over live pull request state; the only reason it needed a
+model was that nothing else was rendering it anywhere. Putting it on the dashboard removes the last
+non-judgment reason Phase 3 exists, so this item is a direct enabler of the cutover, not a parallel
+feature. The same builder is what the Action's own "cram2-link comment" duty will call.
+
+### The eligibility predicate
+
+An item is ready to promote when all of:
+
+- its live state is open-and-ready — this repo's convention is that a pull request stays a draft
+  until its author has reviewed it themselves, so out-of-draft *is* the record of "reviewed by me",
+  the same signal `_compute_ready_to_review` already reads in the opposite direction;
+- GitHub reports it cleanly mergeable (PR 3's `mergeable`, already fetched for its conflict chip) —
+  `None` (still computing) is not treated as ready, since promoting a conflicted branch upstream is
+  the failure this check exists to prevent;
+- its base is the fork's default branch — a pull request still stacked on a sibling cannot be
+  promoted on its own, and one whose parent has merged has already been retargeted to main by
+  GitHub, so this reads the *current* base rather than the plan's `depends_on`;
+- it does not carry `in-review` (already promoted), and it is not merged or closed.
+
+Check state deliberately does **not** gate the list: this repo's robotics jobs flake on tests a
+`.claude/`-only pull request cannot reach, and that has already been ruled unrelated-and-ignorable
+more than once in this plan. It renders as a chip so the decision stays the user's.
+
+### The link
+
+`https://github.com/<upstream_repository>/compare/<upstream_base>...<fork owner>:<branch>?expand=1&title=<t>&body=<b>`,
+url-encoded, with the title taken from the fork pull request and the body being its first paragraph
+truncated plus a `Full detail: <fork pull request url>` line. The truncation is not cosmetic —
+Phase 3's doctrine records that a compare URL has a length cap and silently drops an over-long body,
+which is the kind of failure nobody notices until a promoted pull request arrives upstream empty.
+
+Portability: `upstream_repository` becomes a new optional top-level `plan.yaml` field (with an
+optional `upstream_base`), because the dashboard tooling lives on main and this plan's standing rule
+forbids a hardcoded repository name outside config defaults. A plan that sets neither renders no
+group at all — the feature is invisible rather than broken for a plan with no upstream. `stack.toml`
+was considered and rejected as the home for it: it carries git *remote* names (`upstream_remote =
+"cram2"`), not the `owner/repo` a compare URL needs, and it is not a file the dashboard reads.
+
+### Why it depends on #111 rather than standing alone off fork main
+
+The two facts the predicate needs live in the same place #111 is already touching: `mergeable` is
+literally #111's conflict chip, and the link builder belongs next to `pr_state` in the
+`development_tooling` package #111 creates, so `routine-cutover`'s Action can import it instead of
+re-deriving the URL format in prose a third time. Standing this item off fork main — the way #103,
+#105, #119 and #115 legitimately do — would mean duplicating the `mergeable` plumbing into
+`build_dashboard.py` a second time and colliding with #111 for real, not just textually. The cost is
+accepted: this item cannot start until #111 leaves draft.
+
+Three fields the pull request entry does not yet carry are this item's own work: `base`, `title` and
+`body`, plus `pr-data-fetching.md`'s minimum field set updated to name them — the same document
+whose under-specification caused the #119 bug, so the addition goes in as a documented requirement
+rather than an optional extra.
+
+### Removal from the list
+
+Applying `in-review` after clicking Create is what drops an item, which is precisely the existing
+convention ("I add `in-review` then"). `cram2-link-sent` stays out of the dashboard entirely: it is
+Routine-side bookkeeping that stops an emailed link being re-sent, and a list recomputed from live
+state on every refresh has nothing to remember. That leaves the two surfaces double-listing a pull
+request while the live Routine is still running — accepted, since the Routine is scheduled for
+deletion by `routine-cutover` and the overlap is a duplicate link, not a wrong one.
+
+### Ordering
+
+Before `dev-tooling-python-package`, which moves `build_dashboard.py` wholesale, and after #111.
+Textual overlap in `build_dashboard.py` with #103, #105, #111 and #119 is the established
+whichever-lands-second-merges pattern for this track.

@@ -550,3 +550,36 @@ items:
       the user asked for the patch text to review and paste rather than a direct
       update_trigger call, so until they do, restack-plan emits the right parent but
       Phase 1 still will not retarget on GitHub.
+
+  - id: ready-to-promote-upstream-links
+    branch: null
+    title: "PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links"
+    track: dashboards
+    depends_on: [shared-pr-state-chips]
+    status: not_started
+    notes: >
+      Adds a fifth sidebar group to the plan dashboard - "Ready to promote" - listing every
+      item whose fork pull request is open-and-ready (out of draft, i.e. self-reviewed),
+      cleanly mergeable, and based on the fork's default branch, and gives each one a
+      one-click link that opens the upstream compare-and-create page with the title and
+      body prefilled and the fork pull request linked from it. This is ROUTINE.md Phase 3's
+      link building turned into a surface instead of an emailed summary: the same
+      compare URL format, computed deterministically at dashboard build time, so it needs
+      no scheduled LLM run to reach the user - which is exactly what routine-cutover's
+      endgame requires of every deterministic duty. Portability rule applies as everywhere
+      else: the upstream is a new optional plan.yaml field (upstream_repository, plus an
+      optional upstream_base defaulting to the fork's own base), never a hardcoded cram2;
+      a plan without it renders no group and no links. Decisions settled with the user at
+      planning time (2026-08-01): the link builder lands in the development_tooling package
+      PR 3 creates, next to pr_state, so the scheduled Action can reuse it verbatim; the
+      prefilled body is the fork pull request's own description truncated to one paragraph
+      plus a "Full detail" link back to it, matching the doctrine's existing warning that a
+      compare URL silently drops an over-long body; check state is shown as a chip and
+      never excludes an item, since a red robotics job routinely has nothing to do with the
+      pull request under it; and an item leaves the list when the user applies the in-review
+      label after clicking Create, with cram2-link-sent left alone entirely - it exists only
+      to stop the Routine re-emailing a link, which a stateless recomputed list does not
+      need. Requires three new fields in pr_data.json that PR 3's pull request entry does
+      not yet carry (base, title, body) plus pr-data-fetching.md's minimum field set updated
+      to match; mergeable and the check rollup come from PR 3 as-is. Sequence before
+      dev-tooling-python-package, which moves build_dashboard.py wholesale.
