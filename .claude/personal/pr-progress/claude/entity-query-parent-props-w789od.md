@@ -103,6 +103,18 @@ Downstream: PR #92 merges this branch in and touches `query_graph.py` — it mus
 re-merge this branch's tip (58671190); the construct_graph revert may conflict with
 its QueryGraph memoization fix. Recorded in the plan manifest.
 
+New review thread 2026-08-01 12:26 (evaluation.py:160, open, awaiting developer):
+"is `except NoExpressionFoundForGivenID: continue` masking a real error?" Investigated
+and replied: the miss is expected by design — `evaluated_expression_ids` is
+pass-cumulative (merges source chains and subquery internals) while the lookup only
+resolves the conditions root's own tree (`_descendants_` skips `ResultQuantifier`
+children), proven by removing the except: 9 test_eql failures well beyond the
+shared-node cases (test_limit, pipeline chain traversal, generative backend, ...).
+The try/except predates this PR (only variables renamed in it here). Offered but did
+not push the idiom fix (AGENTS.md-compliant Optional-returning lookup + guard clause,
+since a legal-state miss shouldn't use exception control flow) — in this PR or riding
+with Phase B, developer's call. Thread left unresolved.
+
 Next: react to further review events when they arrive (no subscription — re-subscribe
 was denied; the developer will prompt). The summary discussion is settled and its
 conclusions are recorded in the plan manifest and roadmap addendum (rustworkx declined;
