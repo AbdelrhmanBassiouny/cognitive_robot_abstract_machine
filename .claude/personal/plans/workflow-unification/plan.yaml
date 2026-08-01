@@ -743,11 +743,13 @@ items:
       with the usual whichever-lands-second treatment.
 
   - id: ready-to-review-merged-dependency
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-s9e8bj
     title: "Ready-to-review drops items whose dependency has already merged"
+    pull_request_number: 122
     track: dashboards
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01Ltrz1G8qwSHgo6jyfeV1EU
     notes: >
       Found 2026-08-01 while working sidebar-bug-fix-chips, and deliberately left out of
       that pull request to keep one root cause per bug fix. _compute_ready_to_review admits
@@ -773,3 +775,32 @@ items:
       merged) and, like them, an independent bug-fix pull request off fork main carrying
       the bug label; build_dashboard.py overlap with #111, #119 and #120 is the usual
       whichever-lands-second-merges pattern for this track.
+      Kicked off and implemented 2026-08-01 via /plan-item-kickoff as draft PR #122
+      (bug label, based on fork main one commit off the tip). The user confirmed the
+      oversight reading, so the fix went ahead. The suggested consolidation onto
+      is_ready_to_unblock_dependents() was rejected on inspection and must not be
+      revived: that predicate excludes OPEN_DRAFT, because a draft is unsafe to build a
+      branch on, while _compute_ready_to_review deliberately includes a draft dependency
+      - pinned by the pre-existing test_item_ready_to_review_once_dependency_has_an_open
+      _pull_request and its explanatory comment. The two predicates differ by exactly
+      OPEN_DRAFT, and that difference is the real distinction: safe-to-build-on requires
+      out-of-draft, worth-reviewing-behind requires only that the base exists. Delivered
+      as a new Item.is_ready_for_dependent_review() composing the existing
+      has_open_pull_request with is_effectively_done(), so has_open_pull_request stays in
+      production use rather than becoming test-only. 229 tests pass, was 222: three
+      renderer tests (the merged dependency, a done dependency with no pull request at
+      all, and closed-unmerged still excluding) plus four predicate unit tests beside the
+      is_ready_to_unblock_dependents ones. One existing assertion changed deliberately -
+      test_example_plan_renders_the_counts_and_sections_the_walkthrough_describes, whose
+      own docstring says it exists to fail rather than let the walkthrough go stale; the
+      example fixture itself is untouched and now demonstrates the fix, with
+      retry-circuit-breaker reaching the list behind its merged retry-backoff-strategy.
+      The walkthrough prose and dashboard-overview.png were regenerated to match (user's
+      call, knowing it conflicts as a binary with #120's own regenerated copy - whoever
+      lands second re-regenerates, which is mechanical since the image is deterministic
+      from the committed fixture). Regeneration recipe, since no script exists: render
+      example/ with build_dashboard.py, then headless Chromium with
+      --blink-settings=preferredColorScheme=0 for the dark theme the committed images
+      use, cropped to a 100px bottom margin. That regeneration also cleared a
+      pre-existing staleness the roadmap had flagged - the old image still rendered the
+      description as EXAMPLE_WALKTHROUGH.md, a since-renamed file.

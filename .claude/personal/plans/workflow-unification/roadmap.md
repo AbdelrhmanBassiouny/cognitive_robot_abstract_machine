@@ -1316,3 +1316,93 @@ both local and global config and are in force from a session's first command, be
 runs. They are per-environment and do not travel to another contributor's clone, which is exactly
 why the tooling fix is still worth doing — the two cover different populations rather than
 competing.
+
+## Update 2026-08-01 (kickoff + implementation): the ready-to-review merged-dependency fix ships as #122
+
+`/plan-item-kickoff workflow-unification ready-to-review-merged-dependency`, session
+https://claude.ai/code/session_01Ltrz1G8qwSHgo6jyfeV1EU, which went on to implement it the same
+session as draft pull request **#122** on `claude/plan-item-kickoff-workflow-s9e8bj` (fork `main`,
+`bug` label, independent of the #101/#106 chain).
+
+### The confirmation the item required
+
+The item's first step was to confirm the oversight reading with the user rather than patch on a
+guess, per AGENTS.md's rule against inventing a reason for existing behaviour. Confirmed: it is an
+oversight. `has_open_pull_request` was the proxy for *"the base exists and is far enough along"* and
+simply happens to be false at the settled end of the range.
+
+### The consolidation this plan proposed three times is wrong
+
+Worth recording prominently, because the suggestion had propagated into three places that all agree
+with each other — the item's own `notes`, the *spun-out* section above, and the tracking-issue
+comment of 2026-08-01T11:00:35Z — so the next reader would have found three concurring sources
+pointing at the wrong fix.
+
+`Item.is_ready_to_unblock_dependents()` is **not** the right shared predicate. It is
+`is_effectively_done() or OPEN_READY`: it deliberately *excludes* `OPEN_DRAFT`, because a draft can
+still see heavy rework and is unsafe to build a branch on. But `_compute_ready_to_review`
+deliberately *includes* a draft dependency, and that is pinned by a pre-existing test whose own
+comment says so — *"The dependency need not itself be past review - it just needs a pull request
+open, so a whole reviewable stack can surface before its base merges."* Reusing it would have
+traded this bug for a new one.
+
+So the two predicates differ by exactly `OPEN_DRAFT`, and that difference is the real distinction:
+
+- **safe to build a branch on** requires the base to be out of draft — `is_ready_to_unblock_dependents()`
+- **worth reviewing the branch above** requires only that the base exists — `is_ready_for_dependent_review()`
+
+Two sibling predicates sharing `is_effectively_done()` is the correct shape, not one merged
+predicate. `has_open_pull_request` survives as the building block the new one composes, so nothing
+became test-only and AGENTS.md's consult-before-removing rule was never reached.
+
+This is the general lesson the family keeps teaching: the four sidebar lists each re-derive "is this
+dependency far enough along" in their own words, and the answer is genuinely *different* per list.
+Consolidating them onto one predicate is the tempting fix and the wrong one — what they need is
+named predicates that make each list's own threshold explicit.
+
+### The example, and the one assertion deliberately changed
+
+`test_example_plan_renders_the_counts_and_sections_the_walkthrough_describes` is the only existing
+assertion touched. That is the test working, not a test being bent: its own docstring says it exists
+so *"a future change to either would fail this test instead of silently leaving the doc showing stale
+numbers"*, and updating the assertion together with the prose and the screenshot is exactly the
+response it was written to force. The example *fixture* is untouched, and now demonstrates the fix —
+`retry-circuit-breaker` reaches the list behind its merged `retry-backoff-strategy`, so the sidebar
+reads **Ready to review (2)**.
+
+The screenshot was regenerated (user's call, taken knowing it conflicts as a binary with #120's own
+regenerated copy — whoever lands second re-regenerates, mechanical because the image is deterministic
+from the committed fixture). **There is no regeneration script**, which is itself the reason
+screenshots keep drifting silently; until one exists the recipe is: render `example/` through
+`build_dashboard.py`, then headless Chromium at `--window-size=1280,…` with
+`--blink-settings=preferredColorScheme=0` — the dark theme the committed images use, and *not* the
+headless default — cropped to the same 100px bottom margin. Regenerating also cleared the
+`EXAMPLE_WALKTHROUGH.md` staleness this roadmap flagged on 2026-08-01: a committed screenshot goes
+stale from any change, not only from the one that prompted the regeneration.
+
+### Correction to the git-identity hazard, verified live this session
+
+The `git-identity-from-personal-notes` item recorded above diagnoses the container state as
+`GIT_AUTHOR_*`/`GIT_COMMITTER_*` **unset**, with the global config supplying
+`Claude <noreply@anthropic.com>`. That is no longer the state. In this session:
+
+```
+global : Claude / noreply@anthropic.com      (still wrong)
+local  : set by this session, and ignored
+GIT_AUTHOR_NAME / GIT_COMMITTER_NAME   : Abdelrhman Bassiouny
+GIT_AUTHOR_EMAIL / GIT_COMMITTER_EMAIL : abassiou@uni-bremen.de
+```
+
+So the zero-code alternative that item names as *"stronger where it applies"* is now actually in
+force, and #122's commit is live proof it works: it landed authored `Abdelrhman Bassiouny
+<abassiou@uni-bremen.de>` despite the global config still being wrong, and despite a repo-local
+identity having been set to `bido.bassuny@gmail.com` — environment variables beat both, exactly as
+predicted.
+
+Two consequences for that item. Its diagnosis section needs updating before anyone implements
+against it, or they will build for a container state that no longer holds. And its "write the
+repo-local identity only when none exists yet" rule now has a second reason to be careful: a
+repo-local identity written by the hook would be silently overridden by these environment variables
+anyway, so on this environment the hook can only ever be a no-op — its real value is the *other*
+populations (another contributor's clone, an environment without the variables set), which is what
+the item already says, just now with the overlap made concrete.
