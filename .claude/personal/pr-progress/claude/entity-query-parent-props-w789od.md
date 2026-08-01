@@ -86,8 +86,11 @@ changes; left the 3 judgment threads (faded-gate necessity, usage audit, recordi
 necessity) open with justifications for the developer. PR description updated; PR
 still draft.
 
-Summary discussion (held in-session, developer accepted): `is_condition_participant`
-stays — needed at exactly its two remaining functional call sites. On "would rustworkx
+Summary discussion (answer proposed in-session 2026-08-01, awaiting the developer's
+response — an earlier note wrongly recorded it as already accepted; the code changes
+above were pushed before the discussion, out of order): proposed position is that
+`is_condition_participant` stays — needed at its two remaining functional call sites.
+On "would rustworkx
 traversal/queries beat the growing context-record machinery": no — the recurring bugs
 are ownership/context bugs ("who is asking"), not traversal bugs; evaluation is lazy
 streaming recursion unsuited to a materialized graph; rustworkx is already used where
@@ -101,6 +104,7 @@ Downstream: PR #92 merges this branch in and touches `query_graph.py` — it mus
 re-merge this branch's tip (58671190); the construct_graph revert may conflict with
 its QueryGraph memoization fix. Recorded in the plan manifest.
 
-Next: react to further review events when they arrive (no subscription — re-subscribe
-was denied; the developer will prompt); no further code work planned unless review
-raises something or the developer asks for the intra-query QueryGraph follow-up.
+Next: conclude the summary discussion with the developer (it is open, not accepted —
+the pushed commit may need rework depending on its outcome); then react to further
+review events when they arrive (no subscription — re-subscribe was denied; the
+developer will prompt).
