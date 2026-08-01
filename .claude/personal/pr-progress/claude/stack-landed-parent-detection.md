@@ -105,7 +105,15 @@ on main. "Revise this and all related parts."
   intermittent rather than an inherited base-branch red. Noted once on the PR per
   convention; not chased, per the user's standing instruction from #101.
 
+**Unsubscribed 2026-08-01 (user asked): #117 and #41 both dropped.** No triggers or
+check-ins were ever armed by this session, so nothing else needed clearing. A future
+session picking either PR up must re-subscribe deliberately.
+
 **Next**
 - Resolve the base-branch situation on #41, then refresh its description (its "Stack"
   section still lists #40 as a live parent).
-- No scheduled check-ins armed, per personal notes.
+- #117 is open-and-ready but not promotable: its parent #106 is ready without
+  `in-review`, so `parent_landed` correctly withholds it. #106 promotes first.
+- Dashboard: another session's published build renders from #120's `build_dashboard.py`
+  (bug chip + filter), so it is richer than a `main`-based render. Do not republish from
+  `main`'s copy just to refresh a badge - it would strip those features.
