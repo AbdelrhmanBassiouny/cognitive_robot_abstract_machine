@@ -31,9 +31,22 @@ sidebar group is one macro call after this lands and a fifth copied block
 before. Posted on tracking issue #102.
 
 **Open as draft PR #120** (fork `main`, no `bug` label, session link in the
-description, subscribed to activity). CI had not started at open time; nothing
-to act on yet. No scheduled check-in armed, per the no-scheduled-checks rule —
-reacting to webhook events only.
+description, subscribed to activity). No scheduled check-in armed, per the
+no-scheduled-checks rule — reacting to webhook events only.
+
+**CI (2026-08-01).** `test_each_lib (semantic_digital_twin)` red, 3 failures in
+`test_adapters/test_multi_sim.py`: the known `test_world_sim_state_sync`
+settling flake plus two texture/material regression tests asserting `'' != ''`.
+Not reachable by this diff (six files, all under `.claude/`), and the other 12
+jobs passed. Complication recorded rather than glossed: main's own run at this
+branch's base `82501888` was green, so these are *not* demonstrably already-red
+on main the way #101/#103's flakes were. The two texture tests are
+self-contained (`tmp_path`), so the job's cached asset directory — the one real
+PR-vs-main difference — does not explain them; a freshly resolved MuJoCo version
+is the plausible environmental candidate. Could not reproduce locally: mujoco
+and the robotics stack are absent from this session's environment. Reported once
+on the PR asking for a re-run; if it stays red it is a regression on main's tree
+that this PR only surfaced.
 
 **Spun out, not fixed here.** `_compute_ready_to_review` treats a *merged*
 dependency as not-open, so an item whose dependency fully landed is excluded
