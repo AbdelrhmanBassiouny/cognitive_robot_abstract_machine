@@ -35,11 +35,18 @@ Done:
   only touches the Jinja2/CSS template). Replied on the PR explaining why
   it isn't being fixed here; not yet re-run/confirmed flaky vs.
   persistent - watch for it recurring.
+- CI: `test_each_lib (semantic_digital_twin) / test` also failed - 2 real
+  (non-flaky) assertion failures in test_multi_sim.py's mesh-material
+  builder (materials sharing a texture get empty/duplicate names).
+  Unrelated to this diff (no path from a plan-dashboard template to
+  semantic_digital_twin's mesh adapter); matches this repo's established
+  pattern of unrelated robotics CI noise on `.claude/`-only PRs. Replied
+  on the PR; not fixing it here.
 
 Next:
 - Watch for CI results and review activity via the webhook subscription
   (no scheduled polling per personal notes) and react when events arrive.
-- If the coraplex failure recurs on a re-run, look into it further; if it
-  clears, no action needed.
+- If either the coraplex or semantic_digital_twin failure recurs on a
+  re-run, look into it further; if they clear, no action needed.
 - Nothing else planned - single focused change, no further follow-up
   scope known.
