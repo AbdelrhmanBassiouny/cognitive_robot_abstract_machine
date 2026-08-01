@@ -1,8 +1,10 @@
 PR #124: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/124
 (draft, based off main, subscribed to activity)
 
-Single-PR task, contained entirely in this session - not tracked as a
-multi-PR plan.
+Tracked as `dashboard-chip-notes-collapse` in the `workflow-unification`
+plan (`dashboards` track), per the user's explicit request - added after
+implementation since the work started as a single-session task before
+that was raised. Also subscribed to the plan's tracking issue #102.
 
 Plan: hide the long `item.notes` text on plan-dashboard chips
 (`.claude/skills/plan-dashboard/templates/dashboard.html`) behind a
@@ -24,8 +26,20 @@ Done:
 - Committed (authored as the user, not the session's git-config identity)
   and pushed to claude/dashboard-chip-collapse-g5uyj1.
 - Opened draft PR #124 against main, subscribed to its activity.
+- Added the `dashboard-chip-notes-collapse` item to
+  `workflow-unification`'s plan.yaml/roadmap.md, saved via save-plan.sh,
+  and republished its dashboard Artifact (same URL, no drift, new item
+  correctly classified as ready-to-review).
+- CI: `test_each_lib (coraplex) / test` failed on the head commit with a
+  pytest-xdist worker crash (INTERNALERROR, unrelated to this diff, which
+  only touches the Jinja2/CSS template). Replied on the PR explaining why
+  it isn't being fixed here; not yet re-run/confirmed flaky vs.
+  persistent - watch for it recurring.
 
 Next:
 - Watch for CI results and review activity via the webhook subscription
   (no scheduled polling per personal notes) and react when events arrive.
-- Nothing else planned - single focused change, no follow-up scope known.
+- If the coraplex failure recurs on a re-run, look into it further; if it
+  clears, no action needed.
+- Nothing else planned - single focused change, no further follow-up
+  scope known.
