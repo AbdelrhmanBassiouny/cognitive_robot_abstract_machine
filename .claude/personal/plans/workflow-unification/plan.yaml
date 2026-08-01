@@ -555,7 +555,7 @@ items:
     branch: null
     title: "PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links"
     track: dashboards
-    depends_on: [shared-pr-state-chips]
+    depends_on: [shared-pr-state-chips, sidebar-bug-fix-chips]
     status: not_started
     notes: >
       Adds a fifth sidebar group to the plan dashboard - "Ready to promote" - listing every
@@ -605,5 +605,50 @@ items:
       and collapses the four near-identical sidebar group blocks into one next_step_group
       Jinja macro so the chip has a single home. Independent of the #101 chain, based on
       fork main; build_dashboard.py overlap with #103/#105/#111/#119 is the usual
-      whichever-lands-second-merges pattern for this track. Committed and pushed with 200
-      tests passing; no pull request opened yet.
+      whichever-lands-second-merges pattern for this track.
+      Extended 2026-08-01 with the filter the chip made possible: a "Bug fixes only"
+      checkbox on the sidebar card hides every non-bug entry and any group left holding
+      none, rendered only when some entry is a bug fix so it can never empty the card.
+      Both counts per group are rendered up front and swapped by CSS rather than
+      recomputed in script, matching the done-items toggle's two precomputed indent
+      levels. The committed example now demonstrates both - pull request #103 carries a
+      bug label - and all three walkthrough screenshots were regenerated from it
+      (the third, dashboard-bug-filter.png, is new and shows the filter applied).
+      206 tests passing.
+      Placement settled 2026-08-01: stays based on fork main, exactly one commit off the
+      tip, touching only plan-dashboard files and needing nothing from the #101/#106
+      chain - the same treatment #103, #105 and #119 get. It carries no bug label of its
+      own: it surfaces bug fixes, it does not fix a bug. The one real ordering constraint
+      is downstream, recorded as a depends_on on ready-to-promote-upstream-links: that
+      item adds a fifth sidebar group, which is one next_step_group call once this macro
+      has landed and a fifth copy of the markup if it has not. Also sequence before
+      dev-tooling-python-package, which moves build_dashboard.py wholesale. No pull
+      request opened yet.
+
+  - id: session-start-plan-and-setup-guards
+    branch: null
+    title: "Make the plan-item and setup steps impossible for a session to skip"
+    track: personal-data
+    depends_on: []
+    status: not_started
+    notes: >
+      Recorded 2026-08-01 from two process failures in the sidebar-bug-fix-chips session,
+      both of which the conventions already forbade in prose and neither of which anything
+      enforced. (1) Work began, was implemented and was pushed before the plan item
+      existed, even though the request named the plan in its first sentence: session-start
+      prints a bare "plan: none" for a branch absent from the generated index, which reads
+      as "no plan applies here" when it can equally mean "the plan you were told about has
+      no item for this branch yet". (2) check-setup.sh was never run, so the plan-dashboard
+      dependencies were discovered one ModuleNotFoundError at a time across two
+      interpreters, when one read-only call reports the whole picture. Three fixes, in
+      increasing strength: make session-start.sh's plan line name the ambiguity and say
+      what to do about it; have session-start.sh run check-setup.sh and surface a non-zero
+      exit rather than leaving it to be remembered; and, if enforcement rather than
+      prompting is wanted, a PreToolUse hook on Edit|Write that refuses the first source
+      edit from a branch with no plan item, with an explicit opt-out for branches that
+      genuinely have no plan. The first two are the recommendation; the third is the only
+      one that makes the miss impossible rather than merely unlikely. Plan mode was
+      considered and rejected as the mechanism: it would probably have caught the first
+      failure but rests on the same judgment that missed it, and would not have caught the
+      second at all. Deliberately left unimplemented here - the user is assigning it to its
+      own session.

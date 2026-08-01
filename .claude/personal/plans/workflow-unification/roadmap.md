@@ -1069,3 +1069,108 @@ work from. See the conventions discussion this update was written alongside.
 
 Independent, off fork main, no `depends_on`. `build_dashboard.py` overlap with #103, #105,
 #111 and #119 is the established whichever-lands-second-merges pattern for this track.
+
+## Update 2026-08-01 (later): the filter, the example, and where this PR sits
+
+Follow-on to the bug-chip item above, all in the same session.
+
+### The filter the chip made possible
+
+The original request had framed this as "more of a filter that we can apply to show only
+the bug-fixing ones", and the chip alone did not deliver that. "Bug fixes only" is now a
+checkbox on the sidebar card: it hides every non-bug entry and every group left holding
+none. Two details are load-bearing rather than cosmetic:
+
+- **The checkbox only renders when some sidebar entry is a bug fix.** A filter whose only
+  possible result is an empty card is worse than no filter, and this removes the empty
+  state entirely rather than designing a message for it.
+- **Each group's heading carries both counts, swapped by CSS.** A filtered group that
+  still claims "(4)" while showing one entry is simply wrong, and recomputing counts in
+  script would be the first place this page does arithmetic at runtime. Rendering both up
+  front and switching with a class is what the done-items toggle already does with its two
+  precomputed indent levels, so the filter adds a case to an existing pattern instead of a
+  new mechanism.
+
+### The example now demonstrates it
+
+`example/pr_data.json`'s pull request #103 gains a `bug` label — `retry-fallback-queue`, a
+dead-letter queue for dropped retries, is plausibly filed as a bug fix, and it puts the
+chip on the *drift* entry, which is the clearest possible demonstration that the chip
+appears wherever the item already sits rather than moving it. All three walkthrough
+screenshots were regenerated from the committed sample (the third,
+`dashboard-bug-filter.png`, is new and shows the filter applied). A test pins that the
+example keeps producing exactly one chip and the toggle, so the screenshots cannot silently
+go stale again.
+
+Regenerating them turned up an unrelated staleness worth noting: the old
+`dashboard-overview.png` still showed the description text `EXAMPLE_WALKTHROUGH.md`, a
+filename that has since been renamed. Committed screenshots drift silently in a way
+committed text does not.
+
+### Where this pull request belongs
+
+Asked to work out its best place, the answer is: exactly where it already is, plus one
+downstream dependency.
+
+- **Base stays fork `main`.** The branch is one commit off the current tip, touches only
+  plan-dashboard files, and needs nothing from the #101/#106 chain — the same independent
+  treatment #103, #105 and #119 get. Stacking it on #111 would buy nothing and inherit that
+  chain's review latency.
+- **It carries no `bug` label.** It surfaces bug fixes; it does not fix a bug. The
+  convention that bug-fix pull requests must be labelled does not reach it.
+- **`ready-to-promote-upstream-links` now depends on it.** That item adds a fifth sidebar
+  group, which is a single `next_step_group` call once this macro has landed and a fifth
+  hand-copied block if it has not — and the reconciliation would then be someone's manual
+  merge of two divergent copies of the same markup. This is the first dependency in the
+  `dashboards` track recorded for a *refactor seam* rather than for data or files, and it
+  is the whole practical payoff of having collapsed the four blocks.
+- **Still before `dev-tooling-python-package`**, which moves `build_dashboard.py` wholesale.
+
+Overlap with #111 (item-card chips, new `pr_data.json` fields) and #119 (`from_mapping`'s
+merge-timestamp guard) stays the established whichever-lands-second-merges pattern; neither
+is a dependency in either direction, and #111 could not depend on this one anyway, being
+based on #106.
+
+### An oddity found and deliberately not fixed
+
+`_compute_ready_to_review` requires every dependency to have an *open* pull request, via
+`has_open_pull_request`, which is false once that dependency has merged. So an item whose
+dependency has fully landed is excluded from "Ready to review", while one whose dependency
+is merely open is included — the more finished the dependency, the less reviewable the
+dependent looks. It is visible in the committed example, where `retry-circuit-breaker` sits
+out of the list behind a merged `retry-backoff-strategy`. Left alone here: it is a
+different root cause from this item's, and this plan's own convention keeps a bug-fix pull
+request to one. It belongs to the same family as #103 and is worth its own item if it is
+real rather than intended.
+
+## Update 2026-08-01 (process): the two skipped steps become their own item
+
+New `personal-data` item `session-start-plan-and-setup-guards`, recorded at the user's
+request and deliberately left unimplemented for its own session.
+
+Both failures it addresses happened in the bug-chip session, and both were already
+forbidden in prose:
+
+1. **The plan item was created after the implementation was written, pushed and reviewed.**
+   The request named the plan in its first sentence. What made it survivable was
+   `session-start.sh` printing a bare `plan: none` for a branch the generated index does
+   not list — a message that reads as "no plan applies here" but equally means "the plan
+   you were told about has no item for this branch yet". The convention that plan state is
+   updated in the same turn cannot fire if the session has already concluded no plan is in
+   play.
+2. **`check-setup.sh` was never run**, so the plan-dashboard dependencies surfaced one
+   `ModuleNotFoundError` at a time across two interpreters, and `plan-dashboard/SKILL.md`'s
+   own step 0 was not read until the skill was invoked at the very end — long after its
+   code had been edited.
+
+The three fixes, in increasing strength: make the plan line name its own ambiguity; run
+`check-setup.sh` from `session-start.sh` and surface a non-zero exit; and, if enforcement
+is wanted over prompting, a `PreToolUse` hook on `Edit|Write` refusing the first source edit
+from a branch with no plan item, with an explicit opt-out. The first two are the
+recommendation. Only the third makes the miss impossible rather than unlikely.
+
+Plan mode was considered as the mechanism and rejected: it would likely have caught the
+first failure, but it rests on the same judgment that missed it and runs nothing, so it
+would not have caught the second at all. The distinction worth keeping is that conventions
+in `cram-notes.md` are read by a session that has already decided what it is doing, while
+hooks run before it decides.
