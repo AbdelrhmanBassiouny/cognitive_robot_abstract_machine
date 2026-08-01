@@ -34,12 +34,22 @@ Draft PR #123 open, 1 file, +30/−10.
 
 CI is red and stays red. `claude/personal-notes` carries a stale snapshot of the
 source tree — merge-base with `main` is `9703a398`, and 1199 files differ — so the
-full robotics matrix runs against months-old source. `Examples and Demos` was green
-on `main` at `82501888` and fails here on `semantic_digital_twin` circular imports
-(`test_each_lib (coraplex/demos/coraplex_real_tracy/test_demo.py)`), which a
-markdown-only diff cannot touch. Inherent to every PR targeting this branch, not to
-this one. Not chased, and deliberately not "fixed" by merging `main` into the notes
-branch — that would be a large unrelated change to the user's branch.
+full robotics matrix runs against months-old source. Both workflows were green on
+`main` at `82501888` and fail here. Two distinct failures so far, neither reachable
+from a markdown-only diff:
+
+- `Examples and Demos` → `test_each_lib (coraplex/demos/coraplex_real_tracy/test_demo.py)`:
+  `semantic_digital_twin` circular imports.
+- `CI` → `test_each_lib (semantic_digital_twin)`: 813 passed, 2 errors.
+  `test_apartment_semantic_annotations` and `test_explain_inferred_semantic_annotations`
+  raise `BrokenWorldModificationHistoryError` ("world entity not in the kwargs of
+  the method that created it"). Both the implicated `world.py` (+253/−154 vs `main`)
+  and that test file are stale on this branch, which is the cause.
+
+Expect more of the same as the matrix finishes. Inherent to every PR targeting this
+branch, not to this one. Not chased, and deliberately not "fixed" by merging `main`
+into the notes branch — that would be a large unrelated change to the user's branch,
+and is the user's call.
 
 ## Environment note for a future session
 
