@@ -54,10 +54,12 @@ items:
       Phase B), redundant participant check dropped from construct_graph
       (membership in satisfied_condition_ids already implies it), sentinel
       removed, abbreviations fixed. 5/8 threads resolved; 3 judgment threads
-      left open with justifications. In-session discussion concluded: keep
-      is_condition_participant (2 needed call sites); no rustworkx for
-      evaluation-time tracking - the bugs are ownership bugs, not traversal
-      bugs; Phase B consolidation is the right refactor. Warning: PR #92
+      left open with justifications. Summary discussion still open: answer
+      proposed in-session (keep is_condition_participant - 2 needed call
+      sites; no rustworkx for evaluation-time tracking - ownership bugs, not
+      traversal bugs; Phase B consolidation is the right refactor) but the
+      developer has not yet accepted, and the review-round commit was pushed
+      before the discussion was actually held. Warning: PR #92
       merges this branch and touches query_graph.py - it must re-merge tip
       58671190 (construct_graph parent-param revert may conflict).
 
