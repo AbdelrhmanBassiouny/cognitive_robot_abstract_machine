@@ -704,6 +704,44 @@ items:
       upstream. Needs a per-branch opt-out for a branch that genuinely belongs to no plan.
       Depends on #121 for the discriminator helpers it builds on.
 
+  - id: git-identity-from-personal-notes
+    branch: null
+    title: "Stop sessions committing as an assistant identity"
+    track: personal-data
+    depends_on: []
+    status: not_started
+    notes: >
+      Recorded 2026-08-01 while working session-start-plan-and-setup-guards, after that
+      session found its own clone configured to commit as "Claude
+      <noreply@anthropic.com>" - exactly what AGENTS.md's Version Control rule forbids,
+      and the same authorship this roadmap already flags as a standing hazard on #101
+      and the P3 branch. Diagnosis that makes it worth tracking rather than fixing by
+      hand each time: the value is in the container's *global* git config, so a fresh
+      clone inherits it and there is no repo-local identity until something writes one.
+      It is the default, not a slip, and every session that commits without setting the
+      identity first reproduces it. Fix: session-start.sh writes a repo-local identity
+      read from the personal-notes branch (the same "personal config lives on the notes
+      branch, gets written into the clone at session start" pattern personal-settings-sync
+      established for settings.local.json - its own .claude/personal/ entry or folded into
+      that sync), and check-setup.sh gains a git_identity check, which then surfaces
+      through the setup line #121 added with no further plumbing. Write only when no
+      repo-local identity exists yet: a fresh clone has none and someone who set one
+      deliberately keeps it, which is precise where blocklisting known assistant
+      identities would be brittle. Two limits to state rather than paper over: the hook
+      covers only commits made inside a session in this clone, and the merge commits this
+      roadmap already flags landed from *outside* any session (the merge button, the
+      Routine), which no local hook can reach - that half needs the GitHub account's own
+      commit-email setting or a changed merge path. Also independently available with no
+      code at all, and stronger where it applies: GIT_AUTHOR_NAME/GIT_AUTHOR_EMAIL/
+      GIT_COMMITTER_NAME/GIT_COMMITTER_EMAIL set at the environment level next to the
+      CLAUDE_PERSONAL_NOTES_* variables already there - environment variables beat both
+      local and global config and are in force from the session's first command, before
+      any hook runs, but they are per-environment and do not travel to another
+      contributor's clone. The user chose to track the tooling fix; the environment
+      variables remain available as the immediate stopgap. Small independent PR off fork
+      main, like #109 and #115; textual overlap in session-start.sh and check-setup.sh
+      with the usual whichever-lands-second treatment.
+
   - id: ready-to-review-merged-dependency
     branch: null
     title: "Ready-to-review drops items whose dependency has already merged"

@@ -1273,3 +1273,46 @@ the same authorship this roadmap already flags twice as a standing hazard on #10
 branch. It is the *default*, so it is not a one-off slip that happened to land; every session
 that commits without setting the identity first reproduces it. Set `user.name`/`user.email`
 before the first commit of any session.
+
+## Update 2026-08-01 (hazard tracked): the assistant git identity is the container default
+
+Raised by the user while `session-start-plan-and-setup-guards` was being implemented, and now
+tracked as `git-identity-from-personal-notes` (`personal-data`).
+
+This roadmap already flags commits authored `Claude <noreply@anthropic.com>` twice — three merge
+commits on #101, and `6b51075e`/`f5d1c883` on the P3 branch — both times as something that had
+happened, left unrewritten because fixing authorship means force-pushing shared history. What was
+never established is *why* it keeps happening. It is the **global** git config in a session's
+container:
+
+```
+global : Claude / noreply@anthropic.com
+local  : (none, in a fresh clone)
+GIT_AUTHOR_* / GIT_COMMITTER_* : unset
+```
+
+So it is the default rather than a slip, and every session that commits without first setting an
+identity reproduces it. That reframes it from a recurring lapse of discipline into a missing piece
+of tooling — which is the reason it became an item instead of another roadmap warning.
+
+**The fix has a natural home.** `personal-settings-sync` (#109) already established the pattern:
+personal config lives on the notes branch and is written into the clone at session start. A git
+identity is the same shape. `check-setup.sh` gains a `git_identity` check, which then reaches the
+user through the `setup:` line #121 added, with no new delivery mechanism. The one design rule
+worth fixing now: write the repo-local identity *only when none exists yet* — a fresh clone has
+none, someone who set one deliberately keeps it — rather than blocklisting known assistant
+identities, which would be brittle and would need updating for every new one.
+
+**Two limits, stated rather than papered over.** A hook covers only commits made inside a session
+in this clone. The merge commits flagged above landed from *outside* any session — the GitHub
+merge button and the live Routine — and no local hook can reach those; that half needs the GitHub
+account's own commit-email setting or a changed merge path. And the global config stays wrong, so
+only this repo is covered.
+
+**A zero-code alternative exists and is stronger where it applies**: `GIT_AUTHOR_NAME`,
+`GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` set at the environment level,
+alongside the `CLAUDE_PERSONAL_NOTES_*` variables already kept there. Environment variables beat
+both local and global config and are in force from a session's first command, before any hook
+runs. They are per-environment and do not travel to another contributor's clone, which is exactly
+why the tooling fix is still worth doing — the two cover different populations rather than
+competing.
