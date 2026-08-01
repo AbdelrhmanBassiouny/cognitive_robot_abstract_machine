@@ -54,12 +54,14 @@ items:
       Phase B), redundant participant check dropped from construct_graph
       (membership in satisfied_condition_ids already implies it), sentinel
       removed, abbreviations fixed. 5/8 threads resolved; 3 judgment threads
-      left open with justifications. Summary discussion still open: answer
-      proposed in-session (keep is_condition_participant - 2 needed call
-      sites; no rustworkx for evaluation-time tracking - ownership bugs, not
-      traversal bugs; Phase B consolidation is the right refactor) but the
-      developer has not yet accepted, and the review-round commit was pushed
-      before the discussion was actually held. Warning: PR #92
+      left open with justifications. Summary discussion held and accepted by
+      the developer 2026-08-01 (after a false start where the commit was
+      pushed before the discussion): is_condition_participant stays as a thin
+      dispatcher (explicit parent -> evaluation context -> structural
+      fallback) - its question is positional/per-edge, so it cannot become a
+      type property or a construction-time tag; no rustworkx for
+      evaluation-time tracking (see roadmap addendum); the real refactor is
+      Phase B consolidation. Warning: PR #92
       merges this branch and touches query_graph.py - it must re-merge tip
       58671190 (construct_graph parent-param revert may conflict).
 
@@ -101,7 +103,11 @@ items:
       Exists/ForAll node (_ids_of_variables_to_add_to_sources_, a
       @cached_property over _root_query_ at logical_quantifiers.py:147); resolve
       the owning query from context (reuse #92's OutermostQueryClaim) and key
-      any cache by owning-query id on EvaluationContext. Phase D (audit half):
+      any cache by owning-query id on EvaluationContext. Watch-item (accepted
+      2026-08-01): evaluation_context.py already carries five parallel record
+      classes; if Phase C adds per-owning-query caching, fold the records into
+      a single ownership collaborator on EvaluationContext instead of growing
+      a sixth parallel class. Phase D (audit half):
       enumerate remaining semantic _root_/_root_query_/_parent_ reads and
       per-node caches, TDD a shared-node regression test for each unsafe one,
       fix via the context accessor. TDD throughout; krrood-internal mimics only.
@@ -150,7 +156,11 @@ items:
       and _root_ -> _structural_root_ (keep _parents_ authoritative); update the
       construction/layout call sites. Phase B: consolidate the "resolve from
       evaluation context else structural fallback" pattern into one reusable
-      EvaluationContext accessor (Open/Closed), behaviour-preserving. Phase D
+      EvaluationContext accessor (Open/Closed), behaviour-preserving -
+      generalize from is_child_of_truth_value_operator, its first slice
+      (landed via #90's review round, commit 58671190). The 2026-08-01
+      discussion confirmed this consolidation, not a graph library, is the
+      right refactor for the context machinery (roadmap addendum). Phase D
       (guard half): architectural test asserting semantic modules never
       reference the _structural_* accessors, so the class cannot silently
       reappear.

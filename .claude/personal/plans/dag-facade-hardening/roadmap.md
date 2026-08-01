@@ -189,3 +189,48 @@ One consequence for the other plan: `rdr-refactor`'s #79 (`D-ui-rendering`) is b
 the `D-ui-splice-fix` branch. Closing the PR does not delete that branch, so #79 is not
 broken, but it can no longer land through #78 and needs re-targeting onto
 `D-core-engine`. Left to #79's own session; recorded in `rdr-refactor`'s manifest.
+
+## Addendum (2026-08-01) — rustworkx considered and declined; ownership collaborator watch-item
+
+The #90 review summary asked whether the growing evaluation-context machinery
+(`ActiveConditionsRoot`, `TruthValueOperatorChildren`, `EvaluatedExpressionIds`,
+`OutermostQueryClaim`, `SubqueryResultCache` — five parallel record classes in
+`evaluation_context.py`) should be replaced by a graph library such as rustworkx, with
+its traversal algorithms and queries. Discussed in-session and accepted: **no**, for the
+evaluation-time machinery — with one structural conclusion and one escape hatch.
+
+Why a materialized graph does not fit the recurring bugs:
+
+- Every bug in this plan's family (#89, #90, #92, #118) was an **ownership** bug —
+  "which of a shared node's several parents/roots is relevant to the party asking right
+  now" — never a **traversal** bug. A rustworkx graph answers traversal questions
+  (ancestors, paths, reachability) and would faithfully return *all* of a shared node's
+  parent edges; choosing among them requires knowing which query/pass/rule-tree block is
+  currently executing, which is dynamic state a static graph cannot hold. The contextvar
+  machinery would still be needed to pick — the graph adds nothing to the picking.
+- Evaluation is lazy, streaming, top-down recursion over `_children_` with
+  short-circuiting and per-pass state. Mirroring it into a `PyDiGraph` means a build
+  step plus node-index bookkeeping per pass and a parallel mutable annotation store kept
+  in sync — which is exactly what `EvaluationContext` already is, minus a graph copy
+  nothing would query.
+- Where the questions *are* structural and post-hoc, rustworkx **is** already the
+  implementation: `QueryGraph` materializes the expression DAG for visualization and
+  satisfaction coloring. The accepted split: static/structural questions → materialized
+  rustworkx graph; dynamic/"who is asking" questions → evaluation-scoped context.
+
+What *does* deserve refactoring is the record-class sprawl itself, and that is Phase B:
+consolidate the repeated "resolve from context, else structural fallback" dance into
+reusable `EvaluationContext` accessors. `is_child_of_truth_value_operator` (added in
+#90's review round) is deliberately its first slice. Related accepted conclusion:
+`is_condition_participant` stays — its question is positional/per-edge (a bare
+`Variable` is a condition only *as* a direct child of a `TruthValueOperator`), so it can
+be neither a type property nor a construction-time node tag; its final shape is a thin
+dispatcher (explicit caller-known parent → evaluation context → structural fallback).
+
+Watch-item (recorded on `quantified-conditional-and-audit`): if Phase C's
+per-owning-query caching multiplies the records further, fold them into a single
+ownership collaborator on `EvaluationContext` rather than adding a sixth parallel class.
+
+Escape hatch: revisit a per-pass materialized view only if evaluation-time code ever
+needs *bulk* structural queries on hot paths (e.g. "all conditions in this query's
+subtree relative to a given owner"); no current call site does.
