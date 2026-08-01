@@ -1,3 +1,19 @@
+**Plan tracking (added late — see below).** This work is now tracked as
+`workflow-unification` item `sidebar-bug-fix-chips` (track `dashboards`,
+status `in_progress`, no PR yet). The manifest entry and a roadmap update were
+written *after* the implementation was already pushed, which is backwards: the
+user asked for this as a new PR in the workflow-unification plan in their first
+message, and the item should have existed before the first edit. Dashboard
+republished at the same URL after the save.
+
+**Two process failures recorded on the item.** (1) The plan item was created
+after the fact, not before. The session-start hook reported `plan: none` for this
+branch and that was read as "no plan applies" rather than "the plan named in the
+request has no item for this branch yet". (2) `check-setup.sh` was never run, so
+the plan-dashboard dependencies were found one `ModuleNotFoundError` at a time
+across two interpreters instead of in a single call. Both were discussed with the
+user; hook-level fixes proposed, not yet built.
+
 ## Branch `claude/dashboard-bugfix-pr-section-161vf8` — surface bug-fix PRs on the plan dashboard
 
 **Goal.** Make bug-fix pull requests visible in the plan dashboard's "What to
