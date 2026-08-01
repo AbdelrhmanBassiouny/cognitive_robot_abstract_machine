@@ -1,7 +1,8 @@
 ## git-identity-from-personal-notes (plan: workflow-unification, track: personal-data)
 
-Implemented and pushed as commit `ddf3d382`. **No PR opened yet** — awaiting the
-user's go-ahead. Full plan: `/root/.claude/plans/idempotent-juggling-plum.md`.
+Draft **PR #126**, commit `ddf3d382`, subscribed to its activity. No `bug` label.
+`test_claude_dev_tooling` green on first run; robotics jobs still in progress.
+Full plan: `/root/.claude/plans/idempotent-juggling-plum.md`.
 
 **Base: #121** (`claude/workflow-unification-setup-jgvs53`), not fork `main` —
 this reverses the item's recorded `depends_on: []`, now
@@ -29,6 +30,12 @@ CI directories. Live in this clone: row read `needs-setup` naming the real
 author, `save-git-identity.sh` recorded it, row went `ok`, re-run pushed
 nothing. plan.yaml + roadmap saved, dashboard republished.
 
-**Next:** open the draft PR when told to (`bug` label: recommended *no* —
-nothing is defective). Other unconfirmed recommendation now built in:
-`needs-setup` as the no-identity-recorded status.
+**Watch item:** #126 is based on #121, not `main`. If #121 lands by push or
+fast-forward rather than through its own PR, GitHub will *not* retarget #126 —
+round-2 of native-stacks-prototype established that only `merge-async` does.
+Neither is a native stack member, so a plain `PATCH` of the base is the
+recovery. If #121 merges normally, rebase #126 onto `main`.
+
+**Next:** respond to review comments and CI events as they arrive (no timed
+check-in). Unconfirmed recommendation now built in: `needs-setup` as the
+no-identity-recorded status.
