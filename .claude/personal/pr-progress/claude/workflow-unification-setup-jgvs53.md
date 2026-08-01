@@ -25,10 +25,15 @@ notes-but-no-plans from plans-in-use.
   `resolve-personal-notes-config.sh`, which already owns that path.
 - Fixed a latent crash TDD exposed: a plan with no `tracking_issue` made `grep` exit 1,
   which `pipefail` + `set -e` turned into the hook dying with no output at all.
-- First tests `session-start.sh` has ever had: 9, TDD, 6 failing before the change.
+- First tests `session-start.sh` has ever had: 11, TDD, all failing before their change.
   `ScratchRepository` gained `run_hook_script` and `write_setup_prerequisites` (the
   fully-set-up layout `test_check_setup_sh.py` previously built inline).
-- 231 tests green across both CI directories (was 222). Verified live in this clone:
+- Second commit, from the user's point that notes-only work needs no plan item: the
+  default branch, the notes branch and a detached HEAD now report `not applicable`
+  rather than prompting. Verified against a real `main` worktree before and after.
+  `branch_can_hold_plan_item` is deliberately a separate copy of `pr_progress_path`'s
+  three cases, since the two are already known to diverge.
+- 233 tests green across both CI directories (was 222). Verified live in this clone:
   the plan line moved from the ambiguity message to `'workflow-unification'` once
   `save-plan.sh` recorded the item, and `setup:` reads `ok`.
 - Manifest + roadmap updated and saved; structural change recorded on issue #102;
@@ -48,4 +53,12 @@ notes-but-no-plans from plans-in-use.
 - Recorded from this session but *not* part of #121:
   `git-identity-from-personal-notes` (`personal-data`, no dependencies). The assistant
   git identity turns out to be the container's global config, so it is the default
-  rather than a slip — hence an item. Not started; no branch.
+  rather than a slip — hence an item. Another session has since picked it up on
+  `claude/workflow-unification-git-identity-ppzcyh`; do not touch it from here.
+- The user set `GIT_AUTHOR_*`/`GIT_COMMITTER_*` at the environment level mid-session, so
+  this branch's two commits carry different author emails (`bido.bassuny@gmail.com` from
+  the repo-local config on the first, `abassiou@uni-bremen.de` from the env vars on the
+  second). Both are the user's; left alone rather than force-pushing to unify.
+- Left for `plan-item-edit-guard`, not fixed in #121: a branch whose pull request targets
+  the notes branch should also be exempt from the plan prompt. Needs the fixture refactor
+  described in that item's notes.
