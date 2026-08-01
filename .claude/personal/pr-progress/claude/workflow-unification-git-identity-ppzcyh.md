@@ -1,8 +1,20 @@
 ## git-identity-from-personal-notes (plan: workflow-unification, track: personal-data)
 
 Draft **PR #126**, commit `ddf3d382`, subscribed to its activity. No `bug` label.
-`test_claude_dev_tooling` green on first run; robotics jobs still in progress.
-Full plan: `/root/.claude/plans/idempotent-juggling-plum.md`.
+`test_claude_dev_tooling` green. Full plan:
+`/root/.claude/plans/idempotent-juggling-plum.md`.
+
+**CI red, not mine — diagnosed and answered on the PR, no fix pushed.**
+`test_each_lib (semantic_digital_twin)` fails two `test_multi_sim.py`
+material-builder tests (`assert '' != ''`) identically on the base #121 and on
+both #126 runs — constant, so reproducible rather than flaky, and pre-existing.
+One #126 run additionally hit `test_world_sim_state_sync` (the known
+physics-settling flake; failed in one of two runs of the same commit). This
+diff is 11 files under `.claude/hooks/`, zero mention of
+`semantic_digital_twin`. Worth someone's attention separately: `main`'s own run
+at `82501888` passes this job, so the material failures may be specific to the
+`refs/pull/*/merge` environment or the restored asset cache — hypothesis only,
+not investigated.
 
 **Base: #121** (`claude/workflow-unification-setup-jgvs53`), not fork `main` —
 this reverses the item's recorded `depends_on: []`, now
