@@ -44,11 +44,22 @@ items:
     track: leak-fixes
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_01EnQyPLtnuwLdmQ5RvmwZtg
+    session: https://claude.ai/code/session_01Aa2WZP5URWHoQDTpL34m9L
     notes: >
       bug label; open draft, mergeable clean. Adds TruthValueOperatorChildren
       to EvaluationContext (per-pass parent) - the exact latent bug flagged
-      during this plan's design as the TDD seed.
+      during this plan's design as the TDD seed. 2026-08-01 review round
+      handled (commit 58671190): new EvaluationContext.
+      is_child_of_truth_value_operator accessor (first slice of Wave 1
+      Phase B), redundant participant check dropped from construct_graph
+      (membership in satisfied_condition_ids already implies it), sentinel
+      removed, abbreviations fixed. 5/8 threads resolved; 3 judgment threads
+      left open with justifications. In-session discussion concluded: keep
+      is_condition_participant (2 needed call sites); no rustworkx for
+      evaluation-time tracking - the bugs are ownership bugs, not traversal
+      bugs; Phase B consolidation is the right refactor. Warning: PR #92
+      merges this branch and touches query_graph.py - it must re-merge tip
+      58671190 (construct_graph parent-param revert may conflict).
 
   - id: pr-89-drop-dead-parent-recovery
     title: "Drop the dead _last_parent_of_type_ conditions-root recovery"
