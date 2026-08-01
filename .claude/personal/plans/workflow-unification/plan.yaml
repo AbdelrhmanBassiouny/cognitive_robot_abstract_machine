@@ -583,3 +583,27 @@ items:
       not yet carry (base, title, body) plus pr-data-fetching.md's minimum field set updated
       to match; mergeable and the check rollup come from PR 3 as-is. Sequence before
       dev-tooling-python-package, which moves build_dashboard.py wholesale.
+
+  - id: sidebar-bug-fix-chips
+    branch: claude/dashboard-bugfix-pr-section-161vf8
+    title: "Mark bug-fix pull requests with a chip in the dashboard sidebar"
+    track: dashboards
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01UkRVjgoWouwbndZa1siY29
+    notes: >
+      Started 2026-08-01 to surface bug-fix pull requests in the plan dashboard's "What
+      to do next" sidebar. First attempt was a separate top "Bug fixes" group with a red
+      outline; the user rejected it on the grounds that the sidebar groups by action and
+      being a bug fix is not one - such items already sit in ready-to-start,
+      blocker-may-be-cleared or ready-to-review - and that a fifth outline would collide
+      with the existing per-group outlines, which are not mutually exclusive with it. It
+      is therefore an attribute, rendered as a small bug chip on the entry wherever the
+      item already appears, never moving an item between groups. Adds Item.is_bug_fix
+      (filled from the pull request's bug label via a new _pull_request_record_of lookup),
+      which gives the already-defined but unused PullRequestLabel.BUG its first consumer,
+      and collapses the four near-identical sidebar group blocks into one next_step_group
+      Jinja macro so the chip has a single home. Independent of the #101 chain, based on
+      fork main; build_dashboard.py overlap with #103/#105/#111/#119 is the usual
+      whichever-lands-second-merges pattern for this track. Committed and pushed with 200
+      tests passing; no pull request opened yet.

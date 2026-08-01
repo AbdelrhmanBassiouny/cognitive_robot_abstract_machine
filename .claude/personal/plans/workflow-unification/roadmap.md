@@ -1022,3 +1022,50 @@ deletion by `routine-cutover` and the overlap is a duplicate link, not a wrong o
 Before `dev-tooling-python-package`, which moves `build_dashboard.py` wholesale, and after #111.
 Textual overlap in `build_dashboard.py` with #103, #105, #111 and #119 is the established
 whichever-lands-second-merges pattern for this track.
+
+## Update 2026-08-01 (new item): bug-fix chips in the dashboard sidebar
+
+A new `dashboards` item, `sidebar-bug-fix-chips`, on branch
+`claude/dashboard-bugfix-pr-section-161vf8`.
+
+### The design reversal that defines it
+
+The request was to surface bug-fixing pull requests in the sidebar, and the first
+implementation read that as a new top group — "Bug fixes", listed first, outlined in red.
+The user rejected that framing outright: *the sidebar is about actions, and being a bug fix
+is not an action classification*. Every such item already belongs to ready-to-start,
+blocker-may-be-cleared or ready-to-review, so a fifth group can only be built by taking
+items out of the group that describes what to actually do with them. The red outline was
+rejected for a second, independent reason: the existing group outlines are not mutually
+exclusive with bug-ness, so a bug outline would compete with them for the same visual
+channel rather than adding to it.
+
+What survives is an attribute, not a category: `Item.is_bug_fix`, rendered as a small `bug`
+chip on the entry *wherever it already is*. Two regression tests pin exactly that — a
+bug-labelled item stays in its ordinary action group, and a non-bug entry gets no chip.
+
+This is worth recording because `ready-to-promote-upstream-links` (the item added earlier
+the same day) *does* add a fifth sidebar group, and correctly so: "ready to promote" names
+something the user does. The distinction the two items draw together is the rule for
+anything added to this sidebar later — a group must name an action; anything else is a chip.
+
+### Incidental cleanup
+
+The four sidebar group blocks were near-identical copies of the same markup, which is what
+made "add a fifth" look cheap in the first place. They are now one `next_step_group` Jinja
+macro whose `{% call %}` body supplies the reason line, so the per-item drift reason and the
+three fixed reasons share one code path.
+
+### Process failure recorded on this item
+
+The item was created *after* the implementation was written, pushed, and reviewed — not
+before, as this plan's own conventions require. It was also implemented without running
+`check-setup.sh` first, so the plan-dashboard dependencies were discovered missing one
+`ModuleNotFoundError` at a time across two interpreters instead of in one call. Both are
+the same root cause: session-start scaffolding was treated as sufficient context to start
+work from. See the conventions discussion this update was written alongside.
+
+### Ordering
+
+Independent, off fork main, no `depends_on`. `build_dashboard.py` overlap with #103, #105,
+#111 and #119 is the established whichever-lands-second-merges pattern for this track.
