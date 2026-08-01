@@ -1,0 +1,55 @@
+# PR #123 — ready-for-review ends a session's job
+
+Personal-notes-only change: `.claude/personal/cram-notes.md`, PR based on and
+targeting `claude/personal-notes`. No plan item (never reaches `main`, no code),
+no manifest edit, no dashboard republish.
+
+## Plan
+
+1. Generalise `## When your branch merges or closes` → `## When your PR's job
+   ends`, covering merged / closed / user-marked-ready with the one existing
+   teardown checklist rather than a second copy. — done
+2. Widen the teardown from "subscriptions held solely for that branch's sake" to
+   everything subscribed on the finished PR's behalf (tracking issue, dependency
+   or parent PR, upstream mirror), plus: if it was the session's only work, the
+   turn ends with nothing subscribed and nothing armed. — done
+3. Two carve-outs in `## Pull requests` so it no longer contradicts the above
+   (always-re-draft, always-subscribe). — done
+4. Commit as the user, push, open as draft with the session link, subscribe. — done
+
+## Decisions settled with the user
+
+- Only a draft→ready flip **the user made** is terminal. A session marking its own
+  PR ready — on instruction, or self-undrafting to unblock dependents as on #106 —
+  is not the signal and keeps working.
+- On the signal: report loose ends (red CI, conflict, unresolved thread) in the
+  chat, then tear down anyway. Do not stay to fix them.
+- Scope is personal notes only — `main`'s `starter-notes.md` and the plan skills
+  stay untouched.
+- No plan item, per the user's revision to the approved plan.
+
+## State
+
+Draft PR #123 open, 1 file, +30/−10.
+
+CI is red and stays red. `claude/personal-notes` carries a stale snapshot of the
+source tree — merge-base with `main` is `9703a398`, and 1199 files differ — so the
+full robotics matrix runs against months-old source. `Examples and Demos` was green
+on `main` at `82501888` and fails here on `semantic_digital_twin` circular imports
+(`test_each_lib (coraplex/demos/coraplex_real_tracy/test_demo.py)`), which a
+markdown-only diff cannot touch. Inherent to every PR targeting this branch, not to
+this one. Not chased, and deliberately not "fixed" by merging `main` into the notes
+branch — that would be a large unrelated change to the user's branch.
+
+## Environment note for a future session
+
+`.claude/hooks/` does not exist on `claude/personal-notes`, so checking a PR branch
+based on it out in the primary worktree deletes the tooling that saves this file.
+Work in a second worktree, and move the primary worktree's HEAD with
+`git symbolic-ref` (files untouched) only for as long as `save-pr-progress.sh`
+needs a branch name to key on.
+
+## Next
+
+Nothing. Awaiting the user's review. Per this PR's own rule, converting it out of
+draft ends this session's job on it: unsubscribe from #123 and stop.
