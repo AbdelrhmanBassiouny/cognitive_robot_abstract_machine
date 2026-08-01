@@ -1406,3 +1406,52 @@ repo-local identity written by the hook would be silently overridden by these en
 anyway, so on this environment the hook can only ever be a no-op — its real value is the *other*
 populations (another contributor's clone, an environment without the variables set), which is what
 the item already says, just now with the overlap made concrete.
+
+## Update 2026-08-01 (gap closed): notes-only work needs no plan item
+
+Raised by the user after #121 was already open, and it exposed a real wart in what had
+just shipped: *"some situations happen where I am a personal notes user and a plan user,
+and there's work that will just be directly a modification on my personal notes and will
+not be merged upstream or be done off main. For these cases, there's no need for the item
+to be part of a plan."*
+
+Verified rather than reasoned about, by running the new hook against a `main` worktree:
+
+```
+PR progress:  not applicable (no current PR on this branch)
+plan:         no item tracks branch 'main' (5 plan(s) tracked) - ... add its item before starting
+```
+
+`main` can never be a plan item's branch, and **the line directly above already knew
+that** — `pr_progress_path` has always excluded the default branch, the personal-notes
+branch and a detached HEAD. The new plan line simply ignored an exclusion its own
+neighbour had been applying for exactly the same reason. Those three now report
+`not applicable`; an index entry naming the branch still wins over the check, so a
+genuinely tracked branch is unaffected.
+
+**The two predicates are deliberately not shared**, despite listing identical cases today.
+They answer different questions and are already known to diverge: a branch whose pull
+request *targets the notes branch* still wants its progress tracked, but still never wants
+a plan item. Sharing them now would have to be undone the moment that case is handled.
+
+### The case left open, and why it isn't in #121
+
+The user's follow-up — *"what if someone (a session for example) makes a PR that targets
+the notes branch? this as well should not have a plan item"* — is correct and is **not**
+covered by the three branch names. It is recorded on `plan-item-edit-guard` instead of
+being fixed here, for a concrete reason worth remembering: the obvious local test, "the
+notes branch tip is an ancestor of HEAD", collides with the hook tests' own fixture, which
+creates its work branch *off* the notes branch (`publish_notes_branch`). Adopting that test
+without first re-basing the fixture on the initial commit would have failed every existing
+plan-line test and, worse, encoded an unrealistic branch topology as the reference. That is
+a fixture refactor in a file #115 also edits, so it belongs with the item that needs the
+mechanism rather than bolted onto this one.
+
+### What this settles for the guard
+
+`plan-item-edit-guard` now carries two mechanical exemptions rather than opt-outs: it fires
+only for files tracked in the working tree (so notes-only work is exempt for free —
+`CLAUDE.local.md` is gitignored, and notes and plan data are written from scratch paths by
+the `save-*.sh` scripts), and a notes-targeting pull request is exempt once (b) has a
+mechanism. The per-branch opt-out survives, but its only remaining job is genuine no-plan
+*code* work — a much narrower and more defensible role than "anything the guard gets wrong".

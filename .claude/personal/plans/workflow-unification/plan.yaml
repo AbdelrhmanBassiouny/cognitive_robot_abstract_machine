@@ -663,7 +663,7 @@ items:
       no new setting at all: everything added sits after the existing
       `fetch_personal_notes_branch || exit 0`, and within the group that does use the branch,
       whether the generated branch index exists separates notes-but-no-plans from plans-in-use.
-      Delivered: four distinct plan-line outcomes (including an index entry whose manifest has
+      Delivered: five distinct plan-line outcomes (including an index entry whose manifest has
       gone missing, previously indistinguishable from having no plan); a setup line carrying
       check-setup.sh's needs-setup rows, run after CLAUDE.local.md is written so its
       claude_local_md check sees this run's output, and captured with `|| true` so a setup gap
@@ -679,6 +679,17 @@ items:
       scratch_repository.py is the usual whichever-lands-second pattern; the new
       fixtures/plan-with-tracking-issue.yaml is byte-identical to #115's so the two cannot
       conflict on it.
+      Extended 2026-08-01 after the user raised the case the first pass missed: someone who
+      uses both plans and personal notes still does work that is purely a notes edit, never
+      merged upstream and never off main, which needs no plan item at all. The prompt was
+      firing on the default branch, the notes branch and a detached HEAD - none of which a
+      plan item can ever track - so those three now report "not applicable", exactly as the
+      PR-progress line directly above them already did via pr_progress_path. The two
+      predicates are kept as separate copies of the same three cases rather than shared,
+      because they are expected to diverge: see plan-item-edit-guard for the notes-targeting
+      pull request, which still wants PR progress but never wants a plan item. An index entry
+      naming the branch still wins over the whole check, so a tracked branch is unaffected.
+      Two TDD tests, 233 green (was 231).
 
   - id: plan-item-edit-guard
     branch: null
@@ -703,6 +714,20 @@ items:
       this repo inherits the hook, and one that blocked their edits would be indefensible
       upstream. Needs a per-branch opt-out for a branch that genuinely belongs to no plan.
       Depends on #121 for the discriminator helpers it builds on.
+      Scope settled 2026-08-01, from the user's point that plans-and-notes users still do work
+      that is purely a personal-notes edit and needs no item. Two exemptions, both mechanical
+      rather than opt-outs: (a) the guard fires only for files tracked in the working tree, so
+      notes-only work is exempt for free - CLAUDE.local.md is gitignored, and plan and notes
+      data live on the notes branch, written by the save-*.sh scripts from scratch paths
+      outside the repo; and (b) a branch whose pull request targets the notes branch is
+      exempt, since it carries notes data rather than code bound for the default branch.
+      (b) has no mechanism yet and is this item's own work: the branch names #121 excludes do
+      not cover it, and the obvious local test - the notes branch tip being an ancestor of
+      HEAD - collides with the hook tests' scratch fixture, which builds its work branch off
+      the notes branch. Either the fixture branches from the initial commit instead, or the
+      test reads the pull request base. #121's plan line has the same residual gap and should
+      follow whatever mechanism this item settles on. The per-branch opt-out remains, but only
+      for genuine no-plan *code* work, which is now the sole case it has to cover.
 
   - id: git-identity-from-personal-notes
     branch: null
