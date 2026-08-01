@@ -1,7 +1,10 @@
 ## PR #90 — is_condition_participant structural-_parent_ bug (entity-query-parent-props-w789od)
 
 Branch `claude/entity-query-parent-props-w789od`, off `main`, PR #90 (draft, `bug`
-label, subscribed to all activity, 1h check-in scheduled).
+label). Not currently event-subscribed: the original session's subscription died with
+it, and this session's re-subscribe attempts were denied/failed. No check-ins armed
+(the old 1h one fired and self-disabled; scheduled checks are banned per personal
+notes anyway).
 
 Origin: user asked whether EQL's structural `_parent_`/`_parent__` fields on
 `SymbolicExpression` make sense given the expression graph is a documented DAG (nodes can
@@ -58,5 +61,46 @@ whether this fully eliminates `_parent_`/`_parent__` as structural fields, or wh
 remain load-bearing elsewhere (construction-time wiring) and only the *read-for-
 classification* usage was the actual problem.
 
-Next: watch PR #90 CI/reviews (subscribed); no further code work planned unless review
+Review round 2026-08-01 (handled same day by a /plan-item-resolve session, commit
+58671190 pushed): 8 review threads + a summary asking for in-session discussion.
+Actions taken, all verified by full `test_eql` (1143 passed, 3 skipped) and
+`test_ormatic` (132 passed) in a fresh py3.12 venv (3.11 breaks on
+`make_dataclass(module=...)`), formatted via `format_docstrings.py`:
+- Added `EvaluationContext.is_child_of_truth_value_operator(expression)`;
+  `is_condition_participant` now uses it instead of reaching into the record. Unit
+  test added in `test_core/test_evaluation_context.py`.
+- Dropped the redundant `is_condition_participant` check from
+  `construct_graph.is_satisfied` (membership in `satisfied_condition_ids` already
+  implies participant-hood — the tracker's filter is the set's only producer) and
+  reverted `construct_graph`'s `parent` parameter entirely.
+- Deleted the `_PARENT_NOT_SUPPLIED` sentinel: with the construct_graph caller gone,
+  plain `Optional = None` behaves identically at every call site. The reviewer's
+  suggested `UNSET` exists only on the rdr stack (`rdr/utils.py` on `D-core-engine`),
+  not on `main`/this branch.
+- Renamed `expr`/`expr_id` identifiers to full words; removed the `..note::`.
+- Kept the check in `_is_faded_gate` (dropping it would make every non-condition node
+  an unsatisfied gate and fade the whole graph) and kept the recording at
+  `base_expressions.py:844` (feeds the tracker path — the primary fix).
+Replied to all 8 threads with the attribution footer; resolved the 5 with concrete
+changes; left the 3 judgment threads (faded-gate necessity, usage audit, recording
+necessity) open with justifications for the developer. PR description updated; PR
+still draft.
+
+Summary discussion (held in-session, developer accepted): `is_condition_participant`
+stays — needed at exactly its two remaining functional call sites. On "would rustworkx
+traversal/queries beat the growing context-record machinery": no — the recurring bugs
+are ownership/context bugs ("who is asking"), not traversal bugs; evaluation is lazy
+streaming recursion unsuited to a materialized graph; rustworkx is already used where
+structural queries fit (QueryGraph). The genuine consolidation is dag-facade-hardening
+Wave 1 Phase B (one reusable context accessor — `is_child_of_truth_value_operator` is
+its first slice) plus Phase A rename + Phase D guard test. Watch-item recorded: if
+per-owning-query caches multiply (Phase C), consider a single ownership collaborator
+on EvaluationContext rather than parallel record classes.
+
+Downstream: PR #92 merges this branch in and touches `query_graph.py` — it must
+re-merge this branch's tip (58671190); the construct_graph revert may conflict with
+its QueryGraph memoization fix. Recorded in the plan manifest.
+
+Next: react to further review events when they arrive (no subscription — re-subscribe
+was denied; the developer will prompt); no further code work planned unless review
 raises something or the developer asks for the intra-query QueryGraph follow-up.
