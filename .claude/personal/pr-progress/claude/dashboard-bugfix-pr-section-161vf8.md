@@ -30,10 +30,13 @@ one. `ready-to-promote-upstream-links` now `depends_on` it, since its fifth
 sidebar group is one macro call after this lands and a fifth copied block
 before. Posted on tracking issue #102.
 
-**Next.** No PR opened yet — waiting on the user. When opened: draft, session
-link in the description, subscribe to activity.
+**Open as draft PR #120** (fork `main`, no `bug` label, session link in the
+description, subscribed to activity). CI had not started at open time; nothing
+to act on yet. No scheduled check-in armed, per the no-scheduled-checks rule —
+reacting to webhook events only.
 
-**Noted, not fixed.** `_compute_ready_to_review` treats a *merged* dependency as
-not-open, so an item whose dependency fully landed is excluded while one whose
-dependency is merely open is included. Visible in the committed example. Same
-family as #103; left alone to keep one root cause per PR, and raised on #102.
+**Spun out, not fixed here.** `_compute_ready_to_review` treats a *merged*
+dependency as not-open, so an item whose dependency fully landed is excluded
+while one whose dependency is merely open is included. Now its own plan item
+`ready-to-review-merged-dependency` (`not_started`), whose first step is
+confirming with the developer that it is an oversight rather than intent.
