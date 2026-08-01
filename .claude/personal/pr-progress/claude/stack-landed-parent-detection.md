@@ -87,6 +87,24 @@ on main. "Revise this and all related parts."
 - Tracked as `landed-parent-detection` on the workflow-unification plan; roadmap
   addendum written; dashboard republished (17 items).
 
+**Review round 1 (2026-08-01) - both threads replied to and resolved (a672c146)**
+- `Config` is an abbreviation -> `Configuration`, plus every identifier named after it
+  (`load_configuration`, `CONFIGURATION_PATH`, `PERSONAL_STACK_CONFIGURATION_PATH`,
+  `_personal_configuration_overrides`, `Stack.configuration`, the test helpers).
+  Deliberately untouched: `_git("config", ...)` (git's subcommand) and the
+  `resolve-personal-notes-config.sh` / `stack.toml` filenames.
+- "Remove any explicit mentions of historical examples" - read as file-wide, so all
+  three went: `PR #41` (mine), `origin/eql-core-prep`, and the `rdr-engine`/`#29`
+  false-merge anecdote. The last two are #106's; offered to peel them back out if the
+  user would rather fix them there.
+- Flagged on the PR: #110 adds a `stack.py config` subcommand, so whichever lands
+  second gets a textual conflict in the dispatch table / around `load_configuration`.
+- CI: `test_each_lib (semantic_digital_twin)` red on f3080891 -
+  `test_world_sim_state_sync`, the known Mujoco settling flake (1 failed / 885 passed).
+  Same job green on #106 today, and this diff is `.claude/stack/` only, so it is
+  intermittent rather than an inherited base-branch red. Noted once on the PR per
+  convention; not chased, per the user's standing instruction from #101.
+
 **Next**
 - Resolve the base-branch situation on #41, then refresh its description (its "Stack"
   section still lists #40 as a live parent).
