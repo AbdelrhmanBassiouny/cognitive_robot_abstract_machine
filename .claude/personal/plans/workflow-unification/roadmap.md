@@ -1210,3 +1210,66 @@ three are cases of the sidebar's admission rules being written for the common ca
 falling over at an edge of the dependency lifecycle. Worth noticing that the family keeps
 producing members: the four sidebar lists are computed by four separate predicates that
 each re-derive "is this dependency far enough along" in their own words.
+
+## Update 2026-08-01 (kickoff + implementation): the session-start guards ship as #121
+
+`/plan-item-kickoff workflow-unification session-start-plan-and-setup-guards`, session
+https://claude.ai/code/session_01JSxeoePmxWoA4aETrwhFcx, which went on to implement it in the
+same session as draft pull request **#121** on `claude/workflow-unification-setup-jgvs53`
+(fork `main`, independent of the #101/#106 chain).
+
+### The question that reshaped the design
+
+The item recorded three fixes and named the first two as the recommendation. Asked which to
+build, the user chose those two but attached a requirement the item had not considered:
+*maybe the user doesn't want to have a plan or personal notes at all — how would that be
+handled?* — and, for the guard, *"only for people who want to have plans or personal notes …
+as automatic as possible and reliable and works well for both types of users"*.
+
+That requirement turned out to need **no new setting**, which is the point worth carrying
+forward. `session-start.sh` already opens with `fetch_personal_notes_branch || exit 0`, so a
+clone with no personal-notes branch has always been served total silence; everything added
+sits after that line and inherits it. Within the group that does use the branch, whether
+`_generated/branch-index.tsv` exists separates *notes but no plans* — a legitimate
+configuration that must read as quiet and accurate — from *plans in use*. Both discriminators
+are state that already exists. A configuration flag would have been the obvious design and
+the wrong one: it can be set wrongly, it needs documenting, and it asks the least invested
+user to opt out of something they never asked for.
+
+### What shipped
+
+Four distinct plan-line outcomes in place of one bare `none`, the third of which had never
+been visible at all: an index entry naming a plan whose manifest has since gone missing was
+indistinguishable from having no plan. And a `setup:` line carrying `check-setup.sh`'s
+`needs-setup` rows — run *after* `CLAUDE.local.md` is written, so its `claude_local_md` check
+reports on this run's own output rather than flagging a correctly set-up clone, and captured
+with `|| true` so a setup gap can never fail the hook. `plan_branch_index_exists` and
+`tracked_plan_count` live in `resolve-personal-notes-config.sh`, which already owns that path.
+
+### A latent crash, found only by writing the tests
+
+`session-start.sh` had no test module. Writing the first one immediately surfaced that a plan
+with **no `tracking_issue`** killed the hook outright: `grep` exits 1 when it matches nothing,
+`pipefail` propagates that, and `set -e` ends the script with no output whatsoever — no notes,
+no progress, no summary, no error. Every plan this fork tracks sets `tracking_issue`, which is
+the only reason it had never been seen. This is the same shape as the `default_repository`
+grep bug `plan-updates-since-helper` caught on #115, in the same family of scripts, within
+days — the pattern is `set -o pipefail` plus a `grep` used as a test rather than a filter, and
+it is worth grepping the remaining hooks for it rather than waiting for the third instance.
+
+### The third fix became its own item
+
+`plan-item-edit-guard` (`personal-data`, depends on this item). The user settled its semantics
+while agreeing the split: block until resolved rather than a one-shot speed bump, active only
+for someone who uses plans or personal notes, inert for everyone else. Inertness is a hard
+constraint, not a preference — `.claude/settings.json` is committed, so every contributor who
+inherits this repo inherits the hook, and one that blocked their edits would be indefensible
+upstream. It should reuse #121's state-derived discriminator rather than introduce a setting,
+for the same reason above.
+
+Also worth recording from this session: the git identity configured in a fresh cloud clone is
+`Claude <noreply@anthropic.com>` — precisely what AGENTS.md's Version Control rule forbids, and
+the same authorship this roadmap already flags twice as a standing hazard on #101 and the P3
+branch. It is the *default*, so it is not a one-off slip that happened to land; every session
+that commits without setting the identity first reproduces it. Set `user.name`/`user.email`
+before the first commit of any session.

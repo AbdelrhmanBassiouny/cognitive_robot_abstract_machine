@@ -627,11 +627,13 @@ items:
       draft pull request #120 on 2026-08-01, no bug label, subscribed to its activity.
 
   - id: session-start-plan-and-setup-guards
-    branch: null
+    branch: claude/workflow-unification-setup-jgvs53
     title: "Make the plan-item and setup steps impossible for a session to skip"
+    pull_request_number: 121
     track: personal-data
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01JSxeoePmxWoA4aETrwhFcx
     notes: >
       Recorded 2026-08-01 from two process failures in the sidebar-bug-fix-chips session,
       both of which the conventions already forbade in prose and neither of which anything
@@ -653,6 +655,54 @@ items:
       failure but rests on the same judgment that missed it, and would not have caught the
       second at all. Deliberately left unimplemented here - the user is assigning it to its
       own session.
+      Kicked off 2026-08-01 via /plan-item-kickoff and implemented the same session as draft
+      PR #121, based on fork main and independent of the #101/#106 chain. Scope settled with
+      the user at kickoff: fixes 1 and 2 only, with the third split out as
+      plan-item-edit-guard below. The user's own framing reshaped both - a clone whose owner
+      wants neither plans nor personal notes must see none of this - which turned out to need
+      no new setting at all: everything added sits after the existing
+      `fetch_personal_notes_branch || exit 0`, and within the group that does use the branch,
+      whether the generated branch index exists separates notes-but-no-plans from plans-in-use.
+      Delivered: four distinct plan-line outcomes (including an index entry whose manifest has
+      gone missing, previously indistinguishable from having no plan); a setup line carrying
+      check-setup.sh's needs-setup rows, run after CLAUDE.local.md is written so its
+      claude_local_md check sees this run's output, and captured with `|| true` so a setup gap
+      can never fail the hook; plan_branch_index_exists/tracked_plan_count in
+      resolve-personal-notes-config.sh, which owns that path; and the first tests
+      session-start.sh has ever had (9, TDD, 6 failing first). 231 tests green across both CI
+      directories, was 222. One latent crash found by writing them and fixed here: a plan with
+      no tracking_issue made grep exit 1, which pipefail and set -e turned into the hook dying
+      with no output at all - only plans that set tracking_issue, as this one does, ever
+      escaped it. ScratchRepository gained run_hook_script and write_setup_prerequisites, the
+      fully-set-up layout test_check_setup_sh.py previously built inline. Textual overlap with
+      #109 and #115 in the same summary block, resolve-personal-notes-config.sh and
+      scratch_repository.py is the usual whichever-lands-second pattern; the new
+      fixtures/plan-with-tracking-issue.yaml is byte-identical to #115's so the two cannot
+      conflict on it.
+
+  - id: plan-item-edit-guard
+    branch: null
+    title: "PreToolUse guard: refuse source edits from a branch with no plan item"
+    track: personal-data
+    depends_on: [session-start-plan-and-setup-guards]
+    status: not_started
+    notes: >
+      Split out of session-start-plan-and-setup-guards on 2026-08-01, at kickoff, as the third
+      and strongest of that item's three recorded fixes - the only one that makes the miss
+      impossible rather than merely unlikely, where the two that shipped in #121 make it
+      unlikely by reporting better. A PreToolUse hook on Edit|Write that refuses a source edit
+      from a branch no plan item tracks. Semantics settled with the user when the split was
+      agreed: block until resolved, not a one-shot speed bump - an edit is refused until either
+      an item exists for the branch or the branch is explicitly exempted - but active only for
+      someone who uses plans or personal notes, and completely inert for everyone else. The
+      discriminator should be the same state-derived one #121 established (no personal-notes
+      branch reachable, or no generated branch index on it, means silence), not a new setting,
+      since the user's requirement is that this works automatically and reliably for both kinds
+      of user with nothing to configure. Inertness is a hard constraint rather than a
+      preference: .claude/settings.json is committed, so every contributor who ever inherits
+      this repo inherits the hook, and one that blocked their edits would be indefensible
+      upstream. Needs a per-branch opt-out for a branch that genuinely belongs to no plan.
+      Depends on #121 for the discriminator helpers it builds on.
 
   - id: ready-to-review-merged-dependency
     branch: null
