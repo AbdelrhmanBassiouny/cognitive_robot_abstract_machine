@@ -1560,3 +1560,22 @@ Independent of the `#101` chain, based on fork `main`; `dashboard.html` overlap 
 `#105`, `#111`, `#119`, `#120` and `#122` is the same whichever-lands-second-merges pattern
 this track has had throughout. Opened as draft pull request `#124`, subscribed to its
 activity.
+
+### Opened as #126, and the one thing that makes a stacked base worth watching
+
+Draft pull request **#126**, based on `claude/workflow-unification-setup-jgvs53` (#121), no `bug`
+label. It is the first item in this plan whose pull request stacks on *another item's* pull request
+while sitting outside the `#101 → #106 → #107 → #110` chain, and that is worth one line of standing
+guidance rather than being rediscovered later.
+
+Neither #121 nor #126 is a member of a native GitHub stack, so the Phase-1 reparent hazard
+(`422 - Cannot change the base branch because the pull request is part of a stack`) does not apply
+here: a plain `PATCH` of the base is available as the recovery. What *does* apply is round-2 of
+`native-stacks-prototype`'s findings — a push-based merge marks a pull request merged but does
+**not** retarget its children, and only `merge-async` retargets automatically. So if #121 lands by
+push or fast-forward rather than through its own pull request, #126 keeps pointing at a branch that
+is about to disappear, and needs retargeting to `main` by hand. Cheap to fix, invisible if nobody
+looks.
+
+The reverse direction is the cheap one, and is why the base was chosen: if #121 merges normally
+first, rebasing #126 onto `main` costs nothing.

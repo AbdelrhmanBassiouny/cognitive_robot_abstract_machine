@@ -732,6 +732,7 @@ items:
   - id: git-identity-from-personal-notes
     branch: claude/workflow-unification-git-identity-ppzcyh
     title: "Stop sessions committing as an assistant identity"
+    pull_request_number: 126
     track: personal-data
     depends_on: [session-start-plan-and-setup-guards]
     status: in_progress
@@ -774,6 +775,16 @@ items:
       commits are correctly authored. And this is not an independent PR off main - it is
       based on #121, whose ScratchRepository.run_hook_script is the only harness that can
       run session-start.sh in a test, hence the depends_on above.
+      Opened as draft pull request #126 on 2026-08-01, based on
+      claude/workflow-unification-setup-jgvs53 (#121) rather than fork main, no bug label
+      (nothing is defective - this is tooling that never existed, the same call recorded
+      for #120), subscribed to its activity. This is the plan's first item whose PR is
+      stacked on another item's PR outside the #101/#106 upstream chain, so it inherits
+      that chain's one live constraint: when #121 merges, GitHub retargets this to main
+      by itself only if #121 is merged through the PR rather than by a push (round-2 of
+      native-stacks-prototype established that push-based merges mark a PR merged without
+      retargeting its children). Neither PR is a native stack member, so the Phase-1
+      reparent 422 does not apply and a plain PATCH of the base is the recovery.
 
   - id: ready-to-review-merged-dependency
     branch: claude/plan-item-kickoff-workflow-s9e8bj
