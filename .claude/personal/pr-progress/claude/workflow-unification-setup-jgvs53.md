@@ -36,12 +36,16 @@ notes-but-no-plans from plans-in-use.
 
 ## Next
 
-- Wait for review on #121. No `bug` label — it changes process guardrails rather than
-  fixing a defect, though it carries the `tracking_issue` crash fix; offered to add the
-  label if the user would rather it counted as a bug fix.
+- Wait for review on #121. `bug` label applied at the user's request (it carries the
+  `tracking_issue` crash fix); the description's "no bug label" paragraph was rewritten
+  to match rather than left contradicting the label.
 - Expect a textual merge with #109 and #115 in the summary block,
   `resolve-personal-notes-config.sh` and `scratch_repository.py` — no `depends_on`
   either way, whichever lands second resolves it.
 - Possible follow-up flagged on #102, not an item yet: grep the remaining hooks for
   `set -o pipefail` plus a `grep` used as a test rather than a filter. Two instances
   now (this one and #115's `default_repository` grep).
+- Recorded from this session but *not* part of #121:
+  `git-identity-from-personal-notes` (`personal-data`, no dependencies). The assistant
+  git identity turns out to be the container's global config, so it is the default
+  rather than a slip — hence an item. Not started; no branch.
