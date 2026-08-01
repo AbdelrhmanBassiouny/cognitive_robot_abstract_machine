@@ -587,6 +587,7 @@ items:
   - id: sidebar-bug-fix-chips
     branch: claude/dashboard-bugfix-pr-section-161vf8
     title: "Mark bug-fix pull requests with a chip in the dashboard sidebar"
+    pull_request_number: 120
     track: dashboards
     depends_on: []
     status: in_progress
@@ -622,8 +623,8 @@ items:
       is downstream, recorded as a depends_on on ready-to-promote-upstream-links: that
       item adds a fifth sidebar group, which is one next_step_group call once this macro
       has landed and a fifth copy of the markup if it has not. Also sequence before
-      dev-tooling-python-package, which moves build_dashboard.py wholesale. No pull
-      request opened yet.
+      dev-tooling-python-package, which moves build_dashboard.py wholesale. Opened as
+      draft pull request #120 on 2026-08-01, no bug label, subscribed to its activity.
 
   - id: session-start-plan-and-setup-guards
     branch: null
@@ -652,3 +653,35 @@ items:
       failure but rests on the same judgment that missed it, and would not have caught the
       second at all. Deliberately left unimplemented here - the user is assigning it to its
       own session.
+
+  - id: ready-to-review-merged-dependency
+    branch: null
+    title: "Ready-to-review drops items whose dependency has already merged"
+    track: dashboards
+    depends_on: []
+    status: not_started
+    notes: >
+      Found 2026-08-01 while working sidebar-bug-fix-chips, and deliberately left out of
+      that pull request to keep one root cause per bug fix. _compute_ready_to_review admits
+      an item only when every dependency satisfies has_open_pull_request, which is
+      LiveState.OPEN_DRAFT or OPEN_READY - and therefore false once that dependency has
+      merged. The result inverts the intent: an item whose dependency merely has an open
+      draft is listed, while one whose dependency has fully landed is not, so a dependency
+      becoming more finished makes its dependent look less reviewable. Visible in the
+      committed example, where retry-circuit-breaker never reaches the list because
+      retry-backoff-strategy is merged. The method's own docstring argues the rule exists
+      because "reviewing a stacked pull request before its base even has one open yet is
+      premature", a rationale a merged base satisfies completely, which is why this reads
+      as an oversight rather than intent - has_open_pull_request was used as the proxy for
+      "the base exists and is far enough along" and happens to be false at the far end.
+      Confirm that reading with the developer before changing anything, per AGENTS.md's
+      rule against inventing a reason for existing behaviour. If confirmed: a dependency
+      with no pull request at all must keep excluding its dependent (the base genuinely
+      does not exist yet), so the fix is to admit the settled states too - the plainest
+      spelling is has_open_pull_request or is_effectively_done(), and Item already carries
+      is_ready_to_unblock_dependents() with almost exactly this meaning, which may be the
+      right shared predicate. TDD as usual: a failing test pinning that a merged dependency
+      leaves its dependent in the list, before the fix. Same family as #103 and #105 (both
+      merged) and, like them, an independent bug-fix pull request off fork main carrying
+      the bug label; build_dashboard.py overlap with #111, #119 and #120 is the usual
+      whichever-lands-second-merges pattern for this track.

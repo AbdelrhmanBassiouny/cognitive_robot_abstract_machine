@@ -1174,3 +1174,39 @@ first failure, but it rests on the same judgment that missed it and runs nothing
 would not have caught the second at all. The distinction worth keeping is that conventions
 in `cram-notes.md` are read by a session that has already decided what it is doing, while
 hooks run before it decides.
+
+## Update 2026-08-01 (spun out): the ready-to-review merged-dependency bug gets its own item
+
+`sidebar-bug-fix-chips` was opened as draft pull request **#120** (fork `main`, no `bug`
+label, subscribed). The oddity its session recorded but refused to bundle in is now
+`ready-to-review-merged-dependency` in the `dashboards` track.
+
+**The bug.** `_compute_ready_to_review` admits an item only when every dependency satisfies
+`has_open_pull_request` — `OPEN_DRAFT` or `OPEN_READY`, and therefore *false* once that
+dependency merges. So the rule inverts at the far end: a dependency with a rough open draft
+lets its dependent through, and the same dependency, fully landed, keeps it out. The more
+finished the base, the less reviewable the thing on top of it looks.
+
+**Why it reads as an oversight rather than intent.** The method's own docstring gives the
+rationale as *"reviewing a stacked pull request before its base even has one open yet is
+premature"* — a condition a merged base satisfies more completely than any open one.
+`has_open_pull_request` was evidently reached for as the proxy for "the base exists and is
+far enough along to build on", and it simply happens to be false at the settled end of the
+range. That is a guess about intent, though, so the item's first step is to confirm it with
+the developer rather than to patch it — AGENTS.md is explicit that an unexplained decision
+gets a question, not an invented reason.
+
+**The shape of the fix, if confirmed.** A dependency with *no* pull request at all must keep
+excluding its dependent — there the base really does not exist yet, and that half of the
+rule is right. So only the settled states need adding. `Item` already carries
+`is_ready_to_unblock_dependents()` (done, merged, or open-and-ready), which is nearly this
+predicate under a different name, so the fix may be a consolidation rather than an extra
+clause.
+
+**Why it was not folded into #120.** Different root cause, and this plan's own convention
+keeps a bug-fix pull request to one. It is the third member of the same family as #103
+(ready-to-start dropping dependency-free items) and #105 (unmet dependency chips) — all
+three are cases of the sidebar's admission rules being written for the common case and
+falling over at an edge of the dependency lifecycle. Worth noticing that the family keeps
+producing members: the four sidebar lists are computed by four separate predicates that
+each re-derive "is this dependency far enough along" in their own words.
