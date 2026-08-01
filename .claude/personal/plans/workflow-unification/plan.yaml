@@ -730,11 +730,12 @@ items:
       for genuine no-plan *code* work, which is now the sole case it has to cover.
 
   - id: git-identity-from-personal-notes
-    branch: null
+    branch: claude/workflow-unification-git-identity-ppzcyh
     title: "Stop sessions committing as an assistant identity"
     track: personal-data
-    depends_on: []
-    status: not_started
+    depends_on: [session-start-plan-and-setup-guards]
+    status: in_progress
+    session: https://claude.ai/code/session_011qPaY1qP7B8hhGQauH4k61
     notes: >
       Recorded 2026-08-01 while working session-start-plan-and-setup-guards, after that
       session found its own clone configured to commit as "Claude
@@ -766,6 +767,13 @@ items:
       variables remain available as the immediate stopgap. Small independent PR off fork
       main, like #109 and #115; textual overlap in session-start.sh and check-setup.sh
       with the usual whichever-lands-second treatment.
+      Superseded 2026-08-01 on implementation, both points corrected in the roadmap: the
+      environment variables are *set* in the session environment this was recorded from,
+      not unset, so the check resolves authorship with `git var GIT_AUTHOR_IDENT` rather
+      than `git config --get user.name`, which reports the assistant on a clone whose
+      commits are correctly authored. And this is not an independent PR off main - it is
+      based on #121, whose ScratchRepository.run_hook_script is the only harness that can
+      run session-start.sh in a test, hence the depends_on above.
 
   - id: ready-to-review-merged-dependency
     branch: claude/plan-item-kickoff-workflow-s9e8bj

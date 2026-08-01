@@ -1455,3 +1455,80 @@ only for files tracked in the working tree (so notes-only work is exempt for fre
 the `save-*.sh` scripts), and a notes-targeting pull request is exempt once (b) has a
 mechanism. The per-branch opt-out survives, but its only remaining job is genuine no-plan
 *code* work — a much narrower and more defensible role than "anything the guard gets wrong".
+
+## Update 2026-08-01 (kickoff + implementation): the git identity sync ships off #121
+
+`git-identity-from-personal-notes` was kicked off and implemented in the same session. Two
+things the item recorded turned out to be wrong at implementation time; both are corrected
+in its `notes`, and both changed the design rather than just the prose.
+
+### The environment variables, confirmed a second time
+
+The container check the `#122` session recorded above (*"Correction to the git-identity
+hazard"*) reproduced exactly: global config still `Claude <noreply@anthropic.com>`,
+`GIT_AUTHOR_*`/`GIT_COMMITTER_*` set to `Abdelrhman Bassiouny <abassiou@uni-bremen.de>`, and
+an empty commit in a scratch repository authored correctly — reverting to `Claude` the moment
+those four variables are stripped. This clone differed in one respect from that session's:
+**no repository-local identity at all**, so precedence ran straight from the environment to
+the global fallback.
+
+The consequence that section did not draw is the load-bearing one for the check. Because the
+variables outrank config, `git config --get user.name` prints `Claude` *on a clone whose every
+commit is correctly authored*. A check built on it would report the assistant identity as the
+problem on exactly the clones that don't have one — the single wrong answer a check about
+commit authorship must never give. So `effective_git_identity` resolves through
+`git var GIT_AUTHOR_IDENT`, which applies git's real precedence, and `check-setup.sh` compares
+*that* against what the notes branch records.
+
+That also answers the "the hook can only ever be a no-op on this environment" point above.
+It is true, and it is why the check matters more than the write here: on an environment with
+the variables set, the `git_identity` row is what makes the override visible, naming
+`GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL` as the reason a correct-looking config still isn't what
+commits carry. The write half is for the populations without them.
+
+### Not an independent PR off main after all
+
+The item says *"small independent PR off fork main, like #109 and #115"*, `depends_on: []`.
+Checked against the live branches, neither held:
+
+- **#109 is not a viable base at all** — `mergeable_state: dirty`, labelled `needs-resolution`,
+  based on the superseded `0fd14357`. The item offered folding the identity into its
+  `settings.local.json` sync; that would have blocked this on a stalled PR, so it gets its own
+  `.claude/personal/git-identity` instead.
+- **#121 carries the only harness that can test this.** On `main`, *nothing* runs
+  `session-start.sh` in a test. #121 adds `ScratchRepository.run_hook_script` and
+  `write_setup_prerequisites`, and `test_session_start_sh.py` alongside them.
+
+Basing off `main` would have meant hand-rolling a `run_hook_script` equivalent *in the same
+file* #121 adds one to — not the textual overlap the whichever-lands-second convention covers,
+but duplicated infrastructure that collides. The asymmetry settled it: if #121 lands first,
+rebasing onto `main` costs nothing, whereas a parallel harness is thrown-away work either way.
+So `depends_on: [session-start-plan-and-setup-guards]`, and the sibling items that legitimately
+based off `main` are not a precedent here — theirs overlapped on summary lines, this one needs
+a harness.
+
+Worth keeping as a general rule: *"independent PR off main"* recorded at planning time is a
+claim about the code, and it expires when a sibling PR moves the test infrastructure. Re-check
+it against the live branches at kickoff rather than inheriting it.
+
+### What shipped
+
+`.claude/personal/git-identity` on the notes branch, in git's own config format and read back
+with `git config --file` — no hand-rolled parser, and the writer is the same tool as the reader
+so the two cannot disagree. `session-start.sh` writes it into repository-local config only when
+the clone has neither `user.name` nor `user.email` of its own, before the setup check so
+`check-setup.sh` reports on what this run just did. `save-git-identity.sh` requires `--name`
+and `--email` and refuses to read them from the clone's config — in a fresh session environment
+that resolves to the assistant identity, so a guessing script would record the very thing this
+item exists to stop, silently. Same reasoning as #107's required `--remote`.
+
+One refactor came along because the tests forced it: the environment scrub moved onto
+`ScratchRepository.run_hook_script`, replacing the two hand-rolled scrubbed-subprocess blocks
+#121 left in `test_check_setup_sh.py` and `test_session_start_sh.py`, and extending it to
+`GIT_AUTHOR_*`/`GIT_COMMITTER_*`. Without that the suite would assert against whatever identity
+the runner's shell happens to carry — which, per the section above, is not empty here.
+
+54 tests pass in `.claude/hooks/tests`, was 37. Verified live in this clone beyond the suite:
+the row read `needs-setup` naming the real author while `git config --get user.name` said
+`Claude`, `save-git-identity.sh` recorded the identity, the row went `ok`, and a re-run pushed
+nothing.
