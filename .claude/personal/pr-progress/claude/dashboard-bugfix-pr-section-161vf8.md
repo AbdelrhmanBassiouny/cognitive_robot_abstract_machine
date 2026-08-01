@@ -11,26 +11,28 @@ the existing per-group outlines, which are not mutually exclusive with it. It is
 an attribute, so it renders as a small `bug` chip on the entry wherever the item
 already appears.
 
-**Done.**
+**Done — committed and pushed, all 200 plan-dashboard tests pass.**
 - Failing tests first, in a new `# %% DashboardRenderer - bug-fix marking`
   section of `tests/test_build_dashboard.py`.
 - `Item.is_bug_fix`, filled in by `DashboardRenderer._classify_items` via a new
   `_pull_request_record_of` lookup + `_is_bug_fix`. Gives the already-defined
   but previously unused `PullRequestLabel.BUG` its first real consumer.
-- `--bug` CSS variable across all four theme blocks, and the `.next-bug-chip`
-  rule.
+- The four near-identical sidebar group blocks collapsed into one
+  `next_step_group` Jinja macro, each call block supplying its own reason line
+  so the per-item drift reason and the three fixed reasons share one path.
+- `--bug` CSS variable across all four theme blocks, `.next-bug-chip` rule.
+- Docs: `SKILL.md`, `.claude/hooks/README.md`'s "labels the dashboard reads",
+  `pr-data-fetching.md`.
 
 **Next.**
-- Collapse the four near-identical sidebar `<li>` blocks into one
-  `next_step_entry(item, reason, show_review_link)` Jinja macro, so the chip has
-  a single home rather than four copies.
-- Render the chip from that macro; confirm the two "no chip"/"stays in its
-  ordinary group" regression tests still hold.
-- Update `SKILL.md` and `.claude/hooks/README.md`'s "labels the dashboard reads"
-  entry for `bug` now that it drives UI.
-- Full `plan-dashboard` suite + `scripts/format_docstrings.py` on changed Python.
+- No PR opened yet — waiting on the user. When opened: draft, `bug` label,
+  session link in the description.
+- The committed `example/` plan has no bug-labelled PR, so its screenshots stay
+  accurate and were deliberately left alone. If the walkthrough should show the
+  chip, `example/pr_data.json` needs a `bug` label and both screenshots need
+  regenerating.
 
 **Open question for the user.** They framed this as "more of a filter that we
-can apply to show only the bug-fixing ones". Shipping the chip only; an actual
+can apply to show only the bug-fixing ones". Shipped the chip only; an actual
 interactive "bug fixes only" toggle is a small follow-up if wanted — ask before
 building it.
