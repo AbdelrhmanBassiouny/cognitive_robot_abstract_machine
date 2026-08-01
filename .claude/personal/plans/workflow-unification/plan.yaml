@@ -314,6 +314,159 @@ items:
       .claude/hooks/tests/ that #101's diff adds) and PR 3 merged or at least stable
       (it moves files PR 3 edits) — sequence it last in the upstream wave.
 
+  - id: dev-tooling-notes-core-python
+    branch: null
+    title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
+    track: dashboards
+    depends_on: [dev-tooling-python-package]
+    status: not_started
+    notes: >
+      Pure addition to development_tooling, no bash file changes (decision 12):
+      errors.py (stdlib-only dataclass-exception base mirroring krrood's
+      DataclassException idiom — typed context fields, abstract
+      error_message/suggest_correction composed in __post_init__ — without importing
+      krrood), personal_notes_configuration.py (ConfigurationSource StrEnum, frozen
+      ResolvedSetting and PersonalNotesConfiguration.resolve with the git-config >
+      environment > default precedence), git_interface.py (thin GitRepository
+      dataclass as the dependency seam; the real-git ScratchRepository harness stays
+      the primary test strategy, no fakes), notes_branch.py (fetch_notes_branch with
+      the upstream-remote fallback, ScratchWorktree context manager with
+      pid+uuid-suffixed scratch branch names, NotesBranchWriter with a bounded
+      re-fetch/re-apply push retry), marker_sections.py (single source for the
+      CLAUDE.local.md BEGIN/END markers currently duplicated between session-start
+      and every save script), and __main__.py with only the configuration
+      subcommand. The SessionStart-reachable surface is stdlib-only, enforced by an
+      import-block test. Includes a real two-writer non-fast-forward retry test
+      against the bare notes remote.
+
+  - id: dev-tooling-save-commands-python
+    branch: null
+    title: "Bash→Python 2: the four notes writers become python -m subcommands"
+    track: dashboards
+    depends_on: [dev-tooling-notes-core-python]
+    status: not_started
+    notes: >
+      save-personal-notes.sh, save-pr-progress.sh, write-personal-notes-file.sh and
+      create-personal-notes-branch.sh become three-line shims (cd to root, exec
+      python3 -m development_tooling <subcommand> "$@"); their bodies move onto the
+      core modules, collapsing the four near-identical scratch-worktree write dances
+      into NotesBranchWriter. Known defects fixed here, each proven by a failing
+      test first: a missing BEGIN-PERSONAL-NOTES marker pushed the entire
+      CLAUDE.local.md (PR-progress section included) into the notes file; fixed
+      scratch branch names raced between concurrent sessions; a rejected
+      non-fast-forward push lost the edit after the cleanup trap deleted the
+      committed scratch worktree; a trailing flag died with "$2: unbound variable"
+      instead of a usage message. Flag names, stdout lines and exit codes are
+      external API and stay unchanged, pinned by shim-level subprocess contract
+      tests. Sequence after the in-flight bash-touching PRs (#107 #109 #110 #115
+      #121 #126) land — a wholesale body rewrite cannot be merged by the
+      whichever-lands-second-merges convention.
+
+  - id: dev-tooling-save-plan-python
+    branch: null
+    title: "Bash→Python 3: save-plan and the plan manifest tools"
+    track: dashboards
+    depends_on: [dev-tooling-save-commands-python]
+    status: not_started
+    notes: >
+      save-plan.sh becomes a shim; plan_manifest_tools.py is absorbed as
+      plan_manifest.py (read-id, regenerate-branch-index, YamlBooleanCoercionError).
+      New validation with curated errors instead of cp/traceback noise: the roadmap
+      marker block must be non-empty (today an empty block silently overwrites
+      roadmap.md) and the --manifest/--roadmap source files must exist.
+      test_plan_manifest_tools.py carries over with an import change;
+      test_save_plan_sh.py carries over as the shim contract test.
+
+  - id: dev-tooling-session-start-python
+    branch: null
+    title: "Bash→Python 4: session-start behind an inert probing shim"
+    track: dashboards
+    depends_on: [dev-tooling-notes-core-python, session-start-plan-and-setup-guards, git-identity-from-personal-notes]
+    status: not_started
+    notes: >
+      session-start.sh keeps its path (settings.json stays byte-identical) but its
+      body becomes the one guarded shim: command -v python3 plus a >=3.11 version
+      probe, exiting 0 with a single diagnostic line when absent, so the hook stays
+      inert on machines without python3 (user-accepted floor raise — every targeted
+      environment ships 3.11+). session_start.py is stdlib-only end to end (yaml,
+      jinja2, markdown, nh3 blocked in an import test) and reproduces the 4-line
+      stdout summary and every written marker/header byte-for-byte, pinned by
+      golden-output fixtures recorded from the bash version before deletion. The
+      tracking_issue grep pipeline that kills the hook under pipefail when the field
+      is absent (found by #121's first session-start tests) becomes a re.search
+      returning None. Depends on #121 and #126 so their run_hook_script subprocess
+      tests carry over as the shim contract tests instead of colliding.
+
+  - id: dev-tooling-setup-checks-python
+    branch: null
+    title: "Bash→Python 5: check-setup as typed rows"
+    track: dashboards
+    depends_on: [dev-tooling-notes-core-python]
+    status: not_started
+    notes: >
+      check-setup.sh becomes a shim over setup_checks.py: SetupCheckIdentifier and
+      SetupCheckStatus StrEnums, frozen SetupCheckRow, SetupReport with the exact
+      TSV row order and exit-code semantics preserved (external API for
+      setup-personal-notes and prerequisite-check.md). The parsing enums
+      test_check_setup_sh.py already defines move into the production module and the
+      test imports them instead. Two fixes: the settings.json check parses the JSON
+      and verifies a SessionStart hook command rather than grepping for the
+      substring session-start.sh anywhere in the file, and the inline python3
+      heredoc becomes missing_requirements() via importlib.metadata. Runs parallel
+      to the other conversions off the core item.
+
+  - id: dev-tooling-dashboard-refresh-python
+    branch: null
+    title: "Bash→Python 6: refresh_dashboard orchestration in-process"
+    track: dashboards
+    depends_on: [dev-tooling-save-commands-python]
+    status: not_started
+    notes: >
+      refresh_dashboard.sh becomes a shim over dashboard_refresh.py, which calls
+      sync_manifest_status/build_dashboard in-process (dev-tooling-python-package has
+      moved them into the package by this point) and pushes manifest corrections
+      through NotesBranchWriter instead of shelling out to
+      write-personal-notes-file.sh. refresh_dashboard_support.py — which exists only
+      as JSON plumbing for the shell orchestrator — is deleted along with its
+      REFRESH_DASHBOARD_SUPPORT_SCRIPT constant; count-corrected/merge-summaries
+      become internal functions. The merged single-JSON stdout contract and the
+      --plan-id flag surface stay unchanged; test_refresh_dashboard_sh.py carries
+      over as the shim contract test.
+
+  - id: dev-tooling-config-shim-slimming
+    branch: null
+    title: "Bash→Python 7: slim the sourced config file to constants"
+    track: dashboards
+    depends_on: [dev-tooling-save-commands-python, dev-tooling-save-plan-python, dev-tooling-session-start-python, dev-tooling-setup-checks-python, dev-tooling-dashboard-refresh-python]
+    status: not_started
+    notes: >
+      resolve-personal-notes-config.sh keeps its sourcing contract (10 doc locations
+      plus ci.yml twice source it for variables and the cd-to-root side effect —
+      zero mandatory SKILL.md changes by construction) but shrinks to the cd
+      preamble, the three NOTES_* resolutions, the path constants, and the trivial
+      pure-string path helpers. The behavioral functions
+      (fetch_personal_notes_branch, current_branch_upstream_remote,
+      default_branch_name, pr_progress_path, plan_id_for_branch) are deleted once a
+      grep of all SKILL.md/*.md confirms no prose instructs a session to call them.
+      The residual bash/python duplication of the precedence rules is guarded by a
+      CI consistency test asserting the sourced variables equal python3 -m
+      development_tooling configuration output. hooks/README.md and plan-schema.md
+      prose touch-ups ride along.
+
+  - id: dev-tooling-github-api-unification
+    branch: null
+    title: "One github backend: the gh-CLI-else-token rule implemented once"
+    track: dashboards
+    depends_on: [setup-personal-notes-script, shared-pr-state-chips, dev-tooling-notes-core-python]
+    status: not_started
+    notes: >
+      github-api.sh (decision 9, arrives with #107) and pr_state (arrives with #111)
+      implement the same gh-CLI-else-GH_TOKEN/GITHUB_TOKEN+curl dual-backend rule
+      twice — the strongest concrete duplication on record in this plan. One
+      development_tooling github_backend.py implements it once; github-api.sh
+      becomes a shim. Blocked until both carriers land; scope-boxed to the backend
+      rule, not the callers' features.
+
   - id: stack-board-single-site
     branch: null
     title: "PR 4: plans-only Pages site (stack board retired for the native stack map)"

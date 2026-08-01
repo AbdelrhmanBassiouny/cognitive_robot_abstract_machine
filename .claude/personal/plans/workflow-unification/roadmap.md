@@ -1579,3 +1579,81 @@ looks.
 
 The reverse direction is the cheap one, and is why the base was chosen: if #121 merges normally
 first, rebasing #126 onto `main` costs nothing.
+
+## Update 2026-08-01 (decision 12): the bash layer retires into development_tooling — conversion registered
+
+Session: https://claude.ai/code/session_015ShWoksdRxv5ioXcDaNiQk (study session; registration only, no
+code conversion). Eight new items in the `dashboards` track: `dev-tooling-notes-core-python` through
+`dev-tooling-config-shim-slimming` plus `dev-tooling-github-api-unification`, all downstream of
+`dev-tooling-python-package`.
+
+### What was decided
+
+All logic in the `.claude/` bash tooling (~1300 lines across 9 hook scripts plus
+`refresh_dashboard.sh`) moves into `development_tooling`. This extends decision 8 in its own
+words — it already said the bash hook entry points "become thin wrappers invoking `python -m`" —
+and settles what that means: the permanent bash remainder is ~8 three-line shims at the existing
+paths, a slimmed `resolve-personal-notes-config.sh` (constants + cd for the 10 doc sourcing sites
+and ci.yml), and `configure-personal-notes.sh` unchanged (pasted-by-reference into cloud
+environment setup fields this repo cannot update). `settings.json` stays byte-identical.
+
+### Why now (the evidence)
+
+The study inventoried the bash layer's failure record and duplication:
+
+- Four near-identical copies of the scratch-worktree write dance (plus an orphan fifth) that
+  `write-personal-notes-file.sh` was extracted to end but never absorbed; the marker strings,
+  branch-missing error, and no-CLAUDE.local.md error each duplicated 3-4 times.
+- The recorded pipefail/`set -e` family (#107's exit-128 fix, #115's `default_repository` grep,
+  #121's `tracking_issue` latent hook-kill) — the 2026-08-01 comment on #102 already called two
+  instances a pattern; the study found the class is structural, not incidental.
+- Defects nobody had hit yet: a missing `BEGIN-PERSONAL-NOTES` marker pushes the *whole*
+  `CLAUDE.local.md` (PR-progress included) into the notes file; `__save-personal-notes-tmp` /
+  `__save-pr-progress-tmp` are fixed names that race between concurrent sessions; every push is
+  single-shot, so a concurrent save loses the edit after the trap deletes the committed scratch
+  worktree; `set -u` kills argument loops on a trailing flag; `save-plan.sh` never validates the
+  roadmap; `check-setup.sh` passes on any substring occurrence of `session-start.sh` in
+  settings.json.
+
+Each conversion item fixes its file's defects with failing tests first; external contracts (flag
+surfaces, TSV rows, exit codes, the 4-line SessionStart stdout block) are pinned by golden
+fixtures recorded from the bash versions and by subprocess contract tests through the real shims.
+
+### The one accepted functional trade
+
+The SessionStart floor rises from bash+git to bash+git+python3>=3.11. The shim probes and exits 0
+with a single diagnostic line when the probe fails, so the hook stays inert for contributors —
+a machine without python3 silently skips loading personal notes. Accepted deliberately: every
+targeted environment ships 3.11+, and the bash read path is where the silent-death bugs live.
+
+### Sequencing
+
+Items 2-6 cannot land before the in-flight bash-touching PRs (#107, #109, #110, #115, #121,
+#126): a wholesale body rewrite is not mergeable by the whichever-lands-second-merges convention.
+`dev-tooling-session-start-python` additionally depends on the #121/#126 items so their
+`run_hook_script` tests carry over as the shim contract tests. Everything hangs off
+`dev-tooling-python-package`, which stays last in the upstream wave as already recorded.
+
+### The krrood question (asked, verified, deferred)
+
+The user asked whether `development_tooling` should depend on `krrood` — exceptions as
+`DataclassException` subclasses, and eventually EQL/verbalization. Verified in-session:
+`krrood.exceptions`' only third-party import is `typing_extensions` (line 9, `Optional`) — a
+one-line stdlib fix makes `import krrood.exceptions` fully stdlib-clean (proven empirically with
+all third-party imports blocked; `krrood/__init__.py` is already stdlib-light). In-monorepo use
+would need no install (a 2-line `sys.path` bootstrap to `krrood/src/`); other repos have
+`pip install krrood` (PyPI, 26.7.0) via their environment setup script — never in the hook (60s
+budget, pygraphviz build hazard, contributors' machines). EQL/verbalization can never be
+hook-safe (jinja2/lemminflect/rustworkx) and are under active churn in three sibling plans.
+
+**Decision: version 1 is fully independent of krrood.** `errors.py` mirrors the
+`DataclassException` idiom in a stdlib-only base — a small, conscious pattern duplication. A
+separate future plan (working name `dev-tooling-krrood-adoption`, deliberately *not* created now)
+migrates the tooling onto krrood once the krrood API plans (`dag-facade-hardening`,
+`eql-performatives`, `eql-verbalization`) and the converted tooling itself have stabilized,
+seeded with the verified facts above plus the guard design (a CI test importing
+`krrood.exceptions` with third-party modules blocked defines the hook-safe surface; the tooling
+may only import guard-covered modules). Dependency tiers adopted now, krrood-independent:
+tier 1 hook-safe = stdlib only (SessionStart path, enforced by an import-block test); tier 2
+command-time = installed packages (PyYAML); tier 3 domain machinery (EQL queries over the plan
+model, verbalized status text) = only ever in dedicated feature items of that future plan.
