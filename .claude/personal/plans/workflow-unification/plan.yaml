@@ -837,3 +837,32 @@ items:
       use, cropped to a 100px bottom margin. That regeneration also cleared a
       pre-existing staleness the roadmap had flagged - the old image still rendered the
       description as EXAMPLE_WALKTHROUGH.md, a since-renamed file.
+
+  - id: dashboard-chip-notes-collapse
+    branch: claude/dashboard-chip-collapse-g5uyj1
+    title: "Collapse plan-item notes on dashboard chips behind an expand arrow"
+    pull_request_number: 124
+    track: dashboards
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01HaU9fwvtLUvFh4k93K6p5C
+    notes: >
+      Raised 2026-08-01 against a screenshot of this very plan's own dashboard: the
+      ready-to-review-merged-dependency card's notes ran to several hundred words and
+      alone filled the viewport, forcing heavy scrolling and leaving only one item
+      visible at a time - defeating the dashboard's purpose as an overview. item.notes
+      (item_card macro, dashboard.html) rendered at full height with no truncation, so
+      any item with a long investigation writeup did this to the page. Fixed by wrapping
+      the notes div in a collapsed-by-default <details>/<summary> toggle, reusing the
+      .roadmap-details CSS-only arrow-toggle pattern already in the file for the
+      "Background & history" section, rather than inventing new JS. No Python changes
+      needed - build_dashboard.py/render_common.py already pass item.notes through
+      unchanged; the sidebar "What to do next" cards are unaffected since they render
+      short fixed one-liners, not item.notes. Verified by rendering example/ through
+      build_dashboard.py with a temporarily lengthened note and publishing the result as
+      an Artifact: notes collapse by default behind "▸ Notes", expand to "▾ Notes" on
+      click, and items with no notes show no summary line. 194 tests pass (plan-dashboard
+      suite - unaffected, since this is template/CSS only). Independent of the #101 chain,
+      based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
+      #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for
+      this track. Opened as draft pull request #124, subscribed to its activity.

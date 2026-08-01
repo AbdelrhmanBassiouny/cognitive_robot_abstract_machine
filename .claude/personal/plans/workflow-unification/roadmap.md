@@ -1532,3 +1532,31 @@ the runner's shell happens to carry — which, per the section above, is not emp
 the row read `needs-setup` naming the real author while `git config --get user.name` said
 `Claude`, `save-git-identity.sh` recorded the identity, the row went `ok`, and a re-run pushed
 nothing.
+
+## Update 2026-08-01 (kickoff + implementation): dashboard chip notes collapse
+
+Raised directly from a screenshot of this plan's own published dashboard: the
+`ready-to-review-merged-dependency` card's `notes` (see its entry above) ran long enough to
+fill the entire viewport by itself, so only one item was visible on screen at a time and
+reviewing the board meant heavy scrolling instead of a glance-able overview. The dashboard's
+whole purpose is the opposite of that.
+
+`item_card` (`templates/dashboard.html`) rendered `item.notes` at full height with no
+collapse — every long-note item did this, not just that one card. Fixed by wrapping the
+notes `<div>` in a `<details>`/`<summary>` toggle, collapsed by default, reusing the
+`.roadmap-details` CSS-only arrow-toggle already in the file for the page-level "Background
+& history" section rather than adding new JS. Deliberately did not touch
+`build_dashboard.py`/`render_common.py` — they already pass `item.notes` through unchanged,
+and the native `<details>` element needs no script wiring. The sidebar "What to do next"
+cards are unaffected: they render short fixed one-line strings, not `item.notes`.
+
+Verified by rendering the skill's own `example/` fixtures through `build_dashboard.py` with
+a temporarily lengthened note and publishing the result as an Artifact: notes collapse by
+default behind "▸ Notes", expand to "▾ Notes" in place on click, and items with no notes
+render no summary line at all. `pytest .claude/skills/plan-dashboard/tests/` — 194 passed,
+unaffected since this is template/CSS only.
+
+Independent of the `#101` chain, based on fork `main`; `dashboard.html` overlap with `#103`,
+`#105`, `#111`, `#119`, `#120` and `#122` is the same whichever-lands-second-merges pattern
+this track has had throughout. Opened as draft pull request `#124`, subscribed to its
+activity.
