@@ -63,6 +63,13 @@ PR #41 repaired earlier: 268 files/+27,825 → 7 files/+1,318, number and thread
 - Pointer-rendering command (`stack.py pointer --fork ... --tooling-branch ...`) handed
   to **#110** by comment — developer's call, overriding my follow-up-PR suggestion,
   because #110 is the setup PR and this is a setup step.
+- **Also handed to #110: delete the remote inference.** Developer's objection — ~138
+  lines + 9 tests exist only to *guess* the fork. If setup asks once and writes
+  `fork_repository` to `.claude/personal/stack.toml` (personal-notes branch, so it
+  survives the fresh clone each Routine run gets), resolution collapses to "find the
+  remote naming it, else add it" and ~120 lines + 7 tests go. Kept in #106 only because
+  #106 lands first and must run with zero configuration. Thread left open for his call
+  on stripping it here instead.
 - Due when #106 lands: delete the pointer's `<TOOLING_BRANCH>` fallback (manual paste)
   and step 0's fetch fallback. Neither breaks anything if missed.
 
