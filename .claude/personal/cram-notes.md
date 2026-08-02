@@ -93,8 +93,15 @@ file itself must never be merged into `main`.
   wrote things in, not a real dependency.
 - The test is mechanical, so run it rather than judging by feel:
   `git ls-tree <base-branch> -- <paths the work touches>`. Empty output means those files do not
-  exist on the base yet, so whichever PR introduces them owns them, and from the base's point of
-  view the two are one addition.
+  exist on the base yet, so whichever PR introduces them is a candidate owner.
+- **That flags it for inspection; it does not settle it.** Ask what the PR would be if those edits
+  were removed. Substantial and standing on its own → it is real work on top of an unlanded parent,
+  which is just stacking. Nothing left → it exists only to change the parent, so it is not a
+  separate PR. Weighing the two halves usually decides it at a glance (#110: 2,645 lines of new
+  setup infrastructure vs 187 lines editing #106's files — real; #117: nothing but edits to #106's
+  files — folded).
+- A duplicate will not show up as an overlapping path if the two PRs named the file differently,
+  so compare by *purpose* too, not only by path.
 - Costs of splitting anyway, all of which we have now paid: the earlier PR ships a state nobody
   should run; the later one spends its review re-explaining the first; if the earlier one is live
   infrastructure, landing it alone regresses that infrastructure until the later one follows; and
