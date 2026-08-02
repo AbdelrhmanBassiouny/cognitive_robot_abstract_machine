@@ -31,6 +31,10 @@ detection: the #41 bug, back silently. Developer agreed and chose the fold.
   value. Developer rejected my first attempt (committed his fork as a default) - he was
   right, it moved the problem one file across.
 - Both errors are dataclasses; `DocumentLandmark` is a `Protocol`, not a union.
+- #106 is **self-contained**: no file under `.claude/stack/` refers to another branch's
+  work. I had written "the command that renders this block" into POINTER.md for a
+  command that lives in #110 - developer caught it; that sentence is #110's to add
+  alongside the command, and is flagged there.
 - **272 tests pass**, was 247 at session start. All 10 review threads on #106 resolved.
 
 ## Live-system state, worth not forgetting
