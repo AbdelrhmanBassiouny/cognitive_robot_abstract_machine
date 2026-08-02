@@ -1807,3 +1807,44 @@ layers, and the first one is the most direct:
 Both of these are about *when* the already-correct detection logic runs, not about the logic itself
 - #117 already answers "is this parent actually landed" correctly; what was missing is "make sure
 that question gets asked, in production, as close to the landing event as possible."
+
+## Update 2026-08-02 (traced): who closed PR #40, and why prevention means catching it, not stopping it
+
+The user asked directly: who closed the parent PR without marking it, and if it was them, doesn't
+that mean no automated script or routine can actually prevent this? Traced from PR #40's own GitHub
+timeline and its successor rather than assumed:
+
+- **The user closed PR #40 themselves**, 2026-07-09T08:49:56Z, with a comment on the PR: *"Replaced
+  by #53. This branch's history was rebuilt (recreated, not force-pushed forward) after
+  eql-core-prep/code-generation-extract advanced further upstream, so GitHub won't let this PR
+  reopen. Same content — #53 cherry-picks this PR's single real commit onto the current
+  code-generation-extract tip."* This is deliberate, correct maintenance - a branch got rebuilt
+  after its own base advanced, the old PR couldn't reopen against the new history, so the user closed
+  it and opened a clean successor. Not a bot, not the Routine, not a mistake.
+- **PR #53** is that successor: same branch name (`ripple-down-rules-refactor`), rebuilt history,
+  same one real commit cherry-picked onto the current `code-generation-extract` tip. The user merged
+  it normally into `main` on 2026-07-25T09:56:27Z (`merged_by: AbdelrhmanBassiouny`) - this is the
+  actual, ordinary merge event that put the branch's content in `main`.
+- **PR #41** predates both: created 2026-07-07, based on the branch name `ripple-down-rules-refactor`
+  directly, never on #40 or #53's PR number. It had no way to know which PR number was currently "of
+  record" for that branch, because it never referenced one.
+
+**The right conclusion, and the correction it forces on the prevention design above.** The user is
+right that no automation should try to stop this - closing a superseded PR after a branch rebuild,
+and later merging its replacement, are both normal and correct. Trying to prevent the *human action*
+would be solving the wrong problem. What was missing is narrower and worse than first framed: it is
+not specifically "closed without merging" (#40's case) - it is that **any pull request leaving the
+open set drops out of `board.json`**, whether by an unmerged close (#40) or by a normal
+merge-and-auto-close (#53). The old code's `by_name.get(branch.parent)` returns `None` either way,
+and reads that `None` as "no parent" regardless of which route caused it. `landed-parent-detection`'s
+ancestry check is correct against both, which is reassuring - it never depended on which of the two
+happened.
+
+It does mean the event-triggered design recorded on `routine-cutover` above was one event narrower
+than it should be. `pull_request: closed` fires for a merge-close exactly as it does for a
+supersede-close, so the fix is to re-sweep ancestry for **every** remaining open fork PR's base on
+that one event type, not to special-case "check just this PR's own branch." Concretely in this
+history: that sweep, triggered off #53's closed-via-merge event on 2026-07-25, would have caught
+#41's orphaning that same day - instead of the ~6 days it actually took until a review round on #41
+noticed the inflated diff by accident on 2026-07-31. `routine-cutover`'s notes are corrected to say
+this plainly, rather than leaving the narrower framing on record.

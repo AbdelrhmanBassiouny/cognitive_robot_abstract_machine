@@ -526,6 +526,19 @@ items:
       elsewhere - this is what actually prevents the #40/#41 orphan pattern from
       recurring with a multi-cycle delay, rather than only shrinking the window to one
       scheduled tick.
+      Corrected 2026-08-02 (traced #40/#41's actual history, at the user's request, to
+      answer "who closed the parent and can automation stop that"): the human action
+      (the user closing #40 as ordinary hygiene after rebuilding its branch, then
+      normally merging its successor #53 nine days later) is not something automation
+      should ever try to prevent - it is correct, deliberate maintenance, not a mistake.
+      The trigger design above is one PR-closed-event narrower than it needs to be: the
+      real defect is that ANY pull request leaving the open set drops it from
+      board.json, whether it closes unmerged (#40) or merges normally and GitHub
+      auto-closes it (#53) - `pull_request: closed` fires for both, so the Action should
+      re-sweep git-ancestry for every remaining open fork PR's base on that one event
+      type generally, not just check the closed PR's own branch. In this real case that
+      would have caught #41's orphaning at #53's merge on 2026-07-25, days before a
+      review round noticed it by accident on 2026-07-31.
 
   - id: tooling-branch-retirement
     branch: null
