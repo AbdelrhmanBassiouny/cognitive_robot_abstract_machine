@@ -177,6 +177,25 @@ items:
       label/cram2-link helpers, a small reparent-recovery script, and tests.
       Re-scope instruction posted on the PR itself.
 
+      Assessed 2026-08-02 against #110 (see roadmap): the two are split correctly, but
+      three artifacts had been built twice. This PR keeps all of them by landing first.
+      Shipped here (36eda87a): `stack.py remotes` becomes `configuration`, printing one
+      `field<TAB>value` line per Configuration field instead of four hand-written
+      hyphenated keys, with `upstream_setup_command` moved onto Configuration and omitted
+      when the remote already exists. That makes this PR's command surface and #110's
+      independently-built `config` one surface, so #110's rebase deletes the resolution
+      internals only. 286 CI tests pass, was 283. Description updated to match.
+
+      Still outstanding here: the same-day cut recorded above is only half applied.
+      ROUTINE.md was rewritten around native mechanics, but stack.py still ships
+      print_next and print_restack_plan, the latter still documented as feeding "the
+      restack workflow's args". Confirm whether the cut is still wanted; if so, sequence
+      it before #110's rebase, or that rebase resolves the same stack.py conflict twice.
+      Two review threads remain open: stack.toml:23 asks whether to strip the remote
+      inference here (recommended answer: no - it is what makes this PR runnable
+      standalone; delete it in #110 with the interactive setup), and stack.py:84 notes
+      Repository.from_remote_url parses without validating.
+
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
     title: "PR 2: /setup-stacked-prs guided one-command setup skill"
@@ -217,6 +236,29 @@ items:
       draft. #106's same-day cut narrows this further: there is no restack engine to
       install — setup is doctrine files + labels + personal stack.toml + the optional
       stack creation.
+
+      Scope assessed 2026-08-02 and confirmed separate (see roadmap): removing this
+      item's edits to #106's files leaves ~2,645 lines of standalone setup
+      infrastructure, so it is ordinary stacking, not a disguised modification of its
+      parent - unlike #133/#117, which folded because nothing remained. Keep the PR.
+
+      What its rebase onto #106 must carry, all of it here rather than in #106: delete
+      .claude/stack/routine-prompt.md and render POINTER.md instead - they are the same
+      artifact, and POINTER.md's copy is the one pinned byte-for-byte against
+      ROUTINE.md's hard rules, while this branch's paraphrases them unenforced. The two
+      files template different values (<FORK_REMOTE>/<UPSTREAM_REMOTE> here versus
+      <FORK_REPOSITORY>/<TOOLING_BRANCH> there), so the renderer changes variables, not
+      just filenames. Carry over the two rules this branch promoted into the pointer
+      (never force-push a branch with an open upstream PR unless it carries the rebase
+      label; do not use the Workflow tool) - they exist in #106 only as prose above the
+      pinned block, so promoting them means editing that block too. Drop the
+      <TOOLING_BRANCH> fallback, dead once .claude/stack/ is on main. Update the two
+      contract tests this branch's SETUP step 0 rewrite breaks
+      (test_setup_obtains_the_tooling_rather_than_assuming_it and
+      test_setup_takes_the_tooling_ref_from_the_pointer) as a declared contract change,
+      not a silent one. Adapt check-stack-setup.sh and setup-stacked-prs.sh from
+      `stack.py config` to `stack.py configuration`; #106 already matched the key names,
+      so nothing else in the parsing changes.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
@@ -314,6 +356,159 @@ items:
       .claude/hooks/tests/ that #101's diff adds) and PR 3 merged or at least stable
       (it moves files PR 3 edits) — sequence it last in the upstream wave.
 
+  - id: dev-tooling-notes-core-python
+    branch: null
+    title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
+    track: dashboards
+    depends_on: [dev-tooling-python-package]
+    status: not_started
+    notes: >
+      Pure addition to development_tooling, no bash file changes (decision 12):
+      errors.py (stdlib-only dataclass-exception base mirroring krrood's
+      DataclassException idiom — typed context fields, abstract
+      error_message/suggest_correction composed in __post_init__ — without importing
+      krrood), personal_notes_configuration.py (ConfigurationSource StrEnum, frozen
+      ResolvedSetting and PersonalNotesConfiguration.resolve with the git-config >
+      environment > default precedence), git_interface.py (thin GitRepository
+      dataclass as the dependency seam; the real-git ScratchRepository harness stays
+      the primary test strategy, no fakes), notes_branch.py (fetch_notes_branch with
+      the upstream-remote fallback, ScratchWorktree context manager with
+      pid+uuid-suffixed scratch branch names, NotesBranchWriter with a bounded
+      re-fetch/re-apply push retry), marker_sections.py (single source for the
+      CLAUDE.local.md BEGIN/END markers currently duplicated between session-start
+      and every save script), and __main__.py with only the configuration
+      subcommand. The SessionStart-reachable surface is stdlib-only, enforced by an
+      import-block test. Includes a real two-writer non-fast-forward retry test
+      against the bare notes remote.
+
+  - id: dev-tooling-save-commands-python
+    branch: null
+    title: "Bash→Python 2: the four notes writers become python -m subcommands"
+    track: dashboards
+    depends_on: [dev-tooling-notes-core-python]
+    status: not_started
+    notes: >
+      save-personal-notes.sh, save-pr-progress.sh, write-personal-notes-file.sh and
+      create-personal-notes-branch.sh become three-line shims (cd to root, exec
+      python3 -m development_tooling <subcommand> "$@"); their bodies move onto the
+      core modules, collapsing the four near-identical scratch-worktree write dances
+      into NotesBranchWriter. Known defects fixed here, each proven by a failing
+      test first: a missing BEGIN-PERSONAL-NOTES marker pushed the entire
+      CLAUDE.local.md (PR-progress section included) into the notes file; fixed
+      scratch branch names raced between concurrent sessions; a rejected
+      non-fast-forward push lost the edit after the cleanup trap deleted the
+      committed scratch worktree; a trailing flag died with "$2: unbound variable"
+      instead of a usage message. Flag names, stdout lines and exit codes are
+      external API and stay unchanged, pinned by shim-level subprocess contract
+      tests. Sequence after the in-flight bash-touching PRs (#107 #109 #110 #115
+      #121 #126) land — a wholesale body rewrite cannot be merged by the
+      whichever-lands-second-merges convention.
+
+  - id: dev-tooling-save-plan-python
+    branch: null
+    title: "Bash→Python 3: save-plan and the plan manifest tools"
+    track: dashboards
+    depends_on: [dev-tooling-save-commands-python]
+    status: not_started
+    notes: >
+      save-plan.sh becomes a shim; plan_manifest_tools.py is absorbed as
+      plan_manifest.py (read-id, regenerate-branch-index, YamlBooleanCoercionError).
+      New validation with curated errors instead of cp/traceback noise: the roadmap
+      marker block must be non-empty (today an empty block silently overwrites
+      roadmap.md) and the --manifest/--roadmap source files must exist.
+      test_plan_manifest_tools.py carries over with an import change;
+      test_save_plan_sh.py carries over as the shim contract test.
+
+  - id: dev-tooling-session-start-python
+    branch: null
+    title: "Bash→Python 4: session-start behind an inert probing shim"
+    track: dashboards
+    depends_on: [dev-tooling-notes-core-python, session-start-plan-and-setup-guards, git-identity-from-personal-notes]
+    status: not_started
+    notes: >
+      session-start.sh keeps its path (settings.json stays byte-identical) but its
+      body becomes the one guarded shim: command -v python3 plus a >=3.11 version
+      probe, exiting 0 with a single diagnostic line when absent, so the hook stays
+      inert on machines without python3 (user-accepted floor raise — every targeted
+      environment ships 3.11+). session_start.py is stdlib-only end to end (yaml,
+      jinja2, markdown, nh3 blocked in an import test) and reproduces the 4-line
+      stdout summary and every written marker/header byte-for-byte, pinned by
+      golden-output fixtures recorded from the bash version before deletion. The
+      tracking_issue grep pipeline that kills the hook under pipefail when the field
+      is absent (found by #121's first session-start tests) becomes a re.search
+      returning None. Depends on #121 and #126 so their run_hook_script subprocess
+      tests carry over as the shim contract tests instead of colliding.
+
+  - id: dev-tooling-setup-checks-python
+    branch: null
+    title: "Bash→Python 5: check-setup as typed rows"
+    track: dashboards
+    depends_on: [dev-tooling-notes-core-python]
+    status: not_started
+    notes: >
+      check-setup.sh becomes a shim over setup_checks.py: SetupCheckIdentifier and
+      SetupCheckStatus StrEnums, frozen SetupCheckRow, SetupReport with the exact
+      TSV row order and exit-code semantics preserved (external API for
+      setup-personal-notes and prerequisite-check.md). The parsing enums
+      test_check_setup_sh.py already defines move into the production module and the
+      test imports them instead. Two fixes: the settings.json check parses the JSON
+      and verifies a SessionStart hook command rather than grepping for the
+      substring session-start.sh anywhere in the file, and the inline python3
+      heredoc becomes missing_requirements() via importlib.metadata. Runs parallel
+      to the other conversions off the core item.
+
+  - id: dev-tooling-dashboard-refresh-python
+    branch: null
+    title: "Bash→Python 6: refresh_dashboard orchestration in-process"
+    track: dashboards
+    depends_on: [dev-tooling-save-commands-python]
+    status: not_started
+    notes: >
+      refresh_dashboard.sh becomes a shim over dashboard_refresh.py, which calls
+      sync_manifest_status/build_dashboard in-process (dev-tooling-python-package has
+      moved them into the package by this point) and pushes manifest corrections
+      through NotesBranchWriter instead of shelling out to
+      write-personal-notes-file.sh. refresh_dashboard_support.py — which exists only
+      as JSON plumbing for the shell orchestrator — is deleted along with its
+      REFRESH_DASHBOARD_SUPPORT_SCRIPT constant; count-corrected/merge-summaries
+      become internal functions. The merged single-JSON stdout contract and the
+      --plan-id flag surface stay unchanged; test_refresh_dashboard_sh.py carries
+      over as the shim contract test.
+
+  - id: dev-tooling-config-shim-slimming
+    branch: null
+    title: "Bash→Python 7: slim the sourced config file to constants"
+    track: dashboards
+    depends_on: [dev-tooling-save-commands-python, dev-tooling-save-plan-python, dev-tooling-session-start-python, dev-tooling-setup-checks-python, dev-tooling-dashboard-refresh-python]
+    status: not_started
+    notes: >
+      resolve-personal-notes-config.sh keeps its sourcing contract (10 doc locations
+      plus ci.yml twice source it for variables and the cd-to-root side effect —
+      zero mandatory SKILL.md changes by construction) but shrinks to the cd
+      preamble, the three NOTES_* resolutions, the path constants, and the trivial
+      pure-string path helpers. The behavioral functions
+      (fetch_personal_notes_branch, current_branch_upstream_remote,
+      default_branch_name, pr_progress_path, plan_id_for_branch) are deleted once a
+      grep of all SKILL.md/*.md confirms no prose instructs a session to call them.
+      The residual bash/python duplication of the precedence rules is guarded by a
+      CI consistency test asserting the sourced variables equal python3 -m
+      development_tooling configuration output. hooks/README.md and plan-schema.md
+      prose touch-ups ride along.
+
+  - id: dev-tooling-github-api-unification
+    branch: null
+    title: "One github backend: the gh-CLI-else-token rule implemented once"
+    track: dashboards
+    depends_on: [setup-personal-notes-script, shared-pr-state-chips, dev-tooling-notes-core-python]
+    status: not_started
+    notes: >
+      github-api.sh (decision 9, arrives with #107) and pr_state (arrives with #111)
+      implement the same gh-CLI-else-GH_TOKEN/GITHUB_TOKEN+curl dual-backend rule
+      twice — the strongest concrete duplication on record in this plan. One
+      development_tooling github_backend.py implements it once; github-api.sh
+      becomes a shim. Blocked until both carriers land; scope-boxed to the backend
+      rule, not the callers' features.
+
   - id: stack-board-single-site
     branch: null
     title: "PR 4: plans-only Pages site (stack board retired for the native stack map)"
@@ -357,6 +552,61 @@ items:
       trigger trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the
       final cutover deletes or disables it. Gate unchanged: only after PR 1 is on
       cram2/main and fork main fast-forwards; one green Action cycle flips this done.
+      Base-change requirement, corrected 2026-08-02 by session-safe-pr-reparent's probe:
+      the 403 recorded here is a property of the session git-proxy credential, not of
+      sessions or of the operation - the MCP `update_pull_request` tool changes a base
+      fine (verified on throwaway PR #129), so the "no session can ever do a real
+      base-branch reparent" reading was wrong and no close+create fallback exists to
+      inherit. The Action's own credential (default GITHUB_TOKEN or a stored PAT) is a
+      third identity again, and the probe makes it much more likely to work than feared,
+      since the block is narrow rather than platform-wide. Still verify it concretely
+      with a real base change from the Action before relying on it; if it does 403, the
+      Action can call the same MCP-equivalent REST endpoint under a token that does not
+      carry the restriction rather than degrade to renumbering pull requests. Also fold in event-triggered
+      detection rather than cadence-only: trigger the Action (or an additional one) on
+      `pull_request` `closed`, ancestry-test that PR's head branch immediately, and
+      reparent any open fork PR based on it right then if it turns out to have landed
+      elsewhere - this is what actually prevents the #40/#41 orphan pattern from
+      recurring with a multi-cycle delay, rather than only shrinking the window to one
+      scheduled tick.
+      Corrected 2026-08-02 (traced #40/#41's actual history, at the user's request, to
+      answer "who closed the parent and can automation stop that"): the human action
+      (the user closing #40 as ordinary hygiene after rebuilding its branch, then
+      normally merging its successor #53 nine days later) is not something automation
+      should ever try to prevent - it is correct, deliberate maintenance, not a mistake.
+      The trigger design above is one PR-closed-event narrower than it needs to be: the
+      real defect is that ANY pull request leaving the open set drops it from
+      board.json, whether it closes unmerged (#40) or merges normally and GitHub
+      auto-closes it (#53) - `pull_request: closed` fires for both, so the Action should
+      re-sweep git-ancestry for every remaining open fork PR's base on that one event
+      type generally, not just check the closed PR's own branch. In this real case that
+      would have caught #41's orphaning at #53's merge on 2026-07-25, days before a
+      review round noticed it by accident on 2026-07-31.
+      Interim pointer prompt ADOPTED AND LIVE 2026-08-02. The user replaced the Routine's
+      ~17.5k inline prompt at claude.ai/code/routines with the short pointer this item
+      had specified: HARD RULES inline (they must bind before any file is read), plus
+      "read .claude/stack/ROUTINE.md and execute the fenced text block". It resolves
+      origin/main first and falls back to origin/claude/stack-landed-parent-detection
+      while that is in review, because .claude/stack/ is NOT on main yet - it is only on
+      #106 and #117. So #117's branch is currently live production input, and an edit to
+      ROUTINE.md now ships to the running workflow on push with no deploy step.
+      This is the "optional interim step if the Action lags the tooling wave" this item
+      already described, so the endgame is unchanged: a plain scheduled Action plus
+      on-demand sessions, no scheduled LLM. What the adoption buys now is that doctrine
+      corrections stop needing a manual paste - which is what let the base-PATCH error sit
+      in the live prompt after ROUTINE.md had been fixed.
+      Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0 told
+      the Routine that stack.py and stack.toml "are already on this checkout - they live on
+      main". Written in anticipation of #106 landing, false today, and harmless only while
+      nothing read it. Under the pointer the Routine would resolve its doctrine fine,
+      believe the tooling was present, then fail on the first stack.py call in Phase 2 -
+      after Phase 1 had already mutated pull requests. Step 0 now fetches .claude/stack/
+      from the same ref rather than asserting it. Verified end to end in a worktree at
+      origin/main: stack.py absent before, `stack.py --help` working after.
+      Two deletions are due when #106 lands and .claude/stack/ reaches main: the pointer
+      prompt's source-2 line (needs a manual paste) and step 0's fetch fallback (a normal
+      commit). Neither breaks anything if forgotten - the fetch becomes a no-op and the
+      fallback ref stops resolving - but both are dead weight.
 
   - id: tooling-branch-retirement
     branch: null
@@ -519,7 +769,7 @@ items:
     pull_request_number: 117
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01URVDhViP2TijuQAHAysUKL
     notes: >
       Bug fix, found while handling a review round on PR #41. board.json carries only
@@ -550,6 +800,99 @@ items:
       the user asked for the patch text to review and paste rather than a direct
       update_trigger call, so until they do, restack-plan emits the right parent but
       Phase 1 still will not retarget on GitHub.
+      Validated 2026-08-02 (/plan-item-resolve session) against the real PR #41 stack
+      the bug was found on, not just the item's own synthetic tests: confirmed live that
+      ripple-down-rules-refactor (PR #40's head) is still an ancestor of origin/main while
+      PR #41 is still based on it (unreparented), and that #41 is native GitHub Stack #112
+      (#41 -> #63 -> #64 -> #65 -> #66 -> #67 -> #98, all open). Ran restack_plan/
+      parent_landed from both #106's pre-fix stack.py and this item's fixed stack.py
+      against that real 7-PR set (real git-ancestry predicate, not a stub): pre-fix
+      restack_plan reparents #41 onto the stale ripple-down-rules-refactor branch exactly
+      as the bug describes; the fixed version correctly emits parent: main for #41 and
+      leaves #63..#98's own parent chain untouched. This was read-only (local script, no
+      push, no GitHub write) - the live reparent (dissolve Stack #112 -> PATCH #41's base
+      -> restack -> re-create) was proposed and the user explicitly approved executing it.
+      Attempted the same session: dissolved Stack #112 (POST .../unstack, 204) succeeded,
+      but PATCH .../pulls/41 with a new base 403'd with "Changing a pull request's base
+      branch is not permitted for this session type". That was read at the time as a
+      platform-level block on ANY base change from a session; it is not - see the
+      correction below.
+      Per ROUTINE.md's own stop-and-report rule, re-created the stack immediately with the
+      same 7-PR list to avoid leaving it dissolved for no gain - GitHub assigns it a new
+      number (Stack #128; #112 cannot be reused once dissolved) but the PR list, order and
+      every base are otherwise identical to before the attempt. PR #41 was left unchanged that day.
+      Corrected 2026-08-02 (later, by session-safe-pr-reparent's probe on throwaway PR
+      #129): the 403 is a property of the session git-proxy credential, not of sessions.
+      The MCP `update_pull_request` tool changes a base successfully; only the raw curl +
+      GH_TOKEN PATCH is refused, and the earlier attempt reached for curl because the
+      stacks endpoints have no MCP tool. So this item's doctrine was right about the
+      mechanics and wrong only about the client, the "no session can ever PATCH any base"
+      reading does not hold, and base-change is not a third member of the
+      tag-push/branch-delete family (those two have no MCP tool at all). ROUTINE.md's
+      REPARENT paragraph and the NATIVE-STACK MEMBERS sequence are both session-executable
+      once they name the MCP tool, which this branch now does directly: the correction was
+      first opened as stacked PR #133 and then folded into this PR, so #117 no longer ships
+      a step that 403s. PR #41 has since been reparented onto main with that sequence -
+      268 files/+27,825 down to 7 files/+1,318, number, labels and review thread all kept -
+      so this item's fix is now validated live end to end rather than only in its own
+      tests.
+
+  - id: session-safe-pr-reparent
+    branch: claude/stack-landed-parent-detection
+    title: "Reparent a base through the GitHub MCP server, not a raw PATCH"
+    pull_request_number: 117
+    track: stack-tooling
+    depends_on: [landed-parent-detection]
+    status: done
+    session: https://claude.ai/code/session_01WvRrTrtiznzAyvaoeCdNSq
+    notes: >
+      Premise disproven and item re-scoped 2026-08-02. It was spun out of
+      landed-parent-detection on the reading that PATCHing any pull request's base 403s
+      from a Claude Code session unconditionally, and was to replace every reparent with
+      close-old-PR -> create-new-PR. A direct probe on throwaway PR #129 showed the block
+      is a property of one credential, not of sessions: the MCP `update_pull_request`
+      tool changed the base successfully (200), while a raw PATCH with curl and GH_TOKEN
+      through the session git proxy 403'd on the same pull request minutes apart. The
+      earlier attempt only ever saw the 403 because the stacks endpoints have no MCP tool,
+      so that session was already in curl and stayed there.
+      The stack-member 422 is unchanged and orthogonal, and the full repair
+      (dissolve -> MCP base change -> re-create) was rehearsed end to end on a throwaway
+      stack (204/200/201) - which is exactly the sequence landed-parent-detection already
+      prescribes. That item was right about the mechanics and wrong only about the client.
+      So no close+create fallback, and no reparent-recovery script: the script this item's
+      notes previously said #106 "already scopes" was never actually written (verified by
+      git ls-tree on both #106 and #117 - .claude/stack/ holds only README.md, ROUTINE.md,
+      stack.py, stack.toml, tests/), and with the base change available there is nothing
+      for it to work around. Not writing new mechanics also matches decision 11's
+      direction: GitHub maintains the mechanics, we maintain policy.
+      What shipped: a "BASE CHANGES GO THROUGH THE GITHUB MCP SERVER" rule stated once in
+      Phase 1 recording the 403 and its cause, both reparent sites deferring to it, step 3
+      of the native-stack sequence using the MCP tool and stating that the child keeps its
+      number/labels/review thread, and the README source-of-truth row naming the tool.
+      Four contract tests written failing first over ROUTINE.md, which is prose and had no
+      coverage at all; 251 tests pass in the dev-tooling suite, was 247.
+      This item has no pull request of its own. It was opened as draft PR #133 stacked on
+      #117, then folded into #117 itself on the user's instruction that a PR must be
+      self-sufficient and correct: #133's only purpose was correcting a section #117 had
+      just introduced, so leaving it stacked meant #117 would sit in review carrying an
+      instruction already known to 403. The commit fast-forwarded onto
+      claude/stack-landed-parent-detection, which GitHub detected as merging #133 into its
+      own base and auto-closed it - merged into that branch, not into main. #117's
+      description was rewritten to explain the 403-vs-422 distinction directly so it stands
+      alone, and #117 was returned to draft per the always-re-draft-after-pushing rule.
+      Both this item and landed-parent-detection therefore point at #117 and land together.
+      Validated live on PR #41, the case the whole thread started from: recorded Stack
+      #128's composition, dissolved it (204), changed #41's base to main via the MCP tool,
+      re-created the stack (201). #41's diff went from 268 files/+27,825 to 7 files/+1,318
+      - exactly the four rdr/ modules and three test files its own description names -
+      mergeable_state clean, and it kept its number, its four comments and its
+      cram2-link-sent label. Nothing was pushed to any branch; only the base moved.
+      Stack #134 carries the same seven pull requests in the same order, now trunked on
+      main; #63-#98's own bases were untouched. GitHub will not reuse a dissolved stack's
+      number, so #112 -> #128 -> #134 is expected, not a symptom.
+      Note for anyone reading the roadmap's session-blocked-operations thread: base-change
+      is NOT a third member of the tag-push/branch-delete family. Those two have no MCP
+      tool at all and stay genuinely blocked; this one simply needed the other client.
 
   - id: ready-to-promote-upstream-links
     branch: null
@@ -732,6 +1075,7 @@ items:
   - id: git-identity-from-personal-notes
     branch: claude/workflow-unification-git-identity-ppzcyh
     title: "Stop sessions committing as an assistant identity"
+    pull_request_number: 126
     track: personal-data
     depends_on: [session-start-plan-and-setup-guards]
     status: in_progress
@@ -774,6 +1118,16 @@ items:
       commits are correctly authored. And this is not an independent PR off main - it is
       based on #121, whose ScratchRepository.run_hook_script is the only harness that can
       run session-start.sh in a test, hence the depends_on above.
+      Opened as draft pull request #126 on 2026-08-01, based on
+      claude/workflow-unification-setup-jgvs53 (#121) rather than fork main, no bug label
+      (nothing is defective - this is tooling that never existed, the same call recorded
+      for #120), subscribed to its activity. This is the plan's first item whose PR is
+      stacked on another item's PR outside the #101/#106 upstream chain, so it inherits
+      that chain's one live constraint: when #121 merges, GitHub retargets this to main
+      by itself only if #121 is merged through the PR rather than by a push (round-2 of
+      native-stacks-prototype established that push-based merges mark a PR merged without
+      retargeting its children). Neither PR is a native stack member, so the Phase-1
+      reparent 422 does not apply and a plain PATCH of the base is the recovery.
 
   - id: ready-to-review-merged-dependency
     branch: claude/plan-item-kickoff-workflow-s9e8bj
@@ -837,3 +1191,84 @@ items:
       use, cropped to a 100px bottom margin. That regeneration also cleared a
       pre-existing staleness the roadmap had flagged - the old image still rendered the
       description as EXAMPLE_WALKTHROUGH.md, a since-renamed file.
+
+  - id: dashboard-chip-notes-collapse
+    branch: claude/dashboard-chip-collapse-g5uyj1
+    title: "Collapse plan-item notes on dashboard chips behind an expand arrow"
+    pull_request_number: 124
+    track: dashboards
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01HaU9fwvtLUvFh4k93K6p5C
+    notes: >
+      Raised 2026-08-01 against a screenshot of this very plan's own dashboard: the
+      ready-to-review-merged-dependency card's notes ran to several hundred words and
+      alone filled the viewport, forcing heavy scrolling and leaving only one item
+      visible at a time - defeating the dashboard's purpose as an overview. item.notes
+      (item_card macro, dashboard.html) rendered at full height with no truncation, so
+      any item with a long investigation writeup did this to the page. Fixed by wrapping
+      the notes div in a collapsed-by-default <details>/<summary> toggle, reusing the
+      .roadmap-details CSS-only arrow-toggle pattern already in the file for the
+      "Background & history" section, rather than inventing new JS. No Python changes
+      needed - build_dashboard.py/render_common.py already pass item.notes through
+      unchanged; the sidebar "What to do next" cards are unaffected since they render
+      short fixed one-liners, not item.notes. Verified by rendering example/ through
+      build_dashboard.py with a temporarily lengthened note and publishing the result as
+      an Artifact: notes collapse by default behind "▸ Notes", expand to "▾ Notes" on
+      click, and items with no notes show no summary line. 194 tests pass (plan-dashboard
+      suite - unaffected, since this is template/CSS only). Independent of the #101 chain,
+      based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
+      #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for
+      this track. Opened as draft pull request #124, subscribed to its activity.
+
+  - id: add-plan-item-skill
+    branch: claude/add-plan-item-skill-e89irj
+    title: "/add-plan-item: decide where a new piece of work belongs"
+    pull_request_number: 135
+    track: personal-data
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01XGMaAHK8LQCoxa52KVaMCc
+    notes: >
+      Raised 2026-08-02. The plan skills covered creating a plan, starting an item,
+      unblocking one and publishing status, but nothing covered the most frequent event:
+      someone describing new work and asking where it goes. That decision was being made
+      by default, which is what produced this plan's own recorded fold chain (#133 into
+      #117, #117 into #106) and the #110/#106 collision where two sessions independently
+      built the same artifact under two names. Adds /add-plan-item, which derives the
+      paths the work touches, gathers every plan and open pull request as candidate
+      homes, runs the scope check, and proposes exactly one of four outcomes - fold, new
+      item in an existing plan, new plan via /plan-create, or no item at all - through
+      plan mode without writing code.
+      Two decisions taken with the user before implementing. The rule itself was
+      triplicated as three independently-worded copies added to plan-create,
+      plan-item-kickoff and plan-item-resolve by the unlanded, PR-less branch
+      claude/plan-scope-before-new-item, with no shared anchor - itself the failure mode
+      the rule is about. It moves into add-plan-item/scope-decision.md, referenced in a
+      line by all four skills, following the setup-personal-notes/prerequisite-check.md
+      precedent. And rather than stack two pull requests, this branch was reset onto
+      claude/plan-scope-before-new-item (a clean fast-forward from main, commits 3e23270a
+      and 96a5b30b) so one branch carries both; that branch is retired, having never had
+      a pull request. That is the new rule applied to its own introduction.
+      Ships check_scope_overlap.py rather than prose alone, since the #110/#106 collision
+      is exactly what eyeballing missed: given a base and the work's paths it reports
+      which paths the base lacks and which unlanded branches already touch them, plus
+      each candidate's full changed-file list so same-purpose/different-filename
+      duplicates stay findable. Pure git, no network. Eight tests under
+      add-plan-item/tests/, reusing the hooks suite's ScratchRepository rather than a
+      second scratch-repository helper, wired into ci.yml's test_claude_dev_tooling job
+      via a new ADD_PLAN_ITEM_TESTS_DIRECTORY constant. 230 tests pass, was 222.
+      Committed and pushed 2026-08-02, then opened as draft pull request #135 based on
+      fork main, no bug label (tooling that never existed, not a defect), subscribed to
+      its activity. Basing was checked with this item's own check_scope_overlap.py rather
+      than by feel, after the user asked whether it should sit on #106: the only paths
+      absent from main are the three this item introduces, the two it shares with #106
+      (resolve-personal-notes-config.sh, ci.yml) already exist on main, and nothing in
+      .claude/stack/ is read or referenced - so it is textual overlap, not a dependency,
+      and basing on #106 would attach a dependency-free immediate-wave item to the
+      unlanded upstream chain. git merge-tree against #106 reports exactly one conflict,
+      ci.yml's single pytest line, which both branches extend with their own tests
+      directory; the config file auto-merges. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
+      work is nil; the shared surface is resolve-personal-notes-config.sh (new constants
+      appended) and the three plan-*/SKILL.md files, which no other in-flight item on this
+      track touches.

@@ -1,27 +1,53 @@
 ## git-identity-from-personal-notes (plan: workflow-unification, track: personal-data)
 
-Branch is at origin/main (82501888), no code written yet. Kickoff only — no PR yet.
+Draft **PR #126**, commit `ddf3d382`, subscribed to its activity. No `bug` label.
+`test_claude_dev_tooling` green. Full plan:
+`/root/.claude/plans/idempotent-juggling-plum.md`.
 
-**Plan** (full version: `/root/.claude/plans/idempotent-juggling-plum.md`):
-sync the human git identity from the personal-notes branch into the clone at
-session start, and add a `git_identity` row to `check-setup.sh`. Base off fork
-`main`, no `depends_on`. Steps, test-first: (1) new
-`tests/test_git_identity_sync.py`; (2) `resolve-personal-notes-config.sh` gains
-`PERSONAL_GIT_IDENTITY_PATH`, `effective_git_identity`,
-`repository_local_git_identity_is_set`, `recorded_git_identity`; (3)
-`session-start.sh` identity block + summary line; (4) `test_check_setup_sh.py`
-gains `SetupCheck.GIT_IDENTITY` and strips `GIT_AUTHOR_*`/`GIT_COMMITTER_*` in
-its env scrub; (5) `check-setup.sh` row after `notes_file`; (6) new
-`save-git-identity.sh` (`--name`/`--email` required, delegates to
-`write-personal-notes-file.sh`); (7) README rows; (8) plan.yaml + roadmap.
+**CI red, not mine — diagnosed and answered on the PR, no fix pushed.**
+`test_each_lib (semantic_digital_twin)` fails two `test_multi_sim.py`
+material-builder tests (`assert '' != ''`) identically on the base #121 and on
+both #126 runs — constant, so reproducible rather than flaky, and pre-existing.
+One #126 run additionally hit `test_world_sim_state_sync` (the known
+physics-settling flake; failed in one of two runs of the same commit). This
+diff is 11 files under `.claude/hooks/`, zero mention of
+`semantic_digital_twin`. Worth someone's attention separately: `main`'s own run
+at `82501888` passes this job, so the material failures may be specific to the
+`refs/pull/*/merge` environment or the restored asset cache — hypothesis only,
+not investigated.
 
-**Key finding this session:** `GIT_AUTHOR_*`/`GIT_COMMITTER_*` are *set* in this
-container to `Abdelrhman Bassiouny <abassiou@uni-bremen.de>` and commits here are
-authored correctly — the roadmap's 2026-08-01 section records them as unset.
-Correcting that is part of step 8. Consequence: the check must read
-`git var GIT_AUTHOR_IDENT`, not `git config --get user.name` (which prints
-`Claude` on a clone that commits correctly).
+**Base: #121** (`claude/workflow-unification-setup-jgvs53`), not fork `main` —
+this reverses the item's recorded `depends_on: []`, now
+`depends_on: [session-start-plan-and-setup-guards]`. Reason: `main` has *no*
+harness that can run `session-start.sh` in a test; #121 adds
+`ScratchRepository.run_hook_script` + `write_setup_prerequisites`. #109 was
+rejected as a base outright (`dirty`, `needs-resolution`, stale base).
 
-**Next:** await go-ahead to implement (kickoff writes no code). Two decisions
-were recommended, not confirmed: `needs-setup` as the no-identity-recorded
-status, and no `bug` label.
+**Shipped:** `.claude/personal/git-identity` on the notes branch (git-config
+format, read via `git config --file`); `session-start.sh` writes it to
+repository-local config only when the clone has neither half, before the setup
+check; `check-setup.sh` `git_identity` row; `save-git-identity.sh`
+(`--name`/`--email` required, delegates to `write-personal-notes-file.sh`);
+README + `personal-notes.env.example` rows. Env scrub moved onto
+`run_hook_script`, replacing #121's two hand-rolled copies.
+
+**Key finding:** `GIT_AUTHOR_*`/`GIT_COMMITTER_*` are *set* here to
+`Abdelrhman Bassiouny <abassiou@uni-bremen.de>`; the #122 session had already
+recorded this correction in the roadmap, mine confirms it independently. So the
+check resolves via `git var GIT_AUTHOR_IDENT`, never `git config --get
+user.name` (prints `Claude` on a clone that commits correctly).
+
+**Verified:** 54 tests pass in `.claude/hooks/tests` (was 37), 248 across both
+CI directories. Live in this clone: row read `needs-setup` naming the real
+author, `save-git-identity.sh` recorded it, row went `ok`, re-run pushed
+nothing. plan.yaml + roadmap saved, dashboard republished.
+
+**Watch item:** #126 is based on #121, not `main`. If #121 lands by push or
+fast-forward rather than through its own PR, GitHub will *not* retarget #126 —
+round-2 of native-stacks-prototype established that only `merge-async` does.
+Neither is a native stack member, so a plain `PATCH` of the base is the
+recovery. If #121 merges normally, rebase #126 onto `main`.
+
+**Next:** respond to review comments and CI events as they arrive (no timed
+check-in). Unconfirmed recommendation now built in: `needs-setup` as the
+no-identity-recorded status.

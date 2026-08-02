@@ -88,6 +88,35 @@ file itself must never be merged into `main`.
 - This is the moment that decides whether the plan gets captured durably or evaporates once the
   session ends - do not let it pass by default.
 
+## New PR/item, or a change to one already in flight?
+
+- **Ask this before opening any branch or adding any plan item, and prefer the change.** Something
+  is genuinely new only if it still stands alone once the work before it lands. If it *modifies*
+  what an unlanded PR/item introduces, it is that PR's work - stacking it reflects the order I
+  wrote things in, not a real dependency.
+- The test is mechanical, so run it rather than judging by feel:
+  `git ls-tree <base-branch> -- <paths the work touches>`. Empty output means those files do not
+  exist on the base yet, so whichever PR introduces them is a candidate owner.
+- **That flags it for inspection; it does not settle it.** Ask what the PR would be if those edits
+  were removed. Substantial and standing on its own → it is real work on top of an unlanded parent,
+  which is just stacking. Nothing left → it exists only to change the parent, so it is not a
+  separate PR. Weighing the two halves usually decides it at a glance (#110: 2,645 lines of new
+  setup infrastructure vs 187 lines editing #106's files — real; #117: nothing but edits to #106's
+  files — folded).
+- A duplicate will not show up as an overlapping path if the two PRs named the file differently,
+  so compare by *purpose* too, not only by path.
+- Costs of splitting anyway, all of which we have now paid: the earlier PR ships a state nobody
+  should run; the later one spends its review re-explaining the first; if the earlier one is live
+  infrastructure, landing it alone regresses that infrastructure until the later one follows; and
+  two PRs both touching unlanded files can independently build the same file without noticing.
+- When it has already happened, fold rather than sequence - and decide *before* either lands,
+  because afterwards a duplicate is a merge conflict instead of a choice.
+- Split on what the work *is*, never on when I thought of it. One PR with a coherent story beats
+  two that only make sense read in order.
+- Precedent: #133 folded into #117, #117 folded into #106, and #110 turned out to be building
+  `.claude/stack/routine-prompt.md` while #106 was building `POINTER.md` - the same artifact,
+  twice, because nobody ran the check above.
+
 ## Keeping plan state current
 
 - **Whenever anything happens that changes a tracked plan's state, update that plan's

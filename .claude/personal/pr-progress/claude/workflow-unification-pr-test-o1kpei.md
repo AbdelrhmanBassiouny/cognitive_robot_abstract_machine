@@ -1,0 +1,75 @@
+# Branch retired twice over — all work now on PR #106
+
+#133 folded into #117; #117 has now folded into **#106**. Both auto-closed as merged
+when their head branches became identical to the parent's. Commits go straight to
+`claude/stack-tooling-on-main`. This session is subscribed to #106.
+
+## Why #117 collapsed into #106
+
+Every file #117 touched under `.claude/stack/` does not exist on `main` — #106 is what
+creates them. So from main's view the two were one addition and the split was an
+artifact of writing order. Worse, the pointer resolves `origin/main` **first**, so
+landing #106 alone would have swapped the live Routine onto a copy with no orphaned-child
+sweep, no named base-change client, no native-stack recovery and board-membership landed
+detection: the #41 bug, back silently. Developer agreed and chose the fold.
+
+## What #106 now carries from this session
+
+- Ancestry landed-parent detection (`Stack.has_landed_upstream()`), 3 tests.
+- `BASE CHANGES GO THROUGH THE GITHUB MCP SERVER`; both reparent sites defer to it.
+- SETUP step 0 fetches `.claude/stack/` instead of asserting it is on `main`.
+- `prompt_model.py` (was `doctrine.py`) — `PromptLandmark`, `PromptRule` +
+  `RuleSpecification` carrying `refused_client`/`refusal_status_code`, `GitHubMcpTool`,
+  `PromptDirective`, `PromptDocument` (`PARAGRAPH_BREAK` is a `ClassVar`). Zero
+  doctrine literals in tests; the word "doctrine" is gone from `.claude/stack/`.
+- `POINTER.md` — registered prompt as a template; HARD RULES pinned equal to
+  `ROUTINE.md`'s (real 15-line/1404-char block).
+- Remotes resolved **by repository, not by name**: `upstream_repository` is the one
+  committed constant, the fork is whichever remote points elsewhere. Zero/several
+  candidates raise rather than guess. `stack.py remotes` reports the pair + the exact
+  `git remote add` when no upstream remote exists (this checkout's actual case).
+  Step 0 runs it and uses the output; 11 hardcoded `origin/`/`cram2/` refs gone from
+  the prompt, pinned by `test_setup_asks_the_tool_which_remote_is_which`.
+  Two earlier attempts were rejected by the developer and he was right both times:
+  committing his fork as a `stack.toml` default (moved the problem one file across),
+  then deriving from `fork_remote` defaulting to `origin` (silently resolves the fork
+  to the *upstream* when origin is cram2 - a wrong answer, not an error).
+- Both errors are dataclasses; `DocumentLandmark` is a `Protocol`, not a union.
+- #106 is **self-contained**: no file under `.claude/stack/` refers to another branch's
+  work. I had written "the command that renders this block" into POINTER.md for a
+  command that lives in #110 - developer caught it; that sentence is #110's to add
+  alongside the command, and is flagged there.
+- **283 tests pass**, was 247 at session start. All 12 review threads on #106 resolved.
+
+## Live-system state, worth not forgetting
+
+The Routine's registered prompt reads `.claude/stack/ROUTINE.md` from git each run —
+`origin/main` first, falling back to the tooling branch since `.claude/stack/` is not on
+`main`. The fallback branch named in the *registered* prompt is still
+`claude/stack-landed-parent-detection`, which is now a dead branch pointing at the same
+commit as #106. It resolves today but should be re-pasted to name
+`claude/stack-tooling-on-main`.
+
+The registered prompt and `POINTER.md` also differ: the file adds "remember which ref you
+resolved it from", which step 0 leans on. `POINTER.md` is canonical — re-paste from it,
+never the reverse.
+
+PR #41 repaired earlier: 268 files/+27,825 → 7 files/+1,318, number and thread kept.
+
+## Open
+
+- #107 and #111 are based on `claude/stack-tooling-on-main` and need a restack now that
+  it has moved. #110 sits above #107, so it needs it too.
+- Pointer-rendering command (`stack.py pointer --fork ... --tooling-branch ...`) handed
+  to **#110** by comment — developer's call, overriding my follow-up-PR suggestion,
+  because #110 is the setup PR and this is a setup step.
+- **Also handed to #110: delete the remote inference.** Developer's objection — ~138
+  lines + 9 tests exist only to *guess* the fork. If setup asks once and writes
+  `fork_repository` to `.claude/personal/stack.toml` (personal-notes branch, so it
+  survives the fresh clone each Routine run gets), resolution collapses to "find the
+  remote naming it, else add it" and ~120 lines + 7 tests go. Kept in #106 only because
+  #106 lands first and must run with zero configuration. Thread left open for his call
+  on stripping it here instead.
+- Due when #106 lands: delete the pointer's `<TOOLING_BRANCH>` fallback (manual paste)
+  and step 0's fetch fallback. Neither breaks anything if missed.
+
