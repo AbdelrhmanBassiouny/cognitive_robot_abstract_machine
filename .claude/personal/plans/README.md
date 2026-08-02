@@ -126,6 +126,19 @@ validates it against the same checks `plan-dashboard` runs, asks before assuming
 real structural judgment call, then runs `save-plan.sh` and `/plan-dashboard` itself. This is how
 `rdr-refactor` (this repo's reference plan) was produced, done by hand before the skill existed.
 
+## Deciding where a new piece of work belongs
+
+Before adding an item — or opening a branch for one — settle whether it is genuinely new work or
+a change to work already in flight. `.claude/skills/add-plan-item/SKILL.md` (on `main`,
+`/add-plan-item <description>`) does this: it derives the paths the work would touch, reads every
+plan here plus live open pull requests as candidate homes, runs the scope check, and proposes one
+of four outcomes — fold it into an unlanded item, add it to an existing plan, start a new plan via
+`/plan-create`, or track it nowhere — through plan mode, without writing any code.
+
+The rule it applies lives in `.claude/skills/add-plan-item/scope-decision.md`, which
+`plan-create`, `plan-item-kickoff` and `plan-item-resolve` also defer to, so all four ask the
+question the same way.
+
 ## Editing an existing plan
 
 Edit `plans/<plan-id>/plan.yaml` and `roadmap.md` directly (in `CLAUDE.local.md` if a session
