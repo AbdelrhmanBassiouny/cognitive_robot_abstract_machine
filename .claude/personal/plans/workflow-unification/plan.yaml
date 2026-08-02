@@ -1224,6 +1224,7 @@ items:
   - id: add-plan-item-skill
     branch: claude/add-plan-item-skill-e89irj
     title: "/add-plan-item: decide where a new piece of work belongs"
+    pull_request_number: 135
     track: personal-data
     depends_on: []
     status: in_progress
@@ -1257,8 +1258,17 @@ items:
       add-plan-item/tests/, reusing the hooks suite's ScratchRepository rather than a
       second scratch-repository helper, wired into ci.yml's test_claude_dev_tooling job
       via a new ADD_PLAN_ITEM_TESTS_DIRECTORY constant. 230 tests pass, was 222.
-      Committed and pushed 2026-08-02; no pull request opened yet - the user has not
-      asked for one. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
+      Committed and pushed 2026-08-02, then opened as draft pull request #135 based on
+      fork main, no bug label (tooling that never existed, not a defect), subscribed to
+      its activity. Basing was checked with this item's own check_scope_overlap.py rather
+      than by feel, after the user asked whether it should sit on #106: the only paths
+      absent from main are the three this item introduces, the two it shares with #106
+      (resolve-personal-notes-config.sh, ci.yml) already exist on main, and nothing in
+      .claude/stack/ is read or referenced - so it is textual overlap, not a dependency,
+      and basing on #106 would attach a dependency-free immediate-wave item to the
+      unlanded upstream chain. git merge-tree against #106 reports exactly one conflict,
+      ci.yml's single pytest line, which both branches extend with their own tests
+      directory; the config file auto-merges. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
       work is nil; the shared surface is resolve-personal-notes-config.sh (new constants
       appended) and the three plan-*/SKILL.md files, which no other in-flight item on this
       track touches.
