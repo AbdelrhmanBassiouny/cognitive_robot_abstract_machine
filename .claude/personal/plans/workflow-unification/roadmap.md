@@ -2180,3 +2180,95 @@ rewritten around native mechanics, but `stack.py` still ships `print_next` and
 `args`" — the subsystem the cut removes. Either it is outstanding or it was dropped
 without a record. It matters for sequencing: applying it later rewrites `stack.py` again
 and makes #110's rebase resolve the same conflict twice.
+
+## Update 2026-08-02 (re-scoped): the routine's doctrine becomes a skill, and its recipes become subcommands
+
+Session: https://claude.ai/code/session_01BByQFT6he8xf5qvBWtyUPV, via `/plan-item-resolve`. Two
+user decisions, both taken after the options were costed rather than assumed.
+
+### The doctrine is a skill now, and it folds into #106
+
+`ROUTINE.md` is deleted. `.claude/skills/stacked-pr-maintenance/SKILL.md` carries the same
+doctrine, is invocable as `/stacked-pr-maintenance` from any session, and is what `POINTER.md`'s
+registered block resolves and runs for a scheduled one. The fork and upstream come from the
+skill's own arguments first, then `stack.py configuration`, then - interactively only - a
+question whose answer is written to `.claude/personal/stack.toml` on the personal-notes branch.
+`--non-interactive` turns that question into a stop.
+
+**Where it landed was the first decision.** `git ls-tree origin/main -- .claude/stack` is empty:
+every path this touches is introduced by #106 itself. By `add-plan-item/scope-decision.md`'s test,
+removing these edits leaves nothing standing alone, so it is #106's work and went onto
+`claude/stack-tooling-on-main` directly (commit `e20b0bb4`), not onto this session's designated
+branch. The second reason is sharper than the scope rule: the registered pointer resolves
+`origin/main` **first**, so landing a `ROUTINE.md` that its own successor deletes would change the
+live doctrine twice within one review cycle.
+
+### Recipes as subcommands, not prose and not an MCP server
+
+The second decision was how far to take "computed rather than recalled". Four new `stack.py`
+subcommands, each replacing a rule the reader previously had to remember:
+
+- **`labels`** - the complete set a label write must send, computed from the labels the pull
+  request carries now. This is the one with a production incident behind it: the write replaces
+  the whole set, and computing it from the addition alone once stripped `in-review` off
+  already-promoted branches.
+- **`preflight`** - refuses the move rather than describing how to check one: wrong branch checked
+  out, a refspec naming different branches on each side, a destination that is not the fork, and a
+  push that would make a child an ancestor of its own parent. Its own exit status (`5`).
+- **`promotion-link`** - owns the compare URL's encoding and length limit, both of which discard
+  the prefill *silently* when got wrong.
+- **`reparents` / `landed`** - phase 1 derived from git ancestry rather than pull-request state.
+
+**An MCP server was considered and rejected, on evidence rather than taste.** `gh` is absent in
+this environment and `GH_TOKEN` is proxy-injected, and the 2026-08-02 probe already recorded here
+shows a raw base-`PATCH` through that credential returns 403 while the GitHub MCP's
+`update_pull_request` returns 200. A local MCP server would therefore use the credential that
+*cannot* perform the riskiest operation in the whole workflow - so it would leave the base change
+in prose anyway, while adding `.mcp.json`, a server process and per-session schema loading. It is
+also the format that does not survive `routine-cutover`, whose endgame is a plain scheduled Action
+with no LLM at all; subcommands run identically in a session, in the Routine, and in that Action.
+
+The operating shape this settles on, worth stating generally: **compute deterministically, write
+through MCP.** The credential boundary decides which half is which, and that boundary is a
+property of the environment, not of the design.
+
+### Decision 11's cut is deliberately left half-applied
+
+The premise recorded in the previous entry - that `print_next` and `print_restack_plan` are
+outstanding work from decision 11 - was put to the user and reversed. They stay. Phases 2 and 3
+call them, and they are the derivation half of the scripts-over-prose choice made the same day;
+cutting them would push those phases back into the prose this work is removing.
+`print_restack_plan`'s docstring no longer names "the restack workflow's `args`", which is the
+part of the complaint that was real.
+
+### What the contract tests can now catch
+
+`test_prompt_documents.py` goes from 14 tests to 19. The five new ones assert things the previous
+shape had no way to state: that resolution prefers what it was told over what it can infer, that
+it names the exit status meaning the fork is unknown, that a run which cannot ask stops rather
+than guessing, that the pointer hands over both repositories with `--non-interactive`, and that
+the skill states the whole job rather than delegating to harness machinery - which is what lets
+the pointer keep reading the file while the skill is not yet on `main`.
+
+Each was checked by breaking the document three ways and confirming exactly one test failed each
+time. The hard-rules equality test earned itself again: the two copies were written independently
+in this session and it passed first time, which is the only evidence that the duplication is
+actually being held equal rather than coincidentally similar.
+
+**A constraint found while writing it, worth carrying:** a skill that is not on the checked-out
+branch at session start cannot be invoked by name. `.claude/skills/` is on `main` but
+`.claude/stack/` is not, so until #106 lands the pointer must still say "read this file from
+`<ref>` and execute it". That is why the skill has to read as a *document*, not only as a harness
+entry point - and it is the same not-yet-true-future-state hazard the 2026-08-02 pointer-adoption
+entry named, met a second time.
+
+### Review threads: one answered, one left open on purpose
+
+`stack.toml:23` asked for exactly this - *"running the configuration script or skill
+interactively, and it takes the fork link or name"*. The skill answers its interactive half. The
+~120-line inference deletion is still #110's, because the remaining caller is a non-interactive
+run with no arguments on a checkout nobody has configured, and only setup writing
+`fork_repository` at install time removes that one. Replied and left open rather than resolved;
+`stack.py:84` dies with the same deletion. #110 was told its rebase now inherits a skill, that its
+SETUP step 0 rewrite is superseded, and that the two contract tests it was told to update are
+updated upstream of it.

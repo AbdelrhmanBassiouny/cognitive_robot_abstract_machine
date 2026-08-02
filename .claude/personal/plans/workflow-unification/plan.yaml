@@ -186,15 +186,47 @@ items:
       independently-built `config` one surface, so #110's rebase deletes the resolution
       internals only. 286 CI tests pass, was 283. Description updated to match.
 
-      Still outstanding here: the same-day cut recorded above is only half applied.
-      ROUTINE.md was rewritten around native mechanics, but stack.py still ships
-      print_next and print_restack_plan, the latter still documented as feeding "the
-      restack workflow's args". Confirm whether the cut is still wanted; if so, sequence
-      it before #110's rebase, or that rebase resolves the same stack.py conflict twice.
-      Two review threads remain open: stack.toml:23 asks whether to strip the remote
-      inference here (recommended answer: no - it is what makes this PR runnable
-      standalone; delete it in #110 with the interactive setup), and stack.py:84 notes
-      Repository.from_remote_url parses without validating.
+      Re-scoped again 2026-08-02 (user-approved, session_01BByQFT6he8xf5qvBWtyUPV): the
+      doctrine becomes a skill and the recipes become subcommands. ROUTINE.md is deleted;
+      .claude/skills/stacked-pr-maintenance/SKILL.md carries the doctrine, is invocable as
+      /stacked-pr-maintenance from any session, and is what POINTER.md's registered block
+      now resolves and runs. Context resolution is arguments first (fork=/upstream=, passed
+      through as configuration --fork/--upstream, so nothing is inferred when both are
+      given), then stack.py configuration, then - only interactively - an AskUserQuestion
+      whose answer is persisted to .claude/personal/stack.toml on the personal-notes
+      branch; --non-interactive turns that question into a stop, which is what a scheduled
+      run needs given its own rule against opening a discussion. Landed as one commit on
+      this branch (e20b0bb4) rather than as a child PR: every path it touches is absent
+      from main, so by the scope rule nothing standalone would have remained, and shipping
+      a ROUTINE.md that its successor deletes would change the live doctrine twice - the
+      pointer resolves origin/main first.
+
+      Four new stack.py subcommands, each replacing a rule a reader had to remember:
+      labels (the complete set a label write must send, computed from the current labels),
+      preflight (refuses a wrong checked-out branch, a mismatched refspec, a non-fork
+      destination, and the child-becomes-ancestor-of-parent false merge; exit 5),
+      promotion-link (owns the compare URL's encoding and length limit), and
+      reparents/landed (phase 1 derived from git ancestry rather than pull-request state).
+      331 tests pass, was 294. An MCP server was considered and rejected: the raw PATCH
+      base change 403s on the session git-proxy credential, so a local server could not own
+      the riskiest operation, and subcommands survive routine-cutover's no-LLM endgame.
+
+      Decision 11's half-applied cut is deliberately not completed: print_next and
+      print_restack_plan are kept, because phases 2 and 3 call them and they are the
+      derivation half of the scripts-over-prose choice made here. print_restack_plan's
+      docstring no longer names "the restack workflow's args".
+
+      One review thread stays open by design - stack.toml:23, the remote inference. The
+      skill answers its interactive half; the remaining caller is a non-interactive run
+      with no arguments on an unconfigured checkout, so the ~120-line deletion is still
+      #110's, alongside the setup that writes fork_repository. Replied on the thread and
+      on #110 rather than resolving it. stack.py:84 (from_remote_url parses without
+      validating) also remains open and dies with the same deletion.
+
+      Manual step still due: re-paste POINTER.md's block into claude.ai/code/routines - it
+      now resolves the skill and passes both repositories plus --non-interactive. Once this
+      lands on main, the pointer's tooling-branch fallback can go and the block can invoke
+      /stacked-pr-maintenance by name instead of reading the file.
 
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
