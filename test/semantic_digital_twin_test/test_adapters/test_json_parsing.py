@@ -31,7 +31,9 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
     ScrewConnection,
+    RevoluteConnection,
 )
+from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import Box
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
@@ -363,3 +365,49 @@ def test_json_serialization_with_mesh():
             # shell rather than exactly empty; treat a negligible residual volume as
             # geometrically identical.
             assert difference.is_empty or difference.volume < c1.mesh.volume * 1e-3
+
+
+# %% connection references survive same-name ambiguity
+
+
+def _world_with_two_equally_named_connections() -> (
+    tuple[World, RevoluteConnection, RevoluteConnection]
+):
+    """
+    A world holding two revolute connections that share one name.
+
+    Merging two instances of the same robot description produces exactly this, since
+    every entity is named after the description it was parsed from.
+    """
+    world = World.create_with_root_body("root")
+    connections = []
+    for index in range(2):
+        with world.modify_world():
+            child = Body(name=PrefixedName("link", prefix=f"branch_{index}"))
+            connection = RevoluteConnection.create_with_dofs(
+                world=world,
+                parent=world.root,
+                child=child,
+                axis=Vector3.Z(),
+                name=PrefixedName("shared_joint"),
+            )
+            world.add_connection(connection)
+        connections.append(connection)
+    return world, connections[0], connections[1]
+
+
+def test_joint_state_resolves_the_connection_it_was_built_from():
+    world, first_connection, second_connection = (
+        _world_with_two_equally_named_connections()
+    )
+    joint_state = JointState.from_mapping(
+        mapping={second_connection: 0.5}, name=PrefixedName("state")
+    )
+
+    tracker = WorldEntityWithIDKwargsTracker.from_world(world)
+    reconstructed = JointState.from_json(
+        joint_state.to_json(), **tracker.create_kwargs()
+    )
+
+    assert reconstructed.connections == [second_connection]
+    assert reconstructed.connections[0] is not first_connection

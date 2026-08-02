@@ -73,6 +73,16 @@ from semantic_digital_twin.world_description.world_state_trajectory_plotter impo
 from semantic_digital_twin.orm.ormatic_interface import *
 
 
+def test_create_with_root_body_names_the_root_from_a_plain_string():
+    world = World.create_with_root_body("kitchen")
+    assert world.root.name == PrefixedName("kitchen")
+
+
+def test_create_with_root_body_defaults_the_root_name_to_map():
+    world = World.create_with_root_body()
+    assert world.root.name == PrefixedName("map")
+
+
 def test_set_state(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
     c1: PrismaticConnection = world.get_connection(l1, l2)
@@ -650,6 +660,24 @@ def test_remove_connection(world_setup):
         with world.modify_world():
             # if you remove a connection, the child must be connected some other way or deleted
             world.remove_connection(world.get_connection(r1, r2))
+
+
+def test_remove_branch_from_world(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    parent_connection = world.get_connection(bf, r1)
+    inner_connection = world.get_connection(r1, r2)
+
+    world.remove_branch_from_world(r1)
+
+    # The whole r-branch and the connection attaching it to its parent are gone.
+    assert r1 not in world.kinematic_structure_entities
+    assert r2 not in world.kinematic_structure_entities
+    assert parent_connection not in world.connections
+    assert inner_connection not in world.connections
+
+    # The rest of the world is untouched.
+    for remaining in (world.root, bf, l1, l2):
+        assert remaining in world.kinematic_structure_entities
 
 
 def test_kinematic_structure_entity_hash(world_setup):
