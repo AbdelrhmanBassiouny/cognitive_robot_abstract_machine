@@ -240,7 +240,7 @@ print(verbalize_expression(m.assigned_to == robots[0]))   # robots[0] is Robot("
 ```
 
 The identifying field(s) are the dataclass fields marked with `GrammarMetadata.is_identifying_field`
-(via `field(metadata=FieldMetadata(other_metadata=[GrammarMetadata(is_identifying_field=True)]).as_dict())`),
+(via `field(metadata=GrammarMetadata(is_identifying_field=True).as_dict())`),
 otherwise the first present of `name` / `id` / `label` / `key` / `uuid` (`Robot` has `name`, so this
 reads *"a specific Robot with name 'R2D2'"*). With none of those, it falls back to a bare *"a
 specific Robot"*.
@@ -258,7 +258,6 @@ surfaces as *"beginning"*).
 ```{code-cell} ipython3
 from dataclasses import dataclass, field
 from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
-from krrood.patterns.field_metadata import FieldMetadata
 
 @dataclass
 class Date:
@@ -267,11 +266,7 @@ class Date:
 
 @dataclass
 class Period:
-    begin: Date = field(
-        metadata=FieldMetadata(
-            other_metadata=[GrammarMetadata(display_name="beginning")]
-        ).as_dict()
-    )
+    begin: Date = field(metadata=GrammarMetadata(display_name="beginning").as_dict())
     end: Date = None
 
 p = variable(Period, domain=None)

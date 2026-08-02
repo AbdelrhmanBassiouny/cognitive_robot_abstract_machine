@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from functools import lru_cache
 from typing import Tuple
 
 import numpy as np
 import trimesh
 from krrood.class_diagrams.class_diagram import WrappedClass
-from krrood.class_diagrams.wrapped_field import WrappedField
 from krrood.entity_query_language.factories import variable_from, entity, variable, an
 from krrood.ormatic.utils import classproperty
-from krrood.patterns.field_metadata import FieldMetadata
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.helper import make_dirac
@@ -38,6 +35,15 @@ from typing_extensions import (
     TypeVar,
 )
 
+from semantic_digital_twin.api import (
+    BodySpecification,
+    ConnectionSpecification,
+    FixedConnectionSpecification,
+    PartSpecificationBinding,
+    RegionSpecification,
+    SemanticAnnotationWithRootSpecification,
+    KinematicStructureEntitySpecification,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.exceptions import (
@@ -46,6 +52,9 @@ from semantic_digital_twin.exceptions import (
     UnknownPartWholeRelationshipField,
 )
 from semantic_digital_twin.reasoning.predicates import is_supported_by
+from semantic_digital_twin.semantic_annotations.part_whole import (
+    IsPartWholeRelationship,
+)
 from semantic_digital_twin.spatial_types import (
     Point3,
     HomogeneousTransformationMatrix,
@@ -53,9 +62,6 @@ from semantic_digital_twin.spatial_types import (
 )
 from semantic_digital_twin.world_description.connections import (
     FixedConnection,
-)
-from semantic_digital_twin.world_description.degree_of_freedom import (
-    DegreeOfFreedomLimits,
 )
 from semantic_digital_twin.world_description.geometry import Scale
 from semantic_digital_twin.world_description.shape_collection import (
@@ -105,7 +111,7 @@ TKinematicStructureEntity = TypeVar(
 
 @dataclass(eq=False)
 class HasRootKinematicStructureEntity(
-    SemanticAnnotation, Generic[TKinematicStructureEntity], SubClassSafeGeneric, ABC
+    SemanticAnnotation, Generic[TKinematicStructureEntity], SubClassSafeGeneric
 ):
     """
     Base class for shared method for HasRootBody and HasRootRegion.
@@ -131,79 +137,137 @@ class HasRootKinematicStructureEntity(
     def __hash__(self):
         return hash((self.__class__, self.root))
 
-    @classproperty
-    def _parent_connection_type(self) -> Type[Connection]:
+    @classmethod
+    def parent_connection_specification(cls) -> ConnectionSpecification:
         """
-        The type of connection used to connect the root kinematic structure entity to the world.
-        .. note:: Currently its always, except with sliders and hinges, but in the future this may change. So override if needed.
+        Build the connection that attaches this annotation's root entity to its parent.
+
+        Annotation types whose connection takes parameters override this with their own
+        concrete signature, so callers get the parameters that family actually uses and
+        nothing else (e.g. :meth:`Slider.parent_connection_specification` takes an
+        ``axis``, this one takes none).
+
+        :meth:`get_specification` calls this to fill in the connection
+        when the caller supplies none. To parameterize it, call this method yourself and
+        hand the result to that factory.
+
+        .. warning:: Every override must stay callable with no arguments, since that is
+            how the default is resolved. Add parameters only with defaults.
+
+        .. note:: Currently always fixed, except for sliders and hinges. This may change
+            in the future, so override where needed.
+
+        :return: A freshly built connection specification.
         """
-        return FixedConnection
+        return FixedConnectionSpecification()
 
     @classmethod
-    def _create_with_connection_in_world(
+    @abstractmethod
+    def get_default_root_specification(
         cls,
-        name: PrefixedName,
-        world: World,
-        kinematic_structure_entity: KinematicStructureEntity,
-        world_root_T_self: Optional[HomogeneousTransformationMatrix] = None,
-        connection_limits: Optional[DegreeOfFreedomLimits] = None,
-        active_axis: Optional[Vector3] = None,
-        connection_multiplier: float = 1.0,
-        connection_offset: float = 0.0,
-    ) -> Self:
+        name: str | None = None,
+        scale: Optional[Scale] = None,
+        connection_specification: Optional[ConnectionSpecification] = None,
+    ) -> KinematicStructureEntitySpecification:
         """
-        Create a new instance and connect its root entity to the world's root.
+        Build this type's default root entity specification.
 
-        :param name: The name of the semantic annotation.
-        :param world: The world to add the annotation and entity to.
-        :param kinematic_structure_entity: The root entity of the semantic annotation.
-        :param world_root_T_self: The initial pose of the entity in the world root frame.
-        :param connection_limits: The limits for the connection's degrees of freedom.
-        :param active_axis: The active axis for the connection.
-        :param connection_multiplier: The multiplier for the connection.
-        :param connection_offset: The offset for the connection.
-        :return: The created semantic annotation instance.
+        Implemented once per root entity kind (:class:`HasRootBody` yields a body
+        specification, :class:`HasRootRegion` a region one) and overridden by types
+        whose geometry takes further parameters, such as a handle's ``thickness`` or a
+        case's ``wall_thickness``. Those parameters live here and nowhere else, so a
+        type's geometry is described in a single place.
+
+        :param name: The name of entities created from the specification. ``None``
+            leaves naming to the spawning annotation, which overrides it with its own
+            name.
+        :param scale: The scale the geometry is generated from.
+        :param connection_specification: Connection attaching the entity to its parent.
+            ``None`` defers to the annotation type's default at spawn time.
+        :return: The root entity specification.
         """
 
-        self_instance = cls(name=name, root=kinematic_structure_entity)
-        world_root_T_self = world_root_T_self or HomogeneousTransformationMatrix()
+    @classmethod
+    def get_specification(
+        cls,
+        name: str,
+        root_specification: KinematicStructureEntitySpecification,
+        *,
+        parent_connection_specification: Optional[ConnectionSpecification] = None,
+        annotation_kwargs: Optional[dict] = None,
+        part_specifications: Optional[dict] = None,
+    ) -> SemanticAnnotationWithRootSpecification[Self]:
+        """
+        Build the annotation specification around a given root entity specification.
 
-        root = world.root
-        world_root_T_self.reference_frame = root
-        world_root_T_self.child_frame = kinematic_structure_entity
+        The root geometry is always supplied by the caller, typically built with this
+        type's own :meth:`get_default_root_specification`. That builder owns every
+        geometry parameter (a scale, a handle's ``thickness``, a case's
+        ``wall_thickness``), so geometry is described in exactly one place.
 
-        if cls._parent_connection_type == FixedConnection:
-            world_root_C_self = FixedConnection(
-                parent=root,
-                child=kinematic_structure_entity,
-                parent_T_connection_expression=world_root_T_self,
+        :param name: The name of the annotation and its root entity.
+        :param root_specification: The specification of the annotation's root entity.
+        :param parent_connection_specification: Connection attaching the root to its
+            parent. When omitted, :meth:`parent_connection_specification` supplies this
+            type's default.
+        :param annotation_kwargs: Inert keyword arguments for the annotation
+            constructor.
+        :param part_specifications: Nested annotation parts keyed by part-whole
+            relationship field name.
+        :return: The annotation specification.
+        """
+        if parent_connection_specification is not None:
+            root_specification.connection_specification = (
+                parent_connection_specification
             )
-        else:
-            world_root_C_self = cls._parent_connection_type.create_with_dofs(
-                world=world,
-                parent=root,
-                child=kinematic_structure_entity,
-                parent_T_connection_expression=world_root_T_self,
-                multiplier=connection_multiplier,
-                offset=connection_offset,
-                axis=active_axis,
-                dof_limits=connection_limits,
+        return SemanticAnnotationWithRootSpecification(
+            name=name,
+            semantic_annotation_type=cls,
+            root_specification=root_specification,
+            annotation_kwargs=(
+                annotation_kwargs if annotation_kwargs is not None else {}
+            ),
+            part_bindings=cls._to_part_bindings(part_specifications),
+        )
+
+    @staticmethod
+    def _to_part_bindings(
+        part_specifications: Optional[dict],
+    ) -> list[PartSpecificationBinding]:
+        """
+        Convert the keyword-friendly mapping of parts into the bindings the
+        specification stores.
+
+        :param part_specifications: Nested annotation parts keyed by part-whole
+            relationship field name, each a single specification or a list of them.
+        :return: One binding per named field.
+        """
+        if part_specifications is None:
+            return []
+        return [
+            PartSpecificationBinding(
+                field_name=field_name,
+                specifications=(list(value) if isinstance(value, list) else [value]),
             )
+            for field_name, value in part_specifications.items()
+        ]
 
-        world.add_connection(world_root_C_self)
-        world.add_semantic_annotation(self_instance)
-
-        return self_instance
-
-    def _mount_strategy(self, main_has_root_body_annotation: HasRootBody) -> None:
+    def _mount_strategy(
+        self,
+        main_has_root_body_annotation: HasRootBody,
+        relationship: IsPartWholeRelationship,
+    ) -> None:
         """
         Realize the relationship between this annotation (as a part) and the
-        ``main_has_root_body_annotation`` (the whole) in the kinematic structure. The default is to
-        become a kinematic child of the whole; parts with a different strategy (e.g. mechanical
-        joints that re-parent the whole, apertures that cut it) override this.
+        ``main_has_root_body_annotation`` (the whole) in the kinematic structure. The
+        default is to become a kinematic child of the whole; parts with a different
+        strategy (e.g. mechanical joints that re-parent the whole, apertures that cut
+        it) override this.
 
-        :param main_has_root_body_annotation: The annotation (the whole) this one is being added to
-            as a part.
+        :param main_has_root_body_annotation: The annotation (the whole) this one is
+            being added to as a part.
+        :param relationship: The metadata of the part-whole relationship field being
+            mounted into, describing how the mount affects the whole.
         """
         main_has_root_body_annotation._world.move_branch(
             self.root, main_has_root_body_annotation.root, True
@@ -230,26 +294,23 @@ TBody = TypeVar("TBody", bound=Body)
 
 
 @dataclass(eq=False)
-class HasRootBody(HasRootKinematicStructureEntity[TBody], ABC):
+class HasRootBody(HasRootKinematicStructureEntity[TBody]):
     """
-    Abstract base class for all household objects. Each semantic annotation refers to a single Body.
-    Each subclass automatically derives a MatchRule from its own class name and
-    the names of its HouseholdObject ancestors. This makes specialized subclasses
-    naturally more specific than their bases.
+    Abstract base class for all objects which have a unambiguous root reference frame.
+
+    Each semantic annotation refers to a single Body. Each subclass automatically
+    derives a MatchRule from its own class name and the names of its ancestors.
+     This makes specialized subclasses naturally more specific than their bases.
     """
 
     @classmethod
     def create_with_new_body_in_world(
         cls,
-        name: PrefixedName,
+        name: str,
         world: World,
         world_root_T_self: Optional[HomogeneousTransformationMatrix] = None,
-        connection_limits: Optional[DegreeOfFreedomLimits] = None,
-        active_axis: Optional[Vector3] = None,
-        connection_multiplier: float = 1.0,
-        connection_offset: float = 0.0,
-        scale: Scale = None,
-        **kwargs,
+        parent_connection_specification: Optional[ConnectionSpecification] = None,
+        scale: Optional[Scale] = None,
     ) -> Self:
         """
         Create a new semantic annotation with a new body in the given world.
@@ -257,31 +318,48 @@ class HasRootBody(HasRootKinematicStructureEntity[TBody], ABC):
         :param name: The name of the semantic annotation.
         :param world: The world to add the annotation and body to.
         :param world_root_T_self: The initial pose of the body in the world root frame.
-        :param connection_limits: The limits for the connection's degrees of freedom.
-        :param active_axis: The active axis for the connection.
-        :param connection_multiplier: The multiplier for the connection.
-        :param connection_offset: The offset for the connection.
-        :param scale: The scale used to generate the geometry of the body.
+        :param parent_connection_specification: Connection attaching the body to the
+            world root. When omitted, this type's default parent connection applies.
+        :param scale: The scale used to generate the geometry of the body. When omitted,
+            the type's default geometry scale applies.
         :return: The created semantic annotation instance.
         """
-        body = Body(name=name)
+        return cls.get_specification(
+            name,
+            cls.get_default_root_specification(scale=scale),
+            parent_connection_specification=parent_connection_specification,
+        ).spawn(world, parent_T_self=world_root_T_self)
 
-        if scale is not None:
-            collision_shapes = BoundingBoxCollection.from_event(
-                body, scale.to_simple_event().as_composite_set()
-            ).as_shapes()
-            body.collision = collision_shapes
-            body.visual = collision_shapes
+    @classmethod
+    def get_default_root_specification(
+        cls,
+        name: str | None = None,
+        scale: Optional[Scale] = None,
+        connection_specification: Optional[ConnectionSpecification] = None,
+    ) -> BodySpecification:
+        """
+        Build the default body specification whose geometry matches what
+        :meth:`create_with_new_body_in_world` generates from ``scale``.
 
-        return cls._create_with_connection_in_world(
-            name=name,
-            world=world,
-            kinematic_structure_entity=body,
-            world_root_T_self=world_root_T_self,
-            connection_multiplier=connection_multiplier,
-            connection_offset=connection_offset,
-            active_axis=active_axis,
-            connection_limits=connection_limits,
+        This is the geometry-extraction counterpart of the factory: instead of
+        mutating a world, it returns a reusable, world-independent specification.
+
+        :param name: The name of bodies created from the specification. ``None`` leaves
+            naming to the spawning annotation, which overrides it with its own name.
+        :param scale: The scale used to generate the box geometry. ``None`` yields a
+            geometry-less specification, matching a factory call without a scale.
+        :param connection_specification: Connection attaching the entity to its parent.
+            ``None`` defers to the annotation type's default at spawn time.
+        :return: A body specification with a single solid box derived from ``scale``.
+        """
+        if scale is None:
+            return BodySpecification(
+                name=name, connection_specification=connection_specification
+            )
+        return BodySpecification.from_event(
+            name,
+            scale.to_simple_event().as_composite_set(),
+            connection_specification=connection_specification,
         )
 
 
@@ -289,7 +367,7 @@ TRegion = TypeVar("TRegion", bound=Region)
 
 
 @dataclass(eq=False)
-class HasRootRegion(HasRootKinematicStructureEntity[TRegion], ABC):
+class HasRootRegion(HasRootKinematicStructureEntity[TRegion]):
     """
     A mixin class for semantic annotations that have a region.
     """
@@ -297,71 +375,62 @@ class HasRootRegion(HasRootKinematicStructureEntity[TRegion], ABC):
     @classmethod
     def create_with_new_region_in_world(
         cls,
-        name: PrefixedName,
+        name: str,
         world: World,
         world_root_T_self: Optional[HomogeneousTransformationMatrix] = None,
-        connection_limits: Optional[DegreeOfFreedomLimits] = None,
-        active_axis: Optional[Vector3] = None,
-        connection_multiplier: float = 1.0,
-        connection_offset: float = 0.0,
-        **kwargs,
+        parent_connection_specification: Optional[ConnectionSpecification] = None,
+        scale: Optional[Scale] = None,
     ) -> Self:
         """
         Create a new semantic annotation with a new region in the given world.
 
         :param name: The name of the semantic annotation.
         :param world: The world to add the annotation and region to.
-        :param world_root_T_self: The initial pose of the region in the world root frame.
-        :param connection_limits: The limits for the connection's degrees of freedom.
-        :param active_axis: The active axis for the connection.
-        :param connection_multiplier: The multiplier for the connection.
-        :param connection_offset: The offset for the connection.
+        :param world_root_T_self: The initial pose of the region in the world root
+            frame.
+        :param parent_connection_specification: Connection attaching the region to the
+            world root. When omitted, this type's default parent connection applies.
+        :param scale: The scale used to generate the region area geometry.
         :return: The created semantic annotation instance.
         """
-        region = Region(name=name)
+        return cls.get_specification(
+            name,
+            cls.get_default_root_specification(scale=scale),
+            parent_connection_specification=parent_connection_specification,
+        ).spawn(world, parent_T_self=world_root_T_self)
 
-        return cls._create_with_connection_in_world(
-            name=name,
-            world=world,
-            kinematic_structure_entity=region,
-            world_root_T_self=world_root_T_self,
-            connection_multiplier=connection_multiplier,
-            connection_offset=connection_offset,
-            active_axis=active_axis,
-            connection_limits=connection_limits,
+    @classmethod
+    def get_default_root_specification(
+        cls,
+        name: str | None = None,
+        scale: Optional[Scale] = None,
+        connection_specification: Optional[ConnectionSpecification] = None,
+    ) -> RegionSpecification:
+        """
+        Build the default region specification whose geometry matches what
+        :meth:`create_with_new_region_in_world` generates.
+
+        :param name: The name of regions created from the specification. ``None`` leaves
+            naming to the spawning annotation, which overrides it with its own name.
+        :param scale: The scale used to generate the region area geometry. ``None`` yields a
+            geometry-less specification, matching the bare region of the base factory.
+        :param connection_specification: Connection attaching the entity to its parent.
+            ``None`` defers to the annotation type's default at spawn time.
+        :return: A region specification.
+        """
+        if scale is None:
+            return RegionSpecification(
+                name=name, connection_specification=connection_specification
+            )
+        return RegionSpecification.from_event(
+            name,
+            scale.to_simple_event().as_composite_set(),
+            connection_specification=connection_specification,
         )
-
-
-@lru_cache(maxsize=None)
-def _wrapped_part_whole_relationship_fields(
-    cls: Type[PartWholeRelationship],
-) -> list[WrappedField]:
-    """
-    Filters the fields of cls for all fields marked as a part-whole relationship (by carrying an
-    :class:`IsPartWholeRelationship` in their metadata), and returns them as a Wrapped Class.
-    """
-    return [
-        wrapped_part_whole_relationship_field
-        for wrapped_part_whole_relationship_field in WrappedClass(cls).fields
-        if IsPartWholeRelationship.of_field(
-            wrapped_part_whole_relationship_field.clazz.clazz,
-            wrapped_part_whole_relationship_field.name,
-        )
-        is not None
-    ]
-
-
-@dataclass
-class IsPartWholeRelationship(FieldMetadata):
-    """Marks a field as holding a structural *part* of its owner (the part-whole relation).
-
-    The relation is signalled by the mere presence of an instance of this class in a field's
-    :attr:`~FieldMetadata.other_metadata`; it carries no further data.
-    """
 
 
 @dataclass(eq=False)
-class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
+class PartWholeRelationship(HasRootKinematicStructureEntity):
     """
     Base for annotations that have structural *parts* (the part-whole relation).
 
@@ -375,21 +444,24 @@ class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
         self, part: HasRootKinematicStructureEntity, *, field_name: str = ""
     ) -> None:
         """
-        Add ``part`` as a structural part, routing it to the matching part-whole relationship field
-        by type.
+        Add ``part`` as a structural part, routing it to the matching part-whole
+        relationship field by type.
 
         :param part: The part to add.
-        :param field_name: Optional name of the target part-whole relationship field. When given,
-            only that field is considered (and ``part`` must still match its element type), which
-            resolves the ambiguity when ``type(part)`` matches several fields. When empty (default),
-            the field is resolved by type alone.
-        :raises UnknownPartWholeRelationshipField: If ``field_name`` is given but is not a
-            part-whole relationship field of this annotation.
-        :raises CannotBeAPartOf: If no part-whole relationship field of this annotation accepts
-            ``type(part)``.
-        :raises AmbiguousPart: If ``type(part)`` matches more than one part-whole relationship field.
+        :param field_name: Optional name of the target part-whole relationship field.
+            When given, only that field is considered (and ``part`` must still match its
+            element type), which resolves the ambiguity when ``type(part)`` matches
+            several fields. When empty (default), the field is resolved by type alone.
+        :raises UnknownPartWholeRelationshipField: If ``field_name`` is given but is not
+            a part-whole relationship field of this annotation.
+        :raises CannotBeAPartOf: If no part-whole relationship field of this annotation
+            accepts ``type(part)``.
+        :raises AmbiguousPart: If ``type(part)`` matches more than one part-whole
+            relationship field.
         """
-        candidate_fields = _wrapped_part_whole_relationship_fields(type(self))
+        candidate_fields = WrappedClass(type(self)).fields_with_metadata(
+            IsPartWholeRelationship
+        )
         if field_name:
             named_fields = [
                 wrapped_part_whole_relationship_field
@@ -398,7 +470,7 @@ class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
             ]
             if not named_fields:
                 raise UnknownPartWholeRelationshipField(
-                    self,
+                    type(self),
                     field_name,
                     [
                         wrapped_part_whole_relationship_field.field.name
@@ -417,7 +489,7 @@ class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
             raise AmbiguousPart(self, part, [match.field for match in matches])
 
         [match] = matches
-        part._mount_strategy(self)
+        part._mount_strategy(self, IsPartWholeRelationship.of_wrapped_field(match))
         if match.is_many_to_many_relationship:
             getattr(self, match.field.name).append(part)
         else:
@@ -425,16 +497,21 @@ class PartWholeRelationship(HasRootKinematicStructureEntity, ABC):
 
 
 @dataclass(eq=False)
-class HasApertures(HasRootBody, PartWholeRelationship, ABC):
+class HasApertures(HasRootBody, PartWholeRelationship):
     """
     A mixin class for semantic annotations that have apertures.
+
+    An aperture is an opening through this annotation's material, so mounting one
+    removes its volume from the annotation's collision and visual geometry.
     """
 
     apertures: List[Aperture] = field(
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship(
+            removes_part_geometry_from_whole=True
+        ).as_dict(),
     )
     """
     The apertures of the semantic annotation.
@@ -442,14 +519,14 @@ class HasApertures(HasRootBody, PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasMechanicalJoint(HasRootBody, PartWholeRelationship, ABC):
+class HasMechanicalJoint(HasRootBody, PartWholeRelationship):
     """
     A mixin class for semantic annotations that have mechanical joints.
     """
 
     mechanical_joint: Optional[MechanicalJoint] = field(
         default=None,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The mechanical joint of the semantic annotation.
@@ -470,7 +547,7 @@ class HasMechanicalJoint(HasRootBody, PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasDrawers(PartWholeRelationship, ABC):
+class HasDrawers(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have drawers.
     """
@@ -479,7 +556,7 @@ class HasDrawers(PartWholeRelationship, ABC):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The drawers of the semantic annotation.
@@ -487,7 +564,7 @@ class HasDrawers(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasDoors(PartWholeRelationship, ABC):
+class HasDoors(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have doors.
     """
@@ -496,7 +573,7 @@ class HasDoors(PartWholeRelationship, ABC):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The doors of the semantic annotation.
@@ -504,14 +581,14 @@ class HasDoors(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasHandle(HasRootBody, PartWholeRelationship, ABC):
+class HasHandle(HasRootBody, PartWholeRelationship):
     """
     A mixin class for semantic annotations that have a handle.
     """
 
     handle: Optional[Handle] = field(
         default=None,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The handle of the semantic annotation.
@@ -525,7 +602,7 @@ A type variable for HasRootBody.
 
 
 @dataclass(eq=False)
-class HasLegs(PartWholeRelationship, ABC):
+class HasLegs(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have legs.
     """
@@ -534,7 +611,7 @@ class HasLegs(PartWholeRelationship, ABC):
         default_factory=list,
         hash=False,
         kw_only=True,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The legs of the semantic annotation.
@@ -542,14 +619,14 @@ class HasLegs(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class HasSink(PartWholeRelationship, ABC):
+class HasSink(PartWholeRelationship):
     """
     A mixin class for semantic annotations that have a sink.
     """
 
     sink: Optional[Sink] = field(
         default=None,
-        metadata=FieldMetadata(other_metadata=[IsPartWholeRelationship()]).as_dict(),
+        metadata=IsPartWholeRelationship().as_dict(),
     )
     """
     The sink of the semantic annotation.
@@ -557,10 +634,12 @@ class HasSink(PartWholeRelationship, ABC):
 
 
 @dataclass(eq=False)
-class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric, ABC):
+class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric):
     """
-    A mixin class for semantic annotations that represent storage spaces. Used to afterthefact add object for example
-    to a table, and have those objects move with the table when it is moved.
+    A mixin class for semantic annotations that represent storage spaces.
+
+    Used to afterthefact add object for example to a table, and have those objects move
+    with the table when it is moved.
     """
 
     objects: List[THasRootBody] = field(default_factory=list, hash=False, kw_only=True)
@@ -593,7 +672,7 @@ class IsStorageSpace(HasRootBody, Generic[THasRootBody], SubClassSafeGeneric, AB
 
 
 @dataclass(eq=False)
-class HasSupportingSurface(IsStorageSpace, ABC):
+class HasSupportingSurface(IsStorageSpace):
     """
     A semantic annotation that represents a supporting surface.
     """
@@ -610,14 +689,17 @@ class HasSupportingSurface(IsStorageSpace, ABC):
         min_surface_area: float = 0.0225,  # 15cm x 15cm
     ) -> Optional[Region]:
         """
-        Calculate the supporting surface region for the semantic annotation, add it to the world, and set
-        it as the supporting surface of self
+        Calculate the supporting surface region for the semantic annotation, add it to
+        the world, and set it as the supporting surface of self.
 
-        :param upward_threshold: The threshold for the face normal to be considered upward-facing.
-        :param clearance_threshold: The threshold for the vertical clearance above the surface.
-        :param min_surface_area: The minimum area for a surface to be considered a supporting surface.
-
-        :return: The supporting surface region, or None if no suitable region could be found.
+        :param upward_threshold: The threshold for the face normal to be considered
+            upward-facing.
+        :param clearance_threshold: The threshold for the vertical clearance above the
+            surface.
+        :param min_surface_area: The minimum area for a surface to be considered a
+            supporting surface.
+        :return: The supporting surface region, or None if no suitable region could be
+            found.
         """
         mesh = self.root.combined_mesh
         if mesh is None:
@@ -701,9 +783,9 @@ class HasSupportingSurface(IsStorageSpace, ABC):
         """
         Infer and add objects that are supported by this surface to the storage space.
 
-        This method queries the world for bodies that are supported by this annotation's root body,
-        finds their corresponding semantic annotations, and adds them to the objects list if they
-        are not already present.
+        This method queries the world for bodies that are supported by this annotation's
+        root body, finds their corresponding semantic annotations, and adds them to the
+        objects list if they are not already present.
         """
         bodies = variable_from(self._world.bodies_with_collision)
         body = entity(bodies).where(
@@ -738,8 +820,9 @@ class HasSupportingSurface(IsStorageSpace, ABC):
         amount: int = 100,
     ) -> List[Point3]:
         """
-        Samples points from a surface around the semantic annotation. The surface is determined by the supporting
-        surface of the semantic annotation and is truncated by the objects on the surface. The points are sampled
+        Samples points from a surface around the semantic annotation.
+
+        The surface is determined by the supporting surface of the semantic annotation and is truncated by the objects on the surface. The points are sampled
         using a Gaussian mixture model.
 
         ..warning:: Calling this method when the self.supporting_surface is None will cause the method to calculate the
@@ -795,8 +878,9 @@ class HasSupportingSurface(IsStorageSpace, ABC):
         object_bloat: float = 0.1,
     ):
         """
-        Build a probabilistic circuit representing the supporting surface, truncated by the objects on the surface,
-        and with Gaussian mixtures around the objects of interest.
+        Build a probabilistic circuit representing the supporting surface, truncated by
+        the objects on the surface, and with Gaussian mixtures around the objects of
+        interest.
 
         :param category_of_interest: The type of object sample points around.
         :param object_bloat: The amount of bloat to apply to the object event.
@@ -822,7 +906,8 @@ class HasSupportingSurface(IsStorageSpace, ABC):
 
     def _2d_surface_sample_space_excluding_objects(self, object_bloat: float) -> Event:
         """
-        Compute a 2D event representing the supporting surface, truncated by the objects on the surface.
+        Compute a 2D event representing the supporting surface, truncated by the objects
+        on the surface.
 
         :param object_bloat: The amount of bloat to apply to the object events.
         """
@@ -850,14 +935,14 @@ class HasSupportingSurface(IsStorageSpace, ABC):
         """
         Create a Gaussian mixture model from a list of points, truncated by an event.
 
-        :param objects_of_interest: Objects of interest to sample around. The Gaussian mixtures will be centered around
-           the positions of these objects on the surface.
+        :param objects_of_interest: Objects of interest to sample around. The Gaussian
+            mixtures will be centered around the positions of these objects on the
+            surface.
         :param variance: The standard deviation to use for the Gaussian mixtures.
         :param sample_space: The event to truncate the Gaussian mixture model with.
-
-        :return: A probabilistic circuit representing the Gaussian mixture model truncated by the event, or None if the event has zero measure.
+        :return: A probabilistic circuit representing the Gaussian mixture model
+            truncated by the event, or None if the event has zero measure.
         """
-
         surface_circuit = self._untruncated_2d_gaussian_sampler(
             objects_of_interest=objects_of_interest,
             variance=variance,
@@ -874,8 +959,10 @@ class HasSupportingSurface(IsStorageSpace, ABC):
     ) -> ProbabilisticCircuit:
         """
         Create a Gaussian mixture model from a list of points, without truncation.
-        This method is extracted from the `_2d_gaussian_sampler_from_2d_sample_space` method so that the generated
-        distribution can be tested properly, which cannot be done after truncation.
+
+        This method is extracted from the `_2d_gaussian_sampler_from_2d_sample_space`
+        method so that the generated distribution can be tested properly, which cannot
+        be done after truncation.
         """
         surface_circuit = ProbabilisticCircuit()
         surface_circuit_root = SumUnit(probabilistic_circuit=surface_circuit)
@@ -916,7 +1003,7 @@ class HasSupportingSurface(IsStorageSpace, ABC):
 
 
 @dataclass(eq=False)
-class HasCaseAsRootBody(HasSupportingSurface, ABC):
+class HasCaseAsRootBody(HasSupportingSurface):
     """
     A mixin class for semantic annotations that have a case as root body.
     """
@@ -925,59 +1012,12 @@ class HasCaseAsRootBody(HasSupportingSurface, ABC):
     @abstractmethod
     def hole_direction(self) -> Vector3:
         """
-        The direction of the physical hole of the geometry. For a drawer for example, this would always be Z.
+        The direction of the physical hole of the geometry.
 
-        ..warning:: This does not describe the axis along, for example, a drawer opens. Its the physical opening where
-        you can put something into the drawer.
+        For a drawer for example, this would always be Z.
+                ..warning:: This does not describe the axis along, for example, a drawer opens. Its the physical opening where
+                you can put something into the drawer.
         """
-        ...
-
-    @classmethod
-    def create_with_new_body_in_world(
-        cls,
-        name: PrefixedName,
-        world: World,
-        world_root_T_self: Optional[HomogeneousTransformationMatrix] = None,
-        connection_limits: Optional[DegreeOfFreedomLimits] = None,
-        active_axis: Optional[Vector3] = None,
-        connection_multiplier: float = 1.0,
-        connection_offset: float = 0.0,
-        scale: Scale = Scale(),
-        *,
-        wall_thickness: float = 0.01,
-    ) -> Self:
-        """
-        Create a new semantic annotation with a new body in the given world.
-
-        :param name: The name of the semantic annotation.
-        :param world: The world to add the annotation and body to.
-        :param world_root_T_self: The initial pose of the body in the world root frame.
-        :param connection_limits: The limits for the connection's degrees of freedom.
-        :param active_axis: The active axis for the connection.
-        :param connection_multiplier: The multiplier for the connection.
-        :param connection_offset: The offset for the connection.
-        :param scale: The scale of the case.
-        :param wall_thickness: The thickness of the case walls.
-        :return: The created semantic annotation instance.
-        """
-        container_event = cls._create_container_event(scale, wall_thickness)
-
-        body = Body(name=name)
-        collision_shapes = BoundingBoxCollection.from_event(
-            body, container_event
-        ).as_shapes()
-        body.collision = collision_shapes
-        body.visual = collision_shapes
-        return cls._create_with_connection_in_world(
-            name=name,
-            world=world,
-            kinematic_structure_entity=body,
-            world_root_T_self=world_root_T_self,
-            connection_multiplier=connection_multiplier,
-            connection_offset=connection_offset,
-            active_axis=active_axis,
-            connection_limits=connection_limits,
-        )
 
     @classmethod
     def _create_container_event(cls, scale: Scale, wall_thickness: float) -> Event:
@@ -998,3 +1038,31 @@ class HasCaseAsRootBody(HasSupportingSurface, ABC):
         container_event = outer_box.as_composite_set() - inner_box.as_composite_set()
 
         return container_event
+
+    @classmethod
+    def get_default_root_specification(
+        cls,
+        name: str | None = None,
+        scale: Optional[Scale] = None,
+        connection_specification: Optional[ConnectionSpecification] = None,
+        *,
+        wall_thickness: float = 0.01,
+    ) -> BodySpecification:
+        """
+        Build the default body specification for a container/case, matching the hollow
+        geometry generated by :meth:`create_with_new_body_in_world`.
+
+        :param name: The name of bodies created from the specification.
+        :param scale: The outer scale of the case. Defaults to a unit :class:`Scale`
+            when omitted.
+        :param wall_thickness: The thickness of the case walls.
+        :param connection_specification: Connection attaching the entity to its parent.
+            ``None`` defers to the annotation type's default at spawn time.
+        :return: A body specification with hollow container geometry.
+        """
+        scale = scale if scale is not None else Scale()
+        return BodySpecification.from_event(
+            name,
+            cls._create_container_event(scale, wall_thickness),
+            connection_specification=connection_specification,
+        )

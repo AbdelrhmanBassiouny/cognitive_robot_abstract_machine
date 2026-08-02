@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import field, fields, dataclass, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 
-from typing_extensions import ClassVar, Dict, List, Optional, Type, TypeVar, Self
+from typing_extensions import Dict, Optional, Self, TYPE_CHECKING, Type
+
+if TYPE_CHECKING:
+    from krrood.class_diagrams.wrapped_field import WrappedField
 
 
 @dataclass
@@ -10,58 +13,47 @@ class FieldMetadata:
     """
     Krrood-specific metadata carried inside a dataclass field's ``metadata`` mapping.
 
-    A field carries a single :class:`FieldMetadata` under :attr:`METADATA_KEY` (attach
-    it with :meth:`as_dict`). Specific metadata classes are held as sub-metadatas in
-    :attr:`other_metadata` and read back by type via :meth:`get_metadata_by_type`.
+    A field carries at most one instance of a given :class:`FieldMetadata` subclass,
+    stored under that subclass itself as the key (attach it with :meth:`as_dict`, read
+    it back with :meth:`of_field`).
     """
 
-    METADATA_KEY: ClassVar[str] = "krrood_field_metadata"
-    """
-    The key this metadata is stored under inside a field's ``metadata`` mapping.
-    """
-
-    other_metadata: List[FieldMetadata] = field(default_factory=list)
-    """
-    The typed sub-metadatas this field carries (e.g. :class:`GrammarMetadata`),
-    retrieved by type via :meth:`get_metadata_by_type`.
-    """
-
-    def as_dict(self) -> Dict[str, FieldMetadata]:
-        """:return: a dataclass-field ``metadata`` mapping carrying this metadata under
-        :attr:`METADATA_KEY`, ready to pass to ``field(metadata=...)``.
+    def as_dict(self) -> Dict[type, Self]:
         """
-        return {self.METADATA_KEY: self}
-
-    def get_metadata_by_type(
-        self, metadata_type: Type[MetadataType]
-    ) -> Optional[MetadataType]:
-        """:return: the first sub-metadata in :attr:`other_metadata` that is an instance of
-        *metadata_type*, or ``None`` when none is present.
+        :return: a dataclass-field ``metadata`` mapping carrying this metadata under its own
+            type, ready to pass to ``field(metadata=...)``.
         """
-        for metadata in self.other_metadata:
-            if isinstance(metadata, metadata_type):
-                return metadata
-        return None
+        return {type(self): self}
 
     @classmethod
     def of_field(cls, clazz: Type, field_name: str) -> Optional[Self]:
-        """:return: The :class:`FieldMetadata` attached to *field_name* of *clazz*, or ``None`` when
-        *clazz* is not a dataclass, has no such field, or the field carries no metadata.
+        """
+        :return: the instance of *cls* attached to *field_name* of *clazz*, or ``None`` when
+            *clazz* is not a dataclass, has no such field, or the field carries no metadata of
+            type *cls*.
         """
         if not is_dataclass(clazz):
             return None
         field_ = next((f for f in fields(clazz) if f.name == field_name), None)
         if field_ is None:
             return None
-        field_metadata: Optional[FieldMetadata] = field_.metadata.get(cls.METADATA_KEY)
-        if field_metadata is None:
-            return None
-        if cls is FieldMetadata:
-            return field_metadata
-        return field_metadata.get_metadata_by_type(cls)
+        return field_.metadata.get(cls)
+
+    @classmethod
+    def of_wrapped_field(cls, wrapped_field: WrappedField) -> Optional[Self]:
+        """
+        :return: the instance of *cls* attached to the dataclass field behind
+            *wrapped_field*, or ``None`` when that field carries no metadata of type *cls*.
+
+        ..note:: The lookup goes through the dataclass field name, which may differ from
+            the public name under which the field is addressed.
+        """
+        return cls.of_field(wrapped_field.clazz.clazz, wrapped_field.field.name)
 
 
-MetadataType = TypeVar("MetadataType", bound=FieldMetadata)
-"""
-A type that is a subclass of :class:`FieldMetadata`.
-"""
+@dataclass
+class JSONMetadata(FieldMetadata):
+    serialize: bool = True
+    """
+    Whether the field should be serialized to JSON.
+    """

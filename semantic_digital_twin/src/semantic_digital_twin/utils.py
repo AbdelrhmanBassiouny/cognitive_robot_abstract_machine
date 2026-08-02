@@ -19,35 +19,6 @@ from xml.etree import ElementTree as ET
 from typing_extensions import Any, Tuple, ClassVar, Type
 
 
-class IDGenerator:
-    """
-    A class that generates incrementing, unique IDs and caches them for every object this is called on.
-    """
-
-    _counter = 0
-    """
-    The counter of the unique IDs.
-    """
-
-    def __init__(self):
-        self._counter = 0
-        self._by_obj = weakref.WeakKeyDictionary()  # type: ignore[var-annotated]
-
-    def __call__(self, obj: Any) -> int:
-        """
-        Creates a unique ID and caches it for every object this is called on.
-
-        :param obj: The object to generate a unique ID for, must be hashable.
-        :return: The unique ID.
-        """
-        try:
-            return self._by_obj[obj]
-        except KeyError:
-            self._counter += 1
-            self._by_obj[obj] = self._counter
-            return self._counter
-
-
 class suppress_stdout_stderr(object):
     """
     A context manager for doing a "deep suppression" of stdout and stderr in
@@ -109,24 +80,6 @@ def robot_name_from_urdf_string(urdf_string: str) -> str:
     return urdf_string.split('robot name="')[1].split('"')[0]
 
 
-def copy_lru_cache(maxsize=None, typed=False):
-    def decorator(func):
-        cached_func = lru_cache(maxsize=maxsize, typed=typed)(func)
-
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            result = cached_func(*args, **kwargs)
-            return deepcopy(result)
-
-        # Preserve lru_cache methods
-        wrapper.cache_info = cached_func.cache_info
-        wrapper.cache_clear = cached_func.cache_clear
-
-        return wrapper
-
-    return decorator
-
-
 def bpy_installed() -> bool:
     try:
         import bpy
@@ -150,6 +103,19 @@ def tracy_installed() -> bool:
         from ament_index_python.packages import get_package_share_directory
 
         pkg_name = "iai_tracy_description"
+
+        if get_package_share_directory(pkg_name):
+            return True
+        return False
+    except (ImportError, PackageNotFoundError, ValueError):
+        return False
+
+
+def daisy_installed() -> bool:
+    try:
+        from ament_index_python.packages import get_package_share_directory
+
+        pkg_name = "iai_daisy_description"
 
         if get_package_share_directory(pkg_name):
             return True
