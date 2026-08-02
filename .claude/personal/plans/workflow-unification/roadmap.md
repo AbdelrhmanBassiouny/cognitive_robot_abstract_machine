@@ -2018,3 +2018,61 @@ discover which sentences were aspirational. The same shape is queued for the sta
 source-2 line (manual paste) and step 0's fetch fallback (an ordinary commit). Neither breaks
 anything if forgotten — the fetch becomes a no-op, the fallback ref stops resolving — but both are
 dead weight, and the pointer edit is the last manual paste this design should ever need.
+
+## Update 2026-08-02: `/add-plan-item` — the scope decision gets a skill, and the rule gets one home
+
+The plan skills covered creating a plan, starting an item, unblocking one, and
+publishing status. They did not cover the event that happens most often: someone
+describes something to build and it has to be decided where it goes. Left to
+default, that decision reliably produced a new branch — which is how this plan
+accumulated its own fold chain (#133 into #117, #117 into #106) and the #110/#106
+collision, where two sessions independently built the same artifact under two
+different filenames without either noticing.
+
+### The rule was triplicated, which is the failure mode it warns about
+
+A mechanical test for this had just been written onto
+`claude/plan-scope-before-new-item` — an unlanded, pull-request-less branch, two
+commits, a clean fast-forward from main. It added the rule three times, as three
+independently-worded copies, to `plan-create`, `plan-item-kickoff` and
+`plan-item-resolve`, with no shared anchor for a fourth caller to reference.
+
+It now lives once, in `add-plan-item/scope-decision.md`, with all four skills
+referencing it in a line and keeping only their own situational framing (when the
+question is asked, and what to do with the answer). This follows
+`setup-personal-notes/prerequisite-check.md`, which established the pattern for
+exactly this: a shared procedure stated once so each caller cites rather than
+restates it. The three copies' distinct content was merged rather than dropped —
+`plan-item-resolve`'s duplicate-copies clause (decide which survives *before*
+either lands, since afterwards it is a merge conflict instead of a choice) is now
+part of the shared document.
+
+### The rule applied to its own introduction
+
+`claude/plan-scope-before-new-item` had no pull request and existed only to
+introduce prose this work rewrites. By the rule's own test, nothing substantial
+would have remained of it once the rewrite landed, so it is not separate work:
+this branch was reset onto it and carries both commits. Stacking instead would
+have put a pull request into review shipping the triplicated wording its
+successor deletes. That branch is retired.
+
+### Why it ships a script and not only prose
+
+The path check is the step most often skipped, and skipping it is what the fold
+chain and the collision have in common. `check_scope_overlap.py` runs it: given a
+base branch and the paths the work would touch, it reports which paths the base
+lacks and which unlanded branches already touch them. It also returns each
+candidate branch's full changed-file list, because the #110/#106 case shares no
+path at all — the same artifact under two names is invisible to a path
+intersection, and only a purpose comparison finds it. The script gathers the
+evidence; the fold-or-split judgement stays with the reader.
+
+Pure git, so no network access or GitHub call: the tests build a real scratch
+repository with a base and two candidate branches, reusing the hooks suite's
+`ScratchRepository` rather than adding a second helper of the same shape. Eight
+tests, wired into `ci.yml`'s `test_claude_dev_tooling` job through a new
+`ADD_PLAN_ITEM_TESTS_DIRECTORY` constant. 230 pass, was 222.
+
+One deliberate limit: a branch that does not resolve raises rather than returning
+an empty overlap. A missing candidate must never read as "no overlap" — that is
+the precise failure this whole item exists to prevent.

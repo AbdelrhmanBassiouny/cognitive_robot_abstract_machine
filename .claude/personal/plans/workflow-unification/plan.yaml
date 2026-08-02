@@ -1178,3 +1178,45 @@ items:
       based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
       #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for
       this track. Opened as draft pull request #124, subscribed to its activity.
+
+  - id: add-plan-item-skill
+    branch: claude/add-plan-item-skill-e89irj
+    title: "/add-plan-item: decide where a new piece of work belongs"
+    track: personal-data
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01XGMaAHK8LQCoxa52KVaMCc
+    notes: >
+      Raised 2026-08-02. The plan skills covered creating a plan, starting an item,
+      unblocking one and publishing status, but nothing covered the most frequent event:
+      someone describing new work and asking where it goes. That decision was being made
+      by default, which is what produced this plan's own recorded fold chain (#133 into
+      #117, #117 into #106) and the #110/#106 collision where two sessions independently
+      built the same artifact under two names. Adds /add-plan-item, which derives the
+      paths the work touches, gathers every plan and open pull request as candidate
+      homes, runs the scope check, and proposes exactly one of four outcomes - fold, new
+      item in an existing plan, new plan via /plan-create, or no item at all - through
+      plan mode without writing code.
+      Two decisions taken with the user before implementing. The rule itself was
+      triplicated as three independently-worded copies added to plan-create,
+      plan-item-kickoff and plan-item-resolve by the unlanded, PR-less branch
+      claude/plan-scope-before-new-item, with no shared anchor - itself the failure mode
+      the rule is about. It moves into add-plan-item/scope-decision.md, referenced in a
+      line by all four skills, following the setup-personal-notes/prerequisite-check.md
+      precedent. And rather than stack two pull requests, this branch was reset onto
+      claude/plan-scope-before-new-item (a clean fast-forward from main, commits 3e23270a
+      and 96a5b30b) so one branch carries both; that branch is retired, having never had
+      a pull request. That is the new rule applied to its own introduction.
+      Ships check_scope_overlap.py rather than prose alone, since the #110/#106 collision
+      is exactly what eyeballing missed: given a base and the work's paths it reports
+      which paths the base lacks and which unlanded branches already touch them, plus
+      each candidate's full changed-file list so same-purpose/different-filename
+      duplicates stay findable. Pure git, no network. Eight tests under
+      add-plan-item/tests/, reusing the hooks suite's ScratchRepository rather than a
+      second scratch-repository helper, wired into ci.yml's test_claude_dev_tooling job
+      via a new ADD_PLAN_ITEM_TESTS_DIRECTORY constant. 230 tests pass, was 222.
+      Committed and pushed 2026-08-02; no pull request opened yet - the user has not
+      asked for one. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
+      work is nil; the shared surface is resolve-personal-notes-config.sh (new constants
+      appended) and the three plan-*/SKILL.md files, which no other in-flight item on this
+      track touches.
