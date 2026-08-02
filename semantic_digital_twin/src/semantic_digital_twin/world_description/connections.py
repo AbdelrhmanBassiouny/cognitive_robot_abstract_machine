@@ -23,6 +23,7 @@ from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.types import NpMatrix4x4
+from semantic_digital_twin.exceptions import MissingConnectionAxisError
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
@@ -228,6 +229,8 @@ class ActiveConnection1DOF(ActiveConnection, ABC):
         :return: An instance of the class representing the defined relationship with its
             DOF added to the world.
         """
+        if axis is None:
+            raise MissingConnectionAxisError(connection_type_name=cls.__name__)
         name = name or cls._generate_default_name(parent=parent, child=child)
         dof = DegreeOfFreedom(name=PrefixedName("dof", str(name)), limits=dof_limits)
         world.add_degree_of_freedom(dof)

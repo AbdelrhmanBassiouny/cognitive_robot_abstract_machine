@@ -743,7 +743,7 @@ class TestOpenClose:
 
         with pr2_world_copy.modify_world():
             door = Door.create_with_new_body_in_world(
-                name=PrefixedName("door"),
+                name="door",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=1.5, z=1, yaw=np.pi, reference_frame=pr2_world_copy.root
@@ -751,7 +751,7 @@ class TestOpenClose:
             )
 
             handle = Handle.create_with_new_body_in_world(
-                name=PrefixedName("handle"),
+                name="handle",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=1.5,
@@ -770,7 +770,7 @@ class TestOpenClose:
             upper_limits.velocity = 1
 
             hinge = Hinge.create_with_new_body_in_world(
-                name=PrefixedName("hinge"),
+                name="hinge",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=1.5,
@@ -779,10 +779,12 @@ class TestOpenClose:
                     yaw=np.pi,
                     reference_frame=pr2_world_copy.root,
                 ),
-                connection_limits=DegreeOfFreedomLimits(
-                    lower=lower_limits, upper=upper_limits
+                parent_connection_specification=Hinge.parent_connection_specification(
+                    dof_limits=DegreeOfFreedomLimits(
+                        lower=lower_limits, upper=upper_limits
+                    ),
+                    axis=Vector3.Z(),
                 ),
-                active_axis=Vector3.Z(),
             )
 
             door.add(handle)
@@ -859,7 +861,7 @@ class TestOpenClose:
         with pr2_world_copy.modify_world():
             # The bottle lies on its side, its thread axis pointing towards the robot.
             Bottle.create_with_new_body_in_world(
-                name=PrefixedName("bottle"),
+                name="bottle",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.77, y=-0.2, z=0.9, reference_frame=pr2_world_copy.root
@@ -868,7 +870,7 @@ class TestOpenClose:
             )
 
             bottle_cap = BottleCap.create_with_new_body_in_world(
-                name=PrefixedName("bottle_cap"),
+                name="bottle_cap",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.65, y=-0.2, z=0.9, reference_frame=pr2_world_copy.root
@@ -886,16 +888,18 @@ class TestOpenClose:
             # The thread axis points from the bottle out through the cap, here
             # towards the robot, so unscrewing moves the cap away from the bottle.
             screw_joint = ScrewMechanism.create_with_new_body_in_world(
-                name=PrefixedName("screw_joint"),
+                name="screw_joint",
                 world=pr2_world_copy,
                 world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                     x=0.65, y=-0.2, z=0.9, reference_frame=pr2_world_copy.root
                 ),
-                connection_limits=DegreeOfFreedomLimits(
-                    lower=lower_limits, upper=upper_limits
+                parent_connection_specification=ScrewMechanism.parent_connection_specification(
+                    axis=Vector3(-1, 0, 0),
+                    dof_limits=DegreeOfFreedomLimits(
+                        lower=lower_limits, upper=upper_limits
+                    ),
+                    screw_pitch=screw_pitch,
                 ),
-                active_axis=Vector3(-1, 0, 0),
-                screw_pitch=screw_pitch,
             )
 
             bottle_cap.add(screw_joint)
