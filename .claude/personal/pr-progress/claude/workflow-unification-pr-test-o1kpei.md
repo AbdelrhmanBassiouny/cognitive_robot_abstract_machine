@@ -24,18 +24,22 @@ detection: the #41 bug, back silently. Developer agreed and chose the fold.
   doctrine literals in tests; the word "doctrine" is gone from `.claude/stack/`.
 - `POINTER.md` — registered prompt as a template; HARD RULES pinned equal to
   `ROUTINE.md`'s (real 15-line/1404-char block).
-- Fork **derived** from `fork_remote`'s URL (`Repository.from_remote_url`, handles HTTPS,
-  SSH and the cloud proxy form). `stack.toml` names nobody; `fork_repository` stays
-  settable for a checkout whose remote is not the fork. ROUTINE.md names no owner (was
-  3 sites), pinned by `test_routine_names_no_fork_of_its_own` against the *resolved*
-  value. Developer rejected my first attempt (committed his fork as a default) - he was
-  right, it moved the problem one file across.
+- Remotes resolved **by repository, not by name**: `upstream_repository` is the one
+  committed constant, the fork is whichever remote points elsewhere. Zero/several
+  candidates raise rather than guess. `stack.py remotes` reports the pair + the exact
+  `git remote add` when no upstream remote exists (this checkout's actual case).
+  Step 0 runs it and uses the output; 11 hardcoded `origin/`/`cram2/` refs gone from
+  the prompt, pinned by `test_setup_asks_the_tool_which_remote_is_which`.
+  Two earlier attempts were rejected by the developer and he was right both times:
+  committing his fork as a `stack.toml` default (moved the problem one file across),
+  then deriving from `fork_remote` defaulting to `origin` (silently resolves the fork
+  to the *upstream* when origin is cram2 - a wrong answer, not an error).
 - Both errors are dataclasses; `DocumentLandmark` is a `Protocol`, not a union.
 - #106 is **self-contained**: no file under `.claude/stack/` refers to another branch's
   work. I had written "the command that renders this block" into POINTER.md for a
   command that lives in #110 - developer caught it; that sentence is #110's to add
   alongside the command, and is flagged there.
-- **272 tests pass**, was 247 at session start. All 10 review threads on #106 resolved.
+- **283 tests pass**, was 247 at session start. All 12 review threads on #106 resolved.
 
 ## Live-system state, worth not forgetting
 
