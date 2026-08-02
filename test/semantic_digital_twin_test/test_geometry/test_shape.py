@@ -1,13 +1,67 @@
+import math
 import os
 from importlib.resources import files
 from pathlib import Path
 
 import numpy as np
+import pytest
 import trimesh
 
 from krrood.adapters.json_serializer import from_json, to_json
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Cylinder,
+    Mesh,
+    Scale,
+    Sphere,
+    Texture,
+)
 
-from semantic_digital_twin.world_description.geometry import Box, Mesh, Scale, Texture
+
+def test_recenter_origin_centers_bounding_box():
+    # A non-planar point cloud whose bounding box is offset from the origin.
+    mesh = Mesh.from_3d_points(
+        points_3d=[
+            Point3(0, 0, 0),
+            Point3(2, 0, 0),
+            Point3(0, 4, 0),
+            Point3(0, 0, 6),
+        ]
+    )
+    bounding_box = mesh.local_frame_bounding_box
+    expected_center = np.array(
+        [
+            (bounding_box.min_x + bounding_box.max_x) / 2,
+            (bounding_box.min_y + bounding_box.max_y) / 2,
+            (bounding_box.min_z + bounding_box.max_z) / 2,
+        ]
+    )
+
+    mesh.recenter_origin()
+
+    np.testing.assert_allclose(mesh.origin.to_position().to_np()[:3], -expected_center)
+
+
+def test_recenter_origin_preserves_existing_rotation():
+    # Recentering only moves the origin's translation; a pre-existing rotation must
+    # survive so the shape is not silently re-oriented.
+    mesh = Mesh.from_3d_points(
+        points_3d=[
+            Point3(0, 0, 0),
+            Point3(2, 0, 0),
+            Point3(0, 4, 0),
+            Point3(0, 0, 6),
+        ]
+    )
+    mesh.origin = HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 0, 0, 0, np.pi / 2)
+    expected_rotation = mesh.origin.to_rotation_matrix().to_np()
+
+    mesh.recenter_origin()
+
+    np.testing.assert_allclose(
+        mesh.origin.to_rotation_matrix().to_np(), expected_rotation, atol=1e-12
+    )
 
 
 def test_shape():
@@ -72,8 +126,8 @@ def test_texture_defaults():
 
 def test_texture_survives_serialization():
     """
-    A texture's fields survive the to_json/from_json round-trip, so a receiver renders the
-    same tiling as the sender without needing the original scene.
+    A texture's fields survive the to_json/from_json round-trip, so a receiver renders
+    the same tiling as the sender without needing the original scene.
     """
     texture = Texture(file_path="/textures/wood.png", repeat=(2.0, 3.0), uniform=True)
 
@@ -84,12 +138,44 @@ def test_texture_survives_serialization():
 
 def test_textured_primitive_survives_serialization():
     """
-    A primitive shape carrying a texture round-trips through serialization with the texture
-    intact, rather than silently collapsing to its flat color.
+    A primitive shape carrying a texture round-trips through serialization with the
+    texture intact, rather than silently collapsing to its flat color.
     """
-    box = Box(scale=Scale(1.0, 1.0, 1.0), texture=Texture(file_path="/textures/marble.png"))
+    box = Box(
+        scale=Scale(1.0, 1.0, 1.0), texture=Texture(file_path="/textures/marble.png")
+    )
 
     restored = Box.from_json(box.to_json())
 
     assert restored.texture == box.texture
     assert restored == box
+
+
+# %% the volume a shape encloses
+
+
+def test_box_volume():
+    assert Box(scale=Scale(0.5, 2.0, 3.0)).volume == pytest.approx(3.0)
+
+
+def test_sphere_volume():
+    assert Sphere(radius=2.0).volume == pytest.approx(4.0 / 3.0 * math.pi * 8.0)
+
+
+def test_cylinder_volume():
+    """
+    A cylinder's volume follows from the circle its width spans, not from the polygon
+    its mesh approximates that circle with.
+    """
+    cylinder = Cylinder(width=2.0, height=3.0)
+
+    assert cylinder.volume == pytest.approx(math.pi * 3.0)
+    assert cylinder.volume > cylinder.mesh.volume
+
+
+def test_mesh_volume(tmp_path):
+    source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
+
+    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
+
+    assert mesh.volume == pytest.approx(8.0)

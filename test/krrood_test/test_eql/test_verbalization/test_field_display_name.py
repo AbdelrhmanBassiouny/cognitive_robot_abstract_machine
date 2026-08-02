@@ -12,7 +12,6 @@ from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.fragments.base import RoleFragment
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
-from krrood.patterns.field_metadata import FieldMetadata
 
 
 @dataclass
@@ -32,11 +31,7 @@ class Period:
     override.
     """
 
-    begin: Date = field(
-        metadata=FieldMetadata(
-            other_metadata=[GrammarMetadata(display_name="beginning")]
-        ).as_dict()
-    )
+    begin: Date = field(metadata=GrammarMetadata(display_name="beginning").as_dict())
     end: Date = field(default=None)
 
 

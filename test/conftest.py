@@ -7,6 +7,11 @@ from copy import deepcopy
 import numpy as np
 import objgraph
 import pytest
+from semantic_digital_twin.robots.daisy import DAiSy
+from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
+from semantic_digital_twin.world_description.degree_of_freedom import (
+    DegreeOfFreedomLimits,
+)
 
 try:
     from semantic_digital_twin.robots.garmi import Garmi
@@ -55,13 +60,23 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Carrot,
     Lettuce,
     Banana,
-    Bowl,
     Spoon,
     Drawer,
     Handle,
+    Elevator,
+    Slider,
+    Door,
 )
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Vector3
-from semantic_digital_twin.utils import rclpy_installed, tracy_installed
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3,
+    Point3,
+)
+from semantic_digital_twin.utils import (
+    rclpy_installed,
+    tracy_installed,
+    daisy_installed,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     OmniDrive,
@@ -346,6 +361,7 @@ def supported_abstract_robots():
         ICub3,
         UnitreeG1,
         MMPDresden,
+        DAiSy,
         # Garmi, We dont have the ROS Package yet
     ]
 
@@ -389,7 +405,6 @@ def cylinder_bot_diff_world():
 
 def world_with_urdf_factory(
     robot_semantic_annotation: Type[AbstractRobot],
-    drive_connection_type: Type[OmniDrive | DifferentialDrive],
     robot_starting_pose: HomogeneousTransformationMatrix | None = None,
     urdf_path_resolver: PathResolver | None = None,
     robot_localization_pose: HomogeneousTransformationMatrix | None = None,
@@ -398,6 +413,7 @@ def world_with_urdf_factory(
     Builds this tree:
     map -> odom_combined -> "urdf tree"
     """
+    drive_connection_type = robot_semantic_annotation.get_drive_connection_type()
     urdf_parser = URDFParser.from_file(
         file_path=robot_semantic_annotation.get_ros_file_path(),
         path_resolver=urdf_path_resolver,
@@ -434,7 +450,7 @@ def world_with_urdf_factory(
 
 @pytest.fixture(scope="session")
 def _pr2_world_setup():
-    return world_with_urdf_factory(PR2, OmniDrive)
+    return world_with_urdf_factory(PR2)
 
 
 @pytest.fixture(scope="function")
@@ -445,7 +461,7 @@ def pr2_world_copy(_pr2_world_setup):
 
 @pytest.fixture(scope="session")
 def _hsr_world_setup():
-    return world_with_urdf_factory(HSRB, OmniDrive)
+    return world_with_urdf_factory(HSRB)
 
 
 @pytest.fixture(scope="function")
@@ -459,9 +475,8 @@ def hsr_world_copy(_hsr_world_setup):
 def _garmi_world_setup():
     if Garmi is None:
         pytest.skip("GARMI semantic annotation not installed")
-    urdf_dir = "package://garmi_description/urdf/garmi.urdf"
     try:
-        return world_with_urdf_factory(urdf_dir, Garmi, OmniDrive)
+        return world_with_urdf_factory(Garmi)
     except ParsingError as error:
         pytest.skip(f"GARMI URDF not available: {error}")
 
@@ -477,13 +492,24 @@ def tracy_world():
 
 
 @pytest.fixture(scope="session")
+def daisy_world():
+    if not daisy_installed():
+        pytest.skip("DAiSy not installed")
+    daisy = "package://iai_daisy_description/robots/daisy.urdf.xacro"
+    daisy_parser = URDFParser.from_file(file_path=daisy)
+    world_with_daisy = daisy_parser.parse()
+    DAiSy.from_world(world_with_daisy)
+    return world_with_daisy
+
+
+@pytest.fixture(scope="session")
 def _stretch_world_setup():
-    return world_with_urdf_factory(Stretch, DifferentialDrive)
+    return world_with_urdf_factory(Stretch)
 
 
 @pytest.fixture(scope="session")
 def _tiago_world_setup():
-    return world_with_urdf_factory(Tiago, DifferentialDrive)
+    return world_with_urdf_factory(Tiago)
 
 
 @pytest.fixture(scope="session")
@@ -568,6 +594,80 @@ def _apartment_world_setup():
         )
 
     return apartment_world
+
+
+@pytest.fixture(scope="session")
+def _elevator_world_setup():
+
+    world = World()
+
+    with world.modify_world():
+        world.add_body(Body(name=PrefixedName("root")))
+
+        wall_thickness = 0.05
+        scale = Scale(1, 1, 1)
+        name = PrefixedName("elevator")
+        elevator = Elevator.create_with_new_body_in_world(
+            name=PrefixedName("Elevator"),
+            world=world,
+            scale=Scale(1, 1, 1),
+            wall_thickness=0.05,
+        )
+
+        vertical_drive = Slider.create_with_new_body_in_world(
+            name=PrefixedName(f"{name.name}_drive", name.prefix),
+            world=world,
+            active_axis=Vector3.Z(),
+        )
+        elevator.add(vertical_drive)
+
+        door_scale = Scale(wall_thickness, scale.y / 2, scale.z)
+        door1 = Door.create_with_new_body_in_world(
+            name=PrefixedName(f"{name.name}_door0", name.prefix),
+            world=world,
+            world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
+                Point3(-scale.x / 2, -scale.y / 4, 0),
+                reference_frame=world.root,
+            ),
+            scale=door_scale,
+        )
+        door2 = Door.create_with_new_body_in_world(
+            name=PrefixedName(f"{name.name}_door1", name.prefix),
+            world=world,
+            world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
+                Point3(-scale.x / 2, scale.y / 4, 0),
+                reference_frame=world.root,
+            ),
+            scale=door_scale,
+        )
+
+        elevator.add(door1)
+        elevator.add(door2)
+
+        door_travel = door_scale.y
+        door_slider_configs = (
+            (
+                door1,
+                DerivativeMap(position=0.0),
+                DerivativeMap(position=door_travel),
+            ),
+            (
+                door2,
+                DerivativeMap(position=0.0),
+                DerivativeMap(position=door_travel),
+            ),
+        )
+        for i, (current_door, lower, upper) in enumerate(door_slider_configs):
+            door_slider = Slider.create_with_new_body_in_world(
+                name=PrefixedName(f"{name.name}_door{i}_drive", name.prefix),
+                world=world,
+                active_axis=(Vector3.Y() * ((-1) ** (i + 1))),
+                connection_limits=DegreeOfFreedomLimits(lower=lower, upper=upper),
+            )
+            current_door.add(door_slider)
+
+        world.add_semantic_annotation(elevator)
+    return world
 
 
 @pytest.fixture(scope="function")
@@ -848,7 +948,7 @@ def kitchen_environment_fixture():
         world.add_kinematic_structure_entity(root)
         fruit_table = Table.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("fruit_table"),
+            name="fruit_table",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=1, z=0
             ),
@@ -857,7 +957,7 @@ def kitchen_environment_fixture():
 
         vegetable_table = Table.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("vegetable_table"),
+            name="vegetable_table",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=1, z=2
             ),
@@ -866,7 +966,7 @@ def kitchen_environment_fixture():
 
         empty_table = Table.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("empty_table"),
+            name="empty_table",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=1, z=4
             ),
@@ -875,7 +975,7 @@ def kitchen_environment_fixture():
 
         empty_table2 = Table.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("empty_table2"),
+            name="empty_table2",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=1, z=6
             ),
@@ -884,7 +984,7 @@ def kitchen_environment_fixture():
 
         apple = Apple.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("apple"),
+            name="apple",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=1, z=0.55
             ),
@@ -895,7 +995,7 @@ def kitchen_environment_fixture():
 
         orange = Orange.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("orange"),
+            name="orange",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=0.5, z=0.55
             ),
@@ -906,7 +1006,7 @@ def kitchen_environment_fixture():
 
         banana1 = Banana.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("banana1"),
+            name="banana1",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=0.6, z=0.75
             ),
@@ -917,7 +1017,7 @@ def kitchen_environment_fixture():
 
         carrot = Carrot.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("carrot"),
+            name="carrot",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=1, z=2.6
             ),
@@ -928,7 +1028,7 @@ def kitchen_environment_fixture():
 
         lettuce = Lettuce.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("lettuce"),
+            name="lettuce",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=1, y=1.5, z=2.55
             ),
@@ -939,7 +1039,7 @@ def kitchen_environment_fixture():
 
         banana = Banana.create_with_new_body_in_world(
             world=world,
-            name=PrefixedName("banana"),
+            name="banana",
             world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(
                 x=10, y=10, z=10
             ),

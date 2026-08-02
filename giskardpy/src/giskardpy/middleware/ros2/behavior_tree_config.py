@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from py_trees.decorators import FailureIsSuccess
+
 from giskardpy.middleware.ros2.utils.utils import is_in_github_workflow
 from giskardpy.tree.behaviors.publish_debug_expressions import QPDataPublisherConfig
 from giskardpy.tree.blackboard_utils import GiskardBlackboard

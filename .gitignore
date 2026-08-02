@@ -19,6 +19,7 @@ msg/_*.py
 *muh*
 *.txt
 *.png
+!.claude/skills/plan-dashboard/example/screenshots/*.png
 *.lprof
 tmp_data/
 tmp/

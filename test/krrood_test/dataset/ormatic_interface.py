@@ -30,6 +30,7 @@ import krrood.ormatic.type_dict
 import krrood.patterns.role
 import krrood.symbol_graph.symbol_graph
 import pathlib
+import random_events.interval
 import sqlalchemy.sql.sqltypes
 import test.krrood_test.dataset.alternative_mappings_construction_order
 import test.krrood_test.dataset.example_classes
@@ -1538,6 +1539,21 @@ class GenericClassAssociationDAO(
     )
 
 
+class HolderOfSimpleIntervalDAO(
+    Base,
+    DataAccessObject[test.krrood_test.dataset.example_classes.HolderOfSimpleInterval],
+):
+    __tablename__ = "HolderOfSimpleIntervalDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    bounds: Mapped[random_events.interval.SimpleInterval] = mapped_column(
+        sqlalchemy.sql.sqltypes.JSON, nullable=False, use_existing_column=True
+    )
+
+
 class InheritanceBaseWithoutSymbolButAlternativelyMappedMappingDAO(
     Base,
     DataAccessObject[
@@ -1730,6 +1746,40 @@ class KRROODOrientationDAO(
 
     __mapper_args__ = {
         "polymorphic_identity": "KRROODOrientationDAO",
+        "inherit_condition": database_id == SymbolDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class KRROODPipeOptionalOrientationDAO(
+    SymbolDAO,
+    DataAccessObject[
+        test.krrood_test.dataset.example_classes.KRROODPipeOptionalOrientation
+    ],
+):
+    __tablename__ = "KRROODPipeOptionalOrientationDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(SymbolDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    x: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    y: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    z: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    w: Mapped[typing.Optional[builtins.float]] = mapped_column(use_existing_column=True)
+
+    position_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("KRROODPositionDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    position: Mapped[KRROODPositionDAO] = relationship(
+        "KRROODPositionDAO", uselist=False, foreign_keys=[position_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "KRROODPipeOptionalOrientationDAO",
         "inherit_condition": database_id == SymbolDAO.database_id,
         "polymorphic_load": "selectin",
     }

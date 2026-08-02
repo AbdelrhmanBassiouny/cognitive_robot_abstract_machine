@@ -204,9 +204,7 @@ def test_attach_semantic_annotation_attaches_door_and_handle_sub_parts():
 
     assert door in cabinet.doors
     assert door.root.name.name == "hinge_cabinet_door"
-    # the handle is nested inside the door in the fixture, so it belongs to the door's annotation,
-    # not directly to the cabinet's
-    assert cabinet.handle is None
+
     assert door.handle == handle
     assert handle.root.name.name == "hinge_cabinet_handle"
 

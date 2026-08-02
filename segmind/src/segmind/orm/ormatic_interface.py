@@ -16,6 +16,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
 import builtins
+import coraplex.datastructures.enums
 import coraplex.orm.model
 import datetime
 import enum
@@ -532,6 +533,9 @@ class AbstractDetectorDAO(
     name: Mapped[builtins.str] = mapped_column(
         sqlalchemy.sql.sqltypes.Text, use_existing_column=True
     )
+    parent_node_index: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        use_existing_column=True
+    )
 
     tracked_object: Mapped[
         typing.Optional[semantic_digital_twin.world_description.world_entity.Body]
@@ -933,8 +937,14 @@ class EpisodeSegmenterExecutorDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
-    tmp_folder: Mapped[builtins.str] = mapped_column(
-        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    player_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("EpisodePlayerDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    player: Mapped[EpisodePlayerDAO] = relationship(
+        "EpisodePlayerDAO", uselist=False, foreign_keys=[player_id], post_update=True
     )
 
 
