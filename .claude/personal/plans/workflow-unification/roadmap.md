@@ -1848,3 +1848,89 @@ history: that sweep, triggered off #53's closed-via-merge event on 2026-07-25, w
 #41's orphaning that same day - instead of the ~6 days it actually took until a review round on #41
 noticed the inflated diff by accident on 2026-07-31. `routine-cutover`'s notes are corrected to say
 this plainly, rather than leaving the narrower framing on record.
+
+## Update 2026-08-02 (probed): the base-change 403 is one credential, not the platform
+
+`/plan-item-kickoff workflow-unification session-safe-pr-reparent`, session
+https://claude.ai/code/session_01WvRrTrtiznzAyvaoeCdNSq, prompted by the user wanting the fix tried
+on PR #41 the way `landed-parent-detection` had been.
+
+The kickoff's step 0 was a cheap probe the previous session had no reason to run: the recorded 403
+came from `curl` + `GH_TOKEN` through the session git proxy, and `mcp__github__update_pull_request`
+takes a `base` parameter that nobody had tried. Run on a throwaway pull request (#129), against the
+same pull request minutes apart:
+
+| Client | Non-stacked PR | Stack member |
+| --- | --- | --- |
+| MCP `update_pull_request(base=…)` | **200, base changed** | `422 - Cannot change the base branch because the pull request is part of a stack` |
+| raw `PATCH` + `GH_TOKEN` via the git proxy | **403 - not permitted for this session type** | — |
+
+**The block is on that credential, not on the operation and not on sessions.** The reason nobody had
+noticed is structural rather than accidental: the stacks endpoints have no MCP tool, so `ROUTINE.md`
+tells the reader to use `curl` with `GH_TOKEN` — and a reader already in `curl` naturally issues the
+base `PATCH` there too, straight into the 403. The doctrine's own advice routed people into the one
+client that cannot do the job.
+
+The full stack-member repair was then rehearsed end to end on a throwaway stack, before anything
+touched #41: `POST /stacks/131/unstack` → 204, MCP base change → 200, `POST /stacks` → 201 (new
+Stack #132, trunk moved). That is exactly the sequence `landed-parent-detection` already prescribes.
+**It was right about the mechanics and wrong only about the client.**
+
+### What this kills
+
+`session-safe-pr-reparent` was created to replace every reparent with close-old-PR → create-new-PR,
+accepting a new pull request number and a fresh review thread on each one because "the clean PATCH is
+not available to a session at all". It is available. So:
+
+- **No close+create fallback**, anywhere — no pull request has to lose its number, labels or review
+  thread to be reparented.
+- **No reparent-recovery script.** Worth recording that the script the item's notes said #106
+  "already scopes" **was never written** — `git ls-tree` on both `claude/stack-tooling-on-main` and
+  `claude/stack-landed-parent-detection` shows `.claude/stack/` holds only `README.md`, `ROUTINE.md`,
+  `stack.py`, `stack.toml`, `tests/`. Decision 11 promised it and it did not get built; with the base
+  change available there is nothing left for it to work around, and not adding new mechanics is
+  decision 11's own direction (GitHub maintains the mechanics, we maintain policy).
+- **The "third instance" framing is wrong and is corrected in the item notes.** Tag-push and
+  branch-delete are genuinely blocked for a session because *no MCP tool exists for either*. A
+  base change has one. The family is "operations with no session-reachable client", not "operations
+  the platform forbids sessions" — which is a materially different thing to carry into
+  `routine-cutover`, where the Action's own credential is the open question.
+
+### What shipped
+
+Draft PR **#133** on `claude/workflow-unification-pr-test-o1kpei`, `bug` label, based on #117's head
+since it edits the NATIVE-STACK MEMBERS section that item added. A `BASE CHANGES GO THROUGH THE
+GITHUB MCP SERVER` rule stated once in Phase 1 — recording the 403, naming its cause, and telling a
+session that hits it that it used the wrong client rather than found a stuck reparent — with both
+reparent sites deferring to it, step 3 of the native-stack sequence using the MCP tool and stating
+that the child keeps its number, labels and review thread, and `README.md`'s source-of-truth row
+naming the tool.
+
+Four contract tests, written failing first. `ROUTINE.md` is prose and had **no test coverage at
+all**, which is exactly how a doctrine drifts back to a blocked verb unnoticed; 251 tests pass in the
+dev-tooling suite, was 247.
+
+### PR #41, repaired
+
+Then run for real against the case the whole thread started from, using the newly written sequence:
+recorded Stack #128's composition → dissolved it (204) → changed #41's base to `main` via the MCP
+tool → re-created the stack (201).
+
+- #41: **268 files / +27,825 → 7 files / +1,318** — exactly the four `rdr/` modules and three test
+  files its own description names. `mergeable_state: clean`. It kept its number, its four comments
+  and its `cram2-link-sent` label.
+- **Nothing was pushed to any branch.** Only the base moved, so no force-push, no restack, no CI
+  churn on the six pull requests above it.
+- Stack **#134** carries the same seven pull requests in the same order, now trunked on `main`
+  instead of `ripple-down-rules-refactor`; #63–#98 kept their own bases. GitHub will not reuse a
+  dissolved stack's number, so #112 → #128 → #134 is expected rather than a symptom.
+
+The prevention story recorded on 2026-08-02 is untouched by all this: #117's ancestry check is still
+what notices the orphan, and `routine-cutover`'s `pull_request: closed` sweep is still what makes it
+notice promptly. What changed is only that the repair it triggers is now a base change a session can
+actually perform.
+
+**Residue.** Throwaway branches `claude/reparent-probe-{head,target,upper}-o1kpei` survive — sessions
+cannot delete branches (2026-07-29 addendum), so they need the same out-of-harness deletion as
+`origin/claude/push-scope-test-zsq7jc`. Their pull requests #129/#130 are closed and stacks #131/#132
+dissolved.

@@ -510,16 +510,17 @@ items:
       trigger trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the
       final cutover deletes or disables it. Gate unchanged: only after PR 1 is on
       cram2/main and fork main fast-forwards; one green Action cycle flips this done.
-      New requirement 2026-08-02, from a live `landed-parent-detection` (#117) reparent
-      attempt: PATCHing a pull request's base branch 403'd from a Claude Code session
-      with "not permitted for this session type" - confirmed unconditional (fired on an
-      already-unstacked PR, not just a stack member), so no session can ever do a real
-      base-branch reparent. The Action's own credential (default GITHUB_TOKEN or a
-      stored PAT) is a different actor identity than a session's, so it plausibly is
-      not subject to this restriction - this item's kickoff/implementation must verify
-      that concretely (a real PATCH attempt from the Action) before assuming it. If the
-      Action's token also 403s, it needs the same close+create-PR fallback
-      session-safe-pr-reparent builds for sessions. Also fold in event-triggered
+      Base-change requirement, corrected 2026-08-02 by session-safe-pr-reparent's probe:
+      the 403 recorded here is a property of the session git-proxy credential, not of
+      sessions or of the operation - the MCP `update_pull_request` tool changes a base
+      fine (verified on throwaway PR #129), so the "no session can ever do a real
+      base-branch reparent" reading was wrong and no close+create fallback exists to
+      inherit. The Action's own credential (default GITHUB_TOKEN or a stored PAT) is a
+      third identity again, and the probe makes it much more likely to work than feared,
+      since the block is narrow rather than platform-wide. Still verify it concretely
+      with a real base change from the Action before relying on it; if it does 403, the
+      Action can call the same MCP-equivalent REST endpoint under a token that does not
+      carry the restriction rather than degrade to renumbering pull requests. Also fold in event-triggered
       detection rather than cadence-only: trigger the Action (or an additional one) on
       `pull_request` `closed`, ancestry-test that PR's head branch immediately, and
       reparent any open fork PR based on it right then if it turns out to have landed
@@ -746,62 +747,76 @@ items:
       -> restack -> re-create) was proposed and the user explicitly approved executing it.
       Attempted the same session: dissolved Stack #112 (POST .../unstack, 204) succeeded,
       but PATCH .../pulls/41 with a new base 403'd with "Changing a pull request's base
-      branch is not permitted for this session type" - a platform-level block on ANY base
-      change from a session, harder than and different from the stack-member 422 this
-      item's ROUTINE.md addition was written for (that 422 is GitHub rejecting a stacked
-      PR's base change specifically; this 403 blocks it regardless of stack membership).
+      branch is not permitted for this session type". That was read at the time as a
+      platform-level block on ANY base change from a session; it is not - see the
+      correction below.
       Per ROUTINE.md's own stop-and-report rule, re-created the stack immediately with the
       same 7-PR list to avoid leaving it dissolved for no gain - GitHub assigns it a new
       number (Stack #128; #112 cannot be reused once dissolved) but the PR list, order and
-      every base are otherwise identical to before the attempt. PR #41 itself is unchanged:
-      still based on ripple-down-rules-refactor, still not reparented. This is a new,
-      real hazard, and it is bigger than a native-stack-only special case: the 403 fired
-      on #41 *after* it was unstacked, so it is unconditional - no session can ever PATCH
-      any pull request's base, stacked or not. That means the ordinary (non-stack) plain
-      PATCH reparent this item's own doctrine still prescribes for a landed off-board
-      parent (the "REPARENT EVERY ORPHANED CHILD" paragraph) was never actually
-      session-executable either - nobody had hit it live until now. Spun out as its own
-      item rather than folded in here, since it is a different root cause (a blocked API
-      call, not the board-membership/ancestry detection bug this item fixes): see
-      session-safe-pr-reparent, which replaces the PATCH step with a session-executable
-      mechanism for every reparent this item's doctrine calls for, not only the
-      native-stack case. Matches the tag-push/branch-delete precedent already on record
-      in this plan's 2026-07-29 addendum - a third instance of a mutating GitHub
-      operation blocked specifically for a Claude Code session's credentials.
+      every base are otherwise identical to before the attempt. PR #41 was left unchanged that day.
+      Corrected 2026-08-02 (later, by session-safe-pr-reparent's probe on throwaway PR
+      #129): the 403 is a property of the session git-proxy credential, not of sessions.
+      The MCP `update_pull_request` tool changes a base successfully; only the raw curl +
+      GH_TOKEN PATCH is refused, and the earlier attempt reached for curl because the
+      stacks endpoints have no MCP tool. So this item's doctrine was right about the
+      mechanics and wrong only about the client, the "no session can ever PATCH any base"
+      reading does not hold, and base-change is not a third member of the
+      tag-push/branch-delete family (those two have no MCP tool at all). ROUTINE.md's
+      REPARENT paragraph and the NATIVE-STACK MEMBERS sequence are both session-executable
+      once they name the MCP tool, which draft PR #133 (session-safe-pr-reparent, stacked
+      on this branch) does. PR #41 has since been reparented onto main with that sequence -
+      268 files/+27,825 down to 7 files/+1,318, number, labels and review thread all kept -
+      so this item's fix is now validated live end to end rather than only in its own
+      tests.
 
   - id: session-safe-pr-reparent
-    branch: null
-    title: "Replace PATCH-base reparents with close+create-PR (base-branch PATCH is blocked for any session)"
+    branch: claude/workflow-unification-pr-test-o1kpei
+    title: "Reparent a base through the GitHub MCP server, not a raw PATCH"
+    pull_request_number: 133
     track: stack-tooling
     depends_on: [landed-parent-detection]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01WvRrTrtiznzAyvaoeCdNSq
     notes: >
-      Spun out of landed-parent-detection (#117) 2026-08-02: a live reparent attempt on
-      PR #41 confirmed PATCHing any pull request's base branch 403s from a Claude Code
-      session ("not permitted for this session type"), unconditionally - fired on a PR
-      that had already been removed from its native stack, so this is not the
-      stack-member 422 #117's doctrine was written for. No session can ever perform the
-      retarget step ROUTINE.md's REPARENT EVERY ORPHANED CHILD paragraph (and its
-      NATIVE-STACK MEMBERS sequence) prescribes, plain PR or stacked.
-      Fix: replace the PATCH step everywhere in ROUTINE.md, and in the small
-      reparent-recovery script stack-tooling-on-main (#106) already scopes, with close
-      old PR -> create_pull_request for the same head branch against the corrected base
-      -> carry over labels and the session-link line -> comment on the old PR pointing
-      to the new number. Creating and closing pull requests both already work from a
-      session; this substitutes the mechanism rather than retrying the blocked verb.
-      Native-stack members keep the same shape, swapping only the middle step: unstack
-      -> close old PR -> create new PR -> restack (local rebase/force-push, unchanged) ->
-      re-create the stack with the new PR number in place of the old one.
-      Cost, stated rather than hidden: the reparented PR gets a new number and its
-      review thread starts fresh (mitigated by the close-comment linking old to new);
-      this is a real trade against a clean PATCH, accepted because the clean PATCH is not
-      available to a session at all.
-      Depends on landed-parent-detection because it edits the same ROUTINE.md sections
-      that item added (NATIVE-STACK MEMBERS) as well as #106's original REPARENT
-      paragraph - branch on top of #117's head, not #106 directly, so both are in scope
-      to edit. Cross-note for routine-cutover: verify whether the Action's own credential
-      (not a session's) can PATCH a base cleanly before assuming it needs this same
-      fallback - see that item's notes.
+      Premise disproven and item re-scoped 2026-08-02. It was spun out of
+      landed-parent-detection on the reading that PATCHing any pull request's base 403s
+      from a Claude Code session unconditionally, and was to replace every reparent with
+      close-old-PR -> create-new-PR. A direct probe on throwaway PR #129 showed the block
+      is a property of one credential, not of sessions: the MCP `update_pull_request`
+      tool changed the base successfully (200), while a raw PATCH with curl and GH_TOKEN
+      through the session git proxy 403'd on the same pull request minutes apart. The
+      earlier attempt only ever saw the 403 because the stacks endpoints have no MCP tool,
+      so that session was already in curl and stayed there.
+      The stack-member 422 is unchanged and orthogonal, and the full repair
+      (dissolve -> MCP base change -> re-create) was rehearsed end to end on a throwaway
+      stack (204/200/201) - which is exactly the sequence landed-parent-detection already
+      prescribes. That item was right about the mechanics and wrong only about the client.
+      So no close+create fallback, and no reparent-recovery script: the script this item's
+      notes previously said #106 "already scopes" was never actually written (verified by
+      git ls-tree on both #106 and #117 - .claude/stack/ holds only README.md, ROUTINE.md,
+      stack.py, stack.toml, tests/), and with the base change available there is nothing
+      for it to work around. Not writing new mechanics also matches decision 11's
+      direction: GitHub maintains the mechanics, we maintain policy.
+      What shipped as draft PR #133 (bug label, based on #117's head since it edits the
+      NATIVE-STACK MEMBERS section that item added): a "BASE CHANGES GO THROUGH THE GITHUB
+      MCP SERVER" rule stated once in Phase 1 recording the 403 and its cause, both
+      reparent sites deferring to it, step 3 of the native-stack sequence using the MCP
+      tool and stating that the child keeps its number/labels/review thread, and the
+      README source-of-truth row naming the tool. Four contract tests written failing
+      first over ROUTINE.md, which is prose and had no coverage at all; 251 tests pass in
+      the dev-tooling suite, was 247.
+      Validated live on PR #41, the case the whole thread started from: recorded Stack
+      #128's composition, dissolved it (204), changed #41's base to main via the MCP tool,
+      re-created the stack (201). #41's diff went from 268 files/+27,825 to 7 files/+1,318
+      - exactly the four rdr/ modules and three test files its own description names -
+      mergeable_state clean, and it kept its number, its four comments and its
+      cram2-link-sent label. Nothing was pushed to any branch; only the base moved.
+      Stack #134 carries the same seven pull requests in the same order, now trunked on
+      main; #63-#98's own bases were untouched. GitHub will not reuse a dissolved stack's
+      number, so #112 -> #128 -> #134 is expected, not a symptom.
+      Note for anyone reading the roadmap's session-blocked-operations thread: base-change
+      is NOT a third member of the tag-push/branch-delete family. Those two have no MCP
+      tool at all and stay genuinely blocked; this one simply needed the other client.
 
   - id: ready-to-promote-upstream-links
     branch: null
