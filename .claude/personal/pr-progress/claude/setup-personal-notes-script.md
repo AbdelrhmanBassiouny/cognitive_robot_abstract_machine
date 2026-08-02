@@ -44,15 +44,36 @@ file concurrently, and `ruff format` then fails to parse it (line 23528 of
 PR #106 had coraplex green an hour earlier — so, intermittent. Analysis posted
 on the PR; `rerun_failed_jobs` queued on run 30498024255 to test it.
 
+## Restacked onto #106 (2026-08-02, head c7887f05)
+
+The user restacked this branch: base is now `claude/stack-tooling-on-main`
+(#106), which had merged `origin/main`. **#101 has landed on main.** My work
+survived intact — 3073c4e8 is still an ancestor, no history rewrite, all six
+of my files present, and the diff against the new base is still `.claude/`-only
+(16 files). `test_claude_dev_tooling` green on c7887f05, which is also the
+first confirmation the restack didn't regress anything here (#106 edits
+`resolve-personal-notes-config.sh` too, so a conflict was plausible).
+
+New red: `test_each_lib (semantic_digital_twin)` — **not the old
+`test_world_sim_state_sync` flake**, two different tests in `test_multi_sim.py`
+(`test_builder_assigns_material_to_every_geom_sharing_a_texture`,
+`test_builder_does_not_confuse_different_textures_sharing_a_basename`), both
+`assert '' != ''`. Not mine: both tests come from `main` (added in 7c935c48,
+2026-07-20, "Fix MujocoBuilder dropping materials on geoms sharing a texture")
+and arrived here only via the restack. Analysis posted on the PR.
+
 ## Next
 
-- Check-in armed (`trig_01L17zAuoW5TNXde1t6kHvuc`): did the coraplex re-run
-  pass? Same error at a *different* line supports the race; a fixed line
-  would mean a real generator bug instead.
-- Do not fix coraplex here — separate root cause, another package, and
-  AGENTS.md routes ORM issues via `scripts/regenerate_all_orm.py`/the
-  developer. Offered a separate PR in the comment.
+- Outstanding comparison: `test_each_lib (semantic_digital_twin)` on **#106**
+  itself, which was still running. If it fails there too, this is inherited
+  from the base and settled. Named in the PR comment so it can be checked by
+  whoever looks next — no scheduled check armed (personal-notes rule).
+- Do not fix semantic_digital_twin or coraplex here — separate root causes,
+  other packages; AGENTS.md routes ORM issues via
+  `scripts/regenerate_all_orm.py`/the developer.
 - Still unverified: label **creation** against a real token. This
   environment's is a fine-grained installation token, so `POST .../labels`
   is exercised only through the stub. Flagged in the PR body.
+- The PR body still says "Stacked on `claude/patch-pr-rheubx`" — stale after
+  the restack, worth one edit next time it's touched.
 - Leave as draft until told otherwise.
