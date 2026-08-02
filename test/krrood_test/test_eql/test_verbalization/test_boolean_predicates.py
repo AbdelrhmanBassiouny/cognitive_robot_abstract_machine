@@ -28,7 +28,6 @@ from krrood.entity_query_language.verbalization.boolean_predicate import (
 from krrood.entity_query_language.verbalization.fragments.features import Definiteness
 from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
-from krrood.patterns.field_metadata import FieldMetadata
 
 
 def _predicate(predicate: BooleanPredicate) -> object:
@@ -37,9 +36,7 @@ def _predicate(predicate: BooleanPredicate) -> object:
     """
     return field(
         default=False,
-        metadata=FieldMetadata(
-            other_metadata=[GrammarMetadata(boolean_predicate=predicate)]
-        ).as_dict(),
+        metadata=GrammarMetadata(boolean_predicate=predicate).as_dict(),
     )
 
 

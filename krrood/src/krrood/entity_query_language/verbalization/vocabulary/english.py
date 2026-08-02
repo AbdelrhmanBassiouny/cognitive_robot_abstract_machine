@@ -42,6 +42,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.fragments.features import Spacing
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.vocabulary.words import (
     AggregationWord,
     KeyWord,
@@ -720,6 +721,7 @@ class Articles(VocabEnum):
     Definite articles (THE, THE UNIQUE), the fused *another* / *the other* alternative
     determiners, and a static helper for indefinite articles.
     """
+
     A = PlainWord("a")
     AN = PlainWord("an")
     THE = PlainWord("the")
@@ -745,7 +747,11 @@ class Articles(VocabEnum):
         >>> Articles.indefinite("robot").text
         'a'
         """
-        text = morphology.indefinite_article(following_word) if following_word else cls.A.text
+        text = (
+            morphology.indefinite_article(following_word)
+            if following_word
+            else cls.A.text
+        )
         return WordFragment(text=text)
 
 
@@ -808,9 +814,9 @@ class FallbackNouns(VocabEnum):
     def name_of(self, node: object) -> str:
         """
         :param node: A variable/entity-like node, or ``None``.
-        :return: *node*'s type name (``_type_.__name__``), or this fallback noun's text when *node*
-            is ``None`` or carries no type. Centralises the one optional-``_type_`` read every
-            planner/assembler would otherwise repeat.
+        :return: *node*'s type noun (:func:`~…value_lexicon.type_noun`), or this fallback noun's
+            text when *node* is ``None`` or carries no type. Centralises the one optional-
+            ``_type_`` read every planner/assembler would otherwise repeat.
 
         >>> FallbackNouns.ENTITY.name_of(variable(Robot, []))
         'Robot'
@@ -818,7 +824,7 @@ class FallbackNouns(VocabEnum):
         'entity'
         """
         node_type = node._type_ if isinstance(node, Selectable) else None
-        return node_type.__name__ if node_type is not None else self.text
+        return type_noun(node_type) if node_type is not None else self.text
 
 
 class GroupKeyPhrases(VocabEnum):

@@ -834,6 +834,7 @@ class WrappedTable:
         type_endpoint = wrapped_field.type_endpoint
         custom_type = self.ormatic.type_mappings[type_endpoint]
         self.ormatic.type_mappings[type_endpoint] = custom_type
+        self.ormatic.imported_modules.add(type_endpoint.__module__)
         column_name = wrapped_field.field.name
         column_type = (
             f"Mapped[{module_and_class_name(type_endpoint)}]"
