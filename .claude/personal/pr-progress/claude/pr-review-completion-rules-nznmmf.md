@@ -54,10 +54,13 @@ from a markdown-only diff:
   the method that created it"). Both the implicated `world.py` (+253/−154 vs `main`)
   and that test file are stale on this branch, which is the cause.
 
-The `semantic_digital_twin` failure recurred identically on the post-restack head
-`b21c693a` (run 30760569205): same two tests, same error, 813 passed / 2 errors,
-only the random entity UUID differing. Restacking onto a newer notes-branch tip
-does not help, because the notes branch itself is what lags `main`.
+Both failures recurred identically on the post-restack head `b21c693a`:
+`semantic_digital_twin` (run 30760569205 — same two tests, 813 passed / 2 errors,
+only the random entity UUID differing) and the `coraplex_real_tracy` demo
+(run 30760569189 — same `semantic_digital_twin.world` circular imports, exit 1).
+Restacking onto a newer notes-branch tip does not help, because the notes branch
+itself is what lags `main`. Treat any further failure on this PR as this same
+cause unless the job name is one not yet seen.
 
 Inherent to every PR targeting this branch, not to this one. Not chased, and
 deliberately not "fixed" by merging `main` into the notes branch — that would be a
