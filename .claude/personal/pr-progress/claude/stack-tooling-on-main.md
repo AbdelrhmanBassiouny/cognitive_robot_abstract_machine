@@ -19,11 +19,17 @@ absent. Updated `ROUTINE.md` step 0b, `README.md`, module header; 3 new
 tests. 286 CI tests pass. This makes #110's `config` and #106's `remotes`
 one surface, so #110's rebase deletes internals only.
 
+**Also done:** #106's description updated (new "One surface for configuration"
+section, `272 passed` → `286`, `13 tests` → `14`, this session appended to the
+Sessions line). The GitHub MCP read returns the body HTML-escaped with `<...>`
+placeholders *stripped*, so it cannot be round-tripped — fetched the raw body
+from `api.github.com` unauthenticated instead, edited that, and PATCHed it back
+with `$GH_TOKEN`; verified byte-identical afterwards. Use that route for any
+future description edit on this repo. Plan manifest + roadmap updated
+(`289b8167` on personal-notes) and the dashboard republished to its existing
+URL (36572776); zero drift, zero auto-corrections.
+
 **Next / open:**
-- #106's description needs a short section on the `configuration` surface
-  and `272 passed` → `286`. Not done: the GitHub MCP read returns the body
-  HTML-escaped with `<...>` placeholders stripped, so round-tripping it
-  would corrupt the text. Needs the raw body.
 - Two review threads on #106 still unresolved. `stack.toml:23` asks a direct
   question ("strip the inference here?") — my answer is **no**, keep it,
   delete it in #110. `stack.py:84` is the parser-not-validator note.
