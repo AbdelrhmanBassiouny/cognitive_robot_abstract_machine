@@ -45,8 +45,22 @@ self-contained (`tmp_path`), so the job's cached asset directory — the one rea
 PR-vs-main difference — does not explain them; a freshly resolved MuJoCo version
 is the plausible environmental candidate. Could not reproduce locally: mujoco
 and the robotics stack are absent from this session's environment. Reported once
-on the PR asking for a re-run; if it stays red it is a regression on main's tree
-that this PR only surfaced.
+on the PR asking for a re-run.
+
+**CI resolved (2026-08-02).** The branch was restacked onto the new main
+(`9b090fc1`, PR #402) and CI re-ran. Main's *own* run at that commit
+(30760195910) now fails `test_each_lib (semantic_digital_twin)` with exactly the
+two texture assertions, `2 failed, 1048 passed` — so they are a real regression
+on main's tree, and the earlier "cannot call this pre-existing" caveat is
+answered. Green at `82501888` (07-31) → red here (08-01) → red on main (08-02)
+with no repo-side change to those tests, which supports the environmental
+(freshly resolved MuJoCo) hypothesis. `test_world_sim_state_sync` passed on
+main's run, confirming it is the separate flake. A second, new failure on this
+PR — `coraplex/demos/coraplex_real_tracy/test_demo.py` — is a teardown race
+(demo passed, then `rclpy-executor` SIGABRT at interpreter shutdown, exit 134);
+main's Examples-and-Demos run at the same commit was green, so that one is
+flake. Neither is reachable from this branch (11 files, all `.claude/`).
+Reported on the PR; nothing to fix here.
 
 **Spun out, not fixed here.** `_compute_ready_to_review` treats a *merged*
 dependency as not-open, so an item whose dependency fully landed is excluded
