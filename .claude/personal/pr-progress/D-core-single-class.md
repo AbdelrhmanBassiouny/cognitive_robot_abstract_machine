@@ -8,9 +8,13 @@ Kickoff session: https://claude.ai/code/session_01FJUE2ePxVHbFSVegZ9WRtP
 
 ## Next steps
 
-1. Cut `D-core-single-class` from `origin/D-core-expert` (not from `main`).
-2. Work through the plan below, tests first.
-3. Update `plan.yaml`'s `d-core-single-class` item (`status`, `branch`,
+1. Get a CI or local-test baseline on `D-core-expert` first — PR #98 has never
+   had CI run on it (see the assumptions below). Without it the new PR's first
+   CI result cannot be separated from anything inherited.
+2. Cut `D-core-single-class` from `origin/D-core-expert` (not from `main`).
+   Do *not* cascade the stack first — see the staleness assumption below.
+3. Work through the plan below, tests first.
+4. Update `plan.yaml`'s `d-core-single-class` item (`status`, `branch`,
    `session`, `pull_request_number`) and run `save-plan.sh rdr-refactor` +
    `/plan-dashboard rdr-refactor` as state changes.
 
@@ -38,15 +42,29 @@ Outcome: `EQLSingleClassRDR` exists on the stack with its full engine test suite
 
 ## Assumptions and flags
 
-- **Dependency is ready.** `d-core-expert` (#98) is open, non-draft, `mergeable_state: clean`
-  → `open_ready` by `plan-schema.md`'s rule. Checked by hand against the live PR rather than
-  via `check_dependency_readiness.py`: that script imports `build_dashboard` → `render_common`,
-  which needs `markdown` + `nh3`, and `check-setup.sh` reports both missing in this clone
-  (`pip install -r .claude/skills/plan-dashboard/requirements.txt` fixes it — also needed
-  before `/plan-dashboard` can republish).
+- **Dependency is ready by the rule, but unverified.** `d-core-expert` (#98) is open, non-draft,
+  `mergeable_state: clean` → `open_ready` by `plan-schema.md`'s rule. Checked by hand against the
+  live PR rather than via `check_dependency_readiness.py`: that script imports `build_dashboard` →
+  `render_common`, which needs `markdown` + `nh3`, and `check-setup.sh` reports both missing in
+  this clone (`pip install -r .claude/skills/plan-dashboard/requirements.txt` fixes it — also
+  needed before `/plan-dashboard` can republish).
+  **#98 has never had CI run on it**: `get_status` on head `ed805dc7` returns
+  `state: pending, total_count: 0`, and `get_check_runs` returns an empty list. Get a baseline
+  before writing code on top — trigger CI on `D-core-expert`, or run
+  `pytest test/krrood_test/test_eql_rdr` on it and record the count — so the new PR's first CI
+  result is separable from anything inherited.
 - **Base is `D-core-expert`, not `main`.** Branch: `D-core-single-class` (your choice; matches
   `plan.yaml` and every sibling). The pre-created `claude/rdr-refactor-d-core-single-class-t3f2ds`
   branch is unused and currently just `main`'s tip.
+- **The stack is stale, and that is fine to build on.** Verified live 2026-08-02, unchanged since
+  roadmap §10: `D-core-support` `8eb7518a` (2026-07-19) still does not contain
+  `D-core-serialization` `2577a2e3`, `D-core-expert` `ed805dc7` sits on that stale support, and
+  `main` `82501888` is not an ancestor of the serialization tip either. Do **not** run the cascade
+  before starting: `git merge-tree --write-tree origin/D-core-expert origin/D-core-serialization`
+  exits 0 with no conflicts and a merged tree carrying zero stale `code_generation.type_hints`
+  references, the missing commits are entirely in `code_generation/` while this item touches only
+  `rdr/` and `test_eql_rdr/`, and the cascade is the S0-steward's own tracked job that has to be
+  redone before anything merges anyway.
 - Could not subscribe to tracking issue #94 — both `subscribe_pr_activity` tools return
   "Could not subscribe to this PR". Not a blocker; the PR itself will be subscribed normally.
 - **Scope expansion, flagged for your call:** thread `single_class.py:239` asks for `CaseContext`
