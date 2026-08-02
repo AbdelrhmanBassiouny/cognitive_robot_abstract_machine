@@ -1960,3 +1960,61 @@ actually perform.
 deleted by the user; their pull requests #129/#130 are closed and stacks #131/#132 dissolved.
 `claude/workflow-unification-pr-test-o1kpei` became redundant once #133 was folded into #117 and
 needs the same out-of-harness deletion, since sessions cannot delete branches (2026-07-29 addendum).
+
+## Update 2026-08-02 (later): the Routine now reads its doctrine from git
+
+The user asked the obvious question after the base-`PATCH` correction — *"can we point the routine
+at the README we maintain instead of changing the prompt every time?"* — and then did it. The
+~17.5k inline prompt at claude.ai/code/routines is replaced by the short pointer `routine-cutover`
+had already specified: HARD RULES inline, plus "read `.claude/stack/ROUTINE.md` and execute the
+fenced text block".
+
+It resolves `origin/main` first, falling back to `origin/claude/stack-landed-parent-detection`
+while that is in review, because **`.claude/stack/` is not on `main` yet** — only on #106 and #117.
+Two consequences worth stating plainly: **#117's branch is live production input**, and an edit to
+`ROUTINE.md` now ships to the running workflow on push, with no deploy step and no copy to sync.
+
+The endgame is unchanged — a plain scheduled Action plus on-demand sessions, no scheduled LLM.
+This is exactly the "optional interim step if the Action lags the tooling wave" already recorded.
+What it buys immediately is that doctrine corrections stop needing a manual paste, which is the
+precise failure that let the base-`PATCH` instruction survive in the live prompt for two days after
+`ROUTINE.md` had been fixed.
+
+### The ordering hazard it exposed
+
+Adoption turned a dormant inaccuracy into a live bug within the hour. `ROUTINE.md`'s SETUP step 0
+said:
+
+> `.claude/stack/stack.py` and `stack.toml` are already on this checkout - they live on `main`, so
+> there is nothing to pull from another branch first.
+
+Written in anticipation of #106 landing, false today, and harmless only for as long as nothing
+actually executed it. Under the pointer the Routine would resolve its doctrine successfully,
+believe the tooling was present, and fail on the first `stack.py` call in **Phase 2 — after Phase 1
+had already mutated pull requests**. Half-applied state on a real stack, from a document that was
+correct-looking prose.
+
+Fixed in #117: step 0 now *obtains* `.claude/stack/` from the same ref the pointer resolved instead
+of asserting it is there. Verified end to end in a worktree at `origin/main` — `stack.py` absent
+before, `stack.py --help` working after.
+
+**The general lesson, which will recur:** a document that describes a not-yet-true future state is
+safe exactly until something starts executing it, and the switch-on is not a good moment to
+discover which sentences were aspirational. The same shape is queued for the stack-board Action
+(PR 4), whose `board.yml` will read repo/branch/upstream variables that do not exist yet.
+
+### Also fixed in the same commit
+
+- The header claimed **"Not live yet"** and described pasting the file into claude.ai/code/routines;
+  `README.md` said the same. Both now describe what happens: the Routine reads this file from git,
+  an edit ships on push, and only the pointer is registered.
+- **Three tests**, the step-0 one written failing first. The other two guard a contract that had
+  none: the pointer locates what to execute *by the fenced block*, so exactly one fence must exist
+  and the HARD RULES must stay inside it. That guard earned itself immediately — it caught a literal
+  fence marker accidentally introduced into the new header prose during this very change, which
+  would have made the Routine execute the wrong slice of the file. 254 tests pass, was 251.
+
+**Two deletions fall due when #106 lands** and `.claude/stack/` reaches `main`: the pointer's
+source-2 line (manual paste) and step 0's fetch fallback (an ordinary commit). Neither breaks
+anything if forgotten — the fetch becomes a no-op, the fallback ref stops resolving — but both are
+dead weight, and the pointer edit is the last manual paste this design should ever need.

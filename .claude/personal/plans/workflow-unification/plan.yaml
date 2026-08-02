@@ -540,6 +540,31 @@ items:
       type generally, not just check the closed PR's own branch. In this real case that
       would have caught #41's orphaning at #53's merge on 2026-07-25, days before a
       review round noticed it by accident on 2026-07-31.
+      Interim pointer prompt ADOPTED AND LIVE 2026-08-02. The user replaced the Routine's
+      ~17.5k inline prompt at claude.ai/code/routines with the short pointer this item
+      had specified: HARD RULES inline (they must bind before any file is read), plus
+      "read .claude/stack/ROUTINE.md and execute the fenced text block". It resolves
+      origin/main first and falls back to origin/claude/stack-landed-parent-detection
+      while that is in review, because .claude/stack/ is NOT on main yet - it is only on
+      #106 and #117. So #117's branch is currently live production input, and an edit to
+      ROUTINE.md now ships to the running workflow on push with no deploy step.
+      This is the "optional interim step if the Action lags the tooling wave" this item
+      already described, so the endgame is unchanged: a plain scheduled Action plus
+      on-demand sessions, no scheduled LLM. What the adoption buys now is that doctrine
+      corrections stop needing a manual paste - which is what let the base-PATCH error sit
+      in the live prompt after ROUTINE.md had been fixed.
+      Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0 told
+      the Routine that stack.py and stack.toml "are already on this checkout - they live on
+      main". Written in anticipation of #106 landing, false today, and harmless only while
+      nothing read it. Under the pointer the Routine would resolve its doctrine fine,
+      believe the tooling was present, then fail on the first stack.py call in Phase 2 -
+      after Phase 1 had already mutated pull requests. Step 0 now fetches .claude/stack/
+      from the same ref rather than asserting it. Verified end to end in a worktree at
+      origin/main: stack.py absent before, `stack.py --help` working after.
+      Two deletions are due when #106 lands and .claude/stack/ reaches main: the pointer
+      prompt's source-2 line (needs a manual paste) and step 0's fetch fallback (a normal
+      commit). Neither breaks anything if forgotten - the fetch becomes a no-op and the
+      fallback ref stops resolving - but both are dead weight.
 
   - id: tooling-branch-retirement
     branch: null
