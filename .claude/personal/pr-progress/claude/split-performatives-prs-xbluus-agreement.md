@@ -46,14 +46,27 @@
   this attempt (ordering/environment-dependent). Predicted duplicate — no new PR
   comment. coraplex + giskardpy re-runs still in progress.
 
+## 2026-08-02: restack onto 9b090fc1, one new base-red (part-4 comment)
+- Routine restacked again: head b9ac0cf0 merges main 9b090fc1 (#402
+  semdt_specifications_rewrite, #484 screw-model, #488-#490).
+- All 07-30 issues resolved on run 30760567495: coraplex green (regen race did
+  not recur), giskardpy green (image rebuild delivered ur_robot_driver), krrood
+  green. 12/13 jobs green.
+- Single red: sdt `test_multi_sim.py::test_builder_assigns_material_to_every_
+  geom_sharing_a_texture` + `test_builder_does_not_confuse_different_textures_
+  sharing_a_basename`, both `assert '' != ''` (empty material names), failing
+  deterministically. Base-red: main's own 9b090fc1 run fails byte-identically as
+  its only red job; main was green on 82501888 (07-31), so the regression came in
+  with the #402 merge. Commented on the PR (part 4).
+
 ## Next
-- giskardpy and sdt cannot go green anywhere until the CI docker image is rebuilt
-  with #405's system deps (`update_docker.yml`) — main-side action (user/DAiSy
-  authors). The multi-sim flake is also main-side.
-- Act on re-run results / base recovery via events or user ping — no timed polling
-  per personal notes.
-- krrood (this PR's own scope) is green on the run; once base recovers and the
-  run is green, PR is ready for user review/mark-ready.
+- Main-side fix needed for the #402 texture/material builder regression; once
+  main recovers, re-merge/re-run — that's the only thing between this PR and a
+  fully green run.
+- Act on base recovery via events or user ping — no timed polling per personal
+  notes.
+- krrood (this PR's own scope) stays green; once the run is green, PR is ready
+  for user review/mark-ready. The restack routine handles #54/#14/#15.
 - Candidate separate bug-fix PR (needs user approval to open): guard the coraplex
   conftest ORM regen from xdist workers (skip when `config.workerinput` is set),
   matching sdt's guarded pattern. One root cause, off main, `bug` label.
