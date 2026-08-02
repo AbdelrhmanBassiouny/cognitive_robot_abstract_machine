@@ -1,33 +1,31 @@
-# PR #133 — Reparent a base through the MCP server, not a raw PATCH
+# Branch retired — work folded into PR #117
 
-Plan item `session-safe-pr-reparent` (workflow-unification, tracking issue #102).
-Branch based on #117's head; draft, `bug` label, subscribed.
+This branch carried draft PR #133 (`session-safe-pr-reparent`, workflow-unification,
+tracking issue #102). It no longer has a pull request of its own and needs no
+further work here.
 
-## The finding this PR exists for
+## Outcome
 
-The item was created to replace every reparent with close+create, because a live
-attempt on PR #41 got `403 - not permitted for this session type` on a base change.
-Probed on throwaway PR #129: the 403 is the **git-proxy credential**, not sessions.
-`mcp__github__update_pull_request(base=…)` returns 200 on the same pull request.
-Stack members still 422 (orthogonal, and dissolving clears it).
+The doctrine correction was fast-forwarded onto `claude/stack-landed-parent-detection`
+(#117), which is where it belongs: its only purpose was fixing a `ROUTINE.md` section
+#117 had just introduced, and leaving it stacked meant #117 sat in review prescribing a
+base `PATCH` already known to return 403. The user's standard — a PR must be
+self-sufficient and correct, never left open with a known bug — settled it.
 
-## Done
+GitHub auto-closed #133 as *merged* when its head landed in its own base branch. That
+means merged into #117's branch, not into `main`.
 
-- Probe + end-to-end rehearsal on a throwaway stack (204 / 200 / 201).
-- `ROUTINE.md`: one `BASE CHANGES GO THROUGH THE GITHUB MCP SERVER` rule; both
-  reparent sites defer to it; native-stack step 3 uses the MCP tool and states the
-  child keeps its number/labels/thread. `README.md` row updated.
-- 4 contract tests over `ROUTINE.md`, written failing first (it had none). 251 pass.
-- **PR #41 repaired live**: 268 files/+27,825 → 7 files/+1,318, number and thread
-  kept, nothing pushed. Stack #128 → #134, same 7 PRs, trunk now `main`.
-- Manifest: item re-scoped; `landed-parent-detection` and `routine-cutover` notes
-  corrected. Roadmap section added, issue #102 commented.
+## What #117 now carries
 
-## Next
+- Ancestry-based landed-parent detection (`Stack.has_landed_upstream()`), 3 tests.
+- The `BASE CHANGES GO THROUGH THE GITHUB MCP SERVER` rule, both reparent sites
+  deferring to it, native-stack step 3 using the MCP tool, 4 contract tests.
+- 251 tests passing; description rewritten with the 403-vs-422 table; back in draft.
 
-- Wait on review of #133. It targets #117's branch — equally fine squashed into #117
-  before that merges, since the correction belongs with the section it corrects.
-- Not done, needs the user: delete throwaway branches
-  `claude/reparent-probe-{head,target,upper}-o1kpei` (sessions can't delete branches).
-- Open for `routine-cutover`: whether the Action's own credential can change a base.
-  Much more likely now that the block is known to be narrow — still unverified.
+Subscription moved from #133 to #117.
+
+## Residue
+
+This branch can be deleted — sessions cannot delete branches, so it needs the same
+out-of-harness deletion the probe branches got.
+
