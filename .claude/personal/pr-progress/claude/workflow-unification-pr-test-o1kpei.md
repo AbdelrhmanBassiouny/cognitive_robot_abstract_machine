@@ -24,11 +24,14 @@ detection: the #41 bug, back silently. Developer agreed and chose the fold.
   doctrine literals in tests; the word "doctrine" is gone from `.claude/stack/`.
 - `POINTER.md` — registered prompt as a template; HARD RULES pinned equal to
   `ROUTINE.md`'s (real 15-line/1404-char block).
-- `stack.toml` `fork_repository` + `Repository`/`MalformedRepositoryError`; ROUTINE.md
-  names no fork owner (was 3 sites), pinned by `test_routine_names_no_fork_of_its_own`
-  against the configured value, not a literal.
-- **266 tests pass**, was 247 at session start. `test_claude_dev_tooling` green on
-  f89a28fc.
+- Fork **derived** from `fork_remote`'s URL (`Repository.from_remote_url`, handles HTTPS,
+  SSH and the cloud proxy form). `stack.toml` names nobody; `fork_repository` stays
+  settable for a checkout whose remote is not the fork. ROUTINE.md names no owner (was
+  3 sites), pinned by `test_routine_names_no_fork_of_its_own` against the *resolved*
+  value. Developer rejected my first attempt (committed his fork as a default) - he was
+  right, it moved the problem one file across.
+- Both errors are dataclasses; `DocumentLandmark` is a `Protocol`, not a union.
+- **272 tests pass**, was 247 at session start. All 10 review threads on #106 resolved.
 
 ## Live-system state, worth not forgetting
 
