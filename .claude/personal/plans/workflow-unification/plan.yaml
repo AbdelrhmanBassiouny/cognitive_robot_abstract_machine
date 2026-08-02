@@ -727,7 +727,7 @@ items:
     pull_request_number: 117
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01URVDhViP2TijuQAHAysUKL
     notes: >
       Bug fix, found while handling a review round on PR #41. board.json carries only
@@ -801,7 +801,7 @@ items:
     pull_request_number: 117
     track: stack-tooling
     depends_on: [landed-parent-detection]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01WvRrTrtiznzAyvaoeCdNSq
     notes: >
       Premise disproven and item re-scoped 2026-08-02. It was spun out of
