@@ -1,31 +1,35 @@
-# Branch retired — work folded into PR #117
+# Branch retired — all work now on PR #117
 
-This branch carried draft PR #133 (`session-safe-pr-reparent`, workflow-unification,
-tracking issue #102). It no longer has a pull request of its own and needs no
-further work here.
+This branch's own PR (#133) was folded into #117 and auto-closed as merged into
+#117's branch. Nothing further happens here; commits go straight to
+`claude/stack-landed-parent-detection`.
 
-## Outcome
-
-The doctrine correction was fast-forwarded onto `claude/stack-landed-parent-detection`
-(#117), which is where it belongs: its only purpose was fixing a `ROUTINE.md` section
-#117 had just introduced, and leaving it stacked meant #117 sat in review prescribing a
-base `PATCH` already known to return 403. The user's standard — a PR must be
-self-sufficient and correct, never left open with a known bug — settled it.
-
-GitHub auto-closed #133 as *merged* when its head landed in its own base branch. That
-means merged into #117's branch, not into `main`.
-
-## What #117 now carries
+## What #117 carries from this session
 
 - Ancestry-based landed-parent detection (`Stack.has_landed_upstream()`), 3 tests.
-- The `BASE CHANGES GO THROUGH THE GITHUB MCP SERVER` rule, both reparent sites
-  deferring to it, native-stack step 3 using the MCP tool, 4 contract tests.
-- 251 tests passing; description rewritten with the 403-vs-422 table; back in draft.
+- `BASE CHANGES GO THROUGH THE GITHUB MCP SERVER` rule; both reparent sites defer to
+  it; native-stack step 3 uses the MCP tool. 4 contract tests.
+- SETUP step 0 now fetches `.claude/stack/` instead of asserting it is on `main`
+  (it is not) + the header/README no longer describe a paste model. 3 more tests.
+- **254 tests pass**, was 247 at the start.
 
-Subscription moved from #133 to #117.
+## Live-system state, worth not forgetting
+
+The cloud Routine's registered prompt is now a pointer that reads
+`.claude/stack/ROUTINE.md` from git each run — `origin/main` first, falling back to
+**this PR's branch** since `.claude/stack/` is not on `main` yet. So pushing to
+`claude/stack-landed-parent-detection` changes the running workflow immediately.
+
+PR #41 was repaired earlier: 268 files/+27,825 → 7 files/+1,318, number and thread
+kept. Stack #134, seven PRs, trunk `main`.
+
+## Due when #106 lands
+
+- Delete the pointer prompt's fallback line (manual paste at claude.ai/code/routines).
+- Delete step 0's fetch fallback (ordinary commit).
+Neither breaks anything if missed; both are dead weight.
 
 ## Residue
 
-This branch can be deleted — sessions cannot delete branches, so it needs the same
-out-of-harness deletion the probe branches got.
+This branch can be deleted.
 
