@@ -714,8 +714,24 @@ items:
       as the bug describes; the fixed version correctly emits parent: main for #41 and
       leaves #63..#98's own parent chain untouched. This was read-only (local script, no
       push, no GitHub write) - the live reparent (dissolve Stack #112 -> PATCH #41's base
-      -> restack -> re-create) was proposed but deliberately not executed pending the
-      user's explicit go-ahead, being destructive and force-pushing six branches.
+      -> restack -> re-create) was proposed and the user explicitly approved executing it.
+      Attempted the same session: dissolved Stack #112 (POST .../unstack, 204) succeeded,
+      but PATCH .../pulls/41 with a new base 403'd with "Changing a pull request's base
+      branch is not permitted for this session type" - a platform-level block on ANY base
+      change from a session, harder than and different from the stack-member 422 this
+      item's ROUTINE.md addition was written for (that 422 is GitHub rejecting a stacked
+      PR's base change specifically; this 403 blocks it regardless of stack membership).
+      Per ROUTINE.md's own stop-and-report rule, re-created the stack immediately with the
+      same 7-PR list to avoid leaving it dissolved for no gain - GitHub assigns it a new
+      number (Stack #128; #112 cannot be reused once dissolved) but the PR list, order and
+      every base are otherwise identical to before the attempt. PR #41 itself is unchanged:
+      still based on ripple-down-rules-refactor, still not reparented. This is a new,
+      real hazard for ROUTINE.md/the live Routine to record: base-branch PATCH may be
+      unavailable to a session outright, in which case the whole native-stack reparent
+      recovery this item added (dissolve -> PATCH -> restack -> re-create) needs a human
+      to perform the PATCH step (UI Rebase-stack button, or a token/actor with base-change
+      permission), matching the tag-push/branch-delete precedent already on record in this
+      plan's 2026-07-29 addendum.
 
   - id: ready-to-promote-upstream-links
     branch: null

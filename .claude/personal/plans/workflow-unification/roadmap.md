@@ -1698,10 +1698,39 @@ had run the fixed code against #41's actual data before. It now holds against th
 the fix is validated end-to-end for the exact case it was written for, not merely for the
 synthetic fixtures the failing-first tests use.
 
-**What was deliberately not done.** The live repair - `POST /stacks/112/unstack` (dissolves all 7,
-no selective/undo), `PATCH` #41's base to `main`, restack + force-push #41 through #98 in order,
-`POST /stacks` to re-create - was proposed but not executed. It is destructive (no undo once
-dissolved) and force-pushes six live branches, so it needs the user's explicit go-ahead in the
-session, separate from and beyond validating the fix's logic. Also untouched, as already recorded
-above: merging #117 itself (normal cram2-review track) and pasting the Phase 1 amendment into the
-live Routine trigger (the user's own manual-paste call, unrelated to this validation).
+**What was deliberately not done, then attempted with approval.** The live repair - `POST
+/stacks/112/unstack` (dissolves all 7, no selective/undo), `PATCH` #41's base to `main`, restack +
+force-push #41 through #98 in order, `POST /stacks` to re-create - was proposed first and not
+executed pending explicit go-ahead, since it is destructive and force-pushes six live branches. The
+user then approved it in the same session, and it was attempted for real:
+
+- `POST /stacks/112/unstack` (no body): **204**, dissolved cleanly.
+- `PATCH /pulls/41` with `{"base": "main"}`: **403** - `"Changing a pull request's base branch is
+  not permitted for this session type."` This is a new hazard, and a harder one than the item
+  itself anticipated: `ROUTINE.md`'s NATIVE-STACK MEMBERS section (this item's own addition) was
+  written for the **422** GitHub returns when a `PATCH` targets a *stacked* PR's base - its whole
+  recovery sequence (dissolve first, then PATCH, then restack, then re-create) exists to get past
+  that 422 by removing the PR from a stack before touching its base. This 403 fired on the *already
+  unstacked* PR - it is a platform-level restriction on any base-branch change from a Claude Code
+  session, unrelated to stack membership. The dissolve-then-PATCH recovery this item designed
+  cannot work around it, because the block isn't the stack; the doctrine's whole premise for this
+  case needs revisiting.
+- Recovery, per `ROUTINE.md`'s own stop-and-report rule (never leave a stack half-dissolved):
+  re-created the stack immediately, `POST /stacks` with the same 7-PR list. GitHub assigned it a
+  **new number, Stack #128** - #112 cannot be reused once dissolved - but the PR list, order, and
+  every base are otherwise identical to before the attempt. Verified: #41's base is still
+  `ripple-down-rules-refactor`, unchanged; nothing about any of the seven PRs' actual state moved.
+
+**Consequence for `landed-parent-detection` and `ROUTINE.md` going forward.** This joins the
+tag-push/branch-delete finding from the 2026-07-29 addendum as a third confirmed instance of the
+same shape: a mutating GitHub operation that works fine through the API in principle but is blocked
+specifically for a Claude Code session's credentials. The item's NATIVE-STACK MEMBERS sequence
+still describes the right *mechanics* (dissolve -> PATCH -> restack -> re-create), but step 3 (the
+PATCH) needs a human or a differently-scoped actor to execute - the UI's "Rebase stack" button, `gh
+stack` from a real user token, or a broader-scoped credential - the same way tag pushes and branch
+deletes already do. `ROUTINE.md` and the live Routine's prompt both need this stated explicitly
+rather than assuming the sequence completes end-to-end from a session; as written today, a session
+hitting this now dissolves a stack it cannot finish repairing unless it also re-creates it
+immediately, as done here. Merging #117 itself (normal cram2-review track) and pasting the Phase 1
+amendment into the live Routine trigger (the user's own manual-paste call) remain untouched,
+unrelated to this finding.
