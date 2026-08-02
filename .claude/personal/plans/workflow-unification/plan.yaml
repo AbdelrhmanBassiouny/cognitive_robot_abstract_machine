@@ -177,6 +177,25 @@ items:
       label/cram2-link helpers, a small reparent-recovery script, and tests.
       Re-scope instruction posted on the PR itself.
 
+      Assessed 2026-08-02 against #110 (see roadmap): the two are split correctly, but
+      three artifacts had been built twice. This PR keeps all of them by landing first.
+      Shipped here (36eda87a): `stack.py remotes` becomes `configuration`, printing one
+      `field<TAB>value` line per Configuration field instead of four hand-written
+      hyphenated keys, with `upstream_setup_command` moved onto Configuration and omitted
+      when the remote already exists. That makes this PR's command surface and #110's
+      independently-built `config` one surface, so #110's rebase deletes the resolution
+      internals only. 286 CI tests pass, was 283. Description updated to match.
+
+      Still outstanding here: the same-day cut recorded above is only half applied.
+      ROUTINE.md was rewritten around native mechanics, but stack.py still ships
+      print_next and print_restack_plan, the latter still documented as feeding "the
+      restack workflow's args". Confirm whether the cut is still wanted; if so, sequence
+      it before #110's rebase, or that rebase resolves the same stack.py conflict twice.
+      Two review threads remain open: stack.toml:23 asks whether to strip the remote
+      inference here (recommended answer: no - it is what makes this PR runnable
+      standalone; delete it in #110 with the interactive setup), and stack.py:84 notes
+      Repository.from_remote_url parses without validating.
+
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
     title: "PR 2: /setup-stacked-prs guided one-command setup skill"
@@ -217,6 +236,29 @@ items:
       draft. #106's same-day cut narrows this further: there is no restack engine to
       install — setup is doctrine files + labels + personal stack.toml + the optional
       stack creation.
+
+      Scope assessed 2026-08-02 and confirmed separate (see roadmap): removing this
+      item's edits to #106's files leaves ~2,645 lines of standalone setup
+      infrastructure, so it is ordinary stacking, not a disguised modification of its
+      parent - unlike #133/#117, which folded because nothing remained. Keep the PR.
+
+      What its rebase onto #106 must carry, all of it here rather than in #106: delete
+      .claude/stack/routine-prompt.md and render POINTER.md instead - they are the same
+      artifact, and POINTER.md's copy is the one pinned byte-for-byte against
+      ROUTINE.md's hard rules, while this branch's paraphrases them unenforced. The two
+      files template different values (<FORK_REMOTE>/<UPSTREAM_REMOTE> here versus
+      <FORK_REPOSITORY>/<TOOLING_BRANCH> there), so the renderer changes variables, not
+      just filenames. Carry over the two rules this branch promoted into the pointer
+      (never force-push a branch with an open upstream PR unless it carries the rebase
+      label; do not use the Workflow tool) - they exist in #106 only as prose above the
+      pinned block, so promoting them means editing that block too. Drop the
+      <TOOLING_BRANCH> fallback, dead once .claude/stack/ is on main. Update the two
+      contract tests this branch's SETUP step 0 rewrite breaks
+      (test_setup_obtains_the_tooling_rather_than_assuming_it and
+      test_setup_takes_the_tooling_ref_from_the_pointer) as a declared contract change,
+      not a silent one. Adapt check-stack-setup.sh and setup-stacked-prs.sh from
+      `stack.py config` to `stack.py configuration`; #106 already matched the key names,
+      so nothing else in the parsing changes.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script

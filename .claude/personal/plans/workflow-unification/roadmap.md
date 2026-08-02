@@ -2076,3 +2076,107 @@ tests, wired into `ci.yml`'s `test_claude_dev_tooling` job through a new
 One deliberate limit: a branch that does not resolve raises rather than returning
 an empty overlap. A missing candidate must never read as "no overlap" — that is
 the precise failure this whole item exists to prevent.
+
+## Update 2026-08-02 (assessed): the #106/#110 overlap is three duplications, and the split is right
+
+`/add-plan-item` above was written partly because of the #110/#106 collision. That
+collision was then actually investigated, and it is larger than the one file it was
+reported as — while the structural question it raised has the opposite answer to the
+one the fold chain would suggest.
+
+### The split is correct; do not fold
+
+Remove #110's edits to its parent's files and ~2,645 lines of standalone setup
+infrastructure remain — `setup-stacked-prs.sh`, `check-stack-setup.sh`,
+`write-branch-files.sh`, two skills and their tests. That is ordinary stacking. #133
+and #117 folded because *nothing* remained once the parent edits were taken out; #110
+fails that test by a wide margin, so folding it would be over-applying the precedent,
+not following it.
+
+### Why it happened: a fork point, not a disagreement
+
+#110 branched from #106 at `eb3ca5a1` on 2026-07-31. `POINTER.md`, `prompt_model.py`
+and `test_prompt_documents.py` all entered #106 on 2026-08-02, in `2868eab9` and
+`93dcbef9` — after that fork point. `POINTER.md` does not exist on #110's head at all.
+Neither session chose a different design over a visible one; both built the same
+artifact against divergent snapshots of an unlanded parent. That is the actual
+mechanism, and it says the mitigation is prompt rebasing of children onto a moving
+parent, not more folding.
+
+### Three artifacts were built twice, not one
+
+Merging #110 into #106's current head conflicts in **all five** `.claude/stack/` files
+it touches. The reported collision was one of three:
+
+1. **The pointer prompt** — `POINTER.md` (#106) and `routine-prompt.md` (#110).
+2. **The pre-board configuration query** — #106's `BOARDLESS_COMMANDS` / `print_remotes`
+   / `stack.py remotes` against #110's `BOARD_FREE_COMMANDS` / `print_config` /
+   `stack.py config`. Same purpose, near-identical docstrings ("must run before
+   `board.json` exists"), two names. This one was never flagged, and it cost more than
+   the prompt file did: #110's shell scripts parse the output, and the two disagreed on
+   both key names and key set.
+3. **`ROUTINE.md` SETUP step 0** — rewritten independently by both.
+
+Item 2 is the interesting one, because a path comparison *did* flag `stack.py` — both
+branches modify it. What dismissed it was the boundary answer ("2,645 lines remain, so
+#110 is real"), applied to a question it does not answer. Two pull requests can be
+correctly split and still both build the same thing. The scope rule decides *where work
+goes*; it does not certify that the overlap between two correctly-split branches is
+benign, and `check_scope_overlap.py`'s full changed-file list is only useful if someone
+reads it for duplicated *purpose* after the split question is settled.
+
+### The argument for keeping `POINTER.md` had to be replaced, not just accepted
+
+The reason previously given was that `routine-prompt.md` claims `.claude/stack/` is
+already on `main`, which is false today. True — but it expires: #110 lands after #106,
+at which point the claim holds and `POINTER.md`'s fallback is the stale half, as that
+file itself says (`Delete this fallback once .claude/stack/ is on main`). Anyone
+re-deriving the decision from that reason after #106 merges will reverse it.
+
+The durable reason is the test harness: `test_pointer_hard_rules_match_the_routine_document_exactly`
+pins `POINTER.md`'s rules byte-for-byte against `ROUTINE.md`'s, and `PointerPlaceholder`
+declares its fork-specific values as an enum enforced in both directions.
+`routine-prompt.md` paraphrases the same rules with nothing checking them. Two copies
+that look equivalent, one of which is enforced, is exactly the drift `ROUTINE.md` exists
+to prevent.
+
+### Verified rather than argued
+
+Splicing #110's SETUP step 0 into #106's `ROUTINE.md` fails two of #106's fourteen
+contract tests — `test_setup_obtains_the_tooling_rather_than_assuming_it` (the step no
+longer *obtains* `stack.py`, it assumes it) and
+`test_setup_takes_the_tooling_ref_from_the_pointer` (it stops mentioning the pointer). A
+third, `test_setup_asks_the_tool_which_remote_is_which`, passes only by accident: it
+substring-matches `remotes`, a word that survives in #110's prose after the command it
+names is gone.
+
+### What shipped, and where the rest goes
+
+Only #106 changed. `stack.py remotes` became `configuration`, printing one
+`field<TAB>value` line per `Configuration` field — keys are the field names, every
+setting is reachable, and `upstream_setup_command` moved onto `Configuration`, omitted
+rather than printed blank when the remote exists. This is a change *to* #106 rather than
+work stacked on it, which is the same test applied in the other direction: it exists
+only to alter what #106 introduces, so it belongs in #106.
+
+Naming it here rather than reconciling later means #110's rebase deletes the resolution
+internals only — no dispatch-table conflict, and its two scripts change `stack.py config`
+to `stack.py configuration` and are done. One deliberate divergence from the "converge on
+`config`" recommendation: every other subcommand is a full word and AGENTS.md bars
+abbreviations, so the command is `configuration`. The key names, which are the part
+parsed by `awk`, match exactly.
+
+The open `stack.toml:23` thread asks whether to strip the remote inference from #106 now.
+Recommended answer: no. #106 lands first and the live Routine switches to `main`'s copy
+the moment it merges, so a fresh cloud clone that needs a hand-edited file before it can
+run is worse than one that infers. Keep it; delete it in #110 alongside the interactive
+setup that makes it unnecessary.
+
+### A premise that turned out to be wrong
+
+Decision 11's cut is recorded here and on #106 as done. It is half done: `ROUTINE.md` was
+rewritten around native mechanics, but `stack.py` still ships `print_next` and
+`print_restack_plan`, and the latter's docstring still points at "the `restack` workflow's
+`args`" — the subsystem the cut removes. Either it is outstanding or it was dropped
+without a record. It matters for sequencing: applying it later rewrites `stack.py` again
+and makes #110's rebase resolve the same conflict twice.
