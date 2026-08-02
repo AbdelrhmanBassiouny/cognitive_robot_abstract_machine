@@ -46,28 +46,30 @@ with world.modify_world():
     world.add_body(root)
 with world.modify_world():
     drawer= Drawer.create_with_new_body_in_world(
-        name=PrefixedName("drawer"),
+        name="drawer",
         scale=Scale(0.3, 0.3, 0.2),
         world=world,
         world_root_T_self=HomogeneousTransformationMatrix(),
     )
     handle = Handle.create_with_new_body_in_world(
-        name=PrefixedName("drawer_handle"),
+        name="drawer_handle",
         world_root_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(x=-0.15),
         world=world,
     )
     drawer.add(handle)
 
     slider = Slider.create_with_new_body_in_world(
-        name=PrefixedName("drawer_slider"),
+        name="drawer_slider",
         world_root_T_self=HomogeneousTransformationMatrix(),
         world=world,
-        active_axis=Vector3.X()
+        parent_connection_specification=Slider.parent_connection_specification(
+            axis=Vector3.X()
+        ),
     )
     drawer.add(slider)
 
     dresser = Dresser.create_with_new_body_in_world(
-        name=PrefixedName("dresser"),
+        name="dresser",
         scale=Scale(0.31, 0.31, 0.21),
         world=world,
     )

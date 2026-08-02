@@ -11,11 +11,11 @@ from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
 
-from plyfile import PlyData
 import numpy as np
 import trimesh
 import trimesh.exchange.stl
 from PIL import Image
+from plyfile import PlyData
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
 from typing_extensions import Optional, List, Dict, Any, Self, Tuple, TYPE_CHECKING
 
@@ -29,7 +29,6 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     Vector3,
 )
-from semantic_digital_twin.utils import IDGenerator
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -38,8 +37,9 @@ if TYPE_CHECKING:
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
-
-id_generator = IDGenerator()
+    from semantic_digital_twin.world_description.shape_collection import (
+        ShapeCollection,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -208,20 +208,26 @@ class Color:
 class Texture:
     """
     A 2D image texture applied to a geometric primitive's surface (for example a MuJoCo
-    box/cylinder/sphere geom's ``material``). Mesh shapes carry their own texture as part of
-    their own trimesh visual instead, and do not use this.
+    box/cylinder/sphere geom's ``material``).
+
+    Mesh shapes carry their own texture as part of their own trimesh visual instead, and
+    do not use this.
     """
 
     file_path: str
-    """The texture image's file path."""
+    """
+    The texture image's file path.
+    """
 
     repeat: Tuple[float, float] = (1.0, 1.0)
-    """How many times the texture tiles across the surface, along each of its two axes."""
+    """
+    How many times the texture tiles across the surface, along each of its two axes.
+    """
 
     uniform: bool = False
     """
-    Whether the texture is scaled uniformly across the surface, independent of the surface's
-    own size, rather than scaled to fit it.
+    Whether the texture is scaled uniformly across the surface, independent of the
+    surface's own size, rather than scaled to fit it.
     """
 
     def __post_init__(self):
@@ -353,9 +359,11 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
 
     texture: Optional[Texture] = None
     """
-    A texture applied to this shape's surface, or ``None`` for a flat ``color``. Only
-    meaningful for primitive shapes (:class:`Box`, :class:`Cylinder`, :class:`Sphere`);
-    :class:`Mesh` shapes carry their own texture as part of their trimesh visual instead.
+    A texture applied to this shape's surface, or ``None`` for a flat ``color``.
+
+    Only meaningful for primitive shapes (:class:`Box`, :class:`Cylinder`,
+    :class:`Sphere`); :class:`Mesh` shapes carry their own texture as part of their
+    trimesh visual instead.
     """
 
     @property
@@ -415,12 +423,9 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
 
         return True
 
-    def copy_for_world(self, world: World) -> Self:
+    def copy_without_reference_frame(self) -> Self:
         """
-        Copies this shape with references to the given world.
-
-        :param world: The world to copy to.
-        :return: A copy of this shape with references to the given world.
+        Creates a copy of this shape without the reference frame.
         """
         new_origin = HomogeneousTransformationMatrix(
             self.origin.to_np(),
@@ -432,6 +437,37 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
             if f.name not in ["origin"]
         }
         return self.__class__(origin=new_origin, **new_props)
+
+    def as_shape_collection(self) -> ShapeCollection:
+        """
+        Wraps this shape in a single-element shape collection anchored to its reference
+        frame.
+        """
+        from semantic_digital_twin.world_description.shape_collection import (
+            ShapeCollection,
+        )
+
+        return ShapeCollection(
+            shapes=[self], reference_frame=self.origin.reference_frame
+        )
+
+    def recenter_origin(self) -> None:
+        """
+        Moves the origin so the shape's local-frame bounding box is centered on it.
+
+        The translation is set to the negated bounding-box center while the origin's
+        existing rotation is preserved, leaving the shape's geometry symmetric about its
+        origin without re-orienting it.
+        """
+        bounding_box = self.local_frame_bounding_box
+        center_x = (bounding_box.min_x + bounding_box.max_x) / 2
+        center_y = (bounding_box.min_y + bounding_box.max_y) / 2
+        center_z = (bounding_box.min_z + bounding_box.max_z) / 2
+        self.origin = HomogeneousTransformationMatrix.from_point_rotation_matrix(
+            point=Point3(-center_x, -center_y, -center_z),
+            rotation_matrix=self.origin.to_rotation_matrix(),
+            reference_frame=self.origin.reference_frame,
+        )
 
 
 @dataclass(eq=False)
@@ -742,7 +778,7 @@ class Mesh(Shape):
         points_3d: List[Point3],
         reference_frame: Optional[KinematicStructureEntity] = None,
         minimum_thickness: float = 0.005,
-        sv_ratio_tol: float = 1e-7,
+        singular_value_ratio_tolerance: float = 1e-7,
     ) -> Self:
         """
         Constructs a Region from a list of 3D points by creating a convex hull around
@@ -754,8 +790,8 @@ class Mesh(Shape):
         :param points_3d: List of 3D points.
         :param reference_frame: Optional reference frame.
         :param minimum_thickness: Minimum thickness to add if points are near-planar.
-        :param sv_ratio_tol: Tolerance for determining planarity based on singular value
-            ratio.
+        :param singular_value_ratio_tolerance: Tolerance for determining planarity based
+            on singular value ratio.
         :return: Region object.
         """
         points = np.asarray([point.to_np()[:3] for point in points_3d], dtype=float)
@@ -782,7 +818,10 @@ class Mesh(Shape):
         # We compute the thickness, peak-to-peak (max - min), along the normal direction, to get the thickness of
         # the region.
         thickness_in_normal_direction = np.ptp(centered_points @ unit_vector_normal)
-        is_near_planar = variance[0] > 0 and variance[-1] / variance[0] < sv_ratio_tol
+        is_near_planar = (
+            variance[0] > 0
+            and variance[-1] / variance[0] < singular_value_ratio_tolerance
+        )
         thickness_padding = (
             minimum_thickness / 2
             if thickness_in_normal_direction < minimum_thickness or is_near_planar
