@@ -13,10 +13,12 @@ plus #121's two new `session-start.sh` tests), all 12 git-identity tests green.
 **CI red, not mine — diagnosed and answered on the PR, no fix pushed.**
 `test_each_lib (semantic_digital_twin)` fails two `test_multi_sim.py`
 material-builder tests (`assert '' != ''`) identically on the base #121 and on
-all three #126 runs — constant, so reproducible rather than flaky, and
-pre-existing. One #126 run additionally hit `test_world_sim_state_sync` (the
-known physics-settling flake; failed in one of three runs). The diff adds only
-`.claude/hooks/` files, zero mention of `semantic_digital_twin`.
+all four #126 runs (two per commit, before and after the restack) — constant,
+so reproducible rather than flaky, and pre-existing. `test_world_sim_state_sync`
+additionally failed in exactly one of those four, which is the known
+physics-settling flake behaving like one. The diff adds only `.claude/hooks/`
+files, zero mention of `semantic_digital_twin`. Answered on the PR three times;
+further identical runs are duplicates and get no further comment.
 
 **Hypothesis ruled out after the restack:** the post-restack run has `main`
 merged in (`1048 passed`, was 884) and the two failures survive it — so this is
