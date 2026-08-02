@@ -1,3 +1,4 @@
+import inspect
 import math
 
 import numpy as np
@@ -5,18 +6,23 @@ import pytest
 from numpy.testing import assert_allclose
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from krrood.utils import recursive_subclasses
+from semantic_digital_twin.exceptions import MissingConnectionAxisError
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
 )
 from semantic_digital_twin.world_description.connection_properties import JointDynamics
 from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
     DifferentialDrive,
+    FixedConnection,
     OmniDrive,
+    PrismaticConnection,
     RevoluteConnection,
     ScrewConnection,
 )
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, Connection
 
 
 def _add_drive(world_with_two_bodies, drive_type):
@@ -302,6 +308,195 @@ def test_screw_connection_copy_with_new_parent_preserves_screw_pitch(
     assert copied_connection.raw_dof is connection.raw_dof
     assert copied_connection.axis == connection.axis
     assert copied_connection.parent is new_parent
+
+
+# %% create_with_dofs parameter forwarding
+
+
+def _connection_types_implementing_create_with_dofs() -> list[type[Connection]]:
+    """
+    The connection types that carry their own ``create_with_dofs`` implementation.
+    """
+    return [
+        connection_type
+        for connection_type in recursive_subclasses(Connection)
+        if "create_with_dofs" in connection_type.__dict__
+    ]
+
+
+@pytest.mark.parametrize(
+    "connection_type", _connection_types_implementing_create_with_dofs()
+)
+def test_create_with_dofs_accepts_the_shared_parameters(connection_type):
+    """
+    Every implementation must accept the parameters a polymorphic caller supplies.
+
+    ``ConnectionSpecification.connect`` and ``RobotSpecification.spawn`` dispatch on a
+    connection type they do not know statically, so these parameters are the interface
+    every connection family has to honour.
+    """
+    parameters = inspect.signature(connection_type.create_with_dofs).parameters
+    assert {
+        "world",
+        "parent",
+        "child",
+        "name",
+        "parent_T_connection_expression",
+        "connection_T_child_expression",
+    } <= set(parameters)
+
+
+@pytest.mark.parametrize(
+    "connection_type, additional_arguments",
+    [
+        (FixedConnection, {}),
+        (Connection6DoF, {}),
+        (OmniDrive, {}),
+        (DifferentialDrive, {}),
+        (RevoluteConnection, {"axis": Vector3.Z()}),
+    ],
+)
+def test_create_with_dofs_rejects_unknown_keyword_argument(
+    world_with_two_bodies, connection_type, additional_arguments
+):
+    """
+    A misspelled parameter must fail loudly instead of falling back to the default.
+
+    ``translation_velocity_limit`` is the singular-form typo of a real drive parameter:
+    swallowing it would hand back a drive running at the default velocity limit.
+    """
+    world, parent, child = world_with_two_bodies
+    with pytest.raises(TypeError):
+        connection_type.create_with_dofs(
+            world,
+            parent,
+            child,
+            translation_velocity_limit=0.2,
+            **additional_arguments,
+        )
+
+
+@pytest.mark.parametrize("drive_type", [OmniDrive, DifferentialDrive])
+def test_create_with_dofs_applies_drive_velocity_limits(
+    world_with_two_bodies, drive_type
+):
+    """
+    The limits are asserted with non-default values, so ignoring them is visible.
+    """
+    world, parent, child = world_with_two_bodies
+    translation_velocity_limit = 0.25
+    rotation_velocity_limit = 0.15
+    with world.modify_world():
+        connection = drive_type.create_with_dofs(
+            world,
+            parent,
+            child,
+            translation_velocity_limits=translation_velocity_limit,
+            rotation_velocity_limits=rotation_velocity_limit,
+        )
+        world.add_connection(connection)
+
+    assert_allclose(
+        connection.x_velocity.limits.upper.velocity, translation_velocity_limit
+    )
+    assert_allclose(
+        connection.x_velocity.limits.lower.velocity, -translation_velocity_limit
+    )
+    assert_allclose(connection.yaw.limits.upper.velocity, rotation_velocity_limit)
+    assert_allclose(connection.yaw.limits.lower.velocity, -rotation_velocity_limit)
+
+
+def test_create_with_dofs_applies_lateral_velocity_limit_of_omni_drive(
+    world_with_two_bodies,
+):
+    """
+    The omni drive's lateral degree of freedom shares the translation limit.
+    """
+    world, parent, child = world_with_two_bodies
+    translation_velocity_limit = 0.25
+    with world.modify_world():
+        connection = OmniDrive.create_with_dofs(
+            world,
+            parent,
+            child,
+            translation_velocity_limits=translation_velocity_limit,
+        )
+        world.add_connection(connection)
+
+    assert_allclose(
+        connection.y_velocity.limits.upper.velocity, translation_velocity_limit
+    )
+    assert_allclose(
+        connection.y_velocity.limits.lower.velocity, -translation_velocity_limit
+    )
+
+
+def test_create_with_dofs_applies_multiplier_and_offset(world_with_two_bodies):
+    """
+    The scaling of the single degree of freedom is set from the arguments.
+    """
+    world, parent, child = world_with_two_bodies
+    multiplier = 2.0
+    offset = 0.5
+    with world.modify_world():
+        connection = RevoluteConnection.create_with_dofs(
+            world,
+            parent,
+            child,
+            axis=Vector3.Z(),
+            multiplier=multiplier,
+            offset=offset,
+        )
+        world.add_connection(connection)
+
+    assert_allclose(connection.multiplier, multiplier)
+    assert_allclose(connection.offset, offset)
+
+    raw_position = 1.0
+    world.state[connection.raw_dof.id].position = raw_position
+    assert_allclose(connection.position, raw_position * multiplier + offset)
+
+
+@pytest.mark.parametrize("connection_type", [PrismaticConnection, RevoluteConnection])
+def test_create_with_dofs_without_axis_raises(world_with_two_bodies, connection_type):
+    """
+    A single-DoF connection has no meaningful default axis, so it must be supplied.
+    """
+    world, parent, child = world_with_two_bodies
+    with pytest.raises(MissingConnectionAxisError):
+        connection_type.create_with_dofs(world, parent, child)
+
+
+def test_create_with_dofs_registers_the_six_dof_state(world_with_two_bodies):
+    """
+    The seven degrees of freedom are added and the quaternion starts at identity.
+    """
+    world, parent, child = world_with_two_bodies
+    with world.modify_world():
+        connection = Connection6DoF.create_with_dofs(world, parent, child)
+        world.add_connection(connection)
+
+    assert len(connection.passive_dofs) == 7
+    assert set(connection.passive_dofs) <= set(world.degrees_of_freedom)
+    assert_allclose(world.state[connection.qw.id].position, 1.0)
+
+
+def test_create_with_dofs_of_fixed_connection_adds_no_degrees_of_freedom(
+    world_with_two_bodies,
+):
+    """
+    A fixed connection has nothing to move, so it must not touch the world's DoFs.
+    """
+    world, parent, child = world_with_two_bodies
+    with world.modify_world():
+        connection = FixedConnection.create_with_dofs(world, parent, child)
+        world.add_connection(connection)
+
+    assert connection.dofs == []
+    assert world.degrees_of_freedom == []
+
+
+# %% joint dynamics
 
 
 def test_joint_dynamics_custom_values():

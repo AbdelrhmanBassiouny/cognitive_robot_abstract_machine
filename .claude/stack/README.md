@@ -5,7 +5,7 @@ in-flight branches; **cram2** is the slow review queue. You promote approved bra
 cram2 as their parents land. Claude does the mechanical restacking so the tower never rots
 and you keep coding.
 
-## The doctrine (why)
+## The rationale (why)
 
 The reviewers are the constraint. Throughput dies from big PRs and unbounded work in review,
 so: keep each PR small and single-concern, and make stack maintenance free. (Stacked diffs +
@@ -18,7 +18,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 | What | Where it lives | You set it by |
 |---|---|---|
-| dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub |
+| dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see `ROUTINE.md`) |
 | `draft` ↔ `ready` | the fork PR's **draft toggle** | un-drafting when you approve it |
 | `in-review` | the **`in-review` label** on the fork PR | labelling at promote time (cram2 isn't readable from the cloud) |
 | `merged` | branch is an ancestor of `cram2/main` | nothing - pure git |
@@ -28,9 +28,13 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 ## Files
 
-- **`stack.toml`** - the committed defaults: label names and remotes. A
-  `.claude/personal/stack.toml` on the personal-notes branch, if present, layers your own
-  overrides on top (see `stack.py`'s `load_config`) - you rarely touch either file directly.
+- **`stack.toml`** - the committed defaults: label names, and `upstream_repository`, the one
+  repository that is the same for every contributor. It names nobody's fork: the fork is
+  *whichever remote is not the upstream*, matched by the repository each URL points at rather
+  than by what the remote is called, so `origin` may be either one. A
+  `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top
+  (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between remotes
+  when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
   `session`) that `stack.py` reads. Written by the routine (via the GitHub MCP) as scratch -
   never committed, and not produced by anything in this directory; see `ROUTINE.md`.
@@ -46,8 +50,24 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`). Feed straight into the `restack`
     workflow's `args`.
-- **`ROUTINE.md`** - the canonical cloud-Routine prompt; paste it (or its successor) into
-  claude.ai/code/routines rather than re-embedding a copy here.
+  - `python .claude/stack/stack.py configuration` - every resolved setting as `key<TAB>value`
+    lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
+    remote is the fork and which is the upstream, plus the exact `git remote add` command when
+    no upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
+    exists; it exits non-zero rather than guessing when the fork is ambiguous. `ROUTINE.md`'s
+    SETUP runs this instead of inspecting or renaming remotes itself, and it is the one surface
+    shell tooling reads configuration through - parsing `stack.toml` directly would miss the
+    personal override.
+- **`ROUTINE.md`** - the cloud Routine's live prompt. The Routine reads it from git each run, so
+  editing it changes the running workflow on push; only a short pointer is registered at
+  claude.ai/code/routines. Never re-embed a copy here.
+- **`POINTER.md`** - that short pointer, as a template. It is the only part of the workflow that
+  lives outside git, so a copy is kept here to keep the running prompt from becoming its own only
+  record; its HARD RULES are pinned against `ROUTINE.md`'s by `tests/test_prompt_documents.py`.
+  Editing it does not change the running Routine - re-register it by hand.
+- **`prompt_model.py`** - the landmarks, rules and vocabulary `ROUTINE.md` and `POINTER.md` are
+  required to use, so the contract tests assert against declared text rather than restating the
+  documents.
 
 ## The state machine (your approval gate)
 

@@ -80,6 +80,16 @@ class KRROODOrientation(Symbol):
     w: Optional[float]
 
 
+# check that the PEP 604 spelling of an optional is recognised just like Optional[...]
+@dataclass
+class KRROODPipeOptionalOrientation(Symbol):
+    x: float
+    y: float
+    z: float
+    w: float | None
+    position: KRROODPosition | None
+
+
 # check that one to one relationship work
 @dataclass
 class KRROODPose(Symbol):
