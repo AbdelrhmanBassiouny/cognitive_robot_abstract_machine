@@ -763,16 +763,17 @@ items:
       reading does not hold, and base-change is not a third member of the
       tag-push/branch-delete family (those two have no MCP tool at all). ROUTINE.md's
       REPARENT paragraph and the NATIVE-STACK MEMBERS sequence are both session-executable
-      once they name the MCP tool, which draft PR #133 (session-safe-pr-reparent, stacked
-      on this branch) does. PR #41 has since been reparented onto main with that sequence -
+      once they name the MCP tool, which this branch now does directly: the correction was
+      first opened as stacked PR #133 and then folded into this PR, so #117 no longer ships
+      a step that 403s. PR #41 has since been reparented onto main with that sequence -
       268 files/+27,825 down to 7 files/+1,318, number, labels and review thread all kept -
       so this item's fix is now validated live end to end rather than only in its own
       tests.
 
   - id: session-safe-pr-reparent
-    branch: claude/workflow-unification-pr-test-o1kpei
+    branch: claude/stack-landed-parent-detection
     title: "Reparent a base through the GitHub MCP server, not a raw PATCH"
-    pull_request_number: 133
+    pull_request_number: 117
     track: stack-tooling
     depends_on: [landed-parent-detection]
     status: in_progress
@@ -797,14 +798,22 @@ items:
       stack.py, stack.toml, tests/), and with the base change available there is nothing
       for it to work around. Not writing new mechanics also matches decision 11's
       direction: GitHub maintains the mechanics, we maintain policy.
-      What shipped as draft PR #133 (bug label, based on #117's head since it edits the
-      NATIVE-STACK MEMBERS section that item added): a "BASE CHANGES GO THROUGH THE GITHUB
-      MCP SERVER" rule stated once in Phase 1 recording the 403 and its cause, both
-      reparent sites deferring to it, step 3 of the native-stack sequence using the MCP
-      tool and stating that the child keeps its number/labels/review thread, and the
-      README source-of-truth row naming the tool. Four contract tests written failing
-      first over ROUTINE.md, which is prose and had no coverage at all; 251 tests pass in
-      the dev-tooling suite, was 247.
+      What shipped: a "BASE CHANGES GO THROUGH THE GITHUB MCP SERVER" rule stated once in
+      Phase 1 recording the 403 and its cause, both reparent sites deferring to it, step 3
+      of the native-stack sequence using the MCP tool and stating that the child keeps its
+      number/labels/review thread, and the README source-of-truth row naming the tool.
+      Four contract tests written failing first over ROUTINE.md, which is prose and had no
+      coverage at all; 251 tests pass in the dev-tooling suite, was 247.
+      This item has no pull request of its own. It was opened as draft PR #133 stacked on
+      #117, then folded into #117 itself on the user's instruction that a PR must be
+      self-sufficient and correct: #133's only purpose was correcting a section #117 had
+      just introduced, so leaving it stacked meant #117 would sit in review carrying an
+      instruction already known to 403. The commit fast-forwarded onto
+      claude/stack-landed-parent-detection, which GitHub detected as merging #133 into its
+      own base and auto-closed it - merged into that branch, not into main. #117's
+      description was rewritten to explain the 403-vs-422 distinction directly so it stands
+      alone, and #117 was returned to draft per the always-re-draft-after-pushing rule.
+      Both this item and landed-parent-detection therefore point at #117 and land together.
       Validated live on PR #41, the case the whole thread started from: recorded Stack
       #128's composition, dissolved it (204), changed #41's base to main via the MCP tool,
       re-created the stack (201). #41's diff went from 268 files/+27,825 to 7 files/+1,318

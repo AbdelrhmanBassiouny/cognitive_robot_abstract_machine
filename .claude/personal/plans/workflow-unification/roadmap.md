@@ -1896,11 +1896,9 @@ not available to a session at all". It is available. So:
   the platform forbids sessions" — which is a materially different thing to carry into
   `routine-cutover`, where the Action's own credential is the open question.
 
-### What shipped
+### What shipped — and why it ended up inside #117 rather than beside it
 
-Draft PR **#133** on `claude/workflow-unification-pr-test-o1kpei`, `bug` label, based on #117's head
-since it edits the NATIVE-STACK MEMBERS section that item added. A `BASE CHANGES GO THROUGH THE
-GITHUB MCP SERVER` rule stated once in Phase 1 — recording the 403, naming its cause, and telling a
+A `BASE CHANGES GO THROUGH THE GITHUB MCP SERVER` rule stated once in Phase 1 — recording the 403, naming its cause, and telling a
 session that hits it that it used the wrong client rather than found a stuck reparent — with both
 reparent sites deferring to it, step 3 of the native-stack sequence using the MCP tool and stating
 that the child keeps its number, labels and review thread, and `README.md`'s source-of-truth row
@@ -1909,6 +1907,34 @@ naming the tool.
 Four contract tests, written failing first. `ROUTINE.md` is prose and had **no test coverage at
 all**, which is exactly how a doctrine drifts back to a blocked verb unnoticed; 251 tests pass in the
 dev-tooling suite, was 247.
+
+This was opened as draft PR **#133**, stacked on #117 — because a session's standing instruction is
+to develop on its own designated branch and not push to another session's branch without explicit
+permission. The user overrode that on sight of the result, with a standard worth recording as
+general: **a pull request must be self-sufficient and correct on its own; never leave one open that
+is known to contain a bug.** #133's only purpose was correcting a section #117 had *just
+introduced*, so stacking it meant #117 would sit in review prescribing a step already known to 403,
+with its fix visible only to someone who noticed a second PR behind it. A change whose sole purpose
+is patching its parent's own new section is not independent work.
+
+So the commit was fast-forwarded onto `claude/stack-landed-parent-detection` (a true
+fast-forward, `a672c146..938e6415` — no rebase, no force-push, #117's three commits untouched).
+GitHub then detected #133's head as contained in its own base and auto-closed it as **merged** —
+merged into that branch, not into `main`, which is worth stating because the badge does not say so.
+A comment on #133 records it.
+
+Two consequences beyond the fold itself. #117's description was rewritten rather than left alone —
+it described the old mechanism in two places, and a PR whose body explains a superseded design is
+not self-sufficient either; it now carries the 403-vs-422 table directly. And #117 went back to
+**draft**, per the standing always-re-draft-after-pushing rule. Note that open PR #123 proposes
+exactly the opposite for this case — that a draft→ready flip the user made means accepted, with no
+re-drafting — so whichever way #123 lands settles the question; until then the in-force rule applies.
+
+**#106 deliberately needed no equivalent change.** The change touches text originating in both PRs,
+but only #117's was actively wrong. #106 says "retarget its child's base to `main` on GitHub" and the
+README row said "retargeting the PR base on GitHub" — vague, naming no client, and so not misleading
+in the way `PATCH` is. Since #117 stacks on #106, `main` gets the corrected text whenever the chain
+lands.
 
 ### PR #41, repaired
 
@@ -1930,7 +1956,7 @@ what notices the orphan, and `routine-cutover`'s `pull_request: closed` sweep is
 notice promptly. What changed is only that the repair it triggers is now a base change a session can
 actually perform.
 
-**Residue.** Throwaway branches `claude/reparent-probe-{head,target,upper}-o1kpei` survive — sessions
-cannot delete branches (2026-07-29 addendum), so they need the same out-of-harness deletion as
-`origin/claude/push-scope-test-zsq7jc`. Their pull requests #129/#130 are closed and stacks #131/#132
-dissolved.
+**Residue.** The throwaway probe branches `claude/reparent-probe-{head,target,upper}-o1kpei` were
+deleted by the user; their pull requests #129/#130 are closed and stacks #131/#132 dissolved.
+`claude/workflow-unification-pr-test-o1kpei` became redundant once #133 was folded into #117 and
+needs the same out-of-harness deletion, since sessions cannot delete branches (2026-07-29 addendum).
