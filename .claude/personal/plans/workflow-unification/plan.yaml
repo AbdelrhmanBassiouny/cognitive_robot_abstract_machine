@@ -703,6 +703,19 @@ items:
       the user asked for the patch text to review and paste rather than a direct
       update_trigger call, so until they do, restack-plan emits the right parent but
       Phase 1 still will not retarget on GitHub.
+      Validated 2026-08-02 (/plan-item-resolve session) against the real PR #41 stack
+      the bug was found on, not just the item's own synthetic tests: confirmed live that
+      ripple-down-rules-refactor (PR #40's head) is still an ancestor of origin/main while
+      PR #41 is still based on it (unreparented), and that #41 is native GitHub Stack #112
+      (#41 -> #63 -> #64 -> #65 -> #66 -> #67 -> #98, all open). Ran restack_plan/
+      parent_landed from both #106's pre-fix stack.py and this item's fixed stack.py
+      against that real 7-PR set (real git-ancestry predicate, not a stub): pre-fix
+      restack_plan reparents #41 onto the stale ripple-down-rules-refactor branch exactly
+      as the bug describes; the fixed version correctly emits parent: main for #41 and
+      leaves #63..#98's own parent chain untouched. This was read-only (local script, no
+      push, no GitHub write) - the live reparent (dissolve Stack #112 -> PATCH #41's base
+      -> restack -> re-create) was proposed but deliberately not executed pending the
+      user's explicit go-ahead, being destructive and force-pushing six branches.
 
   - id: ready-to-promote-upstream-links
     branch: null

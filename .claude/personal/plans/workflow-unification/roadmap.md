@@ -1657,3 +1657,51 @@ may only import guard-covered modules). Dependency tiers adopted now, krrood-ind
 tier 1 hook-safe = stdlib only (SessionStart path, enforced by an import-block test); tier 2
 command-time = installed packages (PyYAML); tier 3 domain machinery (EQL queries over the plan
 model, verbalized status text) = only ever in dedicated feature items of that future plan.
+
+## Update 2026-08-02: `landed-parent-detection` validated against the real PR #41 stack
+
+`/plan-item-resolve workflow-unification landed-parent-detection`, prompted by the user wanting to
+try PR #117's fix on "the current stack that starts with PR #41 which has the exact issue" rather
+than take the item's synthetic tests on faith.
+
+**Confirmed live, not assumed**, before touching anything:
+
+- `ripple-down-rules-refactor` (PR #40's head, `34f160df`) **is** an ancestor of `origin/main` -
+  `git merge-base --is-ancestor origin/ripple-down-rules-refactor origin/main` succeeds. PR #40 is
+  closed, not merged - exactly the "landed by another route" case.
+- PR #41 (`rdr-backward-inference`) is still based on that branch (`base.sha` matches the branch's
+  live tip) - it has not been reparented since the bug was found.
+- PR #41 is native GitHub **Stack #112** (`GET /stacks/112`, `X-GitHub-Api-Version: 2026-03-10` via
+  curl + `GH_TOKEN` - no MCP tool exposes the stacks API): `#41 (rdr-backward-inference) -> #63
+  (D-core-aid) -> #64 (D-core-underspecified) -> #65 (D-core-corner-case) -> #66
+  (D-core-serialization) -> #67 (D-core-support) -> #98 (D-core-expert)`, all open, all non-draft
+  except #41. This is the exact native-stack-member case `ROUTINE.md`'s NATIVE-STACK MEMBERS section
+  (added by this item) targets: plain `PATCH` 422s here, recovery is dissolve -> PATCH -> restack ->
+  re-create.
+
+**The validation itself** (read-only local script, no push, no GitHub write): built the real 7-PR set
+above as `PullRequest` records and wired `is_merged` to a real `git merge-base --is-ancestor
+origin/<branch> origin/main` predicate - no stubs, no synthetic fixtures - then ran `restack_plan`/
+`parent_landed` from two checkouts:
+
+- **`claude/stack-tooling-on-main` (#106, pre-fix)**: `restack_plan` reparents #41 onto
+  `ripple-down-rules-refactor` (the stale, closed branch) rather than `main` - the bug reproduces
+  exactly as described, on live data, not just in the item's own synthetic tests.
+- **`claude/stack-landed-parent-detection` (#117, the fix)**: `restack_plan` correctly emits
+  `{"branch": "rdr-backward-inference", "parent": "main", "strategy": "merge"}` for #41, and
+  `has_landed_upstream("ripple-down-rules-refactor")` is `True`. The six branches above #41
+  (#63..#98) keep their normal parent-chain entries unchanged - only #41's root parent moves.
+
+**What this settles.** The item's own notes already said "restack-plan emits the right parent but
+Phase 1 still will not retarget on GitHub" - that was true of the synthetic tests only, since nobody
+had run the fixed code against #41's actual data before. It now holds against the real stack too, so
+the fix is validated end-to-end for the exact case it was written for, not merely for the
+synthetic fixtures the failing-first tests use.
+
+**What was deliberately not done.** The live repair - `POST /stacks/112/unstack` (dissolves all 7,
+no selective/undo), `PATCH` #41's base to `main`, restack + force-push #41 through #98 in order,
+`POST /stacks` to re-create - was proposed but not executed. It is destructive (no undo once
+dissolved) and force-pushes six live branches, so it needs the user's explicit go-ahead in the
+session, separate from and beyond validating the fix's logic. Also untouched, as already recorded
+above: merging #117 itself (normal cram2-review track) and pasting the Phase 1 amendment into the
+live Routine trigger (the user's own manual-paste call, unrelated to this validation).
