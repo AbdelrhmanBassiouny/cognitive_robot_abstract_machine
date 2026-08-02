@@ -1734,3 +1734,76 @@ hitting this now dissolves a stack it cannot finish repairing unless it also re-
 immediately, as done here. Merging #117 itself (normal cram2-review track) and pasting the Phase 1
 amendment into the live Routine trigger (the user's own manual-paste call) remain untouched,
 unrelated to this finding.
+
+## Update 2026-08-02 (later): the fix generalizes to a new item; and preventing the orphan in the first place
+
+Follow-on in the same session, after the user asked two things: how to make the reparent fully
+session-solvable (not needing a human for the blocked step), and separately, how to stop a parent
+landing-while-closed from orphaning a child at all, rather than only recovering after the fact.
+
+### Scope correction: the block is unconditional, not stack-specific
+
+The PATCH 403 recorded above fired on PR #41 *after* it had already been removed from Stack #112 -
+at that moment it was an ordinary, non-stacked pull request. That means the restriction is not the
+stack-member 422 `landed-parent-detection`'s `ROUTINE.md` addition was written for; it is a
+platform-level block on **any** pull request base-branch change from a Claude Code session, full
+stop. The consequence reaches further back than today's incident: the *original* Phase 1 REPARENT
+paragraph (`stack-tooling-on-main`, #106), which prescribes a plain `PATCH` for an ordinary,
+non-stacked child whose parent lands, was never actually session-executable either - nobody had hit
+it live before because a parent landing while its own PR stays open-and-merged (the common case) is
+rare enough that the retarget step had never actually been exercised end to end.
+
+### New item: `session-safe-pr-reparent`
+
+Spun out rather than folded into #117, since it is a different root cause (a blocked API call, not
+the board-membership/git-ancestry detection bug #117 fixes) - matching this plan's own
+one-root-cause-per-bug-fix convention. `depends_on: [landed-parent-detection]`, branched on top of
+#117's head rather than #106 directly, since it edits both #106's original REPARENT paragraph and
+#117's NATIVE-STACK MEMBERS addition.
+
+**The fix**: replace "PATCH the base" everywhere in `ROUTINE.md` (and the small reparent-recovery
+script #106 already scopes) with **close the orphaned PR, `create_pull_request` for the same head
+branch against the corrected base, carry over labels and the session-link line, comment on the old
+PR linking to the new number**. Creating and closing pull requests both already work fine from a
+session - this substitutes the mechanism rather than retrying the blocked verb. Native-stack members
+keep the same shape as #117's sequence, swapping only the middle step: unstack -> close old PR ->
+create new PR -> restack (local rebase/force-push, unchanged) -> re-create the stack with the new PR
+number in place of the old one.
+
+**Cost, named rather than hidden**: the reparented PR gets a new number and its review thread starts
+fresh. Mitigated by the close-comment linking old to new, but it is a real trade against a clean
+PATCH - accepted because the clean PATCH is not available to a session at all, so there is no
+zero-cost alternative to weigh it against.
+
+**Cross-note for `routine-cutover`** (added to that item's own notes too): verify, concretely, whether
+the Action's own credential (default `GITHUB_TOKEN` or a stored PAT - a different actor identity than
+a session's token) can PATCH a base cleanly, before assuming it needs the same close+create-PR
+fallback. If it can, the Action gets a real, clean reparent with no PR-renumbering cost at all -
+worth checking before building the fallback into the Action's own path.
+
+### Preventing the orphan itself, not just recovering from it
+
+The user's second question - stop a landed-but-closed parent from ever orphaning a child - has two
+layers, and the first one is the most direct:
+
+1. **The fix that already exists has to actually ship.** `landed-parent-detection`'s own notes already
+   record that the live Routine's Phase 1 prompt is unpatched pending the user's manual paste, and
+   #117 itself is not yet merged to `main`. Until both land, the *old* code keeps running in
+   production, and it will keep missing this exact case - a closed-not-merged parent - on every
+   cycle, indefinitely, not just once. This is worth stating plainly because it is easy to read
+   today's work as "done" once the logic is fixed and validated; it is not in force until deployed.
+   Once it is, the ancestry-based check runs on every Phase 1 pass and self-heals this pattern within
+   one cycle of whatever cadence Phase 1 runs on.
+2. **Cadence still leaves a window; make detection event-triggered, not just periodic.** Even with
+   #117 live, a scheduled Routine/Action only notices a closed-and-landed parent on its next tick.
+   The tighter fix - folded into `routine-cutover`'s notes as a design requirement, not a new item,
+   since it is a refinement of the Action that item already owns - is to also trigger the ancestry
+   check from the `pull_request` `closed` webhook event itself: the moment any fork PR closes,
+   ancestry-test its head branch immediately, and reparent every open PR based on it right then if
+   it turns out to have landed elsewhere. That collapses the detection window from "up to one
+   scheduled cycle" to "the same event that could cause the problem," which is what actually prevents
+   the #40/#41 pattern from recurring rather than only shrinking how long it can go unnoticed.
+
+Both of these are about *when* the already-correct detection logic runs, not about the logic itself
+- #117 already answers "is this parent actually landed" correctly; what was missing is "make sure
+that question gets asked, in production, as close to the landing event as possible."

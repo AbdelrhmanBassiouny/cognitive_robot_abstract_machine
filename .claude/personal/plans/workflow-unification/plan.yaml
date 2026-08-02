@@ -510,6 +510,22 @@ items:
       trigger trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the
       final cutover deletes or disables it. Gate unchanged: only after PR 1 is on
       cram2/main and fork main fast-forwards; one green Action cycle flips this done.
+      New requirement 2026-08-02, from a live `landed-parent-detection` (#117) reparent
+      attempt: PATCHing a pull request's base branch 403'd from a Claude Code session
+      with "not permitted for this session type" - confirmed unconditional (fired on an
+      already-unstacked PR, not just a stack member), so no session can ever do a real
+      base-branch reparent. The Action's own credential (default GITHUB_TOKEN or a
+      stored PAT) is a different actor identity than a session's, so it plausibly is
+      not subject to this restriction - this item's kickoff/implementation must verify
+      that concretely (a real PATCH attempt from the Action) before assuming it. If the
+      Action's token also 403s, it needs the same close+create-PR fallback
+      session-safe-pr-reparent builds for sessions. Also fold in event-triggered
+      detection rather than cadence-only: trigger the Action (or an additional one) on
+      `pull_request` `closed`, ancestry-test that PR's head branch immediately, and
+      reparent any open fork PR based on it right then if it turns out to have landed
+      elsewhere - this is what actually prevents the #40/#41 orphan pattern from
+      recurring with a multi-cycle delay, rather than only shrinking the window to one
+      scheduled tick.
 
   - id: tooling-branch-retirement
     branch: null
@@ -726,12 +742,53 @@ items:
       number (Stack #128; #112 cannot be reused once dissolved) but the PR list, order and
       every base are otherwise identical to before the attempt. PR #41 itself is unchanged:
       still based on ripple-down-rules-refactor, still not reparented. This is a new,
-      real hazard for ROUTINE.md/the live Routine to record: base-branch PATCH may be
-      unavailable to a session outright, in which case the whole native-stack reparent
-      recovery this item added (dissolve -> PATCH -> restack -> re-create) needs a human
-      to perform the PATCH step (UI Rebase-stack button, or a token/actor with base-change
-      permission), matching the tag-push/branch-delete precedent already on record in this
-      plan's 2026-07-29 addendum.
+      real hazard, and it is bigger than a native-stack-only special case: the 403 fired
+      on #41 *after* it was unstacked, so it is unconditional - no session can ever PATCH
+      any pull request's base, stacked or not. That means the ordinary (non-stack) plain
+      PATCH reparent this item's own doctrine still prescribes for a landed off-board
+      parent (the "REPARENT EVERY ORPHANED CHILD" paragraph) was never actually
+      session-executable either - nobody had hit it live until now. Spun out as its own
+      item rather than folded in here, since it is a different root cause (a blocked API
+      call, not the board-membership/ancestry detection bug this item fixes): see
+      session-safe-pr-reparent, which replaces the PATCH step with a session-executable
+      mechanism for every reparent this item's doctrine calls for, not only the
+      native-stack case. Matches the tag-push/branch-delete precedent already on record
+      in this plan's 2026-07-29 addendum - a third instance of a mutating GitHub
+      operation blocked specifically for a Claude Code session's credentials.
+
+  - id: session-safe-pr-reparent
+    branch: null
+    title: "Replace PATCH-base reparents with close+create-PR (base-branch PATCH is blocked for any session)"
+    track: stack-tooling
+    depends_on: [landed-parent-detection]
+    status: not_started
+    notes: >
+      Spun out of landed-parent-detection (#117) 2026-08-02: a live reparent attempt on
+      PR #41 confirmed PATCHing any pull request's base branch 403s from a Claude Code
+      session ("not permitted for this session type"), unconditionally - fired on a PR
+      that had already been removed from its native stack, so this is not the
+      stack-member 422 #117's doctrine was written for. No session can ever perform the
+      retarget step ROUTINE.md's REPARENT EVERY ORPHANED CHILD paragraph (and its
+      NATIVE-STACK MEMBERS sequence) prescribes, plain PR or stacked.
+      Fix: replace the PATCH step everywhere in ROUTINE.md, and in the small
+      reparent-recovery script stack-tooling-on-main (#106) already scopes, with close
+      old PR -> create_pull_request for the same head branch against the corrected base
+      -> carry over labels and the session-link line -> comment on the old PR pointing
+      to the new number. Creating and closing pull requests both already work from a
+      session; this substitutes the mechanism rather than retrying the blocked verb.
+      Native-stack members keep the same shape, swapping only the middle step: unstack
+      -> close old PR -> create new PR -> restack (local rebase/force-push, unchanged) ->
+      re-create the stack with the new PR number in place of the old one.
+      Cost, stated rather than hidden: the reparented PR gets a new number and its
+      review thread starts fresh (mitigated by the close-comment linking old to new);
+      this is a real trade against a clean PATCH, accepted because the clean PATCH is not
+      available to a session at all.
+      Depends on landed-parent-detection because it edits the same ROUTINE.md sections
+      that item added (NATIVE-STACK MEMBERS) as well as #106's original REPARENT
+      paragraph - branch on top of #117's head, not #106 directly, so both are in scope
+      to edit. Cross-note for routine-cutover: verify whether the Action's own credential
+      (not a session's) can PATCH a base cleanly before assuming it needs this same
+      fallback - see that item's notes.
 
   - id: ready-to-promote-upstream-links
     branch: null
