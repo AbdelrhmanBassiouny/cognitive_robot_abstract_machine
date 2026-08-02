@@ -11,10 +11,13 @@ Kickoff session: https://claude.ai/code/session_01FJUE2ePxVHbFSVegZ9WRtP
 1. Get a CI or local-test baseline on `D-core-expert` first — PR #98 has never
    had CI run on it (see the assumptions below). Without it the new PR's first
    CI result cannot be separated from anything inherited.
-2. Cut `D-core-single-class` from `origin/D-core-expert` (not from `main`).
+2. Check whether #98 has picked up the "Handed to #98" items below before
+   implementing anything that touches `condition_resolver.py`, `interface.py`
+   or `progress.py`.
+3. Cut `D-core-single-class` from `origin/D-core-expert` (not from `main`).
    Do *not* cascade the stack first — see the staleness assumption below.
-3. Work through the plan below, tests first.
-4. Update `plan.yaml`'s `d-core-single-class` item (`status`, `branch`,
+4. Work through the plan below, tests first.
+5. Update `plan.yaml`'s `d-core-single-class` item (`status`, `branch`,
    `session`, `pull_request_number`) and run `save-plan.sh rdr-refactor` +
    `/plan-dashboard rdr-refactor` as state changes.
 
@@ -67,12 +70,44 @@ Outcome: `EQLSingleClassRDR` exists on the stack with its full engine test suite
   redone before anything merges anyway.
 - Could not subscribe to tracking issue #94 — both `subscribe_pr_activity` tools return
   "Could not subscribe to this PR". Not a blocker; the PR itself will be subscribed normally.
-- **Scope expansion, flagged for your call:** thread `single_class.py:239` asks for `CaseContext`
-  to be given to the condition resolver too, not just the expert. That changes
-  `ConditionResolver.resolve`'s 8 flattened parameters and touches `condition_resolver.py` plus
-  `test_condition_resolver.py` (383 lines, 10 `.resolve(` call sites) — files owned by a lower PR
-  in the stack. Included below; say the word and it moves to a follow-up. (#98 set the precedent
-  by touching `interface.py` when its review required it.)
+- **Handed to #98 — see the section below.** The condition-resolver `CaseContext` change and the
+  `interface.py`/`progress.py` Null-Object work target files that already exist on
+  `D-core-expert`, so they belong to that PR's topic rather than this one.
+
+## Handed to #98 (`D-core-expert`) — not built here
+
+Every file below already exists on `D-core-expert`, so these changes belong to the PR that owns
+the parameter-object/Null-Object topic. Reported on #98 so that session can pick them up. This
+slice consumes the results and must not re-implement them.
+
+1. **`ConditionResolver.resolve` takes `CaseContext`** (thread `single_class.py:239`, comment 2 of
+   3). Four definitions change — abstract `ConditionResolver` (`condition_resolver.py:72`),
+   `TargetKnowledgeResolver` (`:115`), `CornerCaseKnowledgeResolver` (`:172`),
+   `ChainConditionResolver` (`:208`) — from eight flattened parameters to
+   `resolve(context, target_knowledge, current_knowledge)`. Five of the eight are already
+   `CaseContext` fields (`case`→`case_instance`, `case_variable`, `target_conclusion`,
+   `current_conclusion`, `corner_case`) and `firing_anchor` comes off `context.trace.firing_anchor`.
+   Plus `test_condition_resolver.py` (383 lines, 10 `.resolve(` call sites). The import is
+   type-only and cycle-free: `interface.py:38` already imports `ResolvedCondition` under
+   `TYPE_CHECKING`, and `condition_resolver.py` has `from __future__ import annotations` plus its
+   own `TYPE_CHECKING` block.
+2. **Null-Object defaults on `interface.py` + `progress.py`.** `make_progress_reporter()` returns
+   `Optional[ProgressReporter]` today (`interface.py:310`, returns `None`); `on_save` is
+   `Optional[Callable[[], None]] = None` (`:181`) with `save()` guarding
+   `if self.on_save is not None` (`:190`). Add `NullProgressReporter` to `progress.py` (alongside
+   the existing `SpyProgressReporter`), make the return type non-`Optional`, default `on_save` to
+   a no-op, drop the guard.
+3. **`ProgressDescription` `StrEnum` in `progress.py`** (thread `single_class.py:67`) — replaces
+   the `_FITTING_DESCRIPTION` module global. The enum belongs with progress reporting; only the
+   engine consumes it.
+4. **Open question, not a decision:** should `save()` and `make_progress_reporter()` be promoted
+   from `ExpertInterface` onto `Expert`, so the engine stops reaching through
+   `expert.interface.…`? This session's default is no — they stay on `ExpertInterface`
+   (`expert.py` has no reference to either today). It changes #98's public API, so it is cheaper
+   to settle while #98 is open than after this slice depends on it.
+
+Staying here: `RDRDidNotConvergeError` and the expert-required exception in `rdr/exceptions.py`.
+Both are engine-specific and only meaningful once the convergence loop exists.
 
 ## Decisions already settled (do not re-litigate)
 
@@ -170,22 +205,17 @@ Port the 554-line module, then apply its review threads:
 
 - `rdr/exceptions.py`: `RDRDidNotConvergeError` + the expert-required exception, following the
   existing `error_message()`/`suggest_correction()` shape.
-- `rdr/progress.py`: `NullProgressReporter` (no-op `ProgressReporter`) + `ProgressDescription`.
-- `rdr/interface.py`: `make_progress_reporter()` returns `NullProgressReporter` instead of
-  `Optional[...]`; `on_save` defaults to a no-op so `save()` needs no guard. Both stay on
-  `ExpertInterface`.
-- `rdr/condition_resolver.py`: `resolve(context, target_knowledge, current_knowledge)` — only if
-  the scope flag above is accepted.
+
+`progress.py`, `interface.py` and `condition_resolver.py` are handed to #98 (see the section
+above). If #98 lands without them, implement them here and say so in the PR body — but check
+#98 first.
 
 ### 5. PR
 
 Draft PR against `D-core-expert`, session link in the body, `bug` label not applicable. The body
-carries the answers to every "discuss with me" thread this slice touches (the pattern #98 used).
-Then, per your note, comment on **#98** — it owns `Expert` — asking whether `save()` /
-`make_progress_reporter()` should be promoted onto `Expert` so the engine stops reaching through
-`expert.interface.…`; it changes #98's public API, so it is cheaper to settle while #98 is still
-open. Record the same question on tracking issue #94 as the structural record. Subscribe to the
-new PR's activity; write the pr-progress note.
+carries the answers to every "discuss with me" thread this slice touches (the pattern #98 used),
+and notes which threads were answered on #98 instead. Record the handoff on tracking issue #94 as
+the structural record. Subscribe to the new PR's activity; write the pr-progress note.
 
 ## Verification
 
