@@ -2272,3 +2272,94 @@ run with no arguments on a checkout nobody has configured, and only setup writin
 `stack.py:84` dies with the same deletion. #110 was told its rebase now inherits a skill, that its
 SETUP step 0 rewrite is superseded, and that the two contract tests it was told to update are
 updated upstream of it.
+
+## Update 2026-08-02 (review round): GitHub already closes what the pass was closing by hand
+
+Twenty-five review comments on the skill, in `8b7435bb`. Three were decisions rather than
+corrections, and each is worth recording with the evidence that settled it.
+
+### The fast-forward is the close
+
+The reviewer asked three versions of the same question - *"if fork main is fast forwarded with
+upstream main, then github auto closes pull requests that are ancestors of main"*, *"isn't merging
+better than closing?"*, *"could this actually happen anyway?"* - and the answer was in this
+repository's own history:
+
+| PR | `merged_at` | labels |
+| --- | --- | --- |
+| #101 | `2026-07-31T10:36:43Z` | `in-review`, **`merged`** |
+| #103 | `2026-07-31T10:36:43Z` | `bug`, `in-review` |
+| #105 | `2026-07-31T10:36:43Z` | `bug`, `in-review` |
+
+All three at the same second - the moment fork `main` fast-forwarded from cram2 - and only #101
+carries the hand-applied label. GitHub records all three as **merged**, not merely closed. So
+phase 1's label-then-close was doing by hand what step 2 already did in one push.
+
+Deleted: the close call, the `merged` label from the workflow entirely, and `landed` as a to-do
+list (it survives as a report). **The ordering changed with it**: auto-detection fires only for a
+pull request whose *own* base moved, so a stacked child based on a sibling branch is not caught by
+fast-forwarding the trunk. The reparent sweep therefore has to run *before* the fast-forward, which
+inverts the order the document had carried since it was a routine prompt.
+
+The general shape, worth reusing: **before writing a step that maintains state, check whether the
+platform already maintains it.** This one had survived two rewrites unexamined.
+
+### The pass never writes code, which is what made it generic
+
+*"Didn't we say it should never code, why debug and fix?"* — and the document did contradict
+itself: it said code changes are the developer's session's work, then gave a procedure for
+reproducing, fixing and locally validating a failure.
+
+Removing that branch removed every repository-specific name with it — `krrood`, `ormatic_interface.py`,
+`semantic_digital_twin`, `coraplex`, `experiments`, ROS, `AGENTS.md`. The reviewer predicted exactly
+this (*"that will also remove all ormatic, krrood, ros, coraplex, semdt mentions completely and will
+make the skill more generic"*), and it is the cleanest illustration in this plan of a portability
+problem that was really a scope problem: the file was repo-specific *because* it was doing work it
+should not have been doing.
+
+The one file change that survives is resolving a conflict during a restack, which is unavoidable if
+it restacks at all — and it now has to be reported in a comment naming the files, since it is a
+change to somebody else's branch that they did not make.
+
+### The pointer is gone, and most of the prose tests with it
+
+*"I don't want anything in the pointer at all, the pointer is useless now, it's just a skill call."*
+`POINTER.md`, `prompt_model.py` and `test_prompt_documents.py` are all deleted.
+
+The reviewer separately asked to discuss whether the prose tests were worth keeping (*"this is
+fragile and easy to break"*), and the two questions answer each other: those tests existed to hold
+the pointer's duplicated copy of the HARD RULES equal to the routine document's. With one copy, the
+duplication they guarded does not exist. Eighteen deleted.
+
+**One survives, and the distinction is the useful part.** `test_the_skill_names_no_fork_of_its_own`
+asserts an *absence*, computed from `load_configuration()` rather than from a string written in the
+test. It cannot fail from rewording, only from the fault it exists to catch — shipping one
+contributor's repository name in a document that is executed verbatim on somebody else's fork. That
+is the line worth drawing for any future test over prose: assert what the document must not contain,
+computed from live state; do not assert what it says.
+
+**A consequence that reverses design decision 4**, flagged to the user rather than buried: the HARD
+RULES no longer bind before the first file is read. They were inline in the pointer precisely because
+a webhook event can arrive before the first tool call. The window is now one turn — between the run
+starting and it reading the skill — which is an accepted trade against deleting a file plus its
+enforcement machinery, and `routine-cutover` deletes the scheduled run entirely anyway.
+
+### Smaller, but the same principle each time
+
+`Command` is a `StrEnum` with a `needs_a_board` property, which answered both *"make these commands
+maybe a StrEnum?"* and *"why not a tuple?"* — the second question was about a `frozenset` of boardless
+commands kept beside the enum, and the right answer was that the fact belongs to the command rather
+than to a set beside it, so the set is gone.
+
+A pre-flight refusal now carries a `RefusalReason` alongside its sentence, so the tests assert
+`[RefusalReason.MISMATCHED_REFSPEC]` instead of a hardcoded English string — which was the reviewer's
+*"can this string be fetched from where it is defined?"*, answered by deleting the need for the string
+rather than by importing it. Label tests read their labels from the `Configuration` that defines them,
+since labels are per-user configuration and never an enum.
+
+### Left open deliberately
+
+*"This file is so big"* — `stack.py` is ~1,540 lines and this PR added ~400 of them. Not split here,
+and put back to the user with the reasoning: `dev-tooling-python-package` already moves every
+`.claude/` Python file into a package, so splitting now means the same surgery twice, with #110 and
+#111 rebasing across it in between.

@@ -223,10 +223,43 @@ items:
       on #110 rather than resolving it. stack.py:84 (from_remote_url parses without
       validating) also remains open and dies with the same deletion.
 
-      Manual step still due: re-paste POINTER.md's block into claude.ai/code/routines - it
-      now resolves the skill and passes both repositories plus --non-interactive. Once this
-      lands on main, the pointer's tooling-branch fallback can go and the block can invoke
-      /stacked-pr-maintenance by name instead of reading the file.
+      Review round 2026-08-02 (25 comments) applied in 8b7435bb; three decisions were the
+      user's, each taken after the options were costed. (1) GitHub marks a pull request
+      merged - not closed - the moment its head becomes an ancestor of its base, proven
+      from live data: #101, #103 and #105 all carry merged_at 2026-07-31T10:36:43Z, the
+      second fork main fast-forwarded, and two carry no merged label. So the label-then-
+      close step was duplicating the fast-forward and is deleted, the merged label with
+      it; landed becomes a report. The fast-forward moves after the reparent sweep,
+      because auto-detection only fires for a pull request whose own base moved.
+      (2) The skill never writes code: a conflict it cannot merge cleanly, or a red check,
+      is reported to the branch's owner and skipped. That removed every krrood, ormatic,
+      coraplex and semantic_digital_twin mention, so the instructions are now repo-generic.
+      A conflict it does resolve while restacking must be reported in a comment.
+      (3) POINTER.md, prompt_model.py and test_prompt_documents.py are deleted - the
+      registered prompt is a skill call now, so the duplication the prose tests guarded no
+      longer exists. One test survives, that the skill names no fork of its own: an absence
+      computed from live configuration rather than a sentence asserted against a document.
+      313 tests pass, was 331; the difference is exactly those 18 prose assertions.
+
+      Consequence to carry: the HARD RULES no longer bind before the first file is read,
+      which reverses design decision 4. Flagged to the user on the PR rather than buried -
+      the window is now one turn, and routine-cutover deletes the scheduled run anyway.
+
+      Also: commands are a Command StrEnum with a needs_a_board property; a pre-flight
+      refusal carries a RefusalReason so callers act on which refusal rather than its
+      wording; BranchMove is ProposedCommitMove; label tests read their labels from the
+      configuration that defines them; promotion writes its compare link into the fork
+      pull request's description so it outlives the summary.
+
+      Deliberately not done, and put to the user on the PR: splitting stack.py (~1,540
+      lines). dev-tooling-python-package already moves every .claude/ Python file into a
+      package, so splitting now means the same surgery twice with #110 and #111 rebasing
+      across it in between.
+
+      Manual step still due: register the routine's prompt as a call to
+      /stacked-pr-maintenance with fork=, upstream= and --non-interactive. Until this
+      lands on main the skill cannot be invoked by name from a fresh clone, so the prompt
+      must read the file from a ref until then.
 
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
