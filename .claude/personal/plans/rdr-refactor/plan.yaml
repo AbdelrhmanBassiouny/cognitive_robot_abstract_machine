@@ -159,7 +159,25 @@ items:
     convention: record the no-live-tree-mutation rationale in the field docstring (its design doc is
     on the dropped krrood/docs/ path), correct the misleading evaluation comment at
     backward_inference.py:82-90, and TDD-pin whether the isinstance(OperationResult) branch in
-    holds_for is reachable before deleting it.'
+    holds_for is reachable before deleting it.
+    All three applied and pushed as 29c27cca; PR converted back to draft per convention. The
+    reachability probe corrected an earlier claim of mine: evaluate() does not only yield true
+    results -- a leaf predicate yields a literal False when it fails, so bool(result) is
+    load-bearing and "did it yield anything" would have been wrong. Only the isinstance branch
+    was dead. Verified against a clean run of the previous head in the same container: 206 failed
+    / 935 passed before, 206 failed / 937 passed after, the +2 being exactly the new tests.
+    scripts/format_docstrings.py was deliberately not run on the result -- it rewrites the whole
+    module (125 unrelated lines) and regresses ":return: ``True``" to ":return:``True``"; flagged
+    on the thread as deserving its own pass. The _materialize live-node mutation is filed as
+    dag-facade-hardening''s non-mutating-negation item, per the developer''s call; when that
+    lands, GuardCondition.negated should be revisited, since Not()-wrapping was cleaner at 4 of
+    6 sites and the mutation hazard was the only thing against it.
+    2026-08-03 (final): the developer marked #41 ready for review again after the push. CI green
+    20/20 on head 29c27cca including test_each_lib (krrood), draft: false, mergeable_state: clean,
+    all 23 threads resolved. CI passing is the stronger verification here -- the resolve session''s
+    own container lacked the dependency set entirely (206 environment failures, identical before and
+    after), whereas CI runs the real one. Nothing outstanding: #41 is ready to merge as the stack
+    bottom, and the next steward pass should cascade it forward through #63-#67/#98.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid

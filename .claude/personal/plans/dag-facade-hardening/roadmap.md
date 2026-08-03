@@ -234,3 +234,39 @@ ownership collaborator on `EvaluationContext` rather than adding a sixth paralle
 Escape hatch: revisit a per-pass materialized view only if evaluation-time code ever
 needs *bulk* structural queries on hot paths (e.g. "all conditions in this query's
 subtree relative to a given owner"); no current call site does.
+
+## Addendum (2026-08-03) — `non-mutating-negation`, filed from rdr-refactor's #41
+
+A `/plan-item-resolve` session on `rdr-refactor`'s `rdr-backward-inference` (#41) was asked
+to settle a review question: should `GuardCondition.negated` be dropped in favour of wrapping
+the guard expression in `Not()`, so a guard's expression is always required to be true?
+
+The answer turned on this plan's defect class, which is why the item lands here.
+
+`Not()`-wrapping is genuinely the cleaner representation — cleaner at four of six concrete
+use sites across that plan (it deletes `_materialize` outright, simplifies `holds_for`, and
+reduces `_active_path`'s positive-occurrence check to an identity test). It loses on exactly
+one point: `factories.not_` → `SymbolicExpression._invert_` → `Not(self)` →
+`base_expressions.py:299` `child._parent_ = self`. Negating a node that belongs to a live
+tree reparents it. That is the tree-shaped-facade-over-a-DAG problem this plan exists to
+close, at construction time rather than evaluation time — the same shape as
+`insert-at-ownership-parentage`.
+
+The developer kept the flag on that basis and asked for the underlying defect to be tracked
+here rather than bundled into #41 (the bottom of a seven-PR stack, where every extra commit
+costs a cascade restack).
+
+The concrete instance is `rdr/condition_resolver.py:104`: `_materialize` calls
+`not_(guard.expression)` on a live rule-tree node — so the no-mutation rule is honoured
+during traversal and violated at rule-insertion time. That call site is not on `main` yet;
+it arrives with #41. So the item's real content is the first half — a way to build a negated
+view without adopting the operand — and the call site is repointed whenever the RDR stack
+lands, in whichever order the two merge.
+
+Worth carrying forward: **once this lands, `rdr-refactor` should revisit
+`GuardCondition.negated`.** The recommendation recorded on #41 was explicitly conditional —
+"keep the flag now, revisit when #96 lands a safe constructor" — and this item is that
+condition. Its own analysis is in `rdr-refactor`'s roadmap §12; the short version is that
+verbalization does not decide the question (the verbalizer already handles both an
+`(expression, polarity)` pair and a native `Not(Comparator)`), so the hazard is the whole
+argument.

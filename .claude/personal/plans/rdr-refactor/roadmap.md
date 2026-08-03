@@ -759,3 +759,62 @@ go-ahead, and are cheap to carry on whichever PR next touches these files if #41
 
 The `_materialize` live-node mutation (`condition_resolver.py:104`) remains open and unplaced —
 it is a real defect, and not this PR's to carry.
+
+### Applied (2026-08-03, same day)
+
+The developer chose to take the three follow-ups onto #41 rather than defer them. Pushed as
+`29c27cca`; PR converted back to draft per the always-drafts-until-ready convention.
+
+- `GuardCondition.negated`'s docstring now states why polarity is a flag (negation reparents,
+  and the expression belongs to the live rule tree), so the reason survives the dropped
+  `krrood/docs/` design doc.
+- `holds_for`'s comment now describes the real mechanism.
+- The dead `isinstance(result, OperationResult)` branch and its import are gone.
+
+**A correction worth keeping**, because it nearly caused a real bug. §12 above recorded that
+`evaluate()` "already filters `if result.is_true`", inferred from reading `_true_results_`.
+Probing it directly disproved the generalisation:
+
+| expression | case | `evaluate()` yields |
+|---|---|---|
+| `animal.has_fur` | `fur=True` | `[True]` |
+| `animal.has_fur` | `fur=False` | `[False]` |
+| `Not(animal.has_fur)` | `fur=True` | `[]` |
+| `Not(animal.has_fur)` | `fur=False` | `[UnificationDict]` (truthy) |
+
+A leaf predicate yields a bool either way, including a literal `False`. So `bool(result)` is
+load-bearing; "simplifying" to `any(expression.evaluate())` on the strength of the earlier
+claim would have made every false leaf guard read as true. Only the `isinstance` branch was
+genuinely dead. Both rows are now pinned by
+`test_guard_expressions_evaluate_to_plain_values_never_operation_results`, added before the
+removal, alongside new coverage for a `Not()`-wrapped guard.
+
+Verification followed §8's method — compare against a clean run of the same tree, not raw
+counts. `test_eql` + `test_eql_rdr`: **206 failed / 935 passed** on the previous head,
+**206 failed / 937 passed** after, identical failures, +2 exactly the new tests. (The 206 are
+this container's missing system dependencies, plus three files excluded for the pre-existing
+`probabilistic_model.probabilistic_circuit.relational.rspn` gap §9 already documented.)
+
+**`scripts/format_docstrings.py` was deliberately not run on the result.** AGENTS.md mandates
+it for modified files, but on `backward_inference.py` it rewrites the whole module — 125 lines
+of unrelated rewrapping — and regresses `:return: ``True``` to `:return:``True``` (dropping the
+space) in every docstring it touches. Bundling that into a stack-bottom PR conflicts with
+keeping PRs focused, and it would ship a formatting regression. Flagged on the thread as
+deserving its own pass across the package; the tool/file mismatch is pre-existing, not
+introduced here.
+
+The `_materialize` defect is now `dag-facade-hardening`'s `non-mutating-negation` item. When it
+lands, **revisit `GuardCondition.negated`** — the recommendation here was explicitly conditional.
+
+### Closed (2026-08-03)
+
+The developer marked #41 **ready for review** again after the push. CI green 20/20 on head
+`29c27cca`, including `test_each_lib (krrood)`; `draft: false`, `mergeable_state: clean`, all 23
+threads resolved. #41 is ready to merge as the stack bottom.
+
+Worth recording for future sessions: **CI is the load-bearing verification here, not the local
+run.** This resolve session's container shipped no interpreter with the project's dependencies at
+all — the 206 failures in its sweep were entirely environmental, which is exactly why the
+before/after comparison (206/935 vs 206/937) rather than the absolute number was the signal. CI
+runs the real environment and passed. A local sweep in a bare container can only show *no new
+failures*; it cannot show *no failures*.
