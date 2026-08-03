@@ -1,18 +1,27 @@
-Root cause found and fixed - done, no PR needed.
+Data fix done directly on claude/personal-notes (no PR - see below). Code
+hardening now also shipped as draft PR #136 on this branch, per explicit
+follow-up request ("I would like a bug fix PR there").
 
-The dashboard glitch (screenshot showed one bullet per character under the
-personal-settings-sync item) was a data bug, not a code bug: that item's
-`blockers` field in workflow-unification's plan.yaml was a YAML block-scalar
-*string* instead of the schema's list of strings. `build_dashboard.py`'s
-`list(data.get("blockers") or [])` on a Python string explodes it into one
-list element per character, and the template renders one `<div
-class="blocker">` per element.
+Root cause: the workflow-unification dashboard's rendering glitch (one
+bullet per character under personal-settings-sync) was a plan.yaml data bug
+- that item's `blockers` field was a YAML block-scalar string instead of a
+list, and `build_dashboard.py`'s `list(data.get("blockers") or [])` explodes
+a Python string into one list element per character. Fixed the data by
+restructuring it into a proper 3-item YAML list (unchanged wording), pushed
+via save-plan.sh, and republished the dashboard Artifact (same URL, no
+drift).
 
-User chose the data-only fix (declined hardening build_dashboard.py against
-this class of input). Restructured the prose into a proper 3-item YAML list
-(unchanged wording, split at the existing "(1)"/"(2)" boundaries), pushed via
-save-plan.sh, verified `list()` now yields a real list of 3 in Python and
-`build_dashboard.py`'s output has exactly 3 `.blocker` divs, then republished
-the workflow-unification dashboard Artifact (same URL, no drift, no manifest
-auto-corrections). Nothing to commit to this branch - the fix lives entirely
-on claude/personal-notes.
+PR #136 (draft, `bug` label, based on main @ 2f459043, committed as
+Abdelrhman Bassiouny <abassiou@uni-bremen.de> not the assistant identity):
+adds `InvalidBlockers` to build_dashboard.py's `validate_plan`, mirroring
+the existing `InvalidDependsOn` check (which already documented this exact
+string-explodes-to-chars footgun for depends_on but had no equivalent for
+blockers) - a string `blockers` now fails validation loudly instead of
+silently corrupting the render. Added
+test_validate_plan_rejects_blockers_that_is_not_a_list first (confirmed it
+failed via ImportError before the fix), then implemented; full suite
+(.claude/skills/plan-dashboard/tests + .claude/hooks/tests) passes, 223/223.
+Subscribed to PR activity.
+
+Next: none - waiting on review/CI. React to webhook events as they arrive;
+no scheduled check-ins per this repo's personal-notes rule.
