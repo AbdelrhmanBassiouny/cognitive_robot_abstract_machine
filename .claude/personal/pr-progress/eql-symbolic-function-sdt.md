@@ -105,9 +105,23 @@ real blockers; dashboard republished.
     in that file); and that file's recent `main` history is literally "Fix
     subscriber-count race … causing flaky collision checks". Analysis on #33
     (5142155247).
-  - **Open loop**: wanted to confirm by `rerun_failed_jobs`, but GitHub returns 403
-    "workflow is already running" while `coraplex` finishes. Retry when a later event
-    arrives or the user asks — no timed check-in, per these notes.
+  - *Round 3 (`36e2624f`, the `semdt_specifications_rewrite` merge, #402 — 93 files,
+    +10569/-2472)*: `coraplex_real_tracy` demo failed. `tracy_standalone` (a prebuilt
+    binary in the ROS overlay) died with **exit -11 = SIGSEGV**, so `fetch_world` never
+    came up and the demo timed out at 276s. Not ours: the job passed on both previous
+    runs with all our changes in, and the demo dies at world fetch before touching
+    anything of ours. Analysis on #33 (5159902918).
+    **Verified our own work against that rewrite locally**: sdt verbalization test
+    passes, krrood value-phrase + base-class-exclusion + all 76 doctests pass (82
+    total), and — the useful bit — the regenerated `verbalization_results.py` is
+    *byte-identical*, so the rewrite added no new `SymbolicCallable` and changed no
+    rendering. The merge touched `krrood/ormatic/utils.py` but only to type-hint
+    `classproperty`; `classes_of_package` unchanged.
+  - **Open loop**: `rerun_failed_jobs` keeps returning 403 "workflow is already
+    running" (there is nearly always a job in flight). Retry when a later event
+    arrives or the user asks — no timed check-in, per these notes. Still unconfirmed
+    whether round 2's `test_world_synchronizer` flake recurs; that file was changed
+    again in round 3's merge.
 - Reacting to webhook events; per these notes, no timed check-in is armed. When a
   base-branch-recovered notice arrives, merge `main` again and let CI re-run.
 - When the type-noun decision lands: if it is "type-level display noun", that is a

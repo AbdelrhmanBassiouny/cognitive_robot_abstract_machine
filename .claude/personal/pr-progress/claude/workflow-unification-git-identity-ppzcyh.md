@@ -4,17 +4,30 @@ Draft **PR #126**, commit `ddf3d382`, subscribed to its activity. No `bug` label
 `test_claude_dev_tooling` green. Full plan:
 `/root/.claude/plans/idempotent-juggling-plum.md`.
 
+**Restacked 2026-08-02** by the stack routine: head is now `bb3f6a51`, merging
+#121's updated branch (which had merged `main`) into `ddf3d382`. Local branch
+fast-forwarded to it. Verified the merge is sound in substance, not just
+textually: `56 passed` in `.claude/hooks/tests` on the merged tree (54 before,
+plus #121's two new `session-start.sh` tests), all 12 git-identity tests green.
+
 **CI red, not mine — diagnosed and answered on the PR, no fix pushed.**
 `test_each_lib (semantic_digital_twin)` fails two `test_multi_sim.py`
 material-builder tests (`assert '' != ''`) identically on the base #121 and on
-both #126 runs — constant, so reproducible rather than flaky, and pre-existing.
-One #126 run additionally hit `test_world_sim_state_sync` (the known
-physics-settling flake; failed in one of two runs of the same commit). This
-diff is 11 files under `.claude/hooks/`, zero mention of
-`semantic_digital_twin`. Worth someone's attention separately: `main`'s own run
-at `82501888` passes this job, so the material failures may be specific to the
-`refs/pull/*/merge` environment or the restored asset cache — hypothesis only,
-not investigated.
+all four #126 runs (two per commit, before and after the restack) — constant,
+so reproducible rather than flaky, and pre-existing. `test_world_sim_state_sync`
+additionally failed in exactly one of those four, which is the known
+physics-settling flake behaving like one. The diff adds only `.claude/hooks/`
+files, zero mention of `semantic_digital_twin`. Answered on the PR three times;
+further identical runs are duplicates and get no further comment.
+
+**Hypothesis ruled out after the restack:** the post-restack run has `main`
+merged in (`1048 passed`, was 884) and the two failures survive it — so this is
+*not* staleness relative to `main`, and merging `main` is not the fix. `main`'s
+own push run at `82501888` still passes this job, so the divergence is between
+push runs and `refs/pull/*/merge` runs. The restored asset cache
+(`/github/home/.cache/semantic_digital_twin`) is the likelier place to dig than
+the source tree. Not investigated further — different package, outside this PR;
+worth its own item if it keeps reddening unrelated PRs.
 
 **Base: #121** (`claude/workflow-unification-setup-jgvs53`), not fork `main` —
 this reverses the item's recorded `depends_on: []`, now

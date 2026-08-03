@@ -1,50 +1,49 @@
-# Plan
+# PR #109 - personal-settings-sync (workflow-unification)
 
-Two asks, one branch:
+Unblocked 2026-08-03 by `/plan-item-resolve workflow-unification
+personal-settings-sync`, session
+https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn, in commit `5281e3f3`.
+The item had sat `in_progress` since 2026-07-31 with a manifest entry claiming
+"open and ready" and no `blockers` recorded.
 
-1. Sync a personal `settings.local.json` off the personal-notes branch the way
-   CLAUDE.local.md already is, seeded with a rule allowing the Artifact tool
-   without prompting.
-2. Add a personal-notes rule: republish a plan's dashboard whenever any session
-   changes that plan's data.
+## Done
 
-# Done
+- **Merged `main`.** The conflict was a duplicated artifact, not drifting text:
+  `main` had `ScratchRepository` (from #101's review round), this branch had
+  `ScratchProject` - the same hook-test fixture under two names. Adopted `main`'s
+  (a superset, already used by `test_check_setup_sh.py`) and deleted
+  `ScratchProject`, so `conftest.py` and `test_save_plan_sh.py` are now
+  byte-identical to `main` and have left the diff entirely. Third instance of
+  this pattern in the plan after `POINTER.md`/`routine-prompt.md` and
+  `BOARDLESS_COMMANDS`/`BOARD_FREE_COMMANDS`.
+- **Ported `test_personal_settings_sync.py`** onto the `scratch_repository`
+  fixture with a module-level `run_hook`, mirroring `run_check_setup`/
+  `run_save_plan`. Picked up `run_check_setup`'s environment scrub, which the
+  old fixture lacked.
+- **Added `ScratchRepository.update_notes_branch_file`** (+ optional `cwd` on
+  `run_git`) - the one thing `ScratchProject` could do that it couldn't.
+- **The three review threads**: JSON literals moved to
+  `tests/fixtures/personal-settings*.json`, read via `FIXTURES_DIRECTORY`.
+  Replied on the PR and resolved all three.
+- **README** section re-authored against `main`'s rewritten step-based guide:
+  30 lines, down from 53.
+- PR back to draft, `needs-resolution` dropped (`cram2-link-sent` kept), body
+  refreshed, manifest + roadmap updated, dashboard republished.
 
-- `resolve-personal-notes-config.sh`: `PERSONAL_SETTINGS_PATH`,
-  `LOCAL_SETTINGS_RELATIVE_PATH`/`LOCAL_SETTINGS_JSON`, the sync-stamp path, and the
-  `personal_settings_are_locally_modified`/`record_personal_settings_sync` helpers.
-- `session-start.sh`: copies the branch's settings into `.claude/settings.local.json`
-  unless it changed locally since the last sync (Claude Code writes its own
-  "don't ask again" grants there), plus a `local settings:` summary line.
-- New `save-personal-settings.sh`, delegating commit/push to
-  `write-personal-notes-file.sh` and re-stamping afterwards.
-- Tests: scratch-project fixture extracted into `conftest.py` as a `ScratchProject`
-  class (shared with the save-plan.sh tests); `test_personal_settings_sync.py` covers
-  both halves. `.claude/hooks/tests` + `plan-dashboard/tests` all green (24 + 187).
-- `.gitignore` for the settings file and the stamp; hooks README section, safety
-  bullets, and intro updated.
-- Committed and pushed to `claude/local-settings-dashboard-sync-8sx0tf`.
-- Personal-notes branch: `.claude/personal/settings.local.json` allowing `Artifact`,
-  and the "always republish the dashboard when plan data changes" rule under
-  "Keeping plan state current".
+## State
 
-- PR #109 opened on the fork as a draft, subscribed to its activity. Abdelrhman marked
-  it ready for review himself - leave it ready; only re-draft it if I push a commit.
-- CI: `test_claude_dev_tooling` green (the job covering this PR's changes); everything
-  else green except `test_each_lib (semantic_digital_twin)`, which fails on
-  `test_multi_sim.py::test_world_sim_state_sync`. Identical failure on `main` at this
-  PR's base commit 52f4f74, so it is pre-existing, not ours - said so in a PR comment
-  and did not bundle a fix.
+36 tests pass under `.claude/hooks/tests` (`main`'s 28 + this module's 8), 194
+under `.claude/skills/plan-dashboard/tests`. `test_claude_dev_tooling` green on
+`5281e3f3`. `mergeable_state: unstable` (mergeable; robotics jobs still running -
+historically flaky and unreachable from a `.claude/`-only diff).
 
-- Tracked in the workflow-unification plan as item `personal-settings-sync`
-  (personal-data track, immediate wave, depends_on []). plan.yaml + roadmap addendum
-  saved, dashboard republished at the existing URL, structural change commented on
-  tracking issue #102.
+## Next
 
-# Next
+Nothing outstanding on my side. Waiting on the developer's own review - the PR
+is a draft by convention until they have reviewed it.
 
-- React to PR #109 events as they arrive (no scheduled polling, per notes). Keep it a
-  draft after any push; mark ready only when told to.
-- If the sim failure is worth chasing, it wants its own `bug`-labelled PR off `main`:
-  the box settles in z but never moves in x/y, so the sim never picks up the
-  connection-origin update.
+**Note for whoever replies here next**: the three review threads belong to an
+*unsubmitted pending review*. GitHub allows one pending review per user, so any
+inline reply returns `422 - user_id can only have one pending review per pull
+request` until that review is submitted. Use a PR-level comment instead, or
+submit the pending review first.

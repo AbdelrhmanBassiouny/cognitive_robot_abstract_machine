@@ -20,6 +20,14 @@ when null; `#101` escaped only because it carries the manual `merged` label.
   with `drift_count: 0`.
 - Subscribed to PR activity. Per personal notes: no scheduled check-in armed.
 
+**CI (2026-08-02)**
+- User marked it ready for review and merged `origin/main` into the branch (`2b9a0eb8`).
+- `test_each_lib (semantic_digital_twin)` red: two `test_multi_sim.py` texture/material tests
+  (`assert '' != ''`). Identical failure on `main` at `9b090fc1` (run 30760195910), the very
+  commit merged in - pre-existing on the base, unreachable from a `.claude/`-only diff.
+  Stated once on the PR; nothing to fix here.
+- `test_claude_dev_tooling` green.
+
 **Next**
-- Wait for review; the library CI jobs from the second push still need to come back green.
+- Wait for review, and for the base branch to go green - then re-run CI here.
 - If review lands it, flip the item to `done` in `plan.yaml` and republish the dashboard.

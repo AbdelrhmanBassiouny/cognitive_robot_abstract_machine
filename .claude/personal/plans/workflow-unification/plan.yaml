@@ -81,7 +81,7 @@ items:
     track: personal-data
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_0167iZiWUnXizpKSqa7xf5rC
+    session: https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn
     notes: >
       Extends the session-start hook so the notes branch also carries this project's
       local Claude Code settings (.claude/personal/settings.local.json ->
@@ -92,15 +92,33 @@ items:
       baseline is a hash stamp in .claude/.personal-settings-sync-hash. This widens the
       track beyond its "slimming" name: personal-data is now personal-notes data and
       config generally, which is what the plan's target architecture already says that
-      branch holds. Independent of the #101 stack - branched off fork main, PR #109 open
-      and ready. Same session also added the personal-notes rule that any session
-      changing a plan's data republishes that plan's dashboard in the same turn
-      (notes-branch only, no PR). File overlap to expect, not a dependency: #107 adds
-      path constants to resolve-personal-notes-config.sh and #110 makes
-      write-personal-notes-file.sh delegate to write-branch-files.sh - this item touches
-      both, so whichever lands second merges the two. CI is green on
-      test_claude_dev_tooling; the one red job (semantic_digital_twin's
-      test_world_sim_state_sync) fails identically on main at this PR's base commit.
+      branch holds. Independent of the #101 stack - branched off fork main. Same session
+      also added the personal-notes rule that any session changing a plan's data
+      republishes that plan's dashboard in the same turn (notes-branch only, no PR).
+      STALLED 2026-07-31 to 2026-08-03 and RESOLVED by
+      https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn (commit 5281e3f3), on two
+      blockers neither of which this entry had recorded - see blockers below and the
+      2026-08-03 roadmap entry. The overlap warning above resolved itself: #107's and
+      #110's files (resolve-personal-notes-config.sh, session-start.sh) auto-merged
+      clean; what actually conflicted was a duplicated test fixture against main. PR
+      #109 is a draft again, labelled cram2-link-sent only, mergeable against main
+      9b090fc1, all three review threads resolved; 36 tests pass under
+      .claude/hooks/tests (main's 28 plus this module's 8).
+    blockers: >
+      Both cleared 2026-08-03. (1) Merge conflict against main since the 2026-07-31
+      fast-forward - mergeable_state dirty, labelled needs-resolution - in
+      .claude/hooks/README.md, tests/conftest.py and tests/test_save_plan_sh.py. Root
+      cause was a duplicated artifact, not drifting text: main extracted the hook-test
+      scratch repository as ScratchRepository (via #101's review round) while this branch
+      independently extracted the same thing as ScratchProject. Resolved by adopting
+      main's superset and deleting ScratchProject, so both test files are now
+      byte-identical to main. (2) Three unresolved review threads on
+      test_personal_settings_sync.py asking for the inline JSON literals to move into
+      separate files - AGENTS.md's no-inline-snippets rule - now three .json files under
+      tests/fixtures/. Note for anyone replying on this PR: those threads belong to an
+      unsubmitted PENDING review, and GitHub allows one pending review per user, so
+      inline replies 422 until it is submitted; the resolution was explained in a
+      PR-level comment instead.
 
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
@@ -186,15 +204,81 @@ items:
       independently-built `config` one surface, so #110's rebase deletes the resolution
       internals only. 286 CI tests pass, was 283. Description updated to match.
 
-      Still outstanding here: the same-day cut recorded above is only half applied.
-      ROUTINE.md was rewritten around native mechanics, but stack.py still ships
-      print_next and print_restack_plan, the latter still documented as feeding "the
-      restack workflow's args". Confirm whether the cut is still wanted; if so, sequence
-      it before #110's rebase, or that rebase resolves the same stack.py conflict twice.
-      Two review threads remain open: stack.toml:23 asks whether to strip the remote
-      inference here (recommended answer: no - it is what makes this PR runnable
-      standalone; delete it in #110 with the interactive setup), and stack.py:84 notes
-      Repository.from_remote_url parses without validating.
+      Re-scoped again 2026-08-02 (user-approved, session_01BByQFT6he8xf5qvBWtyUPV): the
+      doctrine becomes a skill and the recipes become subcommands. ROUTINE.md is deleted;
+      .claude/skills/stacked-pr-maintenance/SKILL.md carries the doctrine, is invocable as
+      /stacked-pr-maintenance from any session, and is what POINTER.md's registered block
+      now resolves and runs. Context resolution is arguments first (fork=/upstream=, passed
+      through as configuration --fork/--upstream, so nothing is inferred when both are
+      given), then stack.py configuration, then - only interactively - an AskUserQuestion
+      whose answer is persisted to .claude/personal/stack.toml on the personal-notes
+      branch; --non-interactive turns that question into a stop, which is what a scheduled
+      run needs given its own rule against opening a discussion. Landed as one commit on
+      this branch (e20b0bb4) rather than as a child PR: every path it touches is absent
+      from main, so by the scope rule nothing standalone would have remained, and shipping
+      a ROUTINE.md that its successor deletes would change the live doctrine twice - the
+      pointer resolves origin/main first.
+
+      Four new stack.py subcommands, each replacing a rule a reader had to remember:
+      labels (the complete set a label write must send, computed from the current labels),
+      preflight (refuses a wrong checked-out branch, a mismatched refspec, a non-fork
+      destination, and the child-becomes-ancestor-of-parent false merge; exit 5),
+      promotion-link (owns the compare URL's encoding and length limit), and
+      reparents/landed (phase 1 derived from git ancestry rather than pull-request state).
+      331 tests pass, was 294. An MCP server was considered and rejected: the raw PATCH
+      base change 403s on the session git-proxy credential, so a local server could not own
+      the riskiest operation, and subcommands survive routine-cutover's no-LLM endgame.
+
+      Decision 11's half-applied cut is deliberately not completed: print_next and
+      print_restack_plan are kept, because phases 2 and 3 call them and they are the
+      derivation half of the scripts-over-prose choice made here. print_restack_plan's
+      docstring no longer names "the restack workflow's args".
+
+      One review thread stays open by design - stack.toml:23, the remote inference. The
+      skill answers its interactive half; the remaining caller is a non-interactive run
+      with no arguments on an unconfigured checkout, so the ~120-line deletion is still
+      #110's, alongside the setup that writes fork_repository. Replied on the thread and
+      on #110 rather than resolving it. stack.py:84 (from_remote_url parses without
+      validating) also remains open and dies with the same deletion.
+
+      Review round 2026-08-02 (25 comments) applied in 8b7435bb; three decisions were the
+      user's, each taken after the options were costed. (1) GitHub marks a pull request
+      merged - not closed - the moment its head becomes an ancestor of its base, proven
+      from live data: #101, #103 and #105 all carry merged_at 2026-07-31T10:36:43Z, the
+      second fork main fast-forwarded, and two carry no merged label. So the label-then-
+      close step was duplicating the fast-forward and is deleted, the merged label with
+      it; landed becomes a report. The fast-forward moves after the reparent sweep,
+      because auto-detection only fires for a pull request whose own base moved.
+      (2) The skill never writes code: a conflict it cannot merge cleanly, or a red check,
+      is reported to the branch's owner and skipped. That removed every krrood, ormatic,
+      coraplex and semantic_digital_twin mention, so the instructions are now repo-generic.
+      A conflict it does resolve while restacking must be reported in a comment.
+      (3) POINTER.md, prompt_model.py and test_prompt_documents.py are deleted - the
+      registered prompt is a skill call now, so the duplication the prose tests guarded no
+      longer exists. One test survives, that the skill names no fork of its own: an absence
+      computed from live configuration rather than a sentence asserted against a document.
+      313 tests pass, was 331; the difference is exactly those 18 prose assertions.
+
+      Consequence to carry: the HARD RULES no longer bind before the first file is read,
+      which reverses design decision 4. Flagged to the user on the PR rather than buried -
+      the window is now one turn, and routine-cutover deletes the scheduled run anyway.
+
+      Also: commands are a Command StrEnum with a needs_a_board property; a pre-flight
+      refusal carries a RefusalReason so callers act on which refusal rather than its
+      wording; BranchMove is ProposedCommitMove; label tests read their labels from the
+      configuration that defines them; promotion writes its compare link into the fork
+      pull request's description so it outlives the summary.
+
+      Settled 2026-08-02 (user decision): stack.py is not split in this PR. It stays ~1,540
+      lines here and dev-tooling-python-package does the surgery once, when it moves every
+      .claude/ Python file into the package - rather than twice, with #110 and #111 rebasing
+      across the first attempt. The review comment that raised it stays answered rather than
+      resolved.
+
+      Manual step still due: register the routine's prompt as a call to
+      /stacked-pr-maintenance with fork=, upstream= and --non-interactive. Until this
+      lands on main the skill cannot be invoked by name from a fresh clone, so the prompt
+      must read the file from a ref until then.
 
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
@@ -242,23 +326,24 @@ items:
       infrastructure, so it is ordinary stacking, not a disguised modification of its
       parent - unlike #133/#117, which folded because nothing remained. Keep the PR.
 
-      What its rebase onto #106 must carry, all of it here rather than in #106: delete
-      .claude/stack/routine-prompt.md and render POINTER.md instead - they are the same
-      artifact, and POINTER.md's copy is the one pinned byte-for-byte against
-      ROUTINE.md's hard rules, while this branch's paraphrases them unenforced. The two
-      files template different values (<FORK_REMOTE>/<UPSTREAM_REMOTE> here versus
-      <FORK_REPOSITORY>/<TOOLING_BRANCH> there), so the renderer changes variables, not
-      just filenames. Carry over the two rules this branch promoted into the pointer
-      (never force-push a branch with an open upstream PR unless it carries the rebase
-      label; do not use the Workflow tool) - they exist in #106 only as prose above the
-      pinned block, so promoting them means editing that block too. Drop the
-      <TOOLING_BRANCH> fallback, dead once .claude/stack/ is on main. Update the two
-      contract tests this branch's SETUP step 0 rewrite breaks
-      (test_setup_obtains_the_tooling_rather_than_assuming_it and
-      test_setup_takes_the_tooling_ref_from_the_pointer) as a declared contract change,
-      not a silent one. Adapt check-stack-setup.sh and setup-stacked-prs.sh from
-      `stack.py config` to `stack.py configuration`; #106 already matched the key names,
-      so nothing else in the parsing changes.
+      Rebase instructions rewritten 2026-08-02 (user-directed), because #106's review round
+      invalidated most of the previous set. ROUTINE.md and POINTER.md no longer exist: the
+      instructions are .claude/skills/stacked-pr-maintenance/SKILL.md and the registered prompt
+      is a skill call. So, concretely: (1) delete .claude/stack/routine-prompt.md - the template
+      lives at .claude/skills/stacked-pr-maintenance/routine-prompt.md and is already written,
+      templating <FORK_REPOSITORY>/<UPSTREAM_REPOSITORY>; there is nothing left to render.
+      (2) check-stack-setup.sh's stack_tooling_files check looks for ROUTINE.md and
+      routine-prompt.md under .claude/stack/ and will fail - point it at the skill directory
+      instead. (3) The two rules this branch wanted promoted into the pointer (never force-push a
+      branch with an open upstream pull request unless it carries the rebase label; do not use the
+      Workflow tool) are already in the skill - nothing to promote. (4) The two contract tests it
+      was told to update are deleted along with test_prompt_documents.py and prompt_model.py -
+      nothing to declare. (5) `stack.py config` -> `configuration` still stands, key names
+      unchanged. (6) The fork-overlay install mode now has to carry .claude/skills/
+      stacked-pr-maintenance/ as well as .claude/stack/, since the instructions moved out of the
+      latter. (7) Setup writing fork_repository into .claude/personal/stack.toml is now the same
+      thing the skill does interactively, so setup does it at install time and the skill's
+      question is the fallback - do not build a second asker.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script

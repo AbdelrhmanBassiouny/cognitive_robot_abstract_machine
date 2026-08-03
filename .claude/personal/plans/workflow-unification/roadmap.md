@@ -2180,3 +2180,317 @@ rewritten around native mechanics, but `stack.py` still ships `print_next` and
 `args`" — the subsystem the cut removes. Either it is outstanding or it was dropped
 without a record. It matters for sequencing: applying it later rewrites `stack.py` again
 and makes #110's rebase resolve the same conflict twice.
+
+## Update 2026-08-02 (re-scoped): the routine's doctrine becomes a skill, and its recipes become subcommands
+
+Session: https://claude.ai/code/session_01BByQFT6he8xf5qvBWtyUPV, via `/plan-item-resolve`. Two
+user decisions, both taken after the options were costed rather than assumed.
+
+### The doctrine is a skill now, and it folds into #106
+
+`ROUTINE.md` is deleted. `.claude/skills/stacked-pr-maintenance/SKILL.md` carries the same
+doctrine, is invocable as `/stacked-pr-maintenance` from any session, and is what `POINTER.md`'s
+registered block resolves and runs for a scheduled one. The fork and upstream come from the
+skill's own arguments first, then `stack.py configuration`, then - interactively only - a
+question whose answer is written to `.claude/personal/stack.toml` on the personal-notes branch.
+`--non-interactive` turns that question into a stop.
+
+**Where it landed was the first decision.** `git ls-tree origin/main -- .claude/stack` is empty:
+every path this touches is introduced by #106 itself. By `add-plan-item/scope-decision.md`'s test,
+removing these edits leaves nothing standing alone, so it is #106's work and went onto
+`claude/stack-tooling-on-main` directly (commit `e20b0bb4`), not onto this session's designated
+branch. The second reason is sharper than the scope rule: the registered pointer resolves
+`origin/main` **first**, so landing a `ROUTINE.md` that its own successor deletes would change the
+live doctrine twice within one review cycle.
+
+### Recipes as subcommands, not prose and not an MCP server
+
+The second decision was how far to take "computed rather than recalled". Four new `stack.py`
+subcommands, each replacing a rule the reader previously had to remember:
+
+- **`labels`** - the complete set a label write must send, computed from the labels the pull
+  request carries now. This is the one with a production incident behind it: the write replaces
+  the whole set, and computing it from the addition alone once stripped `in-review` off
+  already-promoted branches.
+- **`preflight`** - refuses the move rather than describing how to check one: wrong branch checked
+  out, a refspec naming different branches on each side, a destination that is not the fork, and a
+  push that would make a child an ancestor of its own parent. Its own exit status (`5`).
+- **`promotion-link`** - owns the compare URL's encoding and length limit, both of which discard
+  the prefill *silently* when got wrong.
+- **`reparents` / `landed`** - phase 1 derived from git ancestry rather than pull-request state.
+
+**An MCP server was considered and rejected, on evidence rather than taste.** `gh` is absent in
+this environment and `GH_TOKEN` is proxy-injected, and the 2026-08-02 probe already recorded here
+shows a raw base-`PATCH` through that credential returns 403 while the GitHub MCP's
+`update_pull_request` returns 200. A local MCP server would therefore use the credential that
+*cannot* perform the riskiest operation in the whole workflow - so it would leave the base change
+in prose anyway, while adding `.mcp.json`, a server process and per-session schema loading. It is
+also the format that does not survive `routine-cutover`, whose endgame is a plain scheduled Action
+with no LLM at all; subcommands run identically in a session, in the Routine, and in that Action.
+
+The operating shape this settles on, worth stating generally: **compute deterministically, write
+through MCP.** The credential boundary decides which half is which, and that boundary is a
+property of the environment, not of the design.
+
+### Decision 11's cut is deliberately left half-applied
+
+The premise recorded in the previous entry - that `print_next` and `print_restack_plan` are
+outstanding work from decision 11 - was put to the user and reversed. They stay. Phases 2 and 3
+call them, and they are the derivation half of the scripts-over-prose choice made the same day;
+cutting them would push those phases back into the prose this work is removing.
+`print_restack_plan`'s docstring no longer names "the restack workflow's `args`", which is the
+part of the complaint that was real.
+
+### What the contract tests can now catch
+
+`test_prompt_documents.py` goes from 14 tests to 19. The five new ones assert things the previous
+shape had no way to state: that resolution prefers what it was told over what it can infer, that
+it names the exit status meaning the fork is unknown, that a run which cannot ask stops rather
+than guessing, that the pointer hands over both repositories with `--non-interactive`, and that
+the skill states the whole job rather than delegating to harness machinery - which is what lets
+the pointer keep reading the file while the skill is not yet on `main`.
+
+Each was checked by breaking the document three ways and confirming exactly one test failed each
+time. The hard-rules equality test earned itself again: the two copies were written independently
+in this session and it passed first time, which is the only evidence that the duplication is
+actually being held equal rather than coincidentally similar.
+
+**A constraint found while writing it, worth carrying:** a skill that is not on the checked-out
+branch at session start cannot be invoked by name. `.claude/skills/` is on `main` but
+`.claude/stack/` is not, so until #106 lands the pointer must still say "read this file from
+`<ref>` and execute it". That is why the skill has to read as a *document*, not only as a harness
+entry point - and it is the same not-yet-true-future-state hazard the 2026-08-02 pointer-adoption
+entry named, met a second time.
+
+### Review threads: one answered, one left open on purpose
+
+`stack.toml:23` asked for exactly this - *"running the configuration script or skill
+interactively, and it takes the fork link or name"*. The skill answers its interactive half. The
+~120-line inference deletion is still #110's, because the remaining caller is a non-interactive
+run with no arguments on a checkout nobody has configured, and only setup writing
+`fork_repository` at install time removes that one. Replied and left open rather than resolved;
+`stack.py:84` dies with the same deletion. #110 was told its rebase now inherits a skill, that its
+SETUP step 0 rewrite is superseded, and that the two contract tests it was told to update are
+updated upstream of it.
+
+## Update 2026-08-02 (review round): GitHub already closes what the pass was closing by hand
+
+Twenty-five review comments on the skill, in `8b7435bb`. Three were decisions rather than
+corrections, and each is worth recording with the evidence that settled it.
+
+### The fast-forward is the close
+
+The reviewer asked three versions of the same question - *"if fork main is fast forwarded with
+upstream main, then github auto closes pull requests that are ancestors of main"*, *"isn't merging
+better than closing?"*, *"could this actually happen anyway?"* - and the answer was in this
+repository's own history:
+
+| PR | `merged_at` | labels |
+| --- | --- | --- |
+| #101 | `2026-07-31T10:36:43Z` | `in-review`, **`merged`** |
+| #103 | `2026-07-31T10:36:43Z` | `bug`, `in-review` |
+| #105 | `2026-07-31T10:36:43Z` | `bug`, `in-review` |
+
+All three at the same second - the moment fork `main` fast-forwarded from cram2 - and only #101
+carries the hand-applied label. GitHub records all three as **merged**, not merely closed. So
+phase 1's label-then-close was doing by hand what step 2 already did in one push.
+
+Deleted: the close call, the `merged` label from the workflow entirely, and `landed` as a to-do
+list (it survives as a report). **The ordering changed with it**: auto-detection fires only for a
+pull request whose *own* base moved, so a stacked child based on a sibling branch is not caught by
+fast-forwarding the trunk. The reparent sweep therefore has to run *before* the fast-forward, which
+inverts the order the document had carried since it was a routine prompt.
+
+The general shape, worth reusing: **before writing a step that maintains state, check whether the
+platform already maintains it.** This one had survived two rewrites unexamined.
+
+### The pass never writes code, which is what made it generic
+
+*"Didn't we say it should never code, why debug and fix?"* — and the document did contradict
+itself: it said code changes are the developer's session's work, then gave a procedure for
+reproducing, fixing and locally validating a failure.
+
+Removing that branch removed every repository-specific name with it — `krrood`, `ormatic_interface.py`,
+`semantic_digital_twin`, `coraplex`, `experiments`, ROS, `AGENTS.md`. The reviewer predicted exactly
+this (*"that will also remove all ormatic, krrood, ros, coraplex, semdt mentions completely and will
+make the skill more generic"*), and it is the cleanest illustration in this plan of a portability
+problem that was really a scope problem: the file was repo-specific *because* it was doing work it
+should not have been doing.
+
+The one file change that survives is resolving a conflict during a restack, which is unavoidable if
+it restacks at all — and it now has to be reported in a comment naming the files, since it is a
+change to somebody else's branch that they did not make.
+
+### The pointer is gone, and most of the prose tests with it
+
+*"I don't want anything in the pointer at all, the pointer is useless now, it's just a skill call."*
+`POINTER.md`, `prompt_model.py` and `test_prompt_documents.py` are all deleted.
+
+The reviewer separately asked to discuss whether the prose tests were worth keeping (*"this is
+fragile and easy to break"*), and the two questions answer each other: those tests existed to hold
+the pointer's duplicated copy of the HARD RULES equal to the routine document's. With one copy, the
+duplication they guarded does not exist. Eighteen deleted.
+
+**One survives, and the distinction is the useful part.** `test_the_skill_names_no_fork_of_its_own`
+asserts an *absence*, computed from `load_configuration()` rather than from a string written in the
+test. It cannot fail from rewording, only from the fault it exists to catch — shipping one
+contributor's repository name in a document that is executed verbatim on somebody else's fork. That
+is the line worth drawing for any future test over prose: assert what the document must not contain,
+computed from live state; do not assert what it says.
+
+**A consequence that reverses design decision 4**, flagged to the user rather than buried: the HARD
+RULES no longer bind before the first file is read. They were inline in the pointer precisely because
+a webhook event can arrive before the first tool call. The window is now one turn — between the run
+starting and it reading the skill — which is an accepted trade against deleting a file plus its
+enforcement machinery, and `routine-cutover` deletes the scheduled run entirely anyway.
+
+### Smaller, but the same principle each time
+
+`Command` is a `StrEnum` with a `needs_a_board` property, which answered both *"make these commands
+maybe a StrEnum?"* and *"why not a tuple?"* — the second question was about a `frozenset` of boardless
+commands kept beside the enum, and the right answer was that the fact belongs to the command rather
+than to a set beside it, so the set is gone.
+
+A pre-flight refusal now carries a `RefusalReason` alongside its sentence, so the tests assert
+`[RefusalReason.MISMATCHED_REFSPEC]` instead of a hardcoded English string — which was the reviewer's
+*"can this string be fetched from where it is defined?"*, answered by deleting the need for the string
+rather than by importing it. Label tests read their labels from the `Configuration` that defines them,
+since labels are per-user configuration and never an enum.
+
+### Left open deliberately
+
+*"This file is so big"* — `stack.py` is ~1,540 lines and this PR added ~400 of them. Not split here,
+and put back to the user with the reasoning: `dev-tooling-python-package` already moves every
+`.claude/` Python file into a package, so splitting now means the same surgery twice, with #110 and
+#111 rebasing across it in between.
+
+## Update 2026-08-02 (corrected): #110's rebase instructions, and the split settled
+
+Two loose ends from the review round, both closed by the user in the same turn.
+
+### `stack.py` is not split in #106
+
+The reviewer's *"this file is so big"* was left open with a recommendation rather than an answer.
+The answer is no split here: `dev-tooling-python-package` already moves every `.claude/` Python
+file into the package, so splitting now means the same surgery twice, with #110 and #111 rebasing
+across the first attempt in between. The thread stays answered rather than resolved, since the
+concern is real and its resolution is somebody else's item.
+
+### #110's rebase instructions were mostly invalidated, and saying so is the whole point
+
+`setup-stacked-prs-skill`'s notes carried a detailed list of what its rebase onto #106 "must carry",
+written on 2026-08-02 against #106 as it then stood. The review round deleted the artifacts three of
+those five points were about — `ROUTINE.md`, `POINTER.md`, `prompt_model.py` and
+`test_prompt_documents.py` are all gone — so following the list would have produced work with no
+target. Rewritten in place rather than annotated, because a stale instruction that is still readable
+as an instruction is worse than no instruction.
+
+What actually changed for #110, verified against its head rather than inferred:
+
+- Its `.claude/stack/routine-prompt.md` is now a duplicate of a file that already exists at
+  `.claude/skills/stacked-pr-maintenance/routine-prompt.md`, already templating
+  `<FORK_REPOSITORY>`/`<UPSTREAM_REPOSITORY>`. The previous instruction — *render `POINTER.md`
+  instead* — has no referent; the instruction is simply to delete its copy.
+- **A real breakage nobody had spotted**: `check-stack-setup.sh:62` reports
+  `stack_tooling_files ok "stack.py, stack.toml, README.md, ROUTINE.md and routine-prompt.md are all
+  present"`. Two of those five files no longer exist anywhere, so that check fails outright on the
+  rebased branch. This is the only point on the list that is a defect rather than a no-op, and it was
+  found by reading #110's script rather than by reasoning about the deletions.
+- The two rules #110 wanted promoted into the pointer (never force-push a branch with an open
+  upstream pull request unless it carries the `rebase` label; do not use the Workflow tool) are
+  already in the skill, so there is nothing to promote.
+- Two new points the deletion creates: the fork-overlay install mode has to carry
+  `.claude/skills/stacked-pr-maintenance/` as well as `.claude/stack/`, now that the instructions
+  live outside the latter; and setup writing `fork_repository` at install time is the same thing the
+  skill's step 0 does interactively, so setup does it once and the skill's question is the fallback —
+  not a second asker.
+
+`stack.py config` → `configuration` is the one point that survives unchanged, key names included.
+
+**The general shape, worth keeping.** A child branch's rebase instructions are written against a
+snapshot of its parent, and a parent's review round is exactly the event that invalidates them.
+Nothing notices this on its own: #110's session is not subscribed to #106's review threads, and the
+manifest entry that carried the instructions reads as current no matter how old it is. The parent's
+own session correcting them in the same turn as the review round — and commenting on the child's
+pull request so its owner receives it as an event — is the only mechanism this workflow has. It is
+the same fork-point failure as the #110/#106 duplication recorded on 2026-08-02, met from the other
+side: there, two sessions built the same artifact against divergent snapshots; here, one session's
+plan for the future was written against a snapshot that then moved.
+
+## Update 2026-08-03 (resolved): #109's conflict was the same-artifact-twice pattern, a third time
+
+`/plan-item-resolve workflow-unification personal-settings-sync`, session
+https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn. The item had been `in_progress` and
+untouched since 2026-07-31 with a manifest entry that said *"PR #109 open and ready"* and recorded
+no `blockers` at all. Two real ones existed, and neither was in the manifest.
+
+### The manifest was the least accurate source, which is the process finding
+
+Everything needed to diagnose this was on the pull request the whole time — `mergeable_state:
+dirty`, a `needs-resolution` label, a routine comment naming the three conflicting files, and three
+unresolved review threads. The item's `notes` instead described a CI red that had since gone green
+and asserted readiness. This is the failure mode the keep-plan-state-current rule exists to prevent,
+seen from the far end: a stale entry does not read as stale, so the next session either trusts it or
+re-derives everything. The entry now carries a `blockers` field for the first time.
+
+### The conflict: `ScratchRepository` and `ScratchProject` are the same artifact
+
+`main` extracted the hook-test scratch repository into `tests/scratch_repository.py` as
+`ScratchRepository` during #101's review round. #109, branched before that landed, independently
+extracted the same fixture out of `test_save_plan_sh.py` into `conftest.py` as `ScratchProject`.
+Same purpose, two names, two branches — so `conftest.py` and `test_save_plan_sh.py` conflicted on
+content that was never a disagreement.
+
+This is the **third** instance of the pattern this roadmap has now recorded, after `POINTER.md` /
+`routine-prompt.md` and `BOARDLESS_COMMANDS` / `BOARD_FREE_COMMANDS` between #106 and #110. All
+three share a mechanism: a child branched from a snapshot of an unlanded parent, the parent moved,
+and both sides built the same thing. `check_scope_overlap.py` flags the path in each case; only
+reading for duplicated *purpose* explains it. Worth stating as a standing expectation rather than a
+recurring surprise — **any long-lived branch off an unlanded or fast-moving base should be re-read
+for duplicated purpose before its merge is attempted**, not only for conflicting lines.
+
+Resolved by adopting `main`'s, on evidence rather than seniority: `ScratchRepository` is a strict
+superset (`install_hook_scripts`, `write`, `commit_everything`, `publish_notes_branch`,
+`clone_notes_branch`, `resolve_notes_remote_to`) and already had a second consumer in
+`test_check_setup_sh.py`. `ScratchProject` is deleted; both conflicted test files are now
+byte-identical to `main` and have left #109's diff entirely. The one capability `ScratchProject`
+had that `ScratchRepository` lacked — editing the notes branch *after* publication — moved onto the
+class that owns notes-branch operations, as `update_notes_branch_file`.
+
+The overlap this item's own notes had warned about (#107's constants in
+`resolve-personal-notes-config.sh`, #110's `write-personal-notes-file.sh` delegation) **auto-merged
+clean**. The warning was aimed at the wrong files: it was written from the paths the item touches,
+while the actual collision was in a test fixture nobody had listed as shared.
+
+### A latent test bug the port fixed for free
+
+`ScratchProject.run_hook` passed no `env=`, so it inherited the shell's `CLAUDE_PERSONAL_NOTES_*`
+variables — exactly what `main`'s `run_check_setup` strips, and for exactly this reason. It passed
+only because the fixture's local `git config` outranks the remote variable and the branch variable
+happened to equal the default; a clone with `CLAUDE_PERSONAL_NOTES_PATH` set would have broken it.
+Porting onto `main`'s pattern adopted the scrub. Inheriting a shared fixture buys the fixes made to
+it since, which is an argument for converging on one that the line-count comparison does not show.
+
+### The pending-review trap, worth knowing before it costs someone a turn
+
+The three review threads could not be replied to inline: they belong to a review that was **never
+submitted** (`PENDING`, on `55cd2f9`). GitHub allows one pending review per user per pull request,
+so every reply attempt returns `422 - user_id can only have one pending review per pull request`.
+Submitting someone else's draft review is not a session's call — it publishes comments they may
+still be drafting — so the resolution was explained in one PR-level comment naming each thread, and
+the threads were then resolved. Anything that looks like a stuck reply on this repository should
+check for a pending review before assuming a permissions problem.
+
+### The README section had to be re-authored, not merged
+
+#109 added 53 lines to a `README.md` that #101 then rewrote from 378 lines to ~140 as a step-based
+guide. A textual merge would have spliced two documents with different shapes. Rewritten against
+the new structure at 30 lines, per that rewrite's own stated length discipline. Worth generalizing:
+a documentation conflict against a restructured file is a rewrite, and resolving it hunk-by-hunk
+produces a document that reads as two.
+
+**State**: #109 is a draft again (standing re-draft-after-push rule), labelled `cram2-link-sent`
+only, `mergeable_state: unstable` (mergeable; CI running) against `main` at `9b090fc1`. 36 tests
+pass under `.claude/hooks/tests` — `main`'s 28 plus this module's 8, none lost — and 194 under
+`.claude/skills/plan-dashboard/tests`. This unblocks part of decision 12's chain, which cannot land
+before the in-flight bash-touching pull requests, #109 among them.
