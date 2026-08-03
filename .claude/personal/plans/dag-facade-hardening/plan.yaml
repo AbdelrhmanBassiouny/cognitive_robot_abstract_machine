@@ -43,7 +43,7 @@ items:
     pull_request_number: 90
     track: leak-fixes
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01Aa2WZP5URWHoQDTpL34m9L
     notes: >
       bug label; open draft, mergeable clean. Adds TruthValueOperatorChildren
