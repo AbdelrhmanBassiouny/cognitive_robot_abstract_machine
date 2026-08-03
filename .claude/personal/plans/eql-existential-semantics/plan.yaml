@@ -1,0 +1,446 @@
+schema_version: 1
+id: eql-existential-semantics
+title: "EQL existential semantics: binding order, semi-join exists, and range restriction"
+description: >
+  Rebuild EQL's existential operator on the standard relational/logic-programming
+  footing. Today exists() takes a redundant quantified variable, exports bindings from
+  inside the quantifier, and short-circuits globally rather than per outer binding —
+  which silently drops matching rows, breaks not_(exists(...)) and for_all(...), and
+  turns a correlated existential into a cross product. The root cause is that bottom-up
+  evaluation gives the quantifier no outer relation to filter, so the operator invented
+  one. The plan fixes the evaluation model first, then makes exists a semi-join and
+  negated exists an antijoin, then removes the now-dead first argument and updates its
+  two consumers — measuring evaluation cost before and after throughout.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 137
+
+waves:
+  - id: measurement
+    name: "Measurement baseline"
+    description: >
+      Establish how EQL evaluation cost is measured before changing the evaluation
+      model, so the binding-order and quantifier work is judged against numbers rather
+      than intuition. PR #99 already set the precedent for this repo with its
+      truth-read-count table.
+  - id: evaluation-model
+    name: "Evaluation model: binding order and range restriction"
+    description: >
+      The prerequisite wave. A semi-join is only meaningful relative to an outer
+      relation, and negation-as-failure is only sound over bound variables; both are
+      properties of when things get evaluated, not of the quantifier node.
+  - id: quantifier-semantics
+    name: "Quantifier semantics: semi-join and antijoin"
+    description: >
+      Re-express the quantifiers as the relational operators the literature names, once
+      the evaluation model can supply them with an outer relation.
+  - id: api-and-consumers
+    name: "API surface and consumers"
+    description: >
+      Remove the first argument that the semi-join semantics makes dead, and rederive
+      what the verbalization and SQLAlchemy consumers were reading off it.
+
+tracks:
+  - id: benchmarking
+    name: "Evaluation cost measurement"
+    wave: measurement
+    description: >
+      Spans the whole plan: the harness lands first as a baseline, and the closing
+      report re-runs it once the spine is in.
+  - id: binding-order
+    name: "Binding order and the outer relation"
+    wave: evaluation-model
+  - id: disjunction-safety
+    name: "Disjunction range restriction"
+    wave: evaluation-model
+    description: >
+      Parallel to binding-order — same safety family (range restriction), no shared
+      code path, so the two can run concurrently.
+  - id: quantifiers
+    name: "Existential and universal quantifiers"
+    wave: quantifier-semantics
+  - id: api-surface
+    name: "exists() signature and its consumers"
+    wave: api-and-consumers
+
+items:
+  - id: evaluation-benchmark
+    title: "Benchmark harness and baseline for EQL evaluation cost"
+    branch: null
+    pull_request_number: null
+    track: benchmarking
+    depends_on: []
+    status: not_started
+    notes: >
+      GOAL: a repeatable timing harness for EQL query evaluation, plus a recorded
+      baseline on main, so every later item in this plan reports a measured delta
+      instead of an assertion that it is "probably fine".
+
+      EXPLORE FIRST: (a) what PR #99 already built — it measured truth-read *counts*
+      against an origin/main worktree and published a before/after table; reuse that
+      methodology and its worktree-comparison trick rather than inventing a second one.
+      (b) Whether pytest-benchmark is already a dependency anywhere in the workspace, or
+      whether a plain timeit-based harness is the lighter fit. (c) Which query shapes
+      actually stress the evaluation model: nested quantifiers, correlated conditions,
+      large flat_variable fan-out, deep attribute chains — the binding-order change in
+      the next wave will move cost between enumeration and filtering, so the harness
+      must separate those, not just report one wall-clock number per query.
+
+      MEASURE AT LEAST: evaluation wall time and result-row count per query shape;
+      number of variable enumerations performed; number of condition evaluations. The
+      last two are what binding order actually changes — wall time alone will not
+      explain a regression.
+
+      TDD: the harness itself needs tests that pin its instrumentation (a query with a
+      known enumeration count reports that count), not just that it runs.
+
+      LITERATURE: the counting model is the standard "logical reads" instrumentation of
+      query engines; Graefe's Volcano/Cascades work on operator-level instrumentation is
+      the reference for separating enumeration cost from predicate cost.
+
+  - id: binding-order-planner
+    title: "Bind a query's selected variables before evaluating its filter conditions"
+    branch: null
+    pull_request_number: null
+    track: binding-order
+    depends_on: [evaluation-benchmark]
+    status: blocked
+    blockers:
+      - "Cross-plan: PR #99 (rdr-refactor) refactors base_expressions.py, logical_quantifiers.py and core_logical_operators.py — the same functions. Start off main once #99 merges."
+    notes: >
+      GOAL: the outer relation exists before any filter condition runs. Concretely,
+      an(entity(box).where(<filter>)) binds box first, then evaluates <filter> per
+      binding — rather than letting the condition's own enumeration be the only thing
+      that ever binds box.
+
+      WHY IT IS THE PREREQUISITE, NOT AN OPTIMIZATION: measured in this session, a
+      correct semi-join exists() evaluated *without* a bound outer relation returns
+      every row rather than the matching ones — it is evaluated once against an empty
+      context, answers "true", and then the selected variable enumerates freely. The
+      same semi-join with the outer variable bound first returns exactly the right rows.
+      So shipping the quantifier change before this one makes exists *more* wrong, not
+      less. This ordering is the single most important structural fact in the plan.
+
+      EXPLORE FIRST: (a) whether QueryPlanner already has any notion of condition
+      ordering or is greenfield for this. (b) How Where/Filter currently drives
+      evaluation and where an outer-relation step could be introduced without
+      restructuring every operator. (c) Whether the fix belongs at the Filter level
+      (bind selected variables, then filter) or as adornment/binding-pattern metadata
+      carried per condition node — the literature supports the second as more general.
+      (d) The blast radius on coraplex and semantic_digital_twin: PR #99's history shows
+      krrood's own suite cannot see costs that break downstream callers.
+
+      TDD (all reproduced this session, all currently failing without a hand-placed
+      binding condition):
+      - not_(exists(apple, apple.color == "green")) over four boxes returns [] today;
+        must return the two non-matching boxes, including the one with an empty apple
+        list. Prefixing HasType(box, AppleBox) makes it pass today — that prefix is the
+        user hand-writing a magic predicate, and the test must pass without it.
+      - for_all(fruit, not_(HasType(fruit, Apple))) returns [] today; must return the
+        box with no apples.
+      - A test asserting that condition order within .where(...) does not change the
+        result set, over a query where it currently does.
+
+      MEASURE: re-run the wave-0 harness; report enumeration-count and condition-count
+      deltas, not just wall time. Binding first may increase enumerations while cutting
+      condition evaluations — that trade is the point and must be visible.
+
+      LITERATURE: this is bottom-up (naive/semi-naive) evaluation lacking top-down
+      binding propagation. The canonical fix inside a bottom-up engine is magic sets /
+      sideways information passing with adorned predicates — Bancilhon, Maier, Sagiv &
+      Ullman, "Magic sets and other strange ways to implement logic programs" (PODS
+      1986); Beeri & Ramakrishnan, "On the power of magic". Applying negation to a goal
+      whose non-local variables are unbound is *floundering* — Clark, "Negation as
+      failure" (1978); Lloyd, "Foundations of Logic Programming". Datalog's structural
+      answer is stratified negation plus an ordering discipline that binds a negated
+      subgoal's non-local variables first. The relational-engine equivalent is that the
+      optimizer guarantees the outer relation drives the semi-join.
+
+  - id: disjunction-range-restriction
+    title: "Range-restrict disjunction: characterize OR, then reject unsafe branches"
+    branch: null
+    pull_request_number: null
+    track: disjunction-safety
+    depends_on: []
+    status: not_started
+    notes: >
+      GOAL: OR's behaviour is stated, tested, and safe. Today core_logical_operators.py
+      documents OR as an "ElseIf" that evaluates the right operand only when the left is
+      False, but measured behaviour is classical disjunction — the union of both
+      branches' solution sets — because selected variables are enumerated independently
+      of the condition. Correct today, but incidentally so: nothing states or enforces
+      it, and the docstring says something else.
+
+      EXPLORE FIRST: (a) find the case, if any, where the ElseIf implementation and
+      classical union actually diverge — a variable mentioned only in the right branch
+      that is neither selected nor otherwise enumerable is the candidate shape. (b)
+      Decide whether EQL wants Datalog-style rejection or SPARQL-style partial solution
+      mappings; the second would require every consumer to tolerate absent bindings, so
+      rejection is the expected answer, but confirm the cost before committing. (c)
+      Whether the same restriction check has a home shared with the binding-order item's
+      adornment work.
+
+      DESIRED END STATE: rr(φ ∨ ψ) = rr(φ) ∩ rr(ψ) enforced at build time — a variable
+      that must escape a disjunction but is not range-restricted in both branches raises
+      a meaningful custom exception rather than silently producing whatever the
+      enumeration order gives. The ElseIf docstring is corrected to match.
+
+      TDD:
+      - Pin the measured union behaviour: set_of(box, tag).where(or_(box.name == ...,
+        tag.name == ...)) yields exactly the union of the two branches' solution sets
+        (three rows for the two-box/two-tag fixture), so a later refactor cannot quietly
+        turn it back into a fallback.
+      - An unsafe disjunction whose escaping variable is restricted in only one branch
+        raises, with the variable named in the message.
+      - A branch-local variable appearing in only one branch is accepted, since it never
+        escapes — this is the case that must NOT raise.
+
+      NOTE ON SCOPE: inside a semi-join exists this hazard is structurally neutralized,
+      because nothing escapes the quantifier. Verified this session: an OR over two
+      independent local variables inside a semi-join exists loses no rows. So this item
+      is about OR in a plain where(), not about quantifiers — which is why it is a
+      parallel track rather than part of the spine.
+
+      LITERATURE: safe-range calculus and the safe-range normal form — Abiteboul, Hull &
+      Vianu, "Foundations of Databases" ch. 5; Van Gelder & Topor, "Safety and
+      translation of relational calculus queries" (ACM TODS 16(2), 1991); Codd's
+      relational completeness work for the original safety notion. Datalog expresses
+      disjunction as two rules, each of which must independently bind every head
+      variable. SPARQL's UNION takes the other branch: solution mappings are partial and
+      a variable is simply unbound in solutions from the other side.
+
+  - id: exists-semijoin
+    title: "Make exists() a semi-join: per outer binding, no escaping locals"
+    branch: null
+    pull_request_number: null
+    track: quantifiers
+    depends_on: [binding-order-planner]
+    status: not_started
+    notes: >
+      GOAL: exists() is a filter on the outer bindings that emits no new bindings at
+      all. For each distinct assignment to the outer-visible variables, yield it once if
+      at least one assignment to the remaining variables satisfies the condition; the
+      remaining variables never escape.
+
+      THE TWO DEFECTS THIS REMOVES, both measured this session:
+      (a) The `return` after the first witness is global rather than per outer binding,
+      so an(entity(box).where(exists(fruit, HasType(fruit, Apple)))) over three boxes
+      returns only the first matching box. Every existing exists test has exactly one
+      matching row, which is why this was never caught.
+      (b) The yield reads val.bindings — the quantified variable's — never
+      cond_val.bindings, so an outer selected variable bound only inside the condition
+      is dropped, turning a correlated existential into a cross product.
+
+      Once locals stop escaping, there is no witness to choose, and the "why the first
+      answer?" question disappears rather than needing an answer.
+
+      EXPLORE FIRST: (a) how to compute the outer-visible set. The rule is lexical: a
+      variable is local iff it occurs only within the exists subtree. Statically
+      decidable on the expression tree, but it must be computed at build/plan time
+      against the root, not at node construction — and note the consequence that the
+      same condition object reused in two queries has two different local sets. The
+      codebase already fights this class of problem (see the ActiveConditionsRoot
+      comment in base_expressions.py about a node reused as the condition of more than
+      one Filter). (b) Whether Exists should stop being a QuantifiedConditional and
+      become a unary condition wrapper — the shared (left, right) shape with ForAll is
+      what pulled the redundant argument in, and ForAll genuinely needs its variable
+      while Exists does not.
+
+      TDD:
+      - Boxes [two_green, no_green, one_green, empty]: exists over a green apple returns
+        [two_green, one_green]. Fails today, returning [two_green] only.
+      - The correlated shape set_of(box, shelf).where(exists(fruit, and_(apple,
+        shelf.box_name == box.name))) returns one row per matching box, not the
+        box × all-shelves cross product it produces today.
+      - No local binding appears in any result: the flattened collection variable and
+        the attribute it compares are absent from the output unification.
+      - An OR inside the exists whose branches use different local variables loses no
+        rows (verified achievable this session).
+      - PR #99's deferred defect: evaluate_condition on a satisfied bare exists(...)
+        returns False today. #99 preserved it deliberately — "it deserves its own
+        change" — and this is that change.
+
+      MEASURE: re-run the harness. A semi-join should *reduce* condition evaluations
+      versus the bare-condition-plus-distinct workaround; confirm rather than assume.
+
+      LITERATURE: the semi-join R ⋉ S = π_R(R ⋈ S) is the textbook implementation —
+      Bernstein & Chiu, "Using semi-joins to solve relational queries" (JACM 1981). The
+      scoping rule is SQL's and Cypher's: locals never escape ("any variable defined
+      within the subquery will not be available outside of the expression", Neo4j Cypher
+      manual, EXISTS subqueries). The same free-variable computation is Prolog's
+      bagof/3 rule. Decorrelation precedent and its failure modes: Kim, "On optimizing
+      an SQL-like nested query" (ACM TODS 1982), whose algorithm Ganski & Wong,
+      "Optimization of nested SQL queries revisited" (SIGMOD 1987) showed contained the
+      *count bug* — a witness search not grouped by the outer binding, the same failure
+      class as defect (a) above; Dayal (VLDB 1987); Seshadri, Pirahesh & Leung, "Complex
+      query decorrelation" (ICDE 1996); Neumann & Kemper, "Unnesting arbitrary queries".
+      Cautionary counter-example: SPARQL 1.1's FILTER EXISTS defines correlation by
+      *substituting* outer values into the pattern, which diverges from bottom-up
+      results and is still being unpicked (W3C SPARQL EXISTS report; "The Problem of
+      Correlation and Substitution in SPARQL", arXiv 1801.04387). Evaluate the condition
+      under the outer bindings as an environment; do not substitute.
+
+  - id: negation-antijoin
+    title: "Make negated exists an antijoin, and fix for_all the same way"
+    branch: null
+    pull_request_number: null
+    track: quantifiers
+    depends_on: [exists-semijoin]
+    status: not_started
+    notes: >
+      GOAL: not_(exists(...)) is an antijoin (R ▷ S) — one row per outer binding with no
+      witness — and for_all stops failing for the same reason exists did.
+
+      EXPLORE FIRST: (a) whether Not wrapping a semi-join Exists gives the antijoin for
+      free once the semi-join yields per outer binding, or whether an explicit antijoin
+      node is needed. Prefer the explicit node if the planner needs to recognize it —
+      "not_(exists(...))" is the shape an optimizer must see to avoid materializing the
+      inner side. (b) ForAll's variable stays: the ∀/∃ split among a condition's free
+      variables is not derivable, and interleaved quantifier order is meaningful. Confirm
+      ForAll._invert_ → Exists still type-checks once Exists loses its variable, since
+      that inversion is the one place the two operators' shapes are coupled.
+
+      TDD:
+      - not_(exists(green apple)) returns [no_green, empty] — including the empty-apple
+        box, which is the case a naive "no witness" implementation over an empty
+        enumeration most easily drops.
+      - for_all(fruit, not_(HasType(fruit, Apple))) returns the box with no apples;
+        returns [] today.
+      - Double negation not_(not_(exists(...))) agrees with exists(...).
+      - An antijoin whose outer binding is unbound at evaluation time raises rather than
+        silently returning everything — the floundering guard, made explicit.
+
+      MEASURE: antijoins cannot short-circuit on the outer side; check the harness for a
+      regression on queries with a large outer relation and a cheap inner condition.
+
+      LITERATURE: antijoin as the standard NOT EXISTS implementation; stratified negation
+      in Datalog (Apt/Blair/Walker; Van Gelder) for why the negated subgoal's non-local
+      variables must be bound first; Clark 1978 for negation as failure and floundering.
+      SPARQL's MINUS versus NOT EXISTS divergence is the worked example of getting this
+      subtly wrong — worth reading before choosing between an explicit node and a
+      wrapped Not.
+
+  - id: exists-single-argument
+    title: "Drop exists()'s redundant first argument"
+    branch: null
+    pull_request_number: null
+    track: api-surface
+    depends_on: [exists-semijoin]
+    status: not_started
+    notes: >
+      GOAL: exists(*conditions), joined like where(). Hard break — all five in-repo call
+      sites migrate in the same PR, no deprecation shim (user decision, 2026-08-03: a
+      shim that silently accepts a now-meaningless variable is exactly the misuse-prone
+      interface being removed).
+
+      WHY THE ARGUMENT IS DEAD: all five call sites already mention the first argument
+      inside the condition, so it restates information the condition carries — verified
+      exhaustively this session (explanation.py:70, test_queries.py:772,
+      test_queries.py:1052, test_eql.py:1444, inference_explanation.md:237). Passing the
+      condition itself as the "variable", Exists(cond, cond), produces the correct
+      answer, which is the sharpest demonstration that it carries nothing.
+
+      WHY IT IS NOT MERELY REDUNDANT BUT HARMFUL: it is a real binder with semantic
+      force, so getting it wrong changes meaning silently. exists(unrelated_variable,
+      cond) returns wrong rows; exists(empty_domain_variable, cond) makes the whole
+      condition false (correct bounded-quantifier semantics — ∃v∈∅ is false — which is
+      exactly why an unrelated variable is dangerous); exists(selected_variable, cond)
+      quantifies away the answer variable and returns everything.
+
+      EXPLORE FIRST: whether the first argument is ever an Attribute chain rather than a
+      Variable — it is (exists(cabinets.drawers, ...) in test_queries.py:1052), so any
+      derivation must work at attribute granularity, not just on _unique_variables_
+      leaves. This is the main technical risk in the whole API change and should be
+      prototyped before the signature moves.
+
+      TDD:
+      - Every migrated call site keeps its existing assertion, unchanged.
+      - The walrus idiom disappears: exists(var := flat_variable(fb.fruits),
+        HasType(var, Apple)) becomes exists(HasType(flat_variable(fb.fruits), Apple))
+        and returns the same rows.
+      - exists() with an Attribute-chain-rooted condition (the cabinets.drawers shape)
+        still resolves its locals correctly.
+      - Calling exists with the old two-argument signature fails loudly, not silently.
+
+      LITERATURE: the family taxonomy is decided by where the quantified variable's
+      range comes from. Range at the quantifier ⇒ the variable is mandatory: tuple
+      relational calculus (∃t ∈ R), Z, Alloy's `some x: X | F`, OCL's
+      coll->exists(v | body), XQuery's `some $x in E satisfies P`, LINQ's Any(predicate).
+      Range from the body ⇒ no variable: SQL's EXISTS (subquery), SPARQL's FILTER EXISTS
+      { pattern }, Cypher's EXISTS { }, Datalog/Prolog rule bodies, and description
+      logic's ∃R.C which has no variables at all. EQL is unusual in that variable(...)
+      carries its own domain, so every variable is range-restricted at declaration — the
+      property Van Gelder & Topor's safety work exists to establish for calculus
+      queries. So neither reason to name the variable applies: EQL is semantically in the
+      body-supplies-the-range family but was given the other family's syntax. Both OCL
+      (implicit iterator) and Alloy (`some expr`) show the same drift toward making it
+      optional once derivable.
+
+  - id: exists-consumers
+    title: "Rederive the verbalization and SQL-translation consumers from the condition"
+    branch: null
+    pull_request_number: null
+    track: api-surface
+    depends_on: [exists-single-argument]
+    status: not_started
+    notes: >
+      GOAL: the two consumers that read Exists.variable keep working without it.
+
+      THE CONSUMERS: (a) ExistsRule.build and QuantifierScope.focus in verbalization —
+      "there exists a Robot such that its battery is greater than 0" needs both a noun to
+      introduce and a discourse focus referent for the pronoun. (b) _translate_exists in
+      ormatic/eql_interface.py — it calls _require_dao_class(existential_variable._type_)
+      to build SELECT 1 FROM <DAO>. Neither needs the variable *passed in*; both need it
+      *known*, and it is derivable as free(condition) minus outer-visible.
+
+      EXPLORE FIRST: (a) what the verbalization should say when the derived local set has
+      more than one variable — "there exists a Robot and a Task such that ..." or a
+      different framing? Today's single-variable framing is all that is exercised, so
+      this is a genuine new question, not a port. (b) Whether the SQL translator's
+      correlated-subquery construction needs the whole local set or only the one whose
+      DAO becomes the FROM — and what it should do when the local set has two types.
+      Both may warrant an AskUserQuestion rather than a guess.
+
+      TDD:
+      - The existing verbalization doctests keep their exact current output
+        ("there exists a Robot such that its battery is greater than 50").
+      - test_exists_in_where_clause in test_ormatic/test_eql.py keeps passing: the
+        emitted SQL is still a correlated EXISTS subquery over GraspConfigDAO and the
+        two MoveActions with a grasp config come back.
+      - A multi-local-variable exists has a defined verbalization and a defined SQL
+        translation — new tests, whatever the answer to the explore questions turns out
+        to be.
+
+      LITERATURE: SQL's EXISTS subquery derives its FROM from the subquery itself, which
+      is precisely the derivation being reimplemented here; Cypher permits omitting MATCH
+      when the subquery is only a pattern, i.e. the engine infers the same thing.
+
+  - id: benchmark-regression-report
+    title: "Re-measure and report the evaluation-cost delta across the whole plan"
+    branch: null
+    pull_request_number: null
+    track: benchmarking
+    depends_on: [exists-consumers, negation-antijoin, disjunction-range-restriction]
+    status: not_started
+    notes: >
+      GOAL: close the loop the user asked for — a published before/after on what the
+      binding-order and quantifier changes did to EQL's evaluation cost, using the
+      wave-0 harness unchanged.
+
+      REPORT: per query shape, the baseline and final numbers for wall time, variable
+      enumerations, and condition evaluations; the binding-order change isolated from
+      the quantifier change, since they push cost in opposite directions (binding first
+      raises enumerations, semi-join lowers condition evaluations). Call out any shape
+      that regressed and say whether it is acceptable.
+
+      EXPLORE FIRST: whether downstream packages (coraplex, semantic_digital_twin) need
+      their own numbers. PR #99's history is the warning — its cost regression was
+      invisible to krrood's own suite because krrood tests use cheap comparators, and it
+      broke coraplex twice before reaching parity. A predicate whose __bool__ runs a
+      world deepcopy plus a reachability simulation makes condition-evaluation count the
+      dominant term, so at minimum report that count for a coraplex-shaped predicate.
+
+      TDD: the report is generated by the harness, not hand-written; a test pins that
+      the report generator produces the same numbers as a direct harness run.
+
+      LITERATURE: PR #99's own truth-read-count table is the in-repo precedent for both
+      the methodology and the presentation format.
