@@ -21,6 +21,10 @@ Three kinds of content, stored the same way and never merged anywhere:
 The PR-progress section appears on any branch that isn't the default branch, a detached `HEAD`, or
 the notes branch itself, as an empty scaffold even before anything has been saved.
 
+Your local Claude Code settings ride along on the same branch too, as a whole file rather than a
+section — see [Syncing your local Claude Code settings](#syncing-your-local-claude-code-settings).
+Every run prints a summary of what it found and wrote, so a session never has to infer it.
+
 ## Quick start
 
 1. Run `/setup-personal-notes` in any Claude Code session on this repo.
@@ -51,6 +55,29 @@ To do the same by hand:
 
 Only content between the markers is ever saved. Headers and markers are regenerated every session,
 so editing them has no effect.
+
+## Syncing your local Claude Code settings
+
+The same branch can carry your personal `.claude/settings.local.json` — the file Claude Code reads
+as this project's local settings (permission rules, environment variables, anything else in its
+settings schema). Store it on the notes branch at `.claude/personal/settings.local.json` and each
+session start copies it into the project root, so permissions you'd otherwise re-grant in every
+fresh clone follow you around. It is gitignored; the committed `.claude/settings.json` stays the
+shared, team-wide one.
+
+It gets no header or markers — strict JSON has nowhere to put them — so the file is copied whole.
+
+**Your local edits are never overwritten.** Claude Code writes to that same file whenever you grant
+a permission with "don't ask again", so the hook writes only when the file is missing or still
+identical to what it last synced (tracked in the gitignored `.claude/.personal-settings-sync-hash`).
+Otherwise it keeps your version and says so in its summary. To push your edits up and let syncing
+resume:
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-settings.sh"
+```
+
+Or ask Claude — *"save my Claude settings"* — the same way as your notes.
 
 ## Configuration
 
@@ -135,7 +162,10 @@ Any other label is preserved but not interpreted.
   content can leak into what it pushes.
 - PR progress and plans can't be merged into a PR by construction: they're only ever written to the
   notes branch, never to a file tracked on your branch.
-- `CLAUDE.local.md` is gitignored.
+- Synced settings never silently replace local ones: `.claude/settings.local.json` is written only
+  when it's missing or unchanged since the last sync, so "don't ask again" grants survive until you
+  run `save-personal-settings.sh` yourself.
+- `CLAUDE.local.md` and `.claude/settings.local.json` are both gitignored.
 - Always operates on this repo's project root, resolved from the scripts' own location on disk —
   not the caller's cwd, which a `SessionStart` hook can't rely on.
 - Coexists with your own `SessionStart` hooks: Claude Code concatenates hook arrays across settings

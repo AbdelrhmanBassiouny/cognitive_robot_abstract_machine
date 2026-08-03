@@ -505,9 +505,30 @@ class Mesh(Shape):
         """
         return BoundingBox.from_mesh(self.mesh, self.origin)
 
+    @staticmethod
+    def _load_in_meters(filename: str, process: bool = True) -> trimesh.Trimesh:
+        """
+        Load a mesh file, converting its coordinates to meters when the file declares
+        the unit they are written in.
+
+        A file that declares no unit is read as it is written, because there is nothing to
+        convert from.
+
+        ..note:: The scale a renderer applies on top of this must stay free of the
+            conversion. RViz is handed the file itself and converts its units again.
+
+        :param filename: The path of the mesh file.
+        :param process: Whether trimesh merges vertices and drops degenerate faces.
+        :return: The loaded mesh, measured in meters.
+        """
+        mesh = trimesh.load_mesh(filename, process=process)
+        if mesh.units is not None:
+            mesh.convert_units("meters")
+        return mesh
+
     def to_json(self) -> Dict[str, Any]:
         # Serialize the raw (unscaled, unprocessed) mesh geometry and the scale separately
-        base_mesh = trimesh.load_mesh(self.filename, process=False)
+        base_mesh = self._load_in_meters(self.filename, process=False)
         # Bake materials/textures down to per-vertex colors so the mesh's color
         # survives serialization (e.g. across the ROS world synchronizer).
         if isinstance(base_mesh.visual, TextureVisuals):
@@ -587,7 +608,7 @@ class Mesh(Shape):
         """
         The mesh object.
         """
-        mesh = trimesh.load_mesh(self.filename)
+        mesh = self._load_in_meters(self.filename)
         mesh.apply_scale(self.scale.to_np())
         # Apply the shape's color only when it was explicitly set, so a mesh's own
         # materials or per-vertex colors (e.g. from a .dae or from serialization)
