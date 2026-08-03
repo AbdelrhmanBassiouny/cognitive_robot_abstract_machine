@@ -2,10 +2,13 @@
 Unit tests for the live bridge's serializers and its viewer-facing accessors.
 
 The bridge is exercised against mimics of the duck-typed interfaces it reads, so no
-coraplex or giskardpy import is needed. What is covered is the interesting logic:
-bottom-up status aggregation in the plan tree, freeze semantics when a motion group
-finishes, statechart signatures that let the frontend distinguish "re-colour only" from
-"rebuild", and the queue that carries viewer drags onto the simulation thread.
+coraplex import is needed. Translating a life-cycle ordinal to its name/status does
+import giskardpy's real ``LifeCycleValues`` enum (the bridge reuses it rather than
+duplicating its ordinals), so giskardpy must be importable for the statechart and live-
+motion-status tests below. What is covered is the interesting logic: bottom-up status
+aggregation in the plan tree, freeze semantics when a motion group finishes, statechart
+signatures that let the frontend distinguish "re-colour only" from "rebuild", and the
+queue that carries viewer drags onto the simulation thread.
 """
 
 from __future__ import annotations

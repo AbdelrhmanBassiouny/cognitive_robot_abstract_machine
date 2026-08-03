@@ -102,27 +102,14 @@ class LiveHook(Enum):
     """
 
 
-#: giskardpy ``LifeCycleValues`` ordinal → its name, for the statechart view
-LIFE_CYCLE_NAME = {0: "NOT_STARTED", 1: "RUNNING", 2: "PAUSED", 3: "DONE", 4: "FAILED"}
-
-#: giskardpy ``LifeCycleValues`` ordinal → coraplex ``TaskStatus`` vocabulary,
-#: so the viewer styles plan nodes and statechart nodes with one status palette
-LIFE_CYCLE_TO_STATUS = {
-    0: "CREATED",
-    1: "RUNNING",
-    2: "PAUSE",
-    3: "SUCCEEDED",
-    4: "FAILED",
-}
-
 #: for bottom-up aggregation in the plan tree: the higher rank wins
-STATUS_RANK = {
-    "CREATED": 0,
-    "SUCCEEDED": 1,
-    "PAUSE": 2,
-    "RUNNING": 3,
-    "INTERRUPTED": 4,
-    "FAILED": 5,
+STATUS_RANK: Dict[TaskStatusName, int] = {
+    TaskStatusName.CREATED: 0,
+    TaskStatusName.SUCCEEDED: 1,
+    TaskStatusName.PAUSE: 2,
+    TaskStatusName.RUNNING: 3,
+    TaskStatusName.INTERRUPTED: 4,
+    TaskStatusName.FAILED: 5,
 }
 
 #: how long a world binding stays fresh before the bridge re-discovers bodies
@@ -810,9 +797,19 @@ class Bridge:
         progress = self._motion_nodes.get(self._node_key(node))
         if progress is None:
             return None
-        if progress.task is not None:
-            return LIFE_CYCLE_TO_STATUS.get(int(progress.task.life_cycle_state))
-        return progress.status
+        if progress.task is None:
+            return progress.status
+        from giskardpy.motion_statechart.data_types import LifeCycleValues
+
+        life_cycle_to_status = {
+            LifeCycleValues.NOT_STARTED: TaskStatusName.CREATED,
+            LifeCycleValues.RUNNING: TaskStatusName.RUNNING,
+            LifeCycleValues.PAUSED: TaskStatusName.PAUSE,
+            LifeCycleValues.DONE: TaskStatusName.SUCCEEDED,
+            LifeCycleValues.FAILED: TaskStatusName.FAILED,
+        }
+        life_cycle = LifeCycleValues(int(progress.task.life_cycle_state))
+        return life_cycle_to_status.get(life_cycle)
 
     def snapshot_plan(self) -> None:
         """
@@ -946,6 +943,8 @@ class Bridge:
         structure = self._chart_structure
         if not structure:
             return
+        from giskardpy.motion_statechart.data_types import LifeCycleValues
+
         life_cycle = [
             int(chart.life_cycle_state.data[index]) for index in structure["indices"]
         ]
@@ -958,9 +957,7 @@ class Bridge:
         nodes = []
         for position, node in enumerate(structure["nodes"]):
             entry = dict(node)
-            entry["life"] = LIFE_CYCLE_NAME.get(
-                life_cycle[position], str(life_cycle[position])
-            )
+            entry["life"] = LifeCycleValues(life_cycle[position]).name
             entry["obs"] = self._observation_name(observations[position])
             nodes.append(entry)
         with self._lock:
