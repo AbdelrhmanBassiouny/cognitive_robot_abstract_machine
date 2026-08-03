@@ -374,12 +374,9 @@ class Recorder:
         """
         A body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
         """
-        pose = body.global_pose
-        translation = pose.to_position().to_np().flatten()
-        quaternion = pose.to_quaternion().to_np().flatten()
         return [
-            round(float(value), POSE_PRECISION)
-            for value in (*translation[:3], *quaternion[:4])
+            round(value, POSE_PRECISION)
+            for value in body.global_pose.to_position_quaternion_list()
         ]
 
     def record_frame(self, executor: Executor) -> None:

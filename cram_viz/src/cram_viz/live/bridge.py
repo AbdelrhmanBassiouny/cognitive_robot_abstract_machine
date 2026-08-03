@@ -137,10 +137,10 @@ def _pose_as_position_quaternion(body: Body) -> List[float]:
     """
     Return a body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
     """
-    pose = body.global_pose
-    translation = pose.to_position().to_np().flatten()
-    quaternion = pose.to_quaternion().to_np().flatten()
-    return [round(float(value), 5) for value in (*translation[:3], *quaternion[:4])]
+    return [
+        round(value, POSE_PRECISION)
+        for value in body.global_pose.to_position_quaternion_list()
+    ]
 
 
 @runtime_checkable
@@ -951,7 +951,7 @@ class Bridge:
         if time.time() - self._last_bind > REBIND_INTERVAL_SECONDS:
             self.bind()
         frames = {
-            str(connection.name): round(float(connection.position), 5)
+            str(connection.name): round(float(connection.position), POSE_PRECISION)
             for connection in self._connections
         }
         base_pose: Optional[List[float]] = None
