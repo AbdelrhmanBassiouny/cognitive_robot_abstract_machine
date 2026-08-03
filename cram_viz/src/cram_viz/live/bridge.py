@@ -22,7 +22,7 @@ import threading
 import time
 import urllib.parse
 import math
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -57,6 +57,8 @@ from cram_viz.palette import ObjectPalette
 if TYPE_CHECKING:
     from coraplex.plans.executables import GiskardExecutable
     from coraplex.plans.plan import Plan
+    from coraplex.plans.plan_node import PlanNode
+    from giskardpy.motion_statechart.graph_node import Task
     from giskardpy.motion_statechart.motion_statechart import MotionStatechart
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.world_entity import Body
@@ -246,12 +248,12 @@ class MotionNodeProgress:
     as the entry lives.
     """
 
-    node: Any
+    node: PlanNode
     """
     The plan node this progress belongs to.
     """
 
-    task: Optional[Any] = None
+    task: Optional[Task] = None
     """
     The giskard task while the node's motion group runs, else None.
     """
@@ -260,6 +262,247 @@ class MotionNodeProgress:
     """
     The status pinned when the node's motion group finished, else None.
     """
+
+
+# %% viewer payload shapes
+class ObjectKind(str, Enum):
+    """
+    How a loose object's geometry is served to the viewer.
+    """
+
+    MESH = "mesh"
+    BOX = "box"
+
+
+@dataclass(frozen=True)
+class ObjectCatalogEntry:
+    """
+    One loose object's geometry-catalog entry, as the viewer spawns it.
+    """
+
+    key: str
+    """
+    Mesh basename this object is published under.
+    """
+
+    id: str
+    """
+    Stem of :attr:`key`, used as the object's display id.
+    """
+
+    kind: ObjectKind
+    """
+    Whether the viewer renders a served mesh or a placeholder box.
+    """
+
+    color: str
+    """
+    Colour assigned to this object from the shared palette.
+    """
+
+    mesh: Optional[str] = None
+    """
+    URL the mesh is served from, set only when :attr:`kind` is ``MESH``.
+    """
+
+    format: Optional[str] = None
+    """
+    Mesh file extension, set only when :attr:`kind` is ``MESH``.
+    """
+
+    size: Optional[List[float]] = None
+    """
+    Box extent in metres, set only when :attr:`kind` is ``BOX``.
+    """
+
+
+@dataclass
+class PlanNodeEntry:
+    """
+    One plan node's serialized state, mutated in place as its status resolves.
+    """
+
+    id: str
+    """
+    Identity-based id of this node (``p`` + ``id(node)``).
+    """
+
+    parent: Optional[str]
+    """
+    Id of this node's parent entry, or None for the root.
+    """
+
+    kind: str
+    """
+    The plan node's own class name.
+    """
+
+    label: str
+    """
+    Designator class name if this node describes an action, else :attr:`kind`.
+    """
+
+    status: str
+    """
+    This node's status: its own if it reports one, else a derived one.
+
+    Not typed as :class:`TaskStatusName`, because it mirrors whatever coraplex's own
+    ``TaskStatus`` reports, which this bridge does not validate.
+    """
+
+    derived: bool
+    """
+    Whether :attr:`status` was derived (from the statechart or children) rather than
+    the node's own reported status.
+    """
+
+    arm: Optional[str] = None
+    """
+    Arm the node's designator names, if any.
+    """
+
+    target: Optional[str] = None
+    """
+    Published object the node's designator refers to, if any.
+    """
+
+
+@dataclass(frozen=True)
+class PlanSnapshot:
+    """
+    The plan tree in the shape the viewer walks.
+    """
+
+    sig: str = ""
+    """
+    Node-id signature of the tree's shape, stable across status-only changes.
+    """
+
+    nodes: List[PlanNodeEntry] = field(default_factory=list)
+    """
+    Every node in the tree, flattened with parent references.
+    """
+
+
+@dataclass(frozen=True)
+class ChartNodeStructure:
+    """
+    The structural part of one statechart node: what does not change per tick.
+    """
+
+    id: str
+    name: str
+    cls: str
+    parent: Optional[str]
+
+
+@dataclass(frozen=True)
+class ChartEdgeEntry:
+    """
+    One transition edge between two statechart nodes.
+    """
+
+    source: str
+    target: str
+    kind: str
+
+
+@dataclass(frozen=True)
+class _ChartStructure:
+    """
+    A statechart's cached structure, rebuilt only when the executor compiles a new one.
+    """
+
+    nodes: List[ChartNodeStructure] = field(default_factory=list)
+    edges: List[ChartEdgeEntry] = field(default_factory=list)
+    indices: List[int] = field(default_factory=list)
+    """
+    Each node's index into the chart's life-cycle/observation state vectors.
+    """
+
+    sig: str = ""
+    """
+    Node-id signature of the structure, stable while it does not change.
+    """
+
+
+@dataclass(frozen=True)
+class ChartNodeEntry:
+    """
+    One statechart node's structure plus its current life cycle and observation.
+    """
+
+    id: str
+    name: str
+    cls: str
+    parent: Optional[str]
+    life: str
+    """
+    The node's ``LifeCycleValues`` name (e.g. ``RUNNING``).
+    """
+
+    obs: str
+    """
+    The node's trinary observation name (``TRUE``, ``FALSE`` or ``UNKNOWN``).
+    """
+
+
+@dataclass(frozen=True)
+class ChartSnapshot:
+    """
+    The motion statechart in the shape the viewer renders.
+    """
+
+    sig: str = ""
+    title: str = ""
+    """
+    Name of the action whose motion group this statechart belongs to.
+    """
+
+    nodes: List[ChartNodeEntry] = field(default_factory=list)
+    edges: List[ChartEdgeEntry] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class WorldStateSnapshot:
+    """
+    The world's joints, base pose and object poses at one simulation tick.
+    """
+
+    seq: int = 0
+    """
+    Monotonic snapshot counter so the viewer can skip unchanged states.
+    """
+
+    frames: Dict[str, float] = field(default_factory=dict)
+    """
+    Movable connection position by prefixed name.
+    """
+
+    base: Optional[List[float]] = None
+    """
+    Robot base pose as ``[x, y, z, qx, qy, qz, qw]``, or None without a robot.
+    """
+
+    objects: Dict[str, List[float]] = field(default_factory=dict)
+    """
+    Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
+    """
+
+
+@dataclass(frozen=True)
+class BridgeStatus:
+    """
+    What the viewer polls to decide whether a live demo is reachable.
+    """
+
+    running: bool
+    robot: Optional[str]
+    objects: List[str]
+    movable: bool
+    plan: bool
+    chart: bool
+    seq: int
 
 
 @dataclass
@@ -286,31 +529,27 @@ class Bridge:
     Monotonic snapshot counter so the viewer can skip unchanged states.
     """
 
-    state: Dict[str, Any] = field(
-        default_factory=lambda: {"seq": 0, "frames": {}, "base": None, "objects": {}}
-    )
+    state: WorldStateSnapshot = field(default_factory=WorldStateSnapshot)
     """
     The newest world snapshot in the trajectory-frame format.
     """
 
-    object_metadata: List[Dict[str, Any]] = field(default_factory=list)
+    object_metadata: List[ObjectCatalogEntry] = field(default_factory=list)
     """
     Geometry catalog for the viewer: one entry per loose object.
     """
 
-    plan_state: Dict[str, Any] = field(default_factory=lambda: {"sig": "", "nodes": []})
+    plan_state: PlanSnapshot = field(default_factory=PlanSnapshot)
     """
     The newest plan-tree snapshot (see :meth:`snapshot_plan`).
     """
 
-    chart_state: Dict[str, Any] = field(
-        default_factory=lambda: {"sig": "", "title": "", "nodes": [], "edges": []}
-    )
+    chart_state: ChartSnapshot = field(default_factory=ChartSnapshot)
     """
     The newest motion-statechart snapshot (see :meth:`observe_chart`).
     """
 
-    _connections: List[Any] = field(default_factory=list)
+    _connections: List[ActiveConnection1DOF] = field(default_factory=list)
     """
     Actuated world connections whose positions are published as frames.
     """
@@ -330,7 +569,7 @@ class Bridge:
     Guards every snapshot dict that the HTTP layer reads.
     """
 
-    _moves: List[Dict[str, Any]] = field(default_factory=list)
+    _moves: List[MoveRequest] = field(default_factory=list)
     """
     Object moves queued by the viewer, applied on the simulation thread.
     """
@@ -360,7 +599,7 @@ class Bridge:
     The motion statechart the executor is currently ticking.
     """
 
-    _chart_structure: Optional[Dict[str, Any]] = None
+    _chart_structure: Optional[_ChartStructure] = None
     """
     Serialized structure of :attr:`_chart`, rebuilt when it changes.
     """
@@ -480,7 +719,7 @@ class Bridge:
         The geometry catalog the viewer spawns live objects from.
         """
         with self._lock:
-            return list(self.object_metadata)
+            return [asdict(entry) for entry in self.object_metadata]
 
     def object_keys(self) -> List[str]:
         """
@@ -501,15 +740,17 @@ class Bridge:
         What the viewer polls to decide whether a live demo is reachable.
         """
         with self._lock:
-            return {
-                "running": self.world is not None,
-                "robot": type(self.robot).__name__ if self.robot else None,
-                "objects": [key for key in self._bodies if key != ROBOT_BASE_KEY],
-                "movable": True,
-                "plan": bool(self.plan_state.get("nodes")),
-                "chart": bool(self.chart_state.get("nodes")),
-                "seq": self.seq,
-            }
+            return asdict(
+                BridgeStatus(
+                    running=self.world is not None,
+                    robot=type(self.robot).__name__ if self.robot else None,
+                    objects=[key for key in self._bodies if key != ROBOT_BASE_KEY],
+                    movable=True,
+                    plan=bool(self.plan_state.nodes),
+                    chart=bool(self.chart_state.nodes),
+                    seq=self.seq,
+                )
+            )
 
     # %% viewer -> world
     def queue_move(self, request: MoveRequest) -> None:
@@ -644,7 +885,7 @@ class Bridge:
         Each object gets either a mesh URL (served by the bridge) or a box size, so
         objects the viewer does not know yet can appear mid-run.
         """
-        catalog: List[Dict[str, Any]] = []
+        catalog: List[ObjectCatalogEntry] = []
         serve: Dict[str, str] = {}
         palette = ObjectPalette()
         for index, (key, body) in enumerate(
@@ -656,24 +897,24 @@ class Bridge:
             if mesh_path and Path(mesh_path).is_file():
                 serve[key] = mesh_path
                 catalog.append(
-                    {
-                        "key": key,
-                        "id": object_id,
-                        "kind": "mesh",
-                        "mesh": "/mesh?key=" + urllib.parse.quote(key),
-                        "format": Path(key).suffix.lstrip(".").lower(),
-                        "color": color,
-                    }
+                    ObjectCatalogEntry(
+                        key=key,
+                        id=object_id,
+                        kind=ObjectKind.MESH,
+                        color=color,
+                        mesh="/mesh?key=" + urllib.parse.quote(key),
+                        format=Path(key).suffix.lstrip(".").lower(),
+                    )
                 )
             else:
                 catalog.append(
-                    {
-                        "key": key,
-                        "id": object_id,
-                        "kind": "box",
-                        "size": self._box_size(body) or list(DEFAULT_OBJECT_SIZE),
-                        "color": color,
-                    }
+                    ObjectCatalogEntry(
+                        key=key,
+                        id=object_id,
+                        kind=ObjectKind.BOX,
+                        color=color,
+                        size=self._box_size(body) or list(DEFAULT_OBJECT_SIZE),
+                    )
                 )
         self._mesh_serve = serve
         with self._lock:
@@ -712,23 +953,23 @@ class Bridge:
                 object_poses[name] = _pose_as_position_quaternion(body)
         with self._lock:
             self.seq += 1
-            self.state = {
-                "seq": self.seq,
-                "frames": frames,
-                "base": base_pose,
-                "objects": object_poses,
-            }
+            self.state = WorldStateSnapshot(
+                seq=self.seq,
+                frames=frames,
+                base=base_pose,
+                objects=object_poses,
+            )
 
     def get_state(self) -> Dict[str, Any]:
         """
         The newest world snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return dict(self.state)
+            return asdict(self.state)
 
     # %% plan tree
     @staticmethod
-    def _node_key(node: Any) -> int:
+    def _node_key(node: PlanNode) -> int:
         """
         Identity key of a plan node.
 
@@ -787,7 +1028,7 @@ class Bridge:
             )
         self.snapshot_plan()
 
-    def _live_motion_status(self, node: Any) -> Optional[str]:
+    def _live_motion_status(self, node: PlanNode) -> Optional[str]:
         """
         Status of one plan node from the statechart, or None.
 
@@ -827,17 +1068,17 @@ class Bridge:
         except Exception:
             # the plan is mid-mutation and not a tree right now — next tick
             return
-        nodes: List[Dict[str, Any]] = []
+        nodes: List[PlanNodeEntry] = []
         order: List[str] = []
         self._serialize_plan_node(root, None, nodes, order)
         with self._lock:
-            self.plan_state = {"sig": "|".join(order), "nodes": nodes}
+            self.plan_state = PlanSnapshot(sig="|".join(order), nodes=nodes)
 
     def _serialize_plan_node(
         self,
-        node: Any,
+        node: PlanNode,
         parent_id: Optional[str],
-        nodes: List[Dict[str, Any]],
+        nodes: List[PlanNodeEntry],
         order: List[str],
     ) -> str:
         """
@@ -846,18 +1087,18 @@ class Bridge:
         node_id = "p%d" % id(node)
         designator = node.designator if isinstance(node, DescribesAnAction) else None
         own_status = node.status.name
-        entry: Dict[str, Any] = {
-            "id": node_id,
-            "parent": parent_id,
-            "kind": type(node).__name__,
-            "label": (
+        entry = PlanNodeEntry(
+            id=node_id,
+            parent=parent_id,
+            kind=type(node).__name__,
+            label=(
                 type(designator).__name__
                 if designator is not None
                 else type(node).__name__
             ),
-            "status": own_status,
-            "derived": False,
-        }
+            status=own_status,
+            derived=False,
+        )
         self._add_designator_metadata(entry, designator)
         nodes.append(entry)
         order.append(node_id)
@@ -876,12 +1117,12 @@ class Bridge:
                 child_best if child_best != "CREATED" else None
             )
             if derived:
-                entry["status"] = derived
-                entry["derived"] = True
-        return entry["status"]
+                entry.status = derived
+                entry.derived = True
+        return entry.status
 
     def _add_designator_metadata(
-        self, entry: Dict[str, Any], designator: Optional[Any]
+        self, entry: PlanNodeEntry, designator: Optional[Any]
     ) -> None:
         """
         Add arm and target-object info from a node's designator, if any.
@@ -891,10 +1132,10 @@ class Bridge:
         fields = vars(designator)
         arm = fields.get("arm") or fields.get("arms")
         if arm is not None:
-            entry["arm"] = str(arm)
+            entry.arm = str(arm)
         target = self._designator_target(designator)
         if target:
-            entry["target"] = target
+            entry.target = target
 
     @staticmethod
     def _max_status(first: str, second: str) -> str:
@@ -923,7 +1164,7 @@ class Bridge:
         The newest plan snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return dict(self.plan_state)
+            return asdict(self.plan_state)
 
     # %% motion statechart
     def observe_chart(self, chart: Optional[MotionStatechart]) -> None:
@@ -941,32 +1182,37 @@ class Bridge:
             self._chart_structure = self._serialize_chart_structure(chart)
             self._last_node_states = None
         structure = self._chart_structure
-        if not structure:
+        if structure is None:
             return
         from giskardpy.motion_statechart.data_types import LifeCycleValues
 
         life_cycle = [
-            int(chart.life_cycle_state.data[index]) for index in structure["indices"]
+            int(chart.life_cycle_state.data[index]) for index in structure.indices
         ]
         observations = [
-            float(chart.observation_state.data[index]) for index in structure["indices"]
+            float(chart.observation_state.data[index]) for index in structure.indices
         ]
         if (life_cycle, observations) == self._last_node_states:
             return
         self._last_node_states = (life_cycle, observations)
-        nodes = []
-        for position, node in enumerate(structure["nodes"]):
-            entry = dict(node)
-            entry["life"] = LifeCycleValues(life_cycle[position]).name
-            entry["obs"] = self._observation_name(observations[position])
-            nodes.append(entry)
+        nodes = [
+            ChartNodeEntry(
+                id=node.id,
+                name=node.name,
+                cls=node.cls,
+                parent=node.parent,
+                life=LifeCycleValues(life_cycle[position]).name,
+                obs=self._observation_name(observations[position]),
+            )
+            for position, node in enumerate(structure.nodes)
+        ]
         with self._lock:
-            self.chart_state = {
-                "sig": structure["sig"],
-                "title": self._chart_title,
-                "nodes": nodes,
-                "edges": structure["edges"],
-            }
+            self.chart_state = ChartSnapshot(
+                sig=structure.sig,
+                title=self._chart_title,
+                nodes=nodes,
+                edges=structure.edges,
+            )
 
     @staticmethod
     def _observation_name(observation: float) -> str:
@@ -980,43 +1226,49 @@ class Bridge:
         return "UNKNOWN"
 
     @staticmethod
-    def _serialize_chart_structure(chart: MotionStatechart) -> Optional[Dict[str, Any]]:
+    def _serialize_chart_structure(chart: MotionStatechart) -> _ChartStructure:
         """
-        Nodes and transition edges of a statechart, as plain dicts.
+        Nodes and transition edges of a statechart.
         """
-        nodes: List[Dict[str, Any]] = []
+        nodes: List[ChartNodeStructure] = []
         indices: List[int] = []
         for node in chart.nodes:
             parent_index = node.parent_node_index
             nodes.append(
-                {
-                    "id": "s%d" % node.index,
-                    "name": node.name,
-                    "cls": type(node).__name__,
-                    "parent": (
+                ChartNodeStructure(
+                    id="s%d" % node.index,
+                    name=node.name,
+                    cls=type(node).__name__,
+                    parent=(
                         ("s%d" % parent_index) if parent_index is not None else None
                     ),
-                }
+                )
             )
             indices.append(node.index)
         edges = []
         for source, target, transition in chart.rx_graph.edge_index_map().values():
             edges.append(
-                {
-                    "from": "s%d" % chart.rx_graph.get_node_data(source).index,
-                    "to": "s%d" % chart.rx_graph.get_node_data(target).index,
-                    "kind": transition.kind.name,
-                }
+                ChartEdgeEntry(
+                    source="s%d" % chart.rx_graph.get_node_data(source).index,
+                    target="s%d" % chart.rx_graph.get_node_data(target).index,
+                    kind=transition.kind.name,
+                )
             )
-        signature = "|".join(node["id"] + ":" + node["name"] for node in nodes)
-        return {"nodes": nodes, "edges": edges, "indices": indices, "sig": signature}
+        signature = "|".join(node.id + ":" + node.name for node in nodes)
+        return _ChartStructure(nodes=nodes, edges=edges, indices=indices, sig=signature)
 
     def get_chart(self) -> Dict[str, Any]:
         """
         The newest statechart snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return dict(self.chart_state)
+            chart = self.chart_state
+        payload = asdict(chart)
+        payload["edges"] = [
+            {"from": edge.source, "to": edge.target, "kind": edge.kind}
+            for edge in chart.edges
+        ]
+        return payload
 
 
 #: the process-wide bridge instance shared by hooks and HTTP handlers
