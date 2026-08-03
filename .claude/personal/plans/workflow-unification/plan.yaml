@@ -104,21 +104,25 @@ items:
       #109 is a draft again, labelled cram2-link-sent only, mergeable against main
       9b090fc1, all three review threads resolved; 36 tests pass under
       .claude/hooks/tests (main's 28 plus this module's 8).
-    blockers: >
-      Both cleared 2026-08-03. (1) Merge conflict against main since the 2026-07-31
-      fast-forward - mergeable_state dirty, labelled needs-resolution - in
-      .claude/hooks/README.md, tests/conftest.py and tests/test_save_plan_sh.py. Root
-      cause was a duplicated artifact, not drifting text: main extracted the hook-test
-      scratch repository as ScratchRepository (via #101's review round) while this branch
-      independently extracted the same thing as ScratchProject. Resolved by adopting
-      main's superset and deleting ScratchProject, so both test files are now
-      byte-identical to main. (2) Three unresolved review threads on
-      test_personal_settings_sync.py asking for the inline JSON literals to move into
-      separate files - AGENTS.md's no-inline-snippets rule - now three .json files under
-      tests/fixtures/. Note for anyone replying on this PR: those threads belong to an
-      unsubmitted PENDING review, and GitHub allows one pending review per user, so
-      inline replies 422 until it is submitted; the resolution was explained in a
-      PR-level comment instead.
+    blockers:
+      - "Both cleared 2026-08-03."
+      - >
+        (1) Merge conflict against main since the 2026-07-31 fast-forward -
+        mergeable_state dirty, labelled needs-resolution - in
+        .claude/hooks/README.md, tests/conftest.py and tests/test_save_plan_sh.py.
+        Root cause was a duplicated artifact, not drifting text: main extracted the
+        hook-test scratch repository as ScratchRepository (via #101's review round)
+        while this branch independently extracted the same thing as
+        ScratchProject. Resolved by adopting main's superset and deleting
+        ScratchProject, so both test files are now byte-identical to main.
+      - >
+        (2) Three unresolved review threads on test_personal_settings_sync.py
+        asking for the inline JSON literals to move into separate files -
+        AGENTS.md's no-inline-snippets rule - now three .json files under
+        tests/fixtures/. Note for anyone replying on this PR: those threads belong
+        to an unsubmitted PENDING review, and GitHub allows one pending review per
+        user, so inline replies 422 until it is submitted; the resolution was
+        explained in a PR-level comment instead.
 
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
