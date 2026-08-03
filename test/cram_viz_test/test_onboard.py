@@ -114,7 +114,7 @@ class TestMovementDetection:
         assert moved(pose_at(0, 0, 1.0), pose_at(0, 0, 1.5)) is True
 
     def test_the_tolerance_is_configurable(self):
-        assert moved(pose_at(0, 0), pose_at(0.5, 0.0), eps=1.0) is False
+        assert moved(pose_at(0, 0), pose_at(0.5, 0.0), tolerance=1.0) is False
 
 
 # %% transport windows

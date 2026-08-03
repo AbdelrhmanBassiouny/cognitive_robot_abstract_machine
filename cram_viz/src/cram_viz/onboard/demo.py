@@ -543,21 +543,21 @@ BASE_MOTION_TOLERANCE = 0.05
 def moved(
     first: Sequence[float],
     second: Sequence[float],
-    eps: float = MOVEMENT_TOLERANCE,
+    tolerance: float = MOVEMENT_TOLERANCE,
 ) -> bool:
     """
-    Whether two poses are more than ``eps`` apart (planar distance plus height).
+    Whether two poses are more than ``tolerance`` apart (planar distance plus height).
 
-    :param eps: Tolerance in metres, so sensor jitter does not read as movement.
+    :param tolerance: Tolerance in metres, so sensor jitter does not read as movement.
     """
     return (
         math.hypot(first[0] - second[0], first[1] - second[1])
         + abs(first[2] - second[2])
-        > eps
+        > tolerance
     )
 
 
-def object_windows(rec: Recorder) -> List[Dict[str, Any]]:
+def object_windows(recorder: Recorder) -> List[Dict[str, Any]]:
     """
     The attach..detach frame window of every object that travelled overall.
 
@@ -565,7 +565,7 @@ def object_windows(rec: Recorder) -> List[Dict[str, Any]]:
     the first frame that differs from where it started to just past the last frame
     that differs from where it ended up.
     """
-    object_frames = rec.object_frames
+    object_frames = recorder.object_frames
     frame_count = len(object_frames)
     windows = []
     for name in object_frames[0]:
@@ -607,15 +607,15 @@ def object_windows(rec: Recorder) -> List[Dict[str, Any]]:
     return windows
 
 
-def first_base_motion(rec: Recorder, before: int) -> int:
+def first_base_motion(recorder: Recorder, before: int) -> int:
     """
     The first frame before ``before`` at which the robot base left its spawn.
 
     :return: That frame's index, or ``before`` if the base never moved.
     """
-    spawn = rec.base_frames[0]
-    for index in range(min(before, len(rec.base_frames))):
-        pose = rec.base_frames[index]
+    spawn = recorder.base_frames[0]
+    for index in range(min(before, len(recorder.base_frames))):
+        pose = recorder.base_frames[index]
         if not pose or not spawn:
             continue
         if math.hypot(pose[0] - spawn[0], pose[1] - spawn[1]) > BASE_MOTION_TOLERANCE:
@@ -623,72 +623,102 @@ def first_base_motion(rec: Recorder, before: int) -> int:
     return before
 
 
-def derive_segments(rec: Recorder) -> List[Dict[str, Any]]:
+def derive_segments(recorder: Recorder) -> List[Dict[str, Any]]:
     """Segments = data-driven windows, labelled from the parsed action list."""
-    n = len(rec.frames)
-    wins = object_windows(rec)
-    manip_acts = [a for a in rec.actions if a.get("target")]
-    lead_acts = []
-    for a in rec.actions:
-        if a.get("target"):
+    frame_count = len(recorder.frames)
+    transport_windows = object_windows(recorder)
+    manipulation_actions = [
+        action for action in recorder.actions if action.get("target")
+    ]
+    leading_actions = []
+    for action in recorder.actions:
+        if action.get("target"):
             break
-        lead_acts.append(a)
+        leading_actions.append(action)
 
     segments = []
-    prev = 0
-    if wins:
-        lead_end = first_base_motion(rec, wins[0]["attach"])
+    previous_end = 0
+    if transport_windows:
+        lead_end = first_base_motion(recorder, transport_windows[0]["attach"])
         if lead_end > 10:
             label = (
-                lead_acts[0]["action"].replace("Action", "").lower()
-                if len(lead_acts) == 1
+                leading_actions[0]["action"].replace("Action", "").lower()
+                if len(leading_actions) == 1
                 else "prepare"
             )
             segments.append(
                 {
                     "step": label,
-                    "action": ",".join(x["action"] for x in lead_acts) or None,
+                    "action": ",".join(
+                        leading_action["action"] for leading_action in leading_actions
+                    )
+                    or None,
                     "arm": None,
                     "start": 0,
                     "end": lead_end,
                 }
             )
-            prev = lead_end
-    remaining = list(manip_acts)
-    for k, w in enumerate(wins):
-        act = next((x for x in remaining if x["target"] == w["object"]), None)
-        if act:
-            remaining.remove(act)
-        oid = os.path.splitext(w["object"])[0]
-        verb = act["action"].replace("Action", "").lower() if act else "move"
-        nxt = wins[k + 1]["attach"] if k + 1 < len(wins) else n - 1
+            previous_end = lead_end
+    unmatched_actions = list(manipulation_actions)
+    for window_index, window in enumerate(transport_windows):
+        matching_action = next(
+            (
+                action
+                for action in unmatched_actions
+                if action["target"] == window["object"]
+            ),
+            None,
+        )
+        if matching_action:
+            unmatched_actions.remove(matching_action)
+        object_id = os.path.splitext(window["object"])[0]
+        verb = (
+            matching_action["action"].replace("Action", "").lower()
+            if matching_action
+            else "move"
+        )
+        has_next_window = window_index + 1 < len(transport_windows)
+        next_attach = (
+            transport_windows[window_index + 1]["attach"]
+            if has_next_window
+            else frame_count - 1
+        )
         end = (
-            min(nxt, w["detach"] + max(10, (nxt - w["detach"]) // 2))
-            if k + 1 < len(wins)
-            else n - 1
+            min(
+                next_attach,
+                window["detach"] + max(10, (next_attach - window["detach"]) // 2),
+            )
+            if has_next_window
+            else frame_count - 1
         )
         segments.append(
             {
-                "step": "%s_%s" % (verb, oid),
-                "action": act["action"] if act else None,
-                "arm": act["arm"] if act else None,
-                "start": prev,
+                "step": "%s_%s" % (verb, object_id),
+                "action": matching_action["action"] if matching_action else None,
+                "arm": matching_action["arm"] if matching_action else None,
+                "start": previous_end,
                 "end": end,
-                "picks": oid,
-                "attach": w["attach"],
-                "detach": w["detach"],
-                "place": w["place"],
+                "picks": object_id,
+                "attach": window["attach"],
+                "detach": window["detach"],
+                "place": window["place"],
             }
         )
-        prev = end
+        previous_end = end
     if not segments:
         label = (
-            rec.actions[0]["action"].replace("Action", "").lower()
-            if len(rec.actions) == 1
+            recorder.actions[0]["action"].replace("Action", "").lower()
+            if len(recorder.actions) == 1
             else "plan"
         )
         segments.append(
-            {"step": label, "action": None, "arm": None, "start": 0, "end": n - 1}
+            {
+                "step": label,
+                "action": None,
+                "arm": None,
+                "start": 0,
+                "end": frame_count - 1,
+            }
         )
     return segments
 
@@ -706,12 +736,14 @@ def link_set(part: Any) -> List[str]:
     return link_names
 
 
-def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, Any]:
+def build_scene(
+    recorder: Recorder, name: str, out_dir: str, step: int
+) -> Dict[str, Any]:
     """
     Downsample the recording to every step-th frame (always keeping the last)
     and assemble scene.json + trajectory.json from it.
     """
-    frame_count = len(rec.frames)
+    frame_count = len(recorder.frames)
     kept_indices = list(range(0, frame_count, step))
     if kept_indices and kept_indices[-1] != frame_count - 1:
         kept_indices.append(frame_count - 1)
@@ -728,19 +760,19 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
             ],
         )
 
-    n = frame_count
-    idx = kept_indices
-    frames = [rec.frames[index] for index in kept_indices]
-    base = [rec.base_frames[index] for index in kept_indices]
-    objs = [rec.object_frames[index] for index in kept_indices]
+    frames = [recorder.frames[index] for index in kept_indices]
+    base = [recorder.base_frames[index] for index in kept_indices]
+    object_poses = [recorder.object_frames[index] for index in kept_indices]
 
     raw_frames_per_second = (
-        1.0 / rec.control_dt if rec.control_dt else FALLBACK_FRAMES_PER_SECOND
+        1.0 / recorder.control_dt if recorder.control_dt else FALLBACK_FRAMES_PER_SECOND
     )
-    fps = max(MINIMUM_FRAMES_PER_SECOND, round(raw_frames_per_second / step))
+    frames_per_second = max(
+        MINIMUM_FRAMES_PER_SECOND, round(raw_frames_per_second / step)
+    )
 
     # %% robot description
-    robot = rec.robot
+    robot = recorder.robot
     root_name = str(robot.root.name)
     prefix = root_name.split("/", 1)[0] if "/" in root_name else ""
     base_body = root_name.split("/", 1)[1] if "/" in root_name else root_name
@@ -755,7 +787,7 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
 
     # %% segments: data-derived windows, labelled from the parsed actions
     segments = []
-    for raw_segment in derive_segments(rec):
+    for raw_segment in derive_segments(recorder):
         segment = dict(raw_segment)
         segment["start"] = nearest(raw_segment["start"])
         segment["end"] = nearest(raw_segment["end"])
@@ -777,9 +809,9 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
     # %% objects
     objects = []
     palette = ObjectPalette()
-    for i, source in enumerate(rec.mesh_sources):
+    for index, source in enumerate(recorder.mesh_sources):
         mesh = os.path.basename(source)
-        if mesh not in rec.object_frames[0]:
+        if mesh not in recorder.object_frames[0]:
             continue
         destination = os.path.join(out_dir, "meshes", "objects", mesh)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
@@ -788,12 +820,12 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
             "id": os.path.splitext(mesh)[0],
             "key": mesh,
             "mesh": "meshes/objects/" + mesh,
-            "spawn": rec.object_frames[0][mesh],
-            "color": palette.color_for(i),
+            "spawn": recorder.object_frames[0][mesh],
+            "color": palette.color_for(index),
         }
         # recorded from the world, so the knowledge base does not have to guess it;
         # omitted when the object's shapes report no measurable size
-        body = (rec._bodies or {}).get(mesh)
+        body = (recorder._bodies or {}).get(mesh)
         extent = BodyExtent.of(body) if body is not None else None
         if extent is not None:
             entry["height"] = round(extent.z, POSE_PRECISION)
@@ -830,13 +862,13 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
     # %% bundle the URDF models
     world_body_names = [
         str(body.name) if isinstance(body, NamesAWorldEntity) else ""
-        for body in rec.world.bodies
+        for body in recorder.world.bodies
     ]
     models = []
     missing: List[str] = []
-    for source in rec.urdf_sources:
+    for source in recorder.urdf_sources:
         base_name = os.path.splitext(os.path.basename(source))[0]
-        report = bundle_urdf(source, base_name, out_dir, hints=rec.resolutions)
+        report = bundle_urdf(source, base_name, out_dir, hints=recorder.resolutions)
         missing += report["missing"]
         # find this model's prefix in the composed world via one of its links
         model_prefix = ""
@@ -876,7 +908,7 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
 
     scene = {
         "name": name,
-        "fps": fps,
+        "fps": frames_per_second,
         "trajectory": "trajectory.json",
         "models": models,
         "robot": {
@@ -887,8 +919,8 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
         },
         "objects": objects,
         "segments": segments,
-        "actions": rec.actions,
-        "planTrees": rec.serialize_plans(),
+        "actions": recorder.actions,
+        "planTrees": recorder.serialize_plans(),
         "placeTarget": place_target,
         "dragBounds": drag_bounds,
         "missingAssets": sorted(set(missing)),
@@ -896,7 +928,12 @@ def build_scene(rec: Recorder, name: str, out_dir: str, step: int) -> Dict[str, 
     _write_json(Path(out_dir) / "scene.json", scene, indent=1)
     _write_json(
         Path(out_dir) / "trajectory.json",
-        {"fps": fps, "frames": frames, "base": base, "objects": objs},
+        {
+            "fps": frames_per_second,
+            "frames": frames,
+            "base": base,
+            "objects": object_poses,
+        },
     )
     return scene
 
@@ -939,18 +976,20 @@ def main() -> None:
     """
     # force: the demo's own imports configure the root logger before we get here
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    ap = argparse.ArgumentParser(
+    parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("demo", help="path to the coraplex demo .py file")
-    ap.add_argument("--name", required=True, help="scene name (output folder)")
-    ap.add_argument(
+    parser.add_argument("demo", help="path to the coraplex demo .py file")
+    parser.add_argument("--name", required=True, help="scene name (output folder)")
+    parser.add_argument(
         "--out",
         default=str(paths.scenes_dir()),
         help="scenes directory (default: CRAM_VIZ_SCENES or ~/.cram_viz/scenes)",
     )
-    ap.add_argument("--step", type=int, default=0, help="downsample step (0 = auto)")
-    args = ap.parse_args()
+    parser.add_argument(
+        "--step", type=int, default=0, help="downsample step (0 = auto)"
+    )
+    args = parser.parse_args()
 
     try:
         import coraplex  # noqa: F401
@@ -960,10 +999,10 @@ def main() -> None:
             "  the workspace venv (uv sync), then: cram-viz-onboard ..."
         )
 
-    rec = Recorder()
-    rec.install_asset_hooks()
-    rec.install_tick_hook()
-    rec.install_segment_hook()
+    recorder = Recorder()
+    recorder.install_asset_hooks()
+    recorder.install_tick_hook()
+    recorder.install_segment_hook()
 
     demo = os.path.abspath(args.demo)
     log("running demo:", demo)
@@ -981,18 +1020,19 @@ def main() -> None:
         candidate = os.path.dirname(candidate)
     runpy.run_path(demo, run_name="__main__")
     log(
-        "demo finished: %d raw frames, %d actions" % (len(rec.frames), len(rec.actions))
+        "demo finished: %d raw frames, %d actions"
+        % (len(recorder.frames), len(recorder.actions))
     )
 
-    if not rec.frames:
+    if not recorder.frames:
         sys.exit("No frames captured — did the demo perform a plan?")
-    if rec.robot is None:
+    if recorder.robot is None:
         sys.exit("No AbstractRobot semantic annotation found in the world.")
 
-    step = args.step or max(1, len(rec.frames) // TARGET_BUNDLE_FRAMES)
+    step = args.step or max(1, len(recorder.frames) // TARGET_BUNDLE_FRAMES)
     out_dir = os.path.join(args.out, args.name)
     os.makedirs(out_dir, exist_ok=True)
-    scene = build_scene(rec, args.name, out_dir, step)
+    scene = build_scene(recorder, args.name, out_dir, step)
     _update_scene_index(Path(args.out) / "index.json", args.name)
 
     log("scene '%s' written to %s" % (args.name, out_dir))
