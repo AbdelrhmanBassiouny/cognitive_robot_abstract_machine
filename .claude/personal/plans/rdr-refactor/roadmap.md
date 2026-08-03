@@ -734,3 +734,28 @@ Answered at `r3702169709`: keep the field, with the expiry condition stated plai
 `Not()`-wrapping wins outright once #96 lands a non-mutating negation. The thread is
 deliberately **left unresolved**; the call is the developer's, and no code was changed on #41
 pending it.
+
+### Resolution (same day)
+
+The developer resolved thread `r3702021144` without a counter-argument and marked #41 **ready
+for review**. The decision is therefore: **keep `GuardCondition.negated`**, on the
+no-live-tree-mutation ground, with the recorded expiry — revisit if `dag-facade-hardening` (#96)
+lands a non-mutating negation.
+
+All 23 review threads on #41 are now resolved, `draft: false`, `mergeable_state: clean`, CI green
+20/20. #41 is genuinely ready to merge as the stack bottom — the §8 claim that was stale this
+morning is now true for a different reason.
+
+The three follow-ups offered in the reply are **not applied**, and deliberately so: pushing to #41
+would force it back to draft under the standing always-drafts-until-ready convention, undoing the
+developer's own ready-for-review signal minutes after they gave it. They need an explicit
+go-ahead, and are cheap to carry on whichever PR next touches these files if #41 merges first:
+
+1. Record the no-live-tree-mutation rationale in the `negated` field's docstring — its design doc
+   is on the dropped `krrood/docs/` path and will not land, so the reason is otherwise lost.
+2. Correct the misleading evaluation comment at `backward_inference.py:82-90`.
+3. TDD-pin whether the `isinstance(result, OperationResult)` branch in `holds_for` is reachable,
+   and delete it if not.
+
+The `_materialize` live-node mutation (`condition_resolver.py:104`) remains open and unplaced —
+it is a real defect, and not this PR's to carry.

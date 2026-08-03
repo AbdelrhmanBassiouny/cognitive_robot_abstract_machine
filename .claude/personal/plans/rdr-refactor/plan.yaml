@@ -150,7 +150,16 @@ items:
     class dag-facade-hardening (#96) exists to fix. Recommendation carries an expiry: Not()-wrapping
     is cleaner at 4 of 6 concrete sites and wins outright once #96 lands a non-mutating negation.
     CI green, 20/20 checks on head cbbf7bf3. Thread deliberately left unresolved. Full account in
-    roadmap.md section 12.'
+    roadmap.md section 12.
+    2026-08-03 (later): resolved -- the developer resolved thread r3702021144 without counter-argument
+    and marked #41 ready for review. Decision: keep GuardCondition.negated. All 23 review threads are
+    now resolved, draft: false, mergeable_state: clean, so #41 is genuinely ready for the steward to
+    merge as the stack bottom. Three small follow-ups offered in the reply are NOT yet applied and
+    need the developer''s go-ahead, since pushing would force the PR back to draft per the standing
+    convention: record the no-live-tree-mutation rationale in the field docstring (its design doc is
+    on the dropped krrood/docs/ path), correct the misleading evaluation comment at
+    backward_inference.py:82-90, and TDD-pin whether the isinstance(OperationResult) branch in
+    holds_for is reachable before deleting it.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
