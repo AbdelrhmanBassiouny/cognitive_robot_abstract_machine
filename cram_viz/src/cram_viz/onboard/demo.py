@@ -36,6 +36,9 @@ import sys
 import time
 from pathlib import Path
 
+from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
+from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from typing_extensions import (
     Any,
@@ -60,9 +63,6 @@ if TYPE_CHECKING:
     from coraplex.plans.executables import Executable
     from coraplex.plans.plan_node import ActionNode
     from giskardpy.executor import Executor
-    from semantic_digital_twin.adapters.mesh import STLParser
-    from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
-    from semantic_digital_twin.adapters.urdf import URDFParser
     from semantic_digital_twin.world_description.world_entity import Body
 
 logger = logging.getLogger(__name__)
@@ -187,12 +187,12 @@ class Recorder:
     """
     Records one demo run: assets, per-tick motion and the executed plan.
 
-    .. note:: The CRAM-stack imports inside the ``install_*`` hook methods are
-       intentionally local. A hook must patch the class *before* the demo
-       imports it, and this module is imported by the ``cram-viz-onboard``
-       console script, which has to stay importable without the CRAM stack
-       installed. This is one of the documented exceptions to the
-       imports-at-top rule.
+    .. note:: ``giskardpy`` and ``coraplex`` are only imported inside the
+       ``install_*`` hook methods that need them. Unlike ``semantic_digital_twin``,
+       which this module already imports at the top, they are not required to parse
+       a finished recording into a scene bundle, and this module is imported by the
+       ``cram-viz-onboard`` console script, which has to stay importable without
+       them. This is one of the documented exceptions to the imports-at-top rule.
     """
 
     def __init__(self) -> None:
@@ -266,10 +266,6 @@ class Recorder:
         """
         Record every asset resolution so the bundler can copy the files.
         """
-        from semantic_digital_twin.adapters.mesh import STLParser
-        from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
-        from semantic_digital_twin.adapters.urdf import URDFParser
-
         MethodPatch(PackageUriResolver, "resolve").install(self._remember_resolution)
         MethodPatch(URDFParser, "from_file").install(self._remember_urdf_source)
         MethodPatch(STLParser, "__init__").install(self._remember_mesh_source)
