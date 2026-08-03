@@ -104,21 +104,25 @@ items:
       #109 is a draft again, labelled cram2-link-sent only, mergeable against main
       9b090fc1, all three review threads resolved; 36 tests pass under
       .claude/hooks/tests (main's 28 plus this module's 8).
-    blockers: >
-      Both cleared 2026-08-03. (1) Merge conflict against main since the 2026-07-31
-      fast-forward - mergeable_state dirty, labelled needs-resolution - in
-      .claude/hooks/README.md, tests/conftest.py and tests/test_save_plan_sh.py. Root
-      cause was a duplicated artifact, not drifting text: main extracted the hook-test
-      scratch repository as ScratchRepository (via #101's review round) while this branch
-      independently extracted the same thing as ScratchProject. Resolved by adopting
-      main's superset and deleting ScratchProject, so both test files are now
-      byte-identical to main. (2) Three unresolved review threads on
-      test_personal_settings_sync.py asking for the inline JSON literals to move into
-      separate files - AGENTS.md's no-inline-snippets rule - now three .json files under
-      tests/fixtures/. Note for anyone replying on this PR: those threads belong to an
-      unsubmitted PENDING review, and GitHub allows one pending review per user, so
-      inline replies 422 until it is submitted; the resolution was explained in a
-      PR-level comment instead.
+    blockers:
+      - "Both cleared 2026-08-03."
+      - >
+        (1) Merge conflict against main since the 2026-07-31 fast-forward -
+        mergeable_state dirty, labelled needs-resolution - in
+        .claude/hooks/README.md, tests/conftest.py and tests/test_save_plan_sh.py.
+        Root cause was a duplicated artifact, not drifting text: main extracted the
+        hook-test scratch repository as ScratchRepository (via #101's review round)
+        while this branch independently extracted the same thing as
+        ScratchProject. Resolved by adopting main's superset and deleting
+        ScratchProject, so both test files are now byte-identical to main.
+      - >
+        (2) Three unresolved review threads on test_personal_settings_sync.py
+        asking for the inline JSON literals to move into separate files -
+        AGENTS.md's no-inline-snippets rule - now three .json files under
+        tests/fixtures/. Note for anyone replying on this PR: those threads belong
+        to an unsubmitted PENDING review, and GitHub allows one pending review per
+        user, so inline replies 422 until it is submitted; the resolution was
+        explained in a PR-level comment instead.
 
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"
@@ -287,63 +291,96 @@ items:
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
     status: in_progress
-    session: https://claude.ai/code/session_01KGBAbjVAmX7LJMnSTJprtM
+    session: https://claude.ai/code/session_01QurCwih1r6STYtP34bpJpf
     notes: >
       Mirrors PR #101's pattern (read-only check-stack-setup.sh + guided skill +
-      prerequisite-check.md) and #107's script/skill split. Two install modes: native
-      (tooling on the target repo's main) and fork-overlay (creates/updates a
-      never-merged tooling branch on the user's fork from the skill's canonical files;
-      re-running is the updater). Creates missing labels, writes personal stack.toml,
-      emits the Routine prompt. Recorded decision (user can override): for cram2 itself,
-      personal config lives on the personal-notes branch, not a per-user dev branch.
-      Kicked off 2026-07-30; branched off claude/setup-personal-notes-script (#107)
-      rather than #106 directly, because the item needs .claude/stack/* from #106 and
-      github-api.sh plus the gh/curl test stubs from #107 — which is what forced the
-      restack of #107 onto #106 first. Two scope calls settled at kickoff: the
-      stack-board step is guidance only (the parameterized board.yml stays PR 4's, per
-      the roadmap), and "prerequisite-check.md" in these notes means this skill gets its
-      own, consumed by ROUTINE.md's SETUP step 0, not a second copy of #101's.
-      Implemented as draft PR #110 (2026-07-30) on claude/setup-personal-notes-script:
-      check-stack-setup.sh, setup-stacked-prs.sh, write-branch-files.sh (which
-      write-personal-notes-file.sh now delegates to), the skill and its
-      prerequisite-check.md, a board-free `stack.py config` command, and 334 tests
-      passing (was 320), all network- and credential-free. Two gaps found and fixed on
-      the way: cram2-link-sent was set and cleared by ROUTINE.md but had no key in
-      stack.toml, so setup could not create it; and board.json was documented as
-      never-committed scratch with nothing gitignoring it. Live label creation stays
-      unverified for the same reason as #107 - a fine-grained installation token, so the
-      label POST is exercised only through a stub.
-      Re-scoped 2026-07-31 (native-stacks pivot, user-approved): setup shrinks to
-      labels + personal stack.toml + optionally creating the stack itself via
-      POST /repos/{owner}/{repo}/stacks; the fork-overlay install mode demotes to a
-      documented fallback for repos without the stacks preview. Amend while still a
-      draft. #106's same-day cut narrows this further: there is no restack engine to
-      install — setup is doctrine files + labels + personal stack.toml + the optional
-      stack creation.
+      prerequisite-check.md) and #107's script/skill split. Two install modes: native (tooling on
+      the target repo's main) and fork-overlay (a never-merged tooling branch on the user's fork;
+      re-running is the updater). Creates missing labels, writes personal stack.toml, emits the
+      Routine prompt. Based on claude/setup-personal-notes-script (#107) rather than #106, because
+      setup-stacked-prs.sh:44 sources github-api.sh, which exists on no other branch; #107 already
+      carries all of #106, and git merge-tree gives the identical conflict set either way, so the
+      base costs nothing and keeps decision 10's one-linear-chain property. Scope assessed
+      2026-08-02 and confirmed separate: removing this item's edits to #106's files leaves ~2,645
+      lines of standalone setup infrastructure, so it is ordinary stacking, not a disguised
+      modification of its parent.
 
-      Scope assessed 2026-08-02 and confirmed separate (see roadmap): removing this
-      item's edits to #106's files leaves ~2,645 lines of standalone setup
-      infrastructure, so it is ordinary stacking, not a disguised modification of its
-      parent - unlike #133/#117, which folded because nothing remained. Keep the PR.
+      Rebased onto #106's review round 2026-08-03 (eecd765d + b9f8f752), which is what the
+      2026-08-02 instruction list called for; that list is now consumed and is not re-recorded
+      here. Five files conflicted, all under .claude/stack/, every one resolved in favour of the
+      parent: ROUTINE.md's delete accepted, this branch's routine-prompt.md deleted as a duplicate
+      of the skill's, stack.py's config/print_config/BOARD_FREE_COMMANDS dropped for #106's
+      configuration, stack.toml and test_stack.py taken from the parent. The one thing this branch
+      had that its parent did not survives: cram2_link_sent_label, without which a fresh fork's
+      first promote writes a label nobody created.
 
-      Rebase instructions rewritten 2026-08-02 (user-directed), because #106's review round
-      invalidated most of the previous set. ROUTINE.md and POINTER.md no longer exist: the
-      instructions are .claude/skills/stacked-pr-maintenance/SKILL.md and the registered prompt
-      is a skill call. So, concretely: (1) delete .claude/stack/routine-prompt.md - the template
-      lives at .claude/skills/stacked-pr-maintenance/routine-prompt.md and is already written,
-      templating <FORK_REPOSITORY>/<UPSTREAM_REPOSITORY>; there is nothing left to render.
-      (2) check-stack-setup.sh's stack_tooling_files check looks for ROUTINE.md and
-      routine-prompt.md under .claude/stack/ and will fail - point it at the skill directory
-      instead. (3) The two rules this branch wanted promoted into the pointer (never force-push a
-      branch with an open upstream pull request unless it carries the rebase label; do not use the
-      Workflow tool) are already in the skill - nothing to promote. (4) The two contract tests it
-      was told to update are deleted along with test_prompt_documents.py and prompt_model.py -
-      nothing to declare. (5) `stack.py config` -> `configuration` still stands, key names
-      unchanged. (6) The fork-overlay install mode now has to carry .claude/skills/
-      stacked-pr-maintenance/ as well as .claude/stack/, since the instructions moved out of the
-      latter. (7) Setup writing fork_repository into .claude/personal/stack.toml is now the same
-      thing the skill does interactively, so setup does it at install time and the skill's
-      question is the fallback - do not build a second asker.
+      One real defect rather than a no-op, found by reading the script rather than reasoning about
+      the deletions: check-stack-setup.sh:51-55 required STACK_ROUTINE_DOCUMENT and
+      STACK_ROUTINE_PROMPT_FILE and :62 reported them present by name, both pointing at files that
+      exist nowhere - so the check reported needs-setup on a correctly installed checkout. Both
+      constants now resolve to .claude/skills/stacked-pr-maintenance/, written failing first. That
+      fixed fork-overlay for free: OVERLAY_FILES already listed both, so an overlay was about to
+      ship tooling with no instructions.
+
+      The ~120-line remote inference is deleted, closing #106's two deliberately-open threads
+      (stack.toml:23 and stack.py:84, both replied to and resolved). AmbiguousForkRemoteError is
+      gone because ambiguity is unreachable once the fork is named; ForkRemoteNotFoundError becomes
+      ForkRepositoryNotConfiguredError at the same exit 4, so the maintenance skill's step 0 keeps
+      the status it keys on. RemoteResolution is symmetric now - a missing fork remote yields a
+      git remote add command exactly as a missing upstream already did, which is what lets setup
+      run before either remote exists. Setup writes fork_repository at install time and merges the
+      override file rather than replacing it: both writers exist now, and a whole-file write
+      silently discarded whichever ran first (a defect nobody had recorded). --fork/--upstream take
+      an owner/name, a URL, or a remote.
+
+      408 tests pass across the three directories CI runs, was 334 on this branch before the
+      rebase. Scratch fixtures now build their bare repositories at paths naming an owner/name and
+      address them as file:// URLs - not cosmetic: remotes are matched by the repository their URL
+      names, and a bare local path deliberately names none. Verified live in this clone: the
+      stack_tooling_files row reads ok, configuration exits 4 naming both ways to answer, and
+      resolves when told. Still unverified, same reason as #107: live label creation, exercised
+      only through a stub because this environment's token is a fine-grained installation token.
+
+  - id: stack-maintenance-executor
+    branch: null
+    title: "Deterministic maintenance executor: board, fast-forward, restack, run-report"
+    track: stack-tooling
+    depends_on: [stack-tooling-on-main]
+    status: not_started
+    notes: >
+      User's proposal, 2026-08-03: automate the stacking pass with a deterministic script that
+      fetches the relevant pull requests, performs the git commands, and reports everything - less
+      work for the session running the skill, and more reliable. The gap is real and was verified
+      rather than assumed: grep -n "git push" over stack.py's 1,600 lines returns nothing. stack.py
+      is read-only derivation only, so every fetch, merge, rebase and push in the workflow is
+      performed by a session following prose, and board.json is hand-assembled from MCP output -
+      the same hand-assembled-input failure class as #119, where a dropped field was
+      indistinguishable from a legitimate one.
+
+      Four commands in a new module (.claude/stack/maintenance.py + its own test module), so the
+      only edits to #106's files are the SKILL.md steps and the dispatch wiring: board --write
+      (fetches the fork's open pull requests itself), fast-forward (step 2, refusing a
+      non-fast-forward rather than forcing), restack (drives restack-plan, runs preflight before
+      every push, never force-pushes without the rebase label, reporting per branch pushed /
+      up-to-date / conflict <files> / refused <RefusalReason>), and run-report --json as the one
+      machine-readable document the skill renders and routine-cutover's Action emits directly.
+      SKILL.md steps 2-4 collapse to "run it, act on the report" - the same computed-rather-than-
+      recalled move #106 already made for labels/preflight/promotion-link.
+
+      Step 0 before any design is committed: a credential probe. Already on record are the raw
+      PATCH base 403, the MCP update_pull_request 200, and the stacks endpoints working via curl +
+      GH_TOKEN. The 403's message names the base branch specifically, so three writes are unknown
+      and decide how much can move into code - PUT /issues/{n}/labels, POST /issues/{n}/comments,
+      and a body-only PATCH /pulls/{n}. Record the results either way: routine-cutover's Action
+      needs the same table for its own credential.
+
+      Staying with a session/MCP regardless: base changes, conflict resolution, and whichever of
+      the three probed writes come back blocked. Scoped as its own item rather than folded into
+      #106 (user's call): the executor is new files that stand alone, #106 is already 3,413
+      additions across 29 commits and out of draft after a 25-comment review round, and this is a
+      direct enabler of routine-cutover's no-LLM endgame. It does not reverse decision 11 - that
+      cut structure derivation in favour of GitHub's stack object; this executes an already-derived
+      plan.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script

@@ -13,7 +13,8 @@ Kickoff session: https://claude.ai/code/session_01FJUE2ePxVHbFSVegZ9WRtP
    CI result cannot be separated from anything inherited.
 2. Check whether #98 has picked up the "Handed to #98" items below before
    implementing anything that touches `condition_resolver.py`, `interface.py`
-   or `progress.py`.
+   or `progress.py`. Item 4 there (segregating `ExpertInterface`) changes the
+   shape this slice consumes, so its outcome gates step 4's engine work.
 3. Cut `D-core-single-class` from `origin/D-core-expert` (not from `main`).
    Do *not* cascade the stack first — see the staleness assumption below.
 4. Work through the plan below, tests first.
@@ -91,20 +92,39 @@ slice consumes the results and must not re-implement them.
    type-only and cycle-free: `interface.py:38` already imports `ResolvedCondition` under
    `TYPE_CHECKING`, and `condition_resolver.py` has `from __future__ import annotations` plus its
    own `TYPE_CHECKING` block.
-2. **Null-Object defaults on `interface.py` + `progress.py`.** `make_progress_reporter()` returns
+2. **Null-Object defaults for progress and save.** `make_progress_reporter()` returns
    `Optional[ProgressReporter]` today (`interface.py:310`, returns `None`); `on_save` is
    `Optional[Callable[[], None]] = None` (`:181`) with `save()` guarding
    `if self.on_save is not None` (`:190`). Add `NullProgressReporter` to `progress.py` (alongside
-   the existing `SpyProgressReporter`), make the return type non-`Optional`, default `on_save` to
-   a no-op, drop the guard.
+   the existing `SpyProgressReporter`) and make both non-`Optional` so no caller guards on `None`.
+   Item 4 decides *where* they live — on the RDR, not on `ExpertInterface`.
 3. **`ProgressDescription` `StrEnum` in `progress.py`** (thread `single_class.py:67`) — replaces
    the `_FITTING_DESCRIPTION` module global. The enum belongs with progress reporting; only the
    engine consumes it.
-4. **Open question, not a decision:** should `save()` and `make_progress_reporter()` be promoted
-   from `ExpertInterface` onto `Expert`, so the engine stops reaching through
-   `expert.interface.…`? This session's default is no — they stay on `ExpertInterface`
-   (`expert.py` has no reference to either today). It changes #98's public API, so it is cheaper
-   to settle while #98 is open than after this slice depends on it.
+4. **Segregate `ExpertInterface`** (supersedes the earlier "promote onto `Expert`?" question).
+   The interface bundles three responsibilities: expert Q&A (`_run`, `interact`,
+   `_build_namespace`, `_validate`, `_missing_required`, `_render_header` — genuinely the
+   `Expert`'s), model persistence (`on_save`, `save()`), and fitting progress
+   (`make_progress_reporter()`). The last two are the RDR's, and the mega-branch proves it:
+   `single_class.py:439-440` *writes* to the expert's interface —
+   `expert.interface.on_save = lambda: save_rdr_with_case(self, self.save_path)` — installing a
+   callback built from the RDR's own `save_path`. Nothing else in `krrood/src` references
+   `on_save`, `save()` or `make_progress_reporter()`; the only `make_progress_reporter` overrides
+   anywhere are two test doubles that subclass `FunctionInterface` just to inject a progress spy
+   (`test_single_class_rdr.py:110`, `test_fit_convergence.py:70`).
+
+   So: the RDR takes a `ProgressReporter` and a save strategy as its own collaborators with
+   Null-Object defaults, and `ExpertInterface` keeps only the Q&A surface. This subsumes item 2 —
+   the Null-Object defaults land on the RDR's collaborators rather than on `ExpertInterface`.
+   Consequences: `expert.interface.on_save = …` disappears, the `expert is not None` guard around
+   progress disappears (progress belongs to the fitting loop, expert or no expert), and test
+   doubles pass a `SpyProgressReporter` in instead of subclassing an interface.
+
+   Cost to weigh: progress and Q&A currently share a session — in the IPython case the bar and
+   the prompt render into the same shell, and `make_progress_reporter()` living on the interface
+   is what lets the interactive interface wire the bar to that shell. After the split the
+   interactive layer constructs both and hands them in. D-ui (#76) is the PR that feels this, and
+   it has not merged, so now is the cheap moment.
 
 Staying here: `RDRDidNotConvergeError` and the expert-required exception in `rdr/exceptions.py`.
 Both are engine-specific and only meaningful once the convergence loop exists.
@@ -121,7 +141,8 @@ stop mentioning plans/phases/history. The auto condition-resolver and `resolutio
 `expert-capabilities` track.
 
 From this session: branch `D-core-single-class`; tests stay on `unittest.TestCase` to match #98;
-Null-Object stays on `ExpertInterface` (no promotion to `Expert`); `_observe`/`_trace` both kept.
+`_observe`/`_trace` both kept. Progress and save move off `ExpertInterface` onto the RDR as its
+own collaborators — not promoted to `Expert` (see the handoff section's item 4).
 
 ## Work
 

@@ -128,14 +128,38 @@ items:
   depends_on:
   - ripple-down-rules-refactor
   status: in_progress
+  session: https://claude.ai/code/session_012xQWiZExn9frHtbfm44eR1
   notes: 'Recorded blocker (base_expressions.py conflict over _last_parent_of_type_) cleared:
     PR #89 merged to main 2026-07-30 and cascaded the fix down the stack as predicted. Verified
     live, not just via the notes: GitHub reports #41''s mergeable_state as clean, and an independent
     local `git merge-tree` dry run of main against rdr-backward-inference produced zero conflict
-    markers. CI is green (18/18 checks). The 4 previously-unresolved review threads were stale
-    GitHub bookkeeping only -- their content was already addressed by commit 7faa806, confirmed
-    against the current file heads -- replied to with the specific evidence and resolved 2026-07-31.
-    No code changes needed on #41 itself; ready for the steward to merge.'
+    markers. The 4 review threads open then were stale GitHub bookkeeping only -- their content was
+    already addressed by commit 7faa806, confirmed against the current file heads -- replied to with
+    the specific evidence and resolved 2026-07-31.
+    2026-08-02: reparented onto main (PR comment 5157212715) now that ripple-down-rules-refactor''s
+    content has landed via #53, so depends_on below is satisfied and the diff is the real
+    7 files / +1,318 rather than the stale-merge-base 268 files.
+    2026-08-03: the "ready for the steward to merge" claim above is superseded -- a new review
+    thread (r3702021144, backward_inference.py:64) asks whether GuardCondition.negated should be
+    replaced by wrapping the guard expression in Not(), considering every use of the guard across
+    this plan rather than just this PR. It is a discussion request, so the PR is blocked on the
+    developer''s call, not on code. Answered at r3702169709 recommending the field be kept: the
+    alternative was already designed and rejected in backward_inference_design.md ("no live tree
+    mutation"), and the hazard was re-verified live -- factories.not_ -> _invert_ -> Not(self) ->
+    base_expressions.py:299 child._parent_ = self reparents a live rule-tree node, the same defect
+    class dag-facade-hardening (#96) exists to fix. Recommendation carries an expiry: Not()-wrapping
+    is cleaner at 4 of 6 concrete sites and wins outright once #96 lands a non-mutating negation.
+    CI green, 20/20 checks on head cbbf7bf3. Thread deliberately left unresolved. Full account in
+    roadmap.md section 12.
+    2026-08-03 (later): resolved -- the developer resolved thread r3702021144 without counter-argument
+    and marked #41 ready for review. Decision: keep GuardCondition.negated. All 23 review threads are
+    now resolved, draft: false, mergeable_state: clean, so #41 is genuinely ready for the steward to
+    merge as the stack bottom. Three small follow-ups offered in the reply are NOT yet applied and
+    need the developer''s go-ahead, since pushing would force the PR back to draft per the standing
+    convention: record the no-live-tree-mutation rationale in the field docstring (its design doc is
+    on the dropped krrood/docs/ path), correct the misleading evaluation comment at
+    backward_inference.py:82-90, and TDD-pin whether the isinstance(OperationResult) branch in
+    holds_for is reachable before deleting it.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
@@ -233,7 +257,21 @@ items:
     retyped to carry the exception itself (touches D-core-support''s file, confirmed
     with the developer). test_ask_for_rule.py from the D-core-engine mega-branch is
     actually an EQLSingleClassRDR integration test in disguise and was not ported -
-    flagged for d-core-single-class to pick up instead.'
+    flagged for d-core-single-class to pick up instead. 2026-08-03: d-core-single-class
+    planning handed four more items back to this PR, reported at PR #98 comment 5156702002 -
+    ConditionResolver.resolve taking CaseContext (4 definitions in condition_resolver.py
+    plus test_condition_resolver.py''s 10 call sites), Null-Object defaults for progress
+    and save, and a ProgressDescription StrEnum replacing the _FITTING_DESCRIPTION global.
+    All target files already on D-core-expert, so they belong to this PR''s parameter-object
+    topic. Revised the same day (comment 5163364467): the fourth item was originally a yes/no
+    on promoting save() / make_progress_reporter() from ExpertInterface onto Expert; it is
+    now a proposal to segregate ExpertInterface instead, moving progress and save onto the
+    RDR as its own collaborators and leaving only the expert Q&A surface on the interface.
+    That subsumes the Null-Object item - the defaults attach to the RDR''s collaborators
+    rather than to ExpertInterface. Larger ask of this PR than the original framing, and it
+    has an integration cost D-ui (#76) absorbs, so it needs the developer''s call.
+    Also: this PR has never had CI run on it (get_status on ed805dc7 returns
+    state=pending, total_count=0).'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
@@ -242,8 +280,17 @@ items:
   depends_on:
   - d-core-expert
   status: not_started
-  notes: single_class.py + engine tests; classify->UNSET, raise+drop max_passes, CaseContext object, Null-Object
-    progress/save.
+  notes: 'single_class.py + engine tests; classify->UNSET, raise+drop max_passes, CaseContext object.
+    2026-08-03: implementation plan approved and saved to
+    .claude/personal/pr-progress/D-core-single-class.md - not started, no branch cut. Scope
+    narrowed: the Null-Object progress/save work, the ConditionResolver CaseContext change and
+    the ProgressDescription enum were handed to d-core-expert (#98), since every target file
+    already exists on D-core-expert; this item consumes them rather than building them. What
+    stays: single_class.py itself, RDRDidNotConvergeError + the expert-required exception in
+    rdr/exceptions.py, and the six engine test files ported from mega-branch e650d968. Before
+    starting, get a CI or local-test baseline on D-core-expert (#98 has no CI runs). Do not
+    cascade the stack first - it is stale but merge-tree-clean and disjoint from this item''s
+    files.'
 - id: d-core-backend
   title: 'RDR engine: underspecified-query RDR backend'
   branch: D-core-backend

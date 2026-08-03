@@ -59,8 +59,15 @@ Both failures recurred identically on the post-restack head `b21c693a`:
 only the random entity UUID differing) and the `coraplex_real_tracy` demo
 (run 30760569189 — same `semantic_digital_twin.world` circular imports, exit 1).
 Restacking onto a newer notes-branch tip does not help, because the notes branch
-itself is what lags `main`. Treat any further failure on this PR as this same
-cause unless the job name is one not yet seen.
+itself is what lags `main`. Both recurred again on `56a6e1b4` after a second
+restack on 2026-08-03; no source file differs between those two heads, only
+`.claude/` data. Treat any further failure on this PR as this same cause unless
+the job name is one not yet seen.
+
+Trap when checking that: these restacks keep moving the base, so a three-dot
+`git diff origin/claude/personal-notes...<branch>` against an unfetched base ref
+shows the base's own commits as if this PR added them — it read as 7 files once.
+Fetch the base first, or just trust the API's `changed_files`, which stays at 1.
 
 Inherent to every PR targeting this branch, not to this one. Not chased, and
 deliberately not "fixed" by merging `main` into the notes branch — that would be a

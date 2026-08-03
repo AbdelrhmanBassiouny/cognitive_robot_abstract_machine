@@ -568,3 +568,194 @@ lets Phase D's audit see `rdr/rule_tree*.py`, which is not on `main` yet.
 
 `insert-at-ownership-parentage` is the deliberate exception: small, off `main`, gated on
 nothing, and it *removes* a future cascade rather than adding one.
+
+## 11. Addendum (2026-08-03) — `d-core-single-class` planned; four items handed back to #98
+
+`/plan-item-kickoff rdr-refactor d-core-single-class` produced an approved implementation
+plan, saved to `.claude/personal/pr-progress/D-core-single-class.md`. No branch cut and no
+code written — the implementation runs in a fresh session, since the planning session had
+consumed most of its context reading #68's 71 review threads and the mega-branch.
+
+### The scope handoff
+
+Planning surfaced that several changes the split had filed under `d-core-single-class`
+target files that already exist on `D-core-expert`: `condition_resolver.py`,
+`interface.py` and `progress.py`. They were reassigned to #98 and reported there
+(comment `5156702002`):
+
+1. `ConditionResolver.resolve` takes `CaseContext` — four definitions (abstract at
+   `condition_resolver.py:72`, `TargetKnowledgeResolver:115`,
+   `CornerCaseKnowledgeResolver:172`, `ChainConditionResolver:208`), eight flattened
+   parameters to three, plus `test_condition_resolver.py`'s 10 call sites. This is
+   comment 2 of 3 in the `single_class.py:239` thread — #98 answered comment 1 (the
+   expert) and left the resolver half.
+2. Null-Object defaults for progress and save (`NullProgressReporter` in `progress.py`,
+   nothing `Optional` left for a caller to guard on).
+3. A `ProgressDescription` `StrEnum` replacing the `_FITTING_DESCRIPTION` module global.
+4. Segregate `ExpertInterface` — see below.
+
+### Item 4: from "promote onto `Expert`?" to "segregate the interface"
+
+Item 4 was first posted as a yes/no question — should `save()` and
+`make_progress_reporter()` move from `ExpertInterface` onto `Expert`, so the engine stops
+reaching through `expert.interface.…`? The developer pushed back with the better question:
+should the interface object be owned by the RDR rather than hidden inside `Expert`? Tracing
+the consumers showed the original framing was wrong, and the answer was revised the same
+day (comment `5163364467`).
+
+The framing error: it treated the problem as *which class exposes two methods*, when the
+actual defect is that `ExpertInterface` carries three unrelated responsibilities — expert
+Q&A (`_run`, `interact`, `_build_namespace`, `_validate`, `_missing_required`,
+`_render_header`), model persistence (`on_save`, `save()`), and fitting progress
+(`make_progress_reporter()`). Only the first is genuinely the `Expert`'s.
+
+The evidence, from the mega-branch's `single_class.py:439-440`:
+
+```python
+if expert is not None and self.save_path is not None and expert.interface.on_save is None:
+    expert.interface.on_save = lambda: save_rdr_with_case(self, self.save_path)
+```
+
+The engine reaches two levels deep and *writes* to the expert's interface, installing a
+callback built from the RDR's own `save_path`. The save behaviour was always the RDR's,
+smuggled into the interface because that is where the plumbing lived. Corroborating: nothing
+else in `krrood/src` references either method, and the only `make_progress_reporter`
+overrides anywhere are two test doubles subclassing `FunctionInterface` just to inject a
+progress spy (`test_single_class_rdr.py:110`, `test_fit_convergence.py:70`).
+
+Resolution: the RDR takes a `ProgressReporter` and a save strategy as its own collaborators
+with Null-Object defaults; `ExpertInterface` keeps only the Q&A surface. Giving the RDR the
+*whole* interface — the developer's literal suggestion — overshoots, since that would hand
+the engine the Q&A mechanism and force the RDR to pass it back on every `ask_for_*` call.
+This subsumes item 2: the defaults attach to the RDR's collaborators, not to
+`ExpertInterface`.
+
+The cost, which is real: progress and Q&A share a session — in the IPython case the bar and
+the prompt render into the same shell, and `make_progress_reporter()` on the interface is
+what wires the bar to that shell. After the split the interactive layer constructs both and
+hands them in. **D-ui (#76) is the PR that absorbs this**, and it has not merged, so this is
+the cheap moment; afterwards it is a change across two merged layers.
+
+The rule applied: split on what the work *is*, not on which PR happened to notice it. One
+parameter-object refactor read twice by a reviewer is worse than one PR carrying it whole,
+and #98 had already set the precedent by touching `interface.py` when its own review
+required it.
+
+### Two facts verified live, both worth carrying forward
+
+**#98 has never had CI run on it.** `get_status` on head `ed805dc7` returns
+`state: pending, total_count: 0`; the check-runs list is empty. It is `mergeable_state:
+clean`, which is what the `open_ready` dependency rule keys on — so the rule passes while
+nothing has actually verified the branch. Get a baseline before stacking ~3,500 lines of
+ported tests on it, or the next PR's first CI result cannot be separated from what it
+inherited. Worth noting the general shape: `open_ready` is a proxy for "safe to build on"
+and does not imply the branch was ever tested.
+
+**The stack is still stale, and that is fine to build on.** Unchanged since §10:
+`D-core-support` `8eb7518a` (2026-07-19) still does not contain `D-core-serialization`
+`2577a2e3`, `D-core-expert` `ed805dc7` sits on that stale support, and `main` `82501888`
+is not an ancestor of the serialization tip either. But
+`git merge-tree --write-tree origin/D-core-expert origin/D-core-serialization` exits 0
+with no conflicts, and the merged tree carries zero stale `code_generation.type_hints`
+references. The missing commits are entirely in `code_generation/` while
+`d-core-single-class` touches only `rdr/` and `test_eql_rdr/`. So the cascade is *not* a
+prerequisite for starting the item — it is the steward's own job, and it has to be redone
+before anything merges anyway since `main` keeps moving.
+
+## 12. Addendum (2026-08-03) — `rdr-backward-inference` (#41): the `negated`-vs-`Not()` design question
+
+§8 closed this item as "ready for the steward to merge, no code changes needed." That is no
+longer true, and the reason is worth recording because it is a *recurring* question rather
+than a new one.
+
+### What changed
+
+- **2026-08-02: #41 was reparented onto `main`** (PR comment `5157212715`), since
+  `ripple-down-rules-refactor`'s content landed via #53. The Files-changed view had been
+  showing 268 files / +27,825 purely from measuring against a stale merge-base; the real
+  diff is 7 files / +1,318. `mergeable_state: clean`, CI green 20/20 on head `cbbf7bf3`.
+- **2026-08-03: a new review thread** (`r3702021144`, `backward_inference.py:64`) asks
+  whether `GuardCondition.negated` should be dropped in favour of wrapping the guard
+  expression in `Not()` so that "guard expression must always be true" — explicitly asking
+  for the answer to consider every use of the guard across this plan, not just #41.
+
+### The question already had an answer, on a branch that was marked for deletion
+
+`krrood/docs/eql/backward_inference_design.md` on the `rdr-engine` mega-branch, "Key Design
+Decisions" #1, records the alternative as designed and rejected:
+
+> `GuardCondition` with negated flag — no live tree mutation. Calling `not_()` on a live EQL
+> expression node sets `expression._parent_` to the new `Not` wrapper, corrupting the
+> original tree's parent references.
+
+Re-verified live rather than taken on faith: `factories.not_` → `SymbolicExpression._invert_`
+→ `Not(self)` → `base_expressions.py:299` `child._parent_ = self`. The hazard is real, and it
+is the same defect class `dag-facade-hardening` (#96) exists to fix (see §10).
+
+**That doc is on the stray `krrood/docs/` path §2 records as dropped** — not the built
+`krrood/doc/` tree, referenced by nothing. So the rationale for a field that is now being
+questioned survives only on a stale branch. This is the same staleness class §5 caught for
+`rdr/why-answer`'s progress note, except the casualty here is a design decision rather than
+a status. Whatever is decided, the reason belongs in the field's own docstring.
+
+### The eight use sites
+
+`Not()`-wrapping is genuinely cleaner at four of six concrete sites — `holds_for` loses its
+inversion, `condition_resolver._materialize` disappears entirely, `_active_path`'s
+`and not guard.negated` reduces to an identity check, and `%knows`'s display branch
+(`magics.py:142`) goes away. Against that: `_leaf_guards`' De Morgan recursion still needs an
+internal polarity parameter either way (eager wrapping builds `Not(Not(x))`), and the
+structural cost is reparenting live nodes. Small distributed wins, one structural hazard.
+
+**Verbalization does not decide it, contrary to expectation.** Both shapes work today:
+`ConditionAssembler.predicate(comparator, *, negated: bool = False)` is already exactly the
+`(expression, polarity)` pair, and `NotComparatorRule` / `NotBooleanAttributeRule`
+(`grammar/conditions/rules.py:495-560`) render `Not(Comparator)` by unwrapping it back into
+that same call with `negated=True`. So the Why track (W1/W2, where `SufficientConditionSet`
+is the reserved contrastive mechanism) is served either way.
+
+### Two findings for whoever picks this up
+
+- **`_materialize` violates the decision it is built on.** `condition_resolver.py:104` calls
+  `not_(guard.expression)` on a live tree node — the exact mutation the flag exists to avoid,
+  merely deferred from traversal time to rule-insertion time. Not fixed here: a non-mutating
+  negation needs #96's façade work, and #41 is the bottom of a seven-PR stack where every
+  extra commit costs a cascade.
+- **`holds_for`'s evaluation comment is misleading.** `backward_inference.py:82-90` implies a
+  `Not()` guard would not evaluate to a usable truth value. It would: `evaluate()`
+  (`base_expressions.py:210`) maps `_process_result_` over `_true_results_()`, which already
+  filters `if result.is_true`, so `any(...)` tests whether a true binding survived. The same
+  reading suggests the `isinstance(result, OperationResult)` branch is unreachable, since
+  `evaluate()` yields processed values — worth pinning with a test before deleting it.
+
+### Disposition
+
+Answered at `r3702169709`: keep the field, with the expiry condition stated plainly —
+`Not()`-wrapping wins outright once #96 lands a non-mutating negation. The thread is
+deliberately **left unresolved**; the call is the developer's, and no code was changed on #41
+pending it.
+
+### Resolution (same day)
+
+The developer resolved thread `r3702021144` without a counter-argument and marked #41 **ready
+for review**. The decision is therefore: **keep `GuardCondition.negated`**, on the
+no-live-tree-mutation ground, with the recorded expiry — revisit if `dag-facade-hardening` (#96)
+lands a non-mutating negation.
+
+All 23 review threads on #41 are now resolved, `draft: false`, `mergeable_state: clean`, CI green
+20/20. #41 is genuinely ready to merge as the stack bottom — the §8 claim that was stale this
+morning is now true for a different reason.
+
+The three follow-ups offered in the reply are **not applied**, and deliberately so: pushing to #41
+would force it back to draft under the standing always-drafts-until-ready convention, undoing the
+developer's own ready-for-review signal minutes after they gave it. They need an explicit
+go-ahead, and are cheap to carry on whichever PR next touches these files if #41 merges first:
+
+1. Record the no-live-tree-mutation rationale in the `negated` field's docstring — its design doc
+   is on the dropped `krrood/docs/` path and will not land, so the reason is otherwise lost.
+2. Correct the misleading evaluation comment at `backward_inference.py:82-90`.
+3. TDD-pin whether the `isinstance(result, OperationResult)` branch in `holds_for` is reachable,
+   and delete it if not.
+
+The `_materialize` live-node mutation (`condition_resolver.py:104`) remains open and unplaced —
+it is a real defect, and not this PR's to carry.
