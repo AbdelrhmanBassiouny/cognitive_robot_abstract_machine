@@ -32,6 +32,40 @@ WORK_BRANCH = "some-work-branch"
 The throwaway branch a scratch repository is left checked out on.
 """
 
+REQUIREMENTS_FILE = ".claude/skills/plan-dashboard/requirements.txt"
+"""
+The requirements file check-setup.sh derives the dependency check from.
+"""
+
+TOOLING_FILES = (
+    ".claude/skills/plan-dashboard/build_dashboard.py",
+    ".claude/skills/plan-dashboard/refresh_dashboard.sh",
+    REQUIREMENTS_FILE,
+    ".claude/skills/plan-dashboard/plan-schema.md",
+)
+"""
+The files check-setup.sh's ``tooling_files`` check requires, relative to the project
+root.
+
+Kept as literals rather than sourced from resolve-personal-notes-config.sh so a rename
+that breaks the check has to be made deliberately in both places, instead of the tests
+silently following along and asserting nothing.
+"""
+
+SESSION_START_SETTINGS = (
+    '{"hooks": {"SessionStart": [{"hooks": [{"type": "command",'
+    ' "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"}]}]}}\n'
+)
+"""
+A settings file registering the SessionStart hook, as check-setup.sh expects to find it.
+"""
+
+INSTALLED_REQUIREMENT = "pytest>=1\n"
+"""
+The requirements file's content: one requirement that is certainly installed wherever
+these tests run, so the dependency check has a green baseline it cannot flake on.
+"""
+
 
 def initialize_bare_repository(path: Path) -> Path:
     """
@@ -115,6 +149,44 @@ class ScratchRepository:
                 HOOKS_SOURCE_DIRECTORY / script_name,
                 self.project_root / ".claude" / "hooks" / script_name,
             )
+
+    def write_setup_prerequisites(self) -> None:
+        """
+        Write everything check-setup.sh requires of a set up clone, apart from the
+        personal-notes branch and CLAUDE.local.md.
+
+        Leaves CLAUDE.local.md out deliberately: session-start.sh writes it, so a test
+        of that script must not find it already there.
+        """
+        for tooling_file in TOOLING_FILES:
+            self.write(tooling_file, "placeholder\n")
+        self.write(REQUIREMENTS_FILE, INSTALLED_REQUIREMENT)
+        self.write(".claude/settings.json", SESSION_START_SETTINGS)
+        self.write(".gitignore", "CLAUDE.local.md\n")
+
+    def run_hook_script(
+        self, script_name: str, *arguments: str
+    ) -> subprocess.CompletedProcess[str]:
+        """
+        Run one of the installed hook scripts from the project root.
+
+        Returns the finished process rather than asserting on it, since a hook's exit
+        code and stderr are often what a test is about.
+
+        :param script_name: File name within the scratch layout's hooks directory.
+        :param arguments: The arguments to pass to the script.
+        :return: The finished subprocess.
+        """
+        return subprocess.run(
+            [
+                "bash",
+                str(self.project_root / ".claude" / "hooks" / script_name),
+                *arguments,
+            ],
+            cwd=self.project_root,
+            capture_output=True,
+            text=True,
+        )
 
     def write(self, relative_path: str, content: str) -> Path:
         """

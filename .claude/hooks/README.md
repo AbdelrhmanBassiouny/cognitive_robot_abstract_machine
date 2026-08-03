@@ -41,6 +41,13 @@ To do the same by hand:
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
+Every session start prints its own summary, so neither of the two things below has to be
+remembered. Its `setup:` line runs `check-setup.sh` for you and names any check that still needs
+setup; its `plan:` line distinguishes *no plans are tracked here* from *plans exist and no item
+tracks this branch* — the second being your cue to add the item before starting work, not after.
+Both lines appear only once a personal-notes branch exists, so a clone that uses none of this
+stays silent.
+
 ## Editing your notes
 
 - **Ask Claude** — *"add \<X\> to my personal notes"*, *"edit my personal notes"*. Nothing else to
