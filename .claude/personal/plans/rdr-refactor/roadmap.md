@@ -818,3 +818,68 @@ all — the 206 failures in its sweep were entirely environmental, which is exac
 before/after comparison (206/935 vs 206/937) rather than the absolute number was the signal. CI
 runs the real environment and passed. A local sweep in a bare container can only show *no new
 failures*; it cannot show *no failures*.
+
+## 13. Addendum (2026-08-03) — `eql-truth-unification` (#99): reconciled with PR #89, landed first
+
+A `/plan-item-resolve` session picked up `eql-truth-unification`, whose `mergeable_state` had gone
+`dirty`. The maintenance bot had reported the same restack conflict three times since 2026-07-30
+(20:12, then 08-03 01:19, then 08-03 09:38) without anyone resolving it.
+
+### Root cause
+
+**PR #89** (`conditions-root-drop-dead-parent-recovery`) merged to `main` on 2026-07-30 and
+independently added a `_true_results_()` method plus reworked
+`SatisfiedConditionTracker.on_conclusions_processed` — the same two things #99 changes — without
+knowledge of #99's `TruthValuedExpression` fix. #99's own coordination comment on #94 named
+#89/#90/#92 as touching the same functions, but that comment was written 2026-07-26, before #89's
+actual content existed. #89 landed first, so #99 had to reconcile onto it.
+
+### Resolution
+
+Reproduced the conflict locally (a real `git merge origin/main`, not just `merge-tree`, to see the
+actual conflicting content) and resolved three files:
+
+- **`base_expressions.py`**: `main`'s `_true_results_()` (from #89) was an unconditional
+  `result.is_true` filter — exactly the bug #99 exists to fix (a query selecting `0`/`[]` would be
+  dropped). Kept `_true_results_()` as the named method (`main` already calls it elsewhere), but
+  moved #99's `TruthValuedExpression` guard into its body; `evaluate()` goes back to the simple
+  `main`-style call through it. One duplication turned out already resolved on `main`'s own side:
+  #89 also added a name-lookup helper that would have overlapped with #99's
+  `_subtree_expressions_with_ids_`, but `main`'s own review deleted it outright on 2026-07-30
+  (commit `a4e0e39f`) once its callers switched to asserting on ids directly.
+- **`evaluation.py`**: kept #99's simplified `on_conclusions_processed` body (one uniform
+  `is_condition_participant`/bindings lookup, dropping `main`'s `chain_truth_map` +
+  `LogicalOperator` special case — exactly #99's own stated simplification), but wired it onto
+  `main`'s `active_conditions_root.has_condition` guard rather than this branch's own
+  `expression._conditions_root_ is expression._root_` check. `main`'s guard is the newer,
+  dedicated mechanism (`test_evaluation_context.py`, 10 tests) that other code in the merged file
+  already depends on; this branch had never seen it.
+- **`test_explanation.py`**: both sides had independently added a `_get_true_results(query)` test
+  helper with different bodies — consolidated to delegate to the now-fixed `_true_results_()`.
+
+### Verification
+
+`test/krrood_test/test_eql` before vs. after the merge: **61 failed / 78 errors on both sides,
+byte-for-byte identical failed+error test names** (a pre-existing `random_events` packaging gap in
+this sandbox — unrelated to anything #99 or #89 touches — blocks every test that reaches the real
+backend), with `+8` passed purely from tests `main` itself added since this branch last synced.
+Targeted re-runs of everything the resolution actually touches all pass cleanly:
+`test_evaluation_context.py` (10/10), the `test_satisfied_conditions_*`/`test_condition_graph_*`
+family in `test_explanation.py` (11/11), `test_operation_result_truth.py` (26/26, excluding the one
+test blocked by the same environmental gap).
+
+Pushed as `857fb74f`. PR converted back to draft per the always-drafts-until-ready convention,
+pending CI on `coraplex`/`semantic_digital_twin` — the packages this PR's cost fix has broken
+before, and which a local sandbox missing `random_events` cannot exercise at all.
+
+### The 4 open review threads from 2026-07-30
+
+All four (`base_expressions.py:376,394,907,1183`) already carried a full Claude analysis ending in
+"your call" with no code change proposed. The developer approved this session's plan, which covered
+signing off on all four — replied to each with a one-line pointer and resolved them.
+
+### Not touched
+
+The `#67`/`#99` `is_condition_false`-removal collision recorded in §10 / tracking-issue comment
+`5146833251` — #67 hasn't merged, so it isn't part of `main` yet. Still "whichever lands second
+reconciles it."

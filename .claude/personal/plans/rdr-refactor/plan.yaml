@@ -577,6 +577,26 @@ items:
     fail loudly instead of silently compiling. _evaluate_child_as_condition_ was kept (now a pass-through)
     so PRs #90/#92 keep their recording hook. Design doc landed with the PR, rewritten to match.
 
+    2026-08-03: a /plan-item-resolve session found and fixed the real blocker — mergeable_state had gone
+    dirty (restack conflicts in base_expressions.py, evaluation.py, test_explanation.py, recurring since
+    2026-07-30 across 3 failed bot restack attempts). Root cause: PR #89 (conditions-root-drop-dead-parent-recovery)
+    merged to main first and independently added a _true_results_() method plus reworked
+    SatisfiedConditionTracker.on_conclusions_processed — the same two things #99 changes — without knowledge
+    of #99''s TruthValuedExpression fix (#99''s own coordination note named #89/#90/#92 but was written before
+    #89''s actual content existed). Resolved: _true_results_() kept as the named method (main already uses
+    it elsewhere) but given #99''s TruthValuedExpression guard; on_conclusions_processed kept #99''s simplified
+    uniform-bindings-lookup body but wired onto main''s newer, already-tested active_conditions_root.has_condition
+    guard rather than this branch''s own expression._conditions_root_ is expression._root_ check; the duplicate
+    test helper _get_true_results consolidated to delegate to the fixed method. Verified: test/krrood_test/test_eql
+    before/after the merge has byte-for-byte identical failed+error sets (61 failed / 78 errors both sides,
+    all tracing to a pre-existing random_events packaging gap in the sandbox, unrelated to this change) with
+    +8 passed from main''s own growth; every test directly exercising the touched logic passes (test_evaluation_context.py
+    10/10, the satisfied-condition/condition-graph family in test_explanation.py 11/11, test_operation_result_truth.py
+    26/26 excluding the one environment-blocked test). Pushed as 857fb74f, PR converted back to draft per the
+    always-drafts-until-ready convention pending CI. Also resolved the 4 review threads left open from the
+    2026-07-30 round (base_expressions.py:376,394,907,1183) — each already had a full analysis with no code
+    change proposed, just awaiting sign-off; replied and resolved all four.
+
     '
 - id: rdr-concept-trees
   title: NRDR concept layer
