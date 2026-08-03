@@ -62,12 +62,21 @@ New red: `test_each_lib (semantic_digital_twin)` — **not the old
 2026-07-20, "Fix MujocoBuilder dropping materials on geoms sharing a texture")
 and arrived here only via the restack. Analysis posted on the PR.
 
-## Next
+## Head 49f5b4c2 (2026-08-03) — third robotics failure, third cause
 
-- Outstanding comparison: `test_each_lib (semantic_digital_twin)` on **#106**
-  itself, which was still running. If it fails there too, this is inherited
-  from the base and settled. Named in the PR comment so it can be checked by
-  whoever looks next — no scheduled check armed (personal-notes rule).
+Branch merged #106 again (which merged main). Still `.claude/`-only vs base;
+`test_claude_dev_tooling` green. New red: `test_each_lib (giskardpy)`,
+`test_pacer.py::test_with_executor`, `assert 26.0 == 42` — a
+`SimulationPacer(real_time_factor=2.0)` control-cycle count, so throughput
+dependent on the runner. File is from main (2026-03-31), untouched here.
+
+Three distinct causes across three heads (coraplex xdist race,
+semantic_digital_twin materials, giskardpy pacer timing) with nothing in
+common but the runner. **Decided to stop reporting these individually** — said
+so on the PR. Only `test_claude_dev_tooling` going red is signal for this
+branch.
+
+## Next
 - Do not fix semantic_digital_twin or coraplex here — separate root causes,
   other packages; AGENTS.md routes ORM issues via
   `scripts/regenerate_all_orm.py`/the developer.
