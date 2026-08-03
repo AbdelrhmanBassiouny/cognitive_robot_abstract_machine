@@ -1,3 +1,4 @@
+import time
 from copy import deepcopy
 
 import numpy as np
@@ -42,6 +43,8 @@ from coraplex.robot_plans.actions.core.robot_body import (
 from coraplex.view_manager import ViewManager
 from giskardpy.utils.utils_for_tests import compare_axis_angle, compare_orientations
 from rustworkx.rustworkx import NoEdgeBetweenNodes
+
+from probabilistic_model.bayesian_network.bayesian_network import Node
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
 )
@@ -62,7 +65,7 @@ from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.stretch import Stretch
 from semantic_digital_twin.robots.tiago import Tiago
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk, Door
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -742,3 +745,10 @@ def test_transport_open_container(mutable_multiple_robot_apartment, rclpy_node):
     assert dist <= 0.02
 
     plan.plan.validate()
+
+def test_elevator_navigation(_generic_room_setup, rclpy_node):
+    VizMarkerPublisher(_world=_generic_room_setup, node=rclpy_node).with_tf_publisher()
+
+    _generic_room_setup.get_semantic_annotations_by_type(Door)[0].root.parent_connection.position = 1
+
+    time.sleep(100)

@@ -7,7 +7,17 @@ from copy import deepcopy
 import numpy as np
 import objgraph
 import pytest
+
+from semantic_digital_twin.api import (
+    ConnectionSpecification,
+    ActiveConnection1DOFSpecification,
+    RevoluteConnectionSpecification,
+)
 from semantic_digital_twin.robots.daisy import DAiSy
+from semantic_digital_twin.semantic_annotations.mixins import (
+    HasRootBody,
+    HasRootKinematicStructureEntity,
+)
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
@@ -66,11 +76,16 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Elevator,
     Slider,
     Door,
+    Floor,
+    Wall,
+    Aperture,
+    Hinge,
 )
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Vector3,
     Point3,
+    Pose,
 )
 from semantic_digital_twin.utils import (
     rclpy_installed,
@@ -812,6 +827,55 @@ def kitchen_world():
     parser = URDFParser.from_file(file_path=path)
     world = parser.parse()
     world.validate()
+    return world
+
+
+@pytest.fixture(scope="session")
+def _generic_room_setup():
+    world = World.create_with_root_body("root")
+
+    scale = Scale(2, 2, 2)
+    wall_thickness = 0.05
+    door_scale = Scale(wall_thickness, 1, 1.8)
+
+    floor = Floor.create_with_new_body_in_world(name="floor", world=world, scale=scale.xy)
+
+    wall_spec = Wall.get_default_root_specification(
+        name="wall", scale=Scale(wall_thickness, scale.x, scale.z)
+    )
+    with world.modify_world():
+        for i in range(0, 4):
+            yaw = (np.pi / 2) * i
+            wall_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
+                (scale.x / 2) * np.cos(yaw),
+                (scale.y / 2) * np.sin(yaw),
+                0,
+                0,
+                0,
+                yaw,
+            )
+            wall_body = wall_spec.spawn(name=f"wall_{i}", world=world, parent=floor.root, parent_T_self=wall_pose)
+            world.add_semantic_annotation(Wall(root=wall_body))
+
+        door = Door.get_default_root_specification(
+            name="door", scale=door_scale, connection_specification=RevoluteConnectionSpecification(axis=Vector3.Z())
+        ).spawn(world=world,parent=wall_body, parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(z=door_scale.z / 2))
+
+        door.collision.shapes[0].color = Color(1,0, 0, 1)
+        handle = Handle.get_default_root_specification(name="handle").spawn(world=world, parent=door, parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(y=door_scale.y / 2 * 0.9, yaw=np.pi))
+        handle_anno = Handle(root=handle)
+        door_anno = Door(root=door, handle=handle_anno)
+        world.add_semantic_annotation(door_anno)
+        world.get_semantic_annotations_by_type(Door)[0].add(handle_anno)
+
+        door_apeture = Aperture.create_with_new_region_in_world_from_body(
+            "door_apeture",
+            world=world,
+            body=door,
+            parent_T_self=world.compute_forward_kinematics(world.root, door),
+        )
+        world.get_semantic_annotations_by_type(Wall)[-1].add(door_apeture)
+
     return world
 
 
