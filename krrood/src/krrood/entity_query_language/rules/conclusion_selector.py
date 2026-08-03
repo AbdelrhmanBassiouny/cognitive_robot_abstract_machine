@@ -196,10 +196,12 @@ class Refinement(LogicalBinaryOperator, ConclusionSelector):
     def get_operation_result_and_clear_conclusion(
         self, result: OperationResult
     ) -> Iterable[OperationResult]:
-        is_false = result.operand is self.left and result.is_false
+        left_branch_failed = result.operand is self.left and result.is_false
         if result.is_true:
             self._conclusions_.update(result.operand._conclusions_)
-        yield OperationResult(result.bindings, is_false, self, result)
+        yield self._build_operation_result_with_truth_(
+            not left_branch_failed, result.bindings, result
+        )
         self._conclusions_.clear()
 
     @classmethod
@@ -279,8 +281,8 @@ class Next(EQLUnion, ConclusionSelector):
     ) -> Iterable[OperationResult]:
         for child in self._operation_children_:
             for child_result in self._evaluate_child_as_condition_(child, sources):
-                output = OperationResult(
-                    child_result.bindings, child_result.is_false, self, child_result
+                output = self._build_operation_result_with_truth_(
+                    child_result.is_true, child_result.bindings, child_result
                 )
                 if output.is_true:
                     self._conclusions_.update(child_result.operand._conclusions_)

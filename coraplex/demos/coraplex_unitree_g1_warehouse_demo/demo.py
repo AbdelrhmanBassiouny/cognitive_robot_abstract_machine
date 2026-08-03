@@ -60,7 +60,7 @@ PARCEL_SCALE = Scale(0.08, 0.08, 0.14)
 The extents of the transported parcel.
 """
 
-PICK_POSE = Pose.from_xyz_rpy(-0.77, 4.3, 0.785, yaw=np.pi / 2)
+PICK_POSE = Pose.from_xyz_rpy(2.75, 9.3, 0.793)
 """
 Where the parcel starts. Rotated 90 degrees so a FRONT grasp approach can reach it.
 """
@@ -142,6 +142,7 @@ def build_plan(world: World, robot: UnitreeG1) -> Plan:
             NavigateAction(standing_pose_in_front_of(PICK_POSE, world)),
             PickUpAction(parcel, Arms.LEFT, grasp),
             ParkArmsAction(Arms.BOTH),
+            NavigateAction(Pose.from_xyz_rpy(yaw=-1.57, reference_frame=robot.root)),
             NavigateAction(standing_pose_in_front_of(PLACE_POSE, world)),
             PlaceAction(parcel, place_pose, Arms.LEFT),
             ParkArmsAction(Arms.BOTH),

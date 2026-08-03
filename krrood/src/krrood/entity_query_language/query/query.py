@@ -621,6 +621,17 @@ class Query(
         self.build()
         return self._expression_._result_transformers_
 
+    def _result_is_false_(self, result: OperationResult) -> bool:
+        """
+        :param result: A result this query produced.
+        :return: ``False`` always.
+
+        A query's own binding is its selection rather than a truth claim, so selecting a
+        falsy value says nothing about whether the query was satisfied. A query applies
+        its conditions internally and yields only the results that satisfied them.
+        """
+        return False
+
     def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
         """
         :param child_result: The child result to construct the operation result from.
@@ -628,7 +639,6 @@ class Query(
         """
         return OperationResult(
             {v._id_: child_result[v._id_] for v in self._selected_variables_},
-            child_result.is_false,
             self,
             child_result,
         )
