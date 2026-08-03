@@ -57,8 +57,8 @@ The individual steps, if you'd rather drive them yourself:
 Separate setup, same shape: `/setup-stacked-prs`, or without a session,
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/setup-stacked-prs.sh" --fork <name-or-url> \
-  --upstream <name-or-url> [--mode fork-overlay] [--personal-config <key>=<value>]... \
+"$CLAUDE_PROJECT_DIR/.claude/hooks/setup-stacked-prs.sh" --fork <repository> \
+  --upstream <repository> [--mode fork-overlay] [--personal-config <key>=<value>]... \
   [--create-labels]
 ```
 

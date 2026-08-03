@@ -152,36 +152,15 @@ class Remote:
     """The repository the remote points at."""
 
 
-@dataclass
-class ForkRemoteNotFoundError(LookupError):
-    """Raised when no remote points at a repository other than the upstream."""
-
-    upstream_repository: Repository
-    """The upstream every candidate turned out to be."""
+class ForkRepositoryNotConfiguredError(LookupError):
+    """Raised when nothing says which repository holds the stack."""
 
     def __str__(self) -> str:
-        """:return: What was searched for and why nothing qualified."""
+        """:return: The two ways to answer the question."""
         return (
-            f"no remote points at a fork: every remote is {self.upstream_repository}. "
-            f"Add a remote for your fork, or set fork_repository in stack.toml."
-        )
-
-
-@dataclass
-class AmbiguousForkRemoteError(LookupError):
-    """Raised when several remotes could each be the fork."""
-
-    candidates: tuple[Remote, ...]
-    """The remotes that are not the upstream, in the order git reported them."""
-
-    def __str__(self) -> str:
-        """:return: The candidates and how to disambiguate them."""
-        listed = ", ".join(
-            f"{remote.name} -> {remote.repository}" for remote in self.candidates
-        )
-        return (
-            f"several remotes could be the fork ({listed}). "
-            f"Set fork_repository in stack.toml to say which."
+            "no fork repository is configured. Pass --fork <owner/name>, or record it once "
+            "with /setup-stacked-prs, which writes fork_repository into "
+            f"{PERSONAL_STACK_CONFIGURATION_PATH} on the personal-notes branch."
         )
 
 
@@ -189,17 +168,28 @@ class AmbiguousForkRemoteError(LookupError):
 class RemoteResolution:
     """Which remote is the fork and which is the upstream, decided without trusting names."""
 
-    fork: Remote
-    """The remote holding the stack."""
+    fork: Remote | None
+    """The remote holding the stack, absent if the checkout has none pointing at it yet."""
 
     upstream: Remote | None
     """The remote for the upstream review repository, absent if the checkout has none."""
 
+    fork_repository: Repository
+    """The fork, whether or not a remote points at it yet."""
+
     upstream_repository: Repository
     """The upstream, whether or not a remote points at it yet."""
 
+    preferred_fork_name: str
+    """What to call the fork remote when one has to be added."""
+
     preferred_upstream_name: str
     """What to call the upstream remote when one has to be added."""
+
+    @property
+    def fork_name(self) -> str:
+        """:return: The fork remote's name, or the name it will get when added."""
+        return self.fork.name if self.fork else self.preferred_fork_name
 
     @property
     def upstream_name(self) -> str:
@@ -207,80 +197,76 @@ class RemoteResolution:
         return self.upstream.name if self.upstream else self.preferred_upstream_name
 
     @property
+    def fork_setup_command(self) -> str | None:
+        """:return: The command adding the missing fork remote, or ``None`` if present."""
+        return _remote_add_command(
+            self.preferred_fork_name, self.fork_repository, self.fork
+        )
+
+    @property
     def upstream_setup_command(self) -> str | None:
         """:return: The command adding the missing upstream remote, or ``None`` if present."""
-        if self.upstream:
-            return None
-        return (
-            f"git remote add {self.preferred_upstream_name} "
-            f"https://github.com/{self.upstream_repository}.git"
+        return _remote_add_command(
+            self.preferred_upstream_name, self.upstream_repository, self.upstream
         )
+
+
+def _remote_add_command(
+    name: str, repository: Repository, existing: Remote | None
+) -> str | None:
+    """Build the command adding a remote for *repository*, if one is missing.
+
+    :param name: What to call the remote.
+    :param repository: The repository it should point at.
+    :param existing: The remote already pointing there, if any.
+    :return: The command to run, or ``None`` when *existing* covers it.
+    """
+    if existing:
+        return None
+    return f"git remote add {name} https://github.com/{repository}.git"
 
 
 def resolve_remotes(
     remote_urls: Mapping[str, str],
+    fork_repository: Repository,
     upstream_repository: Repository,
+    preferred_fork_name: str,
     preferred_upstream_name: str,
-    fork_repository: Repository | None = None,
 ) -> RemoteResolution:
-    """Decide which remote is the fork and which is the upstream.
+    """Find the remotes pointing at the fork and the upstream.
 
     Remotes are matched by the repository their URL names, so a checkout whose remotes are
-    called anything at all resolves the same way.
+    called anything at all resolves the same way. Both repositories are given rather than
+    deduced, so there is nothing here that can pick the wrong one.
 
     :param remote_urls: Remote name to URL, as git reports them.
+    :param fork_repository: The repository holding the stack.
     :param upstream_repository: The repository every fork is forked from.
+    :param preferred_fork_name: What to call the fork remote if one must be added.
     :param preferred_upstream_name: What to call the upstream remote if one must be added.
-    :param fork_repository: The fork, when configuration names it outright.
     :return: The resolved remotes.
-    :raises ForkRemoteNotFoundError: If no remote points at a fork.
-    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
     """
     remotes = [
         Remote(name, Repository.from_remote_url(url))
         for name, url in remote_urls.items()
         if Repository.names_a_repository(url)
     ]
-    upstream = next(
-        (remote for remote in remotes if remote.repository == upstream_repository), None
-    )
-    candidates = tuple(
-        remote for remote in remotes if remote.repository != upstream_repository
-    )
     return RemoteResolution(
-        fork=_select_fork(candidates, fork_repository, upstream_repository),
-        upstream=upstream,
+        fork=_remote_naming(remotes, fork_repository),
+        upstream=_remote_naming(remotes, upstream_repository),
+        fork_repository=fork_repository,
         upstream_repository=upstream_repository,
+        preferred_fork_name=preferred_fork_name,
         preferred_upstream_name=preferred_upstream_name,
     )
 
 
-def _select_fork(
-    candidates: tuple[Remote, ...],
-    fork_repository: Repository | None,
-    upstream_repository: Repository,
-) -> Remote:
-    """Pick the fork from the remotes that are not the upstream.
-
-    :param candidates: The non-upstream remotes.
-    :param fork_repository: The fork, when configuration names it outright.
-    :param upstream_repository: The upstream, for reporting when nothing qualifies.
-    :return: The fork's remote.
-    :raises ForkRemoteNotFoundError: If no candidate qualifies.
-    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
+def _remote_naming(remotes: list[Remote], repository: Repository) -> Remote | None:
+    """:param remotes: Every remote whose URL names a repository.
+    :param repository: The repository to look for.
+    :return: The first remote pointing at *repository*, or ``None``.
     """
-    if fork_repository:
-        named = [
-            remote for remote in candidates if remote.repository == fork_repository
-        ]
-        if not named:
-            raise ForkRemoteNotFoundError(upstream_repository)
-        return named[0]
-    if not candidates:
-        raise ForkRemoteNotFoundError(upstream_repository)
-    if len(candidates) > 1:
-        raise AmbiguousForkRemoteError(candidates)
-    return candidates[0]
+    return next((remote for remote in remotes if remote.repository == repository), None)
 
 
 @dataclass
@@ -303,7 +289,10 @@ class Configuration:
     """The fork that holds the full stack, as GitHub names it."""
 
     fork_remote: str
-    """Git remote for the fork that holds the full stack."""
+    """Git remote for the fork, or the name it will get once one is added."""
+
+    fork_setup_command: str | None
+    """The command adding the fork remote, or ``None`` once this checkout has one."""
 
     upstream_repository: Repository
     """The repository every fork is forked from, and the only one constant across contributors."""
@@ -346,8 +335,9 @@ def load_configuration(
         rebase_label=values.get("rebase_label", "rebase"),
         needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
         cram2_link_sent_label=values.get("cram2_link_sent_label", "cram2-link-sent"),
-        fork_repository=resolution.fork.repository,
-        fork_remote=resolution.fork.name,
+        fork_repository=resolution.fork_repository,
+        fork_remote=resolution.fork_name,
+        fork_setup_command=resolution.fork_setup_command,
         upstream_repository=upstream_repository,
         upstream_remote=resolution.upstream_name,
         upstream_base=values.get("upstream_base", "main"),
@@ -373,21 +363,28 @@ def resolved_remotes(
 ) -> RemoteResolution:
     """Resolve this checkout's fork and upstream remotes.
 
+    The fork is never deduced. It comes from the caller or from ``fork_repository``, and its
+    absence is an answerable question rather than something to guess at from the remotes.
+
     :param path: The committed defaults file.
     :param fork_repository: The fork, when the caller already knows it.
     :param upstream_repository: The upstream, when the caller already knows it.
     :return: The resolved remotes.
-    :raises ForkRemoteNotFoundError: If no remote points at a fork.
-    :raises AmbiguousForkRemoteError: If several do and nothing names which one it is.
+    :raises ForkRepositoryNotConfiguredError: If nothing names the fork.
     """
     values = _configuration_values(path)
     configured_fork = values.get("fork_repository")
+    fork_repository = fork_repository or (
+        Repository.parse(configured_fork) if configured_fork else None
+    )
+    if fork_repository is None:
+        raise ForkRepositoryNotConfiguredError()
     return resolve_remotes(
         _remote_urls(),
+        fork_repository,
         upstream_repository or Repository.parse(values["upstream_repository"]),
+        values.get("fork_remote", "origin"),
         values.get("upstream_remote", "cram2"),
-        fork_repository
-        or (Repository.parse(configured_fork) if configured_fork else None),
     )
 
 
@@ -1589,7 +1586,7 @@ def main() -> ExitCode:
         if not command.needs_a_board:
             return _run_without_a_board(command, arguments)
         return _run_against_the_board(command, arguments, load_stack())
-    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
+    except ForkRepositoryNotConfiguredError as error:
         print(f"{error}", file=sys.stderr)
         return ExitCode.REMOTES_UNRESOLVED
     except BoardUnavailable as error:

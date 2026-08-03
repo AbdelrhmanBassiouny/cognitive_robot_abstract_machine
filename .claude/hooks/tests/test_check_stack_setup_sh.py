@@ -26,8 +26,8 @@ STACK_TOOLING_FILES = (
     ".claude/stack/stack.py",
     ".claude/stack/stack.toml",
     ".claude/stack/README.md",
-    ".claude/stack/ROUTINE.md",
-    ".claude/stack/routine-prompt.md",
+    ".claude/skills/stacked-pr-maintenance/SKILL.md",
+    ".claude/skills/stacked-pr-maintenance/routine-prompt.md",
 )
 
 BOARD_PATH = ".claude/stack/board.json"
@@ -35,6 +35,22 @@ BOARD_PATH = ".claude/stack/board.json"
 PERSONAL_STACK_CONFIG_PATH = ".claude/personal/stack.toml"
 
 UPSTREAM_BASE = "main"
+
+FORK_REPOSITORY = "a-fork-owner/a-project"
+"""
+The fork the scratch checkout is configured to hold its stack in.
+
+Remotes are matched by the repository their URL names, so the bare repositories standing
+in for them are created at paths ending in ``<owner>/<name>.git`` and addressed as
+``file://`` URLs - which names a repository the same way an HTTPS URL does, while still
+being a git remote these tests can actually push to without a network.
+"""
+
+UPSTREAM_REPOSITORY = "an-upstream-owner/a-project"
+"""
+The upstream the scratch checkout is reviewed in, overriding the committed default so
+these tests name no real repository.
+"""
 
 
 class StackSetupCheck(StrEnum):
@@ -58,6 +74,18 @@ class StackSetupCheck(StrEnum):
 # %% the scratch layout
 
 
+def repository_url(root: Path, repository: str) -> tuple[Path, str]:
+    """
+    Create a bare repository whose path names *repository*, and the URL addressing it.
+
+    :param root: The directory to create it under.
+    :param repository: The ``owner/name`` the remote should be seen as pointing at.
+    :return: The bare repository's path, and the ``file://`` URL naming it.
+    """
+    path = initialize_bare_repository(root / f"{repository}.git")
+    return path, f"file://{path}"
+
+
 @pytest.fixture
 def upstream_remote(tmp_path: Path, scratch_repository: ScratchRepository) -> Path:
     """
@@ -68,7 +96,7 @@ def upstream_remote(tmp_path: Path, scratch_repository: ScratchRepository) -> Pa
     :param scratch_repository: The repository whose first commit seeds the base branch.
     :return: The bare repository's path.
     """
-    return initialize_bare_repository(tmp_path / "upstream.git")
+    return repository_url(tmp_path, UPSTREAM_REPOSITORY)[0]
 
 
 @pytest.fixture
@@ -96,13 +124,9 @@ def stack_repository(
     scratch_repository.write(".gitignore", f"CLAUDE.local.md\n{BOARD_PATH}\n")
     scratch_repository.commit_everything("initial commit")
 
-    scratch_repository.run_git(
-        "remote",
-        "add",
-        "origin",
-        str(initialize_bare_repository(tmp_path / "fork.git")),
-    )
-    scratch_repository.run_git("remote", "add", "cram2", str(upstream_remote))
+    _, fork_url = repository_url(tmp_path, FORK_REPOSITORY)
+    scratch_repository.run_git("remote", "add", "origin", fork_url)
+    scratch_repository.run_git("remote", "add", "cram2", f"file://{upstream_remote}")
     scratch_repository.run_git("push", "--quiet", "cram2", f"HEAD:{UPSTREAM_BASE}")
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
@@ -113,7 +137,9 @@ def install_stack_tooling(repository: ScratchRepository) -> None:
     Copy the real ``.claude/stack/`` files into the scratch layout.
 
     The real stack.py is installed rather than a placeholder because the checker asks it
-    for the resolved configuration - a stub would make the layering checks vacuous.
+    for the resolved configuration - a stub would make the layering checks vacuous. Its
+    stack.toml is rewritten to name this scratch layout's repositories, since the
+    committed one deliberately names no fork at all.
 
     :param repository: The scratch repository to install into.
     """
@@ -125,6 +151,22 @@ def install_stack_tooling(repository: ScratchRepository) -> None:
         (repository.project_root / tooling_file).write_text(
             (project_root / tooling_file).read_text()
         )
+    configuration = repository.project_root / ".claude" / "stack" / "stack.toml"
+    kept = [
+        line
+        for line in configuration.read_text().splitlines()
+        if not line.startswith("upstream_repository")
+    ]
+    configuration.write_text(
+        "\n".join(
+            [
+                *kept,
+                f'fork_repository = "{FORK_REPOSITORY}"',
+                f'upstream_repository = "{UPSTREAM_REPOSITORY}"',
+                "",
+            ]
+        )
+    )
 
 
 def run_check_stack_setup(repository: ScratchRepository) -> SetupReport:
@@ -191,14 +233,46 @@ def test_reports_every_check_it_documents(stack_repository: ScratchRepository):
 def test_reports_which_stack_tooling_files_are_missing(
     stack_repository: ScratchRepository,
 ):
-    (stack_repository.project_root / ".claude" / "stack" / "ROUTINE.md").unlink()
+    (stack_repository.project_root / ".claude" / "stack" / "stack.toml").unlink()
 
     report = run_check_stack_setup(stack_repository)
 
     result = report.results[StackSetupCheck.STACK_TOOLING_FILES]
     assert result.status == CheckStatus.NEEDS_SETUP
-    assert ".claude/stack/ROUTINE.md" in result.detail
+    assert ".claude/stack/stack.toml" in result.detail
     assert report.exit_code == 1
+
+
+def test_requires_the_maintenance_instructions_rather_than_the_retired_routine_document(
+    stack_repository: ScratchRepository,
+):
+    """
+    The instructions moved out of ``.claude/stack/`` and into the maintenance skill, so a
+    checkout carrying the real layout must read as set up - and one missing the skill must
+    not. Checking the retired paths reported ``needs-setup`` on a correct installation.
+    """
+    skill_document = (
+        stack_repository.project_root
+        / ".claude"
+        / "skills"
+        / "stacked-pr-maintenance"
+        / "SKILL.md"
+    )
+
+    assert (
+        run_check_stack_setup(stack_repository)
+        .results[StackSetupCheck.STACK_TOOLING_FILES]
+        .status
+        == CheckStatus.OK
+    )
+
+    skill_document.unlink()
+    result = run_check_stack_setup(stack_repository).results[
+        StackSetupCheck.STACK_TOOLING_FILES
+    ]
+
+    assert result.status == CheckStatus.NEEDS_SETUP
+    assert ".claude/skills/stacked-pr-maintenance/SKILL.md" in result.detail
 
 
 def test_does_not_check_the_remotes_when_the_configuration_cannot_be_resolved(
@@ -234,6 +308,11 @@ def test_reports_a_fork_remote_that_is_not_in_the_clone(
 def test_checks_the_remote_the_personal_override_names_rather_than_the_committed_default(
     stack_repository: ScratchRepository,
 ):
+    """
+    ``fork_remote`` is the name to give the fork remote when the clone has none, so the
+    override is what a contributor with no ``origin`` is told to add.
+    """
+    stack_repository.run_git("remote", "remove", "origin")
     stack_repository.publish_notes_branch(
         {PERSONAL_STACK_CONFIG_PATH: 'fork_remote = "my-own-fork"\n'}
     )
@@ -253,7 +332,10 @@ def test_reports_the_remote_urls_as_context_rather_than_a_verdict(
 
     for check in (StackSetupCheck.FORK_REMOTE_URL, StackSetupCheck.UPSTREAM_REMOTE_URL):
         assert report.results[check].status == CheckStatus.INFORMATIONAL
-    assert "fork.git" in report.results[StackSetupCheck.FORK_REMOTE_URL].detail
+    assert (
+        f"{FORK_REPOSITORY}.git"
+        in report.results[StackSetupCheck.FORK_REMOTE_URL].detail
+    )
 
 
 def test_reports_an_upstream_base_that_is_not_on_the_upstream_remote(

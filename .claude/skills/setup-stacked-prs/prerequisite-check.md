@@ -39,11 +39,12 @@ here is how the two drift apart.
    unresolved and stop.
 4. **If they decline:** stop, and say plainly what won't work without it.
 
-## The one variation: an automated Routine
+## The one variation: an unattended run
 
-A Routine running `ROUTINE.md` cannot follow steps 2 to 4 — its own hard rules
-forbid it from entering plan mode or opening a discussion, and there is nobody
-in the loop to answer. It therefore **reports and stops** instead of offering:
+`/stacked-pr-maintenance --non-interactive`, which is how a scheduled Routine
+invokes it, cannot follow steps 2 to 4 — its own hard rules forbid entering plan
+mode or opening a discussion, and there is nobody in the loop to answer. It
+therefore **reports and stops** instead of offering:
 print the `needs-setup` rows in the run summary, and do not attempt the phases.
 A half-set-up clone silently doing half a restack is worse than a run that says
 what is missing.

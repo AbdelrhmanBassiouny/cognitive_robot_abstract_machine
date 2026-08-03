@@ -9,7 +9,7 @@ set -euo pipefail
 #
 # Usage (from anywhere - always operates on this repo specifically, see
 # ./resolve-personal-notes-config.sh):
-#   ./.claude/hooks/setup-stacked-prs.sh --fork <name-or-url> --upstream <name-or-url> \
+#   ./.claude/hooks/setup-stacked-prs.sh --fork <repository> --upstream <repository> \
 #     [--mode native|fork-overlay] [--overlay-branch <name>] \
 #     [--personal-config <key>=<value>]... [--create-labels]
 #
@@ -62,7 +62,7 @@ OVERLAY_FILES=(
 )
 
 usage() {
-  echo "Usage: ${BASH_SOURCE[0]} --fork <name-or-url> --upstream <name-or-url>" >&2
+  echo "Usage: ${BASH_SOURCE[0]} --fork <repository> --upstream <repository>" >&2
   echo "         [--mode native|fork-overlay] [--overlay-branch <name>]" >&2
   echo "         [--personal-config <key>=<value>]... [--create-labels]" >&2
 }
@@ -131,12 +131,62 @@ case "${INSTALL_MODE}" in
     ;;
 esac
 
+# %% which repositories the arguments name
+
+# repository_of: prints the "owner/name" behind --fork/--upstream, which take a
+# remote already in this clone, a remote URL, or the owner/name itself. Nothing
+# below can ask stack.py anything until both are known, because the fork is no
+# longer deduced from the remotes - it is the answer this script was given.
+repository_of() {
+  local reference="$1"
+  if git remote get-url "${reference}" > /dev/null 2>&1; then
+    github_repository_of_remote "${reference}"
+    return
+  fi
+  case "${reference}" in
+    *://* | *@*:*) github_repository_of_remote "${reference}" ;;
+    */*) printf '%s\n' "${reference}" ;;
+    *) github_repository_of_remote "${reference}" ;;
+  esac
+}
+
+# remote_url_for: prints the URL to give `git remote add` for a reference. An
+# owner/name has no URL of its own, so it gets the canonical GitHub one.
+remote_url_for() {
+  local reference="$1"
+  if git remote get-url "${reference}" > /dev/null 2>&1; then
+    git remote get-url "${reference}"
+    return
+  fi
+  case "${reference}" in
+    *://* | *@*:*) printf '%s\n' "${reference}" ;;
+    *) printf 'https://github.com/%s.git\n' "$(repository_of "${reference}")" ;;
+  esac
+}
+
+if ! FORK_REPOSITORY="$(repository_of "${FORK}")"; then
+  echo "--fork must name a repository: <owner/name>, a remote URL, or a remote in" >&2
+  echo "this clone. Got: ${FORK}" >&2
+  exit 1
+fi
+if ! UPSTREAM_REPOSITORY="$(repository_of "${UPSTREAM}")"; then
+  echo "--upstream must name a repository: <owner/name>, a remote URL, or a remote" >&2
+  echo "in this clone. Got: ${UPSTREAM}" >&2
+  exit 1
+fi
+FORK_URL="$(remote_url_for "${FORK}")"
+UPSTREAM_URL="$(remote_url_for "${UPSTREAM}")"
+
 # %% the per-user overrides, applied before anything reads the configuration
 
 # resolved_setting: prints one value from stack.py's own layered resolution, so
-# nothing here re-implements "personal override beats committed default".
+# nothing here re-implements "personal override beats committed default". The
+# repositories are passed rather than resolved, because this runs while the
+# remotes it is about to add do not exist yet.
 resolved_setting() {
-  python3 "${STACK_SCRIPT}" config | awk -F'\t' -v name="$1" '$1 == name { print $2; exit }'
+  python3 "${STACK_SCRIPT}" configuration \
+    --fork "${FORK_REPOSITORY}" --upstream "${UPSTREAM_REPOSITORY}" \
+    | awk -F'\t' -v name="$1" '$1 == name { print $2; exit }'
 }
 
 # committed_setting: prints one value from the committed defaults alone, which is
@@ -151,13 +201,44 @@ with open(sys.argv[1], "rb") as committed_defaults:
 PYTHON
 }
 
-# write_personal_config: records the overrides that actually differ from the
-# committed defaults onto the personal-notes branch. Writes nothing when every
-# value given already matches - a file full of restated defaults is drift waiting
-# to happen.
+# known_settings: the setting names stack.py resolves, which is what an override
+# has to be one of.
+known_settings() {
+  python3 "${STACK_SCRIPT}" configuration \
+    --fork "${FORK_REPOSITORY}" --upstream "${UPSTREAM_REPOSITORY}" | cut -f1
+}
+
+# existing_personal_config: prints the personal override file as it stands on the
+# personal-notes branch, or nothing when there is none yet.
+existing_personal_config() {
+  fetch_personal_notes_branch > /dev/null 2>&1 || return 0
+  git show "FETCH_HEAD:${PERSONAL_STACK_CONFIG_PATH}" 2> /dev/null || true
+}
+
+# merged_personal_config: prints the override file this run should leave behind -
+# what is already there, with this run's keys replacing their old values. Keys
+# this run says nothing about are kept, because the maintenance skill writes
+# fork_repository here too when it has to ask: a whole-file write would silently
+# discard whichever of the two ran first.
+merged_personal_config() {
+  python3 - "$1" <<'PYTHON'
+import sys
+import tomllib
+
+existing_text, new_text = sys.stdin.read(), open(sys.argv[1]).read()
+merged = tomllib.loads(existing_text) | tomllib.loads(new_text)
+for key, value in merged.items():
+    print(f'{key} = "{value}"')
+PYTHON
+}
+
+# write_personal_config: records fork_repository plus any override that actually
+# differs from the committed defaults onto the personal-notes branch.
 write_personal_config() {
-  local entry key value overrides="" scratch_file
-  for entry in "${PERSONAL_CONFIG_ENTRIES[@]}"; do
+  local entry key value overrides="" new_file merged_file
+  overrides="fork_repository = \"${FORK_REPOSITORY}\""$'\n'
+  for entry in "${PERSONAL_CONFIG_ENTRIES[@]:-}"; do
+    [ -n "${entry}" ] || continue
     case "${entry}" in
       *=*) ;;
       *)
@@ -168,9 +249,9 @@ write_personal_config() {
     key="${entry%%=*}"
     value="${entry#*=}"
 
-    if ! python3 "${STACK_SCRIPT}" config | grep -q "^${key}	"; then
+    if ! known_settings | grep -qx "${key}"; then
       echo "Not a stack setting: ${key}" >&2
-      echo "Known settings: $(python3 "${STACK_SCRIPT}" config | cut -f1 | tr '\n' ' ')" >&2
+      echo "Known settings: $(known_settings | tr '\n' ' ')" >&2
       exit 1
     fi
     if [ "${value}" = "$(committed_setting "${key}")" ]; then
@@ -180,22 +261,18 @@ write_personal_config() {
     overrides="${overrides}${key} = \"${value}\""$'\n'
   done
 
-  if [ -z "${overrides}" ]; then
-    return 0
-  fi
-
-  scratch_file="$(mktemp)"
-  printf '%s' "${overrides}" > "${scratch_file}"
+  new_file="$(mktemp)"
+  merged_file="$(mktemp)"
+  printf '%s' "${overrides}" > "${new_file}"
+  existing_personal_config | merged_personal_config "${new_file}" > "${merged_file}"
   bash "${WRITE_PERSONAL_NOTES_FILE_SCRIPT}" \
-    --source "${scratch_file}" \
+    --source "${merged_file}" \
     --destination "${PERSONAL_STACK_CONFIG_PATH}" \
     --message "Record personal stacked-PR configuration"
-  rm -f "${scratch_file}"
+  rm -f "${new_file}" "${merged_file}"
 }
 
-if [ ${#PERSONAL_CONFIG_ENTRIES[@]} -gt 0 ]; then
-  write_personal_config
-fi
+write_personal_config
 
 FORK_REMOTE="$(resolved_setting fork_remote)"
 UPSTREAM_REMOTE="$(resolved_setting upstream_remote)"
@@ -209,7 +286,7 @@ UPSTREAM_BASE="$(resolved_setting upstream_base)"
 name_remote() {
   local remote_name="$1" target="$2" description="$3" existing_url
   if existing_url="$(git remote get-url "${remote_name}" 2> /dev/null)"; then
-    if [ "${existing_url}" = "${target}" ] || [ "${remote_name}" = "${target}" ]; then
+    if [ "${existing_url}" = "${target}" ]; then
       echo "The ${description} '${remote_name}' already points at ${existing_url}."
       return 0
     fi
@@ -219,15 +296,12 @@ name_remote() {
     return 0
   fi
 
-  if git remote get-url "${target}" > /dev/null 2>&1; then
-    target="$(git remote get-url "${target}")"
-  fi
   git remote add "${remote_name}" "${target}"
   echo "Added the ${description} '${remote_name}' -> ${target}."
 }
 
-name_remote "${FORK_REMOTE}" "${FORK}" "fork remote"
-name_remote "${UPSTREAM_REMOTE}" "${UPSTREAM}" "upstream remote"
+name_remote "${FORK_REMOTE}" "${FORK_URL}" "fork remote"
+name_remote "${UPSTREAM_REMOTE}" "${UPSTREAM_URL}" "upstream remote"
 
 # %% is the fork really yours?
 
@@ -361,10 +435,14 @@ check_workflow_labels
 # %% the two things no command can finish
 
 echo
-echo "Paste this into claude.ai/code/routines as the Routine's prompt:"
+echo "To run the maintenance pass on a schedule, register the prompt below at"
+echo "claude.ai/code/routines. Running it by hand needs none of this:"
+echo "/stacked-pr-maintenance works from any session."
 echo
-# The prompt lives in one canonical file; only the remote names are filled in.
-sed -e "s|<FORK_REMOTE>|${FORK_REMOTE}|g" -e "s|<UPSTREAM_REMOTE>|${UPSTREAM_REMOTE}|g" \
+# The prompt lives in one canonical file beside the skill it invokes; only the
+# two repository references are filled in.
+sed -e "s|<FORK_REPOSITORY>|${FORK_REPOSITORY}|g" \
+  -e "s|<UPSTREAM_REPOSITORY>|${UPSTREAM_REPOSITORY}|g" \
   "${STACK_ROUTINE_PROMPT_FILE}"
 
 echo

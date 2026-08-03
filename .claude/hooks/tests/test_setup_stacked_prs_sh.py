@@ -22,7 +22,9 @@ from test_check_stack_setup_sh import (
     BOARD_PATH,
     PERSONAL_STACK_CONFIG_PATH,
     UPSTREAM_BASE,
+    UPSTREAM_REPOSITORY,
     install_stack_tooling,
+    repository_url,
 )
 
 # The hook scripts a full setup run touches, all installed into the scratch layout.
@@ -71,10 +73,15 @@ def upstream_remote(tmp_path: Path) -> Path:
     """
     A bare repository standing in for the upstream review remote.
 
+    Created at a path naming a repository, and passed as a ``file://`` URL, because
+    ``--upstream`` has to say *which repository* the upstream is - a bare local path
+    names no owner, which is exactly what github-api.sh refuses to attribute to an
+    account.
+
     :param tmp_path: pytest's per-test temporary directory.
     :return: The bare repository's path.
     """
-    return initialize_bare_repository(tmp_path / "upstream.git")
+    return repository_url(tmp_path, UPSTREAM_REPOSITORY)[0]
 
 
 @pytest.fixture
@@ -94,7 +101,7 @@ def setup_repository(
     scratch_repository.write(".gitignore", f"CLAUDE.local.md\n{BOARD_PATH}\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.run_git(
-        "push", "--quiet", str(upstream_remote), f"HEAD:{UPSTREAM_BASE}"
+        "push", "--quiet", f"file://{upstream_remote}", f"HEAD:{UPSTREAM_BASE}"
     )
     scratch_repository.publish_notes_branch(
         {".claude/personal/cram-notes.md": "notes\n"}
@@ -141,7 +148,7 @@ def native_arguments(upstream_remote: Path) -> tuple[str, ...]:
     :param upstream_remote: The upstream the run should point at.
     :return: The argument tuple.
     """
-    return ("--fork", FORK_URL, "--upstream", str(upstream_remote))
+    return ("--fork", FORK_URL, "--upstream", f"file://{upstream_remote}")
 
 
 # %% the argument contract
@@ -154,7 +161,7 @@ def test_requires_the_remotes_it_must_not_guess(
     upstream_remote: Path,
     omitted_argument: str,
 ):
-    complete = {"--fork": FORK_URL, "--upstream": str(upstream_remote)}
+    complete = {"--fork": FORK_URL, "--upstream": f"file://{upstream_remote}"}
     arguments = [
         argument
         for name, value in complete.items()
@@ -215,8 +222,9 @@ def test_a_native_run_leaves_the_clone_fully_set_up(
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert_remote_points_at_the_fork(setup_repository, "origin")
-    assert setup_repository.run_git("remote", "get-url", "cram2").stdout.strip() == str(
-        upstream_remote
+    assert (
+        setup_repository.run_git("remote", "get-url", "cram2").stdout.strip()
+        == f"file://{upstream_remote}"
     )
 
 
@@ -236,18 +244,25 @@ def test_a_second_run_changes_nothing(
     assert setup_repository.notes_branch_commit() == notes_commit_after_first_run
 
 
-def test_prints_the_routine_prompt_with_the_remotes_substituted(
+def test_prints_the_routine_prompt_with_the_repositories_substituted(
     setup_repository: ScratchRepository,
     stub_executables: StubExecutableDirectory,
     upstream_remote: Path,
 ):
+    """
+    An unsubstituted placeholder reaching a registered prompt becomes an instruction a
+    live run cannot resolve, so the substitution is the part worth pinning.
+    """
     result = run_setup(
         setup_repository, stub_executables, *native_arguments(upstream_remote)
     )
 
-    assert "<FORK_REMOTE>" not in result.stdout
-    assert "<UPSTREAM_REMOTE>" not in result.stdout
-    assert "NEVER call `subscribe_pr_activity`" in result.stdout
+    assert "<FORK_REPOSITORY>" not in result.stdout
+    assert "<UPSTREAM_REPOSITORY>" not in result.stdout
+    assert (
+        f"/stacked-pr-maintenance fork={FORK_REPOSITORY} "
+        f"upstream={UPSTREAM_REPOSITORY} --non-interactive" in result.stdout
+    )
 
 
 def test_names_the_stack_board_bootstrap_without_touching_another_repository(
@@ -283,7 +298,7 @@ def test_refuses_a_fork_owned_by_somebody_else(
         "--fork",
         "https://github.com/someone-else/octo-repo.git",
         "--upstream",
-        str(upstream_remote),
+        f"file://{upstream_remote}",
     )
 
     assert result.returncode != 0
@@ -390,7 +405,7 @@ def test_writes_only_the_settings_that_differ_from_the_committed_defaults(
         "--fork",
         FORK_URL,
         "--upstream",
-        str(upstream_remote),
+        f"file://{upstream_remote}",
         "--personal-config",
         "fork_remote=my-own-fork",
         "--personal-config",
@@ -414,7 +429,7 @@ def test_adds_the_remote_under_the_name_the_override_gives_it(
         "--fork",
         FORK_URL,
         "--upstream",
-        str(upstream_remote),
+        f"file://{upstream_remote}",
         "--personal-config",
         "fork_remote=my-own-fork",
     )
@@ -451,12 +466,23 @@ def overlay_repository(
     The same scratch layout, but with a pushable local bare repository as the fork - so
     the overlay branch can actually be written and read back.
 
+    Created at a path naming the fork, so the ownership check agrees with the login the
+    stubbed GitHub reports.
+
     :param setup_repository: The scratch repository carrying the tooling.
     :param tmp_path: pytest's per-test temporary directory.
     :return: The same repository.
     """
-    initialize_bare_repository(tmp_path / "fork.git")
+    repository_url(tmp_path, FORK_REPOSITORY)
     return setup_repository
+
+
+def overlay_fork_path(tmp_path: Path) -> Path:
+    """
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The bare repository standing in for the fork.
+    """
+    return tmp_path / f"{FORK_REPOSITORY}.git"
 
 
 def test_fork_overlay_installs_the_canonical_files_on_the_overlay_branch(
@@ -469,20 +495,22 @@ def test_fork_overlay_installs_the_canonical_files_on_the_overlay_branch(
         overlay_repository,
         stub_executables,
         "--fork",
-        str(tmp_path / "fork.git"),
+        f"file://{overlay_fork_path(tmp_path)}",
         "--upstream",
-        str(upstream_remote),
+        f"file://{upstream_remote}",
         "--mode",
         "fork-overlay",
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
     checkout = overlay_repository.clone_branch(
-        tmp_path / "fork.git", OVERLAY_BRANCH, tmp_path / "overlay"
+        overlay_fork_path(tmp_path), OVERLAY_BRANCH, tmp_path / "overlay"
     )
     assert (checkout / ".claude" / "stack" / "stack.py").is_file()
-    assert (checkout / ".claude" / "stack" / "ROUTINE.md").is_file()
     assert (checkout / ".claude" / "hooks" / "check-stack-setup.sh").is_file()
+    assert (
+        checkout / ".claude" / "skills" / "stacked-pr-maintenance" / "SKILL.md"
+    ).is_file(), "an overlay carrying no instructions installs tooling nobody can run"
 
 
 def test_re_running_fork_overlay_is_the_updater(
@@ -493,28 +521,32 @@ def test_re_running_fork_overlay_is_the_updater(
 ):
     arguments = (
         "--fork",
-        str(tmp_path / "fork.git"),
+        f"file://{overlay_fork_path(tmp_path)}",
         "--upstream",
-        str(upstream_remote),
+        f"file://{upstream_remote}",
         "--mode",
         "fork-overlay",
     )
     run_setup(overlay_repository, stub_executables, *arguments)
     commit_after_first_run = overlay_repository.remote_branch_commit(
-        tmp_path / "fork.git", OVERLAY_BRANCH
+        overlay_fork_path(tmp_path), OVERLAY_BRANCH
     )
 
-    overlay_repository.write(".claude/stack/ROUTINE.md", "the doctrine, revised\n")
+    overlay_repository.write(
+        ".claude/skills/stacked-pr-maintenance/SKILL.md", "the doctrine, revised\n"
+    )
     run_setup(overlay_repository, stub_executables, *arguments)
 
     checkout = overlay_repository.clone_branch(
-        tmp_path / "fork.git", OVERLAY_BRANCH, tmp_path / "overlay"
-    )
-    assert (checkout / ".claude" / "stack" / "ROUTINE.md").read_text() == (
-        "the doctrine, revised\n"
+        overlay_fork_path(tmp_path), OVERLAY_BRANCH, tmp_path / "overlay"
     )
     assert (
-        overlay_repository.remote_branch_commit(tmp_path / "fork.git", OVERLAY_BRANCH)
+        checkout / ".claude" / "skills" / "stacked-pr-maintenance" / "SKILL.md"
+    ).read_text() == "the doctrine, revised\n"
+    assert (
+        overlay_repository.remote_branch_commit(
+            overlay_fork_path(tmp_path), OVERLAY_BRANCH
+        )
         != commit_after_first_run
     )
 
@@ -529,12 +561,14 @@ def test_a_native_run_writes_no_overlay_branch(
         overlay_repository,
         stub_executables,
         "--fork",
-        str(tmp_path / "fork.git"),
+        f"file://{overlay_fork_path(tmp_path)}",
         "--upstream",
-        str(upstream_remote),
+        f"file://{upstream_remote}",
     )
 
     assert (
-        overlay_repository.remote_branch_commit(tmp_path / "fork.git", OVERLAY_BRANCH)
+        overlay_repository.remote_branch_commit(
+            overlay_fork_path(tmp_path), OVERLAY_BRANCH
+        )
         is None
     )

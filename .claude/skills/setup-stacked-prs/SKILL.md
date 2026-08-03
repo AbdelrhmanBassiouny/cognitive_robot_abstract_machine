@@ -86,12 +86,18 @@ unasked is not.
 ## 5. Run the setup
 
 ```bash
-bash "${SETUP_STACKED_PRS_SCRIPT}" --fork <name-or-url> --upstream <name-or-url> \
+bash "${SETUP_STACKED_PRS_SCRIPT}" --fork <repository> --upstream <repository> \
   [--mode fork-overlay] [--overlay-branch <name>] \
   [--personal-config <key>=<value>]... [--create-labels]
 ```
 
-It names the remotes, records only the overrides that actually differ from the
+Both take an `owner/name`, a remote URL, or a remote already in the clone. They
+are what the whole run is measured against: nothing deduces which repository is
+the fork any more, so `--fork` is also what gets written to
+`.claude/personal/stack.toml` as `fork_repository`, and every later command reads
+it from there.
+
+It names the remotes, records the overrides that actually differ from the
 committed defaults, fetches the upstream base, installs the overlay branch when
 asked, checks the labels, prints the Routine prompt, and finishes by printing
 `check-stack-setup.sh`'s report. Safe to re-run: every step is skipped when
@@ -112,12 +118,16 @@ somewhere `gh` is authenticated.
 
 ## 6. The two parts no command can finish
 
-**Paste the Routine prompt.** The script printed it with their remotes filled in;
-it goes into <https://claude.ai/code/routines> as the prompt of a scheduled
-Routine. Nothing inside a session can create or edit that, so say so plainly
-rather than leaving them to discover the workflow does nothing on its own. The
-canonical copy is [`routine-prompt.md`](../../stack/routine-prompt.md), and the
-doctrine it points at is [`ROUTINE.md`](../../stack/ROUTINE.md).
+**Register the Routine prompt, if they want the pass to run unattended.** The
+script printed it with their repositories filled in; it goes into
+<https://claude.ai/code/routines> as the prompt of a scheduled Routine, and
+nothing inside a session can create or edit that. Say so plainly — but say the
+other half too, since it is the more common case: the maintenance pass is a skill,
+so `/stacked-pr-maintenance` runs it from any session with no Routine at all. The
+canonical prompt is
+[`routine-prompt.md`](../../skills/stacked-pr-maintenance/routine-prompt.md), and
+the doctrine it invokes is
+[`SKILL.md`](../../skills/stacked-pr-maintenance/SKILL.md).
 
 **Bootstrap the board, if they want one.** The script printed the steps: an empty
 repository of their own with GitHub Pages enabled, and its repository variables

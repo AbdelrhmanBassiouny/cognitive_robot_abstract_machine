@@ -235,14 +235,18 @@ STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
 STACK_TESTS_DIRECTORY="${STACK_DIRECTORY}/tests"
 # README.md: the one-page doctrine and file map for the workflow.
 STACK_README_FILE="${STACK_DIRECTORY}/README.md"
-# ROUTINE.md: the canonical cloud-Routine doctrine, holding the phases the
-# Routine executes.
-STACK_ROUTINE_DOCUMENT="${STACK_DIRECTORY}/ROUTINE.md"
-# routine-prompt.md: the short prompt actually pasted into
-# claude.ai/code/routines - the hard rules inline plus a pointer at
-# ROUTINE.md. Separate from ROUTINE.md because it is substituted into and
-# copied verbatim, not read.
-STACK_ROUTINE_PROMPT_FILE="${STACK_DIRECTORY}/routine-prompt.md"
+# STACKED_PR_MAINTENANCE_DIRECTORY: the maintenance skill, invocable as
+# /stacked-pr-maintenance. It lives under .claude/skills/ rather than in
+# STACK_DIRECTORY because that is where Claude Code discovers a skill by path,
+# so an overlay install has to carry both directories to install a working
+# workflow.
+STACKED_PR_MAINTENANCE_DIRECTORY=".claude/skills/stacked-pr-maintenance"
+# SKILL.md: the maintenance doctrine, holding the steps a pass executes.
+STACK_ROUTINE_DOCUMENT="${STACKED_PR_MAINTENANCE_DIRECTORY}/SKILL.md"
+# routine-prompt.md: the short prompt registered at claude.ai/code/routines to
+# run the pass unattended. Separate from SKILL.md because it is substituted
+# into and copied verbatim, not read.
+STACK_ROUTINE_PROMPT_FILE="${STACKED_PR_MAINTENANCE_DIRECTORY}/routine-prompt.md"
 # board.json: the fork-PR snapshot stack.py reads, written by the Routine as
 # scratch and never committed. Named here so the setup checker can verify it
 # is gitignored rather than restating the path.

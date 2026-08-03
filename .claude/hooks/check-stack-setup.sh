@@ -59,7 +59,7 @@ if [ -n "${MISSING_TOOLING}" ]; then
   report stack_tooling_files needs-setup \
     "this checkout is missing:${MISSING_TOOLING} - merge the stack tooling into your fork's default branch, or install it with /setup-stacked-prs --mode fork-overlay"
 else
-  report stack_tooling_files ok "stack.py, stack.toml, README.md, ROUTINE.md and routine-prompt.md are all present"
+  report stack_tooling_files ok "stack.py, stack.toml, README.md and the stacked-pr-maintenance skill are all present"
 fi
 
 # tomllib, which stack.py imports to read its own configuration, is standard
@@ -78,13 +78,13 @@ fi
 
 # Asked of stack.py rather than parsed out of stack.toml here: the personal
 # .claude/personal/stack.toml override wins over the committed defaults, and
-# load_config is the single place that knows it. Reading the file directly
-# would check the wrong remotes for exactly the contributor this setup exists
-# for.
+# load_configuration is the single place that knows it. Reading the file
+# directly would check the wrong remotes for exactly the contributor this setup
+# exists for.
 STACK_CONFIGURATION=""
 CONFIGURATION_RESOLVED=0
 if [ -z "${MISSING_TOOLING}" ] && [ "${PYTHON_TOML_SUPPORT}" = "1" ] \
-    && STACK_CONFIGURATION="$(python3 "${STACK_SCRIPT}" config 2> /dev/null)"; then
+    && STACK_CONFIGURATION="$(python3 "${STACK_SCRIPT}" configuration 2> /dev/null)"; then
   CONFIGURATION_RESOLVED=1
 fi
 
