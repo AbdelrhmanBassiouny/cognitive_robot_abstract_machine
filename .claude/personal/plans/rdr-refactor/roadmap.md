@@ -661,3 +661,76 @@ references. The missing commits are entirely in `code_generation/` while
 `d-core-single-class` touches only `rdr/` and `test_eql_rdr/`. So the cascade is *not* a
 prerequisite for starting the item — it is the steward's own job, and it has to be redone
 before anything merges anyway since `main` keeps moving.
+
+## 12. Addendum (2026-08-03) — `rdr-backward-inference` (#41): the `negated`-vs-`Not()` design question
+
+§8 closed this item as "ready for the steward to merge, no code changes needed." That is no
+longer true, and the reason is worth recording because it is a *recurring* question rather
+than a new one.
+
+### What changed
+
+- **2026-08-02: #41 was reparented onto `main`** (PR comment `5157212715`), since
+  `ripple-down-rules-refactor`'s content landed via #53. The Files-changed view had been
+  showing 268 files / +27,825 purely from measuring against a stale merge-base; the real
+  diff is 7 files / +1,318. `mergeable_state: clean`, CI green 20/20 on head `cbbf7bf3`.
+- **2026-08-03: a new review thread** (`r3702021144`, `backward_inference.py:64`) asks
+  whether `GuardCondition.negated` should be dropped in favour of wrapping the guard
+  expression in `Not()` so that "guard expression must always be true" — explicitly asking
+  for the answer to consider every use of the guard across this plan, not just #41.
+
+### The question already had an answer, on a branch that was marked for deletion
+
+`krrood/docs/eql/backward_inference_design.md` on the `rdr-engine` mega-branch, "Key Design
+Decisions" #1, records the alternative as designed and rejected:
+
+> `GuardCondition` with negated flag — no live tree mutation. Calling `not_()` on a live EQL
+> expression node sets `expression._parent_` to the new `Not` wrapper, corrupting the
+> original tree's parent references.
+
+Re-verified live rather than taken on faith: `factories.not_` → `SymbolicExpression._invert_`
+→ `Not(self)` → `base_expressions.py:299` `child._parent_ = self`. The hazard is real, and it
+is the same defect class `dag-facade-hardening` (#96) exists to fix (see §10).
+
+**That doc is on the stray `krrood/docs/` path §2 records as dropped** — not the built
+`krrood/doc/` tree, referenced by nothing. So the rationale for a field that is now being
+questioned survives only on a stale branch. This is the same staleness class §5 caught for
+`rdr/why-answer`'s progress note, except the casualty here is a design decision rather than
+a status. Whatever is decided, the reason belongs in the field's own docstring.
+
+### The eight use sites
+
+`Not()`-wrapping is genuinely cleaner at four of six concrete sites — `holds_for` loses its
+inversion, `condition_resolver._materialize` disappears entirely, `_active_path`'s
+`and not guard.negated` reduces to an identity check, and `%knows`'s display branch
+(`magics.py:142`) goes away. Against that: `_leaf_guards`' De Morgan recursion still needs an
+internal polarity parameter either way (eager wrapping builds `Not(Not(x))`), and the
+structural cost is reparenting live nodes. Small distributed wins, one structural hazard.
+
+**Verbalization does not decide it, contrary to expectation.** Both shapes work today:
+`ConditionAssembler.predicate(comparator, *, negated: bool = False)` is already exactly the
+`(expression, polarity)` pair, and `NotComparatorRule` / `NotBooleanAttributeRule`
+(`grammar/conditions/rules.py:495-560`) render `Not(Comparator)` by unwrapping it back into
+that same call with `negated=True`. So the Why track (W1/W2, where `SufficientConditionSet`
+is the reserved contrastive mechanism) is served either way.
+
+### Two findings for whoever picks this up
+
+- **`_materialize` violates the decision it is built on.** `condition_resolver.py:104` calls
+  `not_(guard.expression)` on a live tree node — the exact mutation the flag exists to avoid,
+  merely deferred from traversal time to rule-insertion time. Not fixed here: a non-mutating
+  negation needs #96's façade work, and #41 is the bottom of a seven-PR stack where every
+  extra commit costs a cascade.
+- **`holds_for`'s evaluation comment is misleading.** `backward_inference.py:82-90` implies a
+  `Not()` guard would not evaluate to a usable truth value. It would: `evaluate()`
+  (`base_expressions.py:210`) maps `_process_result_` over `_true_results_()`, which already
+  filters `if result.is_true`, so `any(...)` tests whether a true binding survived. The same
+  reading suggests the `isinstance(result, OperationResult)` branch is unreachable, since
+  `evaluate()` yields processed values — worth pinning with a test before deleting it.
+
+### Disposition
+
+Answered at `r3702169709`: keep the field, with the expiry condition stated plainly —
+`Not()`-wrapping wins outright once #96 lands a non-mutating negation. The thread is
+deliberately **left unresolved**; the call is the developer's, and no code was changed on #41
+pending it.

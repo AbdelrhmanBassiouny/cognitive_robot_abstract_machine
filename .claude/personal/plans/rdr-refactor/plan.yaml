@@ -128,14 +128,29 @@ items:
   depends_on:
   - ripple-down-rules-refactor
   status: in_progress
+  session: https://claude.ai/code/session_012xQWiZExn9frHtbfm44eR1
   notes: 'Recorded blocker (base_expressions.py conflict over _last_parent_of_type_) cleared:
     PR #89 merged to main 2026-07-30 and cascaded the fix down the stack as predicted. Verified
     live, not just via the notes: GitHub reports #41''s mergeable_state as clean, and an independent
     local `git merge-tree` dry run of main against rdr-backward-inference produced zero conflict
-    markers. CI is green (18/18 checks). The 4 previously-unresolved review threads were stale
-    GitHub bookkeeping only -- their content was already addressed by commit 7faa806, confirmed
-    against the current file heads -- replied to with the specific evidence and resolved 2026-07-31.
-    No code changes needed on #41 itself; ready for the steward to merge.'
+    markers. The 4 review threads open then were stale GitHub bookkeeping only -- their content was
+    already addressed by commit 7faa806, confirmed against the current file heads -- replied to with
+    the specific evidence and resolved 2026-07-31.
+    2026-08-02: reparented onto main (PR comment 5157212715) now that ripple-down-rules-refactor''s
+    content has landed via #53, so depends_on below is satisfied and the diff is the real
+    7 files / +1,318 rather than the stale-merge-base 268 files.
+    2026-08-03: the "ready for the steward to merge" claim above is superseded -- a new review
+    thread (r3702021144, backward_inference.py:64) asks whether GuardCondition.negated should be
+    replaced by wrapping the guard expression in Not(), considering every use of the guard across
+    this plan rather than just this PR. It is a discussion request, so the PR is blocked on the
+    developer''s call, not on code. Answered at r3702169709 recommending the field be kept: the
+    alternative was already designed and rejected in backward_inference_design.md ("no live tree
+    mutation"), and the hazard was re-verified live -- factories.not_ -> _invert_ -> Not(self) ->
+    base_expressions.py:299 child._parent_ = self reparents a live rule-tree node, the same defect
+    class dag-facade-hardening (#96) exists to fix. Recommendation carries an expiry: Not()-wrapping
+    is cleaner at 4 of 6 concrete sites and wins outright once #96 lands a non-mutating negation.
+    CI green, 20/20 checks on head cbbf7bf3. Thread deliberately left unresolved. Full account in
+    roadmap.md section 12.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
