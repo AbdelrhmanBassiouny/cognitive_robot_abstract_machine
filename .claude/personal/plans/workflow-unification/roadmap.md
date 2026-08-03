@@ -2494,3 +2494,88 @@ only, `mergeable_state: unstable` (mergeable; CI running) against `main` at `9b0
 pass under `.claude/hooks/tests` — `main`'s 28 plus this module's 8, none lost — and 194 under
 `.claude/skills/plan-dashboard/tests`. This unblocks part of decision 12's chain, which cannot land
 before the in-flight bash-touching pull requests, #109 among them.
+
+## Update 2026-08-03 (rebased + re-scoped): #110 lands its parent's review round, and the fork stops being a guess
+
+`/plan-item-resolve workflow-unification setup-stacked-prs-skill`, session
+https://claude.ai/code/session_01QurCwih1r6STYtP34bpJpf. The item had been `in_progress` and
+untouched since 2026-07-30, `mergeable_state: dirty`, labelled `needs-resolution`, with **zero
+review threads** - nothing was blocking it on review. Its parent had moved twice underneath it.
+
+### The instruction that was half-wrong, and the check that settled it
+
+The ask was to rebase #110 "on 106". Taken literally that breaks the branch:
+`setup-stacked-prs.sh:44` sources `github-api.sh`, which lives only on #107 - decision 10's whole
+reason for the linear chain. #107 was already restacked onto #106's head (`5e203be8`), and
+`git merge-tree --write-tree` returns the **identical** five-file conflict set against either
+branch. So merging #107 delivers 100% of #106 at zero extra cost, and the base stays where it is.
+
+Worth keeping as a general check: when an instruction names a base, run `merge-tree` against both
+candidates before retargeting. Here it turned a base change that would have duplicated
+`github-api.sh` - a fourth same-artifact-twice instance - into a plain merge.
+
+### The one real defect on the rebase list
+
+The 2026-08-02 corrected list said point 2 was the only defect rather than a no-op, and that held
+up. `check-stack-setup.sh:51-55` required `STACK_ROUTINE_DOCUMENT` and `STACK_ROUTINE_PROMPT_FILE`
+and `:62` reported them present *by name*; both pointed at files #106's review round deleted, so
+the checker reported `needs-setup` on a correctly installed checkout. Repointing both constants at
+`.claude/skills/stacked-pr-maintenance/` also fixed the fork-overlay install for free -
+`OVERLAY_FILES` already listed them, so an overlay was about to ship tooling with no instructions
+to run it. Nobody had noticed the second consequence, and it follows from the first by construction.
+
+**A second defect nobody had recorded**, found while implementing point 7: `write_personal_config`
+wrote `overrides` as the *whole* file body. Now that #106's skill step 0 also writes
+`fork_repository` to that same file, whichever ran second silently erased the other's key. The
+write merges now. This is the shape the 2026-08-02 entry predicted in general terms - two writers
+converging on one artifact - showing up in the file rather than in a filename.
+
+### The inference deletion, and what it changed beyond line count
+
+The ~120 lines came out as promised, closing #106's `stack.toml:23` and `stack.py:84` threads
+(replied to and resolved). Two consequences the promise did not anticipate:
+
+- **`RemoteResolution` had to become symmetric.** With the fork named, a *missing fork remote* is
+  no longer an error - it is a `git remote add` command, exactly as a missing upstream already was.
+  Without that, setup could not run before the remotes it adds exist.
+- **`load_configuration()` now fails on a fresh clone until setup runs.** That is the intended
+  trade recorded on 2026-08-02 ("keep it; delete it in #110 alongside the interactive setup that
+  makes it unnecessary"), but it had a consumer nobody had counted: `test_the_skill_names_no_fork_of_its_own`,
+  #106's one surviving prose test, resolved its fork *through the inference* - which is the only
+  reason it worked on CI. It now computes candidate forks from the checkout's own remotes, minus
+  the upstream, and asserts the document names none of them. That is stricter than before, not
+  weaker: it checks every repository the checkout could be operating on rather than the single one
+  configured.
+
+**A test-fixture consequence worth generalising.** Both scratch suites addressed their bare
+repositories by bare local path. Remotes are matched by the repository their URL names, and a local
+path deliberately names none - the same rule `github-api.sh` applies so a directory name is never
+attributed to a GitHub account. The fixtures now create bare repositories at paths ending
+`<owner>/<name>.git` and address them as `file://` URLs, which satisfies both the parser and git
+transport. `insteadOf` was tried first and rejected: `git remote get-url` applies the rewrite, so
+it defeats the very lookup under test.
+
+408 tests pass across the three directories CI runs, up from 334 on this branch before the rebase.
+
+### New item: `stack-maintenance-executor`
+
+The user's second question - *could we automate the stacking process by a deterministic script that
+fetches the relevant PRs, performs the git commands needed, and reports everything* - lands on a
+real gap, verified rather than assumed: `grep -n "git push" .claude/stack/stack.py` returns nothing
+across 1,600 lines. `stack.py` is read-only derivation; every fetch, merge, rebase and push is a
+session following prose, and `board.json` is hand-assembled from MCP output - the same
+hand-assembled-input class as #119.
+
+Four commands (`board --write`, `fast-forward`, `restack`, `run-report --json`) in a new module, so
+the only edits to #106's files are the `SKILL.md` steps and the dispatch wiring. Step 0 is a
+credential probe: the recorded 403 names the *base branch* specifically, so label writes, issue
+comments and body-only PATCHes through `GH_TOKEN` are unknown, and that answer also decides what
+`routine-cutover`'s Action can do without a session.
+
+Scoped as its own item rather than folded into #106 (user's call, offered against folding): the
+executor is new files that stand alone, #106 is already 3,413 additions across 29 commits and out
+of draft after its 25-comment review round, and this is a direct enabler of `routine-cutover`'s
+no-LLM endgame. It does **not** reverse decision 11 - that cut structure *derivation* in favour of
+GitHub's stack object; this executes an already-derived plan. Recording that distinction here so
+nobody re-litigates it from the decision-11 entry alone.
+
