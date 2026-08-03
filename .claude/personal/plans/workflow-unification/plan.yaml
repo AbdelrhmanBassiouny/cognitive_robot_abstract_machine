@@ -80,7 +80,7 @@ items:
     pull_request_number: 109
     track: personal-data
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn
     notes: >
       Extends the session-start hook so the notes branch also carries this project's
