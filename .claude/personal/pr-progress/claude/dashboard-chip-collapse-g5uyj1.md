@@ -54,6 +54,16 @@ Done:
   path back to this diff. Replied on the PR explaining both; not fixing
   either. `test_claude_dev_tooling` (the job that runs plan-dashboard's
   own suite) is green throughout.
+- A third `origin/main` merge landed the same way (2026-08-03), bringing
+  in a new Gazebo adapter (semantic_digital_twin/adapters/gazebo.py) and
+  its tests. New failure: 6 errors in test_gazebo.py::TestSmallWarehouseWorld,
+  all PathResolutionError - a missing ROS package
+  (aws_robomaker_small_warehouse_world) in the CI image, an environment
+  gap for the newly-merged feature, unrelated to this diff. The earlier
+  worker-crash test passed this run. Replied on the PR; not fixing it
+  here. Pattern is now well-established: every CI failure on this PR has
+  come from unrelated upstream code arriving via external main-merges,
+  never from this diff.
 
 Next:
 - Watch for CI results and review activity via the webhook subscription
