@@ -35,18 +35,20 @@ To do the same by hand:
 
 ```bash
 "$CLAUDE_PROJECT_DIR/.claude/hooks/create-personal-notes-branch.sh"           # create the branch
+"$CLAUDE_PROJECT_DIR/.claude/hooks/save-git-identity.sh" --name "Your Name" \
+  --email "you@example.com"                                                   # commit as yourself
 "$CLAUDE_PROJECT_DIR/.claude/hooks/check-setup.sh"                            # inspect, change nothing
 "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh" && cat CLAUDE.local.md   # verify
 ```
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
-Every session start prints its own summary, so neither of the two things below has to be
+Every session start prints its own summary, so none of the three things below has to be
 remembered. Its `setup:` line runs `check-setup.sh` for you and names any check that still needs
 setup; its `plan:` line distinguishes *no plans are tracked here* from *plans exist and no item
-tracks this branch* — the second being your cue to add the item before starting work, not after.
-Both lines appear only once a personal-notes branch exists, so a clone that uses none of this
-stays silent.
+tracks this branch* — the second being your cue to add the item before starting work, not after;
+its `git identity:` line says whose name this clone's commits will carry. All three appear only
+once a personal-notes branch exists, so a clone that uses none of this stays silent.
 
 ## Editing your notes
 
@@ -58,6 +60,35 @@ stays silent.
 
 Only content between the markers is ever saved. Headers and markers are regenerated every session,
 so editing them has no effect.
+
+## Git identity
+
+A fresh clone inherits whatever global git config its environment provides. In an agent session
+that is the agent's own identity, so commits are attributed to it *by default* — not by anyone
+forgetting. Record yours once:
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/save-git-identity.sh" --name "Your Name" --email "you@example.com"
+```
+
+It is stored at `.claude/personal/git-identity` on the notes branch, and every session start writes
+it into that clone's **repository-local** git config. A clone that already has one keeps it, and
+global config is never touched. Both arguments are required — the script will not read them from the
+clone's current config, since that is the thing that may be wrong.
+
+`check-setup.sh`'s `git_identity` row compares what a commit here would *actually* be authored as
+against what is recorded. It resolves that with `git var GIT_AUTHOR_IDENT` rather than
+`git config --get user.name`, because `GIT_AUTHOR_*`/`GIT_COMMITTER_*` outrank every config file
+when set — so the config value can say one thing while every commit says another.
+
+Setting those four variables in your environment does the same job with no hook at all, and applies
+from the session's first command rather than from when the hook runs. See
+[`personal-notes.env.example`](./personal-notes.env.example). Recording the identity on the notes
+branch is what covers environments where you can't set variables.
+
+Two things no local hook can reach: **commits made outside a session** (the GitHub merge button, a
+scheduled job) carry whatever identity that context has — set your GitHub account's commit email for
+those — and **global config stays wrong**, since only this repository is covered.
 
 ## Configuration
 
@@ -143,6 +174,8 @@ Any other label is preserved but not interpreted.
 - PR progress and plans can't be merged into a PR by construction: they're only ever written to the
   notes branch, never to a file tracked on your branch.
 - `CLAUDE.local.md` is gitignored.
+- The git identity sync only ever fills a gap: it writes repository-local config, and only when the
+  clone has none of its own. Global config is never written.
 - Always operates on this repo's project root, resolved from the scripts' own location on disk —
   not the caller's cwd, which a `SessionStart` hook can't rely on.
 - Coexists with your own `SessionStart` hooks: Claude Code concatenates hook arrays across settings

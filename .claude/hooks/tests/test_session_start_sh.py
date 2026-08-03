@@ -11,14 +11,20 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
-import os
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
-from scratch_repository import NOTES_BRANCH, WORK_BRANCH, ScratchRepository
+from scratch_repository import (
+    NOTES_BRANCH,
+    PERSONAL_GIT_IDENTITY_PATH,
+    SCRATCH_IDENTITY,
+    WORK_BRANCH,
+    ScratchRepository,
+)
+from session_start_summary import summary_value
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 
@@ -56,22 +62,6 @@ def branch_index(plan_identifier_by_branch: Mapping[str, str]) -> str:
     )
 
 
-def summary_value(output: str, label: str) -> str:
-    """
-    Extract one line's value from the summary report.
-
-    :param output: session-start.sh's standard output.
-    :param label: The summary line's label, such as ``plan``.
-    :return: Everything after the label, stripped.
-    :raises AssertionError: If the report has no such line.
-    """
-    prefix = f"  {label}:"
-    for line in output.splitlines():
-        if line.startswith(prefix):
-            return line[len(prefix) :].strip()
-    raise AssertionError(f"no '{label}' line in this summary report:\n{output}")
-
-
 # %% the scratch layout
 
 
@@ -103,36 +93,23 @@ def run_session_start(
     """
     Run the scratch layout's session-start.sh.
 
-    Every ``CLAUDE_PERSONAL_NOTES_*`` variable is stripped from the inherited
-    environment first, so a value that happens to be set in whoever's shell is running
-    the tests can never change what they assert.
-
     :param repository: A fixture-built scratch repository.
     :return: The finished subprocess.
     """
-    environment = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith("CLAUDE_PERSONAL_NOTES_")
-    }
-    return subprocess.run(
-        [
-            "bash",
-            str(repository.project_root / ".claude" / "hooks" / "session-start.sh"),
-        ],
-        cwd=repository.project_root,
-        capture_output=True,
-        text=True,
-        env=environment,
-    )
+    return repository.run_hook_script("session-start.sh")
 
 
 def publish_and_run(
     repository: ScratchRepository, notes_branch_files: Mapping[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     """
-    Publish the notes file plus *notes_branch_files* to the notes branch, then run
-    session-start.sh against it.
+    Publish everything a set up notes branch carries, plus *notes_branch_files*, then
+    run session-start.sh against it.
+
+    The recorded git identity is the one this repository already commits with, so the
+    baseline these tests assert against is a clone with nothing left to set up - what
+    the git identity round trip itself does is
+    ``test_git_identity_sync.py``'s subject, not this module's.
 
     :param repository: The fixture-built scratch repository.
     :param notes_branch_files: Extra file contents, keyed by path relative to the
@@ -140,7 +117,11 @@ def publish_and_run(
     :return: The finished session-start.sh process.
     """
     repository.publish_notes_branch(
-        {NOTES_PATH: "personal notes\n", **(notes_branch_files or {})}
+        {
+            NOTES_PATH: "personal notes\n",
+            PERSONAL_GIT_IDENTITY_PATH: SCRATCH_IDENTITY.as_git_config_file(),
+            **(notes_branch_files or {}),
+        }
     )
     return run_session_start(repository)
 

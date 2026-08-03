@@ -101,6 +101,16 @@ set -euo pipefail
 # the notes branch, a detached HEAD - see branch_can_hold_plan_item), where
 # the right answer is silence rather than a prompt.
 #
+# Git identity: the notes branch can also carry the contributor's own git
+# identity (.claude/personal/git-identity), which is written into this clone's
+# repository-local config so its commits are authored by the person working in
+# it. A fresh clone otherwise inherits whatever global git config the
+# environment provides, which in an agent session is the agent's own identity -
+# a default, not an oversight, and so not something discipline alone fixes.
+# Only ever fills a gap: a clone that already has a repository-local identity
+# keeps it, and global config is never touched. See ./save-git-identity.sh to
+# record one, and ./README.md for the two cases a hook cannot reach.
+#
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
 # check that still needs setup. It is reported rather than left to be run on
 # purpose because remembering to run it is the step that gets skipped - after
@@ -155,7 +165,8 @@ WROTE_ANYTHING=0
 # session to describe secondhand, in its own prose, what the hook did.
 SUMMARY_NOTES="not found"
 SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
-# SUMMARY_PLAN and SUMMARY_SETUP get no default on purpose: every path below
+# SUMMARY_PLAN, SUMMARY_GIT_IDENTITY and SUMMARY_SETUP get no default on
+# purpose: every path below
 # assigns one, so `set -u` turns a path that forgets into a loud failure rather
 # than the silently uninformative report this hook used to print.
 
@@ -317,6 +328,28 @@ else
   rm -f "${OUTPUT_FILE}"
 fi
 
+# Git identity, from the notes branch - so a fresh clone commits as the person
+# working in it rather than as whatever the environment's global git config
+# happens to be. Only ever fills a gap: a clone that already has its own
+# repository-local identity keeps it, and nothing here touches global config.
+#
+# Written before the setup check below, so check-setup.sh's git_identity row
+# reports on the identity this run has just set rather than the absence it was
+# about to fix - the same ordering, for the same reason, as CLAUDE.local.md.
+if ! recorded_git_identity_exists; then
+  SUMMARY_GIT_IDENTITY="not recorded on '${NOTES_BRANCH}' (${PERSONAL_GIT_IDENTITY_PATH}) - run ./save-git-identity.sh to record one"
+elif ! RECORDED_GIT_IDENTITY="$(recorded_git_identity)"; then
+  SUMMARY_GIT_IDENTITY="${PERSONAL_GIT_IDENTITY_PATH} on '${NOTES_BRANCH}' needs both user.name and user.email - nothing written"
+elif LOCAL_GIT_IDENTITY="$(repository_local_git_identity)"; then
+  IFS=$'\t' read -r LOCAL_NAME LOCAL_EMAIL <<< "${LOCAL_GIT_IDENTITY}"
+  SUMMARY_GIT_IDENTITY="already set in this clone: $(format_git_identity "${LOCAL_NAME}" "${LOCAL_EMAIL}") - left unchanged"
+else
+  IFS=$'\t' read -r RECORDED_NAME RECORDED_EMAIL <<< "${RECORDED_GIT_IDENTITY}"
+  git config --local user.name "${RECORDED_NAME}"
+  git config --local user.email "${RECORDED_EMAIL}"
+  SUMMARY_GIT_IDENTITY="set from '${NOTES_BRANCH}' (${PERSONAL_GIT_IDENTITY_PATH}): $(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}")"
+fi
+
 # Setup verdict, from ./check-setup.sh - the single read-only source of truth
 # for whether this clone is set up. Reported here because remembering to run it
 # is exactly what does not happen: a session that skips it discovers the same
@@ -355,5 +388,6 @@ session-start.sh summary:
   personal notes:  ${SUMMARY_NOTES}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
+  git identity:    ${SUMMARY_GIT_IDENTITY}
   setup:           ${SUMMARY_SETUP}
 SUMMARY
