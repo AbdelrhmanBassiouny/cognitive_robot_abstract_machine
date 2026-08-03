@@ -293,7 +293,7 @@ class Bridge:
     The newest world snapshot in the trajectory-frame format.
     """
 
-    object_meta: List[Dict[str, Any]] = field(default_factory=list)
+    object_metadata: List[Dict[str, Any]] = field(default_factory=list)
     """
     Geometry catalog for the viewer: one entry per loose object.
     """
@@ -472,7 +472,7 @@ class Bridge:
         Replace the published bodies and rebuild the viewer's geometry catalog.
         """
         self._bodies = bodies
-        self._build_object_meta(bodies)
+        self._build_object_metadata(bodies)
 
     # %% what the HTTP layer reads
     def object_catalog(self) -> List[Dict[str, Any]]:
@@ -480,7 +480,7 @@ class Bridge:
         The geometry catalog the viewer spawns live objects from.
         """
         with self._lock:
-            return list(self.object_meta)
+            return list(self.object_metadata)
 
     def object_keys(self) -> List[str]:
         """
@@ -637,7 +637,7 @@ class Bridge:
             if isinstance(connection, ActiveConnection1DOF)
         ]
 
-    def _build_object_meta(self, bodies: Dict[str, Body]) -> None:
+    def _build_object_metadata(self, bodies: Dict[str, Body]) -> None:
         """
         Rebuild the geometry catalog the viewer spawns live objects from.
 
@@ -677,7 +677,7 @@ class Bridge:
                 )
         self._mesh_serve = serve
         with self._lock:
-            self.object_meta = catalog
+            self.object_metadata = catalog
 
     @staticmethod
     def _box_size(body: Body) -> Optional[List[float]]:
