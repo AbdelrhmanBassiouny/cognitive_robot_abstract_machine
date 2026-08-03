@@ -24,8 +24,16 @@ lemminflect/pyjpt, `PYTHONPATH=krrood/src:probabilistic_model/src`).
    matching box. Binding the outer variable with a preceding condition masks it.
    `not_(exists(...))` and `for_all(...)` alone are broken the same way.
 
-### Proposal put to the user
-`exists(*conditions)` with semi-join semantics: local = free(condition) \ outer-visible;
-one row per distinct outer binding, first witness per group, locals never escape. Keep
-`for_all`'s variable (the ∀/∃ split is not derivable). Awaiting the user's decision on
-scope (API change alone, or the short-circuit fix too, and whether they are one PR or two).
+### Outcome: superseded by a tracked plan
+The investigation is now the **`eql-existential-semantics`** plan (tracking issue #137,
+dashboard <https://claude.ai/code/artifact/b2971b63-c5b5-466d-8542-6f5008f303cf>) — 8
+items, 4 waves, 5 tracks, all findings/literature/TDD cases recorded in its `plan.yaml`
+and `roadmap.md` on the personal-notes branch. This branch itself carries no code and is
+not an item in the plan; new work starts on the plan's own item branches.
+
+Key reversal recorded there: the binding-order fix is the **prerequisite**, not an
+optional extra — a correct semi-join `exists` evaluated without a bound outer relation
+returns *every* row. Wave 1 is blocked on PR #99 (`rdr-refactor`) merging.
+
+User decisions (2026-08-03): block on #99; OR/safe-range as its own parallel track; hard
+API break with no shim; tracking issue yes.
