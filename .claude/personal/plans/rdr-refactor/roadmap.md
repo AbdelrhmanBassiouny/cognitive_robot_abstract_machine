@@ -805,3 +805,16 @@ introduced here.
 
 The `_materialize` defect is now `dag-facade-hardening`'s `non-mutating-negation` item. When it
 lands, **revisit `GuardCondition.negated`** — the recommendation here was explicitly conditional.
+
+### Closed (2026-08-03)
+
+The developer marked #41 **ready for review** again after the push. CI green 20/20 on head
+`29c27cca`, including `test_each_lib (krrood)`; `draft: false`, `mergeable_state: clean`, all 23
+threads resolved. #41 is ready to merge as the stack bottom.
+
+Worth recording for future sessions: **CI is the load-bearing verification here, not the local
+run.** This resolve session's container shipped no interpreter with the project's dependencies at
+all — the 206 failures in its sweep were entirely environmental, which is exactly why the
+before/after comparison (206/935 vs 206/937) rather than the absolute number was the signal. CI
+runs the real environment and passed. A local sweep in a bare container can only show *no new
+failures*; it cannot show *no failures*.
