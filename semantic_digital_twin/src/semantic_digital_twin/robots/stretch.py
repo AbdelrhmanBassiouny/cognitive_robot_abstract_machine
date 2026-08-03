@@ -28,6 +28,7 @@ from semantic_digital_twin.robots.robot_part_mixins import (
     HasEndEffector,
     HasSensors,
 )
+from semantic_digital_twin.world_description.connections import DifferentialDrive
 from semantic_digital_twin.robots.robot_parts import (
     AbstractRobot,
     Arm,
@@ -320,7 +321,7 @@ class StretchTorso(Torso, HasNeck[StretchNeck], HasOneArm[StretchArm]):
 
 
 @dataclass(eq=False)
-class StretchMobileBase(MobileBase, HasTorso[StretchTorso]):
+class StretchMobileBase(MobileBase[DifferentialDrive], HasTorso[StretchTorso]):
 
     full_body_controlled: bool = field(default=True, kw_only=True)
     forward_axis: Vector3 = field(default_factory=Vector3.NEGATIVE_Y)

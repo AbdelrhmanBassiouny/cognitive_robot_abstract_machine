@@ -1,7 +1,7 @@
 ---
 name: plan-item-kickoff
 description: Gather everything available about one tracked plan item (its plan.yaml entry, roadmap.md history/design context, its dependency chain's live GitHub state, and patterns from already-landed sibling items in the same track) and propose a concrete implementation plan via plan mode, without writing any code. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
-allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__Claude_Code_Remote__subscribe_pr_activity
+allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
 # Plan Item Kickoff
@@ -13,6 +13,14 @@ implementation plan via plan mode. **This skill never writes code, creates a
 branch, or pushes anything** — it is a research-and-planning skill, not an
 implementation one. Whether to implement the approved plan in this session
 or a fresh one is the user's call, made after they see it.
+
+## 0. Check the setup is in place, and offer it if not
+
+The item's manifest entry and roadmap live on the personal-notes branch, which
+the user may not have set up yet. Follow
+`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
+the check, and if it reports anything missing, offer `/setup-personal-notes`
+rather than failing on a branch that isn't there.
 
 ## 1. Resolve the item
 

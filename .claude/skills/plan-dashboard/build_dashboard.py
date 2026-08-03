@@ -136,8 +136,8 @@ class PullRequestLabel(StrEnum):
     may add labels this dashboard never needs to know about. See
     :attr:`PullRequestRecord.identified_labels` for how an unrecognized
     label is handled (silently excluded, not an error), and
-    ``.claude/hooks/README.md``'s "pull request labels this tooling relies on"
-    section for what each member means and who applies it.
+    ``.claude/hooks/README.md``'s "labels the dashboard reads" list for what
+    each member means and who applies it.
     """
 
     MERGED = "merged"
@@ -146,7 +146,7 @@ class PullRequestLabel(StrEnum):
 
 
 class ValidationProblem(ABC):
-    """A single problem found while validating a plan.yaml - see plans/README.md.
+    """A single problem found while validating a plan.yaml - see plan-schema.md.
 
     One dataclass subclass per validation rule, each carrying the specific
     fields that rule cares about rather than a pre-formatted string - so a
@@ -297,7 +297,7 @@ class DependencyCycle(ValidationProblem):
 
 
 class PlanValidationError(Exception):
-    """Raised when a plan.yaml fails schema validation - see plans/README.md."""
+    """Raised when a plan.yaml fails schema validation - see plan-schema.md."""
 
     def __init__(self, problems: list[ValidationProblem]) -> None:
         self.problems = problems
@@ -592,6 +592,13 @@ class DependencyChip:
     tooltip: str
     """The chip's hover title: the dependency's title, or its identifier
     again if it doesn't resolve to a known item."""
+
+    is_ready: bool
+    """Whether the dependency is actually safe to build on right now
+    (:meth:`Item.is_ready_to_unblock_dependents`) - ``False`` for an
+    unresolved identifier, since an item this plan doesn't know about can
+    never be considered ready. Drives the chip's ``chip-unmet`` styling, the
+    dashboard's one visual cue that an item is blocked on this dependency."""
 
 
 @dataclass(frozen=True)
@@ -1104,13 +1111,17 @@ class DashboardRenderer:
             if dependency is None:
                 chips.append(
                     DependencyChip(
-                        identifier=dependency_identifier, tooltip=dependency_identifier
+                        identifier=dependency_identifier,
+                        tooltip=dependency_identifier,
+                        is_ready=False,
                     )
                 )
             else:
                 chips.append(
                     DependencyChip(
-                        identifier=dependency.identifier, tooltip=dependency.title
+                        identifier=dependency.identifier,
+                        tooltip=dependency.title,
+                        is_ready=dependency.is_ready_to_unblock_dependents(),
                     )
                 )
         return chips
@@ -1165,7 +1176,7 @@ class DashboardRenderer:
                 for identifier in item.depends_on
                 if identifier in self.items_by_identifier
             ]
-            if not dependencies or item.status not in (
+            if item.status not in (
                 ItemStatus.NOT_STARTED,
                 ItemStatus.BLOCKED,
             ):
