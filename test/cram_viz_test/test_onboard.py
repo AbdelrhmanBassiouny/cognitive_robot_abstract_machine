@@ -3,8 +3,8 @@ Tests for the onboarder's pure post-processing and the URDF asset bundler.
 
 Recording itself needs a running coraplex demo, but everything that turns a recording
 into a scene bundle is plain data work: deciding when an object moved, finding the
-attach/detach window of each transport, labelling the resulting segments, and making
-a URDF self-contained. Those are covered here against hand-built recordings.
+attach/detach window of each transport, labelling the resulting segments, and making a
+URDF self-contained. Those are covered here against hand-built recordings.
 """
 
 from __future__ import annotations
@@ -51,6 +51,57 @@ def recording(
     return recorder
 
 
+# %% asset and tick hooks
+class TestAssetHookMethods:
+    """
+    The methods ``install_asset_hooks``/``install_tick_hook`` patch in.
+
+    Exercised directly with fake ``original`` callables, so none of the real
+    semantic_digital_twin/giskardpy classes need to be monkeypatched here.
+    """
+
+    def test_a_resolution_is_remembered_and_returned(self):
+        recorder = Recorder()
+
+        result = recorder._remember_resolution(
+            lambda resolver, uri: "/opt/pkg/cup.stl",
+            "the-resolver",
+            "package://pkg/cup.stl",
+        )
+
+        assert result == "/opt/pkg/cup.stl"
+        assert recorder.resolutions == {"package://pkg/cup.stl": "/opt/pkg/cup.stl"}
+
+    def test_a_urdf_source_is_recorded_once(self):
+        recorder = Recorder()
+        original = lambda cls, file_path, **kwargs: "parsed"
+
+        first = recorder._remember_urdf_source(original, "the-cls", "robot.urdf")
+        recorder._remember_urdf_source(original, "the-cls", "robot.urdf")
+
+        assert first == "parsed"
+        assert recorder.urdf_sources == ["robot.urdf"]
+
+    def test_a_mesh_source_is_recorded_once(self):
+        recorder = Recorder()
+        original = lambda stl_parser, file_path, *args, **kwargs: None
+
+        recorder._remember_mesh_source(original, "the-parser", "cup.stl")
+        recorder._remember_mesh_source(original, "the-parser", "cup.stl")
+
+        assert recorder.mesh_sources == ["cup.stl"]
+
+    def test_the_tick_hook_forwards_to_the_original_and_records_the_frame(self):
+        recorder = Recorder()
+        recorded_executors = []
+        recorder.record_frame = recorded_executors.append
+
+        result = recorder._record_tick(lambda executor: "ticked", "the-executor")
+
+        assert result == "ticked"
+        assert recorded_executors == ["the-executor"]
+
+
 # %% movement detection
 class TestMovementDetection:
     def test_a_pose_is_unmoved_within_the_tolerance(self):
@@ -92,8 +143,8 @@ class TestObjectWindows:
 
     def test_an_instant_jump_yields_no_window(self):
         """
-        An object that is already at its destination the frame after it leaves the
-        spawn has an empty window, so it is not reported as a transport.
+        An object that is already at its destination the frame after it leaves the spawn
+        has an empty window, so it is not reported as a transport.
         """
         frames = [{"milk.stl": pose_at(0, 0)} for _ in range(3)]
         frames += [{"milk.stl": pose_at(2, 0)} for _ in range(3)]

@@ -39,6 +39,7 @@ from pathlib import Path
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from typing_extensions import (
     Any,
+    Callable,
     Dict,
     List,
     Optional,
@@ -51,6 +52,7 @@ from typing_extensions import (
 from cram_viz import paths
 from cram_viz.body_geometry import BodyExtent
 from cram_viz.live.bridge import ROBOT_BASE_KEY
+from cram_viz.monkey_patch import MethodPatch
 from cram_viz.onboard.bundle_urdf import bundle_urdf
 from cram_viz.palette import ObjectPalette
 
@@ -58,6 +60,8 @@ if TYPE_CHECKING:
     from coraplex.plans.executables import Executable
     from coraplex.plans.plan_node import ActionNode
     from giskardpy.executor import Executor
+    from semantic_digital_twin.adapters.mesh import STLParser
+    from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
     from semantic_digital_twin.adapters.urdf import URDFParser
     from semantic_digital_twin.world_description.world_entity import Body
 
@@ -266,45 +270,51 @@ class Recorder:
         from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
         from semantic_digital_twin.adapters.urdf import URDFParser
 
-        recorder = self
+        MethodPatch(PackageUriResolver, "resolve").install(self._remember_resolution)
+        MethodPatch(URDFParser, "from_file").install(self._remember_urdf_source)
+        MethodPatch(STLParser, "__init__").install(self._remember_mesh_source)
 
-        original_resolve = PackageUriResolver.resolve
+    def _remember_resolution(
+        self,
+        original: Callable[[PackageUriResolver, str], str],
+        resolver: PackageUriResolver,
+        uri: str,
+    ) -> str:
+        """
+        Resolve as usual, but remember the uri -> path mapping.
+        """
+        resolved = original(resolver, uri)
+        self.resolutions[uri] = resolved
+        return resolved
 
-        def resolve(self: PackageUriResolver, uri: str) -> str:
-            """
-            Resolve as usual, but remember the uri -> path mapping.
-            """
-            resolved = original_resolve(self, uri)
-            recorder.resolutions[uri] = resolved
-            return resolved
+    def _remember_urdf_source(
+        self,
+        original: Callable[..., URDFParser],
+        cls: type,
+        file_path: str,
+        **kwargs: Any,
+    ) -> URDFParser:
+        """
+        Parse as usual, but remember this URDF/xacro source file.
+        """
+        if file_path not in self.urdf_sources:
+            self.urdf_sources.append(file_path)
+        return original(cls, file_path, **kwargs)
 
-        PackageUriResolver.resolve = resolve
-
-        original_from_file = URDFParser.from_file.__func__
-
-        def from_file(cls: Any, file_path: str, **kwargs: Any) -> URDFParser:
-            """
-            Parse as usual, but remember this URDF/xacro source file.
-            """
-            if file_path not in recorder.urdf_sources:
-                recorder.urdf_sources.append(file_path)
-            return original_from_file(cls, file_path, **kwargs)
-
-        URDFParser.from_file = classmethod(from_file)
-
-        original_init = STLParser.__init__
-
-        def initialize(
-            self: STLParser, file_path: str, *args: Any, **kwargs: Any
-        ) -> None:
-            """
-            Initialize as usual, but remember this loose object's mesh file.
-            """
-            if file_path not in recorder.mesh_sources:
-                recorder.mesh_sources.append(file_path)
-            return original_init(self, file_path, *args, **kwargs)
-
-        STLParser.__init__ = initialize
+    def _remember_mesh_source(
+        self,
+        original: Callable[..., None],
+        stl_parser: STLParser,
+        file_path: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Initialize as usual, but remember this loose object's mesh file.
+        """
+        if file_path not in self.mesh_sources:
+            self.mesh_sources.append(file_path)
+        return original(stl_parser, file_path, *args, **kwargs)
 
     # %% trajectory hook
     def install_tick_hook(self) -> None:
@@ -313,18 +323,21 @@ class Recorder:
         """
         from giskardpy.executor import Executor
 
-        recorder = self
-        original_tick = Executor.tick
+        MethodPatch(Executor, "tick").install(self._record_tick)
 
-        def tick(self: Executor, *args: Any, **kwargs: Any) -> None:
-            """
-            Run the real tick, then record its resulting world state.
-            """
-            result = original_tick(self, *args, **kwargs)
-            recorder.record_frame(self)
-            return result
-
-        Executor.tick = tick
+    def _record_tick(
+        self,
+        original: Callable[..., None],
+        executor: Executor,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Run the real tick, then record its resulting world state.
+        """
+        result = original(executor, *args, **kwargs)
+        self.record_frame(executor)
+        return result
 
     def bind_to_executor(self, executor: Executor) -> None:
         """

@@ -1,9 +1,10 @@
 """
 Hooks that attach the bridge to a running coraplex/giskardpy demo.
 
-Each hook wraps one CRAM method and forwards what it observes to the bridge; all
-of the interpretation lives there. Installing is idempotent, so the two documented
-ways of starting live mode can be combined safely.
+Each hook installs a :class:`LiveHooks` method in place of one CRAM method; that
+method forwards what it observes to the bridge, and all of the interpretation lives
+there. Installing is idempotent, so the two documented ways of starting live mode can
+be combined safely.
 
 .. warning:: Every world access (forward kinematics for poses etc.) happens on
    the *simulation* thread itself, inside the ``Executor.tick`` hook. Reading
@@ -15,8 +16,9 @@ ways of starting live mode can be combined safely.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
-from typing_extensions import Any
+from typing_extensions import Any, Callable
 
 from coraplex.plans.executables import GiskardExecutable
 from coraplex.plans.plan import Plan
@@ -24,9 +26,92 @@ from giskardpy.executor import Executor
 from semantic_digital_twin.adapters.mesh import MeshParser
 from semantic_digital_twin.world import World
 
-from cram_viz.live.bridge import BRIDGE, LiveHook, TaskStatusName
+from cram_viz.live.bridge import BRIDGE, Bridge, LiveHook, TaskStatusName
+from cram_viz.monkey_patch import MethodPatch
 
 logger = logging.getLogger(__name__)
+
+
+# %% wrappers forwarded to the bridge
+@dataclass(frozen=True)
+class LiveHooks:
+    """
+    Thin per-CRAM-method wrappers that forward what they observe to a bridge.
+
+    Kept as real methods, rather than as closures defined inside the ``install_*``
+    functions, so each one is independently callable and testable.
+    """
+
+    bridge: Bridge
+    """
+    The bridge every wrapper forwards its observations to.
+    """
+
+    def _observe_tick(
+        self,
+        original: Callable[..., None],
+        executor: Executor,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Run the real tick, then let the bridge observe its result.
+        """
+        result = original(executor, *args, **kwargs)
+        if self.bridge.world is None:
+            self.bridge.attach(executor.context.world)
+        try:
+            self.bridge.observe_tick(executor.motion_statechart)
+        except Exception:
+            # boundary guard: a visualization bug must never take the robot demo
+            # down, so this hook swallows everything the bridge raises
+            logger.exception("bridge snapshot failed this tick")
+        return result
+
+    def _begin_plan(
+        self, original: Callable[..., Any], plan: Plan, *args: Any, **kwargs: Any
+    ) -> Any:
+        """
+        Capture the plan the moment it starts performing.
+        """
+        self.bridge.begin_plan(plan)
+        return original(plan, *args, **kwargs)
+
+    def _track_motion_group(
+        self,
+        original: Callable[..., None],
+        executable: GiskardExecutable,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Track this executable's motion group and freeze its final status.
+        """
+        self.bridge.bind_motion_group(executable)
+        try:
+            result = original(executable, *args, **kwargs)
+        except BaseException:
+            self.bridge.freeze_motion_group(executable, TaskStatusName.FAILED)
+            raise
+        self.bridge.freeze_motion_group(executable, TaskStatusName.SUCCEEDED)
+        return result
+
+    def _remember_mesh_file(
+        self,
+        original: Callable[..., World],
+        mesh_parser: MeshParser,
+        *args: Any,
+        **kwargs: Any,
+    ) -> World:
+        """
+        Remember this mesh's file path before parsing it.
+        """
+        if mesh_parser.file_path:
+            self.bridge.remember_mesh_file(mesh_parser.file_path)
+        return original(mesh_parser, *args, **kwargs)
+
+
+_LIVE_HOOKS = LiveHooks(bridge=BRIDGE)
 
 
 # %% world and motion
@@ -37,24 +122,7 @@ def install_tick_hook() -> None:
     if not BRIDGE.claim_hook(LiveHook.TICK):
         logger.debug("tick hook already installed")
         return
-    original_tick = Executor.tick
-
-    def tick(self: Executor, *args: Any, **kwargs: Any) -> None:
-        """
-        Run the real tick, then let the bridge observe its result.
-        """
-        result = original_tick(self, *args, **kwargs)
-        if BRIDGE.world is None:
-            BRIDGE.attach(self.context.world)
-        try:
-            BRIDGE.observe_tick(self.motion_statechart)
-        except Exception:
-            # boundary guard: a visualization bug must never take the robot demo
-            # down, so this hook swallows everything the bridge raises
-            logger.exception("bridge snapshot failed this tick")
-        return result
-
-    Executor.tick = tick
+    MethodPatch(Executor, "tick").install(_LIVE_HOOKS._observe_tick)
 
 
 # %% the coraplex plan
@@ -69,33 +137,8 @@ def install_plan_hooks() -> None:
     if not BRIDGE.claim_hook(LiveHook.PLAN):
         logger.debug("plan hooks already installed")
         return
-    original_perform = Plan.perform
-
-    def perform(self: Plan, *args: Any, **kwargs: Any) -> Any:
-        """
-        Capture the plan the moment it starts performing.
-        """
-        BRIDGE.begin_plan(self)
-        return original_perform(self, *args, **kwargs)
-
-    Plan.perform = perform
-
-    original_execute = GiskardExecutable.execute
-
-    def execute(self: GiskardExecutable, *args: Any, **kwargs: Any) -> None:
-        """
-        Track this executable's motion group and freeze its final status.
-        """
-        BRIDGE.bind_motion_group(self)
-        try:
-            result = original_execute(self, *args, **kwargs)
-        except BaseException:
-            BRIDGE.freeze_motion_group(self, TaskStatusName.FAILED)
-            raise
-        BRIDGE.freeze_motion_group(self, TaskStatusName.SUCCEEDED)
-        return result
-
-    GiskardExecutable.execute = execute
+    MethodPatch(Plan, "perform").install(_LIVE_HOOKS._begin_plan)
+    MethodPatch(GiskardExecutable, "execute").install(_LIVE_HOOKS._track_motion_group)
 
 
 # %% object geometry
@@ -110,14 +153,4 @@ def install_mesh_hook() -> None:
     if not BRIDGE.claim_hook(LiveHook.MESH):
         logger.debug("mesh hook already installed")
         return
-    original_parse = MeshParser.parse
-
-    def parse(self: MeshParser, *args: Any, **kwargs: Any) -> World:
-        """
-        Remember this mesh's file path before parsing it.
-        """
-        if self.file_path:
-            BRIDGE.remember_mesh_file(self.file_path)
-        return original_parse(self, *args, **kwargs)
-
-    MeshParser.parse = parse
+    MethodPatch(MeshParser, "parse").install(_LIVE_HOOKS._remember_mesh_file)
