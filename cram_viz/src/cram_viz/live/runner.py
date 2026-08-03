@@ -13,6 +13,7 @@ from pathlib import Path
 
 from typing_extensions import Optional, TYPE_CHECKING
 
+from cram_viz import get_logger
 from cram_viz.live import hooks
 from cram_viz.live.bridge import BRIDGE
 from cram_viz.live.http import DEFAULT_PORT, serve
@@ -20,7 +21,7 @@ from cram_viz.live.http import DEFAULT_PORT, serve
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def start(

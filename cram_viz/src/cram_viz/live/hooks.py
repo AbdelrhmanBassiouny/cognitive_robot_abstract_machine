@@ -15,7 +15,6 @@ be combined safely.
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 
 from typing_extensions import Any, Callable
@@ -26,10 +25,11 @@ from giskardpy.executor import Executor
 from semantic_digital_twin.adapters.mesh import MeshParser
 from semantic_digital_twin.world import World
 
+from cram_viz import get_logger
 from cram_viz.live.bridge import BRIDGE, Bridge, LiveHook, TaskStatusName
 from cram_viz.monkey_patch import MethodPatch
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # %% wrappers forwarded to the bridge

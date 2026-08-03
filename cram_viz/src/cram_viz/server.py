@@ -35,9 +35,9 @@ from pathlib import Path
 from typing_extensions import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
-from cram_viz import paths
+from cram_viz import get_logger, paths
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_PORT = 8711
 

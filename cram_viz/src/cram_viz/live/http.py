@@ -19,7 +19,6 @@ Handlers only ever read finished snapshot dicts — never the world (see
 from __future__ import annotations
 
 import json
-import logging
 import os
 import threading
 import urllib.parse
@@ -28,9 +27,10 @@ from pathlib import Path
 
 from typing_extensions import Any, Dict
 
+from cram_viz import get_logger
 from cram_viz.live.bridge import BRIDGE, MalformedMoveRequest, MoveRequest
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_PORT = int(os.environ.get("LIVE_VIZ_PORT", "8765"))
 

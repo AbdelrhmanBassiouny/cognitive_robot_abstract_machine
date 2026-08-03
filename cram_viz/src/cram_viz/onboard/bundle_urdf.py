@@ -28,9 +28,9 @@ from pathlib import Path
 
 from typing_extensions import Any, Dict, List, Optional
 
-from cram_viz import paths
+from cram_viz import get_logger, paths
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: mesh formats the web viewer's loaders can read
 MESH_SUFFIXES = (".dae", ".stl", ".obj")
@@ -148,8 +148,8 @@ def _bundled_relative_path(uri: str) -> str:
     """
     Where a reference lands inside ``<out>/meshes/``.
 
-    Package references keep their package directory so same-named meshes from
-    different packages cannot collide; everything else is flattened.
+    Package references keep their package directory so same-named meshes from different
+    packages cannot collide; everything else is flattened.
     """
     if uri.startswith(PACKAGE_SCHEME):
         package, _, relative_path = uri[len(PACKAGE_SCHEME) :].partition("/")
@@ -189,8 +189,8 @@ def _copy_side_assets(
     source_mesh: str, bundled_mesh: str, copied: Dict[str, str], missing: List[str]
 ) -> None:
     """
-    Copy the textures a ``.dae`` references, or the ``.mtl`` plus its textures for
-    an ``.obj``.
+    Copy the textures a ``.dae`` references, or the ``.mtl`` plus its textures for an
+    ``.obj``.
     """
     source_directory = os.path.dirname(source_mesh)
     bundled_directory = os.path.dirname(bundled_mesh)

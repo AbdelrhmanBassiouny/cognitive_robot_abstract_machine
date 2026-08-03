@@ -17,7 +17,6 @@ propagated up the plan tree; those statuses are flagged ``derived``.
 
 from __future__ import annotations
 
-import logging
 import threading
 import time
 import urllib.parse
@@ -46,6 +45,7 @@ from semantic_digital_twin.spatial_types import (
     Quaternion,
     RotationMatrix,
 )
+from cram_viz import get_logger
 from cram_viz.body_geometry import BodyExtent
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -63,7 +63,7 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.world_entity import Body
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class TaskStatusName(str, Enum):

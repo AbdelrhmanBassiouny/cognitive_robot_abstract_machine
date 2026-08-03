@@ -52,7 +52,7 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
-from cram_viz import paths
+from cram_viz import get_logger, paths
 from cram_viz.body_geometry import BodyExtent
 from cram_viz.live.bridge import ROBOT_BASE_KEY
 from cram_viz.monkey_patch import MethodPatch
@@ -65,7 +65,7 @@ if TYPE_CHECKING:
     from giskardpy.executor import Executor
     from semantic_digital_twin.world_description.world_entity import Body
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: when this process started, so progress lines can show elapsed recording time
 _STARTED_AT = time.time()

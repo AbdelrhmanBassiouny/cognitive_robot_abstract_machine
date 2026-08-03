@@ -39,9 +39,9 @@ from typing_extensions import (
 
 from krrood.entity_query_language import factories as eql_factories
 
-from cram_viz import paths
+from cram_viz import get_logger, paths
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 @runtime_checkable
