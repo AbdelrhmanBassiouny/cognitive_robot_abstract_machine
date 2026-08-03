@@ -143,6 +143,35 @@ items:
       main with core EQL plus rules/ alone, so it lands early rather than behind
       the rename. Supersedes rdr-refactor's D-ui-splice-fix (#78).
 
+  - id: non-mutating-negation
+    title: "Negating a live expression must not reparent it"
+    branch: null
+    pull_request_number: null
+    track: bugs-and-audit
+    depends_on: []
+    status: not_started
+    notes: >
+      Surfaced 2026-08-03 by rdr-refactor's #41 review thread r3702021144, which
+      asked whether GuardCondition.negated could be replaced by wrapping the guard
+      expression in Not(). It cannot, today, and the reason is this plan's defect
+      class: factories.not_ -> SymbolicExpression._invert_ -> Not(self) ->
+      base_expressions.py:299 child._parent_ = self, so negating a node that
+      belongs to a live tree reparents it. The developer kept the flag on that
+      basis and asked for the underlying defect to be filed here.
+      The concrete instance is rdr/condition_resolver.py:104, where _materialize
+      calls not_(guard.expression) on a live rule-tree node - honouring the
+      no-mutation rule during traversal and violating it at rule-insertion time.
+      Two halves, and only the first belongs to this plan: a way to build a negated
+      view of an expression without adopting the operand (the same "resolve
+      ownership from the asking context rather than the structural pointer" move as
+      insert-at-ownership-parentage, applied to construction). The _materialize call
+      site is then a one-line follow-up, but condition_resolver.py is not on main
+      yet - it arrives with rdr-refactor's #41 - so the fix lands here and the call
+      site is repointed whenever that stack lands, whichever order they merge in.
+      Once this exists, rdr-refactor should revisit GuardCondition.negated: the
+      #41 analysis found Not()-wrapping cleaner at 4 of 6 concrete sites, with this
+      hazard the only thing standing against it.
+
   - id: facade-rename-and-guard
     title: "Rename structural accessors + reusable ownership accessor + guard test"
     branch: null
