@@ -13,97 +13,7 @@ from pathlib import Path
 
 import pytest
 
-SCENE = {
-    "name": "fixture",
-    "fps": 30,
-    "trajectory": "trajectory.json",
-    "models": [
-        {"name": "pr2", "urdf": "robot.urdf", "prefix": "pr2", "robot": True},
-    ],
-    "robot": {
-        "name": "pr2",
-        "prefix": "pr2",
-        "parts": {
-            "left_arm": ["l_shoulder_link", "l_wrist_link"],
-            "left_gripper": ["l_gripper_link"],
-        },
-    },
-    "objects": [
-        {
-            "id": "milk",
-            "key": "milk.stl",
-            "mesh": "milk.stl",
-            "spawn": [2.37, 2.0, 1.05],
-            "color": "#f3f0ea",
-        },
-    ],
-    "segments": [
-        {
-            "step": "prepare",
-            "action": "ParkArmsAction",
-            "arm": None,
-            "start": 0,
-            "end": 1,
-        },
-        {
-            "step": "transport_milk",
-            "action": "TransportAction",
-            "arm": "left",
-            "start": 1,
-            "end": 3,
-            "picks": "milk",
-        },
-    ],
-    "planTrees": [
-        {
-            "kind": "SequentialNode",
-            "label": "SequentialNode",
-            "status": "SUCCEEDED",
-            "children": [
-                {
-                    "kind": "ActionNode",
-                    "label": "TransportAction",
-                    "status": "CREATED",
-                    "arm": "LEFT",
-                    "target": "milk.stl",
-                    "children": [
-                        {
-                            "kind": "ConditionNode",
-                            "label": "ConditionNode",
-                            "status": "CREATED",
-                            "children": [],
-                        },
-                        {
-                            "kind": "MotionNode",
-                            "label": "MoveTCPMotion",
-                            "status": "CREATED",
-                            "children": [],
-                        },
-                    ],
-                },
-            ],
-        },
-    ],
-    "placeTarget": {
-        "pos": [4.9, 3.3],
-        "z": 0.72,
-        "bounds": {"minX": 4.4, "maxX": 5.5, "minY": 2.7, "maxY": 3.9},
-    },
-    "dragBounds": {"minX": 0, "maxX": 6, "minY": 0, "maxY": 6},
-}
-
-TRAJECTORY = {
-    "fps": 30,
-    "frames": [
-        {"pr2/torso_lift_joint": 0.0, "pr2/l_wrist_flex_joint": -0.1},
-        {"pr2/torso_lift_joint": 0.1, "pr2/l_wrist_flex_joint": -0.5},
-        {"pr2/torso_lift_joint": 0.3, "pr2/l_wrist_flex_joint": -0.2},
-    ],
-    "base": [[0, 0, 0, 0, 0, 0, 1]] * 3,
-    "objects": [{"milk.stl": [2.37, 2.0, 1.05, 0, 0, 0, 1]}] * 3,
-}
-
-#: real files instead of embedded strings, so they stay valid URDF and Python
+#: real files instead of embedded strings/dicts, so they stay valid URDF/JSON and Python
 DATASET_DIR = Path(__file__).parent / "dataset"
 
 #: the scene's robot description
@@ -111,6 +21,10 @@ ROBOT_URDF_PATH = DATASET_DIR / "fixture_robot.urdf"
 
 #: a miniature CRAM repository, so the knowledge base's scan is fast and deterministic
 ARCHITECTURE_DIR = DATASET_DIR / "architecture"
+
+#: the fixture scene bundle's scene.json and trajectory.json content
+SCENE = json.loads((DATASET_DIR / "scene.json").read_text())
+TRAJECTORY = json.loads((DATASET_DIR / "trajectory.json").read_text())
 
 
 def reset_knowledge_base_cache() -> None:
