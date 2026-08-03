@@ -426,6 +426,16 @@ class _ChartStructure:
     """
 
 
+class ObservationName(str, Enum):
+    """
+    A statechart node's trinary observation value, by name.
+    """
+
+    TRUE = "TRUE"
+    FALSE = "FALSE"
+    UNKNOWN = "UNKNOWN"
+
+
 @dataclass(frozen=True)
 class ChartNodeEntry:
     """
@@ -441,9 +451,9 @@ class ChartNodeEntry:
     The node's ``LifeCycleValues`` name (e.g. ``RUNNING``).
     """
 
-    obs: str
+    obs: ObservationName
     """
-    The node's trinary observation name (``TRUE``, ``FALSE`` or ``UNKNOWN``).
+    The node's trinary observation name.
     """
 
 
@@ -1215,15 +1225,15 @@ class Bridge:
             )
 
     @staticmethod
-    def _observation_name(observation: float) -> str:
+    def _observation_name(observation: float) -> ObservationName:
         """
         Trinary observation value → name (0 false, 0.5 unknown, 1 true).
         """
         if observation >= 0.75:
-            return "TRUE"
+            return ObservationName.TRUE
         if observation <= 0.25:
-            return "FALSE"
-        return "UNKNOWN"
+            return ObservationName.FALSE
+        return ObservationName.UNKNOWN
 
     @staticmethod
     def _serialize_chart_structure(chart: MotionStatechart) -> _ChartStructure:

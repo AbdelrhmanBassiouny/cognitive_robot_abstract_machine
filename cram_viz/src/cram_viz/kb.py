@@ -24,6 +24,7 @@ import os
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, fields, is_dataclass
+from enum import Enum
 from pathlib import Path
 
 from typing_extensions import (
@@ -190,6 +191,17 @@ class Position:
         return "(%.2f, %.2f, %.2f)" % (self.x, self.y, self.z)
 
 
+class ArmSide(str, Enum):
+    """
+    Which body side a joint/part belongs to, as inferred from its name.
+    """
+
+    LEFT = "left"
+    RIGHT = "right"
+    BODY = "body"
+    ENVIRONMENT = "environment"
+
+
 @dataclass(unsafe_hash=True)
 class Gripper:
     """
@@ -348,9 +360,9 @@ class JointMotion:
     Joint name (without the model prefix).
     """
 
-    arm_side: str
+    arm_side: ArmSide
     """
-    Body side the joint belongs to ('left' / 'right' / 'body' / …).
+    Body side the joint belongs to.
     """
 
     min_rad: float
@@ -742,16 +754,16 @@ def _measurement_line(
     return ["%s: %s m" % (label, number_format % value)]
 
 
-def _side_of_name(name: str) -> str:
+def _side_of_name(name: str) -> Optional[ArmSide]:
     """
-    Body side encoded in a part/link name: 'left', 'right' or ``''``.
+    Body side encoded in a part/link name, or None when it names neither.
     """
     lowered = name.lower()
     if "left" in lowered or lowered.startswith("l_"):
-        return "left"
+        return ArmSide.LEFT
     if "right" in lowered or lowered.startswith("r_"):
-        return "right"
-    return ""
+        return ArmSide.RIGHT
+    return None
 
 
 class KB:
@@ -930,20 +942,20 @@ class KB:
 
         link_to_part = {link: part for part, links in parts.items() for link in links}
 
-        def side_of(key: str) -> str:
+        def side_of(key: str) -> ArmSide:
             """
-            Which arm side a prefixed joint key belongs to, or "environment"/
-            "body" when it isn't part of an arm.
+            Which arm side a prefixed joint key belongs to, or ``ENVIRONMENT``/``BODY``
+            when it isn't part of an arm.
             """
             prefix, _, joint_name = key.partition("/")
             if "/" not in key:
                 prefix, joint_name = "", key
             if robot_prefix and prefix != robot_prefix:
-                return "environment"
+                return ArmSide.ENVIRONMENT
             part = link_to_part.get(joint_name.replace("_joint", "_link"))
             if part and _side_of_name(part):
                 return _side_of_name(part)
-            return _side_of_name(joint_name) or "body"
+            return _side_of_name(joint_name) or ArmSide.BODY
 
         return [
             JointMotion(
