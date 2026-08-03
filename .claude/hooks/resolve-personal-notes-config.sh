@@ -227,7 +227,7 @@ STACK_DIRECTORY=".claude/stack"
 # stack.py: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
 STACK_SCRIPT="${STACK_DIRECTORY}/stack.py"
-# stack.toml: the committed defaults stack.py's load_config layers a
+# stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
 STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
 # tests/: the pytest suite covering stack.py, including its personal-notes
