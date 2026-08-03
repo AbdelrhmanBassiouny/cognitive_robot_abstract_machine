@@ -56,10 +56,20 @@ The developer resolved the thread without counter-argument and marked #41 ready 
 - Filed `non-mutating-negation` on `dag-facade-hardening`, reported at #96 comment 5164248289.
   Both plans saved (`335b4d76`) and both dashboards republished.
 
+## Closed
+
+The developer marked #41 ready for review again after the push. **CI green 20/20 on
+`29c27cca`**, including `test_each_lib (krrood)`; `draft: false`, `mergeable_state: clean`,
+23/23 threads resolved. #41 is ready to merge as the stack bottom; the next steward pass
+cascades it forward through #63–#67/#98.
+
+CI green is the verification that counts here — this container had no interpreter with the
+project's dependencies, so the local sweep could only show *no new* failures (206 identical
+before and after), never *no* failures.
+
 ## Next
 
-Nothing outstanding on my side. #41 is the developer's to mark ready and merge as the stack
-bottom. When `non-mutating-negation` lands, `rdr-refactor` should reopen the
+Nothing outstanding. When `non-mutating-negation` (#96) lands, `rdr-refactor` should reopen the
 `GuardCondition.negated` question — the recommendation was explicitly conditional on it.
 
 Environment note for any follow-up in a fresh container: this repo's tests need **python3.12**
