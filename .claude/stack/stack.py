@@ -13,27 +13,41 @@ GitHub is the single source of truth. The stack is **not** declared in a ledger:
 ``.claude/personal/stack.toml`` on the personal-notes branch, if present, layers per-user overrides on
 top of them (see :func:`load_configuration`).
 
-Commands (run from the repo root)::
+Commands (run from the repo root; ``--help`` on any of them for its flags)::
 
-    python .claude/stack/stack.py status        # the whole stack: parent, state, drift
-    python .claude/stack/stack.py check         # would each branch merge cleanly onto its parent now?
-    python .claude/stack/stack.py next          # which branches to submit to cram2 next
-    python .claude/stack/stack.py next --porcelain   # machine-readable: one 'name<TAB>pr' line per branch
-    python .claude/stack/stack.py restack-plan  # bottom-up restack plan as JSON, for the `restack` workflow
-    python .claude/stack/stack.py configuration # every resolved setting, including the remotes
+    python .claude/stack/stack.py status         # the whole stack: parent, state, drift
+    python .claude/stack/stack.py check          # would each branch merge cleanly onto its parent now?
+    python .claude/stack/stack.py next           # which branches to submit upstream next
+    python .claude/stack/stack.py next --porcelain    # machine-readable: one 'name<TAB>pr' line per branch
+    python .claude/stack/stack.py restack-plan   # bottom-up restack plan as JSON
+    python .claude/stack/stack.py configuration  # every resolved setting, including the remotes
+    python .claude/stack/stack.py labels         # the complete label set a write must send
+    python .claude/stack/stack.py preflight      # may these commits move onto that branch?
+    python .claude/stack/stack.py promotion-link # the upstream compare-and-create URL for a branch
+    python .claude/stack/stack.py reparents      # children whose base has landed, and the base they need
+    python .claude/stack/stack.py landed         # open fork pull requests whose branch has landed
+
+The last five exist so the steps most easily got wrong by hand are computed rather than recalled: a
+label write replaces the whole set, a push whose two sides name different branches moves the wrong
+commits, an unencoded compare URL loses its prefill, and a landed parent is decided by git ancestry
+rather than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged
+by itself once its head is contained in its base, so nothing here has to close one.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
 import sys
 import tomllib
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from pathlib import Path
+from typing import ClassVar
+from urllib.parse import quote
 
 # %% configuration
 
@@ -301,19 +315,29 @@ class Configuration:
     """The command adding the upstream remote, or ``None`` once this checkout has one."""
 
 
-def load_configuration(path: Path = CONFIGURATION_PATH) -> Configuration:
+def load_configuration(
+    path: Path = CONFIGURATION_PATH,
+    fork_repository: Repository | None = None,
+    upstream_repository: Repository | None = None,
+) -> Configuration:
     """Parse the layered configuration into a :class:`Configuration`.
 
     Values from the committed *path* are the defaults; any key present in
     ``.claude/personal/stack.toml`` on the personal-notes branch overrides them, so a user's own
-    remotes/labels never have to be hand-edited into the checked-in file.
+    remotes/labels never have to be hand-edited into the checked-in file. A repository passed
+    here outranks both, so a caller that has been told which repository is which never has one
+    inferred for it.
 
     :param path: The committed defaults file.
+    :param fork_repository: The fork, when the caller already knows it.
+    :param upstream_repository: The upstream, when the caller already knows it.
     :return: The layered configuration.
     """
     values = _configuration_values(path)
-    upstream_repository = Repository.parse(values["upstream_repository"])
-    resolution = resolved_remotes(path)
+    upstream_repository = upstream_repository or Repository.parse(
+        values["upstream_repository"]
+    )
+    resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
         in_review_label=values.get("in_review_label", "in-review"),
         rebase_label=values.get("rebase_label", "rebase"),
@@ -338,21 +362,28 @@ def _configuration_values(path: Path) -> dict[str, str]:
     return values
 
 
-def resolved_remotes(path: Path = CONFIGURATION_PATH) -> RemoteResolution:
+def resolved_remotes(
+    path: Path = CONFIGURATION_PATH,
+    fork_repository: Repository | None = None,
+    upstream_repository: Repository | None = None,
+) -> RemoteResolution:
     """Resolve this checkout's fork and upstream remotes.
 
     :param path: The committed defaults file.
+    :param fork_repository: The fork, when the caller already knows it.
+    :param upstream_repository: The upstream, when the caller already knows it.
     :return: The resolved remotes.
     :raises ForkRemoteNotFoundError: If no remote points at a fork.
-    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
+    :raises AmbiguousForkRemoteError: If several do and nothing names which one it is.
     """
     values = _configuration_values(path)
     configured_fork = values.get("fork_repository")
     return resolve_remotes(
         _remote_urls(),
-        Repository.parse(values["upstream_repository"]),
+        upstream_repository or Repository.parse(values["upstream_repository"]),
         values.get("upstream_remote", "cram2"),
-        Repository.parse(configured_fork) if configured_fork else None,
+        fork_repository
+        or (Repository.parse(configured_fork) if configured_fork else None),
     )
 
 
@@ -592,6 +623,140 @@ def build_stack(
     return Stack(configuration=configuration, branches=branches, is_merged=is_merged)
 
 
+# %% label writes
+
+
+@dataclass
+class ContradictoryLabelWriteError(ValueError):
+    """Raised when one write is asked both to carry a label and to drop it."""
+
+    labels: tuple[str, ...]
+    """The labels asked for in both directions."""
+
+    def __str__(self) -> str:
+        """:return: Which labels contradict, and why no outcome is safe."""
+        return (
+            f"cannot both add and remove {', '.join(self.labels)}: "
+            f"either outcome would be a guess at what was meant"
+        )
+
+
+@dataclass(frozen=True)
+class LabelWrite:
+    """The complete label set a pull request has to be written back with.
+
+    GitHub's label write replaces the whole set rather than adding to it, so the labels a
+    change leaves untouched still have to be sent. Computing them from the intended change
+    alone is what silently strips the rest.
+    """
+
+    labels: tuple[str, ...]
+    """Every label the pull request will carry once written, in the order it will carry them."""
+
+    @classmethod
+    def replacing(
+        cls,
+        current: Iterable[str],
+        added: Iterable[str] = (),
+        removed: Iterable[str] = (),
+    ) -> LabelWrite:
+        """Work out the full set that adding and removing labels leaves behind.
+
+        :param current: The labels the pull request carries now.
+        :param added: Labels it must carry afterwards.
+        :param removed: Labels it must not carry afterwards.
+        :return: The complete set to write.
+        :raises ContradictoryLabelWriteError: If a label is both added and removed.
+        """
+        added, removed = tuple(added), tuple(removed)
+        contradictory = tuple(label for label in added if label in removed)
+        if contradictory:
+            raise ContradictoryLabelWriteError(contradictory)
+        kept = [label for label in current if label not in removed]
+        return cls(tuple(kept + [label for label in added if label not in kept]))
+
+
+# %% promotion links
+
+
+@dataclass
+class PromotionLinkTooLongError(ValueError):
+    """Raised when a link cannot fit even with its whole description dropped."""
+
+    branch: str
+    """The branch whose link was being built."""
+
+    length_without_a_description: int
+    """How long the URL already is before any description is added."""
+
+    def __str__(self) -> str:
+        """:return: Which link overflowed, and by how much before the body counts."""
+        return (
+            f"the compare link for {self.branch} is {self.length_without_a_description} "
+            f"characters before its description, over the "
+            f"{PromotionLink.URL_CHARACTER_LIMIT}-character limit: shorten the title"
+        )
+
+
+@dataclass(frozen=True)
+class PromotionLink:
+    """A one-click compare-and-create link opening a fork branch's pull request upstream.
+
+    The prefill travels in the query string, so an unencoded character truncates it and an
+    oversized one is discarded whole by the server - both silently.
+    """
+
+    URL_CHARACTER_LIMIT: ClassVar[int] = 8192
+    """Longest URL to build, the conventional 8 KiB request-line limit servers accept."""
+
+    TRUNCATION_MARKER: ClassVar[str] = "..."
+    """Appended to a body that had to be shortened, so the cut is visible in the prefill."""
+
+    url: str
+    """The compare-and-create URL, ready to open."""
+
+    body_was_truncated: bool
+    """Whether the body had to be shortened to fit :attr:`URL_CHARACTER_LIMIT`."""
+
+    @classmethod
+    def build(
+        cls, configuration: Configuration, branch: str, title: str, body: str
+    ) -> PromotionLink:
+        """Build the link promoting a fork branch to the upstream base.
+
+        :param configuration: The resolved configuration naming both repositories.
+        :param branch: The fork branch to promote.
+        :param title: Title to prefill.
+        :param body: Description to prefill, shortened if the URL would not otherwise fit.
+        :return: The link, flagged if the body was shortened.
+        """
+
+        def url_for(text: str) -> str:
+            return (
+                f"https://github.com/{configuration.upstream_repository}/compare/"
+                f"{configuration.upstream_base}..."
+                f"{configuration.fork_repository.owner}:{branch}"
+                f"?expand=1&title={quote(title)}&body={quote(text)}"
+            )
+
+        if len(url_for(body)) <= cls.URL_CHARACTER_LIMIT:
+            return cls(url_for(body), body_was_truncated=False)
+        if len(url_for(cls.TRUNCATION_MARKER)) > cls.URL_CHARACTER_LIMIT:
+            raise PromotionLinkTooLongError(branch, len(url_for("")))
+        shortest, longest = 0, len(body)
+        while shortest < longest:
+            midpoint = (shortest + longest + 1) // 2
+            candidate = url_for(body[:midpoint] + cls.TRUNCATION_MARKER)
+            shortest, longest = (
+                (midpoint, longest)
+                if len(candidate) <= cls.URL_CHARACTER_LIMIT
+                else (shortest, midpoint - 1)
+            )
+        return cls(
+            url_for(body[:shortest] + cls.TRUNCATION_MARKER), body_was_truncated=True
+        )
+
+
 # %% git plumbing
 
 
@@ -778,6 +943,200 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     return plan
 
 
+# %% landed parents
+
+
+@dataclass(frozen=True)
+class Reparent:
+    """A pull request whose base has landed and must be retargeted at the upstream base.
+
+    A child left on a landed base cannot reach the upstream, and is closed outright the
+    moment that base branch is deleted.
+    """
+
+    branch: str
+    """The child branch that has to move."""
+
+    pull_request_number: int
+    """The child's fork pull request."""
+
+    current_base: str
+    """The landed branch it is still targeting."""
+
+    target_base: str
+    """The base it must be retargeted at."""
+
+
+def reparents(stack: Stack) -> list[Reparent]:
+    """Every open pull request whose base has already landed upstream.
+
+    Decided by git ancestry rather than by the base's own pull-request state, so it also
+    covers a parent whose pull request was closed rather than merged - which leaves the
+    board with no entry for it at all.
+
+    :param stack: The stack to sweep.
+    :return: The children to retarget, parent before child.
+    """
+    base = stack.configuration.upstream_base
+    return [
+        Reparent(
+            branch=branch.name,
+            pull_request_number=branch.pull_request_number,
+            current_base=branch.parent,
+            target_base=base,
+        )
+        for branch in order(stack)
+        if branch.status != BranchStatus.MERGED
+        and branch.parent != base
+        and stack.has_landed_upstream(branch.parent)
+    ]
+
+
+def landed_branches(stack: Stack) -> list[Branch]:
+    """Every open fork pull request whose own branch is already in the upstream base.
+
+    These are the ones to label as landed and close; their children are named separately
+    by :func:`reparents`, which must be acted on first so none is ever orphaned.
+
+    :param stack: The stack to sweep.
+    :return: The landed branches, parent before child.
+    """
+    return [branch for branch in order(stack) if branch.status == BranchStatus.MERGED]
+
+
+# %% pre-flight
+
+
+class CommitMoveAction(StrEnum):
+    """What a proposed move would do to the destination branch."""
+
+    PUSH = "push"
+    MERGE = "merge"
+    RESTACK = "restack"
+
+
+@dataclass(frozen=True)
+class ProposedCommitMove:
+    """Commits a caller proposes to move onto a branch, before anything is run."""
+
+    action: CommitMoveAction
+    """What the move would do."""
+
+    source: str
+    """The branch whose commits would move."""
+
+    destination: str
+    """The branch they would land on."""
+
+    destination_remote: str
+    """The remote holding the destination branch."""
+
+
+class RefusalReason(StrEnum):
+    """Why a proposed move must not be made.
+
+    Each names a move that has gone wrong in practice, so a caller can act on which one
+    it hit without reading the sentence explaining it.
+    """
+
+    NOT_CHECKED_OUT = "not-checked-out"
+    """The source is not the branch whose content a push would actually move."""
+
+    MISMATCHED_BRANCH_NAMES = "mismatched-branch-names"
+    """The source and the destination of the push are different branches."""
+
+    NOT_THE_FORK = "not-the-fork"
+    """The destination remote is not the fork the stack lives on."""
+
+    FALSE_MERGE = "false-merge"
+    """A child would become an ancestor of its own parent, which GitHub reads as merged."""
+
+
+@dataclass(frozen=True)
+class PreFlightRefusal:
+    """One reason a proposed move must not be made."""
+
+    reason: RefusalReason
+    """Which refusal this is, for a caller deciding what to do about it."""
+
+    explanation: str
+    """What is wrong, in terms of the branches the caller named."""
+
+
+@dataclass(frozen=True)
+class PreFlight:
+    """Checks a proposed move against the checkout it would run in.
+
+    Every refusal describes a move that has gone wrong in practice - see
+    :class:`RefusalReason`.
+    """
+
+    stack: Stack
+    """The stack the branches belong to."""
+
+    checked_out_branch: str
+    """The branch actually checked out, whose content a push would move."""
+
+    is_ancestor: Callable[[str, str], bool]
+    """Maps a candidate ancestor branch and a descendant branch to whether the first is
+    contained in the second; injected so the checks are testable without git."""
+
+    def refusals(self, move: ProposedCommitMove) -> list[PreFlightRefusal]:
+        """Every reason the move must not be made.
+
+        All of them are reported together: fixing one and re-running to discover the next
+        is how a move gets half made.
+
+        :param move: The proposed move.
+        :return: The refusals, empty when the move is safe.
+        """
+        found = []
+        if move.source != self.checked_out_branch:
+            found.append(
+                PreFlightRefusal(
+                    RefusalReason.NOT_CHECKED_OUT,
+                    f"'{move.source}' is not checked out; '{self.checked_out_branch}' is, "
+                    f"and its content is what would move",
+                )
+            )
+        if move.source != move.destination:
+            found.append(
+                PreFlightRefusal(
+                    RefusalReason.MISMATCHED_BRANCH_NAMES,
+                    f"this would move '{move.source}' onto '{move.destination}'; the "
+                    f"source and the destination must be the same branch",
+                )
+            )
+        if move.destination_remote != self.stack.configuration.fork_remote:
+            found.append(
+                PreFlightRefusal(
+                    RefusalReason.NOT_THE_FORK,
+                    f"'{move.destination_remote}' is not the fork remote "
+                    f"'{self.stack.configuration.fork_remote}'",
+                )
+            )
+        found.extend(self._false_merges(move))
+        return found
+
+    def _false_merges(self, move: ProposedCommitMove) -> list[PreFlightRefusal]:
+        """The children of the destination this move would make GitHub call merged.
+
+        :param move: The proposed move.
+        :return: One refusal per child already contained in the move's source.
+        """
+        return [
+            PreFlightRefusal(
+                RefusalReason.FALSE_MERGE,
+                f"'{child.name}' is already contained in '{move.source}', so this would "
+                f"make it an ancestor of its own parent '{move.destination}' and GitHub "
+                f"would close pull request #{child.pull_request_number} as merged",
+            )
+            for child in self.stack.branches
+            if child.parent == move.destination
+            and self.is_ancestor(child.name, move.source)
+        ]
+
+
 # %% commands
 
 
@@ -893,11 +1252,76 @@ def print_next_porcelain(stack: Stack) -> None:
 
 
 def print_restack_plan(stack: Stack) -> None:
-    """Print the restack plan as JSON - pipe it into the ``restack`` workflow's ``args``.
+    """Print the bottom-up restack plan as JSON, one object per not-yet-landed branch.
 
     :param stack: The stack to plan.
     """
     print(json.dumps(restack_plan(stack), indent=2))
+
+
+def print_label_write(write: LabelWrite) -> None:
+    """Print the complete label set, one label per line.
+
+    One per line rather than a separator-joined list, because a label may contain any
+    character a separator could be.
+
+    :param write: The computed set.
+    """
+    for label in write.labels:
+        print(label)
+
+
+def print_promotion_link(link: PromotionLink) -> None:
+    """Print the compare-and-create URL, reporting on stderr if the body was shortened.
+
+    :param link: The built link.
+    """
+    print(link.url)
+    if link.body_was_truncated:
+        print(
+            "the description was shortened to fit the URL length limit",
+            file=sys.stderr,
+        )
+
+
+def print_reparents(stack: Stack) -> None:
+    """Print one ``branch<TAB>pr<TAB>current base<TAB>target base`` line per orphaned child.
+
+    :param stack: The stack to sweep.
+    """
+    for reparent in reparents(stack):
+        print(
+            f"{reparent.branch}\t{reparent.pull_request_number}\t"
+            f"{reparent.current_base}\t{reparent.target_base}"
+        )
+
+
+def print_landed(stack: Stack) -> None:
+    """Print one ``branch<TAB>pr`` line per open pull request whose branch has landed.
+
+    :param stack: The stack to sweep.
+    """
+    for branch in landed_branches(stack):
+        print(f"{branch.name}\t{branch.pull_request_number}")
+
+
+def print_preflight(pre_flight: PreFlight, move: ProposedCommitMove) -> ExitCode:
+    """Print whether a move may be made, and every reason it may not.
+
+    :param pre_flight: The checks to run.
+    :param move: The proposed move.
+    :return: Success when the move is clear, refusal otherwise.
+    """
+    refusals = pre_flight.refusals(move)
+    if not refusals:
+        print(
+            f"{move.action} {move.source} onto "
+            f"{move.destination_remote}/{move.destination}: clear"
+        )
+        return ExitCode.SUCCESS
+    for refusal in refusals:
+        print(f"{refusal.reason}: {refusal.explanation}", file=sys.stderr)
+    return ExitCode.PREFLIGHT_REFUSED
 
 
 def print_configuration(configuration: Configuration) -> None:
@@ -915,15 +1339,34 @@ def print_configuration(configuration: Configuration) -> None:
         print(f"{name}\t{value}")
 
 
-COMMANDS = {
-    "status": print_status,
-    "check": print_check,
-    "next": print_next,
-    "restack-plan": print_restack_plan,
-}
+class Command(StrEnum):
+    """Every command this tool answers, named once so no caller spells one out."""
 
-BOARDLESS_COMMANDS = frozenset({"configuration"})
-"""Commands answerable from git alone, which must run before ``board.json`` exists."""
+    STATUS = "status"
+    CHECK = "check"
+    NEXT = "next"
+    RESTACK_PLAN = "restack-plan"
+    REPARENTS = "reparents"
+    LANDED = "landed"
+    PREFLIGHT = "preflight"
+    CONFIGURATION = "configuration"
+    LABELS = "labels"
+    PROMOTION_LINK = "promotion-link"
+
+    @property
+    def needs_a_board(self) -> bool:
+        """Whether answering this command means deriving the stack.
+
+        The ones that do not are answerable from git and configuration alone, so they
+        run before a board has ever been exported.
+
+        :return: Whether ``board.json`` must exist.
+        """
+        return self not in {
+            Command.CONFIGURATION,
+            Command.LABELS,
+            Command.PROMOTION_LINK,
+        }
 
 
 # %% entry point
@@ -932,7 +1375,7 @@ BOARDLESS_COMMANDS = frozenset({"configuration"})
 class ExitCode(IntEnum):
     """What this tool's exit status tells a caller.
 
-    A distinct status per failure lets a caller - a shell script, or a Routine acting on
+    A distinct status per failure lets a caller - a shell script, or a session acting on
     what it gets back - tell "you asked for something that does not exist" from "the
     checkout is not in a state I can read", without parsing stderr.
     """
@@ -941,8 +1384,8 @@ class ExitCode(IntEnum):
     """The command ran and printed its result."""
 
     USAGE = 2
-    """No such command, or the wrong number of arguments; the conventional status for a
-    usage error, as `argparse` also uses."""
+    """No such command, or the wrong arguments; the conventional status for a usage
+    error, as `argparse` also uses."""
 
     BOARD_UNAVAILABLE = 3
     """`board.json` is missing or unreadable, so the stack cannot be derived."""
@@ -950,53 +1393,207 @@ class ExitCode(IntEnum):
     REMOTES_UNRESOLVED = 4
     """The fork could not be identified from this checkout's remotes."""
 
+    PREFLIGHT_REFUSED = 5
+    """The proposed move must not be made; the reasons are on stderr."""
 
-def _print_configuration_or_report() -> ExitCode:
-    """Print the resolved configuration, or report why the remotes could not be resolved.
 
-    :return: The process exit code, non-zero when resolution is not deterministic.
+def _argument_parser() -> argparse.ArgumentParser:
+    """:return: The parser for every command and its own flags."""
+    parser = argparse.ArgumentParser(
+        prog="stack.py",
+        description="Stacked-PR helper: read state, compute the writes.",
+    )
+    parser.set_defaults(porcelain=False)
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    commands.add_parser(Command.STATUS, help="the whole stack: parent, state, drift")
+    commands.add_parser(
+        Command.CHECK, help="would each branch merge cleanly onto its parent"
+    )
+    promote = commands.add_parser(
+        Command.NEXT, help="which branches to submit upstream next"
+    )
+    promote.add_argument(
+        "--porcelain",
+        action="store_true",
+        help="print only 'name<TAB>pr' per branch to promote",
+    )
+    commands.add_parser(Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON")
+    commands.add_parser(
+        Command.REPARENTS, help="children whose base has landed, and the base they need"
+    )
+    commands.add_parser(
+        Command.LANDED, help="open pull requests whose branch has landed"
+    )
+
+    configuration = commands.add_parser(
+        Command.CONFIGURATION, help="every resolved setting, including the remotes"
+    )
+    configuration.add_argument(
+        "--fork",
+        type=Repository.parse,
+        help="the fork as 'owner/name', when you already know it",
+    )
+    configuration.add_argument(
+        "--upstream",
+        type=Repository.parse,
+        help="the upstream as 'owner/name', when you already know it",
+    )
+
+    labels = commands.add_parser(
+        Command.LABELS, help="the complete label set a label write must send"
+    )
+    labels.add_argument(
+        "--current",
+        action="append",
+        default=[],
+        metavar="LABEL",
+        help="a label the pull request carries now; repeat per label",
+    )
+    labels.add_argument(
+        "--add",
+        action="append",
+        default=[],
+        metavar="LABEL",
+        help="a label to end up with",
+    )
+    labels.add_argument(
+        "--remove",
+        action="append",
+        default=[],
+        metavar="LABEL",
+        help="a label to end up without",
+    )
+
+    link = commands.add_parser(
+        Command.PROMOTION_LINK, help="the upstream compare-and-create URL for a branch"
+    )
+    link.add_argument("--branch", required=True, help="the fork branch to promote")
+    link.add_argument("--title", required=True, help="title to prefill")
+    link.add_argument("--body", default="", help="description to prefill")
+
+    preflight = commands.add_parser(
+        Command.PREFLIGHT, help="may these commits move onto that branch?"
+    )
+    preflight.add_argument(
+        "--action",
+        required=True,
+        type=CommitMoveAction,
+        choices=list(CommitMoveAction),
+        help="what the move would do",
+    )
+    preflight.add_argument(
+        "--source", required=True, help="the branch whose commits move"
+    )
+    preflight.add_argument(
+        "--destination", required=True, help="the branch they would land on"
+    )
+    preflight.add_argument(
+        "--destination-remote", required=True, help="the remote holding the destination"
+    )
+    return parser
+
+
+def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> ExitCode:
+    """Run a command that needs no ``board.json``.
+
+    :param command: The command to run.
+    :param arguments: The parsed command line.
+    :return: The process exit code.
     """
-    try:
-        configuration = load_configuration()
-    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
-        print(f"{error}", file=sys.stderr)
-        return ExitCode.REMOTES_UNRESOLVED
-    print_configuration(configuration)
+    if command is Command.LABELS:
+        print_label_write(
+            LabelWrite.replacing(arguments.current, arguments.add, arguments.remove)
+        )
+        return ExitCode.SUCCESS
+    if command is Command.CONFIGURATION:
+        print_configuration(
+            load_configuration(
+                fork_repository=arguments.fork,
+                upstream_repository=arguments.upstream,
+            )
+        )
+        return ExitCode.SUCCESS
+    print_promotion_link(
+        PromotionLink.build(
+            load_configuration(), arguments.branch, arguments.title, arguments.body
+        )
+    )
     return ExitCode.SUCCESS
+
+
+def _run_against_the_board(
+    command: Command, arguments: argparse.Namespace, stack: Stack
+) -> ExitCode:
+    """Run a command that reads the derived stack.
+
+    :param command: The command to run.
+    :param arguments: The parsed command line.
+    :param stack: The derived stack.
+    :return: The process exit code.
+    """
+    if command is Command.PREFLIGHT:
+        return print_preflight(
+            PreFlight(
+                stack=stack,
+                checked_out_branch=_git("branch", "--show-current"),
+                is_ancestor=_ancestry_predicate(stack.configuration),
+            ),
+            ProposedCommitMove(
+                action=arguments.action,
+                source=arguments.source,
+                destination=arguments.destination,
+                destination_remote=arguments.destination_remote,
+            ),
+        )
+    reporters = {
+        Command.STATUS: print_status,
+        Command.CHECK: print_check,
+        Command.NEXT: print_next_porcelain if arguments.porcelain else print_next,
+        Command.RESTACK_PLAN: print_restack_plan,
+        Command.REPARENTS: print_reparents,
+        Command.LANDED: print_landed,
+    }
+    reporters[command](stack)
+    return ExitCode.SUCCESS
+
+
+def _ancestry_predicate(configuration: Configuration) -> Callable[[str, str], bool]:
+    """:param configuration: The resolved configuration naming the fork remote.
+    :return: A predicate testing whether a fork branch is contained in a local branch.
+    """
+
+    def is_ancestor(candidate: str, descendant: str) -> bool:
+        return _git_succeeds(
+            "merge-base",
+            "--is-ancestor",
+            resolve_ref(configuration, candidate),
+            descendant,
+        )
+
+    return is_ancestor
 
 
 def main() -> ExitCode:
-    """Dispatch the command-line invocation.
+    """Dispatch the command-line invocation, mapping every refusal to its own status.
 
     :return: The process exit code.
     """
-    arguments = sys.argv[1:]
-    porcelain = "--porcelain" in arguments
-    arguments = [argument for argument in arguments if argument != "--porcelain"]
-
-    known = [*COMMANDS, *BOARDLESS_COMMANDS]
-    if len(arguments) != 1 or arguments[0] not in known:
-        print(
-            f"usage: python stack.py [{' | '.join(known)}] [--porcelain]\n"
-            "  --porcelain (with `next`): print only 'name<TAB>pr' per branch to promote.",
-            file=sys.stderr,
-        )
-        return ExitCode.USAGE
-
-    if arguments[0] in BOARDLESS_COMMANDS:
-        return _print_configuration_or_report()
-
+    arguments = _argument_parser().parse_args()
+    command = Command(arguments.command)
     try:
-        stack = load_stack()
+        if not command.needs_a_board:
+            return _run_without_a_board(command, arguments)
+        return _run_against_the_board(command, arguments, load_stack())
+    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
+        print(f"{error}", file=sys.stderr)
+        return ExitCode.REMOTES_UNRESOLVED
     except BoardUnavailable as error:
         print(f"{error}", file=sys.stderr)
         return ExitCode.BOARD_UNAVAILABLE
-
-    if porcelain and arguments[0] == "next":
-        print_next_porcelain(stack)
-    else:
-        COMMANDS[arguments[0]](stack)
-    return ExitCode.SUCCESS
+    except (ContradictoryLabelWriteError, PromotionLinkTooLongError) as error:
+        print(f"{error}", file=sys.stderr)
+        return ExitCode.USAGE
 
 
 if __name__ == "__main__":
