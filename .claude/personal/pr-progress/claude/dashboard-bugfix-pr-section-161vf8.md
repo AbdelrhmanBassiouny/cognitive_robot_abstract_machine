@@ -62,6 +62,15 @@ main's Examples-and-Demos run at the same commit was green, so that one is
 flake. Neither is reachable from this branch (11 files, all `.claude/`).
 Reported on the PR; nothing to fix here.
 
+**CI (2026-08-03).** Texture regression fixed on main by LucaKro (`59531f14`
+"Resolve mesh texture paths against the mesh's own directory" + `2f459043`); the
+restack onto `167559c2` pulled both onto this branch. Latest run's new red is
+`coraplex/scripts/test_notebook_examples.sh` — `RuntimeError: Kernel didn't
+respond in 60 seconds`, so nothing under test ran; infrastructure timing, not an
+assertion. Third distinct robotics job to fail across four runs, each a
+different cause — the signature of environmental flakiness. `test_claude_dev_tooling`,
+the only job exercising this PR's code, is green. Reported once on the PR.
+
 **Spun out, not fixed here.** `_compute_ready_to_review` treats a *merged*
 dependency as not-open, so an item whose dependency fully landed is excluded
 while one whose dependency is merely open is included. Now its own plan item
