@@ -251,10 +251,11 @@ items:
       configuration that defines them; promotion writes its compare link into the fork
       pull request's description so it outlives the summary.
 
-      Deliberately not done, and put to the user on the PR: splitting stack.py (~1,540
-      lines). dev-tooling-python-package already moves every .claude/ Python file into a
-      package, so splitting now means the same surgery twice with #110 and #111 rebasing
-      across it in between.
+      Settled 2026-08-02 (user decision): stack.py is not split in this PR. It stays ~1,540
+      lines here and dev-tooling-python-package does the surgery once, when it moves every
+      .claude/ Python file into the package - rather than twice, with #110 and #111 rebasing
+      across the first attempt. The review comment that raised it stays answered rather than
+      resolved.
 
       Manual step still due: register the routine's prompt as a call to
       /stacked-pr-maintenance with fork=, upstream= and --non-interactive. Until this
@@ -307,23 +308,24 @@ items:
       infrastructure, so it is ordinary stacking, not a disguised modification of its
       parent - unlike #133/#117, which folded because nothing remained. Keep the PR.
 
-      What its rebase onto #106 must carry, all of it here rather than in #106: delete
-      .claude/stack/routine-prompt.md and render POINTER.md instead - they are the same
-      artifact, and POINTER.md's copy is the one pinned byte-for-byte against
-      ROUTINE.md's hard rules, while this branch's paraphrases them unenforced. The two
-      files template different values (<FORK_REMOTE>/<UPSTREAM_REMOTE> here versus
-      <FORK_REPOSITORY>/<TOOLING_BRANCH> there), so the renderer changes variables, not
-      just filenames. Carry over the two rules this branch promoted into the pointer
-      (never force-push a branch with an open upstream PR unless it carries the rebase
-      label; do not use the Workflow tool) - they exist in #106 only as prose above the
-      pinned block, so promoting them means editing that block too. Drop the
-      <TOOLING_BRANCH> fallback, dead once .claude/stack/ is on main. Update the two
-      contract tests this branch's SETUP step 0 rewrite breaks
-      (test_setup_obtains_the_tooling_rather_than_assuming_it and
-      test_setup_takes_the_tooling_ref_from_the_pointer) as a declared contract change,
-      not a silent one. Adapt check-stack-setup.sh and setup-stacked-prs.sh from
-      `stack.py config` to `stack.py configuration`; #106 already matched the key names,
-      so nothing else in the parsing changes.
+      Rebase instructions rewritten 2026-08-02 (user-directed), because #106's review round
+      invalidated most of the previous set. ROUTINE.md and POINTER.md no longer exist: the
+      instructions are .claude/skills/stacked-pr-maintenance/SKILL.md and the registered prompt
+      is a skill call. So, concretely: (1) delete .claude/stack/routine-prompt.md - the template
+      lives at .claude/skills/stacked-pr-maintenance/routine-prompt.md and is already written,
+      templating <FORK_REPOSITORY>/<UPSTREAM_REPOSITORY>; there is nothing left to render.
+      (2) check-stack-setup.sh's stack_tooling_files check looks for ROUTINE.md and
+      routine-prompt.md under .claude/stack/ and will fail - point it at the skill directory
+      instead. (3) The two rules this branch wanted promoted into the pointer (never force-push a
+      branch with an open upstream pull request unless it carries the rebase label; do not use the
+      Workflow tool) are already in the skill - nothing to promote. (4) The two contract tests it
+      was told to update are deleted along with test_prompt_documents.py and prompt_model.py -
+      nothing to declare. (5) `stack.py config` -> `configuration` still stands, key names
+      unchanged. (6) The fork-overlay install mode now has to carry .claude/skills/
+      stacked-pr-maintenance/ as well as .claude/stack/, since the instructions moved out of the
+      latter. (7) Setup writing fork_repository into .claude/personal/stack.toml is now the same
+      thing the skill does interactively, so setup does it at install time and the skill's
+      question is the fallback - do not build a second asker.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script

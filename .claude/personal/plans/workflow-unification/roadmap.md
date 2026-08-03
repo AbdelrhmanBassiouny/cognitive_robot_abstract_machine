@@ -2363,3 +2363,56 @@ since labels are per-user configuration and never an enum.
 and put back to the user with the reasoning: `dev-tooling-python-package` already moves every
 `.claude/` Python file into a package, so splitting now means the same surgery twice, with #110 and
 #111 rebasing across it in between.
+
+## Update 2026-08-02 (corrected): #110's rebase instructions, and the split settled
+
+Two loose ends from the review round, both closed by the user in the same turn.
+
+### `stack.py` is not split in #106
+
+The reviewer's *"this file is so big"* was left open with a recommendation rather than an answer.
+The answer is no split here: `dev-tooling-python-package` already moves every `.claude/` Python
+file into the package, so splitting now means the same surgery twice, with #110 and #111 rebasing
+across the first attempt in between. The thread stays answered rather than resolved, since the
+concern is real and its resolution is somebody else's item.
+
+### #110's rebase instructions were mostly invalidated, and saying so is the whole point
+
+`setup-stacked-prs-skill`'s notes carried a detailed list of what its rebase onto #106 "must carry",
+written on 2026-08-02 against #106 as it then stood. The review round deleted the artifacts three of
+those five points were about — `ROUTINE.md`, `POINTER.md`, `prompt_model.py` and
+`test_prompt_documents.py` are all gone — so following the list would have produced work with no
+target. Rewritten in place rather than annotated, because a stale instruction that is still readable
+as an instruction is worse than no instruction.
+
+What actually changed for #110, verified against its head rather than inferred:
+
+- Its `.claude/stack/routine-prompt.md` is now a duplicate of a file that already exists at
+  `.claude/skills/stacked-pr-maintenance/routine-prompt.md`, already templating
+  `<FORK_REPOSITORY>`/`<UPSTREAM_REPOSITORY>`. The previous instruction — *render `POINTER.md`
+  instead* — has no referent; the instruction is simply to delete its copy.
+- **A real breakage nobody had spotted**: `check-stack-setup.sh:62` reports
+  `stack_tooling_files ok "stack.py, stack.toml, README.md, ROUTINE.md and routine-prompt.md are all
+  present"`. Two of those five files no longer exist anywhere, so that check fails outright on the
+  rebased branch. This is the only point on the list that is a defect rather than a no-op, and it was
+  found by reading #110's script rather than by reasoning about the deletions.
+- The two rules #110 wanted promoted into the pointer (never force-push a branch with an open
+  upstream pull request unless it carries the `rebase` label; do not use the Workflow tool) are
+  already in the skill, so there is nothing to promote.
+- Two new points the deletion creates: the fork-overlay install mode has to carry
+  `.claude/skills/stacked-pr-maintenance/` as well as `.claude/stack/`, now that the instructions
+  live outside the latter; and setup writing `fork_repository` at install time is the same thing the
+  skill's step 0 does interactively, so setup does it once and the skill's question is the fallback —
+  not a second asker.
+
+`stack.py config` → `configuration` is the one point that survives unchanged, key names included.
+
+**The general shape, worth keeping.** A child branch's rebase instructions are written against a
+snapshot of its parent, and a parent's review round is exactly the event that invalidates them.
+Nothing notices this on its own: #110's session is not subscribed to #106's review threads, and the
+manifest entry that carried the instructions reads as current no matter how old it is. The parent's
+own session correcting them in the same turn as the review round — and commenting on the child's
+pull request so its owner receives it as an event — is the only mechanism this workflow has. It is
+the same fork-point failure as the #110/#106 duplication recorded on 2026-08-02, met from the other
+side: there, two sessions built the same artifact against divergent snapshots; here, one session's
+plan for the future was written against a snapshot that then moved.
