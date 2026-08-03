@@ -746,9 +746,7 @@ def test_transport_open_container(mutable_multiple_robot_apartment, rclpy_node):
 
     plan.plan.validate()
 
-def test_elevator_navigation(_generic_room_setup, rclpy_node):
-    VizMarkerPublisher(_world=_generic_room_setup, node=rclpy_node).with_tf_publisher()
-
-    _generic_room_setup.get_semantic_annotations_by_type(Door)[0].root.parent_connection.position = 1
+def test_elevator_navigation(building_floor, rclpy_node):
+    VizMarkerPublisher(_world=building_floor, node=rclpy_node).with_tf_publisher()
 
     time.sleep(100)

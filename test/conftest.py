@@ -830,7 +830,6 @@ def kitchen_world():
     return world
 
 
-@pytest.fixture(scope="session")
 def _generic_room_setup():
     world = World.create_with_root_body("root")
 
@@ -864,19 +863,43 @@ def _generic_room_setup():
         door.collision.shapes[0].color = Color(1,0, 0, 1)
         handle = Handle.get_default_root_specification(name="handle").spawn(world=world, parent=door, parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(y=door_scale.y / 2 * 0.9, yaw=np.pi))
         handle_anno = Handle(root=handle)
-        door_anno = Door(root=door, handle=handle_anno)
+        world.add_semantic_annotation(handle_anno)
+        door_anno = Door(root=door)
         world.add_semantic_annotation(door_anno)
         world.get_semantic_annotations_by_type(Door)[0].add(handle_anno)
 
+    with world.modify_world():
         door_apeture = Aperture.create_with_new_region_in_world_from_body(
             "door_apeture",
             world=world,
             body=door,
-            parent_T_self=world.compute_forward_kinematics(world.root, door),
+            parent_T_self=door.global_transform
         )
         world.get_semantic_annotations_by_type(Wall)[-1].add(door_apeture)
 
     return world
+
+@pytest.fixture(scope="session")
+def building_floor():
+    world = World.create_with_root_body("root")
+
+    floor = Floor.create_with_new_body_in_world(
+        name="floor", world=world, scale=Scale(8, 8,0)
+    )
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1.5, 1.5, 1.02, yaw=np.pi, reference_frame=world.root))
+
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1.5, -1.5, 1.02, yaw=np.pi))
+
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 1., 1.02))
+
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1.5, -1.5, 1.02))
+
+    print(len(world.bodies))
+
+    return world
+
+
+
 
 
 @pytest.fixture(scope="session")
