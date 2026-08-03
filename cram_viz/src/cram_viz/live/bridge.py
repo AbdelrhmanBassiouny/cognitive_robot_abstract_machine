@@ -40,7 +40,12 @@ from typing_extensions import (
 )
 
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+    Quaternion,
+    RotationMatrix,
+)
 from cram_viz.body_geometry import BodyExtent
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
@@ -569,22 +574,27 @@ class Bridge:
             )
             return
         position = move.position
-        quaternion = move.quaternion
-        if quaternion is None:
-            quaternion = _pose_as_position_quaternion(body)[3:7]
-        world_T_object = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            position[0],
-            position[1],
-            position[2],
-            quaternion[0],
-            quaternion[1],
-            quaternion[2],
-            quaternion[3],
+        rotation_matrix = (
+            RotationMatrix.from_quaternion(
+                Quaternion(
+                    x=move.quaternion[0],
+                    y=move.quaternion[1],
+                    z=move.quaternion[2],
+                    w=move.quaternion[3],
+                )
+            )
+            if move.quaternion is not None
+            else body.global_pose.to_rotation_matrix()
+        )
+        world_T_object = HomogeneousTransformationMatrix.from_point_rotation_matrix(
+            Point3(x=position[0], y=position[1], z=position[2]),
+            rotation_matrix,
             reference_frame=self.world.root,
         )
         # ``origin`` is parent-relative; express the target in the parent
         # frame (a no-op while the parent is the world root)
-        parent_T_object = connection.parent.global_pose.inverse() @ world_T_object
+        parent_T_world = connection.parent.global_pose.to_homogeneous_matrix().inverse()
+        parent_T_object = parent_T_world @ world_T_object
         connection.origin = parent_T_object
         logger.info(
             "moved %s -> world (%.3f, %.3f, %.3f) [final=%s]",

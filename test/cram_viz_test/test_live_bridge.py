@@ -4,17 +4,30 @@ Unit tests for the live bridge's serializers and its viewer-facing accessors.
 The bridge is exercised against mimics of the duck-typed interfaces it reads, so no
 coraplex or giskardpy import is needed. What is covered is the interesting logic:
 bottom-up status aggregation in the plan tree, freeze semantics when a motion group
-finishes, statechart signatures that let the frontend distinguish "re-colour only"
-from "rebuild", and the queue that carries viewer drags onto the simulation thread.
+finishes, statechart signatures that let the frontend distinguish "re-colour only" from
+"rebuild", and the queue that carries viewer drags onto the simulation thread.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
+import numpy as np
 import pytest
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+    Quaternion,
+    RotationMatrix,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import Box, Scale
-from typing_extensions import Any, Dict, List, Optional
+from semantic_digital_twin.world_description.world_entity import Body
+from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from cram_viz.live.bridge import (
     Bridge,
@@ -42,8 +55,8 @@ class ActionDescription:
     """
     A designator describing what an action acts on, as the bridge inspects it.
 
-    Attributes are set only when present, mirroring real designators whose fields
-    differ per action type.
+    Attributes are set only when present, mirroring real designators whose fields differ
+    per action type.
     """
 
     def __init__(self, target: Optional[str] = None, arm: Optional[str] = None):
@@ -350,6 +363,83 @@ class TestQueuedMoves:
         bridge.apply_moves()
 
 
+def make_free_floating_object() -> Tuple[World, Connection6DoF, Body]:
+    """
+    A world with one free-floating body, connected to the root by a Connection6DoF.
+    """
+    world = World()
+    root = Body(name=PrefixedName("world"))
+    obj = Body(name=PrefixedName("milk"))
+    with world.modify_world():
+        x, y, z, qx, qy, qz, qw = (
+            DegreeOfFreedom(name=PrefixedName(component))
+            for component in ("x", "y", "z", "qx", "qy", "qz", "qw")
+        )
+        for dof in (x, y, z, qx, qy, qz, qw):
+            world.add_degree_of_freedom(dof)
+        connection = Connection6DoF(
+            parent=root, child=obj, x=x, y=y, z=z, qx=qx, qy=qy, qz=qz, qw=qw
+        )
+        world.add_connection(connection)
+        world.state[qw.id].position = 1.0
+    return world, connection, obj
+
+
+class TestApplyMove:
+    """
+    ``_apply_move`` writes a viewer drag into a free-floating object's connection.
+    """
+
+    def test_orientation_is_kept_exact_when_the_drag_omits_it(self):
+        """
+        A position-only drag must not round-trip the object's orientation through the
+        5-decimal-place floats ``_pose_as_position_quaternion`` produces for the viewer
+        feed; that would nudge the true orientation on every such drag.
+        """
+        world, connection, body = make_free_floating_object()
+        half_angle = 0.123456789 / 2
+        connection.origin = HomogeneousTransformationMatrix.from_point_rotation_matrix(
+            Point3(x=1.0, y=2.0, z=3.0),
+            RotationMatrix.from_quaternion(
+                Quaternion(z=math.sin(half_angle), w=math.cos(half_angle))
+            ),
+            reference_frame=world.root,
+        )
+        expected_orientation = body.global_pose.to_quaternion().to_np()
+
+        bridge = Bridge()
+        bridge.world = world
+        bridge._apply_move(
+            MoveRequest(object_key="milk.stl", position=[4.0, 5.0, 6.0]), body
+        )
+
+        assert np.allclose(
+            body.global_pose.to_quaternion().to_np(),
+            expected_orientation,
+            rtol=0,
+            atol=1e-8,
+        )
+        assert body.global_pose.to_position().to_np()[:3].tolist() == [4.0, 5.0, 6.0]
+
+    def test_a_given_quaternion_is_applied(self):
+        world, connection, body = make_free_floating_object()
+
+        bridge = Bridge()
+        bridge.world = world
+        bridge._apply_move(
+            MoveRequest(
+                object_key="milk.stl",
+                position=[1.0, 2.0, 3.0],
+                quaternion=[0.0, 0.0, 1.0, 0.0],
+            ),
+            body,
+        )
+
+        pose = body.global_pose
+        assert pose.to_position().to_np()[:3].tolist() == [1.0, 2.0, 3.0]
+        assert np.allclose(pose.to_quaternion().to_np(), [0.0, 0.0, 1.0, 0.0])
+
+
 # %% what the HTTP layer reads
 class TestViewerAccessors:
     def test_object_keys_exclude_the_robot_base(self):
@@ -542,8 +632,8 @@ class TestChartSnapshot:
 
     def test_observation_change_alone_is_published(self):
         """
-        A monitor flipping its observation must reach the viewer even while every
-        node's life cycle stays the same.
+        A monitor flipping its observation must reach the viewer even while every node's
+        life cycle stays the same.
         """
         bridge = Bridge()
         chart = make_chart(life=(1, 1, 1), obs=(0.5, 0.5, 0.5))
