@@ -81,7 +81,7 @@ items:
     track: personal-data
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_0167iZiWUnXizpKSqa7xf5rC
+    session: https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn
     notes: >
       Extends the session-start hook so the notes branch also carries this project's
       local Claude Code settings (.claude/personal/settings.local.json ->
@@ -92,15 +92,33 @@ items:
       baseline is a hash stamp in .claude/.personal-settings-sync-hash. This widens the
       track beyond its "slimming" name: personal-data is now personal-notes data and
       config generally, which is what the plan's target architecture already says that
-      branch holds. Independent of the #101 stack - branched off fork main, PR #109 open
-      and ready. Same session also added the personal-notes rule that any session
-      changing a plan's data republishes that plan's dashboard in the same turn
-      (notes-branch only, no PR). File overlap to expect, not a dependency: #107 adds
-      path constants to resolve-personal-notes-config.sh and #110 makes
-      write-personal-notes-file.sh delegate to write-branch-files.sh - this item touches
-      both, so whichever lands second merges the two. CI is green on
-      test_claude_dev_tooling; the one red job (semantic_digital_twin's
-      test_world_sim_state_sync) fails identically on main at this PR's base commit.
+      branch holds. Independent of the #101 stack - branched off fork main. Same session
+      also added the personal-notes rule that any session changing a plan's data
+      republishes that plan's dashboard in the same turn (notes-branch only, no PR).
+      STALLED 2026-07-31 to 2026-08-03 and RESOLVED by
+      https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn (commit 5281e3f3), on two
+      blockers neither of which this entry had recorded - see blockers below and the
+      2026-08-03 roadmap entry. The overlap warning above resolved itself: #107's and
+      #110's files (resolve-personal-notes-config.sh, session-start.sh) auto-merged
+      clean; what actually conflicted was a duplicated test fixture against main. PR
+      #109 is a draft again, labelled cram2-link-sent only, mergeable against main
+      9b090fc1, all three review threads resolved; 36 tests pass under
+      .claude/hooks/tests (main's 28 plus this module's 8).
+    blockers: >
+      Both cleared 2026-08-03. (1) Merge conflict against main since the 2026-07-31
+      fast-forward - mergeable_state dirty, labelled needs-resolution - in
+      .claude/hooks/README.md, tests/conftest.py and tests/test_save_plan_sh.py. Root
+      cause was a duplicated artifact, not drifting text: main extracted the hook-test
+      scratch repository as ScratchRepository (via #101's review round) while this branch
+      independently extracted the same thing as ScratchProject. Resolved by adopting
+      main's superset and deleting ScratchProject, so both test files are now
+      byte-identical to main. (2) Three unresolved review threads on
+      test_personal_settings_sync.py asking for the inline JSON literals to move into
+      separate files - AGENTS.md's no-inline-snippets rule - now three .json files under
+      tests/fixtures/. Note for anyone replying on this PR: those threads belong to an
+      unsubmitted PENDING review, and GitHub allows one pending review per user, so
+      inline replies 422 until it is submitted; the resolution was explained in a
+      PR-level comment instead.
 
   - id: setup-personal-notes-pr101
     title: "Land /setup-personal-notes (PR #101) — the foundation the stack PRs base on"

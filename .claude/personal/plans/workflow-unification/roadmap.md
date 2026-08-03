@@ -2416,3 +2416,81 @@ pull request so its owner receives it as an event — is the only mechanism this
 the same fork-point failure as the #110/#106 duplication recorded on 2026-08-02, met from the other
 side: there, two sessions built the same artifact against divergent snapshots; here, one session's
 plan for the future was written against a snapshot that then moved.
+
+## Update 2026-08-03 (resolved): #109's conflict was the same-artifact-twice pattern, a third time
+
+`/plan-item-resolve workflow-unification personal-settings-sync`, session
+https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn. The item had been `in_progress` and
+untouched since 2026-07-31 with a manifest entry that said *"PR #109 open and ready"* and recorded
+no `blockers` at all. Two real ones existed, and neither was in the manifest.
+
+### The manifest was the least accurate source, which is the process finding
+
+Everything needed to diagnose this was on the pull request the whole time — `mergeable_state:
+dirty`, a `needs-resolution` label, a routine comment naming the three conflicting files, and three
+unresolved review threads. The item's `notes` instead described a CI red that had since gone green
+and asserted readiness. This is the failure mode the keep-plan-state-current rule exists to prevent,
+seen from the far end: a stale entry does not read as stale, so the next session either trusts it or
+re-derives everything. The entry now carries a `blockers` field for the first time.
+
+### The conflict: `ScratchRepository` and `ScratchProject` are the same artifact
+
+`main` extracted the hook-test scratch repository into `tests/scratch_repository.py` as
+`ScratchRepository` during #101's review round. #109, branched before that landed, independently
+extracted the same fixture out of `test_save_plan_sh.py` into `conftest.py` as `ScratchProject`.
+Same purpose, two names, two branches — so `conftest.py` and `test_save_plan_sh.py` conflicted on
+content that was never a disagreement.
+
+This is the **third** instance of the pattern this roadmap has now recorded, after `POINTER.md` /
+`routine-prompt.md` and `BOARDLESS_COMMANDS` / `BOARD_FREE_COMMANDS` between #106 and #110. All
+three share a mechanism: a child branched from a snapshot of an unlanded parent, the parent moved,
+and both sides built the same thing. `check_scope_overlap.py` flags the path in each case; only
+reading for duplicated *purpose* explains it. Worth stating as a standing expectation rather than a
+recurring surprise — **any long-lived branch off an unlanded or fast-moving base should be re-read
+for duplicated purpose before its merge is attempted**, not only for conflicting lines.
+
+Resolved by adopting `main`'s, on evidence rather than seniority: `ScratchRepository` is a strict
+superset (`install_hook_scripts`, `write`, `commit_everything`, `publish_notes_branch`,
+`clone_notes_branch`, `resolve_notes_remote_to`) and already had a second consumer in
+`test_check_setup_sh.py`. `ScratchProject` is deleted; both conflicted test files are now
+byte-identical to `main` and have left #109's diff entirely. The one capability `ScratchProject`
+had that `ScratchRepository` lacked — editing the notes branch *after* publication — moved onto the
+class that owns notes-branch operations, as `update_notes_branch_file`.
+
+The overlap this item's own notes had warned about (#107's constants in
+`resolve-personal-notes-config.sh`, #110's `write-personal-notes-file.sh` delegation) **auto-merged
+clean**. The warning was aimed at the wrong files: it was written from the paths the item touches,
+while the actual collision was in a test fixture nobody had listed as shared.
+
+### A latent test bug the port fixed for free
+
+`ScratchProject.run_hook` passed no `env=`, so it inherited the shell's `CLAUDE_PERSONAL_NOTES_*`
+variables — exactly what `main`'s `run_check_setup` strips, and for exactly this reason. It passed
+only because the fixture's local `git config` outranks the remote variable and the branch variable
+happened to equal the default; a clone with `CLAUDE_PERSONAL_NOTES_PATH` set would have broken it.
+Porting onto `main`'s pattern adopted the scrub. Inheriting a shared fixture buys the fixes made to
+it since, which is an argument for converging on one that the line-count comparison does not show.
+
+### The pending-review trap, worth knowing before it costs someone a turn
+
+The three review threads could not be replied to inline: they belong to a review that was **never
+submitted** (`PENDING`, on `55cd2f9`). GitHub allows one pending review per user per pull request,
+so every reply attempt returns `422 - user_id can only have one pending review per pull request`.
+Submitting someone else's draft review is not a session's call — it publishes comments they may
+still be drafting — so the resolution was explained in one PR-level comment naming each thread, and
+the threads were then resolved. Anything that looks like a stuck reply on this repository should
+check for a pending review before assuming a permissions problem.
+
+### The README section had to be re-authored, not merged
+
+#109 added 53 lines to a `README.md` that #101 then rewrote from 378 lines to ~140 as a step-based
+guide. A textual merge would have spliced two documents with different shapes. Rewritten against
+the new structure at 30 lines, per that rewrite's own stated length discipline. Worth generalizing:
+a documentation conflict against a restructured file is a rewrite, and resolving it hunk-by-hunk
+produces a document that reads as two.
+
+**State**: #109 is a draft again (standing re-draft-after-push rule), labelled `cram2-link-sent`
+only, `mergeable_state: unstable` (mergeable; CI running) against `main` at `9b090fc1`. 36 tests
+pass under `.claude/hooks/tests` — `main`'s 28 plus this module's 8, none lost — and 194 under
+`.claude/skills/plan-dashboard/tests`. This unblocks part of decision 12's chain, which cannot land
+before the in-flight bash-touching pull requests, #109 among them.
