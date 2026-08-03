@@ -589,11 +589,52 @@ target files that already exist on `D-core-expert`: `condition_resolver.py`,
    parameters to three, plus `test_condition_resolver.py`'s 10 call sites. This is
    comment 2 of 3 in the `single_class.py:239` thread — #98 answered comment 1 (the
    expert) and left the resolver half.
-2. Null-Object defaults on `interface.py` + `progress.py`.
+2. Null-Object defaults for progress and save (`NullProgressReporter` in `progress.py`,
+   nothing `Optional` left for a caller to guard on).
 3. A `ProgressDescription` `StrEnum` replacing the `_FITTING_DESCRIPTION` module global.
-4. Open question: should `save()` / `make_progress_reporter()` move from
-   `ExpertInterface` onto `Expert`? Default is no; it changes #98's public API, so it is
-   cheaper to settle while #98 is open.
+4. Segregate `ExpertInterface` — see below.
+
+### Item 4: from "promote onto `Expert`?" to "segregate the interface"
+
+Item 4 was first posted as a yes/no question — should `save()` and
+`make_progress_reporter()` move from `ExpertInterface` onto `Expert`, so the engine stops
+reaching through `expert.interface.…`? The developer pushed back with the better question:
+should the interface object be owned by the RDR rather than hidden inside `Expert`? Tracing
+the consumers showed the original framing was wrong, and the answer was revised the same
+day (comment `5163364467`).
+
+The framing error: it treated the problem as *which class exposes two methods*, when the
+actual defect is that `ExpertInterface` carries three unrelated responsibilities — expert
+Q&A (`_run`, `interact`, `_build_namespace`, `_validate`, `_missing_required`,
+`_render_header`), model persistence (`on_save`, `save()`), and fitting progress
+(`make_progress_reporter()`). Only the first is genuinely the `Expert`'s.
+
+The evidence, from the mega-branch's `single_class.py:439-440`:
+
+```python
+if expert is not None and self.save_path is not None and expert.interface.on_save is None:
+    expert.interface.on_save = lambda: save_rdr_with_case(self, self.save_path)
+```
+
+The engine reaches two levels deep and *writes* to the expert's interface, installing a
+callback built from the RDR's own `save_path`. The save behaviour was always the RDR's,
+smuggled into the interface because that is where the plumbing lived. Corroborating: nothing
+else in `krrood/src` references either method, and the only `make_progress_reporter`
+overrides anywhere are two test doubles subclassing `FunctionInterface` just to inject a
+progress spy (`test_single_class_rdr.py:110`, `test_fit_convergence.py:70`).
+
+Resolution: the RDR takes a `ProgressReporter` and a save strategy as its own collaborators
+with Null-Object defaults; `ExpertInterface` keeps only the Q&A surface. Giving the RDR the
+*whole* interface — the developer's literal suggestion — overshoots, since that would hand
+the engine the Q&A mechanism and force the RDR to pass it back on every `ask_for_*` call.
+This subsumes item 2: the defaults attach to the RDR's collaborators, not to
+`ExpertInterface`.
+
+The cost, which is real: progress and Q&A share a session — in the IPython case the bar and
+the prompt render into the same shell, and `make_progress_reporter()` on the interface is
+what wires the bar to that shell. After the split the interactive layer constructs both and
+hands them in. **D-ui (#76) is the PR that absorbs this**, and it has not merged, so this is
+the cheap moment; afterwards it is a change across two merged layers.
 
 The rule applied: split on what the work *is*, not on which PR happened to notice it. One
 parameter-object refactor read twice by a reviewer is worse than one PR carrying it whole,

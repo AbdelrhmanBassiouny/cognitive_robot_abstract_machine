@@ -236,11 +236,16 @@ items:
     flagged for d-core-single-class to pick up instead. 2026-08-03: d-core-single-class
     planning handed four more items back to this PR, reported at PR #98 comment 5156702002 -
     ConditionResolver.resolve taking CaseContext (4 definitions in condition_resolver.py
-    plus test_condition_resolver.py''s 10 call sites), Null-Object defaults on
-    interface.py + progress.py, a ProgressDescription StrEnum replacing the
-    _FITTING_DESCRIPTION global, and one open question on whether save() /
-    make_progress_reporter() should move from ExpertInterface onto Expert. All target
-    files already on D-core-expert, so they belong to this PR''s parameter-object topic.
+    plus test_condition_resolver.py''s 10 call sites), Null-Object defaults for progress
+    and save, and a ProgressDescription StrEnum replacing the _FITTING_DESCRIPTION global.
+    All target files already on D-core-expert, so they belong to this PR''s parameter-object
+    topic. Revised the same day (comment 5163364467): the fourth item was originally a yes/no
+    on promoting save() / make_progress_reporter() from ExpertInterface onto Expert; it is
+    now a proposal to segregate ExpertInterface instead, moving progress and save onto the
+    RDR as its own collaborators and leaving only the expert Q&A surface on the interface.
+    That subsumes the Null-Object item - the defaults attach to the RDR''s collaborators
+    rather than to ExpertInterface. Larger ask of this PR than the original framing, and it
+    has an integration cost D-ui (#76) absorbs, so it needs the developer''s call.
     Also: this PR has never had CI run on it (get_status on ed805dc7 returns
     state=pending, total_count=0).'
 - id: d-core-single-class
