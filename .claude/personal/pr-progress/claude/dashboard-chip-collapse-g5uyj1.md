@@ -42,11 +42,23 @@ Done:
   semantic_digital_twin's mesh adapter); matches this repo's established
   pattern of unrelated robotics CI noise on `.claude/`-only PRs. Replied
   on the PR; not fixing it here.
+- Two `origin/main` merge commits landed on this branch from outside any
+  session (2026-08-02/03, correctly authored as the user - likely an
+  automated restack process). After the second merge: the earlier
+  mesh-material failures are GONE (cleared by main's own
+  texture-resolution fix, 2f459043 - confirms they were pre-existing/base
+  issues, not this diff's). A new, different failure appeared instead:
+  `test_each_lib (semantic_digital_twin) / test` - a pytest-xdist worker
+  crash on test_bidirectional_synchronous_publish_does_not_stall (ROS
+  sync test), same shape as the earlier coraplex worker crash, still no
+  path back to this diff. Replied on the PR explaining both; not fixing
+  either. `test_claude_dev_tooling` (the job that runs plan-dashboard's
+  own suite) is green throughout.
 
 Next:
 - Watch for CI results and review activity via the webhook subscription
   (no scheduled polling per personal notes) and react when events arrive.
-- If either the coraplex or semantic_digital_twin failure recurs on a
-  re-run, look into it further; if they clear, no action needed.
+- If the coraplex/semantic_digital_twin worker-crash flakes recur, look
+  into it further; if they clear, no action needed.
 - Nothing else planned - single focused change, no further follow-up
   scope known.
