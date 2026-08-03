@@ -22,7 +22,7 @@ import time
 import urllib.parse
 import math
 from dataclasses import asdict, dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -66,11 +66,11 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-class TaskStatusName(str, Enum):
+class TaskStatusName(StrEnum):
     """
     The status vocabulary the viewer styles plan and statechart nodes with.
 
-    Mirrors coraplex's ``TaskStatus`` names. A plain ``str`` enum, because the values
+    Mirrors coraplex's ``TaskStatus`` names. A :class:`StrEnum`, because the values
     travel to the frontend as JSON and are compared against the names coraplex itself
     reports.
     """
