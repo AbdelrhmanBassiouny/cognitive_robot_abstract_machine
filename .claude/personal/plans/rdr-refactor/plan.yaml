@@ -233,7 +233,16 @@ items:
     retyped to carry the exception itself (touches D-core-support''s file, confirmed
     with the developer). test_ask_for_rule.py from the D-core-engine mega-branch is
     actually an EQLSingleClassRDR integration test in disguise and was not ported -
-    flagged for d-core-single-class to pick up instead.'
+    flagged for d-core-single-class to pick up instead. 2026-08-03: d-core-single-class
+    planning handed four more items back to this PR, reported at PR #98 comment 5156702002 -
+    ConditionResolver.resolve taking CaseContext (4 definitions in condition_resolver.py
+    plus test_condition_resolver.py''s 10 call sites), Null-Object defaults on
+    interface.py + progress.py, a ProgressDescription StrEnum replacing the
+    _FITTING_DESCRIPTION global, and one open question on whether save() /
+    make_progress_reporter() should move from ExpertInterface onto Expert. All target
+    files already on D-core-expert, so they belong to this PR''s parameter-object topic.
+    Also: this PR has never had CI run on it (get_status on ed805dc7 returns
+    state=pending, total_count=0).'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
@@ -242,8 +251,17 @@ items:
   depends_on:
   - d-core-expert
   status: not_started
-  notes: single_class.py + engine tests; classify->UNSET, raise+drop max_passes, CaseContext object, Null-Object
-    progress/save.
+  notes: 'single_class.py + engine tests; classify->UNSET, raise+drop max_passes, CaseContext object.
+    2026-08-03: implementation plan approved and saved to
+    .claude/personal/pr-progress/D-core-single-class.md - not started, no branch cut. Scope
+    narrowed: the Null-Object progress/save work, the ConditionResolver CaseContext change and
+    the ProgressDescription enum were handed to d-core-expert (#98), since every target file
+    already exists on D-core-expert; this item consumes them rather than building them. What
+    stays: single_class.py itself, RDRDidNotConvergeError + the expert-required exception in
+    rdr/exceptions.py, and the six engine test files ported from mega-branch e650d968. Before
+    starting, get a CI or local-test baseline on D-core-expert (#98 has no CI runs). Do not
+    cascade the stack first - it is stale but merge-tree-clean and disjoint from this item''s
+    files.'
 - id: d-core-backend
   title: 'RDR engine: underspecified-query RDR backend'
   branch: D-core-backend

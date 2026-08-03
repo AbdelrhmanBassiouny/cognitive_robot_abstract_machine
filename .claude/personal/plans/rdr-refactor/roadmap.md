@@ -568,3 +568,55 @@ lets Phase D's audit see `rdr/rule_tree*.py`, which is not on `main` yet.
 
 `insert-at-ownership-parentage` is the deliberate exception: small, off `main`, gated on
 nothing, and it *removes* a future cascade rather than adding one.
+
+## 11. Addendum (2026-08-03) — `d-core-single-class` planned; four items handed back to #98
+
+`/plan-item-kickoff rdr-refactor d-core-single-class` produced an approved implementation
+plan, saved to `.claude/personal/pr-progress/D-core-single-class.md`. No branch cut and no
+code written — the implementation runs in a fresh session, since the planning session had
+consumed most of its context reading #68's 71 review threads and the mega-branch.
+
+### The scope handoff
+
+Planning surfaced that several changes the split had filed under `d-core-single-class`
+target files that already exist on `D-core-expert`: `condition_resolver.py`,
+`interface.py` and `progress.py`. They were reassigned to #98 and reported there
+(comment `5156702002`):
+
+1. `ConditionResolver.resolve` takes `CaseContext` — four definitions (abstract at
+   `condition_resolver.py:72`, `TargetKnowledgeResolver:115`,
+   `CornerCaseKnowledgeResolver:172`, `ChainConditionResolver:208`), eight flattened
+   parameters to three, plus `test_condition_resolver.py`'s 10 call sites. This is
+   comment 2 of 3 in the `single_class.py:239` thread — #98 answered comment 1 (the
+   expert) and left the resolver half.
+2. Null-Object defaults on `interface.py` + `progress.py`.
+3. A `ProgressDescription` `StrEnum` replacing the `_FITTING_DESCRIPTION` module global.
+4. Open question: should `save()` / `make_progress_reporter()` move from
+   `ExpertInterface` onto `Expert`? Default is no; it changes #98's public API, so it is
+   cheaper to settle while #98 is open.
+
+The rule applied: split on what the work *is*, not on which PR happened to notice it. One
+parameter-object refactor read twice by a reviewer is worse than one PR carrying it whole,
+and #98 had already set the precedent by touching `interface.py` when its own review
+required it.
+
+### Two facts verified live, both worth carrying forward
+
+**#98 has never had CI run on it.** `get_status` on head `ed805dc7` returns
+`state: pending, total_count: 0`; the check-runs list is empty. It is `mergeable_state:
+clean`, which is what the `open_ready` dependency rule keys on — so the rule passes while
+nothing has actually verified the branch. Get a baseline before stacking ~3,500 lines of
+ported tests on it, or the next PR's first CI result cannot be separated from what it
+inherited. Worth noting the general shape: `open_ready` is a proxy for "safe to build on"
+and does not imply the branch was ever tested.
+
+**The stack is still stale, and that is fine to build on.** Unchanged since §10:
+`D-core-support` `8eb7518a` (2026-07-19) still does not contain `D-core-serialization`
+`2577a2e3`, `D-core-expert` `ed805dc7` sits on that stale support, and `main` `82501888`
+is not an ancestor of the serialization tip either. But
+`git merge-tree --write-tree origin/D-core-expert origin/D-core-serialization` exits 0
+with no conflicts, and the merged tree carries zero stale `code_generation.type_hints`
+references. The missing commits are entirely in `code_generation/` while
+`d-core-single-class` touches only `rdr/` and `test_eql_rdr/`. So the cascade is *not* a
+prerequisite for starting the item — it is the steward's own job, and it has to be redone
+before anything merges anyway since `main` keeps moving.
